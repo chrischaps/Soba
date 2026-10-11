@@ -75,3 +75,4 @@
 - [Soba Speaks](./recipes/soba-speaks.md)
 - [Interlock](./recipes/interlock.md)
 - [From One Sine](./recipes/from-one-sine.md)
+- [Clair de Satellite](./recipes/clair-de-satellite.md)

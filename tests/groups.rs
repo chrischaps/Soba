@@ -12,7 +12,7 @@ use soba::engine::OfflineRenderer;
 use soba::graph::groups::{self, GroupId, NodeKind};
 use soba::graph::{create_editor_state, SynthGraphEditorState};
 use soba::persistence::sample_files::SampleBase;
-use soba::persistence::{capture_patch, patch_from_json, stage_patch, Patch, EXAMPLES};
+use soba::persistence::{capture_patch, patch_from_json, renumber_groups, stage_patch, Patch, EXAMPLES};
 
 /// An editor holding a patch, its modules under their patch IDs.
 struct Editor {
@@ -25,6 +25,13 @@ impl Editor {
     fn open(patch: &Patch) -> Self {
         let mut staged = stage_patch(patch).unwrap();
         assert!(staged.warnings.is_empty(), "{}: {:?}", patch.name, staged.warnings);
+        // A patch's own groups take IDs after its modules', as the app gives
+        // them on load, so saving can't confuse a group with a module
+        let mut next_loaded = patch.all_nodes().iter().map(|n| n.id).max().unwrap_or(0);
+        renumber_groups(&mut staged.graph, || {
+            next_loaded += 1;
+            GroupId(next_loaded)
+        });
         let mut editor = create_editor_state();
         editor.graph = std::mem::take(&mut staged.graph);
         let mut ids = BTreeMap::new();
@@ -205,8 +212,10 @@ fn group_save_load_ungroup_gives_back_the_patch() {
         assert!(ungrouped.groups.is_empty());
         assert_eq!(ungrouped.version, 5, "{}: without groups, a patch stays v5", example.name);
         // Against the patch as this build saves it (with any parameters
-        // added since the example was saved)
-        let original = Editor::open(&patch).save(&patch.name);
+        // added since the example was saved), its own groups opened the same way
+        let mut original = Editor::open(&patch);
+        original.ungroup_all();
+        let original = original.save(&patch.name);
         assert_eq!(essence(&ungrouped), essence(&original), "{}", example.name);
     }
 }

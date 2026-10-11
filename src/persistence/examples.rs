@@ -35,6 +35,10 @@ pub const EXAMPLE_SAMPLES: &[(&str, &[u8])] = &[
     // "Hello. I am Soba. I sing in sines.", from tools/voice/speak.py's
     // formant synthesizer
     ("samples/soba-speaks.wav", include_bytes!("../../patches/samples/soba-speaks.wav")),
+    // Clair de Satellite's sung lines, twelve slots of one file, and its
+    // one plain word: Chris's voice, cloned with ElevenLabs
+    ("samples/clair-lines.wav", include_bytes!("../../patches/samples/clair-lines.wav")),
+    ("samples/clair-still.wav", include_bytes!("../../patches/samples/clair-still.wav")),
 ];
 
 /// Every example, in menu order: from a first note to self-playing patches.
@@ -134,6 +138,12 @@ pub const EXAMPLES: &[Example] = &[
         file_name: "from-one-sine.json",
         description: "Plays itself, start to finish: a four-and-a-half-minute song in 80 modules, scored by two Arrangers that ride the faders section by section. A lone sine's motif grows into the whole rack, and a Looper brings it back reversed",
         json: include_str!("../../patches/from-one-sine.json"),
+    },
+    Example {
+        name: "Clair de Satellite",
+        file_name: "clair-de-satellite.json",
+        description: "Plays itself: a song in the manner of Air, scored by three Arrangers. Rhodes, string machine and a vocoder singing on the chords, each part a group, and a satellite at either end",
+        json: include_str!("../../patches/clair-de-satellite.json"),
     },
 ];
 

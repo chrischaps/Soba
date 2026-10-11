@@ -83,6 +83,8 @@ Bars stand on a frequency axis, one per band, each as tall as the voice is in th
 
 The vocoder can only carry what the carrier has to give. A **bright, sustained** carrier works best: saws, pulses, a supersaw, a chord on a polyphonic cable, or noise for a whisper. A dark, filtered pad has nothing up high for the voice's upper bands to open, so the words come out muffled. Filter the carrier after the vocoder, not before.
 
+**Keep the carrier low.** A carrier's harmonics are where the vowels get drawn, and a high note spaces them too far apart to trace the formants. Measured with speech recognition on a spoken line, a saw at A2 or A3 kept about 60% of the words, and the same saw at A4 about 20%. A chord voiced low and wide, held while the words move, works best of all. [Clair de Satellite](../../recipes/clair-de-satellite.md) sings on the string section's chord for this reason, not on its melody.
+
 The output follows both inputs: a loud chord and a loud voice make a loud vocoder. A five-note chord of detuned saws arrives several times louder than one voice, so turn the vocoder down after it, on a [Mixer](../utilities/mixer.md) strip.
 
 ## Bypass
