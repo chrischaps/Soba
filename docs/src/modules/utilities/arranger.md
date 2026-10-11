@@ -39,8 +39,9 @@ Triggers last half a step.
 |---------|-------|---------|-------------|
 | **Steps** | 1 – 96 | 16 | How many clocks make a bar: 16 for a Clock at 1/16 in 4/4, 12 for 3/4 |
 | **Loop to** | Off, 1 – 32 | 1 | The section to go back to after the last one, or **Off** to stop there |
+| **Width** | Compact, Wide, Extra wide | Compact | How wide the timeline is drawn: 440, 760 or 1080 points. Wide or Extra wide suits a long song read whole on a big screen. The module plays the same at any width |
 
-The sections, their names and lengths, the lanes' names and glides, and every section's cue for every lane are edited on the timeline, and patches save them.
+The sections, their names and lengths, the lanes' names and glides, and every section's cue for every lane are edited on the timeline, and patches save them. So is **Width**. The jacks keep their rows at every width, and so do the lanes beside them.
 
 ## Writing a song
 
@@ -61,6 +62,20 @@ The bar under the timeline does the same for the section you picked. **◀** and
 A section's final bar is shaded, since that's where a fill goes. Every edit is one step of [undo](../../getting-started/interface-overview.md#the-toolbar), named for what it did ("Groove · Pad jumps to 48%").
 
 **Name…**, at the left of the bar under the lanes' names, names the Arranger itself. The name shows in its header beside the section playing, and an Arranger that follows this one calls it by its name.
+
+A name too long for its block is cut short with "…". Hover the block and the whole name shows on a tag just above it. Pick the section and the bar under the timeline shows it in full too.
+
+### Zooming in
+
+A long song packs its short sections tight: in a 128-bar song a one-bar fill is a sliver. Zoom the timeline rather than the whole canvas:
+
+- **Ctrl+scroll** over the timeline (or pinch, on a trackpad) zooms it about the pointer, in as far as two bars across.
+- **Scroll** over the timeline, once it's zoomed in, moves along the song. While it shows the whole song, the scroll wheel zooms the canvas as usual.
+- The thin **strip** over the ruler is the whole song in little, with the part in view framed. **Drag** along it to move the view, or **click** somewhere to go there. **Double-click** it to see the whole song again.
+
+Zoomed in, the ruler numbers the bars inside each section, and each section's name stays in view as you move past its start. While the song plays, the view turns the page whenever the playhead nears its right edge, so the playhead stays in view. It waits a few seconds after you move the view yourself.
+
+The zoom belongs to the editor, like the section you picked. It isn't saved with the patch and isn't a step of undo. For a song you want to read whole, set **Width** instead.
 
 ## More than eight lanes: Follow
 

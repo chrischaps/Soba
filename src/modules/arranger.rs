@@ -243,6 +243,11 @@ const CUE_VALUE_LIMIT: f32 = 6_641_000.0;
 pub const FROM_WHERE_IT_IS: f32 = -1.0;
 
 /// What "Loop" can hold: off, or the section to go back to.
+/// How wide the editor draws the timeline, in points: Compact, Wide and
+/// Extra wide.
+pub const WIDTHS: [f32; 3] = [440.0, 760.0, 1080.0];
+const WIDTH_NAMES: [&str; 3] = ["Compact", "Wide", "Extra wide"];
+
 pub static LOOP_CHOICES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
     std::iter::once("Off").chain((1..=SECTIONS).map(|s| keep(s.to_string()))).collect()
 });
@@ -428,7 +433,10 @@ impl Arranger {
     pub const PARAM_CUES: usize = Self::PARAM_LENGTH + SECTIONS;
     /// Each cue's From: where its ramp starts.
     pub const PARAM_FROMS: usize = Self::PARAM_CUES + SECTIONS * LANES;
-    pub const PARAM_COUNT: usize = Self::PARAM_FROMS + SECTIONS * LANES;
+    /// How wide the timeline is drawn. The editor's alone: the module
+    /// doesn't read it.
+    pub const PARAM_WIDTH: usize = Self::PARAM_FROMS + SECTIONS * LANES;
+    pub const PARAM_COUNT: usize = Self::PARAM_WIDTH + 1;
 
     /// The parameter of a cue (both 0-based).
     pub const fn cue_param(section: usize, lane: usize) -> usize {
@@ -520,6 +528,10 @@ impl Arranger {
                     .describe("The level this lane's ramp starts from, in tenths of a percent, or -1 for where the lane is"),
             );
         }
+        parameters.push(
+            ParameterDefinition::choice("width", "Width", WIDTH_NAMES.as_slice(), 0)
+                .describe("How wide the timeline is drawn: Wide or Extra wide for a long song read whole on a big screen"),
+        );
         debug_assert_eq!(parameters.len(), Self::PARAM_COUNT);
         debug_assert_eq!(ports.len(), 5 + Self::OUT_COUNT);
 
@@ -542,6 +554,12 @@ impl Arranger {
             0 => None,
             n => Some((n - 1).min(Self::sections(params) - 1)),
         }
+    }
+
+    /// How wide the editor draws the timeline, in points, for the Width
+    /// parameter's value.
+    pub fn width(choice: f32) -> f32 {
+        WIDTHS[(choice.max(0.0).round() as usize).min(WIDTHS.len() - 1)]
     }
 
     /// A section's length, in bars.
@@ -986,7 +1004,7 @@ mod tests {
     fn a_patch_from_before_curves_reads_as_it_played() {
         // Saved without From parameters, so they keep their default
         let defaults = defaults();
-        assert!(defaults[Arranger::PARAM_FROMS..].iter().all(|&v| v == FROM_WHERE_IT_IS));
+        assert!(defaults[Arranger::PARAM_FROMS..Arranger::PARAM_WIDTH].iter().all(|&v| v == FROM_WHERE_IT_IS));
         let mut params = defaults;
         params[Arranger::cue_param(3, 2)] = 2_080_250.0;
         assert_eq!(Arranger::cue(&params, 3, 2), Cue::ramp(250, 8));
@@ -1102,6 +1120,7 @@ mod tests {
         assert_eq!(params[Arranger::PARAM_LENGTH + 31].name, "Length 32");
         assert_eq!(params[Arranger::cue_param(0, 0)].name, "Section 01 Lane 1");
         assert_eq!(params[Arranger::cue_param(31, 7)].name, "Section 32 Lane 8");
+        assert_eq!(params[Arranger::PARAM_WIDTH].name, "Width");
         let mut names: Vec<&str> = params.iter().map(|p| p.name).collect();
         names.sort();
         names.dedup();

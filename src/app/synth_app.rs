@@ -4225,6 +4225,8 @@ impl eframe::App for SynthApp {
         if let Some(capture) = self.capture.as_mut() {
             capture.prepare_input(ctx, raw_input);
         }
+        // The wheel over an Arranger's timeline zooms and pans it, not the canvas
+        crate::graph::claim_arranger_wheel(ctx, raw_input);
     }
 
     /// Stores recent files, and the patch while it has unsaved changes, so

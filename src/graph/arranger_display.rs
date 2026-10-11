@@ -21,8 +21,14 @@
 //! its leader's sections, so they can be picked but not edited, and the bar
 //! says whose they are. A section added, copied, moved or deleted on a
 //! leader is on its followers too, with their own cues.
+//!
+//! A long song zooms: Ctrl+scroll over the timeline zooms it about the
+//! pointer, scroll pans it, and a thin strip over the ruler shows the whole
+//! song with the span in view marked, to drag or double-click to fit. While
+//! the song plays the view turns the page to keep the playhead in it. The
+//! zoom is the editor's, like the section picked: not saved, not an edit.
 
-use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Id, Pos2, Rect, Sense, Shape, Stroke, Vec2};
+use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Id, LayerId, Pos2, Rect, Sense, Shape, Stroke, Vec2};
 use egui_node_graph2::{InputId, NodeId};
 
 use crate::app::theme;
@@ -35,12 +41,20 @@ use super::{SynthGraph, SynthGraphState, SynthResponse};
 const ROW: f32 = 13.0;
 /// Room for the lane names, left of the timeline.
 const LABEL: f32 = 52.0;
-/// The timeline's width.
-const TIMELINE: f32 = 440.0;
 /// Room for the jack labels, right of the timeline.
 const JACK_LABEL: f32 = 44.0;
 /// The narrowest a section is drawn, however short.
 const MIN_SECTION: f32 = 10.0;
+/// The overview strip's height, over the ruler.
+const OVERVIEW: f32 = 4.0;
+/// How long after a pan or zoom by hand the view leaves the playhead be, in
+/// seconds.
+const FOLLOW_PAUSE: f64 = 3.0;
+/// How far in from the edge the playhead lands when the view turns the
+/// page, as a share of the view.
+const PAGE_MARGIN: f32 = 0.1;
+/// The fewest bars the view zooms in to.
+const FEWEST_BARS: f32 = 2.0;
 /// The song's own outputs, top to bottom, with the short labels they wear.
 const SONG_OUTPUTS: [(&str, &str); 5] = [("Section", "Section"), ("Section Trig", "Trig"), ("Bar", "Bar"), ("Last Bar", "Last"), ("End", "End")];
 
@@ -74,6 +88,10 @@ impl<'a> Params<'a> {
 
     fn name(&self, index: usize) -> String {
         self.inputs[index].0.clone()
+    }
+
+    fn value(&self, index: usize) -> f32 {
+        self.graph.get_input(self.inputs[index].1).value.actual_value()
     }
 }
 
@@ -198,6 +216,281 @@ impl Layout {
     fn span(&self, section: usize) -> (f32, f32) {
         (self.edges[section], self.edges[section + 1])
     }
+
+    /// The bar (from the song's start, fractional) drawn at `x`.
+    fn bar_at(&self, song: &Song, x: f32) -> f32 {
+        let last = song.count() - 1;
+        let section = (0..last).find(|&section| x < self.edges[section + 1]).unwrap_or(last);
+        let (left, right) = self.span(section);
+        let (start, length) = song.sections[section];
+        start as f32 + length as f32 * ((x - left) / (right - left).max(1e-6)).clamp(0.0, 1.0)
+    }
+
+    /// The x of a bar (from the song's start, fractional).
+    fn x_at(&self, song: &Song, bar: f32) -> f32 {
+        let section = song.sections.iter().rposition(|&(start, _)| start as f32 <= bar).unwrap_or(0);
+        self.x(song, section, bar - song.sections[section].0 as f32)
+    }
+}
+
+/// How the timeline is zoomed. It's the editor's, not the patch's, so it
+/// isn't saved and isn't an edit, like the section picked.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct View {
+    /// How many timelines wide the whole song is drawn: 1 shows it all.
+    scale: f32,
+    /// How far into the song the timeline's left edge is, as a share of
+    /// the song's drawn width.
+    offset: f32,
+    /// A scroll still gliding in, in points.
+    glide: f32,
+    /// When the view was last panned or zoomed by hand, in egui's time.
+    touched: f64,
+    /// Where the playhead was last frame, in bars, to tell it's playing.
+    playhead: Option<f32>,
+    /// The section picked last frame, to bring a new pick into view.
+    picked: Option<usize>,
+}
+
+impl Default for View {
+    fn default() -> Self {
+        Self { scale: 1.0, offset: 0.0, glide: 0.0, touched: f64::NEG_INFINITY, playhead: None, picked: None }
+    }
+}
+
+impl View {
+    /// The most a song is zoomed: until a couple of bars fill the view.
+    fn max_scale(song: &Song) -> f32 {
+        (song.bars as f32 / FEWEST_BARS).max(1.0)
+    }
+
+    fn zoomed(&self) -> bool {
+        self.scale > 1.001
+    }
+
+    fn clamped(self, song: &Song) -> Self {
+        let scale = self.scale.clamp(1.0, Self::max_scale(song));
+        Self { scale, offset: self.offset.clamp(0.0, 1.0 - 1.0 / scale), ..self }
+    }
+
+    /// Where the sections fall, the whole song drawn `scale` timelines wide
+    /// and slid left by the offset.
+    fn layout(&self, song: &Song, timeline: Rect, z: f32) -> Layout {
+        let width = timeline.width() * self.scale;
+        Layout::of(song, timeline.left() - self.offset * width, width, z)
+    }
+
+    /// Zoomed by `factor` about `x`, keeping the bar under it in place.
+    fn zoomed_about(self, song: &Song, timeline: Rect, z: f32, x: f32, factor: f32) -> Self {
+        let bar = self.layout(song, timeline, z).bar_at(song, x);
+        let scale = (self.scale * factor).clamp(1.0, Self::max_scale(song));
+        let width = timeline.width() * scale;
+        let at = Layout::of(song, 0.0, width, z).x_at(song, bar);
+        Self { scale, offset: (at - (x - timeline.left())) / width, ..self }.clamped(song)
+    }
+
+    /// Slid `by` points later in the song.
+    fn panned(self, song: &Song, timeline: Rect, by: f32) -> Self {
+        Self { offset: self.offset + by / (timeline.width() * self.scale), ..self }.clamped(song)
+    }
+
+    /// Slid so `x` lands a page margin in from the left, if it's out of
+    /// view or about to leave it.
+    fn turned_to(self, song: &Song, timeline: Rect, x: f32) -> Self {
+        let margin = timeline.width() * PAGE_MARGIN;
+        if x >= timeline.left() && x <= timeline.right() - margin {
+            return self;
+        }
+        self.panned(song, timeline, x - (timeline.left() + margin))
+    }
+
+    /// The span in view, as shares of the whole song's drawn width.
+    fn window(&self) -> (f32, f32) {
+        (self.offset, self.offset + 1.0 / self.scale)
+    }
+}
+
+fn view_id(node_id: NodeId) -> Id {
+    Id::new((node_id, "arranger-view"))
+}
+
+fn stored_view(ctx: &egui::Context, node_id: NodeId, song: &Song) -> View {
+    ctx.data(|data| data.get_temp::<View>(view_id(node_id))).unwrap_or_default().clamped(song)
+}
+
+/// What the wheel did over a timeline, kept for the timeline to act on.
+#[derive(Clone, Copy, Debug)]
+struct Wheel {
+    /// How far to slide, in points, later in the song.
+    pan: f32,
+    /// How much to zoom in, as a factor.
+    zoom: f32,
+    /// Where the pointer was.
+    at: Pos2,
+}
+
+fn wheel_id(node_id: NodeId) -> Id {
+    Id::new((node_id, "arranger-wheel"))
+}
+
+/// A timeline drawn last frame: over it, the wheel turns it instead of the
+/// canvas.
+#[derive(Clone, Copy, Debug)]
+struct Claim {
+    node_id: NodeId,
+    layer: LayerId,
+    rect: Rect,
+    /// Zoomed in, so a plain scroll pans it. Otherwise only a zoom is its.
+    zoomed: bool,
+}
+
+fn claims_id() -> Id {
+    Id::new("arranger-wheel-claims")
+}
+
+/// Takes the wheel's turns over a timeline out of the frame's input before
+/// the canvas zooms with them, and keeps them for the timeline: Ctrl+scroll
+/// (or a pinch) zooms it, and scroll pans it once it's zoomed in. It goes
+/// by where the timelines were drawn last frame. Call it from the app's raw
+/// input hook.
+pub fn claim_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
+    let Some(claims) = ctx.data_mut(|data| data.remove_temp::<Vec<Claim>>(claims_id())) else { return };
+    if claims.is_empty() {
+        return;
+    }
+    let line = ctx.options(|options| options.line_scroll_speed);
+    let mut pointer = ctx.input(|input| input.pointer.latest_pos());
+    let claim_at = |pointer: Option<Pos2>, zoom: bool| {
+        let at = pointer?;
+        claims.iter().find(|c| c.rect.contains(at) && (zoom || c.zoomed) && ctx.layer_id_at(at) == Some(c.layer)).map(|c| (*c, at))
+    };
+    let add = |claim: Claim, at: Pos2, pan: f32, zoom: f32| {
+        ctx.data_mut(|data| {
+            let wheel = data.get_temp_mut_or_insert_with(wheel_id(claim.node_id), || Wheel { pan: 0.0, zoom: 1.0, at });
+            wheel.pan += pan;
+            wheel.zoom *= zoom;
+            wheel.at = at;
+        });
+    };
+    raw.events.retain(|event| match event {
+        egui::Event::PointerMoved(at) => {
+            pointer = Some(*at);
+            true
+        }
+        egui::Event::MouseWheel { unit, delta, modifiers } => {
+            let zoom = modifiers.ctrl || modifiers.command || modifiers.mac_cmd;
+            let Some((claim, at)) = claim_at(pointer, zoom) else { return true };
+            let delta = match unit {
+                egui::MouseWheelUnit::Point => *delta,
+                egui::MouseWheelUnit::Line => *delta * line,
+                egui::MouseWheelUnit::Page => *delta * claim.rect.width(),
+            };
+            if zoom {
+                add(claim, at, 0.0, (delta.y / 200.0).exp());
+            } else {
+                // Down or right goes later in the song
+                add(claim, at, -(delta.x + delta.y), 1.0);
+            }
+            false
+        }
+        egui::Event::Zoom(factor) => {
+            let Some((claim, at)) = claim_at(pointer, true) else { return true };
+            add(claim, at, 0.0, *factor);
+            false
+        }
+        _ => true,
+    });
+}
+
+/// Marks a timeline as drawn, for [`claim_wheel`] next frame.
+fn claim(ui: &egui::Ui, node_id: NodeId, timeline: Rect, zoomed: bool) {
+    let rect = timeline.intersect(ui.clip_rect());
+    if rect.is_positive() {
+        let claim = Claim { node_id, layer: ui.layer_id(), rect, zoomed };
+        ui.ctx().data_mut(|data| data.get_temp_mut_or_default::<Vec<Claim>>(claims_id()).push(claim));
+    }
+}
+
+/// The overview strip, along the top of the timeline.
+fn overview_rect(timeline: Rect, z: f32) -> Rect {
+    Rect::from_min_size(timeline.left_top(), Vec2::new(timeline.width(), OVERVIEW * z))
+}
+
+/// Works out this frame's view: the wheel's turns, the overview strip
+/// dragged, the playhead followed and a new pick brought into view. The
+/// song's first row does this, before any row is drawn.
+fn update_view(ui: &egui::Ui, node_id: NodeId, song: &Song, timeline: Rect, z: f32, position: Option<Position>, selected: usize) -> View {
+    let ctx = ui.ctx().clone();
+    let (now, dt) = ctx.input(|input| (input.time, input.stable_dt.min(0.1)));
+    let mut view = stored_view(&ctx, node_id, song);
+
+    if let Some(wheel) = ctx.data_mut(|data| data.get_temp::<Wheel>(wheel_id(node_id)).inspect(|_| data.remove::<Wheel>(wheel_id(node_id)))) {
+        if wheel.zoom != 1.0 {
+            view = view.zoomed_about(song, timeline, z, wheel.at.x, wheel.zoom);
+        }
+        view.glide += wheel.pan;
+        view.touched = now;
+    }
+    // A scroll glides in, as the canvas's does
+    if view.glide != 0.0 {
+        let step = if view.glide.abs() < 0.5 { view.glide } else { view.glide * (1.0 - (-18.0 * dt).exp()) };
+        view = view.panned(song, timeline, step);
+        view.glide -= step;
+        // Nothing left to slide into at the song's ends
+        let (left, right) = view.window();
+        if (left <= 0.0 && view.glide < 0.0) || (right >= 1.0 && view.glide > 0.0) {
+            view.glide = 0.0;
+        }
+        ctx.request_repaint();
+    }
+
+    // The overview strip: click or drag to move the view, double-click to
+    // see the whole song
+    let strip = overview_rect(timeline, z);
+    let response = ui
+        .interact(strip.expand2(Vec2::new(0.0, 1.5 * z)).intersect(ui.clip_rect()), Id::new((node_id, "arranger-overview")), Sense::click_and_drag())
+        .on_hover_cursor(if view.zoomed() { CursorIcon::Grab } else { CursorIcon::Default })
+        .on_hover_text("The whole song, with the part in view marked\nDrag along it to move · double-click to see it all · Ctrl+scroll the timeline to zoom");
+    if response.double_clicked() {
+        view = View { touched: now, ..View::default() };
+    } else if let Some(pointer) = response.interact_pointer_pos() {
+        let at = (pointer.x - strip.left()) / strip.width();
+        let (left, right) = view.window();
+        if (response.drag_started() && (at < left || at > right)) || response.clicked() {
+            view.offset = at - (right - left) / 2.0;
+        } else if response.dragged() {
+            view.offset += response.drag_delta().x / strip.width();
+        }
+        view.glide = 0.0;
+        view.touched = now;
+        view = view.clamped(song);
+    }
+
+    // While the song plays, the view turns the page to keep the playhead in
+    // it, unless it was just moved by hand
+    let playhead = position.filter(|p| !p.ended).map(|p| song.sections[p.section].0 as f32 + p.bar as f32 + p.step / song.steps as f32);
+    let playing = playhead.is_some() && playhead != view.playhead;
+    view.playhead = playhead;
+    if let Some(bar) = playhead.filter(|_| playing && view.zoomed() && now - view.touched > FOLLOW_PAUSE) {
+        let x = view.layout(song, timeline, z).x_at(song, bar);
+        view = view.turned_to(song, timeline, x);
+    }
+
+    // A section picked from the bar below comes into view
+    if view.picked != Some(selected) {
+        if view.picked.is_some() && view.zoomed() {
+            let (x0, x1) = view.layout(song, timeline, z).span(selected);
+            if x1 < timeline.left() || x0 > timeline.right() {
+                view = view.turned_to(song, timeline, x0);
+                view.touched = now;
+            }
+        }
+        view.picked = Some(selected);
+    }
+
+    let view = view.clamped(song);
+    ctx.data_mut(|data| data.insert_temp(view_id(node_id), view));
+    view
 }
 
 /// The section picked for editing. It's the editor's choice, not the
@@ -356,8 +649,9 @@ pub fn output_row(
     };
     let params = Params::of(graph, node_id)?;
     let z = user_state.zoom;
+    let width = Arr::width(params.value(Arr::PARAM_WIDTH));
 
-    let (rect, _) = ui.allocate_exact_size(Vec2::new((LABEL + TIMELINE + JACK_LABEL) * z, ROW * z), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(Vec2::new((LABEL + width + JACK_LABEL) * z, ROW * z), Sense::hover());
 
     // The jack's label, small enough for the rows, flush with the edge
     let ink = ui.visuals().widgets.noninteractive.fg_stroke.color;
@@ -395,13 +689,23 @@ pub fn output_row(
 
     let song = Song::of(params.values());
     let timeline = Rect::from_min_max(Pos2::new(block.left() + LABEL * z, block.top()), block.max);
-    let layout = Layout::of(&song, timeline.left(), timeline.width(), z);
     let position = position(user_state, node_id).filter(|p| p.started && p.section < song.count());
     let selected = selected(ui.ctx(), node_id).min(song.count() - 1);
+    // The song's first row works out the view for every row
+    let view = match row {
+        Row::Sections => update_view(ui, node_id, &song, timeline, z, position, selected),
+        _ => stored_view(ui.ctx(), node_id, &song),
+    };
+    claim(ui, node_id, timeline, view.zoomed());
+    let layout = view.layout(&song, timeline, z);
+    // Zoomed in, the song runs on past the timeline's ends
+    let gap = ui.spacing().item_spacing.y;
+    let clip = Rect::from_x_y_ranges(timeline.x_range(), timeline.y_range().expand(gap)).intersect(ui.clip_rect());
+    let frame = Frame { block, timeline, clip, view };
     let mut edits = Vec::new();
     match row {
-        Row::Sections => sections(ui, node_id, graph, user_state, &params, &song, &layout, block, timeline, position, selected, &mut edits),
-        Row::Lane(lane) => lane_rows(ui, node_id, graph, user_state, &params, &song, &layout, block, timeline, lane, position, selected, &mut edits),
+        Row::Sections => sections(ui, node_id, graph, user_state, &params, &song, &layout, &frame, position, selected, &mut edits),
+        Row::Lane(lane) => lane_rows(ui, node_id, graph, user_state, &params, &song, &layout, &frame, lane, position, selected, &mut edits),
         _ => {}
     }
 
@@ -409,15 +713,29 @@ pub fn output_row(
     if let Some(p) = position {
         let bar = p.bar as f32 + p.step / song.steps as f32;
         let x = layout.x(&song, p.section, bar);
-        let gap = ui.spacing().item_spacing.y;
-        let span = egui::Rangef::new(timeline.top() - gap / 2.0, timeline.bottom() + gap / 2.0);
+        let top = if matches!(row, Row::Sections) { timeline.top() + (OVERVIEW + 1.0) * z } else { timeline.top() - gap / 2.0 };
+        let span = egui::Rangef::new(top, timeline.bottom() + gap / 2.0);
         let strength = if p.ended { 0.25 } else { 0.8 };
-        ui.painter().vline(x, span, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(strength)));
+        ui.painter().with_clip_rect(clip).vline(x, span, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(strength)));
     }
     Some(edits)
 }
 
-/// The song's rows: a bar ruler, then a block for each section.
+/// Where a row's part of the timeline is drawn.
+#[derive(Clone, Copy)]
+struct Frame {
+    /// The rows the part covers, from the lane names to the jack labels.
+    block: Rect,
+    /// The timeline's part of them.
+    timeline: Rect,
+    /// What of the timeline can be drawn: zoomed in, the song runs on past
+    /// its ends.
+    clip: Rect,
+    view: View,
+}
+
+/// The song's rows: the overview strip and a bar ruler, then a block for
+/// each section.
 #[allow(clippy::too_many_arguments)]
 fn sections(
     ui: &mut egui::Ui,
@@ -427,14 +745,15 @@ fn sections(
     params: &Params,
     song: &Song,
     layout: &Layout,
-    block: Rect,
-    timeline: Rect,
+    frame: &Frame,
     position: Option<Position>,
     selected: usize,
     edits: &mut Vec<SynthResponse>,
 ) {
     let z = user_state.zoom;
+    let Frame { block, timeline, clip, view } = *frame;
     let painter = ui.painter().clone();
+    let tl = painter.with_clip_rect(clip);
     let green = theme::signal::GATE;
 
     // Where the song is, at the left: bar of bars
@@ -456,30 +775,53 @@ fn sections(
         painter.text(Pos2::new(left, block.top() + 44.0 * z), Align2::LEFT_TOP, text, font.clone(), green);
     }
 
+    overview(&tl, song, layout, &view, timeline, z, position, selected);
+
     // The ruler: a tick a bar if they'd be far enough apart, and a number
-    // where each section starts
-    let ruler = Rect::from_min_max(timeline.left_top(), Pos2::new(timeline.right(), timeline.top() + 11.0 * z));
+    // where each section starts, and on the bars between once there's room
+    let ruler = Rect::from_min_max(Pos2::new(timeline.left(), timeline.top() + (OVERVIEW + 2.0) * z), Pos2::new(timeline.right(), timeline.top() + (OVERVIEW + 12.0) * z));
+    let seen = |x0: f32, x1: f32| x1 >= timeline.left() && x0 <= timeline.right();
+    let number_font = FontId::monospace(7.5 * z);
     for (section, &(start, length)) in song.sections.iter().enumerate() {
         let (x0, x1) = layout.span(section);
+        if !seen(x0, x1) {
+            continue;
+        }
         let per_bar = (x1 - x0) / length as f32;
+        let every = [1, 2, 4, 8, 16].into_iter().find(|&k| per_bar * k as f32 >= 18.0 * z);
         if per_bar >= 3.0 * z {
             for bar in 1..length {
                 let x = x0 + per_bar * bar as f32;
-                painter.vline(x, egui::Rangef::new(ruler.bottom() - 2.5 * z, ruler.bottom()), Stroke::new(1.0, theme::background::GRID_MAJOR));
+                if !seen(x, x) {
+                    continue;
+                }
+                tl.vline(x, egui::Rangef::new(ruler.bottom() - 2.5 * z, ruler.bottom()), Stroke::new(1.0, theme::background::GRID_MAJOR));
+                // Clear of the next section's number
+                if every.is_some_and(|k| bar % k == 0) && x1 - x >= 16.0 * z {
+                    tl.text(Pos2::new(x + 2.0 * z, ruler.top()), Align2::LEFT_TOP, (start + bar + 1).to_string(), number_font.clone(), theme::text::DISABLED.gamma_multiply(0.6));
+                }
             }
         }
-        painter.vline(x0, egui::Rangef::new(ruler.top() + 2.0 * z, ruler.bottom()), Stroke::new(1.0, theme::text::DISABLED));
+        tl.vline(x0, egui::Rangef::new(ruler.top() + 1.0 * z, ruler.bottom()), Stroke::new(1.0, theme::text::DISABLED));
         if x1 - x0 >= 14.0 * z {
-            painter.text(Pos2::new(x0 + 2.0 * z, ruler.top()), Align2::LEFT_TOP, (start + 1).to_string(), FontId::monospace(7.5 * z), theme::text::DISABLED);
+            tl.text(Pos2::new(x0 + 2.0 * z, ruler.top()), Align2::LEFT_TOP, (start + 1).to_string(), number_font.clone(), theme::text::DISABLED);
         }
     }
 
     // The blocks
-    let blocks = Rect::from_min_max(Pos2::new(timeline.left(), ruler.bottom() + 2.0 * z), Pos2::new(timeline.right(), timeline.bottom() - 1.0 * z));
+    let blocks = Rect::from_min_max(Pos2::new(timeline.left(), ruler.bottom() + 1.5 * z), Pos2::new(timeline.right(), timeline.bottom() - 1.0 * z));
     let renaming: Option<Renaming> = ui.ctx().data(|data| data.get_temp(renaming_id(node_id)));
+    let name_font = FontId::proportional(10.0 * z);
+    // A name too long for its block, shown whole while it's hovered
+    let mut hovered_name: Option<(Rect, String)> = None;
     for section in 0..song.count() {
         let (x0, x1) = layout.span(section);
+        if !seen(x0, x1) {
+            continue;
+        }
         let rect = Rect::from_min_max(Pos2::new(x0 + 0.75 * z, blocks.top()), Pos2::new(x1 - 0.75 * z, blocks.bottom()));
+        // The part in view, where its name and number go
+        let shown = rect.intersect(timeline);
         let playing = position.is_some_and(|p| p.section == section && !p.ended);
         let queued = position.is_some_and(|p| p.queued == Some(section));
         let round = 3.0 * z;
@@ -490,40 +832,49 @@ fn sections(
         } else {
             theme::background::WIDGET.lerp_to_gamma(theme::background::PANEL, 0.4)
         };
-        painter.rect_filled(rect, round, fill);
+        tl.rect_filled(rect, round, fill);
         // The last bar, where a fill goes
         let length = song.sections[section].1;
         if length > 1 {
             let last = Rect::from_min_max(Pos2::new(layout.x(song, section, (length - 1) as f32), rect.top()), rect.max);
-            painter.rect_filled(last, round, Color32::BLACK.gamma_multiply(0.18));
+            tl.rect_filled(last, round, Color32::BLACK.gamma_multiply(0.18));
         }
         if playing {
-            painter.hline(rect.x_range(), rect.top() + 0.75 * z, Stroke::new(1.5 * z, green));
+            tl.hline(rect.x_range(), rect.top() + 0.75 * z, Stroke::new(1.5 * z, green));
         }
         if queued {
-            painter.rect_stroke(rect, round, Stroke::new(1.0 * z, green.gamma_multiply(0.8)));
+            tl.rect_stroke(rect, round, Stroke::new(1.0 * z, green.gamma_multiply(0.8)));
         }
         if section == selected {
-            painter.rect_stroke(rect.expand(0.5 * z), round, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(0.75)));
+            tl.rect_stroke(rect.expand(0.5 * z), round, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(0.75)));
         }
 
         let name = section_name(graph, node_id, section);
         let key = section_key(section);
         let is_renaming = renaming.as_ref().is_some_and(|r| r.key == key);
+        let mut cut_short = false;
+        // A block mostly slid out of view shows no name, not a lone "…"
+        let sliver = shown.width() < 20.0 * z && shown.width() < rect.width() - 1.0;
         if !is_renaming {
-            let name_font = FontId::proportional(10.0 * z);
-            let text = fit(&painter, &name, &name_font, rect.width() - 4.0 * z);
+            let text = if sliver { String::new() } else { fit(&painter, &name, &name_font, shown.width() - 4.0 * z) };
+            cut_short = text != name;
             let ink = if playing { Color32::WHITE } else { theme::text::PRIMARY };
-            painter.text(Pos2::new(rect.left() + 3.0 * z, rect.top() + 3.0 * z), Align2::LEFT_TOP, text, name_font, ink);
+            tl.text(Pos2::new(shown.left() + 3.0 * z, rect.top() + 3.0 * z), Align2::LEFT_TOP, text, name_font.clone(), ink);
             let bars = format!("{length}");
-            if rect.width() > 22.0 * z {
-                painter.text(Pos2::new(rect.right() - 3.0 * z, rect.bottom() - 2.0 * z), Align2::RIGHT_BOTTOM, bars, FontId::monospace(8.0 * z), theme::text::SECONDARY);
+            if shown.width() > 22.0 * z {
+                tl.text(Pos2::new(shown.right() - 3.0 * z, rect.bottom() - 2.0 * z), Align2::RIGHT_BOTTOM, bars, FontId::monospace(8.0 * z), theme::text::SECONDARY);
             }
+        }
+        if !shown.is_positive() {
+            continue;
         }
 
         let response = ui
-            .interact(rect, Id::new((node_id, "arranger-section", section)), Sense::click())
+            .interact(shown, Id::new((node_id, "arranger-section", section)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand);
+        if cut_short && response.hovered() {
+            hovered_name = Some((shown, name.clone()));
+        }
         if response.clicked() {
             select(ui.ctx(), node_id, section);
         }
@@ -547,14 +898,66 @@ fn sections(
         });
 
         if is_renaming {
-            if let Some(done) = rename_field(ui, node_id, rect.shrink2(Vec2::new(1.0 * z, 2.0 * z)).with_max_y(rect.top() + 16.0 * z), z) {
+            let field = shown.shrink2(Vec2::new(1.0 * z, 2.0 * z)).with_max_y(rect.top() + 16.0 * z);
+            let field = field.with_max_x(field.right().max(field.left() + 60.0 * z));
+            if let Some(done) = rename_field(ui, node_id, field, z) {
                 edits.extend(done);
             }
         }
     }
+
+    // The hovered name, whole, on a tag just over its block
+    if let Some((shown, name)) = hovered_name {
+        let galley = painter.layout_no_wrap(name, name_font, theme::text::PRIMARY);
+        let pad = Vec2::new(4.0 * z, 1.5 * z);
+        let size = galley.size() + 2.0 * pad;
+        let x = shown.left().min(block.right() - size.x).max(block.left());
+        let tag = Rect::from_min_size(Pos2::new(x, shown.top() - size.y - 1.0 * z), size);
+        painter.rect(tag, 3.0 * z, theme::background::PANEL, Stroke::new(1.0, theme::background::WIDGET_ACTIVE));
+        painter.galley(tag.min + pad, galley, theme::text::PRIMARY);
+    }
 }
 
-/// The name field of a section or lane being renamed, over `rect`. Returns
+/// The overview strip: the whole song in little, the section playing lit,
+/// and the part in view framed while zoomed in.
+#[allow(clippy::too_many_arguments)]
+fn overview(painter: &egui::Painter, song: &Song, layout: &Layout, view: &View, timeline: Rect, z: f32, position: Option<Position>, selected: usize) {
+    let strip = overview_rect(timeline, z);
+    let (w0, w1) = (layout.edges[0], layout.edges[song.count()]);
+    let to_strip = |x: f32| strip.left() + (x - w0) / (w1 - w0).max(1e-6) * strip.width();
+    painter.rect_filled(strip, 1.5 * z, theme::background::PANEL.gamma_multiply(0.7));
+    for section in 0..song.count() {
+        let (x0, x1) = layout.span(section);
+        let (a, b) = (to_strip(x0), to_strip(x1));
+        let playing = position.is_some_and(|p| p.section == section && !p.ended);
+        let ink = if playing {
+            theme::signal::GATE.gamma_multiply(0.8)
+        } else if section == selected {
+            theme::text::SECONDARY
+        } else if section % 2 == 0 {
+            theme::background::WIDGET_ACTIVE
+        } else {
+            theme::background::WIDGET
+        };
+        let inset = if b - a > 2.0 * z { 0.4 * z } else { 0.0 };
+        painter.rect_filled(Rect::from_x_y_ranges(a + inset..=b - inset, strip.y_range()), 1.0 * z, ink);
+    }
+    if let Some(p) = position {
+        let x = to_strip(layout.x(song, p.section, p.bar as f32 + p.step / song.steps as f32));
+        painter.vline(x, strip.y_range(), Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(if p.ended { 0.3 } else { 0.9 })));
+    }
+    if view.zoomed() {
+        let (left, right) = view.window();
+        let (a, b) = (strip.left() + left * strip.width(), strip.left() + right * strip.width());
+        let shade = Color32::BLACK.gamma_multiply(0.45);
+        painter.rect_filled(Rect::from_x_y_ranges(strip.left()..=a, strip.y_range()), 0.0, shade);
+        painter.rect_filled(Rect::from_x_y_ranges(b..=strip.right(), strip.y_range()), 0.0, shade);
+        let window = Rect::from_x_y_ranges(a..=b, strip.y_range()).expand(0.75 * z);
+        painter.rect_stroke(window, 1.5 * z, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.8)));
+    }
+}
+
+// The name field of a section or lane being renamed, over `rect`. Returns
 /// the edit once it's typed.
 fn rename_field(ui: &mut egui::Ui, node_id: NodeId, rect: Rect, z: f32) -> Option<Vec<SynthResponse>> {
     let id = renaming_id(node_id);
@@ -609,14 +1012,14 @@ fn lane_rows(
     params: &Params,
     song: &Song,
     layout: &Layout,
-    block: Rect,
-    timeline: Rect,
+    frame: &Frame,
     lane: usize,
     position: Option<Position>,
     selected: usize,
     edits: &mut Vec<SynthResponse>,
 ) {
     let z = user_state.zoom;
+    let Frame { block, timeline, clip, .. } = *frame;
     let painter = ui.painter().clone();
     let orange = theme::signal::CONTROL;
     let green = theme::signal::GATE;
@@ -651,63 +1054,69 @@ fn lane_rows(
     name_response.context_menu(|ui| lane_menu(ui, node_id, params, song, lane, &lane_label, glide, edits));
 
     // The level's room, and the gate strip under it
+    let tl = painter.with_clip_rect(clip);
     let strip = 3.0 * z;
     let area = Rect::from_min_max(Pos2::new(timeline.left(), block.top() + 1.0 * z), Pos2::new(timeline.right(), block.bottom() - strip - 2.0 * z));
     let strip_rect = Rect::from_min_max(Pos2::new(timeline.left(), block.bottom() - strip), Pos2::new(timeline.right(), block.bottom()));
     painter.rect_filled(area, 2.0 * z, theme::background::PANEL.gamma_multiply(0.6));
     painter.rect_filled(strip_rect, 1.5 * z, theme::background::WIDGET.gamma_multiply(0.6));
     let y_of = |level: f32| area.bottom() - level.clamp(0.0, 1.0) * area.height();
+    // Zoomed in, only the sections in view are drawn, and only their part in view
+    let in_view = |section: usize| {
+        let (x0, x1) = layout.span(section);
+        (x1 >= timeline.left() && x0 <= timeline.right()).then(|| (x0, x1, x0.max(timeline.left()), x1.min(timeline.right())))
+    };
 
     let starts = song.lane_starts(lane);
     let mut points = Vec::new();
     let step = 2.0 * z;
     for section in 0..song.count() {
-        let (x0, x1) = layout.span(section);
+        let Some((x0, x1, from, to)) = in_view(section) else { continue };
         let (start, length) = song.sections[section];
         let state = starts[section].cued(song.cue(section, lane), start as f32, length as f32);
         // The selected section's column, faintly lit
         if section == selected {
-            painter.rect_filled(Rect::from_x_y_ranges(x0..=x1, area.y_range()), 0.0, Color32::WHITE.gamma_multiply(0.035));
+            tl.rect_filled(Rect::from_x_y_ranges(x0..=x1, area.y_range()), 0.0, Color32::WHITE.gamma_multiply(0.035));
         }
-        let samples = (((x1 - x0) / step).ceil() as usize).max(1);
+        let samples = (((to - from) / step).ceil() as usize).max(1);
         let mut gate_from: Option<f32> = None;
         for n in 0..=samples {
-            let x = x0 + (x1 - x0) * n as f32 / samples as f32;
-            let bar = start as f32 + length as f32 * n as f32 / samples as f32;
+            let x = from + (to - from) * n as f32 / samples as f32;
+            let bar = start as f32 + length as f32 * (x - x0) / (x1 - x0).max(1e-6);
             let level = state.at(bar);
             points.push(Pos2::new(x, y_of(level)));
             match (level > 0.0005, gate_from) {
                 (true, None) => gate_from = Some(x),
                 (false, Some(from)) => {
-                    painter.rect_filled(Rect::from_x_y_ranges(from..=x, strip_rect.y_range()), 1.0 * z, green.gamma_multiply(0.55));
+                    tl.rect_filled(Rect::from_x_y_ranges(from..=x, strip_rect.y_range()), 1.0 * z, green.gamma_multiply(0.55));
                     gate_from = None;
                 }
                 _ => {}
             }
         }
         if let Some(from) = gate_from {
-            painter.rect_filled(Rect::from_x_y_ranges(from..=x1, strip_rect.y_range()), 1.0 * z, green.gamma_multiply(0.55));
+            tl.rect_filled(Rect::from_x_y_ranges(from..=to, strip_rect.y_range()), 1.0 * z, green.gamma_multiply(0.55));
         }
         // A section boundary, faint
         if section > 0 {
-            painter.vline(x0, area.y_range(), Stroke::new(1.0, theme::background::GRID_MAJOR.gamma_multiply(0.7)));
+            tl.vline(x0, area.y_range(), Stroke::new(1.0, theme::background::GRID_MAJOR.gamma_multiply(0.7)));
         }
     }
     // A lane no section moves is drawn faintly
     let idle = (0..song.count()).all(|section| song.cue(section, lane).kind == Move::Hold);
     let line = if idle { orange.gamma_multiply(0.3) } else { orange };
     if !idle {
-        super::drum_display::fill_under(&painter, &points, area.bottom(), orange.gamma_multiply(0.22), orange.gamma_multiply(0.02));
+        super::drum_display::fill_under(&tl, &points, area.bottom(), orange.gamma_multiply(0.22), orange.gamma_multiply(0.02));
     }
-    painter.add(Shape::line(points, Stroke::new(1.4 * z, line)));
+    tl.add(Shape::line(points, Stroke::new(1.4 * z, line)));
 
     // Hits, as ticks from the strip up to their level
     for section in 0..song.count() {
         let cue = song.cue(section, lane);
         if cue.kind == Move::Hit {
             let x = layout.span(section).0 + 1.5 * z;
-            painter.vline(x, egui::Rangef::new(y_of(cue.value()), strip_rect.bottom()), Stroke::new(1.4 * z, green));
-            painter.circle_filled(Pos2::new(x, y_of(cue.value())), 2.2 * z, green);
+            tl.vline(x, egui::Rangef::new(y_of(cue.value()), strip_rect.bottom()), Stroke::new(1.4 * z, green));
+            tl.circle_filled(Pos2::new(x, y_of(cue.value())), 2.2 * z, green);
         }
     }
 
@@ -716,18 +1125,21 @@ fn lane_rows(
         let x = layout.x(song, p.section, p.bar as f32 + p.step / song.steps as f32);
         if let Some(level) = output_value(user_state, node_id, Arr::OUT_LANES + 2 * lane) {
             let c = Pos2::new(x, y_of(level));
-            painter.circle_filled(c, 5.0 * z, orange.gamma_multiply(0.25 + 0.3 * level.clamp(0.0, 1.0)));
-            painter.circle_filled(c, 2.4 * z, orange.lerp_to_gamma(Color32::WHITE, 0.4));
+            tl.circle_filled(c, 5.0 * z, orange.gamma_multiply(0.25 + 0.3 * level.clamp(0.0, 1.0)));
+            tl.circle_filled(c, 2.4 * z, orange.lerp_to_gamma(Color32::WHITE, 0.4));
         }
         if output_value(user_state, node_id, Arr::OUT_LANES + 2 * lane + 1).is_some_and(|v| v > 0.5) {
-            painter.circle_filled(Pos2::new(x, strip_rect.center().y), 3.0 * z, green.lerp_to_gamma(Color32::WHITE, 0.4));
+            tl.circle_filled(Pos2::new(x, strip_rect.center().y), 3.0 * z, green.lerp_to_gamma(Color32::WHITE, 0.4));
         }
     }
 
-    // A cell per section: drag to set its level
+    // A cell per section in view: drag to set its level
     for section in 0..song.count() {
-        let (x0, x1) = layout.span(section);
-        let cell = Rect::from_min_max(Pos2::new(x0, block.top()), Pos2::new(x1, block.bottom()));
+        let Some((_, _, from, to)) = in_view(section) else { continue };
+        let cell = Rect::from_min_max(Pos2::new(from, block.top()), Pos2::new(to, block.bottom()));
+        if !cell.is_positive() {
+            continue;
+        }
         let cue = song.cue(section, lane);
         let what = format!("{} · {lane_label}", section_name(graph, node_id, section));
         let response = ui
@@ -1287,5 +1699,73 @@ mod tests {
         // Each keeps the floor, and splits the rest 1:3
         let spare = 400.0 - 2.0 * MIN_SECTION;
         assert!((layout.edges[1] - (MIN_SECTION + spare / 4.0)).abs() < 1e-3);
+    }
+
+    /// From One Sine's shape in little: a long song with 1-bar sections in it.
+    fn long_song() -> Song {
+        song(&[4, 4, 4, 4, 8, 1, 16, 32, 1, 16, 32, 1, 4, 1], &[])
+    }
+
+    fn timeline() -> Rect {
+        Rect::from_min_size(Pos2::new(100.0, 0.0), Vec2::new(440.0, 80.0))
+    }
+
+    #[test]
+    fn a_bar_and_its_x_are_each_others_inverse() {
+        let song = long_song();
+        let layout = Layout::of(&song, 100.0, 1760.0, 1.0);
+        for bar in [0.0, 3.5, 20.0, 24.25, 60.0, 127.9] {
+            assert!((layout.bar_at(&song, layout.x_at(&song, bar)) - bar).abs() < 1e-3, "{bar}");
+        }
+    }
+
+    #[test]
+    fn zooming_keeps_the_bar_under_the_pointer() {
+        let (song, timeline) = (long_song(), timeline());
+        let view = View::default();
+        let x = 300.0;
+        let bar = view.layout(&song, timeline, 1.0).bar_at(&song, x);
+        let zoomed = view.zoomed_about(&song, timeline, 1.0, x, 6.0);
+        assert_eq!(zoomed.scale, 6.0);
+        assert!((zoomed.layout(&song, timeline, 1.0).bar_at(&song, x) - bar).abs() < 1e-2);
+        // And out again, all the way, shows the whole song
+        let out = zoomed.zoomed_about(&song, timeline, 1.0, 450.0, 0.01);
+        assert_eq!((out.scale, out.offset), (1.0, 0.0));
+    }
+
+    #[test]
+    fn zoomed_in_a_one_bar_fill_is_wide_enough_to_name_and_drag() {
+        let (song, timeline) = (long_song(), timeline());
+        let fill = 5;
+        let narrow = View::default().layout(&song, timeline, 1.0).span(fill);
+        assert!(narrow.1 - narrow.0 < 15.0);
+        let view = View { scale: 8.0, ..View::default() }.clamped(&song);
+        let (x0, x1) = view.layout(&song, timeline, 1.0).span(fill);
+        assert!(x1 - x0 > 30.0, "{}", x1 - x0);
+    }
+
+    #[test]
+    fn the_view_stays_on_the_song() {
+        let short = song(&[1], &[]);
+        let (song, timeline) = (long_song(), timeline());
+        let view = View { scale: 4.0, ..View::default() };
+        assert_eq!(view.panned(&song, timeline, -500.0).offset, 0.0);
+        assert_eq!(view.panned(&song, timeline, 1e6).window().1, 1.0);
+        // No closer than a couple of bars
+        assert_eq!(View { scale: 1e6, ..view }.clamped(&song).scale, song.bars as f32 / FEWEST_BARS);
+        // A short song doesn't zoom at all
+        assert_eq!(View { scale: 3.0, ..view }.clamped(&short).scale, 1.0);
+    }
+
+    #[test]
+    fn the_page_turns_when_the_playhead_nears_the_edge() {
+        let (song, timeline) = (long_song(), timeline());
+        let view = View { scale: 4.0, ..View::default() };
+        // Well inside: no turn
+        assert_eq!(view.turned_to(&song, timeline, 300.0), view);
+        // Near the right edge: it lands a margin in from the left
+        let turned = view.turned_to(&song, timeline, 520.0);
+        let moved = (turned.offset - view.offset) * timeline.width() * view.scale;
+        assert!((moved - (520.0 - (timeline.left() + timeline.width() * PAGE_MARGIN))).abs() < 1e-2);
     }
 }

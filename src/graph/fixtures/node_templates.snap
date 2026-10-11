@@ -2095,6 +2095,7 @@ in   Section 32 Lane 5 From Control  ConstantOnly         inline=false num -1 [-
 in   Section 32 Lane 6 From Control  ConstantOnly         inline=false num -1 [-1..1000]  stepped
 in   Section 32 Lane 7 From Control  ConstantOnly         inline=false num -1 [-1..1000]  stepped
 in   Section 32 Lane 8 From Control  ConstantOnly         inline=false num -1 [-1..1000]  stepped
+in   Width              Control  ConstantOnly         inline=true  select 0 ["Compact", "Wide", "Extra wide"] "Width"
 out  Section            Control
 out  Section Trig       Gate
 out  Bar                Gate
