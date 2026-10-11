@@ -107,6 +107,7 @@ pub fn knob_takeover(
                 },
             })
         }
+        ("seq.arranger", "Steps") => super::arranger_follow::steps_takeover(graph, user_state, node_id),
         _ => None,
     }
 }

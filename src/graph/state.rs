@@ -217,6 +217,10 @@ pub struct SynthGraphState {
     /// The cables the engine was last sent, module to module. See
     /// [`crate::app::engine_sync::sync_cables`].
     pub engine_cables: crate::app::engine_sync::LeafCables,
+
+    /// Each Arranger that follows another, and the one it follows. Set by
+    /// the app each frame: see [`super::arranger_follow`].
+    pub arranger_leaders: HashMap<NodeId, NodeId>,
 }
 
 impl Default for SynthGraphState {
@@ -264,6 +268,7 @@ impl Default for SynthGraphState {
             jack_actions: HashMap::new(),
             renaming: None,
             engine_cables: Default::default(),
+            arranger_leaders: HashMap::new(),
         }
     }
 }

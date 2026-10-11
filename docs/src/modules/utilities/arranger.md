@@ -17,6 +17,7 @@ It counts bars from a [Clock](../modulation/clock.md), like the sequencers, so t
 | **Reset** | Gate (Green) | A rising edge starts over: the next clock starts section 1 |
 | **Jump** | Gate (Green) | A rising edge goes to the section **Jump To** picks, at the next bar line |
 | **Jump To** | Control (Orange) | The section a Jump goes to, as its number ÷ 32 (section 1 is 0, section 5 is 4/32). It reads the same as the **Section** output |
+| **Follow** | Control (Orange) | Patch another Arranger's **Section** here to [follow](#more-than-eight-lanes-follow) it: its sections become this one's |
 
 ## Outputs
 
@@ -57,6 +58,19 @@ A lane is named for what its cable drives (a Mixer's **Level 2**, say) until you
 The bar under the timeline does the same for the section you picked. **◀** and **▶** step through the sections. The bars field sets its length. **+** adds a blank section after it, and **Copy** adds a copy. **◀ Move** and **Move ▶** swap it with its neighbours, and **Delete** takes it out. **Loop to** follows the section it named when sections move.
 
 A section's final bar is shaded, since that's where a fill goes. Every edit is one step of [undo](../../getting-started/interface-overview.md#the-toolbar), named for what it did ("Groove · Pad jumps to 48%").
+
+**Name…**, at the left of the bar under the lanes' names, names the Arranger itself. The name shows in its header beside the section playing, and an Arranger that follows this one calls it by its name.
+
+## More than eight lanes: Follow
+
+A song can need more than eight lanes. Patch one Arranger's **Section** output into another's **Follow** input, and the second one *follows* the first. It has the first one's sections, the same number of them, as long, with the same names, and the same **Steps** and **Loop to**. Its lanes are its own, and you edit them on its own face as before.
+
+- **Edit the sections on the leader.** On the follower they can be picked but not changed, and its bar says **Follows Desk** (or whatever the leader is called). Its **Steps** knob and **Loop to** are the leader's too.
+- **The follower's cues move with their sections.** Add, copy, move or delete a section on the leader, and the follower does the same with its own cues. Lengthening or renaming a section does too. The leader's edit and the follower's are one step of undo, so undo takes both back.
+- **Unpatch Follow** and the follower keeps the sections it had, and you can edit them on it again.
+- **Chains.** A follower can lead another, so three Arrangers give 24 lanes. A chain can't come back round: an Arranger that would end up following itself refuses the cable and says why. **Follow** takes only an Arranger's **Section**.
+
+Following happens in the editor, not in the sound. Two Arrangers that count the same Clock already change section on the same sample, so the cable only keeps their sections the same while you write. A patch plays the same with it or without it.
 
 ## Cues
 
@@ -109,13 +123,13 @@ Every section's cue for every lane is one parameter, named for both: `Section 03
 | `2080250` | Ramp to 25% over 8 bars |
 | `3000850` | Hit at 85% |
 
-The sections' lengths are `Length 01` to `Length 32`, the lanes' glides `Glide 1` to `Glide 8`, and **Sections** is how many sections the song has. The names you give sections and lanes are saved with the module as labels.
+The sections' lengths are `Length 01` to `Length 32`, the lanes' glides `Glide 1` to `Glide 8`, and **Sections** is how many sections the song has. The names you give sections and lanes, and the Arranger's own name, are saved with the module as labels. A follower saves its own copy of its leader's sections, so it plays them even where Follow isn't known.
 
 ## Tips
 
 1. **Faders at zero.** On a [Mixer](./mixer.md), set a channel's **Level** knob to 0 and patch a lane into its **Level** input. The lane then is the fader.
 2. **Fills.** Either give each phrase a one-bar **Fill** section that jumps the drum lane to the fill pattern, or patch **Last Bar** into something that plays a fill.
-3. **Two Arrangers, one song.** Arrangers on the same Clock play in lockstep. When eight lanes aren't enough, give a second Arranger the same sections. [From One Sine](../../recipes/from-one-sine.md) splits its score into faders and cues this way.
+3. **Two Arrangers, one song.** When eight lanes aren't enough, clock a second Arranger from the same Clock and patch the first one's **Section** into its **Follow** (see [Follow](#more-than-eight-lanes-follow)). [From One Sine](../../recipes/from-one-sine.md) splits its score into faders and cues this way.
 4. **Pedals.** Hit a Looper's **Rec** at the start of a section to record it, and its **Clear** at the top of the song so each pass starts fresh.
 5. **A brightness lane.** Ramp a lane over a build and patch it through an [Attenuverter](./attenuverter.md) into filter cutoffs or drive amounts: the whole build opens up together.
 6. **A shorter song.** Set **Loop to** a later section, and the intro plays only once.

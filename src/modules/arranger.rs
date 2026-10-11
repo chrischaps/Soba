@@ -248,7 +248,10 @@ impl Lane {
 /// **Inputs:** Clock (each rising edge is a step; a bar is Steps of them),
 /// Reset (the next clock starts section 1), Jump (a rising edge goes to the
 /// section Jump To picks, at the next bar line) and Jump To (the section, as
-/// its number ÷ 32, the same as the Section output).
+/// its number ÷ 32, the same as the Section output). Follow takes another
+/// Arranger's Section, and the editor keeps this one's sections the same as
+/// that one's; the engine doesn't use it, as two Arrangers counting one Clock
+/// already keep step (see `graph::arranger_follow`).
 ///
 /// **Outputs:** Section (the section playing, its index ÷ 32), Section Trig
 /// (on each section's downbeat), Bar (on every downbeat), Last Bar (high
@@ -295,6 +298,7 @@ impl Arranger {
     pub const PORT_RESET: usize = 1;
     pub const PORT_JUMP: usize = 2;
     pub const PORT_JUMP_TO: usize = 3;
+    pub const PORT_FOLLOW: usize = 4;
 
     pub const OUT_SECTION: usize = 0;
     pub const OUT_SECTION_TRIG: usize = 1;
@@ -342,6 +346,8 @@ impl Arranger {
                 .describe("A rising edge goes to the section Jump To picks, at the next bar line"),
             PortDefinition::input_with_default("jump_to", "Jump To", SignalType::Control, 0.0)
                 .describe("The section a Jump goes to, as its number ÷ 32: the same as the Section output"),
+            PortDefinition::input_with_default("follow", "Follow", SignalType::Control, 0.0)
+                .describe("Patch another Arranger's Section here to follow it: its sections, their lengths and names, Steps and Loop become this one's. The lanes stay this one's own"),
             PortDefinition::output("section", "Section", SignalType::Control)
                 .describe("The section playing, as its index ÷ 32 (section 1 is 0)"),
             PortDefinition::output("section_trig", "Section Trig", SignalType::Gate)
@@ -392,7 +398,7 @@ impl Arranger {
             );
         }
         debug_assert_eq!(parameters.len(), Self::PARAM_COUNT);
-        debug_assert_eq!(ports.len(), 4 + Self::OUT_COUNT);
+        debug_assert_eq!(ports.len(), 5 + Self::OUT_COUNT);
 
         Self { ports, parameters, ..Self::new_state() }
     }

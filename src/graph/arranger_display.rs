@@ -15,6 +15,11 @@
 //! right-click for how it gets there (Hold, Jump, Ramp, Hit). Click a section
 //! to pick it for the bar under the timeline, double-click to rename it.
 //! Every edit is one undo step.
+//!
+//! An Arranger that follows another (see [`super::arranger_follow`]) has
+//! its leader's sections, so they can be picked but not edited, and the bar
+//! says whose they are. A section added, copied, moved or deleted on a
+//! leader is on its followers too, with their own cues.
 
 use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Id, Pos2, Rect, Sense, Shape, Stroke, Vec2};
 use egui_node_graph2::{InputId, NodeId};
@@ -22,6 +27,7 @@ use egui_node_graph2::{InputId, NodeId};
 use crate::app::theme;
 use crate::modules::arranger::{ease, Arranger as Arr, Cue, Move, Position, GATE_NAMES, LANES, LANE_NAMES, MAX_BARS, MAX_GLIDE, SECTIONS};
 
+use super::arranger_follow::{self, NAME_KEY};
 use super::{SynthGraph, SynthGraphState, SynthResponse};
 
 /// Height of one output row, in unzoomed points.
@@ -240,13 +246,17 @@ fn lane_name(graph: &SynthGraph, node_id: NodeId, lane: usize) -> (Option<String
     (None, false)
 }
 
-/// The text of the Arranger's header note: the section playing.
+/// The text of the Arranger's header note: its name, if it was given one,
+/// and the section playing.
 pub fn title_note(graph: &SynthGraph, user_state: &SynthGraphState, node_id: NodeId) -> Option<String> {
-    let position = position(user_state, node_id).filter(|p| p.started)?;
-    if position.ended {
-        return Some("End".to_string());
+    let position = position(user_state, node_id).filter(|p| p.started);
+    let playing = position.map(|p| if p.ended { "End".to_string() } else { section_name(graph, node_id, p.section) });
+    match (arranger_follow::given_name(graph, node_id), playing) {
+        (Some(name), Some(playing)) => Some(format!("{name}  ▸  {playing}")),
+        (Some(name), None) => Some(name),
+        (None, Some(playing)) => Some(format!("▸  {playing}")),
+        (None, None) => None,
     }
-    Some(section_name(graph, node_id, position.section))
 }
 
 /// Shortens text to fit a width, with an ellipsis.
@@ -484,18 +494,23 @@ fn sections(
         if response.clicked() {
             select(ui.ctx(), node_id, section);
         }
-        if response.double_clicked() {
+        let leader = arranger_follow::leader(user_state, node_id);
+        if response.double_clicked() && leader.is_none() {
             let existing = graph.nodes.get(node_id).and_then(|n| n.user_data.labels.get(&key).cloned()).unwrap_or_default();
             ui.ctx().data_mut(|data| data.insert_temp(renaming_id(node_id), Renaming::start(key.clone(), existing)));
         }
+        let how = match leader {
+            Some(leader) => format!("Click to pick · it's {}'s section: edit it there", arranger_follow::name(graph, leader)),
+            None => "Click to pick · double-click to rename · right-click for more".to_string(),
+        };
         let response = response.on_hover_text(format!(
-            "{name}: {length} bar{}, from bar {}\nClick to pick · double-click to rename · right-click for more",
+            "{name}: {length} bar{}, from bar {}\n{how}",
             if length == 1 { "" } else { "s" },
             song.sections[section].0 + 1
         ));
         response.context_menu(|ui| {
             select(ui.ctx(), node_id, section);
-            section_menu(ui, node_id, graph, params, song, section, edits);
+            section_menu(ui, node_id, graph, user_state, params, song, section, edits);
         });
 
         if is_renaming {
@@ -542,7 +557,8 @@ fn rename_field(ui: &mut egui::Ui, node_id: NodeId, rect: Rect, z: f32) -> Optio
     if response.lost_focus() || enter {
         ui.ctx().data_mut(|data| data.remove::<Renaming>(id));
         let text = renaming.text.trim().to_string();
-        let label = if text.is_empty() { format!("Clear the name of {}", renaming.key) } else { format!("Name {} {text}", renaming.key) };
+        let what = if renaming.key == NAME_KEY { "the Arranger" } else { renaming.key.as_str() };
+        let label = if text.is_empty() { format!("Clear the name of {what}") } else { format!("Name {what} {text}") };
         return Some(vec![SynthResponse::SetLabels { node_id, label, labels: vec![(renaming.key, text)] }]);
     }
     ui.ctx().data_mut(|data| data.insert_temp(id, renaming));
@@ -783,11 +799,38 @@ fn lane_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, song: &Song, l
 }
 
 /// A section's right-click menu.
-fn section_menu(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, section: usize, edits: &mut Vec<SynthResponse>) {
+#[allow(clippy::too_many_arguments)]
+fn section_menu(
+    ui: &mut egui::Ui,
+    node_id: NodeId,
+    graph: &SynthGraph,
+    user_state: &SynthGraphState,
+    params: &Params,
+    song: &Song,
+    section: usize,
+    edits: &mut Vec<SynthResponse>,
+) {
     let name = section_name(graph, node_id, section);
     ui.label(egui::RichText::new(format!("Section {}: {name}", section + 1)).strong());
     ui.separator();
-    section_controls(ui, node_id, graph, params, song, section, edits, true);
+    match arranger_follow::leader(user_state, node_id) {
+        Some(leader) => {
+            ui.label(follows_text(graph, leader));
+            ui.label(egui::RichText::new(follows_hint(graph, leader)).small().color(theme::text::SECONDARY));
+        }
+        None => section_controls(ui, node_id, graph, user_state, params, song, section, edits, true),
+    }
+}
+
+/// What a follower shows in place of its section controls.
+fn follows_text(graph: &SynthGraph, leader: NodeId) -> egui::RichText {
+    egui::RichText::new(format!("Follows {}", arranger_follow::name(graph, leader))).color(theme::signal::CONTROL)
+}
+
+/// What a follower's "Follows" says when it's hovered.
+fn follows_hint(graph: &SynthGraph, leader: NodeId) -> String {
+    let leader = arranger_follow::name(graph, leader);
+    format!("Its sections, Steps and Loop are {leader}'s, through the cable into Follow: edit them on {leader}. Its lanes are its own.\nUnpatch Follow to edit its sections here; it keeps them")
 }
 
 /// The bar under the timeline: the section picked, its length, and the
@@ -799,8 +842,8 @@ pub fn section_bar(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_
     let mut edits = Vec::new();
     ui.add_space(4.0 * zoom);
     ui.horizontal(|ui| {
-        ui.add_space(LABEL * zoom);
         ui.style_mut().spacing.item_spacing.x = 4.0 * zoom;
+        name_field(ui, node_id, graph, LABEL * zoom - ui.spacing().item_spacing.x, zoom, &mut edits);
         if ui.small_button("◀").on_hover_text("The section before").clicked() {
             select(ui.ctx(), node_id, section.saturating_sub(1));
         }
@@ -811,14 +854,60 @@ pub fn section_bar(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_
         let playing = position(user_state, node_id).is_some_and(|p| p.started && !p.ended && p.section == section);
         let ink = if playing { theme::signal::GATE } else { theme::text::PRIMARY };
         ui.label(egui::RichText::new(format!("{} · {name}", section + 1)).color(ink).strong());
-        section_controls(ui, node_id, graph, &params, &song, section, &mut edits, false);
+        match arranger_follow::leader(user_state, node_id) {
+            Some(leader) => {
+                let length = song.sections[section].1;
+                ui.label(egui::RichText::new(format!("{length} bar{}", if length == 1 { "" } else { "s" })).color(theme::text::SECONDARY));
+                ui.add_space(6.0 * zoom);
+                ui.label(follows_text(graph, leader)).on_hover_text(follows_hint(graph, leader));
+            }
+            None => section_controls(ui, node_id, graph, user_state, &params, &song, section, &mut edits, false),
+        }
     });
     edits
 }
 
+/// The Arranger's own name, at the left of the section bar under its
+/// lanes' names: click to give it one, which its followers call it by.
+fn name_field(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, width: f32, z: f32, edits: &mut Vec<SynthResponse>) {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 16.0 * z), Sense::click());
+    let renaming: Option<Renaming> = ui.ctx().data(|data| data.get_temp(renaming_id(node_id)));
+    if renaming.is_some_and(|r| r.key == NAME_KEY) {
+        if let Some(done) = rename_field(ui, node_id, rect, z) {
+            edits.extend(done);
+        }
+        return;
+    }
+    let given = arranger_follow::given_name(graph, node_id);
+    let font = FontId::proportional(10.0 * z);
+    let (text, ink) = match &given {
+        Some(name) => (fit(ui.painter(), name, &font, rect.width() - 2.0 * z), theme::text::PRIMARY),
+        None => ("Name…".to_string(), theme::text::DISABLED),
+    };
+    let ink = if response.hovered() { ink.lerp_to_gamma(Color32::WHITE, 0.3) } else { ink };
+    ui.painter().text(Pos2::new(rect.left() + 1.0 * z, rect.center().y), Align2::LEFT_CENTER, text, font, ink);
+    let response = response.on_hover_cursor(CursorIcon::Text).on_hover_text(match &given {
+        Some(name) => format!("{name}: click to rename this Arranger"),
+        None => "Click to name this Arranger, so the ones that follow it can say so".to_string(),
+    });
+    if response.clicked() {
+        ui.ctx().data_mut(|data| data.insert_temp(renaming_id(node_id), Renaming::start(NAME_KEY.to_string(), given.unwrap_or_default())));
+    }
+}
+
 /// A section's length and the buttons for it, in the bar or its menu.
 #[allow(clippy::too_many_arguments)]
-fn section_controls(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, section: usize, edits: &mut Vec<SynthResponse>, menu: bool) {
+fn section_controls(
+    ui: &mut egui::Ui,
+    node_id: NodeId,
+    graph: &SynthGraph,
+    user_state: &SynthGraphState,
+    params: &Params,
+    song: &Song,
+    section: usize,
+    edits: &mut Vec<SynthResponse>,
+    menu: bool,
+) {
     let name = section_name(graph, node_id, section);
     let length = song.sections[section].1;
     let mut bars = length as u32;
@@ -841,26 +930,38 @@ fn section_controls(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, para
         }
     };
     let ctx = ui.ctx().clone();
+    let chain = |edit: &dyn Fn(NodeId, &Params, &Song) -> Vec<SynthResponse>| Some(down_the_chain(node_id, graph, user_state, edit));
     action(ui, "+", "Add a section after this one", !full, &|| {
         select(&ctx, node_id, section + 1);
-        Some(insert(node_id, graph, params, song, section + 1, None))
+        chain(&|id, params, song| insert(id, graph, params, song, section + 1, None))
     });
     action(ui, "Copy", "Add a copy of this section after it", !full, &|| {
         select(&ctx, node_id, section + 1);
-        Some(insert(node_id, graph, params, song, section + 1, Some(section)))
+        chain(&|id, params, song| insert(id, graph, params, song, section + 1, Some(section)))
     });
     action(ui, "◀ Move", "Swap with the section before", section > 0, &|| {
         select(&ctx, node_id, section - 1);
-        Some(swap(node_id, graph, params, song, section - 1))
+        chain(&|id, params, song| swap(id, graph, params, song, section - 1))
     });
     action(ui, "Move ▶", "Swap with the section after", section + 1 < count, &|| {
         select(&ctx, node_id, section + 1);
-        Some(swap(node_id, graph, params, song, section))
+        chain(&|id, params, song| swap(id, graph, params, song, section))
     });
     action(ui, "Delete", "Take this section out of the song", count > 1, &|| {
         select(&ctx, node_id, section.saturating_sub(1).min(count - 2));
-        Some(remove(node_id, graph, params, song, section))
+        chain(&|id, params, song| remove(id, graph, params, song, section))
     });
+}
+
+/// A change to the sections made on an Arranger and on every one down the
+/// chain that follows it, each with its own cues, so the cues move with
+/// their sections. `arranger_follow` then copies the lengths and names.
+fn down_the_chain(node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphState, edit: &dyn Fn(NodeId, &Params, &Song) -> Vec<SynthResponse>) -> Vec<SynthResponse> {
+    std::iter::once(node_id)
+        .chain(arranger_follow::followers(&user_state.arranger_leaders, node_id))
+        .filter_map(|id| Params::of(graph, id).map(|params| (id, params)))
+        .flat_map(|(id, params)| edit(id, &params, &Song::of(params.values())))
+        .collect()
 }
 
 /// What one section holds: its length, its cues and its name.
@@ -969,6 +1070,79 @@ mod tests {
         assert!((state(1).at(3.0) - 0.6).abs() < 1e-5, "half way through a two-bar ramp");
         assert_eq!(state(1).at(5.0), 0.8);
         assert_eq!(state(2).at(7.0), 0.8, "held");
+    }
+
+    #[test]
+    fn a_followers_cues_move_with_the_leaders_sections() {
+        use crate::graph::{create_editor_state, SynthNodeTemplate};
+        use egui_node_graph2::NodeTemplateTrait;
+
+        let mut editor = create_editor_state();
+        let mut user_state = SynthGraphState::new();
+        let template = SynthNodeTemplate::from_module_id(arranger_follow::MODULE).unwrap();
+        let mut add = |graph: &mut SynthGraph| {
+            graph.add_node(template.node_graph_label(&mut user_state), template.user_data(&mut user_state), |graph, node_id| {
+                template.build_node(graph, &mut SynthGraphState::new(), node_id)
+            })
+        };
+        let graph = &mut editor.graph;
+        let (desk, cues) = (add(graph), add(graph));
+        let (output, input) = (graph[desk].get_output("Section").unwrap(), graph[cues].get_input(arranger_follow::FOLLOW).unwrap());
+        graph.add_connection(output, input, 0);
+        let set = |graph: &mut SynthGraph, node: NodeId, index: usize, value: f32| {
+            let id = Params::of(graph, node).unwrap().inputs[index].1;
+            graph.inputs[id].value.set_actual_value(value);
+        };
+        set(graph, desk, Arr::PARAM_SECTIONS, 3.0);
+        for (section, level) in [100, 200, 300].into_iter().enumerate() {
+            set(graph, cues, Arr::cue_param(section, 0), Cue::jump(level).encode());
+        }
+        user_state.arranger_leaders = arranger_follow::leaders(graph);
+        arranger_follow::sync(graph, &user_state.arranger_leaders);
+
+        // What the app does with the edits, and then each frame
+        let apply = |graph: &mut SynthGraph, edits: Vec<SynthResponse>| {
+            for edit in edits {
+                match edit {
+                    SynthResponse::EditParameters { node_id, changes, .. } => {
+                        for (name, value) in changes {
+                            let id = graph[node_id].get_input(&name).unwrap();
+                            graph.inputs[id].value.set_actual_value(value);
+                        }
+                    }
+                    SynthResponse::SetLabels { node_id, labels, .. } => {
+                        for (key, text) in labels.into_iter().filter(|(_, text)| !text.is_empty()) {
+                            graph[node_id].user_data.labels.insert(key, text);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let leaders = arranger_follow::leaders(graph);
+            arranger_follow::sync(graph, &leaders);
+        };
+        let levels = |graph: &SynthGraph| {
+            let song = Song::of(Params::of(graph, cues).unwrap().values());
+            (0..song.count()).map(|section| song.cue(section, 0).level).collect::<Vec<_>>()
+        };
+        let on_desk = |graph: &SynthGraph, edit: &dyn Fn(NodeId, &Params, &Song) -> Vec<SynthResponse>| down_the_chain(desk, graph, &user_state, edit);
+
+        let edits = on_desk(graph, &|id, params, song| remove(id, graph, params, song, 1));
+        apply(graph, edits);
+        assert_eq!(levels(graph), [100, 300]);
+        let edits = on_desk(graph, &|id, params, song| swap(id, graph, params, song, 0));
+        apply(graph, edits);
+        assert_eq!(levels(graph), [300, 100]);
+        let edits = on_desk(graph, &|id, params, song| insert(id, graph, params, song, 1, Some(0)));
+        apply(graph, edits);
+        assert_eq!(levels(graph), [300, 300, 100]);
+        let edits = on_desk(graph, &|id, params, song| insert(id, graph, params, song, 0, None));
+        apply(graph, edits);
+        assert_eq!(levels(graph), [0, 300, 300, 100]);
+        // The leader has the same sections, its own cues untouched
+        let desk_song = Song::of(Params::of(graph, desk).unwrap().values());
+        assert_eq!(desk_song.count(), 4);
+        assert!((0..4).all(|section| desk_song.cue(section, 0) == Cue::HOLD));
     }
 
     #[test]

@@ -132,3 +132,19 @@ fn the_desk_and_the_cues_keep_the_same_sections() {
         .collect();
     assert_eq!(layouts[0], layouts[1], "both Arrangers play the same song");
 }
+
+#[test]
+fn the_cues_follow_the_desk() {
+    let patch = from_one_sine();
+    let named = |name: &str| {
+        patch
+            .nodes
+            .iter()
+            .find(|n| n.module_id == "seq.arranger" && n.labels.get("Name").map(String::as_str) == Some(name))
+            .unwrap_or_else(|| panic!("an Arranger named {name}"))
+            .id
+    };
+    let (desk, cues) = (named("Desk"), named("Cues"));
+    let follows = patch.connections.iter().any(|c| c.from_node == desk && c.from_port == "Section" && c.to_node == cues && c.to_port == "Follow");
+    assert!(follows, "Desk's Section is patched into Cues' Follow, so the editor keeps their sections the same");
+}

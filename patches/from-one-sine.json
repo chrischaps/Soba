@@ -9002,7 +9002,7 @@
       "id": 79,
       "module_id": "seq.arranger",
       "position": [
-        300.0,
+        930.0,
         450.0
       ],
       "parameters": [
@@ -10510,6 +10510,7 @@
         "Lane 5": "Memory",
         "Lane 6": "Rec",
         "Lane 7": "Clear",
+        "Name": "Cues",
         "Section 1": "First Sound",
         "Section 10": "Fill",
         "Section 11": "Lift",
@@ -10540,7 +10541,7 @@
       "id": 80,
       "module_id": "seq.arranger",
       "position": [
-        930.0,
+        300.0,
         450.0
       ],
       "parameters": [
@@ -12049,6 +12050,7 @@
         "Lane 6": "Pad",
         "Lane 7": "Wind",
         "Lane 8": "Lead",
+        "Name": "Desk",
         "Section 1": "First Sound",
         "Section 10": "Fill",
         "Section 11": "Lift",
@@ -12130,6 +12132,12 @@
       "from_port": "Gate",
       "to_node": 80,
       "to_port": "Clock"
+    },
+    {
+      "from_node": 80,
+      "from_port": "Section",
+      "to_node": 79,
+      "to_port": "Follow"
     },
     {
       "from_node": 2,
@@ -13145,7 +13153,7 @@
   ],
   "notes": [
     {
-      "text": "**This patch is its own score.** Two **Arrangers** count the song in bars, 24 sections from First Sound to One Sine. **Desk**, on the right, rides eight faders. **Cues** picks the drum pattern, strikes the crash, holds the riser, brightens the pad and bass, and presses the Looper's pedals.",
+      "text": "**This patch is its own score.** Two **Arrangers** count the song in bars, 24 sections from First Sound to One Sine. **Desk**, on the left, rides eight faders. **Cues** follows Desk's sections, through the cable into its **Follow**, and picks the drum pattern, strikes the crash, holds the riser, brightens the pad and bass, and presses the Looper's pedals.",
       "position": [
         24.0,
         450.0

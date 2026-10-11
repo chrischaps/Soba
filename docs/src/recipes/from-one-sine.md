@@ -81,6 +81,7 @@ Each section of the song is sixteen bars. On the Arrangers they're 24 sections: 
 ```text
 [Clock Gate] ──> [Desk Clock]
              ──> [Cues Clock]
+[Desk Section] ──> [Cues Follow]              (Cues follows Desk's sections)
 [Desk Lane 6] ──> [Mixer Body Level 2]        (the pad, both sides)
               ──> [Mixer Body Level 3]
 [Cues Lane 3] ──> [Mixer Sky Level 4]         (the riser's level)
@@ -89,9 +90,9 @@ Each section of the song is sixteen bars. On the Arrangers they're 24 sections: 
 
 Both Arrangers count the Clock's sixteenths, sixteen to a bar, through the same 24 sections: First Sound, Echo, Sparkles, Arp, Pulse, Bass, Bells, Riser, Groove, Fill, Lift, Fill, Memory, Answer, Build, Everything, Fill, Second Wave, Lead Returns, Fill, Return, Sine Returns, Thinning and One Sine. They change section on the same clock edge as the sequencers step on, so the score and the music can't drift apart. **Loop to** is 1, so the song goes round again.
 
-**Desk**, the Arranger on the right, has a lane for each fader: the sine, arpeggio, bells, sparkles, bass, pad, wind and lead. On the Echoes, Body and Sky mixers each channel's **Level** knob is at zero, and its **Level** input adds the lane on top. Most sections jump a fader to a new level on their downbeat, and the rest hold it. The mixer adds a control voltage without smoothing it, so each lane has a **Glide**: a second for the pad, wind and sparkles, 0.8 s for the sine, 0.3 s for the lead, and 40 ms for the arp, bass and bells, which still land on the downbeat but never cut a tail short.
+**Desk**, the Arranger on the left, has a lane for each fader: the sine, arpeggio, bells, sparkles, bass, pad, wind and lead. On the Echoes, Body and Sky mixers each channel's **Level** knob is at zero, and its **Level** input adds the lane on top. Most sections jump a fader to a new level on their downbeat, and the rest hold it. The mixer adds a control voltage without smoothing it, so each lane has a **Glide**: a second for the pad, wind and sparkles, 0.8 s for the sine, 0.3 s for the lead, and 40 ms for the arp, bass and bells, which still land on the downbeat but never cut a tail short.
 
-**Cues**, on the left, has the rest. **Drums** picks the drum pattern (see [Drums and fills](#drums-and-fills)). **Crash** hits on the downbeat of each big section, and its level is the cymbal's accent. **Riser** jumps to 30% for the Riser section and 32% for the Build. Its CV is the riser's level, and its gate holds the riser's envelope open for exactly those four bars. **Heat** ramps up through the opening, 8% to 48% over seven sections, and keeps climbing to its peak at Everything. Through two Attenuverters it opens the pad's Ladder and drives the bass harder. **Memory** is the Looper's level, and **Rec** and **Clear** hit its pedals.
+**Cues**, on the right, has the rest. It [follows](../modules/utilities/arranger.md#more-than-eight-lanes-follow) Desk: Desk's **Section** is patched into its **Follow**, so its sections are always Desk's, and an edit to them on Desk is made on Cues too. **Drums** picks the drum pattern (see [Drums and fills](#drums-and-fills)). **Crash** hits on the downbeat of each big section, and its level is the cymbal's accent. **Riser** jumps to 30% for the Riser section and 32% for the Build. Its CV is the riser's level, and its gate holds the riser's envelope open for exactly those four bars. **Heat** ramps up through the opening, 8% to 48% over seven sections, and keeps climbing to its peak at Everything. Through two Attenuverters it opens the pad's Ladder and drives the bass harder. **Memory** is the Looper's level, and **Rec** and **Clear** hit its pedals.
 
 ### Harmony, a chord a bar
 
@@ -153,9 +154,9 @@ The sine, arpeggio, bells and sparkles share the Echoes mixer, whose send feeds 
 
 ## Variations
 
-**Rearrange it.** Drag a lane on the Desk up or down in any section to move that fader, or right-click it to ramp instead of jump. Delete a **Fill** section on both Arrangers for a phrase of groove without a fill. Keep the two Arrangers' sections the same: they play one song.
+**Rearrange it.** Drag a lane on the Desk up or down in any section to move that fader, or right-click it to ramp instead of jump. Delete a **Fill** section on the Desk for a phrase of groove without a fill: Cues follows, and its cues for the Fill go with it.
 
-**A shorter song.** Set both Arrangers' **Loop to** to 9, the Groove. The opening plays once, and then the song goes round from the groove to the end.
+**A shorter song.** Set the Desk's **Loop to** to 9, the Groove, and Cues follows. The opening plays once, and then the song goes round from the groove to the end.
 
 **Remember something else.** Patch the Arp's VCA into the Looper's **In L** instead of the sine. The breakdown then hears the arpeggio, slowed and backwards.
 

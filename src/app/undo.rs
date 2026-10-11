@@ -1331,6 +1331,40 @@ mod tests {
     }
 
     #[test]
+    fn test_a_follower_follows_in_the_leaders_undo_step() {
+        use crate::graph::arranger_follow;
+        let mut rig = Rig::new();
+        let desk = rig.add("seq.arranger", pos2(0.0, 0.0));
+        let cues = rig.add("seq.arranger", pos2(700.0, 0.0));
+        // A frame as the app has it: followers follow, then the step's taken
+        let frame = |rig: &mut Rig| {
+            let leaders = arranger_follow::leaders(&rig.editor.graph);
+            arranger_follow::sync(&mut rig.editor.graph, &leaders);
+            rig.record();
+        };
+        rig.set(desk, "Length 01", 8.0);
+        rig.editor.graph[desk].user_data.labels.insert("Section 1".into(), "Intro".into());
+        frame(&mut rig);
+        let section = |rig: &Rig, node| (rig.param(node, "Length 01"), rig.editor.graph[node].user_data.labels.get("Section 1").cloned());
+
+        // Patching Follow brings the sections with it, and undo takes both
+        rig.connect(desk, "Section", cues, "Follow");
+        frame(&mut rig);
+        assert_eq!(section(&rig, cues), (8.0, Some("Intro".into())));
+        rig.undo();
+        assert_eq!(section(&rig, cues), (4.0, None));
+        rig.redo();
+        assert_eq!(section(&rig, cues), (8.0, Some("Intro".into())));
+
+        // An edit to the leader is on the follower too, in one step
+        rig.set(desk, "Length 01", 2.0);
+        frame(&mut rig);
+        assert_eq!(rig.param(cues, "Length 01"), 2.0);
+        rig.undo();
+        assert_eq!((rig.param(desk, "Length 01"), rig.param(cues, "Length 01")), (8.0, 8.0));
+    }
+
+    #[test]
     fn test_a_deleted_sampler_comes_back_with_its_file() {
         let mut rig = Rig::new();
         let sampler = rig.add("source.sampler", pos2(0.0, 0.0));

@@ -1280,7 +1280,7 @@ impl NodeDataTrait for SynthNodeData {
         );
         self.draw_category_icon(ui.painter(), icon_center, icon_size, self.titlebar_ink());
 
-        // The Arranger names the section playing, at the header's far end
+        // The Arranger shows its name and the section playing, after the title
         if self.display == NodeDisplay::Timeline {
             if let Some(note) = super::arranger_display::title_note(graph, user_state, node_id) {
                 // After the title, which the editor draws next
@@ -1288,7 +1288,7 @@ impl NodeDataTrait for SynthNodeData {
                 let title = ui.painter().layout_no_wrap(graph[node_id].label.clone(), title_font, Color32::WHITE).size().x;
                 let font = egui::FontId::proportional(11.0 * zoom);
                 let ink = self.titlebar_ink();
-                let galley = ui.painter().layout_no_wrap(format!("▸  {note}"), font, ink.gamma_multiply(0.85));
+                let galley = ui.painter().layout_no_wrap(note, font, ink.gamma_multiply(0.85));
                 let at = egui::pos2(icon_rect.right() + title + 12.0 * zoom, icon_rect.center().y - galley.size().y / 2.0);
                 ui.painter().galley(at, galley, ink);
             }

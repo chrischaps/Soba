@@ -233,17 +233,22 @@ impl WidgetValueTrait for SynthValueType {
             Self::Select { value, options, label } => {
                 // Select gets an inline ComboBox - discrete choices need dropdown
                 let zoom = user_state.zoom;
+                // A following Arranger's Loop is its leader's
+                let locked = super::arranger_follow::locks(node_data.module_id, param_name, node_id, user_state);
                 ui.horizontal(|ui: &mut egui::Ui| {
                     let name = name(ui, label);
-                    let combo = egui::ComboBox::from_id_salt(param_name)
-                        .width(60.0 * zoom)
-                        .selected_text(options.get(*value).map(|s| s.as_str()).unwrap_or(""))
-                        .show_ui(ui, |ui: &mut egui::Ui| {
-                            for (i, option) in options.iter().enumerate() {
-                                ui.selectable_value(value, i, option);
-                            }
-                        });
-                    (name, combo.response)
+                    let combo = ui.add_enabled_ui(!locked, |ui| {
+                        egui::ComboBox::from_id_salt(param_name)
+                            .width(60.0 * zoom)
+                            .selected_text(options.get(*value).map(|s| s.as_str()).unwrap_or(""))
+                            .show_ui(ui, |ui: &mut egui::Ui| {
+                                for (i, option) in options.iter().enumerate() {
+                                    ui.selectable_value(value, i, option);
+                                }
+                            })
+                    });
+                    let response = combo.inner.response.on_disabled_hover_text("It follows another Arranger, and plays that one's Loop");
+                    (name, response)
                 })
                 .inner
             }

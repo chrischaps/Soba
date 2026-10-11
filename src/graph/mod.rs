@@ -21,6 +21,7 @@ mod tape_display;
 mod vocoder_display;
 mod trigger_display;
 mod arranger_display;
+pub mod arranger_follow;
 mod chord_grid;
 mod step_grid;
 mod mixer_strips;

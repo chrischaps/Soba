@@ -1539,6 +1539,7 @@ in   Clock              Gate     ConnectionOnly       inline=true  port
 in   Reset              Gate     ConnectionOnly       inline=true  port
 in   Jump               Gate     ConnectionOnly       inline=true  port
 in   Jump To            Control  ConnectionOnly       inline=true  port
+in   Follow             Control  ConnectionOnly       inline=true  port
 in   Steps              Control  ConstantOnly         inline=false num 16 [1..96]  stepped
 in   Sections           Control  ConstantOnly         inline=false num 4 [1..32]  stepped
 in   Loop               Control  ConstantOnly         inline=true  select 1 ["Off", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32"] "Loop to"

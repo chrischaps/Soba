@@ -2211,6 +2211,13 @@ impl SynthApp {
         }
     }
 
+    /// Keeps each Arranger that follows another playing its leader's
+    /// sections. See [`crate::graph::arranger_follow`].
+    fn follow_arrangers(&mut self) {
+        self.user_state.arranger_leaders = crate::graph::arranger_follow::leaders(&self.graph_state.graph);
+        crate::graph::arranger_follow::sync(&mut self.graph_state.graph, &self.user_state.arranger_leaders);
+    }
+
     /// Sends the engine whatever cables have changed since it last heard,
     /// module to module through any groups.
     fn sync_cables(&mut self) {
@@ -3256,7 +3263,8 @@ impl SynthApp {
                 if !result.is_valid() {
                     result.error_message().map(|s| s.to_string())
                 } else {
-                    None
+                    // An Arranger follows only another's Section, and not round in a loop
+                    crate::graph::arranger_follow::refusal(&self.graph_state.graph, output, input)
                 }
             }
             _ => {
@@ -4033,6 +4041,9 @@ impl eframe::App for SynthApp {
         } else {
             toolbar_actions
         };
+
+        // Followers take their leaders' sections, in the same undo step
+        self.follow_arrangers();
 
         // Sync parameter values to the audio engine
         self.sync_parameters();
