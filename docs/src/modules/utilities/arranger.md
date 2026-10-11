@@ -51,7 +51,8 @@ A lane is named for what its cable drives (a Mixer's **Level 2**, say) until you
 - **Click** a section to pick it. The bar under the timeline shows it.
 - **Double-click** a section to rename it. Press Enter to keep the name, or Escape to leave it.
 - **Drag** a lane up or down inside a section to set the level that section takes it to. A section that held the lane now jumps it.
-- **Right-click** a lane inside a section for how it gets there (see [Cues](#cues)), its level, and a ramp's length.
+- **Shift-drag** a lane inside a section to set where its ramp starts. Any other cue becomes a ramp from there to its level, or for a Hold, to where the lane was.
+- **Right-click** a lane inside a section for how it gets there (see [Cues](#cues)), its level, and a ramp's length, curve and start.
 - **Double-click** a lane's name to rename it. **Right-click** it to set its **Glide**, or to clear it.
 - **Right-click** a section for its length, and to add, copy, move or delete it.
 
@@ -80,16 +81,31 @@ Each section gives each lane one of four cues as the section starts:
 |-----|--------------------|
 | **Hold** | Carries on as it was. If it was ramping, the ramp carries on. A new section holds every lane |
 | **Jump** | Goes straight to the level, on the downbeat |
-| **Ramp** | Glides from wherever it is to the level, over the whole section or over a number of bars. A ramp longer than its section carries on through the sections after it that hold |
+| **Ramp** | Glides to the level over the whole section or over a number of bars, on one of four [curves](#ramps). It starts from wherever the lane is, or from a level of its own. A ramp longer than its section carries on through the sections after it that hold |
 | **Hit** | Goes to the level for half a step, then back: a trigger, with the level riding on the CV, for a Drum's **Trig** and **Accent** or a Looper's **Rec** |
 
-A ramp follows an S-curve: it leaves gently and arrives gently. That makes a Mixer's **Level** fade without a click, however slow or quick the ramp.
+### Ramps
+
+![The four ramp curves: S-curve, Linear, Exp and Log](../../images/arranger-curves.svg)
+
+A ramp takes one of four shapes, chosen in its right-click menu and drawn to shape on the lane:
+
+| Curve | Shape | Suits |
+|-------|-------|-------|
+| **S-curve** | Leaves gently and arrives gently, like a hand on a fader. The default, and how every ramp moved before there was a choice | Fades. A Mixer's **Level** moves without a click, however slow or quick the ramp |
+| **Linear** | The same pace all the way | A steady build, or a tempo-like push |
+| **Exp** | Slow to start, fast to finish: a fifth of the way there at half time | A filter sweep or a riser that rushes into the downbeat |
+| **Log** | Fast to start, slow to finish: four fifths of the way there at half time | A swell that settles, or a fade that tails away |
+
+Exp and Log are mirror images, so an Exp fade-out holds on and then drops away, and a Log one falls quickly and then lingers.
+
+**From** sets where a ramp starts. **Where it is** carries on from the lane's level as the section starts. **A level** jumps the lane there on the downbeat, as a Jump would, gate dip and Glide included, and ramps from there. A part can then come in at one level and grow through the same section: a pad that enters at 28% and swells to 42% over twelve bars is one cue.
 
 ### The gate
 
 A lane's **Gate** is high while the lane is above zero. One lane can therefore be a part's level and its envelope's gate at once. A riser that jumps to 30% for a section and back to 0 is heard for that section and gated for exactly as long.
 
-When a Jump or Hit lands while the gate is already high, the gate drops for one sample first, so an envelope starts again. A ramp up from zero opens the gate as it leaves zero.
+When a Jump or Hit lands while the gate is already high, the gate drops for one sample first, so an envelope starts again. So does a ramp that starts from a level of its own. A ramp up from zero opens the gate as it leaves zero.
 
 ### Glide
 
@@ -113,15 +129,20 @@ After the last section, the song goes back to **Loop to**, and **End** fires. Wi
 
 ## How patches store it
 
-Every section's cue for every lane is one parameter, named for both: `Section 03 Lane 2` is section 3's cue for lane 2. Its value reads as digits, **move**, **ramp bars** and **level** in tenths of a percent:
+Every section's cue for every lane is one parameter, named for both: `Section 03 Lane 2` is section 3's cue for lane 2. Its value reads as digits, **move**, **ramp bars** and **level** in tenths of a percent. The move is 0 Hold, 1 Jump, 2 Ramp and 3 Hit, and a ramp on another curve takes 4 Linear, 5 Exp or 6 Log:
 
 | Value | Cue |
 |-------|-----|
 | `0` | Hold |
 | `1000700` | Jump to 70% |
-| `2000500` | Ramp to 50% over the section |
-| `2080250` | Ramp to 25% over 8 bars |
+| `2000500` | Ramp to 50% over the section, on the S-curve |
+| `2080250` | Ramp to 25% over 8 bars, on the S-curve |
+| `4000500` | Ramp to 50% over the section, in a line |
+| `5160900` | Ramp to 90% over 16 bars, on Exp |
+| `6040000` | Ramp to 0% over 4 bars, on Log |
 | `3000850` | Hit at 85% |
+
+A ramp's start is a second parameter, `Section 03 Lane 2 From`: the level in tenths of a percent (`280` starts at 28%), or `-1` to start from where the lane is. Patches saved before ramps had curves and starts have no From parameters and only 2 for ramps, so they play as they always did.
 
 The sections' lengths are `Length 01` to `Length 32`, the lanes' glides `Glide 1` to `Glide 8`, and **Sections** is how many sections the song has. The names you give sections and lanes, and the Arranger's own name, are saved with the module as labels. A follower saves its own copy of its leader's sections, so it plays them even where Follow isn't known.
 

@@ -10828,7 +10828,7 @@
         {
           "name": "Section 02 Lane 6",
           "type": "Number",
-          "value": 1000280.0
+          "value": 4120420.0
         },
         {
           "name": "Section 02 Lane 7",
@@ -10868,7 +10868,7 @@
         {
           "name": "Section 03 Lane 6",
           "type": "Number",
-          "value": 1000360.0
+          "value": 0.0
         },
         {
           "name": "Section 03 Lane 7",
@@ -10908,7 +10908,7 @@
         {
           "name": "Section 04 Lane 6",
           "type": "Number",
-          "value": 1000420.0
+          "value": 0.0
         },
         {
           "name": "Section 04 Lane 7",
@@ -12039,6 +12039,11 @@
           "name": "Section 32 Lane 8",
           "type": "Number",
           "value": 0.0
+        },
+        {
+          "name": "Section 02 Lane 6 From",
+          "type": "Number",
+          "value": 280.0
         }
       ],
       "labels": {

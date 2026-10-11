@@ -11,8 +11,9 @@
 //!   along the bottom a green strip wherever its gate is high, with a tick
 //!   for each Hit.
 //!
-//! Drag a lane up or down in a section to set where that section takes it;
-//! right-click for how it gets there (Hold, Jump, Ramp, Hit). Click a section
+//! Drag a lane up or down in a section to set where that section takes it,
+//! or Shift-drag to set where its ramp starts; right-click for how it gets
+//! there (Hold, Jump, Ramp, Hit, and a ramp's curve and start). Click a section
 //! to pick it for the bar under the timeline, double-click to rename it.
 //! Every edit is one undo step.
 //!
@@ -25,7 +26,7 @@ use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Id, Pos2, Rect, Se
 use egui_node_graph2::{InputId, NodeId};
 
 use crate::app::theme;
-use crate::modules::arranger::{ease, Arranger as Arr, Cue, Move, Position, GATE_NAMES, LANES, LANE_NAMES, MAX_BARS, MAX_GLIDE, SECTIONS};
+use crate::modules::arranger::{Arranger as Arr, Cue, Curve, Move, Position, FROM_WHERE_IT_IS, GATE_NAMES, LANES, LANE_NAMES, MAX_BARS, MAX_GLIDE, SECTIONS};
 
 use super::arranger_follow::{self, NAME_KEY};
 use super::{SynthGraph, SynthGraphState, SynthResponse};
@@ -80,6 +81,11 @@ fn edit(node_id: NodeId, label: impl Into<String>, changes: Vec<(String, f32)>) 
     SynthResponse::EditParameters { node_id, label: label.into(), changes }
 }
 
+/// The parameter changes that store a cue: its own and its From.
+fn cue_changes(params: &Params, section: usize, lane: usize, cue: Cue) -> Vec<(String, f32)> {
+    vec![(params.name(Arr::cue_param(section, lane)), cue.encode()), (params.name(Arr::from_param(section, lane)), cue.encode_from())]
+}
+
 /// The song as the parameters have it: where each section starts, in bars.
 struct Song {
     values: Vec<f32>,
@@ -122,31 +128,41 @@ impl Song {
     }
 }
 
-/// A lane's level as the timeline works it out, in bars rather than clocks.
+/// A ramp as the timeline draws it, in bars rather than clocks.
+#[derive(Clone, Copy, Debug)]
+struct DrawnRamp {
+    from: f32,
+    to: f32,
+    curve: Curve,
+    start: f32,
+    bars: f32,
+}
+
+/// A lane's level as the timeline works it out.
 #[derive(Clone, Copy, Debug, Default)]
 struct LaneState {
     level: f32,
-    ramp: Option<(f32, f32, f32, f32)>,
+    ramp: Option<DrawnRamp>,
 }
 
 impl LaneState {
     fn at(&self, bar: f32) -> f32 {
         match self.ramp {
-            Some((from, to, start, bars)) if bar < start + bars => from + (to - from) * ease((bar - start) / bars),
-            Some((_, to, _, _)) => to,
+            Some(r) if bar < r.start + r.bars => r.from + (r.to - r.from) * r.curve.shape((bar - r.start) / r.bars),
+            Some(r) => r.to,
             None => self.level,
         }
     }
 
     /// The state once a section starting at `start` has given its cue.
     fn cued(self, cue: Cue, start: f32, length: f32) -> Self {
-        let now = self.at(start);
         match cue.kind {
             Move::Hold | Move::Hit => self,
             Move::Jump => LaneState { level: cue.value(), ramp: None },
             Move::Ramp => {
+                let from = cue.from_value().unwrap_or_else(|| self.at(start));
                 let bars = if cue.bars == 0 { length } else { cue.bars as f32 };
-                LaneState { level: now, ramp: Some((now, cue.value(), start, bars.max(1.0))) }
+                LaneState { level: from, ramp: Some(DrawnRamp { from, to: cue.value(), curve: cue.curve, start, bars: bars.max(1.0) }) }
             }
         }
     }
@@ -276,15 +292,32 @@ fn fit(painter: &egui::Painter, text: &str, font: &FontId, width: f32) -> String
     String::new()
 }
 
+/// A level in words.
+fn percent(level: f32) -> String {
+    format!("{}%", (level * 100.0).round())
+}
+
 /// How a cue reads in words.
 fn describe(cue: Cue) -> String {
-    let level = format!("{}%", (cue.value() * 100.0).round());
+    let level = percent(cue.value());
     match cue.kind {
         Move::Hold => "holds".to_string(),
         Move::Jump => format!("jumps to {level}"),
-        Move::Ramp if cue.bars == 0 => format!("ramps to {level} over the section"),
-        Move::Ramp if cue.bars == 1 => format!("ramps to {level} over a bar"),
-        Move::Ramp => format!("ramps to {level} over {} bars", cue.bars),
+        Move::Ramp => {
+            let from = cue.from_value().map_or(String::new(), |from| format!(" from {}", percent(from)));
+            let over = match cue.bars {
+                0 => "over the section".to_string(),
+                1 => "over a bar".to_string(),
+                bars => format!("over {bars} bars"),
+            };
+            let curve = match cue.curve {
+                Curve::S => String::new(),
+                Curve::Linear => ", in a line".to_string(),
+                Curve::Exp => ", slow then fast".to_string(),
+                Curve::Log => ", fast then slow".to_string(),
+            };
+            format!("ramps{from} to {level} {over}{curve}")
+        }
         Move::Hit => format!("hits at {level}"),
     }
 }
@@ -706,16 +739,26 @@ fn lane_rows(
         if response.dragged() {
             if let Some(pointer) = response.interact_pointer_pos() {
                 let level = (((area.bottom() - pointer.y) / area.height()).clamp(0.0, 1.0) * 1000.0).round() as u16;
-                let kind = if cue.kind == Move::Hold { Move::Jump } else { cue.kind };
-                let next = Cue { kind, level, ..cue };
+                let next = if ui.input(|input| input.modifiers.shift) {
+                    // Where the ramp starts: anything else becomes a ramp to
+                    // where it was going, or for a Hold, where the lane was
+                    let to = if cue.kind == Move::Hold { (starts[section].at(song.sections[section].0 as f32) * 1000.0).round() as u16 } else { cue.level };
+                    Cue { kind: Move::Ramp, level: to, from: Some(level), ..cue }
+                } else {
+                    let kind = if cue.kind == Move::Hold { Move::Jump } else { cue.kind };
+                    Cue { kind, level, ..cue }
+                };
                 if next != cue {
                     select(ui.ctx(), node_id, section);
                     let label = format!("{what} {}", describe(next));
-                    edits.push(edit(node_id, label, vec![(params.name(Arr::cue_param(section, lane)), next.encode())]));
+                    edits.push(edit(node_id, label, cue_changes(params, section, lane, next)));
                 }
             }
         }
-        let response = response.on_hover_text(format!("{what} {}\nDrag up or down to set its level · right-click for how it gets there", describe(cue)));
+        let response = response.on_hover_text(format!(
+            "{what} {}\nDrag up or down to set its level · Shift-drag to set where its ramp starts · right-click for how it gets there",
+            describe(cue)
+        ));
         response.context_menu(|ui| {
             select(ui.ctx(), node_id, section);
             cue_menu(ui, node_id, params, section, lane, cue, &what, edits);
@@ -728,10 +771,9 @@ fn lane_rows(
 fn cue_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, section: usize, lane: usize, cue: Cue, what: &str, edits: &mut Vec<SynthResponse>) {
     ui.label(egui::RichText::new(what).strong());
     ui.separator();
-    let name = params.name(Arr::cue_param(section, lane));
     let set = |next: Cue, edits: &mut Vec<SynthResponse>| {
         if next != cue {
-            edits.push(edit(node_id, format!("{what} {}", describe(next)), vec![(name.clone(), next.encode())]));
+            edits.push(edit(node_id, format!("{what} {}", describe(next)), cue_changes(params, section, lane, next)));
         }
     };
     ui.horizontal(|ui| {
@@ -739,7 +781,7 @@ fn cue_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, section: usize,
             let hint = match kind {
                 Move::Hold => "Carry on as it was",
                 Move::Jump => "Go straight to the level on the downbeat",
-                Move::Ramp => "Glide to the level on a smooth curve",
+                Move::Ramp => "Glide to the level, on a curve of your choosing",
                 Move::Hit => "Go to the level for half a step, then back: a trigger for a drum or a button",
             };
             if ui.selectable_label(cue.kind == kind, kind.name()).on_hover_text(hint).clicked() {
@@ -772,7 +814,55 @@ fn cue_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, section: usize,
                 set(Cue { bars: bars as u8, ..cue }, edits);
             }
         });
+        ui.horizontal(|ui| {
+            ui.label("Curve");
+            for curve in Curve::ALL {
+                let hint = match curve {
+                    Curve::S => "Leaves and arrives at rest, like a hand on a fader",
+                    Curve::Linear => "The same pace all the way",
+                    Curve::Exp => "Slow to start, fast to finish: a fifth of the way at half time, for a sweep or a build",
+                    Curve::Log => "Fast to start, slow to finish: four fifths of the way at half time, for a swell that settles or a fade that tails away",
+                };
+                let icon = curve_icon(ui, curve, cue.curve == curve);
+                let chip = ui.selectable_label(cue.curve == curve, curve.name());
+                if (icon | chip).on_hover_text(hint).clicked() {
+                    set(Cue { curve, ..cue }, edits);
+                }
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label("From");
+            let hint = "Start from the level the lane has reached";
+            if ui.selectable_label(cue.from.is_none(), "where it is").on_hover_text(hint).clicked() {
+                set(Cue { from: None, ..cue }, edits);
+            }
+            let hint = "Jump to a level of its own on the downbeat, then ramp from there. Shift-drag the cell to set it";
+            if ui.selectable_label(cue.from.is_some(), "a level").on_hover_text(hint).clicked() && cue.from.is_none() {
+                set(Cue { from: Some(cue.level), ..cue }, edits);
+            }
+            if let Some(from) = cue.from {
+                let mut percent = from as f32 / 10.0;
+                if ui.add(egui::DragValue::new(&mut percent).range(0.0..=100.0).speed(0.5).suffix("%").max_decimals(1)).changed() {
+                    set(Cue { from: Some((percent * 10.0).round() as u16), ..cue }, edits);
+                }
+            }
+        });
     }
+}
+
+/// A little drawing of a curve, beside its chip in the menu.
+fn curve_icon(ui: &mut egui::Ui, curve: Curve, chosen: bool) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(16.0, 12.0), Sense::click());
+    let rect = rect.shrink(1.5);
+    let points: Vec<Pos2> = (0..=12)
+        .map(|n| {
+            let t = n as f32 / 12.0;
+            Pos2::new(rect.left() + rect.width() * t, rect.bottom() - rect.height() * curve.shape(t))
+        })
+        .collect();
+    let ink = if chosen { theme::signal::CONTROL } else { theme::text::SECONDARY };
+    ui.painter().add(Shape::line(points, Stroke::new(1.4, ink)));
+    response
 }
 
 /// A lane's right-click menu: its glide, and clearing it.
@@ -792,7 +882,7 @@ fn lane_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, song: &Song, l
         ui.close_menu();
     }
     if ui.button("Hold in every section").on_hover_text("Clears the lane: it stays at 0").clicked() {
-        let changes = (0..song.count()).map(|section| (params.name(Arr::cue_param(section, lane)), Cue::HOLD.encode())).collect();
+        let changes = (0..song.count()).flat_map(|section| cue_changes(params, section, lane, Cue::HOLD)).collect();
         edits.push(edit(node_id, format!("Clear {lane_label}"), changes));
         ui.close_menu();
     }
@@ -969,17 +1059,26 @@ fn down_the_chain(node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphSt
 struct SectionData {
     length: f32,
     cues: [f32; LANES],
+    froms: [f32; LANES],
     name: String,
+}
+
+impl SectionData {
+    /// A new section: four bars that hold every lane.
+    fn blank() -> Self {
+        Self { length: 4.0, cues: [Cue::HOLD.encode(); LANES], froms: [FROM_WHERE_IT_IS; LANES], name: String::new() }
+    }
 }
 
 fn section_data(graph: &SynthGraph, node_id: NodeId, song: &Song, section: usize) -> SectionData {
     let labels = graph.nodes.get(node_id).map(|n| n.user_data.labels.clone()).unwrap_or_default();
     if section >= song.count() {
-        return SectionData { length: 4.0, cues: [Cue::HOLD.encode(); LANES], name: String::new() };
+        return SectionData::blank();
     }
     SectionData {
         length: song.values[Arr::PARAM_LENGTH + section],
         cues: std::array::from_fn(|lane| song.values[Arr::cue_param(section, lane)]),
+        froms: std::array::from_fn(|lane| song.values[Arr::from_param(section, lane)]),
         name: labels.get(&section_key(section)).cloned().unwrap_or_default(),
     }
 }
@@ -997,6 +1096,7 @@ fn write_sections(node_id: NodeId, params: &Params, from: usize, sections: &[Sec
         changes.push((params.name(Arr::PARAM_LENGTH + section), data.length));
         for lane in 0..LANES {
             changes.push((params.name(Arr::cue_param(section, lane)), data.cues[lane]));
+            changes.push((params.name(Arr::from_param(section, lane)), data.froms[lane]));
         }
         labels.push((section_key(section), data.name.clone()));
     }
@@ -1008,7 +1108,7 @@ fn insert(node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, at:
     let count = song.count();
     let mut new = match copy {
         Some(section) => section_data(graph, node_id, song, section),
-        None => SectionData { length: 4.0, cues: [Cue::HOLD.encode(); LANES], name: String::new() },
+        None => SectionData::blank(),
     };
     let label = match copy {
         Some(section) => format!("Copy section {}", section_name(graph, node_id, section)),
@@ -1031,7 +1131,7 @@ fn remove(node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, at:
     let label = format!("Delete section {}", section_name(graph, node_id, at));
     let mut moved: Vec<SectionData> = (at + 1..count).map(|section| section_data(graph, node_id, song, section)).collect();
     // The emptied slot at the end goes back to a blank section
-    moved.push(SectionData { length: 4.0, cues: [Cue::HOLD.encode(); LANES], name: String::new() });
+    moved.push(SectionData::blank());
     let loop_to = song.values[Arr::PARAM_LOOP];
     let loop_to = if loop_to >= 1.0 && loop_to as usize - 1 > at { loop_to - 1.0 } else { loop_to.min((count - 1) as f32) };
     write_sections(node_id, params, at, &moved, count - 1, loop_to, label)
@@ -1057,6 +1157,7 @@ mod tests {
         }
         for &(section, lane, cue) in cues {
             values[Arr::cue_param(section, lane)] = cue.encode();
+            values[Arr::from_param(section, lane)] = cue.encode_from();
         }
         Song::of(values)
     }
@@ -1152,6 +1253,29 @@ mod tests {
         let second = starts[1].cued(Cue::HOLD, 1.0, 1.0);
         assert!((second.at(1.0) - 0.5).abs() < 1e-5);
         assert_eq!(second.at(2.0), 1.0);
+    }
+
+    #[test]
+    fn the_timeline_draws_each_curve_and_start() {
+        let song = song(
+            &[2, 4, 4, 4],
+            &[(0, 0, Cue::jump(400)), (1, 0, Cue::ramp(800, 0).on(Curve::Exp)), (2, 0, Cue::ramp(400, 0).on(Curve::Log)), (3, 0, Cue::ramp(600, 0).on(Curve::Linear).starting(200))],
+        );
+        let starts = song.lane_starts(0);
+        let state = |section: usize| starts[section].cued(song.cue(section, 0), song.sections[section].0 as f32, song.sections[section].1 as f32);
+        // Exp is a fifth of the way at half time, Log four fifths
+        assert!((state(1).at(4.0) - (0.4 + 0.4 * 0.2)).abs() < 1e-5, "{}", state(1).at(4.0));
+        assert!((state(2).at(8.0) - (0.8 - 0.4 * 0.8)).abs() < 1e-5, "{}", state(2).at(8.0));
+        // A ramp from a level starts there, wherever the lane had got to
+        assert_eq!(state(3).at(10.0), 0.2);
+        assert!((state(3).at(12.0) - 0.4).abs() < 1e-5);
+        assert_eq!(state(3).at(14.0), 0.6);
+    }
+
+    #[test]
+    fn a_cue_describes_its_curve_and_start() {
+        assert_eq!(describe(Cue::ramp(420, 0)), "ramps to 42% over the section");
+        assert_eq!(describe(Cue::ramp(420, 12).on(Curve::Log).starting(280)), "ramps from 28% to 42% over 12 bars, fast then slow");
     }
 
     #[test]

@@ -35,6 +35,8 @@ struct Played {
     end: Vec<f32>,
     /// The Cues Arranger's first lane: the drum pattern.
     drums: Vec<f32>,
+    /// Every lane's CV.
+    lanes: Vec<Vec<f32>>,
 }
 
 /// Plays From One Sine's Clock into the Arranger whose first lane is named
@@ -56,7 +58,7 @@ fn play(first_lane: &str, seconds: f32) -> (Played, Vec<f32>) {
     arranger.prepare(RATE, BLOCK);
 
     let total = (seconds * RATE) as usize;
-    let mut played = Played { clock: Vec::new(), section_trig: Vec::new(), end: Vec::new(), drums: Vec::new() };
+    let mut played = Played { clock: Vec::new(), section_trig: Vec::new(), end: Vec::new(), drums: Vec::new(), lanes: vec![Vec::new(); 8] };
     let mut clock_out: Vec<SignalBuffer> = (0..3).map(|_| SignalBuffer::gate(BLOCK)).collect();
     let mut arranger_out: Vec<SignalBuffer> = (0..Arranger::OUT_COUNT).map(|_| SignalBuffer::control(BLOCK)).collect();
     let idle = SignalBuffer::gate(BLOCK);
@@ -69,6 +71,9 @@ fn play(first_lane: &str, seconds: f32) -> (Played, Vec<f32>) {
         played.section_trig.extend_from_slice(&arranger_out[Arranger::OUT_SECTION_TRIG].samples);
         played.end.extend_from_slice(&arranger_out[Arranger::OUT_END].samples);
         played.drums.extend_from_slice(&arranger_out[Arranger::OUT_LANES].samples);
+        for (lane, cv) in played.lanes.iter_mut().enumerate() {
+            cv.extend_from_slice(&arranger_out[Arranger::OUT_LANES + 2 * lane].samples);
+        }
     }
     (played, arranger_params)
 }
@@ -147,4 +152,24 @@ fn the_cues_follow_the_desk() {
     let (desk, cues) = (named("Desk"), named("Cues"));
     let follows = patch.connections.iter().any(|c| c.from_node == desk && c.from_port == "Section" && c.to_node == cues && c.to_port == "Follow");
     assert!(follows, "Desk's Section is patched into Cues' Follow, so the editor keeps their sections the same");
+}
+
+#[test]
+fn the_pad_enters_and_swells_through_the_opening() {
+    // Desk's lane 6 is the pad: in at 28% on bar 5, up to 42% by bar 17
+    let (played, _) = play("Sine", 40.0);
+    let pad = &played.lanes[5];
+    let clocks = rises(&played.clock);
+    let (bar_5, bar_17) = (clocks[4 * 16], clocks[16 * 16]);
+    assert_eq!(pad[bar_5 - 1], 0.0, "silent before it enters");
+    // Its second of Glide brings it up to the start, then it rises steadily
+    let settled = bar_5 + RATE as usize;
+    assert!((pad[settled] - 0.28).abs() < 0.01, "in at 28%: {}", pad[settled]);
+    for t in settled + 1..bar_17 {
+        assert!(pad[t] >= pad[t - 1], "the swell falls at sample {t}");
+    }
+    let half_way = clocks[10 * 16];
+    assert!((pad[half_way] - 0.35).abs() < 0.002, "half way at bar 11: {}", pad[half_way]);
+    // There on bar 17's downbeat, where Pulse lifts it again
+    assert!((pad[bar_17 - 1] - 0.42).abs() < 1e-4, "42% by bar 17: {}", pad[bar_17 - 1]);
 }

@@ -9,8 +9,10 @@
 //! - **Hold**: carry on as it was.
 //! - **Jump**: go straight to a level, on the downbeat.
 //! - **Ramp**: glide to a level over the whole section, or over a number of
-//!   bars, on a smooth S-curve. A ramp is smooth enough to drive a Mixer's
-//!   Level directly.
+//!   bars, on a [`Curve`]: an S-curve, a line, or an exponential or
+//!   logarithmic bend. It starts from where the lane is, or from a level of
+//!   its own, jumping there on the downbeat. A ramp is smooth enough to drive
+//!   a Mixer's Level directly.
 //! - **Hit**: go to a level for half a step, then back: a trigger, with the
 //!   level as its accent, for a drum or a Looper's button.
 //!
@@ -21,9 +23,15 @@
 //!
 //! Every cue is one parameter, so a song saves, loads, undoes and copies
 //! like any knob. Its value reads as digits: `M BB LLLL`, the move (0 Hold,
-//! 1 Jump, 2 Ramp, 3 Hit), the ramp's length in bars (00 for the whole
-//! section) and the level in tenths of a percent. `1000700` jumps to 70%;
-//! `2080250` ramps to 25% over 8 bars. See [`Cue`].
+//! 1 Jump, 2 Ramp, 3 Hit, and for ramps on other curves 4 Linear, 5 Exp,
+//! 6 Log), the ramp's length in bars (00 for the whole section) and the level
+//! in tenths of a percent. `1000700` jumps to 70%; `2080250` ramps to 25%
+//! over 8 bars on the S-curve, and `5080250` on Exp. See [`Cue`].
+//!
+//! A ramp's start level is a second parameter, `Section NN Lane L From`: the
+//! level in tenths of a percent, or −1 to start from where the lane is. A
+//! patch saved before ramps had curves or starts reads as S-curves from where
+//! the lane is, as it always played.
 
 use std::f32::consts::PI;
 use std::sync::LazyLock;
@@ -75,22 +83,76 @@ impl Move {
         }
     }
 
-    fn code(self) -> u32 {
+}
+
+/// The shape a ramp takes from its start to its level.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Curve {
+    /// Leaves and arrives at rest: a hand on a fader.
+    #[default]
+    S,
+    /// The same pace throughout.
+    Linear,
+    /// Slow to start, fast to finish: a fifth of the way at half time, for a
+    /// sweep or a riser.
+    Exp,
+    /// Fast to start, slow to finish: four fifths of the way at half time,
+    /// for a swell that settles or a fade that tails away.
+    Log,
+}
+
+impl Curve {
+    pub const ALL: [Curve; 4] = [Curve::S, Curve::Linear, Curve::Exp, Curve::Log];
+
+    pub fn name(self) -> &'static str {
         match self {
-            Move::Hold => 0,
-            Move::Jump => 1,
-            Move::Ramp => 2,
-            Move::Hit => 3,
+            Curve::S => "S-curve",
+            Curve::Linear => "Linear",
+            Curve::Exp => "Exp",
+            Curve::Log => "Log",
         }
     }
 
-    fn from_code(code: u32) -> Self {
-        match code {
-            1 => Move::Jump,
-            2 => Move::Ramp,
-            3 => Move::Hit,
-            _ => Move::Hold,
+    /// How far along the ramp is, 0 to 1, at `t` of the way through its time.
+    pub fn shape(self, t: f32) -> f32 {
+        let t = t.clamp(0.0, 1.0);
+        match self {
+            Curve::S => ease(t),
+            Curve::Linear => t,
+            Curve::Exp => bend(t),
+            Curve::Log => 1.0 - bend(1.0 - t),
         }
+    }
+}
+
+/// The exponential bend, 0 to 1: `(16^t - 1) / 15`, so it's a fifth of the
+/// way at half time.
+fn bend(t: f32) -> f32 {
+    (16f32.powf(t) - 1.0) / 15.0
+}
+
+/// A cue's move digit.
+fn code(kind: Move, curve: Curve) -> u32 {
+    match (kind, curve) {
+        (Move::Hold, _) => 0,
+        (Move::Jump, _) => 1,
+        (Move::Ramp, Curve::S) => 2,
+        (Move::Hit, _) => 3,
+        (Move::Ramp, Curve::Linear) => 4,
+        (Move::Ramp, Curve::Exp) => 5,
+        (Move::Ramp, Curve::Log) => 6,
+    }
+}
+
+fn from_code(code: u32) -> (Move, Curve) {
+    match code {
+        1 => (Move::Jump, Curve::S),
+        2 => (Move::Ramp, Curve::S),
+        3 => (Move::Hit, Curve::S),
+        4 => (Move::Ramp, Curve::Linear),
+        5 => (Move::Ramp, Curve::Exp),
+        6 => (Move::Ramp, Curve::Log),
+        _ => (Move::Hold, Curve::S),
     }
 }
 
@@ -102,47 +164,83 @@ pub struct Cue {
     pub level: u16,
     /// How many bars a ramp takes, or 0 for the whole section.
     pub bars: u8,
+    /// A ramp's shape (S for every other move).
+    pub curve: Curve,
+    /// A ramp's start level, in tenths of a percent, or `None` to start from
+    /// where the lane is (always `None` for every other move).
+    pub from: Option<u16>,
 }
 
 impl Cue {
     /// A section that leaves the lane alone.
-    pub const HOLD: Cue = Cue { kind: Move::Hold, level: 0, bars: 0 };
+    pub const HOLD: Cue = Cue { kind: Move::Hold, level: 0, bars: 0, curve: Curve::S, from: None };
 
     pub const fn jump(level: u16) -> Self {
-        Cue { kind: Move::Jump, level, bars: 0 }
+        Cue { kind: Move::Jump, level, ..Self::HOLD }
     }
 
+    /// An S-curve from where the lane is.
     pub const fn ramp(level: u16, bars: u8) -> Self {
-        Cue { kind: Move::Ramp, level, bars }
+        Cue { kind: Move::Ramp, level, bars, ..Self::HOLD }
     }
 
     pub const fn hit(level: u16) -> Self {
-        Cue { kind: Move::Hit, level, bars: 0 }
+        Cue { kind: Move::Hit, level, ..Self::HOLD }
     }
 
-    /// Reads a cue from its parameter value (see the module docs).
-    pub fn decode(value: f32) -> Self {
+    /// This ramp on another curve.
+    pub const fn on(self, curve: Curve) -> Self {
+        Cue { curve, ..self }
+    }
+
+    /// This ramp, starting from a level of its own.
+    pub const fn starting(self, from: u16) -> Self {
+        Cue { from: Some(from), ..self }
+    }
+
+    /// Reads a cue from its parameter values: the cue's and its From (see the
+    /// module docs).
+    pub fn decode(value: f32, from: f32) -> Self {
         let digits = value.max(0.0).round() as u32;
+        let (kind, curve) = from_code(digits / 1_000_000);
+        let from = (kind == Move::Ramp && from >= 0.0).then(|| (from.round() as u32).min(1000) as u16);
         Self {
-            kind: Move::from_code(digits / 1_000_000),
+            kind,
             level: (digits % 10_000).min(1000) as u16,
             bars: ((digits / 10_000) % 100).min(MAX_BARS as u32) as u8,
+            curve,
+            from,
         }
     }
 
-    /// The parameter value that stores this cue.
+    /// The value of the cue's parameter.
     pub fn encode(self) -> f32 {
-        (self.kind.code() * 1_000_000 + (self.bars.min(MAX_BARS as u8) as u32) * 10_000 + self.level.min(1000) as u32) as f32
+        (code(self.kind, self.curve) * 1_000_000 + (self.bars.min(MAX_BARS as u8) as u32) * 10_000 + self.level.min(1000) as u32) as f32
+    }
+
+    /// The value of the cue's From parameter.
+    pub fn encode_from(self) -> f32 {
+        match (self.kind, self.from) {
+            (Move::Ramp, Some(from)) => from.min(1000) as f32,
+            _ => FROM_WHERE_IT_IS,
+        }
     }
 
     /// The level, 0 to 1.
     pub fn value(self) -> f32 {
         self.level as f32 / 1000.0
     }
+
+    /// The start level, 0 to 1, if it has one.
+    pub fn from_value(self) -> Option<f32> {
+        self.from.map(|from| from as f32 / 1000.0)
+    }
 }
 
 /// The largest value a cue's parameter takes.
-const CUE_VALUE_LIMIT: f32 = 3_641_000.0;
+const CUE_VALUE_LIMIT: f32 = 6_641_000.0;
+/// A From parameter's value for a ramp that starts where the lane is.
+pub const FROM_WHERE_IT_IS: f32 = -1.0;
 
 /// What "Loop" can hold: off, or the section to go back to.
 pub static LOOP_CHOICES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
@@ -156,6 +254,8 @@ struct Names {
     length_names: Vec<&'static str>,
     cue_ids: Vec<&'static str>,
     cue_names: Vec<&'static str>,
+    from_ids: Vec<&'static str>,
+    from_names: Vec<&'static str>,
 }
 
 fn keep(text: String) -> &'static str {
@@ -163,13 +263,22 @@ fn keep(text: String) -> &'static str {
 }
 
 static NAMES: LazyLock<Names> = LazyLock::new(|| {
-    let mut names = Names { length_ids: Vec::new(), length_names: Vec::new(), cue_ids: Vec::new(), cue_names: Vec::new() };
+    let mut names = Names {
+        length_ids: Vec::new(),
+        length_names: Vec::new(),
+        cue_ids: Vec::new(),
+        cue_names: Vec::new(),
+        from_ids: Vec::new(),
+        from_names: Vec::new(),
+    };
     for section in 1..=SECTIONS {
         names.length_ids.push(keep(format!("length_{section}")));
         names.length_names.push(keep(format!("Length {section:02}")));
         for lane in 1..=LANES {
             names.cue_ids.push(keep(format!("cue_{section}_{lane}")));
             names.cue_names.push(keep(format!("Section {section:02} Lane {lane}")));
+            names.from_ids.push(keep(format!("from_{section}_{lane}")));
+            names.from_names.push(keep(format!("Section {section:02} Lane {lane} From")));
         }
     }
     names
@@ -213,6 +322,7 @@ impl Pulse {
 struct Ramp {
     from: f32,
     to: f32,
+    curve: Curve,
     /// The clock count it started on.
     start: u64,
     /// How many clocks it takes.
@@ -316,11 +426,18 @@ impl Arranger {
     pub const PARAM_GLIDE: usize = 3;
     pub const PARAM_LENGTH: usize = Self::PARAM_GLIDE + LANES;
     pub const PARAM_CUES: usize = Self::PARAM_LENGTH + SECTIONS;
-    pub const PARAM_COUNT: usize = Self::PARAM_CUES + SECTIONS * LANES;
+    /// Each cue's From: where its ramp starts.
+    pub const PARAM_FROMS: usize = Self::PARAM_CUES + SECTIONS * LANES;
+    pub const PARAM_COUNT: usize = Self::PARAM_FROMS + SECTIONS * LANES;
 
     /// The parameter of a cue (both 0-based).
     pub const fn cue_param(section: usize, lane: usize) -> usize {
         Self::PARAM_CUES + section * LANES + lane
+    }
+
+    /// The parameter of a cue's From (both 0-based).
+    pub const fn from_param(section: usize, lane: usize) -> usize {
+        Self::PARAM_FROMS + section * LANES + lane
     }
 
     /// Readout values: the section playing.
@@ -397,6 +514,12 @@ impl Arranger {
                     .describe("What this lane does when the section starts: move, ramp bars and level as digits"),
             );
         }
+        for index in 0..SECTIONS * LANES {
+            parameters.push(
+                ParameterDefinition::new(names.from_ids[index], names.from_names[index], FROM_WHERE_IT_IS, 1000.0, FROM_WHERE_IT_IS, ParameterDisplay::stepped(""))
+                    .describe("The level this lane's ramp starts from, in tenths of a percent, or -1 for where the lane is"),
+            );
+        }
         debug_assert_eq!(parameters.len(), Self::PARAM_COUNT);
         debug_assert_eq!(ports.len(), 5 + Self::OUT_COUNT);
 
@@ -427,7 +550,7 @@ impl Arranger {
     }
 
     pub fn cue(params: &[f32], section: usize, lane: usize) -> Cue {
-        Cue::decode(params[Self::cue_param(section, lane)])
+        Cue::decode(params[Self::cue_param(section, lane)], params[Self::from_param(section, lane)])
     }
 
     /// The section a Jump To CV picks.
@@ -527,8 +650,13 @@ impl Arranger {
                     lane.dip = was_high && level > 0.0;
                 }
                 Move::Ramp => {
+                    // A start of its own is a Jump there first
+                    if let Some(from) = cue.from_value() {
+                        lane.level = from;
+                        lane.dip = was_high && from > 0.0;
+                    }
                     let bars = if cue.bars == 0 { section_bars } else { cue.bars as u64 };
-                    lane.ramp = Some(Ramp { from: lane.level, to: level, start: self.count, steps: (bars * steps).max(1) });
+                    lane.ramp = Some(Ramp { from: lane.level, to: level, curve: cue.curve, start: self.count, steps: (bars * steps).max(1) });
                     lane.hit = None;
                 }
                 Move::Hit => {
@@ -637,7 +765,7 @@ impl DspModule for Arranger {
                         lane.ramp = None;
                     } else {
                         let t = (elapsed as f32 + fraction) / ramp.steps as f32;
-                        lane.level = ramp.from + (ramp.to - ramp.from) * ease(t);
+                        lane.level = ramp.from + (ramp.to - ramp.from) * ramp.curve.shape(t);
                     }
                 }
                 let target = lane.target();
@@ -773,6 +901,7 @@ mod tests {
 
     fn set_cue(params: &mut [f32], section: usize, lane: usize, cue: Cue) {
         params[Arranger::cue_param(section, lane)] = cue.encode();
+        params[Arranger::from_param(section, lane)] = cue.encode_from();
     }
 
     /// Runs the Arranger at 1 kHz for `ms`, clocked at the times given with
@@ -825,15 +954,141 @@ mod tests {
         for kind in Move::ALL {
             for level in [0, 1, 250, 999, 1000] {
                 for bars in [0, 1, 8, MAX_BARS as u8] {
-                    let cue = Cue { kind, level, bars };
-                    assert_eq!(Cue::decode(cue.encode()), cue);
+                    let cue = Cue { kind, level, bars, ..Cue::HOLD };
+                    assert_eq!(Cue::decode(cue.encode(), cue.encode_from()), cue);
+                    for curve in Curve::ALL {
+                        for from in [None, Some(0), Some(280), Some(1000)] {
+                            // A curve and a start are a ramp's alone
+                            let cue = Cue { curve, from, ..cue };
+                            let read = Cue::decode(cue.encode(), cue.encode_from());
+                            if kind == Move::Ramp {
+                                assert_eq!(read, cue);
+                            } else {
+                                assert_eq!(read, Cue { curve: Curve::S, from: None, ..cue });
+                            }
+                            assert!(cue.encode() <= CUE_VALUE_LIMIT);
+                        }
+                    }
                 }
             }
         }
-        assert_eq!(Cue::decode(1_000_700.0), Cue::jump(700));
-        assert_eq!(Cue::decode(2_080_250.0), Cue::ramp(250, 8));
+        assert_eq!(Cue::decode(1_000_700.0, FROM_WHERE_IT_IS), Cue::jump(700));
+        assert_eq!(Cue::decode(2_080_250.0, FROM_WHERE_IT_IS), Cue::ramp(250, 8));
+        assert_eq!(Cue::decode(5_080_250.0, 100.0), Cue::ramp(250, 8).on(Curve::Exp).starting(100));
         assert_eq!(Cue::HOLD.encode(), 0.0);
-        assert!(Cue { kind: Move::Hit, level: 1000, bars: MAX_BARS as u8 }.encode() <= CUE_VALUE_LIMIT);
+        // The largest value is still a whole number an f32 holds exactly
+        let largest = Cue { kind: Move::Ramp, level: 1000, bars: MAX_BARS as u8, curve: Curve::Log, from: None };
+        assert_eq!(largest.encode(), CUE_VALUE_LIMIT);
+        assert!(CUE_VALUE_LIMIT < 16_777_216.0);
+    }
+
+    #[test]
+    fn a_patch_from_before_curves_reads_as_it_played() {
+        // Saved without From parameters, so they keep their default
+        let defaults = defaults();
+        assert!(defaults[Arranger::PARAM_FROMS..].iter().all(|&v| v == FROM_WHERE_IT_IS));
+        let mut params = defaults;
+        params[Arranger::cue_param(3, 2)] = 2_080_250.0;
+        assert_eq!(Arranger::cue(&params, 3, 2), Cue::ramp(250, 8));
+    }
+
+    #[test]
+    fn each_curve_passes_its_midpoint_and_lands_exactly() {
+        for (curve, middle) in [(Curve::S, 0.5), (Curve::Linear, 0.5), (Curve::Exp, 0.2), (Curve::Log, 0.8)] {
+            assert_eq!(curve.shape(0.0), 0.0, "{curve:?}");
+            assert!((curve.shape(0.5) - middle).abs() < 1e-6, "{curve:?}: {}", curve.shape(0.5));
+            assert!((curve.shape(1.0) - 1.0).abs() < 1e-6, "{curve:?}");
+            for n in 1..=100 {
+                assert!(curve.shape(n as f32 / 100.0) > curve.shape((n - 1) as f32 / 100.0), "{curve:?} rises");
+            }
+        }
+        // Exp and Log mirror each other
+        for n in 0..=10 {
+            let t = n as f32 / 10.0;
+            assert!((Curve::Exp.shape(t) + Curve::Log.shape(1.0 - t) - 1.0).abs() < 1e-6);
+        }
+        // The S-curve is the one ramps always had
+        assert_eq!(Curve::S.shape(0.3), ease(0.3));
+    }
+
+    #[test]
+    fn ramps_follow_their_curve_and_land_on_their_clock() {
+        // Section 2 ramps lane 1 from 0.2 to 1.0 over its two bars (80 ms)
+        for (curve, middle) in [(Curve::S, 0.5), (Curve::Linear, 0.5), (Curve::Exp, 0.2), (Curve::Log, 0.8)] {
+            let mut params = song(4, &[1, 2, 1]);
+            set_cue(&mut params, 0, 0, Cue::jump(200));
+            set_cue(&mut params, 1, 0, Cue::ramp(1000, 0).on(curve));
+            let out = run(&params, 160, 10);
+            let cv = lane(&out, 0);
+            assert!((cv[40] - 0.2).abs() < 1e-6, "{curve:?} starts where it was");
+            assert!((cv[80] - (0.2 + 0.8 * middle)).abs() < 1e-5, "{curve:?} half way: {}", cv[80]);
+            assert!(cv[119] < 1.0, "{curve:?}");
+            assert_eq!(cv[120], 1.0, "{curve:?} arrives on the clock that ends it");
+            for t in 41..120 {
+                assert!(cv[t] >= cv[t - 1], "{curve:?} falls at {t}");
+            }
+        }
+    }
+
+    #[test]
+    fn curved_ramps_follow_a_swung_clock() {
+        // 66% swing: steps of 16 and 8 ms, 4 to a bar, so a bar is 48 ms
+        for (curve, middle) in [(Curve::Linear, 0.5), (Curve::Exp, 0.2), (Curve::Log, 0.8)] {
+            let mut params = song(4, &[1, 2]);
+            set_cue(&mut params, 1, 0, Cue::ramp(1000, 0).on(curve));
+            let clocks: Vec<usize> = (0..480).step_by(24).flat_map(|t| [t, t + 16]).collect();
+            let out = run_with(&params, 480, &clocks, &[], &[]);
+            let cv = lane(&out, 0);
+            // Half way through its eight clocks is the downbeat of bar 2
+            assert!((cv[96] - middle).abs() < 1e-5, "{curve:?} half way: {}", cv[96]);
+            assert!(cv[143] < 1.0);
+            assert_eq!(cv[144], 1.0, "{curve:?} lands on the clock ending its two bars");
+            for t in 49..144 {
+                assert!(cv[t] >= cv[t - 1], "{curve:?} falls at {t}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_ramp_from_a_level_jumps_there_then_ramps() {
+        // The pad enters at 28% and swells to 42% over the section
+        let mut params = song(4, &[1, 2]);
+        params[Arranger::PARAM_LOOP] = 0.0;
+        set_cue(&mut params, 0, 0, Cue::jump(600));
+        set_cue(&mut params, 1, 0, Cue::ramp(420, 0).on(Curve::Linear).starting(280));
+        let out = run(&params, 140, 10);
+        let cv = lane(&out, 0);
+        assert_eq!(cv[39], 0.6);
+        assert_eq!(cv[40], 0.28, "on the downbeat, to the sample");
+        assert!((cv[80] - 0.35).abs() < 1e-5, "half way: {}", cv[80]);
+        assert_eq!(cv[120], 0.42);
+        // The gate dips on the downbeat, as for a Jump
+        assert_eq!(gate(&out, 0)[40], 0.0);
+        assert_eq!(rises(gate(&out, 0)), [0, 41]);
+    }
+
+    #[test]
+    fn a_ramp_from_zero_opens_the_gate_as_it_leaves() {
+        let mut params = song(4, &[1, 1]);
+        set_cue(&mut params, 0, 0, Cue::jump(500));
+        set_cue(&mut params, 1, 0, Cue::ramp(1000, 0).starting(0));
+        let out = run(&params, 80, 10);
+        assert_eq!(lane(&out, 0)[40], 0.0);
+        assert_eq!(gate(&out, 0)[40], 0.0);
+        assert_eq!(rises(gate(&out, 0)), [0, 41]);
+    }
+
+    #[test]
+    fn a_ramp_from_a_level_glides_like_a_jump() {
+        let mut params = song(4, &[1, 4]);
+        params[Arranger::PARAM_GLIDE] = 0.1;
+        set_cue(&mut params, 0, 0, Cue::jump(0));
+        set_cue(&mut params, 1, 0, Cue::ramp(500, 0).starting(500));
+        let out = run(&params, 200, 10);
+        let cv = lane(&out, 0);
+        // Gliding up to the start at the lane's rate, not stepping
+        assert!((cv[40 + 25] - 0.25).abs() < 0.02, "{}", cv[65]);
+        assert!((cv[40 + 50] - 0.5).abs() < 1e-6);
     }
 
     #[test]
