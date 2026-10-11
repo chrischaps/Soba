@@ -32,6 +32,13 @@
 //! level in tenths of a percent, or −1 to start from where the lane is. A
 //! patch saved before ramps had curves or starts reads as S-curves from where
 //! the lane is, as it always played.
+//!
+//! # Repeats
+//!
+//! A section can play ×1 to ×16, and ×N is exactly N copies of it: every
+//! pass gives its cues again, fires Section Trig, Bar and Last Bar, and a
+//! ramp over "the section" takes one pass. Only the Section output (and so
+//! Jump To and Loop) counts it as one section. A Jump goes to its first pass.
 
 use std::f32::consts::PI;
 use std::sync::LazyLock;
@@ -57,6 +64,8 @@ pub const MAX_BARS: usize = 64;
 pub const MAX_STEPS: usize = 96;
 /// The longest a lane's Glide is, in seconds.
 pub const MAX_GLIDE: f32 = 4.0;
+/// The most times a section repeats.
+pub const MAX_REPEATS: usize = 16;
 
 /// What a lane does when a section starts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -261,6 +270,8 @@ struct Names {
     cue_names: Vec<&'static str>,
     from_ids: Vec<&'static str>,
     from_names: Vec<&'static str>,
+    repeat_ids: Vec<&'static str>,
+    repeat_names: Vec<&'static str>,
 }
 
 fn keep(text: String) -> &'static str {
@@ -275,10 +286,14 @@ static NAMES: LazyLock<Names> = LazyLock::new(|| {
         cue_names: Vec::new(),
         from_ids: Vec::new(),
         from_names: Vec::new(),
+        repeat_ids: Vec::new(),
+        repeat_names: Vec::new(),
     };
     for section in 1..=SECTIONS {
         names.length_ids.push(keep(format!("length_{section}")));
         names.length_names.push(keep(format!("Length {section:02}")));
+        names.repeat_ids.push(keep(format!("repeat_{section}")));
+        names.repeat_names.push(keep(format!("Repeat {section:02}")));
         for lane in 1..=LANES {
             names.cue_ids.push(keep(format!("cue_{section}_{lane}")));
             names.cue_names.push(keep(format!("Section {section:02} Lane {lane}")));
@@ -369,9 +384,9 @@ impl Lane {
 /// already keep step (see `graph::arranger_follow`).
 ///
 /// **Outputs:** Section (the section playing, its index ÷ 32), Section Trig
-/// (on each section's downbeat), Bar (on every downbeat), Last Bar (high
-/// through each section's final bar, for fills), End (when the last section
-/// finishes), then a CV and a Gate for each lane.
+/// (on each section's downbeat, every pass), Bar (on every downbeat), Last
+/// Bar (high through each pass's final bar, for fills), End (when the last
+/// section finishes), then a CV and a Gate for each lane.
 ///
 /// # Timing
 ///
@@ -391,7 +406,9 @@ pub struct Arranger {
     /// Clocks since the first, which ramps count.
     count: u64,
     section: usize,
-    /// The bar within the section.
+    /// Which time through the section this is, from 0.
+    pass: usize,
+    /// The bar within the pass.
     bar: usize,
     /// The step within the bar.
     step: usize,
@@ -436,7 +453,10 @@ impl Arranger {
     /// How wide the timeline is drawn. The editor's alone: the module
     /// doesn't read it.
     pub const PARAM_WIDTH: usize = Self::PARAM_FROMS + SECTIONS * LANES;
-    pub const PARAM_COUNT: usize = Self::PARAM_WIDTH + 1;
+    /// Each section's Repeat. Last, so older patches keep their order and
+    /// load as ×1.
+    pub const PARAM_REPEAT: usize = Self::PARAM_WIDTH + 1;
+    pub const PARAM_COUNT: usize = Self::PARAM_REPEAT + SECTIONS;
 
     /// The parameter of a cue (both 0-based).
     pub const fn cue_param(section: usize, lane: usize) -> usize {
@@ -458,6 +478,8 @@ impl Arranger {
     pub const READOUT_FLAGS: usize = 3;
     /// The section a Jump asked for, + 1, or 0.
     pub const READOUT_QUEUED: usize = 4;
+    /// Which time through the section, from 0.
+    pub const READOUT_PASS: usize = 5;
 
     const GATE_THRESHOLD: f32 = 0.5;
 
@@ -476,11 +498,11 @@ impl Arranger {
             PortDefinition::output("section", "Section", SignalType::Control)
                 .describe("The section playing, as its index ÷ 32 (section 1 is 0)"),
             PortDefinition::output("section_trig", "Section Trig", SignalType::Gate)
-                .describe("A trigger on each section's downbeat"),
+                .describe("A trigger on each section's downbeat, on every pass of a repeated one"),
             PortDefinition::output("bar", "Bar", SignalType::Gate)
                 .describe("A trigger on every bar's downbeat"),
             PortDefinition::output("last_bar", "Last Bar", SignalType::Gate)
-                .describe("High through each section's final bar: for fills"),
+                .describe("High through each section's final bar, on every pass: for fills"),
             PortDefinition::output("end", "End", SignalType::Gate)
                 .describe("A trigger when the last section finishes, whether the song loops or stops"),
         ];
@@ -532,6 +554,12 @@ impl Arranger {
             ParameterDefinition::choice("width", "Width", WIDTH_NAMES.as_slice(), 0)
                 .describe("How wide the timeline is drawn: Wide or Extra wide for a long song read whole on a big screen"),
         );
+        for section in 0..SECTIONS {
+            parameters.push(
+                ParameterDefinition::new(names.repeat_ids[section], names.repeat_names[section], 1.0, MAX_REPEATS as f32, 1.0, ParameterDisplay::stepped("×"))
+                    .describe("How many times this section plays before the next: ×N is the same as N copies of it"),
+            );
+        }
         debug_assert_eq!(parameters.len(), Self::PARAM_COUNT);
         debug_assert_eq!(ports.len(), 5 + Self::OUT_COUNT);
 
@@ -565,6 +593,11 @@ impl Arranger {
     /// A section's length, in bars.
     pub fn length(params: &[f32], section: usize) -> usize {
         (params[Self::PARAM_LENGTH + section].round() as usize).clamp(1, MAX_BARS)
+    }
+
+    /// How many times a section plays.
+    pub fn repeats(params: &[f32], section: usize) -> usize {
+        params.get(Self::PARAM_REPEAT + section).map_or(1, |r| (r.round() as usize).clamp(1, MAX_REPEATS))
     }
 
     pub fn cue(params: &[f32], section: usize, lane: usize) -> Cue {
@@ -624,6 +657,9 @@ impl Arranger {
             self.start_section(params, section.min(sections - 1), pulse);
         } else if self.bar < Self::length(params, self.section) {
             self.downbeat(params, pulse);
+        } else if self.pass + 1 < Self::repeats(params, self.section) {
+            self.pass += 1;
+            self.start_pass(params, pulse);
         } else if self.section + 1 < sections {
             self.start_section(params, self.section + 1, pulse);
         } else {
@@ -646,9 +682,17 @@ impl Arranger {
         self.last_bar = last;
     }
 
-    /// A section's downbeat: its trigger, and every lane's cue.
+    /// A section's first downbeat.
     fn start_section(&mut self, params: &[f32], section: usize, pulse: usize) {
         self.section = section;
+        self.pass = 0;
+        self.start_pass(params, pulse);
+    }
+
+    /// The downbeat of a pass through the section: its trigger, and every
+    /// lane's cue, just as if it were a copy of the section.
+    fn start_pass(&mut self, params: &[f32], pulse: usize) {
+        let section = self.section;
         self.bar = 0;
         self.step = 0;
         self.section_trig.fire(pulse);
@@ -833,6 +877,7 @@ impl DspModule for Arranger {
         let ended = if self.ended { 2 } else { 0 };
         readout.values[Self::READOUT_FLAGS] = (started + ended) as f32;
         readout.values[Self::READOUT_QUEUED] = self.queued.map_or(0.0, |s| (s + 1) as f32);
+        readout.values[Self::READOUT_PASS] = self.pass as f32;
         Some(readout)
     }
 }
@@ -849,6 +894,7 @@ impl Arranger {
             timer: StepTimer::new(),
             count: 0,
             section: 0,
+            pass: 0,
             bar: 0,
             step: 0,
             queued: None,
@@ -869,6 +915,9 @@ impl Arranger {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Position {
     pub section: usize,
+    /// Which time through the section, from 0.
+    pub pass: usize,
+    /// The bar within the pass.
     pub bar: usize,
     /// The step within the bar, with how far through it the clock is.
     pub step: f32,
@@ -886,6 +935,7 @@ impl Position {
         let queued = readout.values[Arranger::READOUT_QUEUED] as usize;
         Self {
             section: (readout.values[Arranger::READOUT_SECTION] as usize).min(SECTIONS - 1),
+            pass: (readout.values[Arranger::READOUT_PASS] as usize).min(MAX_REPEATS - 1),
             bar: readout.values[Arranger::READOUT_BAR] as usize,
             step: readout.values[Arranger::READOUT_STEP].max(0.0),
             started: flags & 1 != 0,
@@ -1345,6 +1395,104 @@ mod tests {
         assert_eq!((at.section, at.bar), (1, 1));
         assert!((2.0..3.0).contains(&at.step), "{}", at.step);
         assert_eq!(at.queued, None);
+    }
+
+    /// A song with a section ×3 (a ramp longer than a pass, a hit, a jump
+    /// and a gliding lane), and the same song with it as three copies.
+    fn repeated_and_copied() -> (Vec<f32>, Vec<f32>) {
+        let cues = |params: &mut [f32], section: usize| {
+            set_cue(params, section, 0, Cue::ramp(1000, 3));
+            set_cue(params, section, 1, Cue::hit(700));
+            set_cue(params, section, 2, Cue::jump(500));
+        };
+        let mut repeated = song(4, &[2, 1]);
+        repeated[Arranger::PARAM_REPEAT] = 3.0;
+        cues(&mut repeated, 0);
+        let mut copied = song(4, &[2, 2, 2, 1]);
+        for section in 0..3 {
+            cues(&mut copied, section);
+        }
+        for params in [&mut repeated, &mut copied] {
+            params[Arranger::PARAM_GLIDE + 2] = 0.02;
+        }
+        // The last section brings lanes 0 and 2 back down
+        set_cue(&mut repeated, 1, 0, Cue::jump(0));
+        set_cue(&mut repeated, 1, 2, Cue::ramp(0, 0));
+        set_cue(&mut copied, 3, 0, Cue::jump(0));
+        set_cue(&mut copied, 3, 2, Cue::ramp(0, 0));
+        (repeated, copied)
+    }
+
+    #[test]
+    fn a_section_repeated_plays_exactly_as_its_copies() {
+        let (repeated, copied) = repeated_and_copied();
+        let straight: Vec<usize> = (0..700).step_by(10).collect();
+        let swung: Vec<usize> = (0..700).step_by(24).flat_map(|t| [t, t + 16]).filter(|&t| t < 700).collect();
+        for clocks in [straight, swung] {
+            // Over two times round the song, as it loops
+            let a = run_with(&repeated, 700, &clocks, &[], &[]);
+            let b = run_with(&copied, 700, &clocks, &[], &[]);
+            for output in 0..Arranger::OUT_COUNT {
+                if output == Arranger::OUT_SECTION {
+                    continue;
+                }
+                assert_eq!(a[output], b[output], "output {output} differs");
+            }
+            assert!(a[Arranger::OUT_LANES].iter().any(|&v| v > 0.0), "the test moves something");
+        }
+    }
+
+    #[test]
+    fn every_pass_fires_the_section_triggers() {
+        let (params, _) = repeated_and_copied();
+        let out = run(&params, 280, 10);
+        // Passes start at bars 0, 2 and 4, then the last section at 6
+        assert_eq!(rises(&out[Arranger::OUT_SECTION_TRIG]), [0, 80, 160, 240]);
+        assert_eq!(rises(&out[Arranger::OUT_LAST_BAR]), [40, 120, 200, 241]);
+        assert_eq!(rises(gate(&out, 1)), [0, 80, 160], "a hit on every pass");
+        // The Section output counts it as one
+        let section_at = |t: usize| (out[Arranger::OUT_SECTION][t] * SECTIONS as f32).round() as usize;
+        assert_eq!([section_at(5), section_at(205), section_at(245)], [0, 0, 1]);
+    }
+
+    #[test]
+    fn readout_counts_the_passes_and_a_jump_goes_to_the_first() {
+        let mut params = song(4, &[1, 1]);
+        params[Arranger::PARAM_REPEAT + 1] = 4.0;
+        // Bar 1 is section 1, bars 2 to 5 section 2's four passes: 14
+        // clocks is the third pass. Then a jump to section 2, from inside
+        // it, and three more clocks to the next bar line
+        let ms = 2 * (14 + 3);
+        let clocks: Vec<usize> = (0..ms).step_by(2).collect();
+        let mut arranger = Arranger::new();
+        arranger.prepare(RATE, 1);
+        let mut outputs: Vec<SignalBuffer> = (0..Arranger::OUT_COUNT).map(|_| SignalBuffer::control(1)).collect();
+        let ctx = ProcessContext::new(RATE, 1);
+        let mut at_third_pass = None;
+        for t in 0..ms {
+            let mut clock = SignalBuffer::gate(1);
+            clock.samples[0] = if clocks.contains(&t) { 1.0 } else { 0.0 };
+            let mut jump = SignalBuffer::gate(1);
+            let mut jump_to = SignalBuffer::control(1);
+            if t == 27 {
+                jump.samples[0] = 1.0;
+                jump_to.samples[0] = 1.0 / SECTIONS as f32;
+                at_third_pass = Some(Position::from_readout(&arranger.readout(&params).unwrap()));
+            }
+            arranger.process(&[&clock, &SignalBuffer::gate(1), &jump, &jump_to], &mut outputs, &params, &ctx);
+        }
+        let at = at_third_pass.unwrap();
+        assert_eq!((at.section, at.pass, at.bar), (1, 2, 0));
+        let at = Position::from_readout(&arranger.readout(&params).unwrap());
+        assert_eq!((at.section, at.pass, at.bar), (1, 0, 0));
+    }
+
+    #[test]
+    fn an_old_patch_without_repeats_plays_each_section_once() {
+        let mut params = song(4, &[1, 1]);
+        params.truncate(Arranger::PARAM_REPEAT);
+        assert_eq!(Arranger::repeats(&params, 0), 1);
+        assert_eq!(Arranger::new().parameters()[Arranger::PARAM_REPEAT + 31].name, "Repeat 32");
     }
 
     #[test]

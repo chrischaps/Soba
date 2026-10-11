@@ -32,7 +32,7 @@ use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Id, LayerId, Pos2,
 use egui_node_graph2::{InputId, NodeId};
 
 use crate::app::theme;
-use crate::modules::arranger::{Arranger as Arr, Cue, Curve, Move, Position, FROM_WHERE_IT_IS, GATE_NAMES, LANES, LANE_NAMES, MAX_BARS, MAX_GLIDE, SECTIONS};
+use crate::modules::arranger::{Arranger as Arr, Cue, Curve, Move, Position, FROM_WHERE_IT_IS, GATE_NAMES, LANES, LANE_NAMES, MAX_BARS, MAX_GLIDE, MAX_REPEATS, SECTIONS};
 
 use super::arranger_follow::{self, NAME_KEY};
 use super::{SynthGraph, SynthGraphState, SynthResponse};
@@ -43,6 +43,8 @@ const ROW: f32 = 13.0;
 const LABEL: f32 = 52.0;
 /// Room for the jack labels, right of the timeline.
 const JACK_LABEL: f32 = 44.0;
+/// The least room the section bar keeps for the picked section's name.
+const NAME_ROOM: f32 = 96.0;
 /// The narrowest a section is drawn, however short.
 const MIN_SECTION: f32 = 10.0;
 /// The overview strip's height, over the ruler.
@@ -108,21 +110,26 @@ fn cue_changes(params: &Params, section: usize, lane: usize, cue: Cue) -> Vec<(S
 struct Song {
     values: Vec<f32>,
     steps: usize,
-    /// Each section's first bar and length in bars.
+    /// Each section's first bar and the length of one pass, in bars.
     sections: Vec<(usize, usize)>,
+    /// How many times each section plays.
+    repeats: Vec<usize>,
     bars: usize,
 }
 
 impl Song {
     fn of(values: Vec<f32>) -> Self {
         let mut sections = Vec::new();
+        let mut repeats = Vec::new();
         let mut bars = 0;
         for section in 0..Arr::sections(&values) {
             let length = Arr::length(&values, section);
+            let times = Arr::repeats(&values, section);
             sections.push((bars, length));
-            bars += length;
+            repeats.push(times);
+            bars += length * times;
         }
-        Self { steps: Arr::steps(&values), values, sections, bars }
+        Self { steps: Arr::steps(&values), values, sections, repeats, bars }
     }
 
     fn count(&self) -> usize {
@@ -133,16 +140,46 @@ impl Song {
         Arr::cue(&self.values, section, lane)
     }
 
-    /// Where a lane starts each section, before the section's cue: its
-    /// level, and the ramp it's on (from, to, first bar, bars).
-    fn lane_starts(&self, lane: usize) -> Vec<LaneState> {
+    /// A section's bars over all its passes.
+    fn span(&self, section: usize) -> usize {
+        self.sections[section].1 * self.repeats[section]
+    }
+
+    /// Every pass of every section in the order they play: the section,
+    /// which pass, and the bar it starts on.
+    fn passes(&self) -> impl Iterator<Item = (usize, usize, usize)> + '_ {
+        self.sections.iter().enumerate().flat_map(|(section, &(start, length))| (0..self.repeats[section]).map(move |pass| (section, pass, start + pass * length)))
+    }
+
+    /// Where a lane is through each pass of [`Song::passes`], once that
+    /// pass's cue is given: its level, and the ramp it's on.
+    fn lane_passes(&self, lane: usize) -> Vec<LaneState> {
         let mut state = LaneState::default();
+        self.passes()
+            .map(|(section, _, start)| {
+                state = state.cued(self.cue(section, lane), start as f32, self.sections[section].1 as f32);
+                state
+            })
+            .collect()
+    }
+
+    /// Where a lane is as each section starts, before its first pass's cue.
+    fn lane_starts(&self, lane: usize) -> Vec<LaneState> {
+        let mut before = LaneState::default();
         let mut starts = Vec::with_capacity(self.count());
-        for (section, &(start, length)) in self.sections.iter().enumerate() {
-            starts.push(state);
-            state = state.cued(self.cue(section, lane), start as f32, length as f32);
+        for ((_, pass, _), state) in self.passes().zip(self.lane_passes(lane)) {
+            if pass == 0 {
+                starts.push(before);
+            }
+            before = state;
         }
         starts
+    }
+
+    /// How far into a section's block the playhead is, in bars.
+    fn playhead(&self, p: &Position) -> f32 {
+        let pass = p.pass.min(self.repeats[p.section] - 1);
+        (pass * self.sections[p.section].1 + p.bar) as f32 + p.step / self.steps as f32
     }
 }
 
@@ -200,17 +237,18 @@ impl Layout {
         let mut edges = Vec::with_capacity(n + 1);
         let mut x = left;
         edges.push(x);
-        for &(_, length) in &song.sections {
-            x += floor + spare * length as f32 / song.bars.max(1) as f32;
+        for section in 0..song.count() {
+            x += floor + spare * song.span(section) as f32 / song.bars.max(1) as f32;
             edges.push(x);
         }
         Self { edges }
     }
 
-    /// The x of a point `bar` bars (fractional) into a section.
+    /// The x of a point `bar` bars (fractional) into a section, counting
+    /// through all its passes.
     fn x(&self, song: &Song, section: usize, bar: f32) -> f32 {
         let (left, right) = (self.edges[section], self.edges[section + 1]);
-        left + (right - left) * (bar / song.sections[section].1 as f32).clamp(0.0, 1.0)
+        left + (right - left) * (bar / song.span(section) as f32).clamp(0.0, 1.0)
     }
 
     fn span(&self, section: usize) -> (f32, f32) {
@@ -222,8 +260,8 @@ impl Layout {
         let last = song.count() - 1;
         let section = (0..last).find(|&section| x < self.edges[section + 1]).unwrap_or(last);
         let (left, right) = self.span(section);
-        let (start, length) = song.sections[section];
-        start as f32 + length as f32 * ((x - left) / (right - left).max(1e-6)).clamp(0.0, 1.0)
+        let start = song.sections[section].0;
+        start as f32 + song.span(section) as f32 * ((x - left) / (right - left).max(1e-6)).clamp(0.0, 1.0)
     }
 
     /// The x of a bar (from the song's start, fractional).
@@ -468,7 +506,7 @@ fn update_view(ui: &egui::Ui, node_id: NodeId, song: &Song, timeline: Rect, z: f
 
     // While the song plays, the view turns the page to keep the playhead in
     // it, unless it was just moved by hand
-    let playhead = position.filter(|p| !p.ended).map(|p| song.sections[p.section].0 as f32 + p.bar as f32 + p.step / song.steps as f32);
+    let playhead = position.filter(|p| !p.ended).map(|p| song.sections[p.section].0 as f32 + song.playhead(&p));
     let playing = playhead.is_some() && playhead != view.playhead;
     view.playhead = playhead;
     if let Some(bar) = playhead.filter(|_| playing && view.zoomed() && now - view.touched > FOLLOW_PAUSE) {
@@ -556,16 +594,27 @@ fn lane_name(graph: &SynthGraph, node_id: NodeId, lane: usize) -> (Option<String
 }
 
 /// The text of the Arranger's header note: its name, if it was given one,
-/// and the section playing.
+/// and the section playing, with which pass of it if it repeats
+/// ("Desk  ▸  Groove 3/4").
 pub fn title_note(graph: &SynthGraph, user_state: &SynthGraphState, node_id: NodeId) -> Option<String> {
     let position = position(user_state, node_id).filter(|p| p.started);
-    let playing = position.map(|p| if p.ended { "End".to_string() } else { section_name(graph, node_id, p.section) });
+    let repeats = |section: usize| Params::of(graph, node_id).map_or(1, |params| Arr::repeats(&params.values(), section));
+    let playing = position.map(|p| match (p.ended, pass_count(&p, repeats(p.section))) {
+        (true, _) => "End".to_string(),
+        (false, None) => section_name(graph, node_id, p.section),
+        (false, Some(count)) => format!("{} {count}", section_name(graph, node_id, p.section)),
+    });
     match (arranger_follow::given_name(graph, node_id), playing) {
         (Some(name), Some(playing)) => Some(format!("{name}  ▸  {playing}")),
         (Some(name), None) => Some(name),
         (None, Some(playing)) => Some(format!("▸  {playing}")),
         (None, None) => None,
     }
+}
+
+/// "3/4" for the third pass of a section ×4, or None if it plays once.
+fn pass_count(position: &Position, repeats: usize) -> Option<String> {
+    (repeats > 1).then(|| format!("{}/{repeats}", position.pass.min(repeats - 1) + 1))
 }
 
 /// Shortens text to fit a width, with an ellipsis.
@@ -711,8 +760,7 @@ pub fn output_row(
 
     // The playhead, through every row
     if let Some(p) = position {
-        let bar = p.bar as f32 + p.step / song.steps as f32;
-        let x = layout.x(&song, p.section, bar);
+        let x = layout.x(&song, p.section, song.playhead(&p));
         let top = if matches!(row, Row::Sections) { timeline.top() + (OVERVIEW + 1.0) * z } else { timeline.top() - gap / 2.0 };
         let span = egui::Rangef::new(top, timeline.bottom() + gap / 2.0);
         let strength = if p.ended { 0.25 } else { 0.8 };
@@ -760,7 +808,7 @@ fn sections(
     let font = FontId::proportional(9.0 * z);
     let big = FontId::proportional(15.0 * z);
     let left = block.left() + 2.0 * z;
-    let bar_now = position.map(|p| song.sections[p.section].0 + p.bar + 1);
+    let bar_now = position.map(|p| song.sections[p.section].0 + song.playhead(&p) as usize + 1);
     let (number, number_ink) = match bar_now {
         Some(bar) => (bar.to_string(), theme::text::PRIMARY),
         None => ("–".to_string(), theme::text::DISABLED),
@@ -770,15 +818,25 @@ fn sections(
     painter.text(Pos2::new(left, block.top() + 30.0 * z), Align2::LEFT_TOP, format!("of {}", song.bars), font.clone(), theme::text::SECONDARY);
     // The section playing, under the bar count
     if let Some(p) = position {
-        let name = if p.ended { "End".to_string() } else { section_name(graph, node_id, p.section) };
-        let text = fit(&painter, &name, &font, LABEL * z - 6.0 * z);
+        let width = LABEL * z - 6.0 * z;
+        let text = match (p.ended, pass_count(&p, song.repeats[p.section])) {
+            (true, _) => "End".to_string(),
+            (false, None) => fit(&painter, &section_name(graph, node_id, p.section), &font, width),
+            // The pass count always shows; the name gives way to it
+            (false, Some(count)) => {
+                let count = format!(" {count}");
+                let room = width - painter.layout_no_wrap(count.clone(), font.clone(), green).size().x;
+                fit(&painter, &section_name(graph, node_id, p.section), &font, room) + &count
+            }
+        };
         painter.text(Pos2::new(left, block.top() + 44.0 * z), Align2::LEFT_TOP, text, font.clone(), green);
     }
 
     overview(&tl, song, layout, &view, timeline, z, position, selected);
 
-    // The ruler: a tick a bar if they'd be far enough apart, and a number
-    // where each section starts, and on the bars between once there's room
+    // The ruler: a tick a bar if they'd be far enough apart, a taller one
+    // between a section's passes, and a number where each section starts,
+    // and on the bars between once there's room
     let ruler = Rect::from_min_max(Pos2::new(timeline.left(), timeline.top() + (OVERVIEW + 2.0) * z), Pos2::new(timeline.right(), timeline.top() + (OVERVIEW + 12.0) * z));
     let seen = |x0: f32, x1: f32| x1 >= timeline.left() && x0 <= timeline.right();
     let number_font = FontId::monospace(7.5 * z);
@@ -787,15 +845,14 @@ fn sections(
         if !seen(x0, x1) {
             continue;
         }
-        let per_bar = (x1 - x0) / length as f32;
+        let per_bar = (x1 - x0) / song.span(section) as f32;
         let every = [1, 2, 4, 8, 16].into_iter().find(|&k| per_bar * k as f32 >= 18.0 * z);
-        if per_bar >= 3.0 * z {
-            for bar in 1..length {
-                let x = x0 + per_bar * bar as f32;
-                if !seen(x, x) {
-                    continue;
-                }
-                tl.vline(x, egui::Rangef::new(ruler.bottom() - 2.5 * z, ruler.bottom()), Stroke::new(1.0, theme::background::GRID_MAJOR));
+        for bar in 1..song.span(section) {
+            let between_passes = bar % length == 0;
+            let x = x0 + per_bar * bar as f32;
+            if seen(x, x) && (per_bar >= 3.0 * z || (between_passes && per_bar * length as f32 >= 3.0 * z)) {
+                let tall = if between_passes { 4.5 } else { 2.5 };
+                tl.vline(x, egui::Rangef::new(ruler.bottom() - tall * z, ruler.bottom()), Stroke::new(1.0, theme::background::GRID_MAJOR));
                 // Clear of the next section's number
                 if every.is_some_and(|k| bar % k == 0) && x1 - x >= 16.0 * z {
                     tl.text(Pos2::new(x + 2.0 * z, ruler.top()), Align2::LEFT_TOP, (start + bar + 1).to_string(), number_font.clone(), theme::text::DISABLED.gamma_multiply(0.6));
@@ -822,22 +879,39 @@ fn sections(
         let rect = Rect::from_min_max(Pos2::new(x0 + 0.75 * z, blocks.top()), Pos2::new(x1 - 0.75 * z, blocks.bottom()));
         // The part in view, where its name and number go
         let shown = rect.intersect(timeline);
-        let playing = position.is_some_and(|p| p.section == section && !p.ended);
+        let repeats = song.repeats[section];
+        let length = song.sections[section].1;
+        let now = position.filter(|p| p.section == section && !p.ended);
+        let playing = now.is_some();
         let queued = position.is_some_and(|p| p.queued == Some(section));
         let round = 3.0 * z;
-        let fill = if playing {
-            green.gamma_multiply(0.30)
-        } else if section % 2 == 0 {
-            theme::background::WIDGET
-        } else {
-            theme::background::WIDGET.lerp_to_gamma(theme::background::PANEL, 0.4)
+        let rest = if section % 2 == 0 { theme::background::WIDGET } else { theme::background::WIDGET.lerp_to_gamma(theme::background::PANEL, 0.4) };
+        let fill = match now {
+            Some(_) if repeats == 1 => green.gamma_multiply(0.30),
+            // A repeated section glows faintly, and the pass playing fully
+            Some(_) => rest.lerp_to_gamma(green, 0.16),
+            None => rest,
         };
         tl.rect_filled(rect, round, fill);
-        // The last bar, where a fill goes
-        let length = song.sections[section].1;
+        let pass_x = |pass: usize| layout.x(song, section, (pass * length) as f32);
+        if let Some(p) = now.filter(|_| repeats > 1) {
+            let pass = p.pass.min(repeats - 1);
+            let lit = Rect::from_x_y_ranges(pass_x(pass).max(rect.left())..=pass_x(pass + 1).min(rect.right()), rect.y_range());
+            tl.rect_filled(lit, round, green.gamma_multiply(0.24));
+        }
+        // Each pass's last bar, where a fill goes
         if length > 1 {
-            let last = Rect::from_min_max(Pos2::new(layout.x(song, section, (length - 1) as f32), rect.top()), rect.max);
-            tl.rect_filled(last, round, Color32::BLACK.gamma_multiply(0.18));
+            for pass in 0..repeats {
+                let x0 = layout.x(song, section, (pass * length + length - 1) as f32);
+                let last = Rect::from_x_y_ranges(x0..=pass_x(pass + 1).min(rect.right()), rect.y_range());
+                tl.rect_filled(last, if pass + 1 == repeats { round } else { 0.0 }, Color32::BLACK.gamma_multiply(0.18));
+            }
+        }
+        // Faint dashes between the passes
+        for pass in 1..repeats {
+            let x = pass_x(pass);
+            let ends = [Pos2::new(x, rect.top() + 2.0 * z), Pos2::new(x, rect.bottom() - 2.0 * z)];
+            tl.extend(Shape::dashed_line(&ends, Stroke::new(1.0 * z, theme::text::SECONDARY.gamma_multiply(0.45)), 2.0 * z, 2.0 * z));
         }
         if playing {
             tl.hline(rect.x_range(), rect.top() + 0.75 * z, Stroke::new(1.5 * z, green));
@@ -856,10 +930,29 @@ fn sections(
         // A block mostly slid out of view shows no name, not a lone "…"
         let sliver = shown.width() < 20.0 * z && shown.width() < rect.width() - 1.0;
         if !is_renaming {
-            let text = if sliver { String::new() } else { fit(&painter, &name, &name_font, shown.width() - 4.0 * z) };
+            // ×N in the corner of the part in view, counting the passes
+            // off while it plays
+            let mut badge_width = 0.0;
+            if repeats > 1 && !sliver {
+                let text = match now {
+                    Some(p) => pass_count(&p, repeats).unwrap_or_default(),
+                    None => format!("×{repeats}"),
+                };
+                let badge_font = FontId::monospace(8.0 * z);
+                let ink = if playing { Color32::WHITE } else { green.lerp_to_gamma(theme::text::SECONDARY, 0.35) };
+                let galley = painter.layout_no_wrap(text, badge_font, ink);
+                if galley.size().x + 6.0 * z <= shown.width() {
+                    badge_width = galley.size().x + 4.0 * z;
+                    tl.galley(Pos2::new(shown.right() - 3.0 * z - galley.size().x, rect.top() + 3.5 * z), galley, ink);
+                }
+            }
+            let text = if sliver { String::new() } else { fit(&painter, &name, &name_font, shown.width() - 4.0 * z - badge_width) };
             cut_short = text != name;
             let ink = if playing { Color32::WHITE } else { theme::text::PRIMARY };
-            tl.text(Pos2::new(shown.left() + 3.0 * z, rect.top() + 3.0 * z), Align2::LEFT_TOP, text, name_font.clone(), ink);
+            // Too narrow for any of the name: the badge says enough
+            if !(badge_width > 0.0 && text == "…") {
+                tl.text(Pos2::new(shown.left() + 3.0 * z, rect.top() + 3.0 * z), Align2::LEFT_TOP, text, name_font.clone(), ink);
+            }
             let bars = format!("{length}");
             if shown.width() > 22.0 * z {
                 tl.text(Pos2::new(shown.right() - 3.0 * z, rect.bottom() - 2.0 * z), Align2::RIGHT_BOTTOM, bars, FontId::monospace(8.0 * z), theme::text::SECONDARY);
@@ -887,8 +980,9 @@ fn sections(
             Some(leader) => format!("Click to pick · it's {}'s section: edit it there", arranger_follow::name(graph, leader)),
             None => "Click to pick · double-click to rename · right-click for more".to_string(),
         };
+        let plays = if repeats > 1 { format!(" ×{repeats}, {} bars in all", song.span(section)) } else { String::new() };
         let response = response.on_hover_text(format!(
-            "{name}: {length} bar{}, from bar {}\n{how}",
+            "{name}: {length} bar{}{plays}, from bar {}\n{how}",
             if length == 1 { "" } else { "s" },
             song.sections[section].0 + 1
         ));
@@ -943,7 +1037,7 @@ fn overview(painter: &egui::Painter, song: &Song, layout: &Layout, view: &View, 
         painter.rect_filled(Rect::from_x_y_ranges(a + inset..=b - inset, strip.y_range()), 1.0 * z, ink);
     }
     if let Some(p) = position {
-        let x = to_strip(layout.x(song, p.section, p.bar as f32 + p.step / song.steps as f32));
+        let x = to_strip(layout.x(song, p.section, song.playhead(&p)));
         painter.vline(x, strip.y_range(), Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(if p.ended { 0.3 } else { 0.9 })));
     }
     if view.zoomed() {
@@ -1067,17 +1161,37 @@ fn lane_rows(
         (x1 >= timeline.left() && x0 <= timeline.right()).then(|| (x0, x1, x0.max(timeline.left()), x1.min(timeline.right())))
     };
 
-    let starts = song.lane_starts(lane);
-    let mut points = Vec::new();
-    let step = 2.0 * z;
     for section in 0..song.count() {
-        let Some((x0, x1, from, to)) = in_view(section) else { continue };
-        let (start, length) = song.sections[section];
-        let state = starts[section].cued(song.cue(section, lane), start as f32, length as f32);
+        let Some((x0, x1, _, _)) = in_view(section) else { continue };
         // The selected section's column, faintly lit
         if section == selected {
             tl.rect_filled(Rect::from_x_y_ranges(x0..=x1, area.y_range()), 0.0, Color32::WHITE.gamma_multiply(0.035));
         }
+        // A section boundary, faint, and fainter dashes between its passes
+        if section > 0 {
+            tl.vline(x0, area.y_range(), Stroke::new(1.0, theme::background::GRID_MAJOR.gamma_multiply(0.7)));
+        }
+        let length = song.sections[section].1;
+        for pass in 1..song.repeats[section] {
+            let x = layout.x(song, section, (pass * length) as f32);
+            let ends = [Pos2::new(x, area.top()), Pos2::new(x, area.bottom())];
+            tl.extend(Shape::dashed_line(&ends, Stroke::new(1.0, theme::background::GRID_MAJOR.gamma_multiply(0.6)), 2.0 * z, 2.0 * z));
+        }
+    }
+
+    // The level, pass by pass, and the gate strip under it: only the passes
+    // in view, and only their part in view
+    let passes: Vec<(usize, usize, usize)> = song.passes().collect();
+    let states = song.lane_passes(lane);
+    let mut points = Vec::new();
+    let step = 2.0 * z;
+    for (&(section, pass, start), state) in passes.iter().zip(&states) {
+        let length = song.sections[section].1;
+        let (x0, x1) = (layout.x(song, section, (pass * length) as f32), layout.x(song, section, ((pass + 1) * length) as f32));
+        if x1 < timeline.left() || x0 > timeline.right() {
+            continue;
+        }
+        let (from, to) = (x0.max(timeline.left()), x1.min(timeline.right()));
         let samples = (((to - from) / step).ceil() as usize).max(1);
         let mut gate_from: Option<f32> = None;
         for n in 0..=samples {
@@ -1097,10 +1211,6 @@ fn lane_rows(
         if let Some(from) = gate_from {
             tl.rect_filled(Rect::from_x_y_ranges(from..=to, strip_rect.y_range()), 1.0 * z, green.gamma_multiply(0.55));
         }
-        // A section boundary, faint
-        if section > 0 {
-            tl.vline(x0, area.y_range(), Stroke::new(1.0, theme::background::GRID_MAJOR.gamma_multiply(0.7)));
-        }
     }
     // A lane no section moves is drawn faintly
     let idle = (0..song.count()).all(|section| song.cue(section, lane).kind == Move::Hold);
@@ -1110,11 +1220,11 @@ fn lane_rows(
     }
     tl.add(Shape::line(points, Stroke::new(1.4 * z, line)));
 
-    // Hits, as ticks from the strip up to their level
-    for section in 0..song.count() {
+    // Hits, as ticks from the strip up to their level, on every pass
+    for (section, pass, _) in song.passes() {
         let cue = song.cue(section, lane);
         if cue.kind == Move::Hit {
-            let x = layout.span(section).0 + 1.5 * z;
+            let x = layout.x(song, section, (pass * song.sections[section].1) as f32) + 1.5 * z;
             tl.vline(x, egui::Rangef::new(y_of(cue.value()), strip_rect.bottom()), Stroke::new(1.4 * z, green));
             tl.circle_filled(Pos2::new(x, y_of(cue.value())), 2.2 * z, green);
         }
@@ -1122,7 +1232,7 @@ fn lane_rows(
 
     // Where the lane is now, riding the playhead
     if let Some(p) = position {
-        let x = layout.x(song, p.section, p.bar as f32 + p.step / song.steps as f32);
+        let x = layout.x(song, p.section, song.playhead(&p));
         if let Some(level) = output_value(user_state, node_id, Arr::OUT_LANES + 2 * lane) {
             let c = Pos2::new(x, y_of(level));
             tl.circle_filled(c, 5.0 * z, orange.gamma_multiply(0.25 + 0.3 * level.clamp(0.0, 1.0)));
@@ -1154,7 +1264,7 @@ fn lane_rows(
                 let next = if ui.input(|input| input.modifiers.shift) {
                     // Where the ramp starts: anything else becomes a ramp to
                     // where it was going, or for a Hold, where the lane was
-                    let to = if cue.kind == Move::Hold { (starts[section].at(song.sections[section].0 as f32) * 1000.0).round() as u16 } else { cue.level };
+                    let to = if cue.kind == Move::Hold { (song.lane_starts(lane)[section].at(song.sections[section].0 as f32) * 1000.0).round() as u16 } else { cue.level };
                     Cue { kind: Move::Ramp, level: to, from: Some(level), ..cue }
                 } else {
                     let kind = if cue.kind == Move::Hold { Move::Jump } else { cue.kind };
@@ -1355,15 +1465,36 @@ pub fn section_bar(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_
         let name = section_name(graph, node_id, section);
         let playing = position(user_state, node_id).is_some_and(|p| p.started && !p.ended && p.section == section);
         let ink = if playing { theme::signal::GATE } else { theme::text::PRIMARY };
-        ui.label(egui::RichText::new(format!("{} · {name}", section + 1)).color(ink).strong());
+        // A long name is cut short, to a set room or to what the row leaves
+        // after the controls (as wide as they were last frame) on a wider
+        // timeline, so picking it doesn't widen the node
+        let row = (LABEL + Arr::width(params.value(Arr::PARAM_WIDTH)) + JACK_LABEL) * zoom;
+        let controls_id = Id::new((node_id, "arranger-bar-controls"));
+        let controls: f32 = ui.ctx().data(|data| data.get_temp(controls_id)).unwrap_or(0.0);
+        let most = (row - ui.min_rect().width() - controls - ui.spacing().item_spacing.x).max(NAME_ROOM * zoom);
+        let text = egui::RichText::new(format!("{} · {name}", section + 1)).color(ink).strong();
+        let wide = egui::WidgetText::from(text.clone()).into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Body).size().x;
+        let room = wide.min(most);
+        ui.allocate_ui_with_layout(Vec2::new(room, 16.0 * zoom), egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            ui.set_width(room);
+            ui.add(egui::Label::new(text).truncate()).on_hover_text(&name);
+        });
+        let start = ui.min_rect().right();
         match arranger_follow::leader(user_state, node_id) {
             Some(leader) => {
                 let length = song.sections[section].1;
-                ui.label(egui::RichText::new(format!("{length} bar{}", if length == 1 { "" } else { "s" })).color(theme::text::SECONDARY));
+                let repeats = song.repeats[section];
+                let times = if repeats > 1 { format!(" ×{repeats}") } else { String::new() };
+                ui.label(egui::RichText::new(format!("{length} bar{}{times}", if length == 1 { "" } else { "s" })).color(theme::text::SECONDARY));
                 ui.add_space(6.0 * zoom);
                 ui.label(follows_text(graph, leader)).on_hover_text(follows_hint(graph, leader));
             }
             None => section_controls(ui, node_id, graph, user_state, &params, &song, section, &mut edits, false),
+        }
+        let used = ui.min_rect().right() - start;
+        if (used - controls).abs() > 0.5 {
+            ui.ctx().data_mut(|data| data.insert_temp(controls_id, used));
+            ui.ctx().request_repaint();
         }
     });
     edits
@@ -1418,11 +1549,22 @@ fn section_controls(
     if ui.add(drag).on_hover_text("How many bars the section lasts").changed() {
         edits.push(edit(node_id, format!("{name} lasts {bars} bars"), vec![(params.name(Arr::PARAM_LENGTH + section), bars as f32)]));
     }
+    let repeats = song.repeats[section];
+    let mut times = repeats as u32;
+    let drag = egui::DragValue::new(&mut times).range(1..=MAX_REPEATS as u32).prefix("×").speed(0.05);
+    // As narrow as "×16", not a whole field's width
+    let changed = ui.scope(|ui| {
+        ui.spacing_mut().interact_size.x = ui.spacing().interact_size.y;
+        ui.add(drag).on_hover_text("How many times the section plays before the next: ×4 plays just as four copies of it would").changed()
+    });
+    if changed.inner {
+        edits.push(edit(node_id, format!("{name} plays ×{times}"), vec![(params.name(Arr::PARAM_REPEAT + section), times as f32)]));
+    }
     let count = song.count();
     let full = count >= SECTIONS;
     let mut action = |ui: &mut egui::Ui, text: &str, hint: &str, enabled: bool, edit: &dyn Fn() -> Option<Vec<SynthResponse>>| {
         let button = if menu { ui.add_enabled(enabled, egui::Button::new(text)) } else { ui.add_enabled(enabled, egui::Button::new(text).small()) };
-        if button.on_hover_text(hint).clicked() {
+        if button.on_hover_text(hint).on_disabled_hover_text(hint).clicked() {
             if let Some(more) = edit() {
                 edits.extend(more);
             }
@@ -1441,11 +1583,17 @@ fn section_controls(
         select(&ctx, node_id, section + 1);
         chain(&|id, params, song| insert(id, graph, params, song, section + 1, Some(section)))
     });
-    action(ui, "◀ Move", "Swap with the section before", section > 0, &|| {
+    // In the bar the two moves share one word, "◀ Move ▶", to leave room
+    // for the section's name
+    let (back, on) = if menu { ("◀ Move", "Move ▶") } else { ("◀", "▶") };
+    action(ui, back, "Swap with the section before", section > 0, &|| {
         select(&ctx, node_id, section - 1);
         chain(&|id, params, song| swap(id, graph, params, song, section - 1))
     });
-    action(ui, "Move ▶", "Swap with the section after", section + 1 < count, &|| {
+    if !menu {
+        ui.label(egui::RichText::new("Move").color(theme::text::SECONDARY));
+    }
+    action(ui, on, "Swap with the section after", section + 1 < count, &|| {
         select(&ctx, node_id, section + 1);
         chain(&|id, params, song| swap(id, graph, params, song, section))
     });
@@ -1453,6 +1601,50 @@ fn section_controls(
         select(&ctx, node_id, section.saturating_sub(1).min(count - 2));
         chain(&|id, params, song| remove(id, graph, params, song, section))
     });
+    if !menu {
+        return;
+    }
+    // Repeats and copies, either way round: they play the same
+    ui.separator();
+    let labels = labels_of(graph, node_id);
+    let split_hint = if repeats < 2 {
+        "Plays once already".to_string()
+    } else if count + repeats - 1 > SECTIONS {
+        format!("No room: a song has at most {SECTIONS} sections")
+    } else {
+        format!("Make this section ×{repeats} into {repeats} sections, each ×1, to change one pass")
+    };
+    // Followers split and merge too, each with its own cues
+    action(ui, "Split into copies", &split_hint, split_plan(&labels, song, section).is_some(), &|| {
+        let label = format!("Split {name} into {repeats} copies");
+        chain(&|id, params, song| split_plan(&labels_of(graph, id), song, section).map_or_else(Vec::new, |rewrite| rewrite.edits(id, params, label.clone())))
+    });
+    let own = mergeable(&labels, song, section);
+    let folds = chain_mergeable(node_id, graph, user_state, section);
+    let total: usize = (section..=section + folds).map(|s| song.repeats[s]).sum();
+    let merge_hint = if own == 0 {
+        "The section after this one plays something else".to_string()
+    } else if folds == 0 {
+        "An Arranger following this one plays something else in the section after it".to_string()
+    } else {
+        let copies = if folds == 1 { "the copy".to_string() } else { format!("the {folds} copies") };
+        format!("Fold {copies} straight after this section into it: {name} ×{total}")
+    };
+    action(ui, "Merge with copies after it", &merge_hint, folds > 0, &|| {
+        let label = format!("Merge {name} ×{total}");
+        chain(&|id, params, song| merge_plan(&labels_of(graph, id), song, section, folds).map_or_else(Vec::new, |rewrite| rewrite.edits(id, params, label.clone())))
+    });
+}
+
+/// How many sections after `at` can fold into it on this Arranger and on
+/// every one down the chain that follows it: on all of them, they have to
+/// play the same.
+fn chain_mergeable(node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphState, at: usize) -> usize {
+    std::iter::once(node_id)
+        .chain(arranger_follow::followers(&user_state.arranger_leaders, node_id))
+        .filter_map(|id| Params::of(graph, id).map(|params| mergeable(&labels_of(graph, id), &Song::of(params.values()), at)))
+        .min()
+        .unwrap_or(0)
 }
 
 /// A change to the sections made on an Arranger and on every one down the
@@ -1466,10 +1658,11 @@ fn down_the_chain(node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphSt
         .collect()
 }
 
-/// What one section holds: its length, its cues and its name.
-#[derive(Clone)]
+/// What one section holds: its length, repeats, cues and name.
+#[derive(Clone, Debug, PartialEq)]
 struct SectionData {
     length: f32,
+    repeats: f32,
     cues: [f32; LANES],
     froms: [f32; LANES],
     name: String,
@@ -1478,48 +1671,82 @@ struct SectionData {
 impl SectionData {
     /// A new section: four bars that hold every lane.
     fn blank() -> Self {
-        Self { length: 4.0, cues: [Cue::HOLD.encode(); LANES], froms: [FROM_WHERE_IT_IS; LANES], name: String::new() }
+        Self { length: 4.0, repeats: 1.0, cues: [Cue::HOLD.encode(); LANES], froms: [FROM_WHERE_IT_IS; LANES], name: String::new() }
+    }
+
+    /// Plays the same as `other`: the same bars and cues, whatever its name
+    /// and repeats.
+    fn same_music(&self, other: &Self) -> bool {
+        self.length.round() == other.length.round()
+            && (0..LANES).all(|lane| Cue::decode(self.cues[lane], self.froms[lane]) == Cue::decode(other.cues[lane], other.froms[lane]))
     }
 }
 
-fn section_data(graph: &SynthGraph, node_id: NodeId, song: &Song, section: usize) -> SectionData {
-    let labels = graph.nodes.get(node_id).map(|n| n.user_data.labels.clone()).unwrap_or_default();
+type Labels = std::collections::BTreeMap<String, String>;
+
+fn labels_of(graph: &SynthGraph, node_id: NodeId) -> Labels {
+    graph.nodes.get(node_id).map(|n| n.user_data.labels.clone()).unwrap_or_default()
+}
+
+fn section_data(labels: &Labels, song: &Song, section: usize) -> SectionData {
     if section >= song.count() {
         return SectionData::blank();
     }
     SectionData {
         length: song.values[Arr::PARAM_LENGTH + section],
+        repeats: song.repeats[section] as f32,
         cues: std::array::from_fn(|lane| song.values[Arr::cue_param(section, lane)]),
         froms: std::array::from_fn(|lane| song.values[Arr::from_param(section, lane)]),
         name: labels.get(&section_key(section)).cloned().unwrap_or_default(),
     }
 }
 
-/// The edits that lay `sections` out from section `from` on, with the new
-/// section count and Loop.
-fn write_sections(node_id: NodeId, params: &Params, from: usize, sections: &[SectionData], count: usize, loop_to: f32, label: String) -> Vec<SynthResponse> {
-    let mut changes = vec![(params.name(Arr::PARAM_SECTIONS), count as f32), (params.name(Arr::PARAM_LOOP), loop_to)];
-    let mut labels = Vec::new();
-    for (offset, data) in sections.iter().enumerate() {
-        let section = from + offset;
-        if section >= SECTIONS {
-            break;
+/// The song from section `from` on, laid out again, with its new section
+/// count and Loop.
+struct Rewrite {
+    from: usize,
+    sections: Vec<SectionData>,
+    count: usize,
+    loop_to: f32,
+}
+
+impl Rewrite {
+    /// The parameters it sets, by index.
+    fn changes(&self) -> Vec<(usize, f32)> {
+        let mut changes = vec![(Arr::PARAM_SECTIONS, self.count as f32), (Arr::PARAM_LOOP, self.loop_to)];
+        for (section, data) in self.placed() {
+            changes.push((Arr::PARAM_LENGTH + section, data.length));
+            changes.push((Arr::PARAM_REPEAT + section, data.repeats));
+            for lane in 0..LANES {
+                changes.push((Arr::cue_param(section, lane), data.cues[lane]));
+                changes.push((Arr::from_param(section, lane), data.froms[lane]));
+            }
         }
-        changes.push((params.name(Arr::PARAM_LENGTH + section), data.length));
-        for lane in 0..LANES {
-            changes.push((params.name(Arr::cue_param(section, lane)), data.cues[lane]));
-            changes.push((params.name(Arr::from_param(section, lane)), data.froms[lane]));
-        }
-        labels.push((section_key(section), data.name.clone()));
+        changes
     }
-    vec![edit(node_id, label.clone(), changes), SynthResponse::SetLabels { node_id, label, labels }]
+
+    /// The section names it sets, empty to clear one.
+    fn labels(&self) -> Vec<(String, String)> {
+        self.placed().map(|(section, data)| (section_key(section), data.name.clone())).collect()
+    }
+
+    fn placed(&self) -> impl Iterator<Item = (usize, &SectionData)> {
+        self.sections.iter().enumerate().map(|(offset, data)| (self.from + offset, data)).take_while(|&(section, _)| section < SECTIONS)
+    }
+
+    /// The edits that make it, as one undo step.
+    fn edits(&self, node_id: NodeId, params: &Params, label: String) -> Vec<SynthResponse> {
+        let changes = self.changes().into_iter().map(|(index, value)| (params.name(index), value)).collect();
+        vec![edit(node_id, label.clone(), changes), SynthResponse::SetLabels { node_id, label, labels: self.labels() }]
+    }
 }
 
 /// Adds a section at `at`: a copy of `copy`, or a blank one.
 fn insert(node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, at: usize, copy: Option<usize>) -> Vec<SynthResponse> {
     let count = song.count();
+    let labels = labels_of(graph, node_id);
     let mut new = match copy {
-        Some(section) => section_data(graph, node_id, song, section),
+        Some(section) => section_data(&labels, song, section),
         None => SectionData::blank(),
     };
     let label = match copy {
@@ -1530,30 +1757,92 @@ fn insert(node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, at:
         new.name = format!("{} 2", new.name);
     }
     let mut moved = vec![new];
-    moved.extend((at..count).map(|section| section_data(graph, node_id, song, section)));
+    moved.extend((at..count).map(|section| section_data(&labels, song, section)));
     // Loop follows the section it named
     let loop_to = song.values[Arr::PARAM_LOOP];
     let loop_to = if loop_to >= 1.0 && loop_to as usize - 1 >= at { loop_to + 1.0 } else { loop_to };
-    write_sections(node_id, params, at, &moved, count + 1, loop_to, label)
+    Rewrite { from: at, sections: moved, count: count + 1, loop_to }.edits(node_id, params, label)
 }
 
 /// Takes section `at` out.
 fn remove(node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, at: usize) -> Vec<SynthResponse> {
     let count = song.count();
+    let labels = labels_of(graph, node_id);
     let label = format!("Delete section {}", section_name(graph, node_id, at));
-    let mut moved: Vec<SectionData> = (at + 1..count).map(|section| section_data(graph, node_id, song, section)).collect();
+    let mut moved: Vec<SectionData> = (at + 1..count).map(|section| section_data(&labels, song, section)).collect();
     // The emptied slot at the end goes back to a blank section
     moved.push(SectionData::blank());
     let loop_to = song.values[Arr::PARAM_LOOP];
     let loop_to = if loop_to >= 1.0 && loop_to as usize - 1 > at { loop_to - 1.0 } else { loop_to.min((count - 1) as f32) };
-    write_sections(node_id, params, at, &moved, count - 1, loop_to, label)
+    Rewrite { from: at, sections: moved, count: count - 1, loop_to }.edits(node_id, params, label)
 }
 
 /// Swaps section `at` with the one after it.
 fn swap(node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, at: usize) -> Vec<SynthResponse> {
+    let labels = labels_of(graph, node_id);
     let label = format!("Move section {}", section_name(graph, node_id, at));
-    let moved = vec![section_data(graph, node_id, song, at + 1), section_data(graph, node_id, song, at)];
-    write_sections(node_id, params, at, &moved, song.count(), song.values[Arr::PARAM_LOOP], label)
+    let moved = vec![section_data(&labels, song, at + 1), section_data(&labels, song, at)];
+    Rewrite { from: at, sections: moved, count: song.count(), loop_to: song.values[Arr::PARAM_LOOP] }.edits(node_id, params, label)
+}
+
+/// Section `at` ×N as N copies of it, each ×1, if there's room for them.
+/// The copies after the first are named "Groove 2", "Groove 3" and so on.
+fn split_plan(labels: &Labels, song: &Song, at: usize) -> Option<Rewrite> {
+    let count = song.count();
+    let repeats = song.repeats[at];
+    if repeats < 2 || count + repeats - 1 > SECTIONS {
+        return None;
+    }
+    let data = section_data(labels, song, at);
+    let mut moved: Vec<SectionData> = (0..repeats)
+        .map(|pass| SectionData {
+            repeats: 1.0,
+            name: if pass == 0 || data.name.is_empty() { data.name.clone() } else { format!("{} {}", data.name, pass + 1) },
+            ..data.clone()
+        })
+        .collect();
+    moved.extend((at + 1..count).map(|section| section_data(labels, song, section)));
+    // Loop to this section goes to its first copy, and to a later one follows it
+    let loop_to = song.values[Arr::PARAM_LOOP];
+    let loop_to = if loop_to >= 1.0 && loop_to as usize - 1 > at { loop_to + (repeats - 1) as f32 } else { loop_to };
+    Some(Rewrite { from: at, sections: moved, count: count + repeats - 1, loop_to })
+}
+
+/// How many of the sections straight after `at` play the same as it and
+/// can fold into it: up to ×16 in all, and not past one Loop goes back to.
+fn mergeable(labels: &Labels, song: &Song, at: usize) -> usize {
+    let first = section_data(labels, song, at);
+    let loop_to = Arr::loop_to(&song.values);
+    let mut total = song.repeats[at];
+    let mut folds = 0;
+    for next in at + 1..song.count() {
+        if !first.same_music(&section_data(labels, song, next)) || total + song.repeats[next] > MAX_REPEATS || loop_to == Some(next) {
+            break;
+        }
+        total += song.repeats[next];
+        folds += 1;
+    }
+    folds
+}
+
+/// Section `at` and up to `most` copies of it straight after it as one
+/// section ×N, keeping the first one's name. None if nothing follows it to
+/// fold in.
+fn merge_plan(labels: &Labels, song: &Song, at: usize, most: usize) -> Option<Rewrite> {
+    let folds = mergeable(labels, song, at).min(most);
+    if folds == 0 {
+        return None;
+    }
+    let count = song.count();
+    let mut first = section_data(labels, song, at);
+    first.repeats = (at..=at + folds).map(|section| song.repeats[section]).sum::<usize>() as f32;
+    let mut moved = vec![first];
+    moved.extend((at + folds + 1..count).map(|section| section_data(labels, song, section)));
+    // The emptied slots at the end go back to blank sections
+    moved.extend((0..folds).map(|_| SectionData::blank()));
+    let loop_to = song.values[Arr::PARAM_LOOP];
+    let loop_to = if loop_to >= 1.0 && loop_to as usize - 1 > at + folds { loop_to - folds as f32 } else { loop_to };
+    Some(Rewrite { from: at, sections: moved, count: count - folds, loop_to })
 }
 
 #[cfg(test)]
@@ -1574,15 +1863,18 @@ mod tests {
         Song::of(values)
     }
 
+    fn state(song: &Song, lane: usize, section: usize, pass: usize) -> LaneState {
+        let index = song.passes().position(|(s, p, _)| (s, p) == (section, pass)).unwrap();
+        song.lane_passes(lane)[index]
+    }
+
     #[test]
     fn the_timeline_follows_the_cues_as_the_module_does() {
         let song = song(&[2, 4, 2], &[(0, 0, Cue::jump(400)), (1, 0, Cue::ramp(800, 2)), (2, 0, Cue::HOLD)]);
-        let starts = song.lane_starts(0);
-        let state = |section: usize| starts[section].cued(song.cue(section, 0), song.sections[section].0 as f32, song.sections[section].1 as f32);
-        assert_eq!(state(0).at(1.0), 0.4);
-        assert!((state(1).at(3.0) - 0.6).abs() < 1e-5, "half way through a two-bar ramp");
-        assert_eq!(state(1).at(5.0), 0.8);
-        assert_eq!(state(2).at(7.0), 0.8, "held");
+        assert_eq!(state(&song, 0, 0, 0).at(1.0), 0.4);
+        assert!((state(&song, 0, 1, 0).at(3.0) - 0.6).abs() < 1e-5, "half way through a two-bar ramp");
+        assert_eq!(state(&song, 0, 1, 0).at(5.0), 0.8);
+        assert_eq!(state(&song, 0, 2, 0).at(7.0), 0.8, "held");
     }
 
     #[test]
@@ -1656,13 +1948,35 @@ mod tests {
         let desk_song = Song::of(Params::of(graph, desk).unwrap().values());
         assert_eq!(desk_song.count(), 4);
         assert!((0..4).all(|section| desk_song.cue(section, 0) == Cue::HOLD));
+
+        // Repeats are the leader's too
+        let repeats = |graph: &SynthGraph| Song::of(Params::of(graph, cues).unwrap().values()).repeats;
+        let edits = vec![edit(desk, "Repeat", vec![(Params::of(graph, desk).unwrap().name(Arr::PARAM_REPEAT + 1), 2.0)])];
+        apply(graph, edits);
+        assert_eq!(repeats(graph)[..4], [1, 2, 1, 1]);
+
+        // Merge and Split go down the chain, the follower's cues with them
+        assert_eq!(chain_mergeable(desk, graph, &user_state, 1), 1);
+        let edits = on_desk(graph, &|id, params, song| merge_plan(&labels_of(graph, id), song, 1, 1).unwrap().edits(id, params, "Merge".into()));
+        apply(graph, edits);
+        assert_eq!(levels(graph), [0, 300, 100]);
+        assert_eq!(repeats(graph)[..3], [1, 3, 1]);
+        let edits = on_desk(graph, &|id, params, song| split_plan(&labels_of(graph, id), song, 1).unwrap().edits(id, params, "Split".into()));
+        apply(graph, edits);
+        assert_eq!(levels(graph), [0, 300, 300, 300, 100]);
+        assert_eq!(repeats(graph)[..5], [1, 1, 1, 1, 1]);
+
+        // A follower that plays the copies differently keeps them apart
+        set(graph, cues, Arr::cue_param(2, 0), Cue::jump(500).encode());
+        let desk_song = Song::of(Params::of(graph, desk).unwrap().values());
+        assert_eq!(mergeable(&labels_of(graph, desk), &desk_song, 1), 3, "the leader alone would fold the rest");
+        assert_eq!(chain_mergeable(desk, graph, &user_state, 1), 0);
     }
 
     #[test]
     fn a_ramp_held_into_the_next_section_carries_on() {
         let song = song(&[1, 1], &[(0, 0, Cue::ramp(1000, 2)), (1, 0, Cue::HOLD)]);
-        let starts = song.lane_starts(0);
-        let second = starts[1].cued(Cue::HOLD, 1.0, 1.0);
+        let second = state(&song, 0, 1, 0);
         assert!((second.at(1.0) - 0.5).abs() < 1e-5);
         assert_eq!(second.at(2.0), 1.0);
     }
@@ -1688,6 +2002,22 @@ mod tests {
     fn a_cue_describes_its_curve_and_start() {
         assert_eq!(describe(Cue::ramp(420, 0)), "ramps to 42% over the section");
         assert_eq!(describe(Cue::ramp(420, 12).on(Curve::Log).starting(280)), "ramps from 28% to 42% over 12 bars, fast then slow");
+    }
+
+    #[test]
+    fn each_pass_of_a_repeated_section_cues_again() {
+        // Two bars ×3, ramping to full over three bars: every pass starts
+        // the ramp again from where the last one left it
+        let mut song = song(&[2, 1], &[(0, 0, Cue::ramp(1000, 3))]);
+        song.values[Arr::PARAM_REPEAT] = 3.0;
+        let song = Song::of(song.values);
+        assert_eq!(song.bars, 7);
+        assert_eq!(song.passes().collect::<Vec<_>>(), [(0, 0, 0), (0, 1, 2), (0, 2, 4), (1, 0, 6)]);
+        let first = state(&song, 0, 0, 0);
+        let second = state(&song, 0, 0, 1);
+        assert!((second.at(2.0) - first.at(2.0)).abs() < 1e-6, "picks up where it was");
+        assert!(second.at(4.0) < 1.0, "a fresh three-bar ramp, not the old one's end");
+        assert_eq!(state(&song, 0, 0, 2).at(7.0), 1.0);
     }
 
     #[test]
@@ -1767,5 +2097,109 @@ mod tests {
         let turned = view.turned_to(&song, timeline, 520.0);
         let moved = (turned.offset - view.offset) * timeline.width() * view.scale;
         assert!((moved - (520.0 - (timeline.left() + timeline.width() * PAGE_MARGIN))).abs() < 1e-2);
+    }
+
+    #[test]
+    fn a_repeated_section_is_as_wide_as_all_its_passes() {
+        let mut values = song(&[1, 1], &[]).values;
+        values[Arr::PARAM_REPEAT] = 3.0;
+        let song = Song::of(values);
+        let layout = Layout::of(&song, 0.0, 400.0, 1.0);
+        let spare = 400.0 - 2.0 * MIN_SECTION;
+        assert!((layout.edges[1] - (MIN_SECTION + spare * 3.0 / 4.0)).abs() < 1e-3);
+        // The playhead counts through the passes
+        let at = Position { section: 0, pass: 2, bar: 0, step: 8.0, started: true, ..Default::default() };
+        assert_eq!(song.playhead(&at), 2.5);
+        // And zooming finds its bars through all of them
+        for bar in [0.5, 1.5, 2.5, 3.5] {
+            assert!((layout.bar_at(&song, layout.x_at(&song, bar)) - bar).abs() < 1e-3, "{bar}");
+        }
+    }
+
+    /// The song once a rewrite's changes are made.
+    fn rewritten(song: &Song, labels: &Labels, rewrite: &Rewrite) -> (Song, Labels) {
+        let mut values = song.values.clone();
+        for (index, value) in rewrite.changes() {
+            values[index] = value;
+        }
+        let mut labels = labels.clone();
+        for (key, text) in rewrite.labels() {
+            if text.is_empty() {
+                labels.remove(&key);
+            } else {
+                labels.insert(key, text);
+            }
+        }
+        (Song::of(values), labels)
+    }
+
+    /// Every output but Section, which counts sections, over 2.5 times
+    /// round the song.
+    fn render(song: &Song) -> Vec<Vec<f32>> {
+        let ms = 10 * song.steps * song.bars * 5 / 2;
+        let mut clock = crate::dsp::SignalBuffer::gate(ms);
+        for t in (0..ms).step_by(10) {
+            clock.samples[t] = 1.0;
+        }
+        let mut arranger = Arr::new();
+        arranger.prepare(1000.0, ms);
+        let mut outputs: Vec<_> = (0..Arr::OUT_COUNT).map(|_| crate::dsp::SignalBuffer::control(ms)).collect();
+        let context = crate::dsp::context::ProcessContext::new(1000.0, ms);
+        arranger.process(&[&clock], &mut outputs, &song.values, &context);
+        outputs.into_iter().enumerate().filter(|&(index, _)| index != Arr::OUT_SECTION).map(|(_, b)| b.samples).collect()
+    }
+
+    /// Intro, Groove ×3, Outro, looping back to the Groove.
+    fn groove_song() -> (Song, Labels) {
+        let mut values = song(
+            &[1, 2, 1],
+            &[(0, 0, Cue::jump(200)), (1, 0, Cue::ramp(900, 3)), (1, 1, Cue::hit(600)), (2, 0, Cue::ramp(0, 0)), (2, 2, Cue::jump(1000))],
+        )
+        .values;
+        values[Arr::PARAM_STEPS] = 4.0;
+        values[Arr::PARAM_REPEAT + 1] = 3.0;
+        values[Arr::PARAM_LOOP] = 2.0;
+        let labels = Labels::from([(section_key(0), "Intro".to_string()), (section_key(1), "Groove".to_string()), (section_key(2), "Outro".to_string())]);
+        (Song::of(values), labels)
+    }
+
+    #[test]
+    fn split_makes_copies_that_play_the_same() {
+        let (song, labels) = groove_song();
+        let (split, split_labels) = rewritten(&song, &labels, &split_plan(&labels, &song, 1).unwrap());
+        assert_eq!(split.count(), 5);
+        assert_eq!(split.repeats, [1, 1, 1, 1, 1]);
+        assert_eq!(split.values[Arr::PARAM_LOOP], 2.0, "Loop still goes to the Groove's first copy");
+        let names: Vec<_> = (0..5).map(|s| split_labels.get(&section_key(s)).cloned().unwrap_or_default()).collect();
+        assert_eq!(names, ["Intro", "Groove", "Groove 2", "Groove 3", "Outro"]);
+        assert_eq!(render(&split), render(&song));
+        assert!(split_plan(&labels, &split, 1).is_none(), "nothing left to split");
+    }
+
+    #[test]
+    fn merge_folds_the_copies_back_into_one() {
+        let (song, labels) = groove_song();
+        let (split, split_labels) = rewritten(&song, &labels, &split_plan(&labels, &song, 1).unwrap());
+        assert_eq!(mergeable(&split_labels, &split, 1), 2);
+        assert_eq!(mergeable(&split_labels, &split, 0), 0, "the Intro plays something else");
+        let (merged, merged_labels) = rewritten(&split, &split_labels, &merge_plan(&split_labels, &split, 1, MAX_REPEATS).unwrap());
+        assert_eq!(merged.count(), 3);
+        assert_eq!(merged.repeats, song.repeats);
+        assert_eq!(merged.values[..Arr::PARAM_LENGTH + 3], song.values[..Arr::PARAM_LENGTH + 3]);
+        assert_eq!(merged_labels, labels, "the copies' names go with them");
+        assert_eq!(render(&merged), render(&song));
+    }
+
+    #[test]
+    fn merge_stops_where_the_music_or_the_loop_changes() {
+        let (song, labels) = groove_song();
+        let (mut split, split_labels) = rewritten(&song, &labels, &split_plan(&labels, &song, 1).unwrap());
+        // The third copy hits harder: only the second folds in
+        split.values[Arr::cue_param(3, 1)] = Cue::hit(900).encode();
+        assert_eq!(mergeable(&split_labels, &Song::of(split.values.clone()), 1), 1);
+        // Looping back to the second copy keeps it a section of its own
+        let (mut split, split_labels) = rewritten(&song, &labels, &split_plan(&labels, &song, 1).unwrap());
+        split.values[Arr::PARAM_LOOP] = 3.0;
+        assert_eq!(mergeable(&split_labels, &Song::of(split.values), 1), 0);
     }
 }

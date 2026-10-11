@@ -5,7 +5,7 @@
 ![Arranger Module](../../images/module-arranger.png)
 *A five-section song, playing its Build. Each section is a block as wide as its bars, and each lane's level runs under them as an orange line, with a green strip wherever its gate is high. The ticks on the Crash lane are Hits. The white line is the playhead.*
 
-The Arranger is a song's timeline. It holds up to 32 named **sections**, each some bars long, played in order, and eight **lanes** of automation that the sections move. A lane can ride a part's fader, pick a drum pattern, open a filter over a build or press a Looper's button, and each section says what it does when the section starts: hold, jump, ramp or hit.
+The Arranger is a song's timeline. It holds up to 32 named **sections**, each some bars long and played ×1 to ×16 times, in order, and eight **lanes** of automation that the sections move. A lane can ride a part's fader, pick a drum pattern, open a filter over a build or press a Looper's button, and each section says what it does when the section starts: hold, jump, ramp or hit.
 
 It counts bars from a [Clock](../modulation/clock.md), like the sequencers, so the song stays in step with everything else the Clock drives. Press **▶ Play** and it starts from the first section.
 
@@ -23,10 +23,10 @@ It counts bars from a [Clock](../modulation/clock.md), like the sequencers, so t
 
 | Port | Signal Type | Description |
 |------|-------------|-------------|
-| **Section** | Control (Orange) | The section playing, its index ÷ 32 |
-| **Section Trig** | Gate (Green) | A trigger on each section's downbeat |
+| **Section** | Control (Orange) | The section playing, its index ÷ 32. A repeated section reads the same on every pass |
+| **Section Trig** | Gate (Green) | A trigger on each section's downbeat, and on every pass of a [repeated](#repeats) one |
 | **Bar** | Gate (Green) | A trigger on every bar's downbeat |
-| **Last Bar** | Gate (Green) | High through each section's final bar, for a fill |
+| **Last Bar** | Gate (Green) | High through each section's final bar, for a fill. A repeated section has one on every pass |
 | **End** | Gate (Green) | A trigger when the last section finishes, whether the song loops or stops |
 | **Lane 1** – **Lane 8** | Control (Orange) | Each lane's level, 0 to 1. A ramp is smooth enough to drive a [Mixer](./mixer.md)'s **Level** directly |
 | **Gate 1** – **Gate 8** | Gate (Green) | High while the lane is above zero, and for a moment on each Hit |
@@ -41,7 +41,7 @@ Triggers last half a step.
 | **Loop to** | Off, 1 – 32 | 1 | The section to go back to after the last one, or **Off** to stop there |
 | **Width** | Compact, Wide, Extra wide | Compact | How wide the timeline is drawn: 440, 760 or 1080 points. Wide or Extra wide suits a long song read whole on a big screen. The module plays the same at any width |
 
-The sections, their names and lengths, the lanes' names and glides, and every section's cue for every lane are edited on the timeline, and patches save them. So is **Width**. The jacks keep their rows at every width, and so do the lanes beside them.
+The sections, their names, lengths and repeats, the lanes' names and glides, and every section's cue for every lane are edited on the timeline, and patches save them. So is **Width**. The jacks keep their rows at every width, and so do the lanes beside them.
 
 ## Writing a song
 
@@ -55,11 +55,11 @@ A lane is named for what its cable drives (a Mixer's **Level 2**, say) until you
 - **Shift-drag** a lane inside a section to set where its ramp starts. Any other cue becomes a ramp from there to its level, or for a Hold, to where the lane was.
 - **Right-click** a lane inside a section for how it gets there (see [Cues](#cues)), its level, and a ramp's length, curve and start.
 - **Double-click** a lane's name to rename it. **Right-click** it to set its **Glide**, or to clear it.
-- **Right-click** a section for its length, and to add, copy, move or delete it.
+- **Right-click** a section for its length and repeats, to add, copy, move or delete it, and to [split or merge](#repeats) its copies.
 
-The bar under the timeline does the same for the section you picked. **◀** and **▶** step through the sections. The bars field sets its length. **+** adds a blank section after it, and **Copy** adds a copy. **◀ Move** and **Move ▶** swap it with its neighbours, and **Delete** takes it out. **Loop to** follows the section it named when sections move.
+The bar under the timeline does the same for the section you picked. **◀** and **▶** step through the sections. The bars field sets its length, and the **×** field how many times it plays. **+** adds a blank section after it, and **Copy** adds a copy. **◀ Move** and **Move ▶** swap it with its neighbours, and **Delete** takes it out. **Loop to** follows the section it named when sections move.
 
-A section's final bar is shaded, since that's where a fill goes. Every edit is one step of [undo](../../getting-started/interface-overview.md#the-toolbar), named for what it did ("Groove · Pad jumps to 48%").
+A section's final bar is shaded, since that's where a fill goes. A repeated section has one shaded on each pass. Every edit is one step of [undo](../../getting-started/interface-overview.md#the-toolbar), named for what it did ("Groove · Pad jumps to 48%").
 
 **Name…**, at the left of the bar under the lanes' names, names the Arranger itself. The name shows in its header beside the section playing, and an Arranger that follows this one calls it by its name.
 
@@ -77,12 +77,30 @@ Zoomed in, the ruler numbers the bars inside each section, and each section's na
 
 The zoom belongs to the editor, like the section you picked. It isn't saved with the patch and isn't a step of undo. For a song you want to read whole, set **Width** instead.
 
+## Repeats
+
+Songs repeat themselves: a groove four times round, a verse that comes back. Give a section a **×** count, ×1 to ×16, and it plays that many times before the next. **×N plays exactly as N copies of it would**, sample for sample:
+
+- Every pass gives the section's [cues](#cues) again. A Jump jumps again, a Ramp runs again (from its own start if it has one, or from wherever the lane is), and a Hit fires again, so a crash on every pass of a 4-bar groove is one cue.
+- **Section Trig**, **Bar** and **Last Bar** fire on every pass, so a fill on the last bar lands at the end of each one.
+- A Ramp "over the section" takes one pass.
+- **Jump** to a repeated section starts its first pass, and so does **Loop to**.
+
+The section is one block on the timeline, as wide as all its passes, with **×N** in its corner and faint dashes between the passes. While it plays, the pass playing is lit, the corner counts the passes off ("3/4"), and so do the bar count and the header: "Groove 3/4".
+
+Since ×N means N copies, either can become the other. Right-click a section:
+
+- **Split into copies** turns a section ×N into N sections, each ×1, named "Groove", "Groove 2" and so on. Do it when one pass needs to differ.
+- **Merge with copies after it** folds the sections straight after this one that play the same (the same length and cues, whatever their names) into it, up to ×16. It stops at a section **Loop to** goes back to, which has to stay a section of its own.
+
+Each is one step of undo, and neither changes what you hear. The one thing that does change is the sections' numbers after it, so a **Jump To** CV that picked a later section by number needs moving too. **Loop to** follows by itself.
+
 ## More than eight lanes: Follow
 
-A song can need more than eight lanes. Patch one Arranger's **Section** output into another's **Follow** input, and the second one *follows* the first. It has the first one's sections, the same number of them, as long, with the same names, and the same **Steps** and **Loop to**. Its lanes are its own, and you edit them on its own face as before.
+A song can need more than eight lanes. Patch one Arranger's **Section** output into another's **Follow** input, and the second one *follows* the first. It has the first one's sections, the same number of them, as long, played as many times, with the same names, and the same **Steps** and **Loop to**. Its lanes are its own, and you edit them on its own face as before.
 
 - **Edit the sections on the leader.** On the follower they can be picked but not changed, and its bar says **Follows Desk** (or whatever the leader is called). Its **Steps** knob and **Loop to** are the leader's too.
-- **The follower's cues move with their sections.** Add, copy, move or delete a section on the leader, and the follower does the same with its own cues. Lengthening or renaming a section does too. The leader's edit and the follower's are one step of undo, so undo takes both back.
+- **The follower's cues move with their sections.** Add, copy, move, delete, split or merge a section on the leader, and the follower does the same with its own cues. A merge folds only copies that play the same on every Arranger down the chain. Lengthening or renaming a section does too. The leader's edit and the follower's are one step of undo, so undo takes both back.
 - **Unpatch Follow** and the follower keeps the sections it had, and you can edit them on it again.
 - **Chains.** A follower can lead another, so three Arrangers give 24 lanes. A chain can't come back round: an Arranger that would end up following itself refuses the cable and says why. **Follow** takes only an Arranger's **Section**.
 
@@ -159,12 +177,12 @@ Every section's cue for every lane is one parameter, named for both: `Section 03
 
 A ramp's start is a second parameter, `Section 03 Lane 2 From`: the level in tenths of a percent (`280` starts at 28%), or `-1` to start from where the lane is. Patches saved before ramps had curves and starts have no From parameters and only 2 for ramps, so they play as they always did.
 
-The sections' lengths are `Length 01` to `Length 32`, the lanes' glides `Glide 1` to `Glide 8`, and **Sections** is how many sections the song has. The names you give sections and lanes, and the Arranger's own name, are saved with the module as labels. A follower saves its own copy of its leader's sections, so it plays them even where Follow isn't known.
+The sections' lengths are `Length 01` to `Length 32`, their repeats `Repeat 01` to `Repeat 32` (a patch from before repeats plays every section ×1), the lanes' glides `Glide 1` to `Glide 8`, and **Sections** is how many sections the song has. The names you give sections and lanes, and the Arranger's own name, are saved with the module as labels. A follower saves its own copy of its leader's sections, so it plays them even where Follow isn't known.
 
 ## Tips
 
 1. **Faders at zero.** On a [Mixer](./mixer.md), set a channel's **Level** knob to 0 and patch a lane into its **Level** input. The lane then is the fader.
-2. **Fills.** Either give each phrase a one-bar **Fill** section that jumps the drum lane to the fill pattern, or patch **Last Bar** into something that plays a fill.
+2. **Fills.** Either give each phrase a one-bar **Fill** section that jumps the drum lane to the fill pattern, or patch **Last Bar** into something that plays a fill. With **Last Bar**, a 4-bar groove ×4 has a fill at the end of every pass.
 3. **Two Arrangers, one song.** When eight lanes aren't enough, clock a second Arranger from the same Clock and patch the first one's **Section** into its **Follow** (see [Follow](#more-than-eight-lanes-follow)). [From One Sine](../../recipes/from-one-sine.md) splits its score into faders and cues this way.
 4. **Pedals.** Hit a Looper's **Rec** at the start of a section to record it, and its **Clear** at the top of the song so each pass starts fresh.
 5. **A brightness lane.** Ramp a lane over a build and patch it through an [Attenuverter](./attenuverter.md) into filter cutoffs or drive amounts: the whole build opens up together.

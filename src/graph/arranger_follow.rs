@@ -2,10 +2,10 @@
 //!
 //! An Arranger has eight lanes, and a song can need more. Patch one
 //! Arranger's **Section** output into another's **Follow** input and the
-//! second *follows* the first. Its sections (how many, how long, what
-//! they're called), its Steps and its Loop are kept the same as its
-//! leader's, and can't be edited on it. Its lanes and their cues stay its
-//! own.
+//! second *follows* the first. Its sections (how many, how long, how many
+//! times each plays, what they're called), its Steps and its Loop are kept
+//! the same as its leader's, and can't be edited on it. Its lanes and their
+//! cues stay its own.
 //!
 //! It all happens in the editor. Each frame, before the engine hears about
 //! the frame's edits, [`sync`] copies every leader's song into its
@@ -42,11 +42,12 @@ const SECTION: &str = "Section";
 pub const NAME_KEY: &str = "Name";
 
 /// The parameters a follower takes from its leader, by index: Steps,
-/// Sections, Loop and every section's length.
+/// Sections, Loop and every section's length and repeats.
 static MIRRORED: LazyLock<Vec<usize>> = LazyLock::new(|| {
     [Arranger::PARAM_STEPS, Arranger::PARAM_SECTIONS, Arranger::PARAM_LOOP]
         .into_iter()
         .chain(Arranger::PARAM_LENGTH..Arranger::PARAM_LENGTH + SECTIONS)
+        .chain(Arranger::PARAM_REPEAT..Arranger::PARAM_REPEAT + SECTIONS)
         .collect()
 });
 
@@ -177,7 +178,7 @@ pub fn refusal(graph: &SynthGraph, output: OutputId, input: InputId) -> Option<S
 }
 
 /// Makes every follower's song its leader's: Steps, Sections, Loop, each
-/// section's length and name. Leaders higher up a chain go first, so a
+/// section's length, repeats and name. Leaders higher up a chain go first, so a
 /// chain settles in one go. Returns whether anything changed.
 pub fn sync(graph: &mut SynthGraph, leaders: &HashMap<NodeId, NodeId>) -> bool {
     let mut order: Vec<NodeId> = leaders.keys().copied().filter(|&f| !in_loop(leaders, f)).collect();

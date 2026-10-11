@@ -360,7 +360,7 @@ static MODULE_UI: &[ModuleUi] = &[
         knobs: &[knob("Steps")],
         labels: &[("Loop", "Loop to")],
         // The timeline, its section bar and its menus edit these
-        hidden: &["Sections", "Glide *", "Length *", "Section *"],
+        hidden: &["Sections", "Glide *", "Length *", "Section *", "Repeat *"],
         // The timeline lights each lane and trigger as it plays
         monitor: &[
             "Section Trig", "Bar", "Last Bar", "End",
