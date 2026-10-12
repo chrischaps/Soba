@@ -161,7 +161,7 @@ pub const EXAMPLES: &[Example] = &[
     Example {
         name: "From One Sine",
         file_name: "from-one-sine.json",
-        description: "Plays itself, start to finish: a four-and-a-half-minute song in 80 modules, scored by two Arrangers that ride the faders section by section. A lone sine's motif grows into the whole rack, and a Looper brings it back reversed",
+        description: "Plays itself, start to finish: a four-and-a-half-minute song in 77 modules, scored by three Arrangers that ride the faders section by section. A lone sine's motif grows into the whole rack, and a Looper brings it back reversed on warping tape",
         json: include_str!("../../patches/from-one-sine.json"),
     },
     Example {

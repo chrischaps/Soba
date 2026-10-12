@@ -1,4 +1,4 @@
-//! From One Sine is scored by two Arrangers. These tests play the patch's
+//! From One Sine is scored by three Arrangers. These tests play the patch's
 //! own Clock into its Arrangers, block by block as the engine does, and
 //! check that the song's sections start on the bars the score gives them,
 //! to the sample.
@@ -122,10 +122,10 @@ fn the_drop_lands_on_the_sample_of_bar_81() {
 }
 
 #[test]
-fn the_desk_and_the_cues_keep_the_same_sections() {
+fn every_arranger_keeps_the_same_sections() {
     let patch = from_one_sine();
     let arrangers: Vec<&NodeData> = patch.nodes.iter().filter(|n| n.module_id == "seq.arranger").collect();
-    assert_eq!(arrangers.len(), 2);
+    assert_eq!(arrangers.len(), 3, "Desk, Cues and Tape");
     let layouts: Vec<(Vec<usize>, Vec<Option<String>>)> = arrangers
         .iter()
         .map(|node| {
@@ -135,11 +135,13 @@ fn the_desk_and_the_cues_keep_the_same_sections() {
             (starts, names)
         })
         .collect();
-    assert_eq!(layouts[0], layouts[1], "both Arrangers play the same song");
+    for layout in &layouts[1..] {
+        assert_eq!(&layouts[0], layout, "every Arranger plays the same song");
+    }
 }
 
 #[test]
-fn the_cues_follow_the_desk() {
+fn the_cues_and_the_tape_follow_the_desk() {
     let patch = from_one_sine();
     let named = |name: &str| {
         patch
@@ -149,9 +151,39 @@ fn the_cues_follow_the_desk() {
             .unwrap_or_else(|| panic!("an Arranger named {name}"))
             .id
     };
-    let (desk, cues) = (named("Desk"), named("Cues"));
-    let follows = patch.connections.iter().any(|c| c.from_node == desk && c.from_port == "Section" && c.to_node == cues && c.to_port == "Follow");
-    assert!(follows, "Desk's Section is patched into Cues' Follow, so the editor keeps their sections the same");
+    let desk = named("Desk");
+    for follower in ["Cues", "Tape"] {
+        let id = named(follower);
+        let follows = patch.connections.iter().any(|c| c.from_node == desk && c.from_port == "Section" && c.to_node == id && c.to_port == "Follow");
+        assert!(follows, "Desk's Section is patched into {follower}'s Follow, so the editor keeps their sections the same");
+    }
+}
+
+#[test]
+fn the_tape_warps_through_the_breakdown_and_snaps_back_for_the_drop() {
+    // The Tape Arranger's Wow lane is patched into the master Tape's Wow
+    let patch = from_one_sine();
+    let tape = patch.nodes.iter().find(|n| n.module_id == "fx.tape").expect("a Tape").id;
+    let output = patch.nodes.iter().find(|n| n.module_id == "output.audio").unwrap().id;
+    let arranger = patch.nodes.iter().find(|n| n.labels.get("Name").map(String::as_str) == Some("Tape")).unwrap().id;
+    assert!(patch.connections.iter().any(|c| c.from_node == arranger && c.from_port == "Lane 1" && c.to_node == tape && c.to_port == "Wow"));
+    for side in ["Left", "Right"] {
+        assert!(patch.connections.iter().any(|c| c.from_node == tape && c.to_node == output && c.to_port == side), "the Tape feeds the Output's {side}");
+    }
+
+    // Steady until the breakdown at bar 65, rising through it, and back to
+    // nothing on the drop's downbeat at bar 81
+    let (played, _) = play("Wow", 190.0);
+    let wow = &played.lanes[0];
+    let clocks = rises(&played.clock);
+    let (bar_65, bar_69, bar_81) = (clocks[64 * 16], clocks[68 * 16], clocks[80 * 16]);
+    assert!(wow[..bar_65].iter().all(|&v| v == 0.0), "steady tape before the breakdown");
+    for t in bar_65 + 1..bar_81 {
+        assert!(wow[t] >= wow[t - 1], "the warp eases off at sample {t}");
+    }
+    assert!((wow[bar_69] - 0.45).abs() < 1e-3, "45% once the ghost is in: {}", wow[bar_69]);
+    assert!((wow[bar_81 - 1] - 0.75).abs() < 0.01, "75% at the end of the Build: {}", wow[bar_81 - 1]);
+    assert!(wow[bar_81..].iter().all(|&v| v == 0.0), "back to speed from the drop");
 }
 
 #[test]

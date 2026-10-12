@@ -9064,7 +9064,7 @@
         {
           "name": "Volume",
           "type": "Number",
-          "value": 0.7
+          "value": 0.74
         },
         {
           "name": "Limiter",
@@ -12243,6 +12243,1607 @@
         "Section 8": "Riser",
         "Section 9": "Groove"
       }
+    },
+    {
+      "id": 81,
+      "module_id": "seq.arranger",
+      "position": [
+        1506.0,
+        450.0
+      ],
+      "parameters": [
+        {
+          "name": "Steps",
+          "type": "Number",
+          "value": 16.0
+        },
+        {
+          "name": "Sections",
+          "type": "Number",
+          "value": 22.0
+        },
+        {
+          "name": "Loop",
+          "type": "Select",
+          "value": 1
+        },
+        {
+          "name": "Glide 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Glide 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Glide 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Glide 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Glide 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Glide 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Glide 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Glide 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Length 01",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 02",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 03",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 04",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 05",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 06",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 07",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 08",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 09",
+          "type": "Number",
+          "value": 15.0
+        },
+        {
+          "name": "Length 10",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Length 11",
+          "type": "Number",
+          "value": 15.0
+        },
+        {
+          "name": "Length 12",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Length 13",
+          "type": "Number",
+          "value": 8.0
+        },
+        {
+          "name": "Length 14",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 15",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 16",
+          "type": "Number",
+          "value": 15.0
+        },
+        {
+          "name": "Length 17",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Length 18",
+          "type": "Number",
+          "value": 8.0
+        },
+        {
+          "name": "Length 19",
+          "type": "Number",
+          "value": 7.0
+        },
+        {
+          "name": "Length 20",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Length 21",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 22",
+          "type": "Number",
+          "value": 12.0
+        },
+        {
+          "name": "Length 23",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 24",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 25",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 26",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 27",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 28",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 29",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 30",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 31",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Length 32",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Section 01 Lane 1",
+          "type": "Number",
+          "value": 1000000.0
+        },
+        {
+          "name": "Section 01 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 01 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 01 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 01 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 01 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 01 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 01 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 02 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 02 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 02 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 02 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 02 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 02 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 02 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 02 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 03 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 03 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 03 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 03 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 03 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 03 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 03 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 03 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 04 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 04 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 04 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 04 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 04 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 04 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 04 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 04 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 05 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 05 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 05 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 05 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 05 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 05 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 05 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 05 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 06 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 06 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 06 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 06 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 06 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 06 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 06 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 06 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 07 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 07 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 07 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 07 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 07 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 07 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 07 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 07 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 08 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 08 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 08 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 08 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 08 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 08 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 08 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 08 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 09 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 09 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 09 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 09 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 09 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 09 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 09 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 09 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 10 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 10 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 10 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 10 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 10 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 10 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 10 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 10 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 11 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 11 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 11 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 11 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 11 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 11 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 11 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 11 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 12 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 12 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 12 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 12 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 12 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 12 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 12 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 12 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 13 Lane 1",
+          "type": "Number",
+          "value": 6040450.0
+        },
+        {
+          "name": "Section 13 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 13 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 13 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 13 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 13 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 13 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 13 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 14 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 14 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 14 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 14 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 14 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 14 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 14 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 14 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 15 Lane 1",
+          "type": "Number",
+          "value": 5000750.0
+        },
+        {
+          "name": "Section 15 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 15 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 15 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 15 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 15 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 15 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 15 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 16 Lane 1",
+          "type": "Number",
+          "value": 1000000.0
+        },
+        {
+          "name": "Section 16 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 16 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 16 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 16 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 16 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 16 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 16 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 17 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 17 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 17 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 17 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 17 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 17 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 17 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 17 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 18 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 18 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 18 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 18 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 18 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 18 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 18 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 18 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 19 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 19 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 19 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 19 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 19 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 19 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 19 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 19 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 20 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 20 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 20 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 20 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 20 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 20 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 20 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 20 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 21 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 21 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 21 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 21 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 21 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 21 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 21 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 21 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 22 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 22 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 22 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 22 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 22 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 22 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 22 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 22 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 23 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 23 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 23 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 23 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 23 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 23 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 23 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 23 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 24 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 24 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 24 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 24 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 24 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 24 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 24 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 24 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 25 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 25 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 25 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 25 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 25 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 25 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 25 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 25 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 26 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 26 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 26 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 26 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 26 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 26 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 26 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 26 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 27 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 27 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 27 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 27 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 27 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 27 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 27 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 27 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 28 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 28 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 28 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 28 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 28 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 28 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 28 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 28 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 29 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 29 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 29 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 29 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 29 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 29 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 29 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 29 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 30 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 30 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 30 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 30 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 30 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 30 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 30 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 30 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 31 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 31 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 31 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 31 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 31 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 31 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 31 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 31 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 32 Lane 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 32 Lane 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 32 Lane 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 32 Lane 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 32 Lane 5",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 32 Lane 6",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 32 Lane 7",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 32 Lane 8",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 15 Lane 4 From",
+          "type": "Number",
+          "value": -1.0
+        },
+        {
+          "name": "Section 11 Lane 8 From",
+          "type": "Number",
+          "value": -1.0
+        },
+        {
+          "name": "Section 16 Lane 8 From",
+          "type": "Number",
+          "value": -1.0
+        },
+        {
+          "name": "Section 18 Lane 8 From",
+          "type": "Number",
+          "value": -1.0
+        }
+      ],
+      "labels": {
+        "Section 1": "First Sound",
+        "Section 10": "Fill",
+        "Section 11": "Lift",
+        "Section 12": "Fill",
+        "Section 13": "Memory",
+        "Section 14": "Answer",
+        "Section 15": "Build",
+        "Section 16": "Everything",
+        "Section 17": "Fill",
+        "Section 18": "Second Wave",
+        "Section 19": "Lead Returns",
+        "Section 2": "Echo",
+        "Section 20": "Fill",
+        "Section 21": "Return",
+        "Section 22": "One Sine",
+        "Section 3": "Sparkles",
+        "Section 4": "Arp",
+        "Section 5": "Pulse",
+        "Section 6": "Bass",
+        "Section 7": "Bells",
+        "Section 8": "Riser",
+        "Section 9": "Groove",
+        "Name": "Tape",
+        "Lane 1": "Wow"
+      }
+    },
+    {
+      "id": 82,
+      "module_id": "fx.tape",
+      "position": [
+        5251.0,
+        2180.0
+      ],
+      "parameters": [
+        {
+          "name": "Wow",
+          "type": "Number",
+          "value": 0.1
+        },
+        {
+          "name": "Flutter",
+          "type": "Number",
+          "value": 0.1
+        },
+        {
+          "name": "Width",
+          "type": "Number",
+          "value": 0.3
+        },
+        {
+          "name": "Saturation",
+          "type": "Number",
+          "value": 0.25
+        },
+        {
+          "name": "Age",
+          "type": "Number",
+          "value": 0.1
+        },
+        {
+          "name": "Hiss",
+          "type": "Number",
+          "value": 0.04
+        },
+        {
+          "name": "Mix",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Speed",
+          "type": "Select",
+          "value": 1
+        }
+      ]
     }
   ],
   "connections": [
@@ -12975,8 +14576,8 @@
     {
       "from_node": 75,
       "from_port": "Out L",
-      "to_node": 77,
-      "to_port": "Left"
+      "to_node": 82,
+      "to_port": "In L"
     },
     {
       "from_node": 75,
@@ -12987,8 +14588,8 @@
     {
       "from_node": 75,
       "from_port": "Out R",
-      "to_node": 77,
-      "to_port": "Right"
+      "to_node": 82,
+      "to_port": "In R"
     },
     {
       "from_node": 75,
@@ -13145,6 +14746,36 @@
       "from_port": "Pitch",
       "to_node": 19,
       "to_port": "V/Oct"
+    },
+    {
+      "from_node": 82,
+      "from_port": "Out L",
+      "to_node": 77,
+      "to_port": "Left"
+    },
+    {
+      "from_node": 82,
+      "from_port": "Out R",
+      "to_node": 77,
+      "to_port": "Right"
+    },
+    {
+      "from_node": 1,
+      "from_port": "Gate",
+      "to_node": 81,
+      "to_port": "Clock"
+    },
+    {
+      "from_node": 80,
+      "from_port": "Section",
+      "to_node": 81,
+      "to_port": "Follow"
+    },
+    {
+      "from_node": 81,
+      "from_port": "Lane 1",
+      "to_node": 82,
+      "to_port": "Wow"
     }
   ],
   "midi_mappings": [],
@@ -13162,13 +14793,13 @@
       "color": "green"
     },
     {
-      "title": "Score: two Arrangers",
+      "title": "Score: three Arrangers",
       "position": [
         0.0,
         410.0
       ],
       "size": [
-        1794.0,
+        2096.0,
         790.0
       ],
       "color": "slate"
@@ -13280,11 +14911,23 @@
         1011.0
       ],
       "color": "cyan"
+    },
+    {
+      "title": "On tape",
+      "position": [
+        5227.0,
+        2122.0
+      ],
+      "size": [
+        278.0,
+        507.0
+      ],
+      "color": "amber"
     }
   ],
   "notes": [
     {
-      "text": "**This patch is its own score.** Two **Arrangers** count the song in bars, 22 sections from First Sound to One Sine. **Desk**, on the left, rides eight faders. **Cues** follows Desk's sections, through the cable into its **Follow**, picks the drums' pattern and the melody's, strikes the crash, holds the riser, brightens the pad and bass, and presses the Looper's pedals.",
+      "text": "**This patch is its own score.** Three **Arrangers** count the song in bars, 22 sections from First Sound to One Sine. **Desk**, on the left, rides eight faders. **Cues** follows Desk's sections, through the cable into its **Follow**, picks the drums' pattern and the melody's, strikes the crash, holds the riser, brightens the pad and bass, and presses the Looper's pedals. **Tape** follows too, and warps the master tape through the breakdown.",
       "position": [
         24.0,
         450.0

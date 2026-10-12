@@ -184,14 +184,14 @@ The sections' lengths are `Length 01` to `Length 32`, their repeats `Repeat 01` 
 
 1. **Faders at zero.** On a [Mixer](./mixer.md), set a channel's **Level** knob to 0 and patch a lane into its **Level** input. The lane then is the fader.
 2. **Fills.** Either give each phrase a one-bar **Fill** section that jumps the drum lane to the fill pattern, or patch **Last Bar** into something that plays a fill. With **Last Bar**, a 4-bar groove ×4 has a fill at the end of every pass.
-3. **Two Arrangers, one song.** When eight lanes aren't enough, clock a second Arranger from the same Clock and patch the first one's **Section** into its **Follow** (see [Follow](#more-than-eight-lanes-follow)). [From One Sine](../../recipes/from-one-sine.md) splits its score into faders and cues this way.
+3. **Two Arrangers, one song.** When eight lanes aren't enough, clock a second Arranger from the same Clock and patch the first one's **Section** into its **Follow** (see [Follow](#more-than-eight-lanes-follow)). [From One Sine](../../recipes/from-one-sine.md) splits its score into faders and cues this way, with a third Arranger for its tape.
 4. **Pedals.** Hit a Looper's **Rec** at the start of a section to record it, and its **Clear** at the top of the song so each pass starts fresh.
 5. **A brightness lane.** Ramp a lane over a build and patch it through an [Attenuverter](./attenuverter.md) into filter cutoffs or drive amounts: the whole build opens up together.
 6. **A shorter song.** Set **Loop to** a later section, and the intro plays only once.
 
 ## Related
 
-- [From One Sine](../../recipes/from-one-sine.md) – a whole song on two Arrangers: eight faders, and the drums, crash, riser, brightness, Looper pedals and the melody's patterns
+- [From One Sine](../../recipes/from-one-sine.md) – a whole song on three Arrangers: eight faders; the drums, crash, riser, brightness, Looper pedals and the melody's patterns; and a lane that warps the master tape
 - [Trigger Sequencer](./trigger-sequencer.md) – patterns for an Arranger lane to pick
 - [Mixer](./mixer.md) – the faders a lane rides
 - [Clock](../modulation/clock.md) – tempo and swing
