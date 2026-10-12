@@ -1,15 +1,19 @@
 //! Render a patch to a WAV file without opening the app.
 //!
 //! ```text
-//! cargo run --release --bin render -- <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--audition] [--input in.wav] [--cue cues.txt]
+//! cargo run --release --bin render -- <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--audition] [--input in.wav] [--cue cues.txt] [--compare before.wav]
 //! ```
 //!
-//! Prints the peak and RMS level of each channel so renders can be compared
-//! before and after a DSP change. Patches that need live input (Keyboard,
-//! MIDI Note, Poly MIDI) render silence unless something in the patch
-//! triggers them, such as a Clock or Sequencer, or `--audition` is given to
-//! play a short phrase into them. Audio Input modules are silent too, unless
-//! `--input` gives them a WAV file to hear in place of the input device.
+//! Prints the peak and RMS level of each channel, and the integrated loudness
+//! (ITU-R BS.1770-4) and loudness range (EBU Tech 3342) of the mix, so renders
+//! can be compared before and after a change. `--compare` reads an earlier
+//! render and prints how far each of those has moved since.
+//!
+//! Patches that need live input (Keyboard, MIDI Note, Poly MIDI) render
+//! silence unless something in the patch triggers them, such as a Clock or
+//! Sequencer, or `--audition` is given to play a short phrase into them.
+//! Audio Input modules are silent too, unless `--input` gives them a WAV file
+//! to hear in place of the input device.
 //!
 //! `--cue` plays a script of parameter changes into the patch, in the
 //! capture kit's `param` form, one per line (`#` starts a comment):
@@ -24,12 +28,13 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use soba::dsp::analysis::{amp_to_db, peak, rms};
+use soba::dsp::loudness::{loudness, Loudness};
 use soba::engine::{create_module_registry, read_wav, EngineCommand, OfflineRenderer};
 use soba::persistence::sample_files::SampleBase;
 use soba::persistence::{load_from_file, CompiledPatch, Patch};
 
 const USAGE: &str =
-    "usage: render <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--block-size N] [--audition] [--input in.wav] [--cue cues.txt]";
+    "usage: render <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--block-size N] [--audition] [--input in.wav] [--cue cues.txt] [--compare before.wav]";
 
 struct Args {
     patch: PathBuf,
@@ -42,6 +47,8 @@ struct Args {
     input: Option<PathBuf>,
     /// A script of parameter changes to play into the patch.
     cue: Option<PathBuf>,
+    /// An earlier render to measure this one against.
+    compare: Option<PathBuf>,
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -52,6 +59,7 @@ fn parse_args() -> Result<Args, String> {
     let mut audition = false;
     let mut input = None;
     let mut cue = None;
+    let mut compare = None;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -67,6 +75,7 @@ fn parse_args() -> Result<Args, String> {
             "--audition" => audition = true,
             "--input" => input = Some(PathBuf::from(value("--input")?)),
             "--cue" => cue = Some(PathBuf::from(value("--cue")?)),
+            "--compare" => compare = Some(PathBuf::from(value("--compare")?)),
             "-h" | "--help" => return Err(USAGE.to_string()),
             flag if flag.starts_with("--") => return Err(format!("unknown option {}\n{}", flag, USAGE)),
             _ => positional.push(PathBuf::from(arg)),
@@ -83,6 +92,7 @@ fn parse_args() -> Result<Args, String> {
             audition,
             input,
             cue,
+            compare,
         }),
         _ => Err(USAGE.to_string()),
     }
@@ -149,18 +159,75 @@ fn run(args: Args) -> Result<(), String> {
         args.sample_rate,
         args.out.display()
     );
-    for (name, channel) in [("L", &audio.left), ("R", &audio.right)] {
-        println!(
-            "  {}: peak {:6.1} dBFS   rms {:6.1} dBFS",
-            name,
-            amp_to_db(peak(channel)),
-            amp_to_db(rms(channel))
-        );
+    let levels = Levels::of(&audio.left, &audio.right, args.sample_rate);
+    levels.print();
+    if let Some(path) = &args.compare {
+        let (before, rate) = read_wav(path).map_err(|e| format!("{}: {}", path.display(), e))?;
+        println!("against {}:", path.display());
+        levels.print_change_from(&Levels::of(&before.left, &before.right, rate));
     }
     if audio.left.iter().chain(&audio.right).any(|s| !s.is_finite()) {
         return Err("render contains NaN or infinite samples".to_string());
     }
     Ok(())
+}
+
+/// What a render's levels are measured as.
+struct Levels {
+    /// Peak and RMS in dBFS, left then right.
+    peak: [f32; 2],
+    rms: [f32; 2],
+    loudness: Loudness,
+}
+
+impl Levels {
+    fn of(left: &[f32], right: &[f32], sample_rate: u32) -> Self {
+        Self {
+            peak: [left, right].map(|c| amp_to_db(peak(c))),
+            rms: [left, right].map(|c| amp_to_db(rms(c))),
+            loudness: loudness(left, right, sample_rate as f32),
+        }
+    }
+
+    fn print(&self) {
+        for (i, name) in ["L", "R"].iter().enumerate() {
+            println!("  {}: peak {:6.1} dBFS   rms {:6.1} dBFS", name, self.peak[i], self.rms[i]);
+        }
+        println!(
+            "  loudness {:>5} LUFS   range {:>4} LU",
+            reading(self.loudness.integrated, false),
+            reading(self.loudness.range, false)
+        );
+    }
+
+    /// Prints how far each level has moved from `before`'s.
+    fn print_change_from(&self, before: &Levels) {
+        let change = |now: f32, then: f32| format!("{:+6.1}", now - then);
+        for (i, name) in ["L", "R"].iter().enumerate() {
+            println!(
+                "  {}: peak {} dB     rms {} dB",
+                name,
+                change(self.peak[i], before.peak[i]),
+                change(self.rms[i], before.rms[i])
+            );
+        }
+        let change = |now: Option<f64>, then: Option<f64>| reading(now.zip(then).map(|(n, t)| n - t), true);
+        println!(
+            "  loudness {:>5} LU     range {:>4} LU",
+            change(self.loudness.integrated, before.loudness.integrated),
+            change(self.loudness.range, before.loudness.range)
+        );
+    }
+}
+
+/// A loudness reading to a tenth, `signed` for a change, or `--` where
+/// there's nothing to read.
+fn reading(value: Option<f64>, signed: bool) -> String {
+    match value {
+        Some(v) if signed => format!("{:+.1}", v),
+        Some(v) => format!("{:.1}", v),
+        None => "--".to_string(),
+    }
 }
 
 /// Reads a cue script into engine commands at their frames: `<seconds>

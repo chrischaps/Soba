@@ -193,8 +193,11 @@ cargo check
 # Run with release optimizations (for audio performance testing)
 cargo run --release
 
-# Render a patch to WAV offline (no audio device) and print peak/RMS levels
+# Render a patch to WAV offline (no audio device) and print peak/RMS levels, plus
+# integrated loudness (LUFS, BS.1770-4) and loudness range (LU) of the mix
 cargo run --release --bin render -- patch.json out.wav --seconds 5
+# ...and how far each has moved since an earlier render: the before/after check
+cargo run --release --bin render -- patch.json after.wav --seconds 5 --compare before.wav
 # ...playing a short phrase into Keyboard/MIDI nodes (for patches that need a player)
 cargo run --release --bin render -- patches/lush-pad.json out.wav --audition
 # ...feeding a WAV to Audio Input modules (a capture script's `input file.wav` cue does the same)
