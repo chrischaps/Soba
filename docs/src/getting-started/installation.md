@@ -152,7 +152,7 @@ Pass a patch file to open it instead of First Sound:
 cargo run --release -- patches/lush-pad.json
 ```
 
-The `render` tool plays a patch into a WAV file without opening the app or using an audio device, then prints each channel's peak and RMS level and the mix's loudness:
+The `render` tool plays a patch into a WAV file without opening the app or using an audio device, then prints each channel's peak and RMS level, the mix's loudness, and how hard the patch drives the output limiter:
 
 ```bash
 cargo run --release --bin render -- patches/fm-synthesis.json out.wav --seconds 5
@@ -177,6 +177,7 @@ rendered 'Lush Pad' (8.00 s @ 48000 Hz) -> after.wav
   L: peak   -4.8 dBFS   rms  -22.2 dBFS
   R: peak   -4.3 dBFS   rms  -21.4 dBFS
   loudness -17.4 LUFS   range 12.3 LU
+  limiter in   -4.3 dBFS   took 0.0 dB at most, 0% of the time over 1 dB
 against before.wav:
   L: peak   -1.5 dB     rms   -1.0 dB
   R: peak   -1.2 dB     rms   -0.9 dB
@@ -184,6 +185,8 @@ against before.wav:
 ```
 
 **Loudness** is integrated loudness after ITU-R BS.1770-4, the measure streaming services normalize to. It weights the mix the way the ear does, so it's the number to compare when you want to know whether a change made a patch sound louder. RMS overweights the bass: above, it says the darker pad lost 1 dB, but the ear hears the treble it lost and puts it at 1.3. **Range** is the EBU loudness range, the spread between the quiet and loud passages. It reads `--` on renders shorter than three seconds.
+
+**Limiter** is how hard the patch drives the [Audio Output](../modules/output/audio-output.md)'s limiter: the highest peak going into it, which can be over 0 dBFS, the most it turned the output down, and for how much of the render it took off more than 1 dB. The limiter is there to catch accidents. A patch whose peaks stay under −1 dBFS leaves it idle, as every example does. The examples also sit within a decibel or so of −16 LUFS, so switching between them doesn't jump in volume; aim there to match them.
 
 ## Microphone access
 

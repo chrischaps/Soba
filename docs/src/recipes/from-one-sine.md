@@ -73,12 +73,12 @@ Each section of the song is sixteen bars. On the Arrangers they're 22 sections: 
 | [Distortion](../modules/effects/distortion.md) | Bass, **Tube** |
 | [3-Band EQ](../modules/effects/eq.md) | Bass: lows up, boxiness out |
 | [Mix](../modules/utilities/mix.md) | The pad's root and chord, **Sum Voices** on |
-| [Mixer](../modules/utilities/mixer.md) ×5 | Two for the kit, and Echoes, Body and Sky |
+| [Mixer](../modules/utilities/mixer.md) ×5 | Two for the kit, and Echoes, Body and Sky. Sky's **Master** −2.9 dB sets the level onto the tape |
 | [Stereo Delay](../modules/effects/delay.md) | **Sync** 1/8D, **P-P** and **Tape** on, on the Echoes send |
 | [Reverb](../modules/effects/reverb.md) ×2 | A hall on Echoes, a plate on the send everyone shares |
 | [Oscilloscope](../modules/visualization/oscilloscope.md) | The mix and the kick, to watch |
 | [Tape](../modules/effects/tape.md) | On the master, 15 ips: **Wow** and **Flutter** 10%, **Saturation** 25%, **Age** 10%, **Hiss** 4%. The Tape Arranger's lane adds to Wow |
-| [Audio Output](../modules/output/audio-output.md) | **Volume** 74%, **Limiter** and **Character** on |
+| [Audio Output](../modules/output/audio-output.md) | **Volume** 80%, **Limiter** and **Character** on |
 
 ## How it's built
 
@@ -205,7 +205,7 @@ The sine, arpeggio, bells and sparkles share the Echoes mixer, whose send feeds 
 [Mixer Sky Out L/R] ──> [Tape In L/R] ──> [Audio Output Left/Right]
 ```
 
-The whole mix goes onto a [Tape](../modules/effects/tape.md) last. For most of the song it's a well-kept machine at 15 ips. **Wow** and **Flutter** are at 10%, which sways the pitch by less than a cent. **Saturation** at 25% rounds the loud sections a little, and there's a touch of **Age** and **Hiss**. The record head squashes the loudest sections by up to a decibel, so the Output's **Volume** is up a little, to 74%, and the song is as loud as it was.
+The whole mix goes onto a [Tape](../modules/effects/tape.md) last. For most of the song it's a well-kept machine at 15 ips. **Wow** and **Flutter** are at 10%, which sways the pitch by less than a cent. **Saturation** at 25% rounds the loud sections a little, and there's a touch of **Age** and **Hiss**. The record head squashes the loudest sections by up to a decibel. Sky's **Master** at −2.9 dB sets how hard the mix meets the head, with the Output's **Volume** at its usual 80%, and leaves the song at −16 LUFS, where every example sits.
 
 The tape earns its place in the breakdown. The Looper plays the opening back reversed, the rack remembering how it began, and memories don't hold their pitch. A third Arranger, **Tape**, follows Desk as Cues does. Its one lane is patched into the Tape's **Wow**, where it adds to the knob:
 

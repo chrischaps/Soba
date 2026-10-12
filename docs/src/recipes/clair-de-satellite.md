@@ -59,11 +59,11 @@ Left running, the song starts again on the satellite.
 | [Vocoder](../modules/effects/vocoder.md) | **Bands** 24, attack 2 ms, release 35 ms, **Sibilance** 60%, **Unvoiced** 50% |
 | [Slope](../modules/modulation/slope.md) | The satellite's Doppler fall |
 | [3-Band EQ](../modules/effects/eq.md) | The voice's lows cut and highs lifted, before the vocoder |
-| [Mixer](../modules/utilities/mixer.md) ×4 | Top (with the tape echo), Drums, Band and Room (with the hall), on one chain |
+| [Mixer](../modules/utilities/mixer.md) ×4 | Top (with the tape echo), Drums, Band and Room (with the hall), on one chain. Room's **Master** −3.7 dB sets the level onto the tape |
 | [Stereo Delay](../modules/effects/delay.md) | **Sync** 1/8D, **P-P** and **Tape** on |
 | [Reverb](../modules/effects/reverb.md) | The hall everyone shares |
 | [Tape](../modules/effects/tape.md) | 15 ips, a little saturation, wow and age |
-| [Audio Output](../modules/output/audio-output.md) | **Limiter** and **Character** on |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 80%, **Limiter** and **Character** on |
 
 The rest are the voices' own envelopes, VCAs, filters, LFOs and Mixes.
 

@@ -194,7 +194,8 @@ cargo check
 cargo run --release
 
 # Render a patch to WAV offline (no audio device) and print peak/RMS levels, plus
-# integrated loudness (LUFS, BS.1770-4) and loudness range (LU) of the mix
+# integrated loudness (LUFS, BS.1770-4) and loudness range (LU) of the mix, and the
+# peak going into the Audio Output's limiter (and how much it limited)
 cargo run --release --bin render -- patch.json out.wav --seconds 5
 # ...and how far each has moved since an earlier render: the before/after check
 cargo run --release --bin render -- patch.json after.wav --seconds 5 --compare before.wav
@@ -204,6 +205,9 @@ cargo run --release --bin render -- patches/lush-pad.json out.wav --audition
 cargo run --release --bin render -- patch.json out.wav --input voice.wav
 # ...pressing knobs and footswitches from a cue script (`<seconds> param <module> <param> <value>`)
 cargo run --release --bin render -- patches/live-looper.json out.wav --seconds 30 --input take.wav --cue cues.txt
+# Every example near -16 LUFS with peaks under -1 dBFS into the limiter: renders
+# them all at length (a couple of minutes); run before a release, or after an example's levels change
+cargo test --release --test example_loudness -- --ignored --nocapture
 # The real input device, end to end (needs a mic; the patch is muted)
 cargo test --release --test live_input -- --ignored --nocapture
 

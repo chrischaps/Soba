@@ -26,8 +26,8 @@ A saw wave through a lowpass filter, with one envelope shaping its brightness an
 | [SVF Filter](../modules/filters/svf-filter.md) | **Cutoff** 700 Hz, **Res** 30% |
 | [ADSR Envelope](../modules/modulation/adsr.md) (filter) | **Atk** 1 ms, **Dec** 300 ms, **Sus** 30%, **Rel** 200 ms |
 | [ADSR Envelope](../modules/modulation/adsr.md) (amp) | **Atk** 5 ms, **Dec** 200 ms, **Sus** 70%, **Rel** 300 ms |
-| [VCA](../modules/utilities/vca.md) | Defaults |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 60% |
+| [VCA](../modules/utilities/vca.md) | **Level** 54% |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |
 
 ## How it's built
 

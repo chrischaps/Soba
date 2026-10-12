@@ -6,7 +6,9 @@
 //!
 //! Prints the peak and RMS level of each channel, and the integrated loudness
 //! (ITU-R BS.1770-4) and loudness range (EBU Tech 3342) of the mix, so renders
-//! can be compared before and after a change. `--compare` reads an earlier
+//! can be compared before and after a change. Then how hard the patch drove
+//! the Audio Output's limiter: the peak going in, the most it turned the
+//! output down, and for how much of the render. `--compare` reads an earlier
 //! render and prints how far each of those has moved since.
 //!
 //! Patches that need live input (Keyboard, MIDI Note, Poly MIDI) render
@@ -29,7 +31,7 @@ use std::process::ExitCode;
 
 use soba::dsp::analysis::{amp_to_db, peak, rms};
 use soba::dsp::loudness::{loudness, Loudness};
-use soba::engine::{create_module_registry, read_wav, EngineCommand, OfflineRenderer};
+use soba::engine::{create_module_registry, read_wav, EngineCommand, LimiterReport, OfflineRenderer};
 use soba::persistence::sample_files::SampleBase;
 use soba::persistence::{load_from_file, CompiledPatch, Patch};
 
@@ -161,6 +163,7 @@ fn run(args: Args) -> Result<(), String> {
     );
     let levels = Levels::of(&audio.left, &audio.right, args.sample_rate);
     levels.print();
+    print_limiter(&renderer.limiter());
     if let Some(path) = &args.compare {
         let (before, rate) = read_wav(path).map_err(|e| format!("{}: {}", path.display(), e))?;
         println!("against {}:", path.display());
@@ -218,6 +221,21 @@ impl Levels {
             change(self.loudness.range, before.loudness.range)
         );
     }
+}
+
+/// How hard the patch drove the output limiter, if it has one.
+fn print_limiter(report: &LimiterReport) {
+    if report.blocks == 0 {
+        return;
+    }
+    println!(
+        "  limiter in {:6.1} dBFS   took {:.1} dB at most, {:.0}% of the time over {} dB",
+        amp_to_db(report.peak_in),
+        // 0 - x rather than -x, so an idle limiter doesn't read -0.0
+        0.0 - amp_to_db(report.deepest),
+        report.time_limiting() * 100.0,
+        LimiterReport::LIMITING_DB
+    );
 }
 
 /// A loudness reading to a tenth, `signed` for a change, or `--` where

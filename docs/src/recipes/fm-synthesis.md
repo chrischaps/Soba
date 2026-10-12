@@ -26,9 +26,9 @@ One sine wave bends the pitch of another, hundreds of times a second, and a bell
 | [VCA](../modules/utilities/vca.md) (modulator) | Defaults |
 | [ADSR Envelope](../modules/modulation/adsr.md) (modulator) | **Atk** 1 ms, **Dec** 500 ms, **Sus** 10%, **Rel** 500 ms |
 | [Oscillator](../modules/sources/oscillator.md) (carrier) | **Wave** Sine, **FM** 2.5 |
-| [VCA](../modules/utilities/vca.md) (carrier) | Defaults |
+| [VCA](../modules/utilities/vca.md) (carrier) | **Level** 42% |
 | [ADSR Envelope](../modules/modulation/adsr.md) (carrier) | **Atk** 1 ms, **Dec** 2 s, **Sus** 0%, **Rel** 1 s |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 55% |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |
 
 ## How it's built
 

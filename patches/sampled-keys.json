@@ -108,7 +108,7 @@
         {
           "name": "Level",
           "type": "Number",
-          "value": 0.45
+          "value": 0.33
         }
       ],
       "file": "samples/fm-bell-c4.wav"

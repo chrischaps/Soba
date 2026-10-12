@@ -60,9 +60,9 @@ crash    on the downbeat after each fill
 | [Mix](../modules/utilities/mix.md) (kick and snare) | **Level 1** 60% kick, **Level 2** 40% snare body, **Level 3** 45% snare noise |
 | [Compressor](../modules/effects/compressor.md) | **Thresh** -16 dB, **Ratio** 3:1, **Atk** 8 ms, **Rel** 120 ms, **Mkup** 2 dB |
 | [Mixer](../modules/utilities/mixer.md) (drum bus) | **Level 1** 100%, centred; **Send 1** 15%; **Master** +3 dB |
-| [Mixer](../modules/utilities/mixer.md) (main) | Hats 44% at R 30 / R 35, toms 40%, crash 36% at L 40; every **Send** 25%; **Master** −2 dB |
+| [Mixer](../modules/utilities/mixer.md) (main) | Hats 44% at R 30 / R 35, toms 40%, crash 36% at L 40; every **Send** 25%; **Master** −1.4 dB |
 | [Reverb](../modules/effects/reverb.md) | **Size** 35%, **Decay** 0.9 s, **Damp** 55%, **PreD** 2.5 ms, **Mix** 100% |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 91% |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |
 
 All drum envelopes have a 1 ms attack and 0% sustain. The sequencers' gates are a fixed 99 ms (**Gate of** 100 ms), so each envelope's **Release** matches its **Decay**: the sound falls at the same rate after the gate closes.
 

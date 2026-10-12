@@ -10209,7 +10209,7 @@
         {
           "name": "Master",
           "type": "Number",
-          "value": 0.0
+          "value": -3.7
         }
       ]
     },
@@ -10319,7 +10319,7 @@
         {
           "name": "Volume",
           "type": "Number",
-          "value": 0.73
+          "value": 0.8
         },
         {
           "name": "Limiter",

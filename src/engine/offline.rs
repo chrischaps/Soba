@@ -37,6 +37,45 @@ pub struct OfflineRenderer {
     input: StereoBuffer,
     /// The current block of `input`.
     block_input: StereoBuffer,
+    /// What the output limiter has done so far.
+    limiter: LimiterReport,
+}
+
+/// What the Audio Output's limiter has done over a render: how hard the
+/// patch drove it, and how often it had to act. The limiter is there to
+/// catch accidents, so a well-staged patch keeps it idle.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LimiterReport {
+    /// Highest peak going into the limiter on either channel. It can exceed
+    /// 1.0: that's how far over full scale the patch drives the output.
+    pub peak_in: f32,
+    /// The most the limiter turned the output down, as a gain (1.0 = never).
+    pub deepest: f32,
+    /// Blocks in which it turned the output down by more than
+    /// [`LIMITING_DB`](Self::LIMITING_DB), out of `blocks`.
+    pub blocks_limited: u64,
+    pub blocks: u64,
+}
+
+impl LimiterReport {
+    /// Gain reduction in a block below which the limiter counts as idle:
+    /// a 1 dB dip on a lone transient goes unheard.
+    pub const LIMITING_DB: f32 = 1.0;
+
+    /// The share of the render (0-1) the limiter spent turning it down.
+    pub fn time_limiting(&self) -> f32 {
+        if self.blocks == 0 {
+            0.0
+        } else {
+            self.blocks_limited as f32 / self.blocks as f32
+        }
+    }
+}
+
+impl Default for LimiterReport {
+    fn default() -> Self {
+        Self { peak_in: 0.0, deepest: 1.0, blocks_limited: 0, blocks: 0 }
+    }
 }
 
 impl OfflineRenderer {
@@ -51,6 +90,7 @@ impl OfflineRenderer {
             block_midi: Vec::new(),
             input: StereoBuffer::default(),
             block_input: StereoBuffer { left: vec![0.0; block_size], right: vec![0.0; block_size] },
+            limiter: LimiterReport::default(),
         }
     }
 
@@ -177,6 +217,23 @@ impl OfflineRenderer {
         }
     }
 
+    /// What the output limiter has done since the renderer was made.
+    pub fn limiter(&self) -> LimiterReport {
+        self.limiter
+    }
+
+    /// Adds the block just processed to the limiter report.
+    fn note_limiter(&mut self) {
+        let Some(levels) = self.plan.take_output_levels() else { return };
+        let report = &mut self.limiter;
+        report.peak_in = report.peak_in.max(levels.pre[0]).max(levels.pre[1]);
+        report.deepest = report.deepest.min(levels.limiter_gain);
+        report.blocks += 1;
+        if levels.limiter_gain < crate::dsp::dynamics::db_to_gain(-LimiterReport::LIMITING_DB) {
+            report.blocks_limited += 1;
+        }
+    }
+
     /// The sample rate being rendered at.
     pub fn sample_rate(&self) -> f32 {
         self.context.sample_rate
@@ -200,6 +257,7 @@ impl OfflineRenderer {
             let input = InputAudio { left: &self.block_input.left, right: &self.block_input.right };
             self.plan.process(&self.context.with_midi(&self.block_midi).with_input(input));
             self.position += self.context.block_size as u64;
+            self.note_limiter();
 
             let wanted = (frames - out.left.len()).min(self.context.block_size);
             match self.plan.audio_output() {

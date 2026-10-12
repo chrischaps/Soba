@@ -68,9 +68,9 @@ The rim plays one quiet hit every 3 steps, and the cowbell one every 5, three ti
 | [Drum](../modules/sources/drum.md) (cowbell) | **Type** Cowbell, **Decay** 35%, **Tone** 50%, **Snap** 50%, **Level** 50% |
 | [Drum](../modules/sources/drum.md) (cymbal) | **Type** Cymbal, **Decay** 70%, **Tone** 55%, **Snap** 50%, **Level** 50% |
 | [Mixer](../modules/utilities/mixer.md) (skins) | Snare 75% at R 10, tom 70% at L 30, rim 50% at R 45, cowbell 45% at L 45; the kick on **Return L** |
-| [Mixer](../modules/utilities/mixer.md) (metal) | Closed hat 55% and open hat 50% at R 30, cymbal 45% at L 25; the skins Mixer on **Chain In** |
+| [Mixer](../modules/utilities/mixer.md) (metal) | Closed hat 55% and open hat 50% at R 30, cymbal 45% at L 25; the skins Mixer on **Chain In**; **Master** +4.2 dB |
 | [Reverb](../modules/effects/reverb.md) | **Size** 30%, **Decay** 0.6 s, **Damp** 60%, **PreD** 8 ms, **Mix** 14% |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 90% |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |
 
 ## How it's built
 

@@ -42,9 +42,9 @@ toms     . . . . . G . . . . . . . D . A#
 | [Drum](../modules/sources/drum.md) (closed hat) | **Type** Closed Hat, **Decay** 35%, **Tone** 60%, **Snap** 40%, **Level** 70% |
 | [Drum](../modules/sources/drum.md) (open hat) | **Type** Open Hat, **Decay** 55%, **Tone** 60%, **Snap** 45%, **Level** 60% |
 | [Drum](../modules/sources/drum.md) (toms) | **Type** Tom, **Decay** 45%, **Tone** 30%, **Snap** 40%, **Level** 80% |
-| [Mixer](../modules/utilities/mixer.md) | Snare 80% centre, closed hat 55% and open hat 50% at R 25, toms 70% at L 30; the kick on **Return L**; **Master** 0 dB |
+| [Mixer](../modules/utilities/mixer.md) | Snare 80% centre, closed hat 55% and open hat 50% at R 25, toms 70% at L 30; the kick on **Return L**; **Master** +3.6 dB |
 | [Reverb](../modules/effects/reverb.md) | **Size** 30%, **Decay** 0.6 s, **Damp** 60%, **PreD** 8 ms, **Mix** 14% |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 90% |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |
 
 ## How it's built
 

@@ -829,6 +829,28 @@ mod tests {
         (0..(seconds * SR) as usize).map(|_| rng.sample()).collect()
     }
 
+    #[test]
+    fn test_saturated_tape_starts_without_a_click() {
+        // The head's curve is lopsided, so its antiderivative isn't zero at
+        // rest; a fresh head once took it to be, and the first quiet sample
+        // came off the tape as a click 14 dB over full scale. The quieter
+        // the first sample, the louder the click, so this one is a whisper.
+        // (Exactly zero would hide it: the head takes its antiderivative
+        // from there.)
+        let mut input = sine(220.0, 0.22, 0.05);
+        input[0] = 1e-4;
+        let mut params = zeros();
+        params[Tape::PARAM_SATURATION] = 0.35;
+        params[Tape::PARAM_MIX] = 1.0;
+        let mut tape = tape();
+        for pass in ["fresh", "reset"] {
+            let out = run(&mut tape, &input, &params);
+            let peak = out.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+            assert!(peak < 0.5, "{} tape's first 50 ms peak at {}", pass, peak);
+            tape.reset();
+        }
+    }
+
     /// Instantaneous frequency of a sine, from its upward zero crossings,
     /// averaged over windows of `cycles`.
     fn frequencies(signal: &[f32], cycles: usize) -> Vec<f32> {

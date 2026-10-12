@@ -198,10 +198,18 @@ const ADAA_EPSILON: f64 = 1e-6;
 
 /// First-order ADAA state for one channel: the previous input and its
 /// antiderivative.
+///
+/// A fresh (or reset) state starts from an input of 0, with the
+/// antiderivative there taken from the first curve it shapes. Assuming
+/// `F(0) = 0` instead would be wrong for a curve like [`BiasedTanh`], whose
+/// `F(0)` isn't zero: the first step would divide that by a tiny `dx`, and
+/// an inaudibly quiet first sample would come out as a full-scale click.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Adaa1 {
     prev_x: f64,
     prev_big_f: f64,
+    /// Whether `prev_big_f` has been taken from a curve yet.
+    primed: bool,
 }
 
 impl Adaa1 {
@@ -213,6 +221,9 @@ impl Adaa1 {
     #[inline]
     pub fn process<C: Curve>(&mut self, curve: &C, x: f32) -> f32 {
         let x = x as f64;
+        if !self.primed {
+            self.prime(curve, 0.0);
+        }
         let big_f = curve.antiderivative(x);
         let dx = x - self.prev_x;
         let y = if dx.abs() > ADAA_EPSILON {
@@ -231,6 +242,7 @@ impl Adaa1 {
     pub fn prime<C: Curve>(&mut self, curve: &C, x: f32) {
         self.prev_x = x as f64;
         self.prev_big_f = curve.antiderivative(self.prev_x);
+        self.primed = true;
     }
 
     pub fn reset(&mut self) {
@@ -262,6 +274,23 @@ mod tests {
         check_antiderivative(&BiasedTanh::new(0.5), "biased tanh");
         check_antiderivative(&RoundedFolder::new(0.4), "folder");
         check_antiderivative(&RoundedFolder::new(1.0), "round folder");
+    }
+
+    #[test]
+    fn test_fresh_state_starts_quietly_on_any_curve() {
+        // BiasedTanh's antiderivative isn't zero at zero, so a fresh state
+        // that assumed it was would turn a whisper into a click
+        let curve = BiasedTanh::new(0.5);
+        assert!(curve.antiderivative(0.0).abs() > 0.1);
+        for mut adaa in [Adaa1::new(), {
+            let mut used = Adaa1::new();
+            used.process(&curve, 0.8);
+            used.reset();
+            used
+        }] {
+            let y = adaa.process(&curve, 1e-4);
+            assert!(y.abs() < 1e-3, "first sample {}", y);
+        }
     }
 
     #[test]

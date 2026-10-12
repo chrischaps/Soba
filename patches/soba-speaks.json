@@ -1229,7 +1229,7 @@
         {
           "name": "Master",
           "type": "Number",
-          "value": 0.0
+          "value": -1.2
         }
       ]
     },
@@ -1339,7 +1339,7 @@
         {
           "name": "Volume",
           "type": "Number",
-          "value": 1.0
+          "value": 0.8
         },
         {
           "name": "Limiter",

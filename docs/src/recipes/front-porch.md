@@ -29,7 +29,7 @@ Rhythm guitar played on an electric piano. A Chord Sequencer strums G, D/F♯, E
 | [Chorus](../modules/effects/chorus.md) | **Rate** 0.35 Hz, **Depth** 25%, **Delay** 10 ms, **Mix** 25% |
 | [Reverb](../modules/effects/reverb.md) | **Size** 45%, **Decay** 1.6 s, **Damp** 55%, **PreD** 12 ms, **Mix** 22%, **Mod** 20% |
 | [Tape](../modules/effects/tape.md) | **Speed** 15 ips, **Sat** 30%, **Age** 20%, **Hiss** 5%, **Wow** 12%, **Flut** 10%, **Width** 25% |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 100% |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |
 
 ## How it's built
 

@@ -188,7 +188,7 @@
         {
           "name": "Level",
           "type": "Number",
-          "value": 1.0
+          "value": 0.42
         },
         {
           "name": "CV Amount",
@@ -208,7 +208,7 @@
         {
           "name": "Volume",
           "type": "Number",
-          "value": 0.55
+          "value": 0.8
         },
         {
           "name": "Limiter",

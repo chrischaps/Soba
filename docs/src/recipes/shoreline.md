@@ -36,7 +36,7 @@ Surf rolls in and draws back, and a glass chime somewhere up the beach turns in 
 | [SVF Filter](../modules/filters/svf-filter.md) | **Cutoff** 500 Hz, **Res** 15% |
 | [Mixer](../modules/utilities/mixer.md) | **Return** 71%, **Master** +3 dB, the rest at their defaults |
 | [Tape](../modules/effects/tape.md) | **Speed** 15 ips, **Sat** 35%, **Age** 20%, **Hiss** 8%, **Wow** 20%, **Flut** 15%, **Width** 30% |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 100% |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 85% |
 
 ## How it's built
 
@@ -116,7 +116,7 @@ The reverb comes back on the Mixer's **Return**. Nothing is sent from the Mixer 
 
 The whole scene is recorded onto tape at 15 ips, gently:
 
-- **Sat** at 35% rounds off the crests of the surf, a breaker's roar squashed slightly, as a small recorder squashes it. That takes about 2 dB off the surf's loudness, so the Audio Output's **Vol** is at 100% rather than the usual 80% to win it back. The head bump also adds body to the low rumble.
+- **Sat** at 35% rounds off the crests of the surf, a breaker's roar squashed slightly, as a small recorder squashes it. That takes about 2 dB off the surf's loudness, which the Audio Output's **Vol** at 85% wins back. The head bump also adds body to the low rumble.
 - **Wow** at 20% sways the pitch by about ±1.5 cents. On the surf you won't hear it, but each ringing chime note bends a hair, like a chime heard on a recording rather than in the room.
 - **Age** at 20% and **Hiss** at 8% add a little grain. The hiss mostly hides in the surf and only shows in the calms.
 

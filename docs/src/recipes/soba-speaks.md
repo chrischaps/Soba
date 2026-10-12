@@ -36,10 +36,10 @@ A patch that talks. Every two bars a voice says *"Hello. I am Soba. I sing in si
 | [VCA](../modules/utilities/vca.md) | **Level** 50% |
 | [ADSR Envelope](../modules/modulation/adsr.md) | **Atk** 400 ms, **Dec** 200 ms, **Sus** 100%, **Rel** 1.5 s, **Vel** 0% |
 | [Vocoder](../modules/effects/vocoder.md) | **Bands** 16, **Attack** 3 ms, **Release** 35 ms, **Formant** 0, **Sibil** 35%, **Unvoic** 40%, **Width** 60%, **Mix** 100% |
-| [Mixer](../modules/utilities/mixer.md) (the mix) | **Level 1** and **Level 2** 28%, **Pan 1** L 80, **Pan 2** R 80. **Level 3** 40%, **Width 3** 60% |
+| [Mixer](../modules/utilities/mixer.md) (the mix) | **Level 1** and **Level 2** 28%, **Pan 1** L 80, **Pan 2** R 80. **Level 3** 40%, **Width 3** 60%, **Master** −1.2 dB |
 | [Stereo Delay](../modules/effects/delay.md) | **Sync** 1/8D, **FB** 35%, **Mix** 22%, **HiCut** 4 kHz, **LoCut** 300 Hz, **P-P** on, **Tape** on |
 | [Reverb](../modules/effects/reverb.md) | **Size** 75%, **Decay** 4 s, **PreD** 25 ms, **Mix** 30%, **Mod** 30% |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 100%, **Limiter** on |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 80%, **Limiter** on |
 
 ## How it's built
 

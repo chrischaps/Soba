@@ -23,7 +23,7 @@ A bell you can play across the keyboard, made from one recorded note. The record
 | Module | Settings |
 |--------|----------|
 | [Poly MIDI](../modules/midi/poly-midi.md) | Defaults: 8 voices, Rotate |
-| [Sampler](../modules/sources/sampler.md) | `samples/fm-bell-c4.wav`, **Mode** Gated, **Root** C4, **Rel** 700 ms, **Level** 45% |
+| [Sampler](../modules/sources/sampler.md) | `samples/fm-bell-c4.wav`, **Mode** Gated, **Root** C4, **Rel** 700 ms, **Level** 33% |
 | [SVF Filter](../modules/filters/svf-filter.md) | **Cutoff** 5.2 kHz, **Res** 10% |
 | [Reverb](../modules/effects/reverb.md) | **Size** 60%, **Decay** 3 s, **Damp** 50%, **PreD** 25 ms, **Mod** 30%, **Mix** 30% |
 | [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |

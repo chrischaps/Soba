@@ -54,9 +54,9 @@ Read the bottom three rows together, left to right, and you hear one melody: E D
 | [Oscillator](../modules/sources/oscillator.md) + [SVF Filter](../modules/filters/svf-filter.md) (pad) | **Wave** Saw, **Oct** -1, **Voices** 3, **Detune** 30%, **Spread** 80%; LowPass, **Cutoff** 650 Hz, **Res** 10% |
 | [ADSR Envelope](../modules/modulation/adsr.md) (pad) | **Atk** 4 s, **Dec** 1 s, **Sus** 100%, **Rel** 6 s |
 | [VCA](../modules/utilities/vca.md) ×4 | Defaults |
-| [Mixer](../modules/utilities/mixer.md) | **Level 1** 50% at L 45, **Level 2** 50% at R 45, **Level 3** 45%, **Level 4** 30% |
+| [Mixer](../modules/utilities/mixer.md) | **Level 1** 50% at L 45, **Level 2** 50% at R 45, **Level 3** 45%, **Level 4** 30%, **Master** +2.8 dB |
 | [Reverb](../modules/effects/reverb.md) | **Size** 75%, **Decay** 3.5 s, **Damp** 45%, **PreD** 20 ms, **Mix** 30% |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 75% |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |
 
 ## How it's built
 
