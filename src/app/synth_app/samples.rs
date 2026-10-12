@@ -103,12 +103,14 @@ impl SynthApp {
         }
     }
 
-    /// Points a Sampler at a file, as one undo step.
+    /// Points a Sampler at a file, as one undo step, and plays it once
+    /// from its face, so you hear what you chose.
     fn set_sample(&mut self, node_id: NodeId, key: String) {
         let name = sample_files::file_name(&key).to_string();
         if let Some(node) = self.graph_state.graph.nodes.get_mut(node_id) {
             node.user_data.file = Some(key);
             self.history.name_next(format!("Load {name}"));
+            self.cue_start_to_end(node_id);
         }
     }
 

@@ -15,6 +15,7 @@ use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutp
 use super::audio_input::InputFeed;
 use super::channels::{EngineHandle, MAX_SNAPSHOTS};
 use super::commands::{AudioMessage, EngineEvent, NodeId, ScopeFrame};
+use super::cue::CuePlayer;
 use super::graph_plan::GraphPlan;
 use super::midi_engine::TimestampedMidiEvent;
 use super::midi_scheduler::{take_chunk, MidiScheduler};
@@ -144,6 +145,8 @@ pub struct AudioProcessor {
     /// Loop snapshots being copied, a piece each callback. Room for
     /// [`MAX_SNAPSHOTS`] is set aside up front.
     snapshots: Vec<(NodeId, Box<Snapshot>)>,
+    /// A recording heard from a module's face, beside the patch.
+    cue: CuePlayer,
 }
 
 /// Frames of background copying (loops loaded or snapshotted) per frame a
@@ -174,6 +177,7 @@ impl AudioProcessor {
             recorder: None,
             input: LiveInput::new(block_size),
             snapshots: Vec::with_capacity(MAX_SNAPSHOTS),
+            cue: CuePlayer::default(),
         }
     }
 
@@ -221,6 +225,7 @@ impl AudioProcessor {
     ///    size, each with its share of the audio input
     /// 4. Writes the output module's audio to the output buffer
     /// 5. While recording, copies that buffer to the recording
+    /// 6. Mixes in the cue, if one is playing, stopped or not
     ///
     /// REAL-TIME SAFE: no allocation, locking or blocking.
     ///
@@ -249,6 +254,7 @@ impl AudioProcessor {
             // Reset CPU load when not playing
             self.cpu_load_avg = 0.0;
             self.record(output, channels);
+            self.play_cue(output, channels);
             return;
         }
 
@@ -260,6 +266,7 @@ impl AudioProcessor {
         let latency = if self.input.feed.is_some() { self.engine_handle.input_latency() } else { 0 };
         Self::render(&mut self.plan, self.sample_rate, output, channels, midi, RenderInput::Live(&mut self.input), latency);
         self.record(output, channels);
+        self.play_cue(output, channels);
 
         self.send_monitor_values();
         self.send_scope_captures();
@@ -300,12 +307,14 @@ impl AudioProcessor {
         output.fill(0.0);
         if !self.is_playing || channels == 0 {
             self.record(output, channels);
+            self.play_cue(output, channels);
             return;
         }
 
         // Input given with the picture is already in time with it
         Self::render(&mut self.plan, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0);
         self.record(output, channels);
+        self.play_cue(output, channels);
 
         self.send_monitor_values();
         self.send_scope_captures();
@@ -349,6 +358,21 @@ impl AudioProcessor {
     fn record(&mut self, output: &[f32], channels: usize) {
         if let Some(tap) = self.recorder.as_mut() {
             tap.write(output, channels);
+        }
+    }
+
+    /// Mixes the cue into a finished buffer, after the patch's limiter and
+    /// after the recording's copy (it's for the player's ears, not the
+    /// take), then tells the UI where it is and hands back a recording
+    /// it's done with.
+    fn play_cue(&mut self, output: &mut [f32], channels: usize) {
+        let Self { cue, engine_handle, sample_rate, .. } = self;
+        cue.mix(output, channels, *sample_rate);
+        if let Some((node_id, place)) = cue.report() {
+            engine_handle.send_event_lossy(EngineEvent::Cue { node_id, place });
+        }
+        while let Some(sample) = cue.take_retired() {
+            engine_handle.retire_sample(sample);
         }
     }
 
@@ -453,6 +477,9 @@ impl AudioProcessor {
                     if let Some(old) = self.plan.load_sample(node_id, sample) {
                         self.engine_handle.retire_sample(old);
                     }
+                }
+                AudioMessage::Cue(cue) => {
+                    self.cue.play(cue, self.sample_rate);
                 }
                 AudioMessage::SnapshotLoop { node_id, mut snapshot } => {
                     if self.snapshots.len() < self.snapshots.capacity() {
@@ -797,5 +824,70 @@ mod tests {
         ui.flush();
         let ((_, snapshot), _) = wait_for_snapshot(&mut ui, &mut processor);
         assert_eq!(snapshot.outcome(), SnapshotOutcome::Unsupported);
+    }
+
+    #[test]
+    fn test_a_cue_plays_with_the_transport_stopped_then_goes_back_to_the_ui() {
+        use crate::engine::{Cue, CUE_LEVEL};
+        let (mut ui, engine) = EngineChannels::with_defaults().split();
+        let mut processor = AudioProcessor::new(48000.0, 256, engine);
+        // A rising ramp, 4800 frames: its middle half plays
+        let ramp: Vec<f32> = (0..4800).map(|n| n as f32 / 4800.0).collect();
+        let sample = std::sync::Arc::new(crate::dsp::SampleData::mono(ramp, 48000.0));
+        ui.cue(Some(Cue { node_id: 4, sample: sample.clone(), from: 0.25, to: 0.75, semitones: 0.0 }));
+
+        let mut heard = Vec::new();
+        let mut places = Vec::new();
+        for _ in 0..12 {
+            let mut output = vec![1.0; 512];
+            processor.process(&mut output, 2);
+            assert!(output.chunks(2).all(|frame| frame[0] == frame[1]), "a mono file on both sides");
+            heard.extend(output.iter().step_by(2).copied());
+            ui.flush();
+            while let Some(event) = ui.recv_event() {
+                if let EngineEvent::Cue { node_id: 4, place } = event {
+                    places.push(place);
+                }
+            }
+        }
+        assert!(!processor.is_playing());
+        // The file's samples at the cue's level while it plays, past its fade in...
+        for n in [100, 1200, 2200] {
+            let expected = (1200 + n) as f32 / 4800.0 * CUE_LEVEL;
+            assert!((heard[n] - expected).abs() < 1e-4, "at {n}: {} vs {expected}", heard[n]);
+        }
+        // ...and silence once it's done
+        assert!(heard[2400..].iter().all(|&s| s == 0.0));
+        // The UI heard it go by, then end
+        assert!(places.windows(2).filter(|w| w[0].is_some() && w[1].is_some()).all(|w| w[1] > w[0]), "{places:?}");
+        assert_eq!(places.last(), Some(&None));
+        assert_eq!(places.iter().filter(|p| p.is_none()).count(), 1);
+        assert_eq!(std::sync::Arc::strong_count(&sample), 1, "freed on the UI side");
+    }
+
+    #[test]
+    fn test_a_cue_plays_over_the_patch_and_a_stop_stops_it() {
+        use crate::engine::Cue;
+        let (mut ui, engine) = EngineChannels::with_defaults().split();
+        let mut processor = AudioProcessor::new(48000.0, 256, engine);
+        let mut patch_alone = vec![0.0; 512];
+        playing_patch(&mut ui);
+        processor.process(&mut patch_alone, 2);
+
+        // The same patch again, with a cue of DC on top
+        let (mut ui, engine) = EngineChannels::with_defaults().split();
+        let mut processor = AudioProcessor::new(48000.0, 256, engine);
+        playing_patch(&mut ui);
+        let dc = std::sync::Arc::new(crate::dsp::SampleData::mono(vec![0.2; 48000], 48000.0));
+        ui.cue(Some(Cue { node_id: 1, sample: dc, from: 0.0, to: 1.0, semitones: 0.0 }));
+        let mut output = vec![0.0; 512];
+        processor.process(&mut output, 2);
+        let difference = output[400] - patch_alone[400];
+        assert!((difference - 0.1).abs() < 1e-4, "{difference}");
+
+        ui.cue(None);
+        processor.process(&mut output, 2);
+        processor.process(&mut output, 2);
+        assert!(!processor.cue.is_playing());
     }
 }

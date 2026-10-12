@@ -45,7 +45,7 @@ pub use groups::{GroupId, NodeKind};
 pub use port_mapping::SynthGraph;
 pub use node_data::{KnobParam, LedIndicator, NodeDisplay, SynthNodeData};
 pub use responses::SynthResponse;
-pub use state::{create_editor_state, DisplayMidiEvent, MidiMappingInfo, SynthGraphEditorState, SynthGraphState};
+pub use state::{create_editor_state, DisplayMidiEvent, MidiMappingInfo, SamplerCue, SynthGraphEditorState, SynthGraphState};
 pub use templates::{AllNodeTemplates, SynthNodeTemplate};
 pub use validation::{validate_connection, types_compatible, ConnectionError, ValidationResult};
 pub use value_types::{NumberSpec, SynthValueType};

@@ -228,8 +228,8 @@ pub struct UiHandle {
     /// Play/stop changes that didn't fit in the queue yet.
     unsent_transport: UnsentTransport,
     /// Recording starts and stops, audio inputs connected and
-    /// disconnected, and chords auditioned, that didn't fit in the queue
-    /// yet, in order.
+    /// disconnected, and chords auditioned and cues played, that didn't
+    /// fit in the queue yet, in order.
     unsent_handoffs: Vec<AudioMessage>,
     /// Recordings for running modules, and snapshots of them, waiting
     /// until the plans holding those modules are sent, and then for room in
@@ -303,6 +303,15 @@ impl UiHandle {
     /// [`ProcessContext::input_latency`](crate::dsp::ProcessContext::input_latency).
     pub fn set_input_latency(&self, frames: usize) {
         self.config.input_latency.store(frames, Ordering::Relaxed);
+    }
+
+    /// Plays a recording from a module's face, beside the patch (see
+    /// [`Cue`](super::cue::Cue)), replacing any cue playing; or with
+    /// `None`, stops it. Never dropped: a stop mustn't be lost, or the cue
+    /// would play on.
+    pub fn cue(&mut self, cue: Option<super::cue::Cue>) {
+        self.unsent_handoffs.push(AudioMessage::Cue(cue));
+        self.send_handoffs();
     }
 
     /// Hands an audio input's feed to the audio thread, which reads from it
@@ -669,6 +678,12 @@ mod tests {
                         engine.retire_sample(old);
                     }
                     seen.push("sample");
+                }
+                AudioMessage::Cue(cue) => {
+                    if let Some(cue) = cue {
+                        engine.retire_sample(cue.sample);
+                    }
+                    seen.push("cue");
                 }
                 AudioMessage::SnapshotLoop { node_id, mut snapshot } => {
                     let mut budget = usize::MAX;

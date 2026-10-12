@@ -46,6 +46,7 @@ use super::WEB;
 #[cfg(target_arch = "wasm32")]
 use super::web;
 
+mod cue;
 mod framing;
 mod grouping;
 mod loops;
@@ -1713,6 +1714,10 @@ impl SynthApp {
                         // A Clock's tempo and beat, for its node
                         self.user_state.readouts.insert(node_id, readout);
                     }
+                    crate::engine::EngineEvent::Cue { node_id, place } => {
+                        // Where a Sampler's file heard from its face has got to
+                        cue::follow(&mut self.user_state, node_id, place);
+                    }
                     // Other events are not currently handled by the app
                     // (Started, Stopped, Error)
                     _ => {}
@@ -1865,6 +1870,12 @@ impl SynthApp {
                         }
                         NodeResponse::User(crate::graph::SynthResponse::Audition { node_id: response_node_id, chord }) => {
                             self.audition(response_node_id, chord);
+                        }
+                        NodeResponse::User(crate::graph::SynthResponse::CueSample { node_id: response_node_id, from, to }) => {
+                            self.cue_sample(response_node_id, from, to);
+                        }
+                        NodeResponse::User(crate::graph::SynthResponse::StopCue(_)) => {
+                            self.stop_cue();
                         }
                         NodeResponse::User(crate::graph::SynthResponse::EditParameters {
                             node_id: response_node_id,
@@ -4280,6 +4291,7 @@ impl eframe::App for SynthApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
         self.sync_samples();
+        self.tend_cue(ctx);
 
         // Whatever this frame changed becomes an undo step, once the mouse
         // button is up: a knob turn or a drag is one step, not one per frame

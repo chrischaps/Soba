@@ -9,6 +9,7 @@ use crate::dsp::{Audition, MeterLevels, OutputLevels, Readout, SampleData, Signa
 use crate::modules::oscilloscope::SCOPE_BUFFER_SIZE;
 
 use super::audio_input::InputFeed;
+use super::cue::Cue;
 use super::graph_plan::GraphPlan;
 use super::recorder::RecordTap;
 
@@ -175,6 +176,9 @@ pub enum AudioMessage {
     SnapshotLoop { node_id: NodeId, snapshot: Box<Snapshot> },
     /// Play a chord on a running module's outputs, or stop.
     Audition { node_id: NodeId, chord: Option<Audition> },
+    /// Hear a recording from a module's face, beside the patch, playing or
+    /// stopped; or with `None`, stop the one playing.
+    Cue(Option<Cue>),
 }
 
 /// One oscilloscope capture, sent from the audio thread by value so that
@@ -277,6 +281,15 @@ pub enum EngineEvent {
         node_id: NodeId,
         /// Its values, in the module's own order.
         readout: Readout,
+    },
+
+    /// Where the cue heard from a module's face has got to, 0 to 1 through
+    /// its recording: after each callback while it plays, and once with
+    /// `None` when it ends or is stopped.
+    Cue {
+        /// The node it's heard from.
+        node_id: NodeId,
+        place: Option<f32>,
     },
 
     /// Oscilloscope buffer data for waveform display.

@@ -48,6 +48,15 @@ pub enum SynthResponse {
         node_id: egui_node_graph2::NodeId,
         chord: Option<crate::dsp::Audition>,
     },
+    /// A Sampler's file heard from its face, from `from` to `to` (0 to 1
+    /// through it), beside the patch: played, never kept or undone.
+    CueSample {
+        node_id: egui_node_graph2::NodeId,
+        from: f32,
+        to: f32,
+    },
+    /// The file being heard from a Sampler's face, stopped.
+    StopCue(egui_node_graph2::NodeId),
     /// A node was selected by right-clicking it, so its menu acts on it.
     NodeSelected(egui_node_graph2::NodeId),
     /// A node was deselected.

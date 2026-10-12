@@ -19,6 +19,21 @@ Every other sound in Soba is synthesized. The Sampler brings in sound you've rec
 
 Loading a file is a step you can undo. A file is read and converted once. Samplers that play the same file share it.
 
+Opening or dropping a file plays it once, from **Start** to **End**, so you hear what you chose. Undoing back to an earlier file doesn't.
+
+## Hearing it
+
+You don't have to patch anything to hear what a Sampler holds.
+
+- **▶**, beside the file's name, plays it from **Start** to **End** and stops there. It plays at the Sampler's **Tune** and **Fine**, at a **Speed** of 1. Press it again (it shows ■ while playing) to stop.
+- **Alt-click** the waveform to play from that point to **End**. Past **End**, it plays on to the end of the file. With Alt held, a dashed line follows the pointer to show where it will start. Dragging the markers works as before.
+
+This works whether the transport is running or not. What you hear is the file itself, not the patch: it plays dry, beside the patch rather than through it, after the Audio Output's limiter, 6 dB below the file's own level. It isn't in a recording made with **Record**. It's how a sampler's or a DAW's file preview works.
+
+One file plays at a time. Starting another, from this Sampler or any other, fades the first out over 5 ms. Deleting the Sampler or giving it another file stops it.
+
+While it plays, a white playhead capped at both ends shows where it is, with the part it has played washed faintly behind it. The voices' playheads are lines with a blue dot, so the two never look alike.
+
 ## Inputs
 
 | Port | Signal Type | Description |
@@ -111,7 +126,7 @@ The waveform shows the whole recording, scaled to fill the panel. What plays is 
 
 Every voice draws a white playhead where it is in the recording, as bright as it is loud. A chord is several lines moving at their own speeds, and a released note fades where it stands.
 
-Under the waveform are the file's name and length. A file that can't be found shows its name in orange. An empty Sampler asks for a file.
+Under the waveform are **▶** (see [Hearing it](#hearing-it)) and the file's name and length. A file that can't be found shows its name in orange. An empty Sampler asks for a file.
 
 ## Files and patches
 

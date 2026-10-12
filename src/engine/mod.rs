@@ -9,6 +9,7 @@ pub mod audio_input;
 pub mod audio_processor;
 pub mod channels;
 pub mod commands;
+pub mod cue;
 pub mod graph_plan;
 pub mod latency;
 pub mod midi_engine;
@@ -25,6 +26,7 @@ pub use channels::{
     MAX_PLANS_IN_FLIGHT,
 };
 pub use commands::{AudioMessage, ChannelPeaks, EngineCommand, EngineEvent, NodeId, PortIndex, ScopeFrame};
+pub use cue::{Cue, CUE_LEVEL};
 pub use graph_plan::GraphPlan;
 pub use latency::{LatencyGauge, RoundTrip};
 pub use recorder::{RecordTap, Recording, RecordingSummary};

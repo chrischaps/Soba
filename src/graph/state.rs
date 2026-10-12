@@ -18,6 +18,25 @@ use super::signal_history::{OutputHistory, TraceShape};
 use super::{SynthDataType, SynthGraph, SynthNodeData, SynthValueType};
 use super::templates::SynthNodeTemplate;
 
+/// A Sampler's file being heard from its face (see [`crate::engine::cue`]).
+#[derive(Clone, Debug)]
+pub struct SamplerCue {
+    /// The Sampler it's heard from.
+    pub node_id: NodeId,
+    /// The same Sampler in the engine, which reports where the cue is.
+    pub engine_id: EngineNodeId,
+    /// The file it plays: the node naming another stops it.
+    pub key: String,
+    /// Where it started, and where it's got to, 0 to 1 through the file.
+    pub from: f32,
+    pub place: f32,
+    /// When the engine last said where it was.
+    pub heard: Instant,
+    /// Whether the engine has said so since it started: until it has, an
+    /// end it reports is the cue's this one replaced.
+    pub begun: bool,
+}
+
 /// Duration to show validation messages before auto-clearing.
 const VALIDATION_MESSAGE_DURATION_SECS: f32 = 3.0;
 
@@ -198,6 +217,9 @@ pub struct SynthGraphState {
     /// The files the patch's Samplers play, decoded, by sample key.
     pub samples: super::sample_shelf::SampleShelf,
 
+    /// The Sampler being heard from its face, and where its cue has got to.
+    pub cue: Option<SamplerCue>,
+
     /// While a file is dragged over the window, the Sampler it would land
     /// on, or `None` for empty canvas. `Some` only during a drag.
     pub file_drop_target: Option<Option<NodeId>>,
@@ -274,6 +296,7 @@ impl Default for SynthGraphState {
             readouts: HashMap::new(),
             audio_input_name: None,
             samples: Default::default(),
+            cue: None,
             file_drop_target: None,
             level: None,
             hidden: HashSet::new(),
