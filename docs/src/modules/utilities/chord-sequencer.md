@@ -42,12 +42,13 @@ The **Root** and **Bass** outputs carry single notes as well: a bass line to pla
 | **Voicing** | Close / Open / Spread | Close | How the notes are spread out (below) |
 | **Voice lead** (Voice Leading) | on / off | on | Each chord takes the inversion nearest the last |
 | **Bass voice** | on / off | off | Puts the bass note under the chord as the first channel (below) |
+| **Rootless** | on / off | off | The chord leaves out its root first, for a bass that plays it elsewhere (below). Always so with **Bass voice** on |
 
-Each step also stores a root (a note, with its octave), a type, a bass (the root, or one of the twelve notes), a gate, a velocity and a tie. A new Chord Sequencer starts on Cmaj7, Am7, Fmaj7, G7, with the roots walking down from C2. Patch a [Clock](../modulation/clock.md) into it and it plays a progression straight away.
+Each step also stores a root (a note, with its octave), a type, a bass (the root, or one of the twelve notes), a gate, a velocity, a tie, and a top (Auto, or the chord tone to put on top). A new Chord Sequencer starts on Cmaj7, Am7, Fmaj7, G7, with the roots walking down from C2. Patch a [Clock](../modulation/clock.md) into it and it plays a progression straight away.
 
 ## Writing chords
 
-Each step shows its chord's name, with a slash bass written under it. A line along the foot of the step shows its velocity. Steps beyond **Steps** are hidden, not lost.
+Each step shows its chord's name, with a slash bass written under it. A line along the foot of the step shows its velocity, and a notch in its head shows that it names its top note. Steps beyond **Steps** are hidden, not lost.
 
 - **Click** a step to switch it on (green) or make it a rest (dark).
 - **Shift + click** a step to tie it into the next step. A bar joins the two.
@@ -59,13 +60,14 @@ While the patch plays, the chord sounding is drawn brighter, with a white outlin
 ### The chord popover
 
 ![The chord popover](../../images/chord-sequencer-popover.png)
-*Am/G# being written into step 2. The bass row is spelled from the root, so the note a half step under A reads G#, as a line cliché writes it.*
+*Step 1 of [From One Sine](../../recipes/from-one-sine.md): Dmadd9, with E on top. The bass row is spelled from the root, so the note a half step under D reads C#, as a lead sheet writes it. The top row offers only the tones the chord keeps: with **Rootless** on and three voices, Dmadd9 keeps F, A and E.*
 
 Right-click a step and its chord opens under it:
 
 - **Root.** A two-octave piano with the root lit. Click a key to set the root. **‹ ›** move the piano an octave.
 - **Bass.** The root, or a note to put under the chord. The notes are spelled from the root (D/F#, Am/G#), the same way the step writes the name.
-- **Type.** All 18 chord types, each named on this root. Clicking a type writes the step, switches it on if it was a rest, and moves to the next step.
+- **Top.** **Auto**, or one of the chord's tones to put on top of the voicing (see [The top note](#the-top-note)). Only the tones the voicing keeps are offered.
+- **Type.** All 19 chord types, each named on this root. Clicking a type writes the step, switches it on if it was a rest, and moves to the next step.
 - **Velocity** and **Tie**, for this step.
 
 So a progression goes in the way a lead sheet reads: a root, then a type, then the next root and type. The popover stays where it opened, and an outline marks the step it's writing. **◂ ▸** (or **←** **→**) move between steps without writing. **Esc**, or a click outside, closes it. Each change is one undo step.
@@ -110,6 +112,7 @@ The tones are listed in the order the sequencer keeps them. With fewer **Voices*
 | 9 | C9 | 1 3 ♭7 9 5 | |
 | 11 | C11 | 1 ♭7 9 11 5 | No 3rd: it would clash with the 11th. A B♭ triad over C, the soft suspended 11 of soul and jazz |
 | 13 | C13 | 1 3 ♭7 13 9 5 | No 11th, for the same reason. In four voices: C E B♭ A |
+| madd9 | Cmadd9 | 1 ♭3 9 5 | Minor add 9, Cm(add9) on a lead sheet: a minor triad with the 9th, no 7th |
 
 The app writes flats and sharps as `b` and `#`, as in Bbmaj7 and F#m7b5.
 
@@ -140,11 +143,21 @@ With voice leading on, D and F hold through G7 while A falls to G and C to B. Th
 
 The first chord after **Reset** or a stop is in root position, and the rest lead on from it.
 
+### The top note
+
+A step's **Top** picks the chord tone that goes on top of the voicing, the way an arranger writes a pad's top line. The sequencer then chooses only among the inversions with that tone on top. With voice leading on, it takes the nearest of those; otherwise, the one whose lowest note is in the **Range** octave. **Auto** leaves the choice to the voicing.
+
+Most steps can leave it on Auto. Set it where voice leading picks a different voicing from the one you hear. A progression that loops back to its first chord is the usual case. Voice leading moves the first chord as close to the last one as it can, so each pass round can start lower than the one before. A **Top** on the first step starts every pass from the same place. [From One Sine](../../recipes/from-one-sine.md) sets two tops in sixteen chords, and voice leading finds the rest.
+
+A top that the voicing can't put on top is ignored, as if it were Auto. That happens if the tone isn't in the chord, or if **Voices** leaves it out, or if a voicing can't reach it: Spread can't put every tone on top. Change the chord and its top stays, so it comes back if the new chord has that tone.
+
 ## Slash chords and the bass
 
 A step's **Bass** puts a different note under the chord: C/E is C major over E, and D/F# is D over F#. That's how a line cliché writes a moving bass under a held chord: Am, Am/G#, Am/G, D/F#. The sequencer places the bass note at or below the root you wrote, so write roots where you want the bass line to sit, usually octave 2.
 
 The bass is always on the **Bass** output. Patch it into a second voice for a bass part. **Root** carries the root itself, ignoring the slash.
+
+When another voice plays the bass from **Root** or **Bass**, switch on **Rootless**. The chord then leaves out its own root first, as it does with **Bass voice**, so its voices are free for the 3rd, 7th and 9th. With **Voices** 3, Dmadd9 is F, A and E over a bass playing D.
 
 To hear the bass in the chord itself, switch on **Bass voice**. The cables' first channel then carries the bass note, under the chord, and the chord takes the remaining channels. A single pad then plays the whole slash chord. Because the bass already has the root, the chord drops its own root first when there are more tones than voices. With **Voices** 4, Cmaj9 is C under E, B and D (its 3rd, 7th and 9th), and with 5 it's C under E G B D. These are the rootless voicings a jazz pianist's left hand plays.
 
@@ -191,7 +204,7 @@ Patch **Root** into an oscillator's **Exp FM** (at 1.0 octave per volt) while a 
 ## Tips
 
 1. **Voices sets the colour.** Three voices give shells (root, 3rd, 7th), and four give full seventh chords. Five or more add the 9ths and doublings that make pads lush.
-2. **Bass voice and four Voices** give the classic rootless voicings for jazz and neo-soul.
+2. **Bass voice and four Voices** give the classic rootless voicings for jazz and neo-soul. **Rootless** gives the same when the bass is a voice of its own.
 3. **Ties on a pad** turn a progression into one long breath.
 4. **Dir Rnd** over a set of related chords (Fmaj7, Am7, Cmaj7, Em7) makes ambient harmony that never quite repeats.
 5. **EOC** can clock a second sequencer once per progression, or a Clock Divider for a turnaround every few passes.

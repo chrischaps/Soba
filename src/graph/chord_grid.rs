@@ -5,11 +5,12 @@
 //!   over its key that glides to its next note, so voice leading can be
 //!   watched: most dots creep a step or stay put while the chord changes.
 //! - A step shows its chord's name ("Am9", with "/G#" under it for a slash
-//!   chord) and its velocity as a line along its foot.
+//!   chord), its velocity as a line along its foot, and a notch in its head
+//!   when it names the tone on top.
 //! - Click switches a step on or off, Shift+click its tie; drag up or down
 //!   moves its root by semitones (Shift: octaves), as on the Step Sequencer.
-//! - Right-click opens the chord under the step: a piano for the root, a row
-//!   for the slash bass and the chord types. Choosing a type writes the step
+//! - Right-click opens the chord under the step: a piano for the root, rows
+//!   for the slash bass and the tone on top, and the chord types. Choosing a type writes the step
 //!   and moves to the next, so a progression goes in as a lead sheet reads:
 //!   root, type, root, type.
 //! - Or play the chord, on a MIDI keyboard or the letter keys, while the
@@ -26,7 +27,7 @@ use egui_node_graph2::NodeId;
 use crate::app::theme;
 use crate::dsp::DspModule;
 use crate::modules::chord_sequencer::recognition::{pitch_classes, recognise, Heard};
-use crate::modules::chord_sequencer::{voice_chord, ChordSequencer, ChordSpec, VoicingSettings, Voicing, CHORD_TYPES, MAX_STEPS};
+use crate::modules::chord_sequencer::{kept_tones, voice_chord, ChordSequencer, ChordSpec, VoicingSettings, Voicing, CHORD_TYPES, MAX_STEPS};
 use crate::modules::sequencer::note_to_name;
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
@@ -45,6 +46,9 @@ const STRIP_OCTAVES: i32 = 4;
 const TOP_BASE: u8 = 96;
 const OCTAVE_WIDTH: f32 = 140.0;
 const KEY_HEIGHT: f32 = 44.0;
+/// The order the popover lists the chord types in: as the Type dropdown,
+/// but with each one beside its kin, where a later type joined the list.
+const TYPE_ORDER: [usize; 19] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 13, 14, 15, 16, 17];
 const HINT: &str = "Click: chord on/off · Shift+click: tie\nDrag up or down: root (Shift: by octave)\nRight-click: edit the chord";
 
 /// A Chord Sequencer's pattern and settings, as its face shows them.
@@ -84,7 +88,7 @@ impl ChordPattern {
             voicing: Voicing::from_param(params[ChordSequencer::PARAM_VOICING]),
             voices: channels.saturating_sub(bass_voice as usize).max(1),
             range: params[ChordSequencer::PARAM_RANGE].round() as i32,
-            rootless: bass_voice,
+            rootless: bass_voice || params[ChordSequencer::PARAM_ROOTLESS] > 0.5,
         };
         Self {
             steps,
@@ -144,7 +148,7 @@ impl Played {
     fn new(notes: Vec<u8>, step: usize, pattern: &ChordPattern) -> Option<Self> {
         let lowest = *notes.first()? as i32;
         let heard = if notes.iter().all(|&n| (n as i32 - lowest) % 12 == 0) {
-            Heard { spec: ChordSpec { root: lowest, kind: pattern.specs[step].kind, bass: None }, extra: 0, missing: 0 }
+            Heard { spec: ChordSpec { root: lowest, kind: pattern.specs[step].kind, bass: None, top: None }, extra: 0, missing: 0 }
         } else {
             recognise(&notes.iter().map(|&n| n as i32).collect::<Vec<_>>())?
         };
@@ -290,6 +294,11 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
             if on {
                 let foot = Rect::from_min_size(egui::pos2(rect.left() + 3.0 * z, rect.bottom() - 3.5 * z), egui::vec2((rect.width() - 6.0 * z) * pattern.velocities[step], 1.5 * z));
                 painter.rect_filled(foot, 0.0, Color32::from_rgba_unmultiplied(18, 40, 20, 110));
+            }
+            // A tone named for the top: a notch in the head
+            if spec.top.is_some() {
+                let notch = Rect::from_center_size(egui::pos2(rect.center().x, rect.top() + 2.5 * z), egui::vec2(8.0 * z, 1.5 * z));
+                painter.rect_filled(notch, 0.0, if on { Color32::from_rgba_unmultiplied(18, 40, 20, 150) } else { OFF_TEXT });
             }
             chord_label(painter, *rect, spec, if on { ON_TEXT } else { OFF_TEXT }, z);
 
@@ -491,6 +500,9 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
     ui.horizontal(|ui| {
         ui.label(RichText::new(format!("Step {}", step + 1)).strong());
         ui.label(RichText::new(spec.name()).color(theme::signal::CONTROL).size(16.0));
+        if let Some(top) = spec.top {
+            ui.label(RichText::new(format!("{} on top", spec.spell(top))).weak());
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.small_button("▸").on_hover_text("Next step (→)").clicked() {
                 open.step = step_along(step, 1, pattern.steps);
@@ -558,11 +570,33 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         }
     });
 
+    // Top: the chord tones the voicing keeps, any of which can go on top
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        ui.label(RichText::new("Top").weak());
+        if ui.selectable_label(spec.top.is_none(), "Auto").on_hover_text("Leave the top to the voicing").clicked() {
+            set(format!("Step {} Top", step + 1), 0.0);
+        }
+        let tones = kept_tones(&spec, &pattern.settings);
+        for &pc in &tones {
+            let chip = ui.selectable_label(spec.top == Some(pc), spec.spell(pc));
+            if chip.on_hover_text("Voice the chord with this tone on top").clicked() {
+                set(format!("Step {} Top", step + 1), pc as f32 + 1.0);
+            }
+        }
+        // A top the voicing doesn't keep, written before the chord changed
+        if let Some(pc) = spec.top.filter(|pc| !tones.contains(pc)) {
+            ui.label(RichText::new(spec.spell(pc)).strikethrough().weak())
+                .on_hover_text("Not one of the tones this chord keeps, so the voicing leaves it out");
+        }
+    });
+
     // Type: writes the step and moves on
     ui.add_space(2.0);
     ui.label(RichText::new("Type").weak());
     egui::Grid::new("chord_types").spacing([2.0, 2.0]).show(ui, |ui| {
-        for (index, kind) in CHORD_TYPES.iter().enumerate() {
+        for (place, &index) in TYPE_ORDER.iter().enumerate() {
+            let kind = &CHORD_TYPES[index];
             let name = format!("{}{}", spec.root_name(), kind.suffix);
             let chip = ui.add_sized([52.0, 20.0], egui::SelectableLabel::new(spec.kind == index, name));
             if chip.on_hover_text(kind.label).clicked() {
@@ -570,7 +604,7 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
                 switch_on(set);
                 open.step = step_along(step, 1, pattern.steps);
             }
-            if index % 6 == 5 {
+            if place % 6 == 5 {
                 ui.end_row();
             }
         }
@@ -633,6 +667,13 @@ fn heard_line(ui: &mut egui::Ui, listening: &Listening) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_popover_lists_every_type_once() {
+        let mut order = TYPE_ORDER.to_vec();
+        order.sort_unstable();
+        assert_eq!(order, (0..CHORD_TYPES.len()).collect::<Vec<_>>());
+    }
 
     #[test]
     fn keys_sit_along_the_strip() {

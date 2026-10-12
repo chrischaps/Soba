@@ -46,7 +46,7 @@ pub fn create_module_registry() -> ModuleRegistry {
     registry.register::<Clock>();
     registry.register::<Poly<Vca>>();
     registry.register::<Poly<Attenuverter>>();
-    registry.register::<Poly<Mix>>();
+    registry.register::<Mix>();
     registry.register::<Mixer>();
     registry.register::<Poly<SampleHold>>();
     registry.register::<Poly<Quantizer>>();

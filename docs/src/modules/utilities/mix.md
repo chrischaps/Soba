@@ -9,7 +9,7 @@ Mix adds up to four signals into one, each at its own level. It's the plain sum 
 
 Audio and control signals both patch in, so the same module mixes sound or modulation. To place sounds left and right, send them to a shared reverb, or mute and solo them as you play, use the [Mixer](./mixer.md).
 
-Mix is polyphonic. A polyphonic cable stays one: each voice is summed on its own, with the same levels, and a mono cable into another input joins every voice.
+Mix is polyphonic. A polyphonic cable stays one: each voice is summed on its own, with the same levels, and a mono cable into another input joins every voice. Switch on **Sum Voices** to add a polyphonic cable's voices together as well, into one channel (see [A chord into one filter](#a-chord-into-one-filter)).
 
 ## Inputs
 
@@ -28,6 +28,7 @@ Mix is polyphonic. A polyphonic cable stays one: each voice is summed on its own
 | Knob | Range | Default | Description |
 |------|-------|---------|-------------|
 | **1** – **4** (Level 1 – 4) | 0 – 100% | 100% | How much of each input joins the sum |
+| **Sum Voices** | on / off | off | Adds a polyphonic cable's voices into one channel too. Off, each voice is mixed on its own |
 
 The levels are smoothed, so you can ride them while the patch plays without clicks.
 
@@ -68,6 +69,20 @@ Two oscillators, one quieter, into one filter:
 ```
 
 [Generative Ambient](../../recipes/generative-ambient.md) starts from this: a triangle melody over a steady second oscillator, slightly out of tune with each other, so they beat.
+
+### A chord into one filter
+
+A [Chord Sequencer](./chord-sequencer.md) plays its chord on one polyphonic cable, and one Oscillator plays a saw for each voice. A filter after it filters each voice on its own, so a Ladder Filter's drive saturates each saw by itself, and the voices never rub against each other in the filter. To drive the chord as one sound, the way a pad of separate oscillators into one filter sounds, sum the voices first:
+
+```text
+[Chord Sequencer Root]  ──> [Oscillator A V/Oct]   (the bass, an octave down)
+[Chord Sequencer Pitch] ──> [Oscillator B V/Oct]   (three voices)
+[Oscillator A Out] ──> [Mix In 1]
+[Oscillator B Out] ──> [Mix In 2]                  (Sum Voices on)
+[Mix Out] ──> [Ladder Filter In]
+```
+
+With **Sum Voices** on, the bass joins the sum once. With it off, the bass would join each of the chord's three voices, and come out three times as loud once they were added together. [From One Sine](../../recipes/from-one-sine.md) builds its pad this way.
 
 ## Related modules
 

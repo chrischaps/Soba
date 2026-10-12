@@ -38,7 +38,8 @@ Each section of the song is sixteen bars. On the Arrangers they're 22 sections: 
 - **Smoothing a control voltage.** A lane's **Glide** turns a jump into a glide, so a fader can move under a ringing note without a click: a second for the sustained parts, 40 ms for the rhythmic ones.
 - **One lane, two jobs.** A lane's **Gate** is high while the lane is above zero, so the riser's lane sets its level and opens its envelope for exactly its section.
 - **A line longer than a sequencer's sixteen steps.** The motif's sequencer holds four patterns, and an Arranger lane picks one for each pass through its **Pattern** input. Where the line should run on, the lane ramps in a straight line, so the four passes play A, B, C and D.
-- **Harmony from mono parts.** A sequencer for each pad voice, stepping once a bar, sings real chords with real voice-leading. A root sequencer transposes the arpeggio and bass through **Exp FM**.
+- **A progression as a lead sheet.** One [Chord Sequencer](../modules/utilities/chord-sequencer.md) holds sixteen bars of chords, and voice leading moves the pad's voices by step from one to the next. Its **Root** plays the bass and transposes the arpeggio and bass line through **Exp FM**.
+- **A chord as one sound.** The pad's three voices ride one polyphonic cable, and a [Mix](../modules/utilities/mix.md) with **Sum Voices** on adds them into one channel, so the Ladder Filter drives the chord as a whole.
 - **Hits press buttons.** A Hit is a trigger with a level on it: the crash and its accent, and the Looper's **Rec** and **Clear**.
 - **Sidechain ducking.** The [Compressor](../modules/effects/compressor.md) on the pad listens to the kick.
 - **Send and return.** Four [Mixers](../modules/utilities/mixer.md) chain their mixes and their sends along one cable each, so one delay and two reverbs serve the whole song.
@@ -51,8 +52,9 @@ Each section of the song is sixteen bars. On the Arrangers they're 22 sections: 
 | [Clock Divider](../modules/utilities/divider.md) ×4 | Beats (÷4), eighths (÷2), bars (÷16), and ÷3 for the sparkles |
 | [Arranger](../modules/utilities/arranger.md) ×2 | The score: 22 sections, 128 bars. **Desk** rides eight faders. **Cues** picks the drum pattern and the melody's, strikes the crash, holds the riser, sets the brightness and the Looper's level, and presses its pedals |
 | [Sample & Hold](../modules/utilities/sample-hold.md) | Samples the sparkles' random voltage |
-| [Step Sequencer](../modules/utilities/sequencer.md) ×8 | Roots and three pad voices (a step a bar), the motif and the line it grows into (quarters, four patterns), the arp and bass (sixteenths), the bells (eighths) |
-| [Oscillator](../modules/sources/oscillator.md) ×10 | The sine, the supersaw lead (**Voices** 7), four pad saws, the arp (Square), the bass (Saw), the sparkles (Tri), the riser |
+| [Chord Sequencer](../modules/utilities/chord-sequencer.md) | The harmony, a chord a bar: **Voices** 3, **Range** 4, **Rootless** |
+| [Step Sequencer](../modules/utilities/sequencer.md) ×5 | The motif and the line it grows into (quarters, four patterns), the arp and bass (sixteenths), the bells (eighths) |
+| [Oscillator](../modules/sources/oscillator.md) ×8 | The sine, the supersaw lead (**Voices** 7), the pad's root saw and its chord saws (three voices on one cable), the arp (Square), the bass (Saw), the sparkles (Tri), the riser |
 | [ADSR Envelope](../modules/modulation/adsr.md) ×7 | One per voice, two for the bass (filter and amp) |
 | [SVF Filter](../modules/filters/svf-filter.md) ×4 | Lead, arp, wind (band-pass) and riser (high-pass) |
 | [Ladder Filter](../modules/filters/ladder-filter.md) ×2 | Pad and bass |
@@ -69,7 +71,7 @@ Each section of the song is sixteen bars. On the Arrangers they're 22 sections: 
 | [Chorus](../modules/effects/chorus.md) | Pad, into stereo |
 | [Distortion](../modules/effects/distortion.md) | Bass, **Tube** |
 | [3-Band EQ](../modules/effects/eq.md) | Bass: lows up, boxiness out |
-| [Mix](../modules/utilities/mix.md) | The pad's four voices |
+| [Mix](../modules/utilities/mix.md) | The pad's root and chord, **Sum Voices** on |
 | [Mixer](../modules/utilities/mixer.md) ×5 | Two for the kit, and Echoes, Body and Sky |
 | [Stereo Delay](../modules/effects/delay.md) | **Sync** 1/8D, **P-P** and **Tape** on, on the Echoes send |
 | [Reverb](../modules/effects/reverb.md) ×2 | A hall on Echoes, a plate on the send everyone shares |
@@ -105,16 +107,25 @@ The mixer adds a control voltage without smoothing it, so each lane has a **Glid
 ### Harmony, a chord a bar
 
 ```text
-[Clock Divider ÷16 Trig] ──> [Roots Clock], [Pad Voice 1–3 Clock]
-[Roots Pitch] ──> [Pad Root Oscillator V/Oct]
-              ──> [Arp Oscillator Exp FM]
-              ──> [Bass Oscillator Exp FM]
-[Pad Voice n Pitch] ──> [Pad Oscillator n V/Oct]
+[Clock Divider ÷16 Trig] ──> [Chord Sequencer Clock]
+[Chord Sequencer Root] ──> [Pad Root Oscillator V/Oct]
+                       ──> [Arp Oscillator Exp FM]
+                       ──> [Bass Oscillator Exp FM]
+[Chord Sequencer Pitch] ──> [Pad Chord Oscillator V/Oct]   (three voices)
+[Pad Root Oscillator Out] ──> [Mix In 1]
+[Pad Chord Oscillator Out] ──> [Mix In 2]                  (Sum Voices on)
 ```
 
-Sixteen bars of chords: Dm9, Bbmaj7, Fmaj7 and Cadd9 twice, then Gm7, Bb, Dm, C, Gm7, Bbmaj7, Csus4 and C. Four sequencers each take a step a bar. **Roots** plays the low voice, an octave down. The other three are the upper voices, and each one sings its own line through the changes, so the chords move by step instead of jumping in parallel. The four saws meet in a [Mix](../modules/utilities/mix.md), pass through one Ladder Filter, and duck under the kick in the Compressor. The Chorus spreads them into stereo.
+Sixteen bars of chords: Dm(add9), Bbmaj7, Fmaj7 and Cadd9 twice, then Gm7, Bbadd9, Dm, C, Gm7, Bbmaj7, Csus4 and C. A [Chord Sequencer](../modules/utilities/chord-sequencer.md) takes a step a bar, so changing a chord is one edit.
 
-The arpeggio and the bass are written over C, and **Roots** moves them to each chord through **Exp FM** at 1 octave per volt, as in [Afterglow](./afterglow.md). That only stays in key if the shapes have no third, so the arpeggio is made of roots, ninths and fifths, and the bass of roots, fifths and octaves. Over these roots, every note they play is in D minor.
+![The Chord Sequencer in the Harmony frame, playing Everything](../images/recipe-from-one-sine-harmony.png)
+*The harmony in Everything, on Gm7: the strip shows the pad's three voices, F, Bb and D. The steps name the chords, and the notches on the first Dm(add9) and the second Gm7 mark the two steps that name their top note.*
+
+Its **Root** output plays each chord's root on a saw of its own, an octave down. **Rootless** is on, so the three voices on its **Pitch** cable leave the root to that saw and play the 3rds, 7ths and 9ths above it. **Voice Leading** gives each chord the inversion nearest the one before, so the voices move by step instead of jumping in parallel. Two steps also set a **Top**, the chord tone they want on top. The opening Dm(add9) keeps its 9th, E, at the top of the pad, so every pass round starts from the same voicing. The second Gm7 puts D on top, so the line climbs back up after the C, where voice leading alone would sink to Bb.
+
+The voices all come out of one Oscillator, three saws on one cable. A Ladder Filter on that cable would filter each voice on its own, and drive each one less hard than the whole chord. So the root saw and the chord meet in a [Mix](../modules/utilities/mix.md) with **Sum Voices** on, which adds the three voices into one channel. Then one Ladder Filter drives the chord as a whole, the Compressor ducks it under the kick, and the Chorus spreads it into stereo.
+
+The arpeggio and the bass are written over C, and the **Root** moves them to each chord through **Exp FM** at 1 octave per volt, as in [Afterglow](./afterglow.md). That only stays in key if the shapes have no third, so the arpeggio is made of roots, ninths and fifths, and the bass of roots, fifths and octaves. Over these roots, every note they play is in D minor.
 
 ### The motif and the line
 
@@ -135,9 +146,9 @@ It's pattern **A** of the motif's [Step Sequencer](../modules/utilities/sequence
 
 | Pattern | Over | Notes | Its part in the line |
 |---------|------|-------|----------------------|
-| A | Dm9, Bbmaj7, Fmaj7, Cadd9 | A, D E / F, D / C, A C / G | The motif. It ends open, on the fifth of C |
+| A | Dm(add9), Bbmaj7, Fmaj7, Cadd9 | A, D E / F, D / C, A C / G | The motif. It ends open, on the fifth of C |
 | B | the same | A, F E / D, F / E, C A / C | The answer. It starts on the motif's note, leaps where the motif stepped, and comes to rest on C |
-| C | Gm7, Bb, Dm, C | D, G A / F, D / F, D F / E | The motif a fourth higher, and the top of the line |
+| C | Gm7, Bbadd9, Dm, C | D, G A / F, D / F, D F / E | The motif a fourth higher, and the top of the line |
 | D | Gm7, Bbmaj7, Csus4, C | G, F E / D, Bb / C, A C / G | Down the scale, and home on the motif's own last two bars, which lead back to A |
 
 ![The motif's Step Sequencer at the Lift, playing pattern C](../images/recipe-from-one-sine-line.png)
@@ -189,6 +200,10 @@ The sine, arpeggio, bells and sparkles share the Echoes mixer, whose send feeds 
 **A shorter song.** Set the Desk's **Loop to** to 9, the Groove, and Cues follows. The opening plays once, and then the song goes round from the groove to the end.
 
 **The line all through.** Pull the Line cable out of the motif sequencer's **Pattern**. Its Chain is A B C D, so the sine plays the whole line from the very first bar, and the breakdown remembers the answer, B, instead of the motif.
+
+**Other chords.** Right-click a step of the Chord Sequencer and pick another type: one edit, and the pad, the arpeggio and the bass all follow. Keep the roots, which the arpeggio and bass are tuned to. Dm9 on the first step adds a C to the opening, and Bbmaj9 on the second puts a C over the Bb.
+
+**Each voice through its own filter.** Switch off the pad Mix's **Sum Voices**. The Ladder then filters each voice on its own, and the pad comes out cleaner and about a decibel louder. The root saw now joins all three voices, so turn the Mix's **Level 1** down to a third (18%) to keep the bass where it was.
 
 **Remember something else.** Patch the Arp's VCA into the Looper's **In L** instead of the sine. The breakdown then hears the arpeggio, slowed and backwards.
 

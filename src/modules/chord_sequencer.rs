@@ -56,6 +56,7 @@ static BASS: StepNames = per_step!("Bass", "bass");
 static GATE: StepNames = per_step!("Gate", "gate");
 static VELOCITY: StepNames = per_step!("Velocity", "velocity");
 static TIE: StepNames = per_step!("Tie", "tie");
+static TOP: StepNames = per_step!("Top", "top");
 
 /// A kind of chord: its name and its tones.
 #[derive(Debug)]
@@ -80,7 +81,9 @@ const fn chord(label: &'static str, suffix: &'static str, tones: &'static [i32])
 /// above it: played that way it's the soft, suspended 11 of soul and jazz
 /// (C11 is a B♭ triad over C). The 13 leaves out the 11th for the same
 /// reason. Both are how keyboard players voice them.
-pub static CHORD_TYPES: [ChordType; 18] = [
+///
+/// New types go on the end: a patch stores a step's type by its place here.
+pub static CHORD_TYPES: [ChordType; 19] = [
     chord("maj", "", &[0, 4, 7]),
     chord("min", "m", &[0, 3, 7]),
     chord("7", "7", &[0, 4, 10, 7]),
@@ -99,11 +102,12 @@ pub static CHORD_TYPES: [ChordType; 18] = [
     chord("9", "9", &[0, 4, 10, 14, 7]),
     chord("11", "11", &[0, 10, 14, 17, 7]),
     chord("13", "13", &[0, 4, 10, 21, 14, 7]),
+    chord("madd9", "madd9", &[0, 3, 14, 7]),
 ];
 
 /// The Type dropdown's choices.
-static TYPE_LABELS: [&str; 18] = [
-    "maj", "min", "7", "maj7", "m7", "m7b5", "dim", "aug", "sus2", "sus4", "6", "m6", "add9", "maj9", "m9", "9", "11", "13",
+static TYPE_LABELS: [&str; 19] = [
+    "maj", "min", "7", "maj7", "m7", "m7b5", "dim", "aug", "sus2", "sus4", "6", "m6", "add9", "maj9", "m9", "9", "11", "13", "madd9",
 ];
 
 /// Note names as a lead sheet spells them: flats, except F#.
@@ -111,6 +115,9 @@ pub static NOTE_NAMES: [&str; 12] = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", 
 
 /// The Bass dropdown: the root itself, or a note to put under the chord.
 static BASS_LABELS: [&str; 13] = ["Root", "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+
+/// The Top dropdown: left to the voicing, or a chord tone to put on top.
+static TOP_LABELS: [&str; 13] = ["Auto", "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 
 /// How a chord's tones are spread over the keyboard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -156,6 +163,10 @@ pub struct ChordSpec {
     pub kind: usize,
     /// A pitch class (0 = C) to put under the chord, or `None` for the root.
     pub bass: Option<i32>,
+    /// A pitch class (0 = C) the voicing puts on top, or `None` to leave it
+    /// to the voicing. Ignored when the voicing can't: when it isn't one of
+    /// the tones the voicing keeps.
+    pub top: Option<i32>,
 }
 
 impl ChordSpec {
@@ -232,6 +243,17 @@ pub struct VoicingSettings {
     pub rootless: bool,
 }
 
+/// The tones a voicing of a chord keeps, as pitch classes (0 = C), in the
+/// order they stack up from the root as the chord is spelled: 3rd, 5th, 7th,
+/// 9th.
+pub fn kept_tones(spec: &ChordSpec, settings: &VoicingSettings) -> Vec<i32> {
+    let kind = &CHORD_TYPES[spec.kind.min(CHORD_TYPES.len() - 1)];
+    let (classes, k, _) = pitch_classes(kind, settings.voices.clamp(1, MAX_VOICES), settings.rootless);
+    let mut tones: Vec<i32> = kind.tones.iter().copied().filter(|t| classes[..k].contains(&t.rem_euclid(12))).collect();
+    tones.sort_unstable();
+    tones.iter().map(|t| (spec.root + t).rem_euclid(12)).collect()
+}
+
 /// The chord's pitch classes above its root (0..12), lowest first, after
 /// keeping as many tones as there are voices, and which of them the chord
 /// is built up from in root position: the root, or without one, the most
@@ -306,6 +328,10 @@ fn movement(from: &Chord, to: &Chord) -> (i32, i32) {
 /// from it, with its lowest note within a fifth of the Range octave, so a
 /// long progression can't wander off the keyboard.
 ///
+/// A step's Top narrows the choice to the inversions with that tone on top,
+/// as an arranger writes a pad's top line. In root position's place, it
+/// takes the one of them with its lowest note in the Range octave.
+///
 /// A semitone the lowest note strays outside the Range octave costs as much
 /// as a semitone of movement. Without that pull, the cheapest move each
 /// time can carry a looping progression up to the edge of its range and
@@ -324,7 +350,13 @@ pub fn voice_chord(spec: &ChordSpec, settings: &VoicingSettings, previous: Optio
         chord
     };
 
-    let home = placed(absolute(stack(classes, home, voices, settings.voicing)), floor);
+    let build = |start: usize, floor: i32| placed(absolute(stack(classes, start, voices, settings.voicing)), floor);
+    // Only inversions with the Top tone on top, if any of them has it there
+    let topped = |chord: &Chord| spec.top.is_none_or(|pc| chord.notes[chord.len - 1].rem_euclid(12) == pc);
+    let topped_home = std::iter::once(home).chain(0..k).map(|start| build(start, floor)).find(topped);
+    let fits = |chord: &Chord| topped_home.is_none() || topped(chord);
+
+    let home = topped_home.unwrap_or_else(|| build(home, floor));
     let Some(previous) = previous.filter(|p| p.len == voices) else {
         return home;
     };
@@ -340,7 +372,7 @@ pub fn voice_chord(spec: &ChordSpec, settings: &VoicingSettings, previous: Optio
     let mut best = home;
     let mut best_cost = cost_of(&home);
     for start in 0..k {
-        let inversion = placed(absolute(stack(classes, start, voices, settings.voicing)), floor - 5);
+        let inversion = build(start, floor - 5);
         // Each inversion twice, an octave apart, while its lowest note stays
         // within a fifth either side of the Range octave
         for octave in [0, 12] {
@@ -348,7 +380,7 @@ pub fn voice_chord(spec: &ChordSpec, settings: &VoicingSettings, previous: Optio
             for note in &mut candidate.notes[..voices] {
                 *note += octave;
             }
-            if candidate.notes[0] >= floor + 12 + 5 {
+            if candidate.notes[0] >= floor + 12 + 5 || !fits(&candidate) {
                 continue;
             }
             let cost = cost_of(&candidate);
@@ -449,6 +481,8 @@ impl ChordSequencer {
                 .describe("The octave the chord's lowest note sits in; 4 is middle C's"),
             ParameterDefinition::toggle("bass_voice", "Bass Voice", false)
                 .describe("Puts the bass note under the chord as the cables' first channel, so a slash chord sounds on one voice. The chord then leaves out its root first"),
+            ParameterDefinition::toggle("rootless", "Rootless", false)
+                .describe("The chord leaves out its root first, for a bass playing it from the Root or Bass output. Always so with Bass Voice on"),
         ];
 
         // A progression to start from: Cmaj7, Am7, Fmaj7, G7, the bass
@@ -473,6 +507,10 @@ impl ChordSequencer {
             parameters.push(
                 ParameterDefinition::toggle(TIE.1[step], TIE.0[step], false)
                     .describe("Holds this chord into the next step, which changes to its own chord without a new attack"),
+            );
+            parameters.push(
+                ParameterDefinition::choice(TOP.1[step], TOP.0[step], &TOP_LABELS, 0)
+                    .describe("A chord tone to put on top of the voicing, as an arranger writes a pad's top line; Auto leaves it to the voicing"),
             );
         }
 
@@ -514,8 +552,9 @@ impl ChordSequencer {
     pub const PARAM_VOICES: usize = 5;
     pub const PARAM_RANGE: usize = 6;
     pub const PARAM_BASS_VOICE: usize = 7;
-    const STEP_PARAMS: usize = 8;
-    const PER_STEP: usize = 6;
+    pub const PARAM_ROOTLESS: usize = 8;
+    const STEP_PARAMS: usize = 9;
+    const PER_STEP: usize = 7;
 
     pub const fn step_root_param(step: usize) -> usize {
         Self::STEP_PARAMS + step * Self::PER_STEP
@@ -535,6 +574,9 @@ impl ChordSequencer {
     pub const fn step_tie_param(step: usize) -> usize {
         Self::step_root_param(step) + 5
     }
+    pub const fn step_top_param(step: usize) -> usize {
+        Self::step_root_param(step) + 6
+    }
 
     /// The readout: the step playing, then each channel's MIDI note (-1
     /// past the last channel).
@@ -547,10 +589,12 @@ impl ChordSequencer {
     /// A step's chord, as its parameters write it.
     pub fn spec(params: &[f32], step: usize) -> ChordSpec {
         let bass = params[Self::step_bass_param(step)].round() as i32;
+        let top = params[Self::step_top_param(step)].round() as i32;
         ChordSpec {
             root: params[Self::step_root_param(step)].round().clamp(0.0, 127.0) as i32,
             kind: (params[Self::step_type_param(step)].round().max(0.0) as usize).min(CHORD_TYPES.len() - 1),
             bass: (1..=12).contains(&bass).then(|| bass - 1),
+            top: (1..=12).contains(&top).then(|| top - 1),
         }
     }
 
@@ -562,7 +606,7 @@ impl ChordSequencer {
             voicing: Voicing::from_param(params[Self::PARAM_VOICING]),
             voices,
             range: params[Self::PARAM_RANGE].round() as i32,
-            rootless: bass_voice,
+            rootless: bass_voice || params[Self::PARAM_ROOTLESS] > 0.5,
         };
         (settings, bass_voice)
     }
@@ -658,7 +702,7 @@ impl ChordSequencer {
 
 impl Sounding {
     const SILENT: Sounding = Sounding {
-        spec: ChordSpec { root: -1, kind: 0, bass: None },
+        spec: ChordSpec { root: -1, kind: 0, bass: None, top: None },
         settings: VoicingSettings { voicing: Voicing::Close, voices: 0, range: 0, rootless: false },
         bass_voice: false,
         chord: Chord { notes: [0; MAX_VOICES], len: 0 },
@@ -863,7 +907,7 @@ mod tests {
     }
 
     fn spec(root: i32, kind: usize, bass: Option<i32>) -> ChordSpec {
-        ChordSpec { root, kind, bass }
+        ChordSpec { root, kind, bass, top: None }
     }
 
     fn close(voices: usize, range: i32) -> VoicingSettings {
@@ -952,13 +996,15 @@ mod tests {
         let ids: Vec<_> = seq.ports().iter().map(|p| p.id).collect();
         assert_eq!(ids, ["clock", "reset", "run", "pitch", "gate", "velocity", "root", "bass", "eoc"]);
         let params = seq.parameters();
-        assert_eq!(params.len(), 8 + 6 * MAX_STEPS);
+        assert_eq!(params.len(), 9 + 7 * MAX_STEPS);
         assert_eq!(params[ChordSequencer::PARAM_BASS_VOICE].id, "bass_voice");
+        assert_eq!(params[ChordSequencer::PARAM_ROOTLESS].id, "rootless");
         assert_eq!(params[ChordSequencer::step_root_param(0)].name, "Step 1 Root");
         assert_eq!(params[ChordSequencer::step_type_param(15)].name, "Step 16 Type");
         assert_eq!(params[ChordSequencer::step_bass_param(2)].id, "step_3_bass");
         assert_eq!(params[ChordSequencer::step_tie_param(15)].id, "step_16_tie");
-        assert_eq!(params.last().unwrap().id, "step_16_tie");
+        assert_eq!(params[ChordSequencer::step_top_param(4)].id, "step_5_top");
+        assert_eq!(params.last().unwrap().id, "step_16_top");
         assert_eq!(TYPE_LABELS.len(), CHORD_TYPES.len());
         for (label, kind) in TYPE_LABELS.iter().zip(&CHORD_TYPES) {
             assert_eq!(*label, kind.label);
@@ -1031,6 +1077,95 @@ mod tests {
         let wide = VoicingSettings { voices: 5, ..rootless };
         let chord = voice_chord(&spec(48, MAJ9, None), &wide, None);
         assert!(chord.notes().iter().any(|n| n % 12 == 0));
+    }
+
+    #[test]
+    fn rootless_knob_leaves_the_root_to_a_bass_elsewhere() {
+        let mut params = params_with(&[(50, kind("madd9"))]);
+        params[ChordSequencer::PARAM_VOICES] = 3.0;
+        params[ChordSequencer::PARAM_RANGE] = 4.0;
+        assert!(!ChordSequencer::settings(&params, 3).0.rootless);
+        params[ChordSequencer::PARAM_ROOTLESS] = 1.0;
+        let (settings, bass_voice) = ChordSequencer::settings(&params, 3);
+        assert!(settings.rootless && !bass_voice);
+        // Dm(add9) without its D: F A E, the 9th on top
+        assert_eq!(voice_chord(&ChordSequencer::spec(&params, 0), &settings, None).notes(), [65, 69, 76]);
+        // Bass Voice leaves the root out whatever the knob says
+        params[ChordSequencer::PARAM_ROOTLESS] = 0.0;
+        params[ChordSequencer::PARAM_BASS_VOICE] = 1.0;
+        assert!(ChordSequencer::settings(&params, 4).0.rootless);
+    }
+
+    #[test]
+    fn minor_add9_is_a_minor_triad_with_a_9th_and_no_7th() {
+        let dm_add9 = spec(50, kind("madd9"), None);
+        assert_eq!(dm_add9.name(), "Dmadd9");
+        assert_eq!(voice_chord(&dm_add9, &close(4, 3), None).notes(), [50, 52, 53, 57]);
+        // With three voices the 5th goes first
+        assert_eq!(voice_chord(&dm_add9, &close(3, 3), None).notes(), [50, 52, 53]);
+    }
+
+    #[test]
+    fn top_puts_its_tone_on_top_in_the_range_octave() {
+        let topped = |top| ChordSpec { top: Some(top), ..spec(48, MAJ, None) };
+        // C major, E on top: G C E, its lowest note in the Range octave
+        assert_eq!(voice_chord(&topped(4), &close(3, 4), None).notes(), [67, 72, 76]);
+        assert_eq!(voice_chord(&topped(7), &close(3, 4), None).notes(), [60, 64, 67]);
+        assert_eq!(voice_chord(&topped(0), &close(3, 4), None).notes(), [64, 67, 72]);
+        // Open and spread voicings too
+        for voicing in [Voicing::Open, Voicing::Spread] {
+            let settings = VoicingSettings { voicing, ..close(4, 3) };
+            for pc in [0, 4, 7, 11] {
+                let chord = voice_chord(&ChordSpec { top: Some(pc), ..spec(48, MAJ7, None) }, &settings, None);
+                let top = chord.notes()[chord.len - 1];
+                if top % 12 != pc {
+                    // Only when no inversion of this voicing can
+                    let any = (0..4).any(|start| stack(&[0, 4, 7, 11], start, 4, voicing).notes()[3] % 12 == pc);
+                    assert!(!any, "{voicing:?}: {pc} on top of {:?}", chord.notes());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn top_narrows_voice_leading_to_its_inversions() {
+        let settings = close(3, 4);
+        // From C E G, voice leading keeps C on the bottom: B D G for G major
+        let c = voice_chord(&spec(48, MAJ, None), &settings, None);
+        assert_eq!(c.notes(), [60, 64, 67]);
+        let led = voice_chord(&spec(43, MAJ, None), &settings, Some(&c));
+        assert_eq!(led.notes(), [59, 62, 67]);
+        // With D on top it takes G B D, the nearest that has it there
+        let topped = voice_chord(&ChordSpec { top: Some(2), ..spec(43, MAJ, None) }, &settings, Some(&c));
+        assert_eq!(topped.notes(), [55, 59, 62]);
+    }
+
+    #[test]
+    fn a_top_the_chord_doesnt_keep_is_ignored() {
+        let settings = close(3, 4);
+        // Cmaj7 in three voices leaves its G out: G on top can't be had
+        let plain = voice_chord(&spec(48, MAJ7, None), &settings, None);
+        let topped = voice_chord(&ChordSpec { top: Some(7), ..spec(48, MAJ7, None) }, &settings, None);
+        assert_eq!(plain, topped);
+        // Nor a note outside the chord
+        let led = voice_chord(&ChordSpec { top: Some(1), ..spec(53, MAJ, None) }, &settings, Some(&plain));
+        assert_eq!(led, voice_chord(&spec(53, MAJ, None), &settings, Some(&plain)));
+    }
+
+    #[test]
+    fn kept_tones_stack_up_from_the_root() {
+        let rootless = VoicingSettings { rootless: true, ..close(3, 4) };
+        assert_eq!(kept_tones(&spec(50, kind("madd9"), None), &rootless), [5, 9, 4]);
+        assert_eq!(kept_tones(&spec(48, MAJ7, None), &close(3, 4)), [0, 4, 11]);
+        assert_eq!(kept_tones(&spec(48, MAJ7, None), &close(4, 4)), [0, 4, 7, 11]);
+    }
+
+    #[test]
+    fn a_step_reads_its_top() {
+        let mut params = params_with(&[(48, MAJ)]);
+        assert_eq!(ChordSequencer::spec(&params, 0).top, None);
+        params[ChordSequencer::step_top_param(0)] = 5.0;
+        assert_eq!(ChordSequencer::spec(&params, 0).top, Some(4));
     }
 
     #[test]

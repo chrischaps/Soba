@@ -187,6 +187,11 @@
               "name": "Level 4",
               "type": "Number",
               "value": 1.0
+            },
+            {
+              "name": "Sum Voices",
+              "type": "Toggle",
+              "value": false
             }
           ],
           "pinned": {

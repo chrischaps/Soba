@@ -5,6 +5,10 @@
 //! colours into one VCA, a pad's oscillators into one filter. Audio and
 //! control both patch in, so the same module mixes sound or modulation.
 //!
+//! A polyphonic cable stays one, each voice its own sum, unless Sum Voices
+//! adds its voices together too: a chord's saws into one filter that drives
+//! them as one sound, the way four oscillators into one filter do.
+//!
 //! For placing sounds left and right, sending them to a shared reverb, or
 //! muting and soloing them as you play, use the Mixer.
 
@@ -14,7 +18,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    signal::SignalBuffer,
+    signal::{SignalBuffer, MAX_CHANNELS},
     smoothed_value::SmoothedValue,
     ParameterDisplay, SignalType,
 };
@@ -39,9 +43,9 @@ pub const INPUTS: usize = 4;
 /// # Parameters
 ///
 /// - **Level 1** to **Level 4** (0 to 1): Each input's level. Default 1.
-///
-/// Run polyphonically, so a polyphonic cable stays one, each voice its own
-/// sum.
+/// - **Sum Voices** (toggle): Adds a polyphonic cable's voices into one
+///   channel too. Off, a polyphonic cable stays one, each voice its own sum,
+///   and a mono input joins every voice.
 pub struct Mix {
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
@@ -71,10 +75,16 @@ impl Mix {
                 level("level2", "Level 2", "How much of In 2 joins the sum"),
                 level("level3", "Level 3", "How much of In 3 joins the sum"),
                 level("level4", "Level 4", "How much of In 4 joins the sum"),
+                ParameterDefinition::toggle("sum_voices", "Sum Voices", false)
+                    .describe("Adds a chord's voices into one sound as well; off, each voice of a polyphonic cable is mixed on its own"),
             ],
             levels: std::array::from_fn(|_| SmoothedValue::with_default_smoothing(1.0, sample_rate)),
         }
     }
+}
+
+impl Mix {
+    const PARAM_SUM_VOICES: usize = INPUTS;
 }
 
 impl Default for Mix {
@@ -119,23 +129,49 @@ impl DspModule for Mix {
             return;
         };
         let n = context.block_size.min(out.samples.len());
-        let out = &mut out.samples[..n];
-        out.fill(0.0);
+        let sum_voices = params[Self::PARAM_SUM_VOICES] > 0.5;
+        let patched: [Option<&SignalBuffer>; INPUTS] =
+            std::array::from_fn(|k| connected_input(inputs, k).filter(|buf| buf.samples.len() >= n));
 
-        for (k, level) in self.levels.iter_mut().enumerate() {
+        // A voice per channel of the widest input, or one for them all
+        let widest = patched.iter().flatten().map(|input| input.channels()).max().unwrap_or(1);
+        let channels = if sum_voices { 1 } else { widest.min(out.max_channels()).min(MAX_CHANNELS) };
+        out.set_channels(channels);
+        for channel in 0..channels {
+            out.channel_mut(channel)[..n].fill(0.0);
+        }
+
+        for ((k, level), input) in self.levels.iter_mut().enumerate().zip(patched) {
             level.set_target(params[k]);
-            let Some(input) = connected_input(inputs, k).filter(|buf| buf.samples.len() >= n) else {
+            let Some(input) = input else {
                 // Unpatched: the knob is simply where it was left
                 level.reset(level.target());
                 continue;
             };
-            for (sum, &x) in out.iter_mut().zip(&input.samples[..n]) {
-                *sum += x * level.next().clamp(0.0, 1.0);
+            let voices = input.channels();
+            for i in 0..n {
+                let gain = level.next().clamp(0.0, 1.0);
+                if sum_voices {
+                    let sum: f32 = (0..voices).map(|v| input.voice(v).samples[i]).sum();
+                    out.samples[i] += sum * gain;
+                    continue;
+                }
+                // A mono input joins every voice; a narrower cable leaves the rest
+                for channel in 0..channels {
+                    let x = match channel {
+                        _ if voices == 1 => input.samples[i],
+                        c if c < voices => input.voice(c).samples[i],
+                        _ => continue,
+                    };
+                    out.channel_mut(channel)[i] += x * gain;
+                }
             }
         }
 
-        for sample in out.iter_mut() {
-            *sample = soft_clip(*sample);
+        for channel in 0..channels {
+            for sample in &mut out.channel_mut(channel)[..n] {
+                *sample = soft_clip(*sample);
+            }
         }
     }
 
@@ -143,6 +179,10 @@ impl DspModule for Mix {
         for level in &mut self.levels {
             level.reset(level.target());
         }
+    }
+
+    fn polyphonic(&self) -> bool {
+        true
     }
 }
 
@@ -160,7 +200,7 @@ mod tests {
 
     /// Runs `blocks` blocks with `patched` laid on the inputs by index (the
     /// rest unpatched), returning the last sample of Out.
-    fn run(mix: &mut Mix, patched: &[(usize, &SignalBuffer)], params: &[f32; INPUTS], blocks: usize) -> f32 {
+    fn run(mix: &mut Mix, patched: &[(usize, &SignalBuffer)], levels: &[f32; INPUTS], blocks: usize) -> f32 {
         let empty = SignalBuffer::unconnected(BLOCK, SignalType::Audio);
         let mut inputs: Vec<&SignalBuffer> = vec![&empty; INPUTS];
         for &(port, buf) in patched {
@@ -168,10 +208,53 @@ mod tests {
         }
         let mut out = vec![SignalBuffer::audio(BLOCK)];
         let ctx = ProcessContext::new(44100.0, BLOCK);
+        let params = [levels[0], levels[1], levels[2], levels[3], 0.0];
         for _ in 0..blocks {
-            mix.process(&inputs, &mut out, params, &ctx);
+            mix.process(&inputs, &mut out, &params, &ctx);
         }
         out[0].samples[BLOCK - 1]
+    }
+
+    /// A polyphonic cable carrying `values`, one constant per channel.
+    fn chord(values: &[f32]) -> SignalBuffer {
+        let mut buf = SignalBuffer::polyphonic(BLOCK, SignalType::Audio);
+        buf.set_channels(values.len());
+        for (channel, &value) in values.iter().enumerate() {
+            buf.channel_mut(channel).fill(value);
+        }
+        buf
+    }
+
+    /// One block of a bass on In 1 and a three-note chord on In 2, at the
+    /// given levels, with Sum Voices `sum`: each channel of Out.
+    fn bass_and_chord(sum: bool) -> Vec<f32> {
+        let mut mix = Mix::new();
+        mix.prepare(44100.0, BLOCK);
+        let (bass, notes) = (constant(0.1), chord(&[0.2, 0.3, 0.4]));
+        let empty = SignalBuffer::unconnected(BLOCK, SignalType::Audio);
+        let inputs = [&bass, &notes, &empty, &empty];
+        let mut out = vec![SignalBuffer::polyphonic(BLOCK, SignalType::Audio)];
+        let params = [1.0, 0.5, 1.0, 1.0, if sum { 1.0 } else { 0.0 }];
+        mix.process(&inputs, &mut out, &params, &ProcessContext::new(44100.0, BLOCK));
+        (0..out[0].channels()).map(|c| out[0].voice(c).samples[BLOCK - 1]).collect()
+    }
+
+    #[test]
+    fn test_a_chord_stays_a_chord_with_the_bass_in_every_voice() {
+        let voices = bass_and_chord(false);
+        let expected = [0.1 + 0.1, 0.1 + 0.15, 0.1 + 0.2];
+        assert_eq!(voices.len(), 3);
+        for (got, want) in voices.iter().zip(expected) {
+            assert!((got - want).abs() < 1e-6, "{voices:?}");
+        }
+    }
+
+    #[test]
+    fn test_sum_voices_adds_a_chord_into_one_channel() {
+        // The bass once, and the chord's three notes at their level
+        let voices = bass_and_chord(true);
+        assert_eq!(voices.len(), 1);
+        assert!((voices[0] - (0.1 + 0.5 * 0.9)).abs() < 1e-6, "{voices:?}");
     }
 
     #[test]
@@ -181,7 +264,9 @@ mod tests {
         assert_eq!(mix.info().category, ModuleCategory::Utility);
         let names: Vec<_> = mix.ports().iter().map(|p| p.name).collect();
         assert_eq!(names, ["In 1", "In 2", "In 3", "In 4", "Out"]);
-        assert!(mix.parameters().iter().all(|p| p.default == 1.0));
+        assert!(mix.parameters()[..INPUTS].iter().all(|p| p.default == 1.0));
+        assert_eq!(mix.parameters()[Mix::PARAM_SUM_VOICES].name, "Sum Voices");
+        assert!(mix.polyphonic());
     }
 
     #[test]

@@ -1,4 +1,4 @@
-//! Naming a chord from the notes of a hand: which root, which of the 18
+//! Naming a chord from the notes of a hand: which root, which of the 19
 //! types, and which note is under it.
 //!
 //! Every root and type is tried against the notes heard, and each is charged
@@ -126,6 +126,7 @@ pub fn recognise(notes: &[i32]) -> Option<Heard> {
                 root: lowest + (root - bass).rem_euclid(12),
                 kind,
                 bass: (under != 0).then_some(bass),
+                top: None,
             };
             let missing = unheard & !shape.optional;
             best = Some((rank, Heard { spec, extra: rotate(extra, -root), missing: rotate(missing, -root) }));
@@ -171,7 +172,7 @@ mod tests {
             for root in 48..60 {
                 let notes = played(root, kind, 0);
                 let heard = recognise(&notes).unwrap();
-                assert_eq!(heard.spec, ChordSpec { root, kind, bass: None }, "{notes:?}");
+                assert_eq!(heard.spec, ChordSpec { root, kind, bass: None, top: None }, "{notes:?}");
                 assert!(heard.exact());
             }
         }
@@ -213,7 +214,7 @@ mod tests {
             for root in 48..60 {
                 let notes: Vec<i32> = CHORD_TYPES[kind].tones.iter().filter(|&&t| t != 7).map(|&t| root + t).collect();
                 let heard = recognise(&notes).unwrap();
-                assert_eq!(heard.spec, ChordSpec { root, kind, bass: None }, "{notes:?} → {}", heard.spec.name());
+                assert_eq!(heard.spec, ChordSpec { root, kind, bass: None, top: None }, "{notes:?} → {}", heard.spec.name());
                 assert!(heard.exact());
             }
         }
@@ -270,7 +271,7 @@ mod tests {
         assert_eq!(pitch_classes(heard.missing).collect::<Vec<_>>(), [9]);
         // Two notes are a chord with the rest missing
         let heard = recognise(&[48, 55]).unwrap();
-        assert_eq!(heard.spec, ChordSpec { root: 48, kind: 0, bass: None });
+        assert_eq!(heard.spec, ChordSpec { root: 48, kind: 0, bass: None, top: None });
         assert_eq!(pitch_classes(heard.missing).collect::<Vec<_>>(), [4]);
     }
 

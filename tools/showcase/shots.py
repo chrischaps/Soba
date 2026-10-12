@@ -33,11 +33,11 @@ OUT = ROOT / "target" / "showcase"
 SHOTS = {}
 
 
-def shot(patch, ppp=1.55, fps=60, crf=0, preset="ultrafast"):
+def shot(patch, ppp=1.55, fps=60, crf=0, preset="ultrafast", size="1920x1080"):
     """Registers a shot function that fills in a Script. A long shot wants a
     crf: lossless 1080p is about 20 MB a second at 30 fps."""
     def register(fn):
-        SHOTS[fn.__name__.replace("_", "-")] = (fn, patch, ppp, fps, crf, preset)
+        SHOTS[fn.__name__.replace("_", "-")] = (fn, patch, ppp, fps, crf, preset, size)
         return fn
     return register
 
@@ -349,8 +349,33 @@ def from_one_sine_line(s):
     s.at(0.1, "end")
 
 
+@shot("patches/from-one-sine.json", ppp=1.0, fps=30, size="1620x1396")
+def from_one_sine_whole(s):
+    """The recipe's picture: the whole rack at the drop, Everything playing.
+    Crop the toolbar and status bar off: 43 points at the top, 21 below."""
+    # In this window the editor's centre is 666 points below patch y = 0
+    t = u(23)
+    c = (810.0, 666.0)
+    (x, y), zoom = (2962, 2425), 0.26
+    s.at(-t, "play").at(-t, f"camera {-(x - c[0]) * zoom:.1f} {-(y - c[1]) * zoom:.1f} {zoom} 0.05")
+    s.at(0.0, "still from-one-sine")
+    s.at(0.1, "end")
+
+
+@shot("patches/from-one-sine.json", ppp=1.0, fps=30)
+def from_one_sine_harmony(s):
+    """A still for the recipe: the Chord Sequencer playing Everything's
+    chords. Crop it to the Harmony frame."""
+    t = u(23)
+    c = (960.0, 508.0)
+    (x, y), zoom = (194, 1479), 1.6
+    s.at(-t, "play").at(-t, f"camera {-(x - c[0]) * zoom:.1f} {-(y - c[1]) * zoom:.1f} {zoom} 0.05")
+    s.at(0.0, "still from-one-sine-harmony")
+    s.at(0.1, "end")
+
+
 def run(name, script_only=False, preview=False):
-    fn, patch, ppp, fps, crf, preset = SHOTS[name]
+    fn, patch, ppp, fps, crf, preset, size = SHOTS[name]
     s = Script()
     fn(s)
     if preview:
@@ -369,7 +394,7 @@ def run(name, script_only=False, preview=False):
         old.unlink()
     print(f"filming {name} ...", flush=True)
     subprocess.run([str(EXE), str(ROOT / patch), "--capture", str(script), "--out", str(out), "--ppp", str(ppp),
-                    "--fps", str(fps), "--crf", str(crf), "--preset", preset],
+                    "--fps", str(fps), "--crf", str(crf), "--preset", preset, "--size", size],
                    check=True, cwd=ROOT)
     from PIL import Image
     for ppm in out.glob("*.ppm"):
