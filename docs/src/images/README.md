@@ -24,6 +24,12 @@ Screenshots for the manual. This file isn't part of the book; it's a note for wh
 - Keep each PNG under about 400 KB, and full-window shots no wider than 1600 px.
 - Recapture a module's shot whenever its ports, knobs or display change. A screenshot that disagrees with the table under it is worse than none.
 
+## Re-shooting recipe images
+
+`python tools/showcase/recipe_images.py` films every example that has a `recipe-<page>.png` and writes it again (name examples to do only those, or a new one). It plays the patch for two seconds, frames it with the capture's `fit` cue, crops to its modules, frames and notes with a little grid around, and saves it 1594 px wide in a 256-colour palette. `--check` writes nothing and lists the pictures that no longer match the build. Build into `target/capture` first (see `tools/showcase/shots.py`).
+
+`recipe-from-one-sine-harmony.png` and `recipe-from-one-sine-line.png` show the song mid-performance, so they're shot by hand.
+
 ## Wanted
 
 - `interface-module-menu.png`: a module's right-click menu (Duplicate, Copy, Bypass, Reset to defaults, Delete), for the Interface Overview's "The module menu" section.

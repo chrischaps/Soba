@@ -39,6 +39,8 @@ pub(super) enum Target {
 pub(super) struct Glide {
     target: Target,
     started: f64,
+    /// How long it takes, in seconds: 0 cuts straight there.
+    seconds: f64,
     from_zoom: f32,
     /// The patch point that was in the middle of the view.
     from_middle: Pos2,
@@ -117,6 +119,12 @@ impl SynthApp {
 
     /// Sets the view gliding to frame `target`.
     pub(super) fn start_glide(&mut self, ctx: &egui::Context, target: Target) {
+        self.start_glide_over(ctx, target, GLIDE_SECONDS);
+    }
+
+    /// Sets the view gliding to frame `target` over `seconds`, or cutting
+    /// straight there for 0: a capture's `fit` cue.
+    pub(super) fn start_glide_over(&mut self, ctx: &egui::Context, target: Target, seconds: f64) {
         if !self.editor_rect.is_positive() {
             return;
         }
@@ -124,6 +132,7 @@ impl SynthApp {
         self.glide = Some(Glide {
             target,
             started: ctx.input(|i| i.time),
+            seconds,
             from_zoom: self.graph_state.pan_zoom.zoom,
             from_middle: self.screen_to_patch(at),
             left: None,
@@ -151,7 +160,7 @@ impl SynthApp {
         let view = self.editor_rect.size();
         let closest = if glide.target == Target::All { ALL_ZOOM } else { SELECTION_ZOOM };
         let to_zoom = zoom_to_fit(bounds.size(), room(view), closest);
-        let t = ((ui.input(|i| i.time) - glide.started) / GLIDE_SECONDS) as f32;
+        let t = if glide.seconds > 0.0 { ((ui.input(|i| i.time) - glide.started) / glide.seconds) as f32 } else { 1.0 };
         let e = ease(t);
         // Zoom eases by ratio, so zooming far out doesn't rush its start
         let zoom = glide.from_zoom * (to_zoom / glide.from_zoom).powf(e);

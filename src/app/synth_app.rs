@@ -527,6 +527,7 @@ impl SynthApp {
                 }
                 CaptureAction::InputFile(name) => self.user_state.audio_input_name = Some(name),
                 CaptureAction::Layout(path) => self.write_layout(ctx, &path),
+                CaptureAction::Fit(seconds) => self.start_glide_over(ctx, framing::Target::All, seconds),
                 CaptureAction::SetParam { module, nth, input, value } => {
                     match find_input(&self.graph_state.graph, &module, nth, &input) {
                         Some(id) => self.graph_state.graph.inputs[id].value.set_actual_value(value),
@@ -577,7 +578,17 @@ impl SynthApp {
                 Annotation::Note(note) => notes.push(serde_json::json!({ "text": note.text, "rect": patch_rect(rect) })),
             }
         }
-        let layout = serde_json::json!({ "modules": modules, "frames": frames, "notes": notes });
+        // Where the view was: a patch point p is drawn at `origin + p * zoom`
+        // screen points, and a screen point is `ppp` pixels
+        let origin = self.editor_rect.min - to_patch(self.editor_rect.min).to_vec2() * zoom;
+        let editor = self.editor_rect;
+        let view = serde_json::json!({
+            "ppp": ctx.pixels_per_point(),
+            "zoom": zoom,
+            "origin": [origin.x, origin.y],
+            "editor": [editor.min.x, editor.min.y, editor.max.x, editor.max.y],
+        });
+        let layout = serde_json::json!({ "modules": modules, "frames": frames, "notes": notes, "view": view });
         let json = serde_json::to_string_pretty(&layout).unwrap_or_default();
         if let Err(e) = std::fs::write(path, json) {
             eprintln!("capture: couldn't write {}: {}", path.display(), e);
@@ -1754,8 +1765,9 @@ impl SynthApp {
                     self.fit_level(ui);
                 }
                 self.follow_gestures(ui, editor_rect);
-                // A capture script moves the view like a camera
-                if let Some(capture) = self.capture.as_mut() {
+                // A capture script moves the view like a camera, from where
+                // a `fit` lands once it has
+                if let Some(capture) = self.capture.as_mut().filter(|_| self.glide.is_none()) {
                     let zoom = capture.take_zoom();
                     if zoom != 1.0 {
                         self.graph_state.zoom(ui, zoom);

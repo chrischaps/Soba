@@ -49,13 +49,16 @@
 //! 3.5  wheel 240 ctrl               # ...with Ctrl held, which zooms
 //! 4.0  view 120 -40 2.0             # pan the graph to an offset over 2 s
 //! 4.0  zoom 1.4 2.0                 # zoom the graph by a factor over 2 s
+//! 4.0  fit                          # frame the whole level, as F does
+//! 4.0  fit 1.5                      # ...gliding there over 1.5 s
 //! 4.0  camera -300 0 0.5 3.0        # move a virtual camera: the view as
-//!                                   # first framed, scaled 0.5 about the
-//!                                   # centre and shifted (-300, 0), over 3 s
+//!                                   # first framed (or last fitted), scaled
+//!                                   # 0.5 about the centre and shifted
+//!                                   # (-300, 0), over 3 s
 //! 5.0  still filter-opens           # save this frame as filter-opens.ppm
 //! 5.0  layout voice                 # save where each module, frame and
-//!                                   # note is drawn, in patch space, as
-//!                                   # voice.json
+//!                                   # note is drawn, in patch space, and
+//!                                   # where the view is, as voice.json
 //! 5.0  input voice.wav              # Audio Input modules hear this WAV
 //!                                   # from now on, in place of a device
 //! 9.0  end
@@ -156,6 +159,8 @@ enum Cue {
     View { pan: Vec2, dur: f64 },
     Zoom { factor: f32, dur: f64 },
     Camera { offset: Vec2, scale: f32, dur: f64 },
+    /// Frame the whole level, over this many seconds.
+    Fit(f64),
     Still(String),
     /// Save where the modules are drawn, under this name.
     Layout(String),
@@ -176,6 +181,8 @@ pub enum CaptureAction {
     InputFile(String),
     /// Write where each module is drawn, in patch space, to this file.
     Layout(PathBuf),
+    /// Frame the whole level, over this many seconds (0 cuts).
+    Fit(f64),
 }
 
 /// A value easing from one point to another over a span of time.
@@ -274,9 +281,9 @@ pub struct Capture {
     pan_glide: Option<Glide<Vec2>>,
     /// Zoom still to apply: (log of the factor left, frames left).
     zoom_left: Option<(f32, f64, f64)>,
-    /// The virtual camera, relative to the view when it was first moved:
-    /// the screen is scaled by `scale` about the editor's centre, then
-    /// shifted by `offset` points.
+    /// The virtual camera, relative to the view when it was first moved
+    /// or last fitted: the screen is scaled by `scale` about the editor's
+    /// centre, then shifted by `offset` points.
     camera: (f32, Vec2),
     camera_glide: Option<CameraGlide>,
     /// Pan to add this frame, from the camera.
@@ -524,6 +531,14 @@ impl Capture {
                         dur: dur.max(self.dt()),
                     });
                 }
+                Cue::Fit(dur) => {
+                    // Camera moves from here on are from the fitted view
+                    self.camera = (1.0, Vec2::ZERO);
+                    self.camera_glide = None;
+                    self.pending_pan_delta = Vec2::ZERO;
+                    self.pending_zoom = 1.0;
+                    self.actions.push(CaptureAction::Fit(dur));
+                }
                 Cue::Zoom { factor, dur } => {
                     self.zoom_left = Some((factor.ln(), at, dur.max(self.dt())));
                 }
@@ -566,7 +581,9 @@ impl Capture {
             // This frame's share of the zoom, eased
             let p0 = ease(((self.time() - start) / dur).clamp(0.0, 1.0) as f32);
             let p1 = ease(((t - start) / dur).clamp(0.0, 1.0) as f32);
-            self.pending_zoom *= (log_factor * (p1 - p0)).exp();
+            let r = (log_factor * (p1 - p0)).exp();
+            self.pending_zoom *= r;
+            self.pending_pan_delta *= r;
             if p1 >= 1.0 {
                 self.zoom_left = None;
             }
@@ -578,7 +595,9 @@ impl Capture {
             let (scale, offset) = glide.at(t);
             let r = scale / self.camera.0;
             self.pending_zoom *= r;
-            self.pending_pan_delta += offset - self.camera.1 * r;
+            // Pan still waiting (the app holds the camera while a fit
+            // glides) is scaled by the zoom, as it would have been
+            self.pending_pan_delta = self.pending_pan_delta * r + offset - self.camera.1 * r;
             self.camera = (scale, offset);
             if glide.progress(t) >= 1.0 {
                 self.camera_glide = None;
@@ -914,6 +933,7 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
                 scale: num(4)? as f32,
                 dur: opt(5)?,
             })),
+            "fit" => cues.push((t, Cue::Fit(opt(2)?))),
             "still" => cues.push((t, Cue::Still(words.get(2).ok_or_else(|| err("missing name"))?.to_string()))),
             "layout" => cues.push((t, Cue::Layout(words.get(2).ok_or_else(|| err("missing name"))?.to_string()))),
             "input" => cues.push((t, Cue::Input(PathBuf::from(words.get(2).ok_or_else(|| err("missing file"))?)))),
@@ -955,6 +975,13 @@ mod tests {
         assert!((ticks[1] - ticks[0] - 1.0 / 48.0).abs() < 1e-12);
         assert!(matches!(cues[0].1, Cue::Midi(MidiEvent::Start)));
         assert!(parse_script("0 midi pause\n1 end").is_err());
+    }
+
+    #[test]
+    fn fit_cuts_unless_given_a_length() {
+        let cues = parse_script("0.0 fit\n1.0 fit 1.5\n2 end").unwrap();
+        assert!(matches!(cues[0].1, Cue::Fit(d) if d == 0.0));
+        assert!(matches!(cues[1].1, Cue::Fit(d) if d == 1.5));
     }
 
     #[test]

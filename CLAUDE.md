@@ -148,7 +148,7 @@ CARGO_TARGET_DIR=target/capture cargo build --release
 python tools/showcase/check_layout.py   # modules inside their frames, clear of notes and each other
 ```
 
-Fix any example it flags by growing the frame or moving its neighbours, and re-shoot that example's recipe image (`docs/src/images/recipe-<name>.png`). A face change that keeps the size can still leave recipe images stale, so look at the ones that show the module.
+Fix any example it flags by growing the frame or moving its neighbours. Then re-shoot the recipe images: `python tools/showcase/recipe_images.py --check` lists the stale ones (a face change that keeps the size leaves them stale too), and `python tools/showcase/recipe_images.py <name...>` re-shoots them.
 
 ### 5. Commit the Changes
 
@@ -220,6 +220,10 @@ python tools/showcase/shots.py from-one-sine     # the whole 4:41 song, ~10 min 
 # After a module grows: are every example's modules still inside their frames,
 # clear of notes and of each other? (Re-shoot the recipe images it flags)
 python tools/showcase/check_layout.py
+# Re-shoot every recipe image (docs/src/images/recipe-<name>.png): played, fitted with
+# the capture's `fit` cue, cropped and paletted. --check lists the stale ones instead
+python tools/showcase/recipe_images.py [name ...]
+python tools/showcase/recipe_images.py --check
 # Never stop a capture with taskkill /IM: it closes every open copy of Soba. Kill by PID
 
 # Open a patch at launch (otherwise the First Sound example opens)
