@@ -70,6 +70,22 @@ Right-click a step and its chord opens under it:
 
 So a progression goes in the way a lead sheet reads: a root, then a type, then the next root and type. The popover stays where it opened, and an outline marks the step it's writing. **◂ ▸** (or **←** **→**) move between steps without writing. **Esc**, or a click outside, closes it. Each change is one undo step.
 
+### Playing a chord into a step
+
+![A chord being played into the popover](../../images/chord-sequencer-play.png)
+*G#, A, C and E held on a MIDI keyboard over step 2. The held keys light on the piano, and the popover names the chord as it's played: Am over G#. When the keys come up, step 2 becomes Am/G# and the popover moves on to step 3.*
+
+With the popover open, you can also play the chord. Hold it on a MIDI keyboard, or on the computer's letter keys, and let go. The popover names what you played and writes it into the step: the root, the type and the slash bass. It switches the step on if it was a rest, then moves to the next step. To write a progression, open the popover on its first step and play the chords one after another.
+
+- **The name shows as you play.** The keys you hold light on the piano, and the line under it names the chord ("Hearing G# A C E → Am/G#"). Every note held since the first key went down counts, so the keys don't have to land or lift together.
+- **The lowest note is the bass.** If it's a chord tone other than the root, you get an inversion, written as a slash chord (C/E). If it isn't in the chord at all, it goes under the chord as a slash bass (Am/G#). The root's octave is the first one above the bass, so the step's **Bass** output plays the note you held at the bottom.
+- **Where the same notes make two chords, the bass decides.** A C E G is C6 over C and Am7 over A.
+- **Leaving out the 5th is fine.** C E B♭ D is C9, and C E B♭ A is C13: players often leave out the 5th, and a 13's 9th.
+- **A single note sets the root.** The step keeps its type and loses any slash bass.
+- **Notes that fit no chord get the nearest one.** The popover shows what it heard and what didn't fit, such as "nearest: no G · Db left out". Fix it with the chips, or play it again.
+
+While the popover is open, the letter keys belong to it, the way a text field takes them. The Keyboard modules don't hear them, so writing chords doesn't play the patch's lead. The letter keys play the popover's piano, with **Z** on its lowest C, and **‹ ›** move them an octave as well. A MIDI keyboard still plays the patch as usual. Each chord you play is one undo step.
+
 ## Chord types
 
 The tones are listed in the order the sequencer keeps them. With fewer **Voices** than tones, it plays the first ones, so the 5th, which adds the least colour, is the first to go. With more voices than tones, it doubles the chord's notes an octave up, in the same order.

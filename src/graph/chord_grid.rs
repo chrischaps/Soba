@@ -12,6 +12,11 @@
 //!   for the slash bass and the chord types. Choosing a type writes the step
 //!   and moves to the next, so a progression goes in as a lead sheet reads:
 //!   root, type, root, type.
+//! - Or play the chord, on a MIDI keyboard or the letter keys, while the
+//!   popover is open. When the hand lifts, the chord is named (see
+//!   [`recognise`]) and written, and the popover moves to the next step, the
+//!   way the Step Sequencer's piano step-records. The keys light on its
+//!   piano while they're held, and the chord's name shows as it's played.
 
 use std::sync::OnceLock;
 
@@ -20,10 +25,12 @@ use egui_node_graph2::NodeId;
 
 use crate::app::theme;
 use crate::dsp::DspModule;
+use crate::modules::chord_sequencer::recognition::{pitch_classes, recognise, Heard};
 use crate::modules::chord_sequencer::{voice_chord, ChordSequencer, ChordSpec, VoicingSettings, Voicing, CHORD_TYPES, MAX_STEPS};
 use crate::modules::sequencer::note_to_name;
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
+use super::chord_ear::{take_letter_keys, ChordEar};
 use super::step_grid::{drag_badge, dragged_pitch};
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
@@ -116,6 +123,66 @@ struct ChordEntry {
     anchor: usize,
 }
 
+/// The popover's ear, and the chord it last wrote.
+#[derive(Clone, Debug, Default)]
+struct Listening {
+    ear: ChordEar,
+    last: Option<Played>,
+}
+
+/// A chord played into a step: the notes, and what they were heard as.
+#[derive(Clone, Debug)]
+struct Played {
+    notes: Vec<u8>,
+    heard: Heard,
+    step: usize,
+}
+
+impl Played {
+    /// Names the notes played into `step` (lowest first). A note alone, or
+    /// in octaves, is a root: the step keeps its type, without a slash bass.
+    fn new(notes: Vec<u8>, step: usize, pattern: &ChordPattern) -> Option<Self> {
+        let lowest = *notes.first()? as i32;
+        let heard = if notes.iter().all(|&n| (n as i32 - lowest) % 12 == 0) {
+            Heard { spec: ChordSpec { root: lowest, kind: pattern.specs[step].kind, bass: None }, extra: 0, missing: 0 }
+        } else {
+            recognise(&notes.iter().map(|&n| n as i32).collect::<Vec<_>>())?
+        };
+        Some(Self { notes, heard, step })
+    }
+
+    /// The step's parameters, as written: root, type, bass and gate.
+    fn changes(&self) -> Vec<(String, f32)> {
+        let n = self.step + 1;
+        let spec = &self.heard.spec;
+        vec![
+            (format!("Step {n} Root"), spec.root.clamp(0, 127) as f32),
+            (format!("Step {n} Type"), spec.kind as f32),
+            (format!("Step {n} Bass"), spec.bass.map_or(0.0, |pc| pc as f32 + 1.0)),
+            (format!("Step {n} Gate"), 1.0),
+        ]
+    }
+}
+
+/// Pitch classes as the chord spells them: G# under Am, not Ab.
+fn spelled(spec: &ChordSpec, pitch_classes: impl IntoIterator<Item = i32>) -> String {
+    pitch_classes.into_iter().map(|pc| spec.spell(pc)).collect::<Vec<_>>().join(" ")
+}
+
+/// What a chord heard didn't fit, as "no G · D left out", or `None` when
+/// it fit.
+fn misfit(heard: &Heard) -> Option<String> {
+    let spec = &heard.spec;
+    let mut parts = Vec::new();
+    if heard.missing != 0 {
+        parts.push(format!("no {}", spelled(spec, pitch_classes(heard.missing))));
+    }
+    if heard.extra != 0 {
+        parts.push(format!("{} left out", spelled(spec, pitch_classes(heard.extra))));
+    }
+    (!parts.is_empty()).then(|| parts.join(" · "))
+}
+
 /// A drag under way: the step, and its root when the drag began.
 #[derive(Clone, Copy, Debug)]
 struct RootDrag {
@@ -153,7 +220,9 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
     };
 
     let entry_id = Id::new(("chord_entry", node_id));
+    let ear_id = Id::new(("chord_ear", node_id));
     let drag_id = Id::new(("chord_drag", node_id));
+    let mut played = None;
     let mut entry = ui
         .memory(|m| m.is_popup_open(entry_id))
         .then(|| ui.data(|d| d.get_temp::<ChordEntry>(entry_id)))
@@ -274,16 +343,41 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
         }
         open.step = step_along(open.step, on as isize - back as isize, pattern.steps);
 
+        // A chord played on the keys writes the step and moves along
+        let mut listening = ui.data(|d| d.get_temp::<Listening>(ear_id)).unwrap_or_default();
+        ui.input(|i| listening.ear.follow_keys(&i.raw.events, open.base));
+        let midi = user_state.midi_active_notes();
+        let held = listening.ear.held(midi);
+        if let Some(chord) = listening.ear.listen(midi).and_then(|notes| Played::new(notes, open.step, &pattern)) {
+            open.step = step_along(open.step, 1, pattern.steps);
+            played = Some(chord.clone());
+            listening.last = Some(chord);
+        }
+
         let anchor = &cells[open.anchor].1;
         egui::popup_below_widget(ui, entry_id, anchor, PopupCloseBehavior::CloseOnClickOutside, |ui| {
-            chord_popover(ui, &mut open, &pattern, &mut set);
+            chord_popover(ui, &mut open, &pattern, &held, &listening, &mut set);
         });
         if ui.memory(|m| m.is_popup_open(entry_id)) {
-            ui.data_mut(|d| d.insert_temp(entry_id, open));
+            ui.data_mut(|d| {
+                d.insert_temp(entry_id, open);
+                d.insert_temp(ear_id, listening);
+            });
+            take_letter_keys(ui.ctx());
+            // MIDI arrives between frames: keep looking while the popover listens
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
         } else {
-            ui.data_mut(|d| d.remove::<ChordEntry>(entry_id));
+            ui.data_mut(|d| {
+                d.remove::<ChordEntry>(entry_id);
+                d.remove::<Listening>(ear_id);
+            });
         }
     });
+    // A chord played is one undo step, named for it
+    if let Some(chord) = played {
+        let label = format!("Play {} into step {}", chord.heard.spec.name(), chord.step + 1);
+        edits.push(SynthResponse::EditParameters { node_id, label, changes: chord.changes() });
+    }
     edits
 }
 
@@ -383,8 +477,9 @@ fn keyboard_strip(ui: &mut egui::Ui, node_id: NodeId, width: f32, low: i32, note
 }
 
 /// The chord under a step: a piano for the root, a row for the bass, and
-/// the types. A type writes the step and moves along to the next.
-fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPattern, set: &mut impl FnMut(String, f32)) {
+/// the types. A type writes the step and moves along to the next, as does a
+/// chord played on the keys. `held` are the notes down now.
+fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPattern, held: &[u8], listening: &Listening, set: &mut impl FnMut(String, f32)) {
     let step = open.step;
     let spec = pattern.specs[step];
     let switch_on = |set: &mut dyn FnMut(String, f32)| {
@@ -425,8 +520,10 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
             ui.spacing_mut().item_spacing.x = 1.0;
             let mut played = None;
             for octave in [open.base, open.base + 12] {
-                let lit = (octave..octave + 12).contains(&root);
-                let data = PianoData { active_notes: if lit { vec![root] } else { Vec::new() }, base_note: octave, ..Default::default() };
+                // The keys held while a chord's played, or else the root
+                let lit = if held.is_empty() { std::slice::from_ref(&root) } else { held };
+                let active_notes = lit.iter().copied().filter(|n| (octave..octave + 12).contains(n)).collect();
+                let data = PianoData { active_notes, base_note: octave, ..Default::default() };
                 let (response, key) = piano_keys(ui, &data, &config);
                 if let Some(key) = key {
                     if response.on_hover_text(note_to_name(octave + key)).clicked() {
@@ -441,6 +538,7 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         set(format!("Step {} Root", step + 1), note as f32);
         switch_on(set);
     }
+    heard_line(ui, listening);
 
     // Bass
     ui.add_space(2.0);
@@ -490,6 +588,46 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         }
     });
     ui.label(RichText::new("Play a root, pick a bass if it has one, then a type: it writes the step and moves on").small().weak());
+    ui.label(RichText::new("Or hold the chord on a MIDI keyboard or the letter keys, and let go").small().weak())
+        .on_hover_text("The letter keys play this piano: Z is its lowest C, and ‹ › move them too");
+}
+
+/// Under the piano: the chord being played, named as it's held, or else
+/// the last one written, with what didn't fit when it was only the nearest.
+fn heard_line(ui: &mut egui::Ui, listening: &Listening) {
+    let gathering = listening.ear.gathering();
+    let (verb, notes, heard, step) = match &listening.last {
+        _ if !gathering.is_empty() => {
+            let notes: Vec<i32> = gathering.iter().map(|&n| n as i32).collect();
+            let heard = recognise(&notes);
+            ("Hearing", notes, heard, None)
+        }
+        Some(last) => ("Heard", last.notes.iter().map(|&n| n as i32).collect(), Some(last.heard), Some(last.step)),
+        None => return,
+    };
+    let Some(heard) = heard else { return };
+    let spec = &heard.spec;
+    // Each pitch once, from the bass up
+    let mut classes: Vec<i32> = Vec::new();
+    for pc in notes.iter().map(|n| n.rem_euclid(12)) {
+        if !classes.contains(&pc) {
+            classes.push(pc);
+        }
+    }
+    let one_note = classes.len() == 1;
+    ui.add_space(2.0);
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.label(RichText::new(format!("{verb} {}  →", spelled(spec, classes.iter().copied()))).weak());
+        let name = if one_note { format!("root {}", spec.root_name()) } else { spec.name() };
+        ui.label(RichText::new(name).color(theme::signal::CONTROL).strong());
+        if let Some(step) = step {
+            ui.label(RichText::new(format!("in step {}", step + 1)).weak());
+        }
+        if let Some(misfit) = misfit(&heard).filter(|_| !one_note) {
+            ui.label(RichText::new(format!("nearest: {misfit}")).weak().italics());
+        }
+    });
 }
 
 #[cfg(test)]

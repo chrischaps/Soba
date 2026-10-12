@@ -3583,6 +3583,9 @@ impl SynthApp {
     ///
     /// Uses raw input events to capture keyboard input before the UI consumes them.
     fn handle_keyboard_events(&mut self, ctx: &egui::Context) {
+        // Asked every frame, so the popover's claim lapses once it closes
+        let chord_popover = crate::graph::letter_keys_taken(ctx);
+
         // Skip if modifier keys are held (those are shortcuts, not notes)
         let skip_keyboard = ctx.input(|i| {
             i.modifiers.ctrl || i.modifiers.alt || i.modifiers.command
@@ -3591,9 +3594,11 @@ impl SynthApp {
             return;
         }
 
-        // Letters typed into a text field (the palette, say) aren't notes.
-        // Releases still count, so a key held while it opened doesn't stick
-        let typing = ctx.wants_keyboard_input() || self.quick_add.is_some();
+        // Letters typed into a text field (the palette, say) aren't notes, nor
+        // are chords played into a Chord Sequencer's popover, which has the
+        // keys while it's open. Releases still count, so a key held while
+        // either opened doesn't stick
+        let typing = ctx.wants_keyboard_input() || self.quick_add.is_some() || chord_popover;
 
         // Process raw keyboard events - these haven't been consumed yet
         let mut keys_changed = false;

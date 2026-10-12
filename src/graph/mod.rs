@@ -22,6 +22,7 @@ mod vocoder_display;
 mod trigger_display;
 mod arranger_display;
 pub mod arranger_follow;
+mod chord_ear;
 mod chord_grid;
 mod step_grid;
 mod mixer_strips;
@@ -38,6 +39,7 @@ mod validation;
 mod value_types;
 
 pub use arranger_display::claim_wheel as claim_arranger_wheel;
+pub use chord_ear::letter_keys_taken;
 pub use data_types::SynthDataType;
 pub use groups::{GroupId, NodeKind};
 pub use port_mapping::SynthGraph;

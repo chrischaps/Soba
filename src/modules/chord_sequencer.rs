@@ -21,6 +21,8 @@ use crate::dsp::{
 
 use super::sequencer::{SequenceDirection, StepTimer};
 
+pub mod recognition;
+
 /// Maximum number of steps in the sequencer.
 pub const MAX_STEPS: usize = 16;
 
@@ -184,8 +186,13 @@ impl ChordSpec {
     /// a major 3rd above D is F#, not Gb, and the note under Am a half step
     /// below its root is G#, as a line cliché spells it.
     pub fn bass_name(&self) -> Option<String> {
-        let bass = self.bass?;
-        Some(spell_above(self.root_name(), (bass - self.root).rem_euclid(12)))
+        Some(self.spell(self.bass?))
+    }
+
+    /// A pitch class (0 = C) spelled as the degree it is above the root,
+    /// the way [`Self::bass_name`] spells a slash note.
+    pub fn spell(&self, pitch_class: i32) -> String {
+        spell_above(self.root_name(), (pitch_class - self.root).rem_euclid(12))
     }
 }
 
