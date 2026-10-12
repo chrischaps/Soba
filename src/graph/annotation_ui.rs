@@ -12,7 +12,7 @@
 
 use egui::text::{CCursor, CCursorRange, LayoutJob, TextFormat};
 use egui::{
-    pos2, vec2, Color32, CursorIcon, FontFamily, FontId, Id, PointerButton, Pos2, Rect, Rounding, Sense,
+    pos2, vec2, Color32, Mesh, CursorIcon, FontFamily, FontId, Id, PointerButton, Pos2, Rect, Rounding, Sense,
     Shape, Stroke, Ui, UiBuilder, Vec2,
 };
 use egui_node_graph2::{Backdrop, NodeId};
@@ -58,6 +58,15 @@ const NOTE_MARK_WIDTH: f32 = 3.0;
 
 /// How near an edge the pointer can grab it, in screen points.
 const GRAB: f32 = 5.0;
+
+/// Words on the canvas are lettered over the cables, on a backing of the
+/// canvas beneath them, so a cable passing by goes behind them. A cable
+/// shows through the backing as strongly as through a module's face.
+///
+/// How far past the words the backing reaches, and how far beyond that it
+/// fades away, in patch points.
+const LABEL_MARGIN: Vec2 = Vec2::new(6.0, 3.0);
+const LABEL_FEATHER: f32 = 7.0;
 
 /// A note's ink, and the warmer ink its bold words are set in.
 const NOTE_INK: Color32 = Color32::from_rgb(196, 198, 212);
@@ -193,7 +202,9 @@ fn riders(annotations: &Annotations, frame_id: AnnotationId, area: Rect) -> Vec<
 /// Larger frames go first, so a frame inside another sits on top of it.
 /// Returns whether the pointer is over one of their handles, where a
 /// right-click is theirs rather than the canvas's.
-pub fn show(ui: &mut Ui, annotations: &mut Annotations, mut backdrop: Backdrop<'_>, view: View) -> bool {
+/// `through` is how strongly a cable shows through the words it passes
+/// behind, as through a module's face.
+pub fn show(ui: &mut Ui, annotations: &mut Annotations, mut backdrop: Backdrop<'_>, view: View, through: f32) -> bool {
     let mut frames: Vec<(AnnotationId, f32)> = annotations
         .iter()
         .filter_map(|(id, a)| match a {
@@ -208,10 +219,10 @@ pub fn show(ui: &mut Ui, annotations: &mut Annotations, mut backdrop: Backdrop<'
     let mut over_handle = false;
     let mut menu_actions = Vec::new();
     for (id, _) in frames {
-        over_handle |= frame_ui(ui, annotations, id, &mut backdrop, view, &mut menu_actions);
+        over_handle |= frame_ui(ui, annotations, id, &mut backdrop, view, through, &mut menu_actions);
     }
     for id in notes {
-        over_handle |= note_ui(ui, annotations, id, &mut backdrop, view, &mut menu_actions);
+        over_handle |= note_ui(ui, annotations, id, &mut backdrop, view, through, &mut menu_actions);
     }
 
     for action in menu_actions {
@@ -273,6 +284,7 @@ fn frame_ui(
     id: AnnotationId,
     backdrop: &mut Backdrop<'_>,
     view: View,
+    through: f32,
     menu_actions: &mut Vec<MenuAction>,
 ) -> bool {
     let Some(Annotation::Frame(frame)) = annotations.get(id).cloned() else { return false };
@@ -399,7 +411,7 @@ fn frame_ui(
     let screen = view.rect_to_screen(frame.rect);
     let band = Rect::from_min_size(screen.min, vec2(screen.width(), FRAME_TITLE_BAND * zoom));
     let hovered = title.hovered() || title.dragged() || resizing;
-    paint_frame(ui, body_slot, &frame, screen, band, zoom, selected, hovered, editing);
+    paint_frame(ui, body_slot, backdrop.labels, through, &frame, screen, band, zoom, selected, hovered, editing);
 
     if editing {
         title_editor(ui, annotations, id, band, zoom, title_ink(frame.tint));
@@ -412,6 +424,8 @@ fn frame_ui(
 fn paint_frame(
     ui: &Ui,
     slot: egui::layers::ShapeIdx,
+    labels: &mut Vec<Shape>,
+    through: f32,
     frame: &Frame,
     screen: Rect,
     band: Rect,
@@ -425,10 +439,11 @@ fn paint_frame(
     let mut shapes = Vec::new();
 
     // A faint wash of the tint, a little deeper across the title band
-    shapes.push(Shape::rect_filled(screen, rounding, tint.gamma_multiply(if selected { 0.095 } else { 0.07 })));
+    let wash = tint.gamma_multiply(if selected { 0.095 } else { 0.07 });
+    shapes.push(Shape::rect_filled(screen, rounding, wash));
     let band_rounding = Rounding { nw: rounding, ne: rounding, sw: 0.0, se: 0.0 };
-    let band_alpha = if hovered { 0.12 } else { 0.07 };
-    shapes.push(Shape::rect_filled(band, band_rounding, tint.gamma_multiply(band_alpha)));
+    let band_wash = tint.gamma_multiply(if hovered { 0.12 } else { 0.07 });
+    shapes.push(Shape::rect_filled(band, band_rounding, band_wash));
     let outline = if selected {
         Stroke::new(1.5, tint.gamma_multiply(0.9))
     } else if hovered {
@@ -439,7 +454,8 @@ fn paint_frame(
     shapes.push(Shape::rect_stroke(screen, rounding, outline));
 
     // The title, in spaced capitals, and a hairline ruled on from it to the
-    // edge, as sections are marked out on a printed panel
+    // edge, as sections are marked out on a printed panel. The title sits
+    // over the cables, on the band as it looks beneath them
     let ink = title_ink(frame.tint);
     let inset = FRAME_TITLE_INSET * zoom;
     let mut rule_from = band.left() + inset;
@@ -447,7 +463,9 @@ fn paint_frame(
         let galley = ui.painter().layout_job(title_job(&frame.title, zoom, ink));
         let at = pos2(band.left() + inset, band.center().y - galley.size().y / 2.0);
         rule_from = at.x + galley.size().x + 10.0 * zoom;
-        shapes.push(Shape::galley(at, galley, ink));
+        let under = laid_over(laid_over(theme::background::MAIN, wash), band_wash);
+        labels.push(label_backing(Rect::from_min_size(at, galley.size()), under, through, zoom));
+        labels.push(Shape::galley(at, galley, ink));
     } else if editing {
         rule_from = band.right();
     }
@@ -457,6 +475,44 @@ fn paint_frame(
         shapes.push(Shape::line_segment([pos2(rule_from, y), pos2(rule_to, y)], Stroke::new(1.0, tint.gamma_multiply(0.35))));
     }
     ui.painter().set(slot, Shape::Vec(shapes));
+}
+
+/// `top` laid over `bottom`, as the painter blends them.
+fn laid_over(bottom: Color32, top: Color32) -> Color32 {
+    let keep = 1.0 - top.a() as f32 / 255.0;
+    let mix = |b: u8, t: u8| (t as f32 + b as f32 * keep).round().min(255.0) as u8;
+    Color32::from_rgba_premultiplied(
+        mix(bottom.r(), top.r()),
+        mix(bottom.g(), top.g()),
+        mix(bottom.b(), top.b()),
+        mix(bottom.a(), top.a()),
+    )
+}
+
+/// The backing lettering on the canvas sits on, over the cables: `under`, the
+/// color of the canvas there, around `words` and fading out past them, so a
+/// cable passing by dims as it goes behind them rather than stopping short.
+/// `through` of the cable still shows.
+fn label_backing(words: Rect, under: Color32, through: f32, zoom: f32) -> Shape {
+    let inner = words.expand2(LABEL_MARGIN * zoom);
+    let outer = inner.expand(LABEL_FEATHER * zoom);
+    let solid = under.gamma_multiply(1.0 - through.clamp(0.0, 1.0));
+    let mut mesh = Mesh::default();
+    for corner in [inner.left_top(), inner.right_top(), inner.right_bottom(), inner.left_bottom()] {
+        mesh.colored_vertex(corner, solid);
+    }
+    for corner in [outer.left_top(), outer.right_top(), outer.right_bottom(), outer.left_bottom()] {
+        mesh.colored_vertex(corner, Color32::TRANSPARENT);
+    }
+    mesh.add_triangle(0, 1, 2);
+    mesh.add_triangle(0, 2, 3);
+    // Each side fades from the inner edge to the outer
+    for side in 0..4 {
+        let (a, b) = (side, (side + 1) % 4);
+        mesh.add_triangle(a, b, b + 4);
+        mesh.add_triangle(a, b + 4, a + 4);
+    }
+    Shape::mesh(mesh)
 }
 
 /// A frame title as lettered: capitals, spaced out.
@@ -551,6 +607,7 @@ fn note_ui(
     id: AnnotationId,
     backdrop: &mut Backdrop<'_>,
     view: View,
+    through: f32,
     menu_actions: &mut Vec<MenuAction>,
 ) -> bool {
     let Some(Annotation::Note(note)) = annotations.get(id).cloned() else { return false };
@@ -633,7 +690,7 @@ fn note_ui(
     };
     let wrap = (note.width * zoom - 2.0 * padding.x).max(1.0);
     let at = view.to_screen(note.position);
-    let text_rect = if editing {
+    let (text_rect, lettered) = if editing {
         let rect = Rect::from_min_size(at + padding, vec2(wrap, text_height));
         let Some(editing) = annotations.editing.as_mut() else { return over };
         let output = ui
@@ -651,12 +708,10 @@ fn note_ui(
             .inner;
         let rect = output.response.rect;
         finish_frame_of_editing(ui, annotations, id, output);
-        rect
+        (rect, None)
     } else {
         let galley = ui.painter().layout_job(note_job(&note.text, zoom, wrap));
-        let rect = Rect::from_min_size(at + padding, galley.size());
-        ui.painter().galley(rect.min, galley, NOTE_INK);
-        rect
+        (Rect::from_min_size(at + padding, galley.size()), Some(galley))
     };
     let card = Rect::from_min_max(at, pos2(at.x + note.width * zoom, text_rect.bottom() + padding.y));
 
@@ -672,7 +727,31 @@ fn note_ui(
     } else if body.hovered() || widen.hovered() {
         shapes.push(Shape::rect_stroke(card, rounding, Stroke::new(1.0, NOTE_INK.gamma_multiply(0.18))));
     }
-    ui.painter().set(card_slot, Shape::Vec(shapes));
+    if let Some(galley) = lettered {
+        // A note is lettered over the cables, as a frame's title is
+        backdrop.labels.push(label_backing(text_rect, laid_over(theme::background::MAIN, NOTE_FILL), through, zoom));
+        backdrop.labels.extend(shapes);
+        backdrop.labels.push(Shape::galley(text_rect.min, galley, NOTE_INK));
+    } else {
+        // The text field is drawn under the cables, so the card is too
+        ui.painter().set(card_slot, Shape::Vec(shapes));
+    }
     annotations.drawn.insert(id, card);
     over
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_backing_matches_the_canvas_it_is_laid_on() {
+        let canvas = theme::background::MAIN;
+        assert_eq!(laid_over(canvas, Color32::TRANSPARENT), canvas);
+        assert_eq!(laid_over(canvas, Color32::WHITE), Color32::WHITE);
+        // A wash lightens the canvas toward its tint, and stays opaque
+        let washed = laid_over(canvas, Tint::ALL[0].color().gamma_multiply(0.07));
+        assert_eq!(washed.a(), 255);
+        assert_ne!(washed, canvas);
+    }
 }

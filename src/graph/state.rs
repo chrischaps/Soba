@@ -24,6 +24,10 @@ const VALIDATION_MESSAGE_DURATION_SECS: f32 = 3.0;
 /// Maximum number of MIDI events to store for display.
 const MAX_MIDI_EVENTS: usize = 10;
 
+/// How strongly a cable shows through what it passes under, at first (the
+/// Cables menu changes it).
+pub const CABLE_THROUGH: f32 = 0.15;
+
 /// A MIDI event with display timestamp for the MIDI Monitor.
 #[derive(Clone, Debug)]
 pub struct DisplayMidiEvent {
@@ -107,6 +111,10 @@ pub struct SynthGraphState {
 
     /// The mark that rides the signal along every cable.
     pub flow_glyph: FlowGlyph,
+
+    /// How strongly a cable shows through a module face, or the words on
+    /// the canvas, it passes under: 0 not at all, 1 as over the canvas.
+    pub cable_through: f32,
 
     /// How knobs are drawn.
     pub knob_style: crate::widgets::KnobStyle,
@@ -243,6 +251,7 @@ impl Default for SynthGraphState {
             output_channels: HashMap::new(),
             signal_history: HashMap::new(),
             flow_glyph: FlowGlyph::default(),
+            cable_through: CABLE_THROUGH,
             knob_style: crate::widgets::KnobStyle::default(),
             midi_events: VecDeque::new(),
             midi_first_event_time: None,
@@ -613,6 +622,10 @@ impl ConnectionSignalTrait for SynthGraphState {
         self.flow_glyph
     }
 
+    fn cable_through_node(&self) -> f32 {
+        self.cable_through
+    }
+
     fn node_shown(&self, node_id: NodeId) -> bool {
         !self.hidden.contains(&node_id)
     }
@@ -631,7 +644,7 @@ impl ConnectionSignalTrait for SynthGraphState {
             view_origin = annotations::follow_zoom(view_origin, backdrop.zoom / self.zoom, half_size, *backdrop.pan);
         }
         let view = View { origin: backdrop.origin + view_origin, zoom: backdrop.zoom };
-        self.over_annotation = annotation_ui::show(ui, &mut self.annotations, backdrop, view);
+        self.over_annotation = annotation_ui::show(ui, &mut self.annotations, backdrop, view, self.cable_through);
     }
 
     fn output_port_color(

@@ -66,6 +66,8 @@ const AUDIO_STALL: std::time::Duration = std::time::Duration::from_millis(750);
 
 /// Storage key for the mark drawn along cables (Cables menu)
 const FLOW_GLYPH_KEY: &str = "cable_flow_glyph";
+/// Storage key for how strongly cables show through modules (Cables menu)
+const CABLE_THROUGH_KEY: &str = "cable_through";
 
 /// Storage key for how knobs are drawn (Knobs menu)
 const KNOB_STYLE_KEY: &str = "knob_style";
@@ -1403,6 +1405,14 @@ impl SynthApp {
                 for glyph in FlowGlyph::ALL {
                     ui.radio_value(&mut self.user_state.flow_glyph, glyph, glyph.name());
                 }
+                ui.separator();
+                ui.label(RichText::new("Under modules and labels").color(theme::text::SECONDARY));
+                ui.add(
+                    egui::Slider::new(&mut self.user_state.cable_through, 0.0..=1.0)
+                        .custom_formatter(|v, _| format!("{:.0}%", v * 100.0))
+                        .custom_parser(|text| text.trim().trim_end_matches('%').trim().parse::<f64>().ok().map(|v| v / 100.0)),
+                )
+                .on_hover_text("How much of a cable shows through a module, frame title or note it passes under");
             })
             .response
             .on_hover_text("How signal flow is drawn along cables");
@@ -3297,6 +3307,9 @@ impl SynthApp {
         #[cfg(not(target_arch = "wasm32"))]
         self.updater.load(storage);
         self.recovery = Autosave::load(storage);
+        if let Some(through) = storage.and_then(|s| s.get_string(CABLE_THROUGH_KEY)).and_then(|t| t.parse::<f32>().ok()) {
+            self.user_state.cable_through = through.clamp(0.0, 1.0);
+        }
         if let Some(glyph) = storage.and_then(|s| s.get_string(FLOW_GLYPH_KEY)) {
             self.user_state.flow_glyph = FlowGlyph::ALL
                 .into_iter()
@@ -4346,6 +4359,7 @@ impl eframe::App for SynthApp {
         #[cfg(not(target_arch = "wasm32"))]
         self.updater.store(storage);
         storage.set_string(FLOW_GLYPH_KEY, self.user_state.flow_glyph.name().to_string());
+        storage.set_string(CABLE_THROUGH_KEY, self.user_state.cable_through.to_string());
         storage.set_string(KNOB_STYLE_KEY, self.user_state.knob_style.name().to_string());
         if let Ok(engine) = &self.audio_engine {
             storage.set_string(AUDIO_SYSTEM_KEY, engine.audio_system().key().to_string());

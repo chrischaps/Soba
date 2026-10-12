@@ -14,7 +14,7 @@ From left to right:
 | **Transport** | **▶ Play** starts the patch; **⏹ Stop** stops it. The app opens stopped. **● Rec** records what you hear: see [Recording](#recording). |
 | **File** | **📄 New**, **📂 Open**, **🕘 Recent**, **📚 Examples**, **💾 Save**, **💾 Save As** |
 | **Edit** | **↩ Undo** and **↪ Redo**. Hover either to see which edit it will undo or redo. |
-| **〰 Cables** | How signal flow is drawn along cables: **Chevrons**, **Dots** or **Comets** |
+| **〰 Cables** | How signal flow is drawn along cables: **Chevrons**, **Dots** or **Comets**. **Under modules and labels** sets how much of a cable shows through a module, frame title or note it passes behind (15% at first) |
 | **◉ Knobs** | How knobs are drawn: **LED ring**, **Hybrid**, **Arc**, **Machined** or **Classic** |
 | **❓ Help** | **📖 Manual** opens this manual. **Check for Updates…**, **Check for Updates Automatically**, and **Roll Back** after an update: see [Updates](installation.md#updates) |
 | **Output** | The audio device to play through |
@@ -101,6 +101,8 @@ Drag from an output to an input to patch a cable; a jack turns white when the ca
 - **Each input takes one cable.** Dropping a new cable onto an occupied input replaces the old one.
 - **No loops.** A cable that would feed a module's output back into its own input, directly or through other modules, is refused.
 - **To remove a cable,** drag its end off the input jack and let go over empty canvas.
+
+Cables run behind the modules, and behind frame titles and notes, showing faintly through them so a route can still be followed without covering the controls or the words. **〰 Cables ▸ Under modules and labels** sets how faintly.
 
 While the patch plays, cables show what their signal has been doing over the last few seconds. [Reading the signal in a cable](../concepts/connections.md#reading-the-signal-in-a-cable) explains what you're seeing.
 
