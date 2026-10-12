@@ -11,8 +11,13 @@
 //!   in the pitch cable's orange.
 //!
 //! A tied step reaches across the gap into the next one, the way a held note
-//! looks on a piano roll. At the end of a row, or of the pattern, it reaches
-//! out of its right side and into the next step's left.
+//! looks on a piano roll. At the end of a row it reaches out of its right
+//! side and into the next step's left. At the end of the pattern it goes
+//! wherever the Chain goes next: round into step 1 when that's this pattern
+//! again, or off the edge toward another, with its letter (`→B`). Step 1 has
+//! a tab into its left side when the pattern before it in the Chain ties
+//! into it. With the Pattern CV patched the next pattern isn't known, so the
+//! tie only leaves.
 //!
 //! A slide step has a slur over it from the step before, in the pitch cable's
 //! orange, since it's the pitch that glides. A tie is about the gate, so it
@@ -30,7 +35,7 @@ use egui_node_graph2::{NodeId, NodeResponse};
 
 use crate::app::theme;
 use crate::modules::sequencer::{note_to_name, PatternPosition, StepField, StepSequencer as Seq, MAX_STEPS, PATTERNS, PATTERN_NAMES};
-use crate::modules::trigger_sequencer::CHAIN_NAMES;
+use crate::modules::trigger_sequencer::{chain_from, CHAIN_NAMES};
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
 use super::trigger_display::{edit_pattern, pattern_tabs, PatternBar, Playing};
@@ -71,6 +76,56 @@ pub(super) struct StepPattern {
     pub ties: [bool; 16],
     /// Steps slurred into from the step before.
     pub slides: [bool; 16],
+    /// Where a tie on the last step goes, and whether one arrives on step 1.
+    pub seam: Seam,
+}
+
+/// How a pattern joins the patterns either side of it in the Chain, as far
+/// as ties go: a tie on its last step carries into whatever pattern plays
+/// next, which isn't always this one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct Seam {
+    /// The Chain comes round to this pattern again, so a tie on its last
+    /// step goes into its own step 1.
+    pub home: bool,
+    /// The other patterns a tie on the last step goes into.
+    pub onward: [bool; PATTERNS],
+    /// Another pattern that plays just before this one ties out of its last
+    /// step, into this one's step 1.
+    pub arrives: bool,
+}
+
+impl Seam {
+    /// The seam for `pattern` in `chain`. `tied_out` says whether a pattern
+    /// ties out of its last step. With the Pattern CV patched the next
+    /// pattern isn't known, so there's nothing either side. A pattern the
+    /// Chain doesn't play is drawn as though it played on its own.
+    fn of(pattern: usize, chain: &[usize], pattern_cv: bool, tied_out: impl Fn(usize) -> bool) -> Self {
+        let mut seam = Self::default();
+        if pattern_cv {
+            return seam;
+        }
+        let len = chain.len();
+        let slots: Vec<usize> = (0..len).filter(|&slot| chain[slot] == pattern).collect();
+        if slots.is_empty() {
+            seam.home = true;
+        }
+        for slot in slots {
+            match chain[(slot + 1) % len] {
+                next if next == pattern => seam.home = true,
+                next => seam.onward[next] = true,
+            }
+            let before = chain[(slot + len - 1) % len];
+            seam.arrives |= before != pattern && tied_out(before);
+        }
+        seam
+    }
+
+    /// The patterns a tie leaves for, as a caption: `→B`, or `→B·C`.
+    fn caption(&self) -> Option<String> {
+        let names: Vec<&str> = (0..PATTERNS).filter(|&p| self.onward[p]).map(|p| PATTERN_NAMES[p]).collect();
+        (!names.is_empty()).then(|| format!("→{}", names.join("·")))
+    }
 }
 
 impl StepPattern {
@@ -120,7 +175,14 @@ pub(super) fn step_sequencer_display(
             .and_then(|id| user_state.get_output_value(id, OUT_STEP))
             .map_or(0, |v| ((v * (steps - 1).max(1) as f32).round() as usize).min(steps - 1))
     });
+    let (chain, len) = chain_from(&CHAIN_NAMES.map(|name| values.get(name).unwrap_or(0.0)));
+    let pattern_cv = position.is_some_and(|p| p.pattern_cv);
+    let tied_out = |pattern: usize| {
+        let field = |field| values.field(pattern, steps - 1, field);
+        field(StepField::Tie).is_some_and(|v| v > 0.5) && field(StepField::Gate).is_none_or(|v| v > 0.5)
+    };
     let pattern = StepPattern {
+        seam: Seam::of(editing, &chain[..len], pattern_cv, tied_out),
         pattern: editing,
         steps,
         current,
@@ -138,7 +200,7 @@ pub(super) fn step_sequencer_display(
         chain: std::array::from_fn(|slot| values.get(CHAIN_NAMES[slot]).map_or(0, |v| (v.round().max(0.0) as usize).min(PATTERNS))),
         chain_names: std::array::from_fn(|slot| CHAIN_NAMES[slot].to_string()),
         playing: position.filter(|p| p.started).map(|p| Playing { pattern: p.pattern, chain_slot: p.chain_slot, next: p.next_pattern }),
-        pattern_cv: position.is_some_and(|p| p.pattern_cv),
+        pattern_cv,
     };
     let edits = pattern_tabs(ui, node_id, zoom, &bar, |ui, pattern, edits| pattern_menu(ui, node_id, &values, pattern, edits));
     responses.extend(edits.into_iter().map(NodeResponse::User));
@@ -271,15 +333,33 @@ pub(super) fn step_grid(
         let band = step_size * 0.22;
         let reach = step_spacing * 2.0;
         let bar = |left: f32, right: f32, y: f32| egui::Rect::from_min_max(egui::pos2(left, y - band), egui::pos2(right, y + band));
+        let tab_in = |to: egui::Rect| painter.rect_filled(bar(to.left() - reach, to.center().x, to.center().y), band, GATE_ON);
+        let last = pattern.steps - 1;
         for step in (0..pattern.steps).filter(|&s| pattern.ties[s] && pattern.gates[s]) {
             let from = cells[step].0;
             let to = cells[(step + 1) % pattern.steps].0;
-            if step + 1 < pattern.steps && (to.center().y - from.center().y).abs() < 1.0 {
+            if step < last && (to.center().y - from.center().y).abs() < 1.0 {
                 painter.rect_filled(bar(from.center().x, to.center().x, from.center().y), 0.0, GATE_ON);
-            } else {
-                painter.rect_filled(bar(from.center().x, from.right() + reach, from.center().y), band, GATE_ON);
-                painter.rect_filled(bar(to.left() - reach, to.center().x, to.center().y), band, GATE_ON);
+                continue;
             }
+            painter.rect_filled(bar(from.center().x, from.right() + reach, from.center().y), band, GATE_ON);
+            if step < last || pattern.seam.home {
+                tab_in(to);
+            }
+            // Off the end of the pattern, into the next one in the Chain
+            if let Some(caption) = pattern.seam.caption().filter(|_| step == last) {
+                painter.text(
+                    egui::pos2(from.right() + reach + 1.5 * zoom, from.center().y),
+                    egui::Align2::LEFT_CENTER,
+                    caption,
+                    egui::FontId::proportional(9.0 * zoom),
+                    GATE_ON,
+                );
+            }
+        }
+        // A tie from the end of the pattern before, unless it's drawn already
+        if pattern.seam.arrives && !(pattern.seam.home && pattern.ties[last] && pattern.gates[last]) {
+            tab_in(cells[0].0);
         }
 
         for (step, (step_rect, response)) in cells.iter().enumerate() {
@@ -557,5 +637,49 @@ mod tests {
         assert_eq!(step_along(7, 1, 8), 0);
         assert_eq!(step_along(0, -1, 5), 4);
         assert_eq!(step_along(2, 0, 5), 2);
+    }
+
+    const A: usize = 0;
+    const B: usize = 1;
+    const C: usize = 2;
+    const D: usize = 3;
+
+    #[test]
+    fn a_chain_of_one_ties_round_into_itself() {
+        let seam = Seam::of(A, &[A], false, |_| true);
+        assert_eq!(seam, Seam { home: true, ..Seam::default() });
+        assert_eq!(seam.caption(), None);
+    }
+
+    #[test]
+    fn a_tie_leaves_toward_the_next_pattern_and_arrives_there() {
+        let a = Seam::of(A, &[A, B], false, |p| p == A);
+        assert_eq!((a.home, a.onward, a.arrives), (false, [false, true, false, false], false));
+        assert_eq!(a.caption().as_deref(), Some("→B"));
+        let b = Seam::of(B, &[A, B], false, |p| p == A);
+        assert_eq!((b.home, b.arrives, b.caption().as_deref()), (false, true, Some("→A")));
+        // Nothing arrives when the pattern before doesn't tie out
+        assert!(!Seam::of(B, &[A, B], false, |_| false).arrives);
+    }
+
+    #[test]
+    fn a_pattern_played_twice_joins_every_neighbour() {
+        // A A B: A comes round to itself and also leaves for B
+        let a = Seam::of(A, &[A, A, B], false, |p| p == A);
+        assert!(a.home && a.onward[B] && !a.arrives);
+        // A B A C: A leaves for B and C, and both tie back into it
+        let a = Seam::of(A, &[A, B, A, C], false, |p| p == C);
+        assert_eq!((a.home, a.arrives, a.caption().as_deref()), (false, true, Some("→B·C")));
+    }
+
+    #[test]
+    fn a_pattern_off_the_chain_looks_as_though_it_played_alone() {
+        assert_eq!(Seam::of(D, &[A, B], false, |_| true), Seam { home: true, ..Seam::default() });
+    }
+
+    #[test]
+    fn with_the_pattern_cv_patched_a_tie_only_leaves() {
+        assert_eq!(Seam::of(A, &[A, B], true, |_| true), Seam::default());
+        assert_eq!(Seam::of(A, &[A], true, |_| true), Seam::default());
     }
 }

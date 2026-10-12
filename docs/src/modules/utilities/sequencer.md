@@ -3,7 +3,7 @@
 **Module ID** `seq.step` · **Category** Utility
 
 ![Step Sequencer Module](../../images/module-sequencer.png)
-*Pattern B, playing. Green steps play, dark steps rest, and the outlined step is the one sounding now. A tied step reaches into the next one: here step 4 into 5, 12 into 13, and 16 round into the next pattern. The Chain plays A A B C; B wears the green dot, and C, ringed, comes next.*
+*Pattern B, playing. Green steps play, dark steps rest, and the outlined step is the one sounding now. A tied step reaches into the next one: here step 4 into 5, 12 into 13, and 16 off toward C, the pattern the Chain plays next. The tab into step 1 is A's last note, tied into B. The Chain plays A A B C; B wears the green dot, and C, ringed, comes next.*
 
 The Step Sequencer plays a repeating pattern of up to 16 notes. Each clock pulse moves it one step along, and each step sends out its own pitch, a gate if the step is switched on, and a velocity. Patch **Pitch** into an oscillator and **Gate** into an envelope, and a [Clock](../modulation/clock.md) turns it into a bass line, an arpeggio or a riff.
 
@@ -109,7 +109,7 @@ A tied step holds its gate across the next clock. If the next step plays, it con
 
 A tie into a rest just holds the note to the end of the tied step. A tie on a step that's switched off does nothing.
 
-The next step is whichever plays next, so in **Bwd**, **P-P** or **Rnd** a tie carries into that one, though the bar on the grid always points right. Tie the last step to carry the note round into the first. At the end of a row the bar reaches out of the step's right side and into the left side of the next row's first step.
+The next step is whichever plays next, so in **Bwd**, **P-P** or **Rnd** a tie carries into that one, though the bar on the grid always points right. At the end of a row the bar reaches out of the step's right side and into the left side of the next row's first step. Tie the last step to carry the note into the first step of the next pattern in the Chain. With a Chain of one pattern that's its own first step, and the bar comes round into it. When the next pattern is another, the bar leaves toward its letter (**→B**), and that pattern's step 1 shows the tie arriving at its left side. With **Pattern** patched the next pattern isn't known ahead, so the bar only leaves.
 
 A held gate (a tie, or **Gate** at 100%) lets go after two steps' time if no clock comes, so stopping the clock doesn't leave a note hanging.
 
