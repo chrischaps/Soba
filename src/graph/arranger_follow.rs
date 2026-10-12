@@ -137,6 +137,20 @@ pub fn leader(user_state: &SynthGraphState, node: NodeId) -> Option<NodeId> {
     user_state.arranger_leaders.get(&node).copied()
 }
 
+/// The Arranger at the top of `node`'s chain: the leader no one leads, or
+/// `node` itself if it follows no one. A chain that comes back round has
+/// no top, so an Arranger that leads into one is its own.
+pub fn head(leaders: &HashMap<NodeId, NodeId>, node: NodeId) -> NodeId {
+    let mut at = node;
+    for _ in 0..=leaders.len() {
+        match leaders.get(&at) {
+            Some(&leader) => at = leader,
+            None => return at,
+        }
+    }
+    node
+}
+
 /// A follower's Steps knob, which its leader turns.
 pub fn steps_takeover(graph: &SynthGraph, user_state: &SynthGraphState, node: NodeId) -> Option<super::clock_display::KnobTakeover> {
     let leader = leader(user_state, node)?;

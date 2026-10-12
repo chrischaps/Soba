@@ -27,6 +27,7 @@
 //! song with the span in view marked, to drag or double-click to fit. While
 //! the song plays the view turns the page to keep the playhead in it. The
 //! zoom is the editor's, like the section picked: not saved, not an edit.
+//! A follower shares its leader's zoom, so their sections stay lined up.
 
 use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Id, LayerId, Pos2, Rect, Sense, Shape, Stroke, Vec2};
 use egui_node_graph2::{InputId, NodeId};
@@ -273,6 +274,10 @@ impl Layout {
 
 /// How the timeline is zoomed. It's the editor's, not the patch's, so it
 /// isn't saved and isn't an edit, like the section picked.
+///
+/// A chain of Arrangers that follow one another shares one view, kept for
+/// the Arranger at its top, so zooming or panning any of them moves them
+/// all and their sections stay lined up (see [`view_owner`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct View {
     /// How many timelines wide the whole song is drawn: 1 shows it all.
@@ -280,20 +285,29 @@ struct View {
     /// How far into the song the timeline's left edge is, as a share of
     /// the song's drawn width.
     offset: f32,
-    /// A scroll still gliding in, in points.
+    /// A scroll still gliding in, as a share of the song's drawn width,
+    /// so it slides a chain's timelines alike whatever their widths.
     glide: f32,
+    /// The frame the glide last slid in, in egui's time, so a chain's
+    /// timelines slide it once between them.
+    glided: f64,
     /// When the view was last panned or zoomed by hand, in egui's time.
     touched: f64,
-    /// Where the playhead was last frame, in bars, to tell it's playing.
-    playhead: Option<f32>,
-    /// The section picked last frame, to bring a new pick into view.
-    picked: Option<usize>,
 }
 
 impl Default for View {
     fn default() -> Self {
-        Self { scale: 1.0, offset: 0.0, glide: 0.0, touched: f64::NEG_INFINITY, playhead: None, picked: None }
+        Self { scale: 1.0, offset: 0.0, glide: 0.0, glided: f64::NEG_INFINITY, touched: f64::NEG_INFINITY }
     }
+}
+
+/// What a timeline saw last frame, its own even when its view is shared.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Watch {
+    /// Where the playhead was, in bars, to tell it's playing.
+    playhead: Option<f32>,
+    /// The section picked, to bring a new pick into view.
+    picked: Option<usize>,
 }
 
 impl View {
@@ -352,8 +366,18 @@ fn view_id(node_id: NodeId) -> Id {
     Id::new((node_id, "arranger-view"))
 }
 
-fn stored_view(ctx: &egui::Context, node_id: NodeId, song: &Song) -> View {
-    ctx.data(|data| data.get_temp::<View>(view_id(node_id))).unwrap_or_default().clamped(song)
+fn watch_id(node_id: NodeId) -> Id {
+    Id::new((node_id, "arranger-watch"))
+}
+
+/// Whose view an Arranger shows: the one at the top of its chain, or its
+/// own if it follows no one.
+fn view_owner(user_state: &SynthGraphState, node_id: NodeId) -> NodeId {
+    arranger_follow::head(&user_state.arranger_leaders, node_id)
+}
+
+fn stored_view(ctx: &egui::Context, owner: NodeId, song: &Song) -> View {
+    ctx.data(|data| data.get_temp::<View>(view_id(owner))).unwrap_or_default().clamped(song)
 }
 
 /// What the wheel did over a timeline, kept for the timeline to act on.
@@ -457,23 +481,32 @@ fn overview_rect(timeline: Rect, z: f32) -> Rect {
 /// Works out this frame's view: the wheel's turns, the overview strip
 /// dragged, the playhead followed and a new pick brought into view. The
 /// song's first row does this, before any row is drawn.
-fn update_view(ui: &egui::Ui, node_id: NodeId, song: &Song, timeline: Rect, z: f32, position: Option<Position>, selected: usize) -> View {
+///
+/// The view is `owner`'s, which a follower shares with its leader. It's
+/// kept under the follower's own name as well, so a follower unpatched
+/// carries on from the view it had.
+#[allow(clippy::too_many_arguments)]
+fn update_view(ui: &egui::Ui, node_id: NodeId, owner: NodeId, song: &Song, timeline: Rect, z: f32, position: Option<Position>, selected: usize) -> View {
     let ctx = ui.ctx().clone();
     let (now, dt) = ctx.input(|input| (input.time, input.stable_dt.min(0.1)));
-    let mut view = stored_view(&ctx, node_id, song);
+    let mut view = stored_view(&ctx, owner, song);
+    let mut watch: Watch = ctx.data(|data| data.get_temp(watch_id(node_id))).unwrap_or_default();
 
     if let Some(wheel) = ctx.data_mut(|data| data.get_temp::<Wheel>(wheel_id(node_id)).inspect(|_| data.remove::<Wheel>(wheel_id(node_id)))) {
         if wheel.zoom != 1.0 {
             view = view.zoomed_about(song, timeline, z, wheel.at.x, wheel.zoom);
         }
-        view.glide += wheel.pan;
+        view.glide += wheel.pan / (timeline.width() * view.scale);
         view.touched = now;
     }
-    // A scroll glides in, as the canvas's does
-    if view.glide != 0.0 {
-        let step = if view.glide.abs() < 0.5 { view.glide } else { view.glide * (1.0 - (-18.0 * dt).exp()) };
-        view = view.panned(song, timeline, step);
+    // A scroll glides in, as the canvas's does, once a frame however many
+    // timelines share it
+    if view.glide != 0.0 && view.glided != now {
+        let point = 1.0 / (timeline.width() * view.scale);
+        let step = if view.glide.abs() < 0.5 * point { view.glide } else { view.glide * (1.0 - (-18.0 * dt).exp()) };
+        view = View { offset: view.offset + step, ..view }.clamped(song);
         view.glide -= step;
+        view.glided = now;
         // Nothing left to slide into at the song's ends
         let (left, right) = view.window();
         if (left <= 0.0 && view.glide < 0.0) || (right >= 1.0 && view.glide > 0.0) {
@@ -507,27 +540,35 @@ fn update_view(ui: &egui::Ui, node_id: NodeId, song: &Song, timeline: Rect, z: f
     // While the song plays, the view turns the page to keep the playhead in
     // it, unless it was just moved by hand
     let playhead = position.filter(|p| !p.ended).map(|p| song.sections[p.section].0 as f32 + song.playhead(&p));
-    let playing = playhead.is_some() && playhead != view.playhead;
-    view.playhead = playhead;
+    let playing = playhead.is_some() && playhead != watch.playhead;
+    watch.playhead = playhead;
     if let Some(bar) = playhead.filter(|_| playing && view.zoomed() && now - view.touched > FOLLOW_PAUSE) {
         let x = view.layout(song, timeline, z).x_at(song, bar);
         view = view.turned_to(song, timeline, x);
     }
 
     // A section picked from the bar below comes into view
-    if view.picked != Some(selected) {
-        if view.picked.is_some() && view.zoomed() {
+    if watch.picked != Some(selected) {
+        if watch.picked.is_some() && view.zoomed() {
             let (x0, x1) = view.layout(song, timeline, z).span(selected);
             if x1 < timeline.left() || x0 > timeline.right() {
                 view = view.turned_to(song, timeline, x0);
                 view.touched = now;
             }
         }
-        view.picked = Some(selected);
+        watch.picked = Some(selected);
     }
 
     let view = view.clamped(song);
-    ctx.data_mut(|data| data.insert_temp(view_id(node_id), view));
+    // The chain's timelines drawn before this one this frame catch up next
+    if view != stored_view(&ctx, owner, song) {
+        ctx.request_repaint();
+    }
+    ctx.data_mut(|data| {
+        data.insert_temp(view_id(owner), view);
+        data.insert_temp(view_id(node_id), view);
+        data.insert_temp(watch_id(node_id), watch);
+    });
     view
 }
 
@@ -741,9 +782,10 @@ pub fn output_row(
     let position = position(user_state, node_id).filter(|p| p.started && p.section < song.count());
     let selected = selected(ui.ctx(), node_id).min(song.count() - 1);
     // The song's first row works out the view for every row
+    let owner = view_owner(user_state, node_id);
     let view = match row {
-        Row::Sections => update_view(ui, node_id, &song, timeline, z, position, selected),
-        _ => stored_view(ui.ctx(), node_id, &song),
+        Row::Sections => update_view(ui, node_id, owner, &song, timeline, z, position, selected),
+        _ => stored_view(ui.ctx(), owner, &song),
     };
     claim(ui, node_id, timeline, view.zoomed());
     let layout = view.layout(&song, timeline, z);
@@ -2097,6 +2139,97 @@ mod tests {
         let turned = view.turned_to(&song, timeline, 520.0);
         let moved = (turned.offset - view.offset) * timeline.width() * view.scale;
         assert!((moved - (520.0 - (timeline.left() + timeline.width() * PAGE_MARGIN))).abs() < 1e-2);
+    }
+
+    /// Three Arrangers, Desk leading Cues leading More.
+    fn chain() -> (SynthGraphState, [NodeId; 3]) {
+        use crate::graph::{create_editor_state, SynthNodeTemplate};
+        use egui_node_graph2::NodeTemplateTrait;
+
+        let mut editor = create_editor_state();
+        let mut user_state = SynthGraphState::new();
+        let template = SynthNodeTemplate::from_module_id(arranger_follow::MODULE).unwrap();
+        let nodes = [(); 3].map(|_| {
+            editor.graph.add_node(template.node_graph_label(&mut user_state), template.user_data(&mut user_state), |graph, node_id| {
+                template.build_node(graph, &mut SynthGraphState::new(), node_id)
+            })
+        });
+        user_state.arranger_leaders = [(nodes[1], nodes[0]), (nodes[2], nodes[1])].into();
+        (user_state, nodes)
+    }
+
+    /// Works out each timeline's view for one frame at `time`, as the song's
+    /// first rows do, in the order given.
+    fn frame(ctx: &egui::Context, time: f64, user_state: &SynthGraphState, song: &Song, nodes: &[NodeId]) -> Vec<View> {
+        let mut views = Vec::new();
+        let input = egui::RawInput { time: Some(time), ..Default::default() };
+        let _ = ctx.run(input, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                views = nodes.iter().map(|&node| update_view(ui, node, view_owner(user_state, node), song, timeline(), 1.0, None, 0)).collect();
+            });
+        });
+        views
+    }
+
+    fn turn_wheel(ctx: &egui::Context, node: NodeId, wheel: Wheel) {
+        ctx.data_mut(|data| data.insert_temp(wheel_id(node), wheel));
+    }
+
+    #[test]
+    fn a_chain_of_followers_shares_one_view() {
+        let (user_state, [desk, cues, more]) = chain();
+        assert_eq!([desk, cues, more].map(|node| view_owner(&user_state, node)), [desk; 3]);
+        let (ctx, song) = (egui::Context::default(), long_song());
+
+        // Zoomed on the last of the chain, the whole chain zooms
+        turn_wheel(&ctx, more, Wheel { pan: 0.0, zoom: 4.0, at: Pos2::new(300.0, 10.0) });
+        frame(&ctx, 1.0, &user_state, &song, &[desk, cues, more]);
+        let views = frame(&ctx, 1.1, &user_state, &song, &[desk, cues, more]);
+        assert_eq!(views[0].scale, 4.0);
+        assert!(views.iter().all(|view| *view == views[0]));
+
+        // Scrolled on the leader, a pan slides them all, and only once a
+        // frame however many timelines share it
+        let alone = egui::Context::default();
+        frame(&alone, 1.1, &SynthGraphState::new(), &song, &[desk]);
+        for ctx in [&ctx, &alone] {
+            ctx.data_mut(|data| data.insert_temp(view_id(desk), views[0]));
+            turn_wheel(ctx, desk, Wheel { pan: 200.0, zoom: 1.0, at: Pos2::new(300.0, 10.0) });
+        }
+        let shared = frame(&ctx, 2.0, &user_state, &song, &[desk, cues, more]);
+        let single = frame(&alone, 2.0, &SynthGraphState::new(), &song, &[desk]);
+        assert!(shared[0].offset > views[0].offset);
+        assert_eq!(shared[2].offset, single[0].offset);
+    }
+
+    #[test]
+    fn a_follower_unpatched_keeps_its_view() {
+        let (mut user_state, [desk, cues, more]) = chain();
+        let (ctx, song) = (egui::Context::default(), long_song());
+        turn_wheel(&ctx, desk, Wheel { pan: 0.0, zoom: 3.0, at: Pos2::new(400.0, 10.0) });
+        let shared = frame(&ctx, 1.0, &user_state, &song, &[desk, cues, more])[0];
+        assert!(shared.zoomed());
+
+        // Cues lets go of Desk, and More follows Cues now
+        user_state.arranger_leaders.remove(&cues);
+        assert_eq!(view_owner(&user_state, more), cues);
+        let views = frame(&ctx, 2.0, &user_state, &song, &[desk, cues, more]);
+        assert!(views.iter().all(|view| (view.scale, view.offset) == (shared.scale, shared.offset)));
+
+        // Each zooms on its own now: Desk out, Cues and More stay
+        ctx.data_mut(|data| data.insert_temp(view_id(desk), View::default()));
+        let views = frame(&ctx, 3.0, &user_state, &song, &[desk, cues, more]);
+        assert!(!views[0].zoomed());
+        assert_eq!(views[1].scale, shared.scale);
+        assert_eq!(views[2], views[1]);
+    }
+
+    #[test]
+    fn a_chain_that_comes_back_round_has_no_head() {
+        let (mut user_state, [desk, cues, more]) = chain();
+        user_state.arranger_leaders.insert(desk, more);
+        assert_eq!(view_owner(&user_state, desk), desk);
+        assert_eq!(view_owner(&user_state, cues), cues);
     }
 
     #[test]

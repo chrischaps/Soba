@@ -101,7 +101,8 @@ A song can need more than eight lanes. Patch one Arranger's **Section** output i
 
 - **Edit the sections on the leader.** On the follower they can be picked but not changed, and its bar says **Follows Desk** (or whatever the leader is called). Its **Steps** knob and **Loop to** are the leader's too.
 - **The follower's cues move with their sections.** Add, copy, move, delete, split or merge a section on the leader, and the follower does the same with its own cues. A merge folds only copies that play the same on every Arranger down the chain. Lengthening or renaming a section does too. The leader's edit and the follower's are one step of undo, so undo takes both back.
-- **Unpatch Follow** and the follower keeps the sections it had, and you can edit them on it again.
+- **The follower zooms with its leader.** [Zoom or scroll](#zooming-in) either one and both move, page turns included, so the two scores stay lined up section for section. A whole chain shares one view.
+- **Unpatch Follow** and the follower keeps the sections it had, and you can edit them on it again. It keeps the view it had too, and zooms on its own from then on.
 - **Chains.** A follower can lead another, so three Arrangers give 24 lanes. A chain can't come back round: an Arranger that would end up following itself refuses the cable and says why. **Follow** takes only an Arranger's **Section**.
 
 Following happens in the editor, not in the sound. Two Arrangers that count the same Clock already change section on the same sample, so the cable only keeps their sections the same while you write. A patch plays the same with it or without it.
