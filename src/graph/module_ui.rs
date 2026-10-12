@@ -337,8 +337,8 @@ static MODULE_UI: &[ModuleUi] = &[
     },
     ModuleUi {
         module_id: "seq.chord",
-        knobs: &[knob("Steps"), knob_as("Gate Length", "Gate"), knob("Voices"), knob("Range")],
-        labels: &[("Direction", "Dir"), ("Voicing", "Voicing"), ("Voice Leading", "Voice lead"), ("Bass Voice", "Bass voice"), ("Rootless", "Rootless")],
+        knobs: &[knob("Steps"), knob_as("Gate Length", "Gate"), knob("Voices"), knob("Range"), knob("Strum")],
+        labels: &[("Direction", "Dir"), ("Voicing", "Voicing"), ("Voice Leading", "Voice lead"), ("Bass Voice", "Bass voice"), ("Rootless", "Rootless"), ("Strum Dir", "Strum dir")],
         // The grid and its popover edit these
         hidden: &["Step *"],
         monitor: &["Gate", "EOC"],

@@ -9,6 +9,10 @@
 //! octave Range names. With Voice Leading on, each chord takes the inversion
 //! nearest the one before, so the voices move as little as they can, the way
 //! a keyboard player's hands do.
+//!
+//! With Strum up, the voices don't all start on the clock: each channel's
+//! gate rises a little after the one before, up or down the chord, as a
+//! guitarist's pick or a harpist's fingers sound it.
 
 use crate::dsp::{
     context::ProcessContext,
@@ -137,6 +141,28 @@ impl Voicing {
             1 => Voicing::Open,
             2 => Voicing::Spread,
             _ => Voicing::Close,
+        }
+    }
+}
+
+/// The order a strum sounds a chord's channels in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StrumDirection {
+    /// Lowest channel first, as a guitar's downstroke from the bass string.
+    Up = 0,
+    /// Highest channel first.
+    Down = 1,
+    /// Up on one clock and down on the next, as a rhythm guitarist's hand
+    /// moves down and up in time, striking or not.
+    Alternate = 2,
+}
+
+impl StrumDirection {
+    pub fn from_param(value: f32) -> Self {
+        match value.round() as i32 {
+            1 => StrumDirection::Down,
+            2 => StrumDirection::Alternate,
+            _ => StrumDirection::Up,
         }
     }
 }
@@ -416,15 +442,31 @@ const UNMEASURED_HOLD: f32 = 4.0;
 ///
 /// A rest leaves the last chord's pitches where they were, so a release
 /// fades on the notes it started on.
+///
+/// A strum reaches each channel in turn. Until it does, the channel goes on
+/// playing the chord before, as a string rings until it's struck again.
+/// Then its pitch moves and its gate rises, the pitch never after the gate.
 pub struct ChordSequencer {
     current_step: usize,
     ping_pong_direction: i32,
     reset_pending: bool,
     prev_clock: bool,
     prev_reset: bool,
-    gate_timer: usize,
+    /// Each channel's gate: samples left, and whether it was high last sample.
+    gate_timers: [usize; MAX_VOICES],
+    gate_high: [bool; MAX_VOICES],
+    /// How long a struck channel's gate lasts, for the chord being strummed.
+    gate_len: usize,
+    /// Samples until the strum reaches each channel, or `None` once it has.
+    strum_wait: [Option<usize>; MAX_VOICES],
+    /// What each channel plays until the strum reaches it.
+    held: [i32; MAX_VOICES],
+    /// The chord being strummed was tied into, so it moves the notes
+    /// without striking them.
+    legato: bool,
+    /// Clocks since a reset: Alt strums down on the odd ones.
+    strokes: u32,
     tied: bool,
-    gate_high: bool,
     timer: StepTimer,
     eoc_timer: usize,
     random_state: u32,
@@ -457,7 +499,7 @@ impl ChordSequencer {
             PortDefinition::input_with_default("reset", "Reset", SignalType::Gate, 0.0).describe("A rising edge jumps back to step 1"),
             PortDefinition::input_with_default("run", "Run", SignalType::Gate, 1.0).describe("Steps only advance while high; runs when unpatched"),
             PortDefinition::output("pitch", "Pitch", SignalType::Control).describe("Poly V/Oct, one channel per note of the chord, lowest first"),
-            PortDefinition::output("gate", "Gate", SignalType::Gate).describe("Poly gate, the same on every channel; patch into a voice's envelope"),
+            PortDefinition::output("gate", "Gate", SignalType::Gate).describe("Poly gate, one channel per note, rising together unless Strum staggers them; patch into a voice's envelope"),
             PortDefinition::output("velocity", "Velocity", SignalType::Control).describe("Poly velocity of the step, 0 to 1"),
             PortDefinition::output("root", "Root", SignalType::Control).describe("The chord's root as V/Oct, in the octave the step names: a bass line, or a transpose for an arp"),
             PortDefinition::output("bass", "Bass", SignalType::Control).describe("The slash chord's bass note as V/Oct, or the root when there is none"),
@@ -483,6 +525,10 @@ impl ChordSequencer {
                 .describe("Puts the bass note under the chord as the cables' first channel, so a slash chord sounds on one voice. The chord then leaves out its root first"),
             ParameterDefinition::toggle("rootless", "Rootless", false)
                 .describe("The chord leaves out its root first, for a bass playing it from the Root or Bass output. Always so with Bass Voice on"),
+            ParameterDefinition::new("strum", "Strum", 0.0, 100.0, 0.0, ParameterDisplay::linear("ms"))
+                .describe("Time between one channel's gate and the next, as a strummed guitar or a harp sounds a chord; 0 strikes every note at once"),
+            ParameterDefinition::choice("strum_dir", "Strum Dir", &["Up", "Down", "Alt"], StrumDirection::Up as usize)
+                .describe("Where the strum starts: the lowest note (Up), the highest (Down), or down and up on alternate clocks (Alt)"),
         ];
 
         // A progression to start from: Cmaj7, Am7, Fmaj7, G7, the bass
@@ -520,9 +566,14 @@ impl ChordSequencer {
             reset_pending: true,
             prev_clock: false,
             prev_reset: false,
-            gate_timer: 0,
+            gate_timers: [0; MAX_VOICES],
+            gate_high: [false; MAX_VOICES],
+            gate_len: 0,
+            strum_wait: [None; MAX_VOICES],
+            held: [0; MAX_VOICES],
+            legato: false,
+            strokes: 0,
             tied: false,
-            gate_high: false,
             timer: StepTimer::new(),
             eoc_timer: 0,
             random_state: 12345,
@@ -553,7 +604,9 @@ impl ChordSequencer {
     pub const PARAM_RANGE: usize = 6;
     pub const PARAM_BASS_VOICE: usize = 7;
     pub const PARAM_ROOTLESS: usize = 8;
-    const STEP_PARAMS: usize = 9;
+    pub const PARAM_STRUM: usize = 9;
+    pub const PARAM_STRUM_DIR: usize = 10;
+    const STEP_PARAMS: usize = 11;
     const PER_STEP: usize = 7;
 
     pub const fn step_root_param(step: usize) -> usize {
@@ -689,6 +742,26 @@ impl ChordSequencer {
         samples.max(1)
     }
 
+    /// Samples between one channel's strike and the next. Once the clock is
+    /// measured, a strum fits inside its step, so its last note is struck
+    /// before the next chord's first.
+    fn strum_spacing(&self, strum_ms: f32, channels: usize) -> usize {
+        let spacing = (strum_ms.max(0.0) / 1000.0 * self.sample_rate) as usize;
+        match self.timer.coming_step() {
+            Some(step) => spacing.min(step / channels.max(1)),
+            None => spacing,
+        }
+    }
+
+    /// The note on a channel now: the chord before, until the strum
+    /// reaches it.
+    fn playing(&self, channel: usize) -> i32 {
+        match self.strum_wait[channel] {
+            Some(_) => self.held[channel],
+            None => self.sounding.channels.notes[channel],
+        }
+    }
+
     /// The step playing.
     pub fn current_step(&self) -> usize {
         self.current_step
@@ -748,6 +821,8 @@ impl DspModule for ChordSequencer {
         let num_steps = (params[Self::PARAM_STEPS].round() as usize).clamp(1, MAX_STEPS);
         let direction = SequenceDirection::from_param(params[Self::PARAM_DIRECTION]);
         let gate_length = params[Self::PARAM_GATE_LENGTH] / 100.0;
+        let strum_ms = params[Self::PARAM_STRUM];
+        let strum_direction = StrumDirection::from_param(params[Self::PARAM_STRUM_DIR]);
 
         // As many channels as the knob asks for and the cables have room for
         let room = outputs[..Self::PORT_ROOT].iter().map(|output| output.max_channels()).min().unwrap_or(1);
@@ -757,6 +832,10 @@ impl DspModule for ChordSequencer {
         }
         for output in &mut outputs[Self::PORT_ROOT..] {
             output.set_channels(1);
+        }
+        // A channel the cables no longer carry has no strum to wait for
+        for wait in &mut self.strum_wait[channels..] {
+            *wait = None;
         }
 
         // Before the first clock the cables carry the first chord, silent,
@@ -794,7 +873,9 @@ impl DspModule for ChordSequencer {
                 self.current_step = direction.start_step(num_steps);
                 self.ping_pong_direction = 1;
                 self.reset_pending = true;
-                self.gate_timer = 0;
+                self.gate_timers = [0; MAX_VOICES];
+                self.strum_wait = [None; MAX_VOICES];
+                self.strokes = 0;
                 self.tied = false;
                 self.timer.forget_gap();
             }
@@ -802,7 +883,6 @@ impl DspModule for ChordSequencer {
             if clock_rising {
                 self.timer.clock();
             }
-            let mut retrigger = false;
 
             if clock_rising && is_running {
                 // The first chord after a reset starts afresh in root
@@ -817,18 +897,37 @@ impl DspModule for ChordSequencer {
                     self.advance_step(num_steps, direction)
                 };
 
-                // A chord that plays is voiced from the one sounding. A rest
+                // The hand moves on every clock, rests and ties included, so
+                // Alt keeps time as a rhythm guitarist's does
+                let down = match strum_direction {
+                    StrumDirection::Up => false,
+                    StrumDirection::Down => true,
+                    StrumDirection::Alternate => self.strokes % 2 == 1,
+                };
+                self.strokes = self.strokes.wrapping_add(1);
+
+                // A chord that plays is voiced from the one sounding, then
+                // strummed: each channel keeps its note until its turn. A rest
                 // leaves the pitches alone, so the release ends where it began
                 let step = self.current_step;
                 if params[Self::step_gate_param(step)] > 0.5 {
                     let tie = params[Self::step_tie_param(step)] > 0.5;
-                    retrigger = self.gate_high && !self.tied;
-                    self.gate_timer = self.gate_samples(gate_length, tie);
+                    for channel in 0..channels {
+                        self.held[channel] = self.playing(channel);
+                    }
+                    self.legato = self.tied;
+                    self.gate_len = self.gate_samples(gate_length, tie);
                     self.tied = tie;
                     self.before = (!fresh && self.sounding.chord.len > 0).then_some(self.sounding.chord);
                     self.voice(params, Self::spec(params, step), channels);
+                    let spacing = self.strum_spacing(strum_ms, channels);
+                    for channel in 0..channels {
+                        let turn = if down { channels - 1 - channel } else { channel };
+                        self.strum_wait[channel] = Some(turn * spacing);
+                    }
                 } else {
-                    self.gate_timer = 0;
+                    self.gate_timers = [0; MAX_VOICES];
+                    self.strum_wait = [None; MAX_VOICES];
                     self.tied = false;
                 }
 
@@ -841,22 +940,34 @@ impl DspModule for ChordSequencer {
                 self.current_step = 0;
             }
 
-            let gate_active = self.gate_timer > 0 && !retrigger;
-            self.gate_high = gate_active;
-            let gate = if gate_active { 1.0 } else { 0.0 };
             let velocity = params[Self::step_velocity_param(self.current_step)] / 127.0;
-            let sounding = &self.sounding;
             for channel in 0..channels {
-                let note = sounding.channels.notes[channel];
-                outputs[Self::PORT_PITCH].channel_mut(channel)[i] = note_to_voct(note);
-                outputs[Self::PORT_GATE].channel_mut(channel)[i] = gate;
+                // The strum reaches this channel: its note moves and, unless
+                // the chord was tied into, its gate drops for this sample so
+                // the envelope starts again
+                let mut retrigger = false;
+                if self.strum_wait[channel] == Some(0) {
+                    self.strum_wait[channel] = None;
+                    retrigger = self.gate_high[channel] && !self.legato;
+                    self.gate_timers[channel] = self.gate_len;
+                }
+                let gate_active = self.gate_timers[channel] > 0 && !retrigger;
+                self.gate_high[channel] = gate_active;
+                outputs[Self::PORT_PITCH].channel_mut(channel)[i] = note_to_voct(self.playing(channel));
+                outputs[Self::PORT_GATE].channel_mut(channel)[i] = if gate_active { 1.0 } else { 0.0 };
                 outputs[Self::PORT_VELOCITY].channel_mut(channel)[i] = velocity;
             }
+            let sounding = &self.sounding;
             outputs[Self::PORT_ROOT].samples[i] = note_to_voct(sounding.spec.root);
             outputs[Self::PORT_BASS].samples[i] = note_to_voct(sounding.spec.bass_note());
             outputs[Self::PORT_EOC].samples[i] = if self.eoc_timer > 0 { 1.0 } else { 0.0 };
 
-            self.gate_timer = self.gate_timer.saturating_sub(1);
+            for timer in &mut self.gate_timers {
+                *timer = timer.saturating_sub(1);
+            }
+            for wait in self.strum_wait.iter_mut().flatten() {
+                *wait = wait.saturating_sub(1);
+            }
             self.eoc_timer = self.eoc_timer.saturating_sub(1);
             self.timer.tick();
         }
@@ -868,9 +979,13 @@ impl DspModule for ChordSequencer {
         self.reset_pending = true;
         self.prev_clock = false;
         self.prev_reset = false;
-        self.gate_timer = 0;
+        self.gate_timers = [0; MAX_VOICES];
+        self.gate_high = [false; MAX_VOICES];
+        self.gate_len = 0;
+        self.strum_wait = [None; MAX_VOICES];
+        self.legato = false;
+        self.strokes = 0;
         self.tied = false;
-        self.gate_high = false;
         self.timer.forget();
         self.eoc_timer = 0;
         self.sounding = Sounding::SILENT;
@@ -881,7 +996,7 @@ impl DspModule for ChordSequencer {
         let mut readout = Readout::default();
         readout.values[Self::READOUT_STEP] = self.current_step as f32;
         for (i, value) in readout.values[Self::READOUT_NOTES..].iter_mut().enumerate() {
-            *value = if i < self.sounding.channels.len { self.sounding.channels.notes[i] as f32 } else { -1.0 };
+            *value = if i < self.sounding.channels.len { self.playing(i) as f32 } else { -1.0 };
         }
         Some(readout)
     }
@@ -996,9 +1111,11 @@ mod tests {
         let ids: Vec<_> = seq.ports().iter().map(|p| p.id).collect();
         assert_eq!(ids, ["clock", "reset", "run", "pitch", "gate", "velocity", "root", "bass", "eoc"]);
         let params = seq.parameters();
-        assert_eq!(params.len(), 9 + 7 * MAX_STEPS);
+        assert_eq!(params.len(), 11 + 7 * MAX_STEPS);
         assert_eq!(params[ChordSequencer::PARAM_BASS_VOICE].id, "bass_voice");
         assert_eq!(params[ChordSequencer::PARAM_ROOTLESS].id, "rootless");
+        assert_eq!(params[ChordSequencer::PARAM_STRUM].id, "strum");
+        assert_eq!(params[ChordSequencer::PARAM_STRUM_DIR].id, "strum_dir");
         assert_eq!(params[ChordSequencer::step_root_param(0)].name, "Step 1 Root");
         assert_eq!(params[ChordSequencer::step_type_param(15)].name, "Step 16 Type");
         assert_eq!(params[ChordSequencer::step_bass_param(2)].id, "step_3_bass");
@@ -1311,6 +1428,100 @@ mod tests {
         assert_ne!(played.chord(1500), played.chord(2500));
     }
 
+    /// Params with a strum, `ms` between channels, in the direction given.
+    fn strummed(chords: &[(i32, usize)], ms: f32, direction: StrumDirection) -> Vec<f32> {
+        let mut params = params_with(chords);
+        params[ChordSequencer::PARAM_STRUM] = ms;
+        params[ChordSequencer::PARAM_STRUM_DIR] = direction as usize as f32;
+        params
+    }
+
+    /// When each channel's gate rose, channel by channel.
+    fn rises_by_channel(played: &Run) -> Vec<Vec<usize>> {
+        (0..played.channels).map(|c| rises(&played.gates[c])).collect()
+    }
+
+    #[test]
+    fn strum_staggers_each_channels_gate() {
+        // 20 ms apart at 1 kHz, lowest channel first. The second chord
+        // re-strikes each channel in turn: a sample's dip, then the rise
+        let played = run(&strummed(&[(48, MAJ), (53, MAJ)], 20.0, StrumDirection::Up), 2000, &[0, 1000]);
+        assert_eq!(rises_by_channel(&played), [[0, 1001], [20, 1021], [40, 1041], [60, 1061]]);
+        let mut down = strummed(&[(48, MAJ), (53, MAJ)], 20.0, StrumDirection::Down);
+        down[ChordSequencer::PARAM_VOICES] = 3.0;
+        let played = run(&down, 2000, &[0, 1000]);
+        assert_eq!(rises_by_channel(&played), [[40, 1041], [20, 1021], [0, 1001]]);
+    }
+
+    #[test]
+    fn a_strummed_channel_rings_its_old_note_until_its_turn() {
+        let played = run(&strummed(&[(48, MAJ), (53, MAJ)], 20.0, StrumDirection::Up), 2000, &[0, 1000]);
+        let (c, f) = (played.chord(500), played.chord(1500));
+        for channel in 0..4 {
+            let dip = 1000 + 20 * channel;
+            let notes = &played.notes[channel];
+            let gate = &played.gates[channel];
+            // The old chord, gate still high, up to the strike
+            assert!((1000..dip).all(|t| notes[t] as i32 == c[channel] && gate[t] == 1.0), "channel {channel} rings C until {dip}");
+            // The new pitch on the dip, before the gate rises on it
+            assert_eq!((notes[dip] as i32, gate[dip]), (f[channel], 0.0), "channel {channel}");
+            assert_eq!((notes[dip + 1] as i32, gate[dip + 1]), (f[channel], 1.0), "channel {channel}");
+        }
+    }
+
+    #[test]
+    fn alt_strums_down_and_up_in_time_with_the_clock() {
+        // Up, down, up over a rest without striking, then down and up: the
+        // hand never stops moving
+        let mut params = strummed(&[(48, MAJ), (53, MAJ), (55, MAJ), (48, MAJ), (53, MAJ)], 10.0, StrumDirection::Alternate);
+        params[ChordSequencer::PARAM_VOICES] = 3.0;
+        params[ChordSequencer::PARAM_GATE_LENGTH] = 50.0;
+        params[ChordSequencer::step_gate_param(2)] = 0.0;
+        let played = run(&params, 5000, &[0, 1000, 2000, 3000, 4000]);
+        assert_eq!(rises_by_channel(&played), [[0, 1020, 3020, 4000], [10, 1010, 3010, 4010], [20, 1000, 3000, 4020]]);
+    }
+
+    #[test]
+    fn a_strum_fits_inside_its_step() {
+        // 100 ms per channel won't fit a 100 ms step of four channels: once
+        // the clock is measured, each waits a quarter of the step at most.
+        // Before it is, the first strum takes the whole 100 ms each, and the
+        // next clock comes before channels 2 to 4 are struck
+        let played = run(&strummed(&[(48, MAJ), (53, MAJ), (55, MAJ)], 100.0, StrumDirection::Up), 300, &[0, 100, 200]);
+        assert_eq!(rises_by_channel(&played), [vec![0, 101, 201], vec![125, 226], vec![150, 251], vec![175, 276]]);
+    }
+
+    #[test]
+    fn a_strum_never_restrikes_across_a_tie() {
+        // Step 2 ties into step 3: step 3's notes still move in strum order,
+        // under gates that never drop
+        let mut params = strummed(&[(48, MAJ), (53, MAJ), (55, MAJ)], 20.0, StrumDirection::Up);
+        params[ChordSequencer::step_tie_param(1)] = 1.0;
+        let played = run(&params, 3000, &[0, 1000, 2000]);
+        let (f, g) = (played.chord(1500), played.chord(2500));
+        for channel in 0..4 {
+            assert_eq!(rises(&played.gates[channel]), [20 * channel, 1001 + 20 * channel], "channel {channel}");
+            let held = 1001 + 20 * channel..3000;
+            assert!(played.gates[channel][held].iter().all(|&g| g == 1.0), "channel {channel} holds across the tie");
+            let moves = 2000 + 20 * channel;
+            assert_eq!(played.notes[channel][moves - 1] as i32, f[channel]);
+            assert_eq!(played.notes[channel][moves] as i32, g[channel], "channel {channel} moves on its turn");
+        }
+    }
+
+    #[test]
+    fn a_strummed_chord_can_be_edited_while_it_plays() {
+        // The channels the strum has reached follow an edit at once; the
+        // rest take the edited chord when it reaches them
+        let mut seq = ChordSequencer::new();
+        let mut params = strummed(&[(48, MAJ)], 20.0, StrumDirection::Up);
+        run_with(&mut seq, &params, 30, &[0], 30);
+        params[ChordSequencer::step_type_param(0)] = MIN as f32;
+        let after = run_with(&mut seq, &params, 70, &[], 70);
+        assert_eq!(rises_by_channel(&after)[2..], [[10], [30]], "channels 3 and 4 struck 40 and 60 ms in");
+        assert_eq!(after.chord(60), [48, 51, 55, 60], "C minor on every channel");
+    }
+
     #[test]
     fn envelopes_are_not_retriggered_across_a_tie() {
         use crate::modules::envelope::AdsrEnvelope;
@@ -1456,7 +1667,7 @@ mod tests {
 
     #[test]
     fn processing_is_the_same_in_any_block_size() {
-        let params = params_with(&[(50, M7), (55, DOM7), (48, MAJ7), (45, kind("m9"))]);
+        let params = strummed(&[(50, M7), (55, DOM7), (48, MAJ7), (45, kind("m9"))], 15.0, StrumDirection::Alternate);
         let clocks: Vec<usize> = (0..12).map(|i| i * 97).collect();
         let whole = run_with(&mut ChordSequencer::new(), &params, 1200, &clocks, 1200);
         let small = run_with(&mut ChordSequencer::new(), &params, 1200, &clocks, 16);

@@ -24,7 +24,7 @@ The **Root** and **Bass** outputs carry single notes as well: a bass line to pla
 | Port | Signal Type | Description |
 |------|-------------|-------------|
 | **Pitch** | Control (Orange), poly | One channel per note of the chord, as V/Oct, lowest first |
-| **Gate** | Gate (Green), poly | The chord's gate, the same on every channel. Stays high across a tie |
+| **Gate** | Gate (Green), poly | The chord's gate, one channel per note. The channels rise together, or one after another with **Strum**. Stays high across a tie |
 | **Velocity** | Control (Orange), poly | The step's velocity, 0 to 1, on every channel |
 | **Root** | Control (Orange) | The chord's root as V/Oct, in the octave the step was written in |
 | **Bass** | Control (Orange) | The slash chord's bass note, at or below the root; the root when there's no slash |
@@ -38,11 +38,13 @@ The **Root** and **Bass** outputs carry single notes as well: a bass line to pla
 | **Gate** (Gate Length) | 1 – 100% | 100% | How long each chord is held, as a share of the step. 100% holds it up to the next clock |
 | **Voices** | 1 – 8 | 4 | How many channels the cables carry: the notes in each chord |
 | **Range** | 1 – 6 | 3 | The octave the chord's lowest note sits in. 4 is middle C's octave |
+| **Strum** | 0 – 100 ms | 0 ms | Time between one note's gate and the next, as a guitar or harp sounds a chord (see [Strum](#strum)). At 0 every note is struck at once |
 | **Dir** (Direction) | Fwd / Bwd / P-P / Rnd | Fwd | Playback order |
 | **Voicing** | Close / Open / Spread | Close | How the notes are spread out (below) |
 | **Voice lead** (Voice Leading) | on / off | on | Each chord takes the inversion nearest the last |
 | **Bass voice** | on / off | off | Puts the bass note under the chord as the first channel (below) |
 | **Rootless** | on / off | off | The chord leaves out its root first, for a bass that plays it elsewhere (below). Always so with **Bass voice** on |
+| **Strum dir** | Up / Down / Alt | Up | Where a strum starts: on the lowest note, on the highest, or on each in turn, clock by clock |
 
 Each step also stores a root (a note, with its octave), a type, a bass (the root, or one of the twelve notes), a gate, a velocity, a tie, and a top (Auto, or the chord tone to put on top). A new Chord Sequencer starts on Cmaj7, Am7, Fmaj7, G7, with the roots walking down from C2. Patch a [Clock](../modulation/clock.md) into it and it plays a progression straight away.
 
@@ -173,6 +175,25 @@ Timing works as on the [Step Sequencer](./sequencer.md#timing). The sequencer mo
 
 Edits are heard at once. Change the chord that's playing, or **Voices**, **Voicing** or **Range**, and the notes move to match without waiting for the next clock.
 
+## Strum
+
+Normally every note of a chord starts on the same sample. That suits pads and string machines, but a chord sounds stiff on a guitar, a harp or an electric piano, whose players never strike all the notes at once. **Strum** delays each channel's gate by its place in the chord: at 20 ms, the second note starts 20 ms after the first, the third 40 ms after, and so on.
+
+**Strum dir** decides which end starts:
+
+- **Up** starts on the lowest note, like a guitar's downstroke from the bass string, or a harp rolling a chord upward.
+- **Down** starts on the highest note.
+- **Alt** strums up on one clock and down on the next, like a rhythm guitarist's hand going down and up in time. The hand keeps moving through rests and ties, so the strokes stay on the beat they belong to: the first clock after **Reset** strums up, the next down, and so on.
+
+Until the strum reaches a note, that channel keeps playing the chord before, as a string rings until it's struck again. When the strum reaches it, its pitch changes and its gate drops for one sample and rises, all on the same channel. The pitch never arrives after the gate, so no note is struck on the last chord's pitch.
+
+- **Ties** are never struck again. A tied chord still changes its notes in strum order, one channel after another, under gates that stay high: the chord rolls from one to the next without an attack.
+- **A strum fits inside its step.** Once the clock has been measured, the notes are spaced no further apart than the step divided by the number of voices. The last note then sounds before the next chord's first, however fast the clock. Until the clock has been measured, the first chord after **▶ Play** takes the full **Strum** spacing. If the next clock comes before its upper notes, they're skipped.
+- **Gate** applies to each note from its own strike, so every note of a strummed chord is held equally long.
+- **Bass voice** is the first channel, so **Up** strums the bass first and **Down** strums it last.
+
+For a guitar, 10 to 30 ms is a quick strum, and around 50 ms a slow one. A harp's rolled chord is 60 to 100 ms. Sixteenth notes at a fast tempo leave little room, so there the strum shortens to fit the step.
+
 ## Example patches
 
 ### A pad that plays a progression
@@ -195,7 +216,7 @@ Add the Supersaw Pad from the Library, set the Clock to a slow division (1/1, a 
 [Chord Sequencer Gate] ──> [ADSR Gate]       (the bass's envelope)
 ```
 
-**Voicing** Close, **Range** 4, **Gate** around 60%, and velocities that vary from step to step. Write the roots in octave 2 so **Bass** plays a real bass line, slash notes included.
+**Voicing** Close, **Range** 4, **Gate** around 60%, and velocities that vary from step to step. Write the roots in octave 2 so **Bass** plays a real bass line, slash notes included. A **Strum** of 10 to 15 ms loosens the chords the way a player's hand does.
 
 ### Moving an arpeggio through the chords
 
@@ -208,6 +229,7 @@ Patch **Root** into an oscillator's **Exp FM** (at 1.0 octave per volt) while a 
 3. **Ties on a pad** turn a progression into one long breath.
 4. **Dir Rnd** over a set of related chords (Fmaj7, Am7, Cmaj7, Em7) makes ambient harmony that never quite repeats.
 5. **EOC** can clock a second sequencer once per progression, or a Clock Divider for a turnaround every few passes.
+6. **Strummed rhythm guitar:** clock at eighth notes, write each chord on two steps, set **Strum dir** to Alt and **Strum** to about 25 ms, and give the upstrokes a lower velocity. **Voicing** Spread with five or six voices and **Bass voice** on spreads the notes out like a guitar's six strings.
 
 ## Related Modules
 

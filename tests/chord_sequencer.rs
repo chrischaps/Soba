@@ -140,3 +140,51 @@ fn a_tie_carries_the_chord_on_without_a_new_attack() {
     let voices = voices().count();
     assert!(struck_again >= voices - 1, "only {struck_again} of {voices} voices struck again untied");
 }
+
+/// C major (C3 E3 G3) strummed up, `ms` between notes.
+fn strummed(ms: f32) -> Vec<(&'static str, ParameterValue)> {
+    let mut params = c_major(3.0);
+    params.extend([("Strum", ParameterValue::Number(ms)), ("Strum Dir", ParameterValue::Select(0))]);
+    params
+}
+
+fn struck_voices() -> impl Iterator<Item = &'static LibraryGroup> {
+    voices().filter(|g| ["Electric Piano", "Mallet"].contains(&g.name))
+}
+
+#[test]
+fn a_strum_sounds_the_chord_from_the_bottom_up() {
+    // 80 ms apart: C on the beat, E at 80 ms, G at 160 ms. Before G's turn
+    // it's far quieter than in the same chord struck at once (not silent: an
+    // octave up, it's C's 3rd harmonic), and after it it's there
+    assert_eq!(struck_voices().count(), 2);
+    for entry in struck_voices() {
+        let rolled = render(&played(entry, &strummed(80.0)), 0.6);
+        let struck = render(&played(entry, &strummed(0.0)), 0.6);
+        let window = |audio: &[f32], from: f32, to: f32| audio[(from * RATE) as usize..(to * RATE) as usize].to_vec();
+        let g = |audio: &[f32]| [-24, -12, 0, 12].map(|octave| amp_to_db(strength(audio, hz(55 + octave)))).into_iter().fold(f32::MIN, f32::max);
+        let early = g(&window(&struck, 0.02, 0.14)) - g(&window(&rolled, 0.02, 0.14));
+        assert!(early > 10.0, "{}: G before its turn only {early:.1} dB quieter", entry.name);
+        let late = g(&window(&struck, 0.25, 0.55)) - g(&window(&rolled, 0.25, 0.55));
+        assert!(late.abs() < 6.0, "{}: G after its turn {late:.1} dB off", entry.name);
+    }
+}
+
+#[test]
+fn a_strummed_tie_strikes_nothing_again() {
+    // As unstrummed: C major strummed and tied into itself sounds exactly as
+    // the strummed chord held alone
+    for entry in struck_voices() {
+        let held = render(&played_at(entry, 30.0, &strummed(80.0)), 1.5);
+        let mut pair = strummed(80.0);
+        pair[0] = ("Steps", ParameterValue::Number(2.0));
+        pair.extend([
+            ("Step 2 Root", ParameterValue::Number(48.0)),
+            ("Step 2 Type", ParameterValue::Select(0)),
+            ("Step 1 Tie", ParameterValue::Toggle(true)),
+        ]);
+        let tied = render(&played(entry, &pair), 1.5);
+        let difference = held.iter().zip(&tied).map(|(x, y)| (x - y).abs()).fold(0.0, f32::max);
+        assert_eq!(difference, 0.0, "{}: the tie struck again", entry.name);
+    }
+}

@@ -805,6 +805,8 @@ in   Voices             Control  ConstantOnly         inline=false num 4 [1..8] 
 in   Range              Control  ConstantOnly         inline=false num 3 [1..6]  stepped
 in   Bass Voice         Control  ConstantOnly         inline=true  toggle false "Bass voice"
 in   Rootless           Control  ConstantOnly         inline=true  toggle false "Rootless"
+in   Strum              Control  ConstantOnly         inline=false num 0 [0..100] ms
+in   Strum Dir          Control  ConstantOnly         inline=true  select 0 ["Up", "Down", "Alt"] "Strum dir"
 in   Step 1 Root        Control  ConstantOnly         inline=false num 36 [0..127]  stepped
 in   Step 1 Type        Control  ConstantOnly         inline=false select 3 ["maj", "min", "7", "maj7", "m7", "m7b5", "dim", "aug", "sus2", "sus4", "6", "m6", "add9", "maj9", "m9", "9", "11", "13", "madd9"] ""
 in   Step 1 Bass        Control  ConstantOnly         inline=false select 0 ["Root", "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"] ""
@@ -927,6 +929,7 @@ knob Steps              "Steps" KnobOnly
 knob Gate Length        "Gate" KnobOnly
 knob Voices             "Voices" KnobOnly
 knob Range              "Range" KnobOnly
+knob Strum              "Strum" KnobOnly
 monitor [1, 5]
 display ChordGrid
 
