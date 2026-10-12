@@ -55,7 +55,7 @@ While the patch plays, the current step is drawn brighter, with a white outline.
 ### Writing a melody on the piano
 
 ![The step piano](../../images/sequencer-piano.png)
-*E2, G2 and A2 have just gone into steps 4 to 6. Step 6 was a rest, and playing a note on it switched it on. The orange outline on step 7 shows where the next key will land.*
+*E2, G2 and A2 have just gone into steps 4 to 6. Step 6 was a rest, and playing a note on it switched it on. The orange outline on step 7 shows where the next key will land. The slur broken over the row's end is the patch's slide into step 9, which **Slide into this step** sets from the piano.*
 
 Right-click a step and a two-octave piano opens under it, with the step's note lit. Click a key and three things happen: the step takes that note, the step switches on if it was a rest, and the outline moves along to the next step. Play a line of keys and you write the melody into the pattern one step after another, the way step-record works on a hardware sequencer. The piano stays where it opened, so the keys don't move while you play. After the last step it carries on at step 1.
 
