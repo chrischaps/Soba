@@ -2,7 +2,7 @@
 
 A whole song in one patch: four and a half minutes of D minor at 112 BPM, from a first note to a last one, with nobody at the keys. It opens the way every patch in this manual opens, on one sine wave playing a short tune, and part by part the rest of the rack joins in: a pad, an arpeggio, a bass, drums, bells, a supersaw lead. In the breakdown a [Looper](../modules/utilities/looper.md) plays the opening back to itself, reversed and an octave down. The song ends where it began, on the sine alone.
 
-Nothing outside the patch tells it what to do. Two [Arrangers](../modules/utilities/arranger.md) are the score: they count the song in bars, through 24 named sections, and each of their lanes rides one part's fader, picks the drum pattern, strikes the crash or presses a pedal. Eighty modules play their part, of 28 kinds. Left running, it plays the song again from the top.
+Nothing outside the patch tells it what to do. Two [Arrangers](../modules/utilities/arranger.md) are the score: they count the song in bars, through 22 named sections, and each of their lanes rides one part's fader, picks the drum pattern, strikes the crash or presses a pedal. Eighty modules play their part, of 28 kinds. Left running, it plays the song again from the top.
 
 > **Load it:** choose **📚 Examples → From One Sine** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/from-one-sine.json`](https://github.com/chrischaps/Soba/blob/master/patches/from-one-sine.json).
@@ -18,7 +18,7 @@ Nothing outside the patch tells it what to do. Two [Arrangers](../modules/utilit
 <iframe class="patch-film" src="https://www.youtube-nocookie.com/embed/xvmurP7NABw?rel=0" title="From One Sine, filmed in Soba as it plays" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
 *The whole song, filmed in the app as it plays. The camera follows the score: it opens close on the lone sine, visits each part as it enters, pulls back to the whole rack for the drop, and ends where it began. [Watch on YouTube](https://youtu.be/xvmurP7NABw).*
 
-Each section of the song is sixteen bars. On the Arrangers they're 24 sections: a new one wherever a part enters or leaves, and a one-bar **Fill** to close each phrase of the groove.
+Each section of the song is sixteen bars. On the Arrangers they're 22 sections: a new one wherever a part enters or the band changes, a one-bar **Fill** to close each phrase of the groove, and a long last one where the song fades back to its first sound.
 
 | Bars | Section | What happens |
 |------|---------|--------------|
@@ -29,11 +29,12 @@ Each section of the song is sixteen bars. On the Arrangers they're 24 sections: 
 | 65–80 | Memory | The drums, bass and lead drop out. The Looper's take of bars 5–8 plays reversed at half speed under the open pad and sparkles. The sine answers its own ghost. Then a four-bar build with a riser. |
 | 81–96 | Everything | Drums, bass, arpeggio, pad, bells, sparkles and the lead at once, at the brightest the score sets. |
 | 97–112 | Second wave | The lead rests and the sine sings over the groove instead, with the ghost underneath. The lead returns for the last eight bars. |
-| 113–128 | Return | Parts leave one at a time until the sine is alone again. |
+| 113–128 | Return | The lead fades and the drums fall back to the pulse. Then the sine returns, and the other parts fade away around it in the reverse of the order they came, until it's alone again. |
 
 ## What it teaches
 
 - **A patch can hold its own arrangement.** An [Arranger](../modules/utilities/arranger.md) is a timeline of named sections, and its lanes are faders that move on cue. Each section jumps, ramps, holds or hits each lane as it starts.
+- **Swells and fades.** A Ramp can start from a level of its own and take a curve. The parts swell in on lines and fade out on **Log** curves, which fall fast and tail away, much as a fade sounds to the ear.
 - **Smoothing a control voltage.** A lane's **Glide** turns a jump into a glide, so a fader can move under a ringing note without a click: a second for the sustained parts, 40 ms for the rhythmic ones.
 - **One lane, two jobs.** A lane's **Gate** is high while the lane is above zero, so the riser's lane sets its level and opens its envelope for exactly its section.
 - **Harmony from mono parts.** A sequencer for each pad voice, stepping once a bar, sings real chords with real voice-leading. A root sequencer transposes the arpeggio and bass through **Exp FM**.
@@ -47,7 +48,7 @@ Each section of the song is sixteen bars. On the Arrangers they're 24 sections: 
 |--------|------|
 | [Clock](../modules/modulation/clock.md) | **BPM** 112, **Div** 1/16, **Swing** 54% |
 | [Clock Divider](../modules/utilities/divider.md) ×4 | Beats (÷4), eighths (÷2), bars (÷16), and ÷3 for the sparkles |
-| [Arranger](../modules/utilities/arranger.md) ×2 | The score: 24 sections, 128 bars. **Desk** rides eight faders. **Cues** picks the drum pattern, strikes the crash, holds the riser, sets the brightness and the Looper's level, and presses its pedals |
+| [Arranger](../modules/utilities/arranger.md) ×2 | The score: 22 sections, 128 bars. **Desk** rides eight faders. **Cues** picks the drum pattern, strikes the crash, holds the riser, sets the brightness and the Looper's level, and presses its pedals |
 | [Sample & Hold](../modules/utilities/sample-hold.md) | Samples the sparkles' random voltage |
 | [Step Sequencer](../modules/utilities/sequencer.md) ×8 | Roots and three pad voices (a step a bar), the motif (quarters), the arp and bass (sixteenths), the bells (eighths) |
 | [Oscillator](../modules/sources/oscillator.md) ×10 | The sine, the supersaw lead (**Voices** 7), four pad saws, the arp (Square), the bass (Saw), the sparkles (Tri), the riser |
@@ -88,11 +89,17 @@ Each section of the song is sixteen bars. On the Arrangers they're 24 sections: 
 [Cues Gate 3] ──> [Riser ADSR Gate]           (and its envelope)
 ```
 
-Both Arrangers count the Clock's sixteenths, sixteen to a bar, through the same 24 sections: First Sound, Echo, Sparkles, Arp, Pulse, Bass, Bells, Riser, Groove, Fill, Lift, Fill, Memory, Answer, Build, Everything, Fill, Second Wave, Lead Returns, Fill, Return, Sine Returns, Thinning and One Sine. They change section on the same clock edge as the sequencers step on, so the score and the music can't drift apart. **Loop to** is 1, so the song goes round again.
+Both Arrangers count the Clock's sixteenths, sixteen to a bar, through the same 22 sections: First Sound, Echo, Sparkles, Arp, Pulse, Bass, Bells, Riser, Groove, Fill, Lift, Fill, Memory, Answer, Build, Everything, Fill, Second Wave, Lead Returns, Fill, Return and One Sine. They change section on the same clock edge as the sequencers step on, so the score and the music can't drift apart. **Loop to** is 1, so the song goes round again.
 
-**Desk**, the Arranger on the left, has a lane for each fader: the sine, arpeggio, bells, sparkles, bass, pad, wind and lead. On the Echoes, Body and Sky mixers each channel's **Level** knob is at zero, and its **Level** input adds the lane on top. Most sections jump a fader to a new level on their downbeat, and the rest hold it. The pad swells instead: Echo brings it in at 28% and ramps it in a line to 42% over twelve bars, through Sparkles and Arp, which hold. The mixer adds a control voltage without smoothing it, so each lane has a **Glide**: a second for the pad, wind and sparkles, 0.8 s for the sine, 0.3 s for the lead, and 40 ms for the arp, bass and bells, which still land on the downbeat but never cut a tail short.
+**Desk**, the Arranger on the left, has a lane for each fader: the sine, arpeggio, bells, sparkles, bass, pad, wind and lead. On the Echoes, Body and Sky mixers each channel's **Level** knob is at zero, and its **Level** input adds the lane on top.
 
-**Cues**, on the right, has the rest. It [follows](../modules/utilities/arranger.md#more-than-eight-lanes-follow) Desk: Desk's **Section** is patched into its **Follow**, so its sections are always Desk's, and an edit to them on Desk is made on Cues too. **Drums** picks the drum pattern (see [Drums and fills](#drums-and-fills)). **Crash** hits on the downbeat of each big section, and its level is the cymbal's accent. **Riser** jumps to 30% for the Riser section and 32% for the Build. Its CV is the riser's level, and its gate holds the riser's envelope open for exactly those four bars. **Heat** ramps up through the opening, 8% to 48% over seven sections, and keeps climbing to its peak at Everything. Through two Attenuverters it opens the pad's Ladder and drives the bass harder. **Memory** is the Looper's level, and **Rec** and **Clear** hit its pedals.
+The faders swell and fade more than they jump. The wind breathes in over the first twelve bars on a Log curve. Echo brings the pad in at 28% and ramps it in a line to 42% over twelve bars, through Sparkles and Arp, which hold. The sparkles rise over eight bars and thin away over the next twelve as the band arrives. The arpeggio swells in under the sine, then lifts into the Pulse as the sine rests. The bass and the bells come in on swells of their own. Where the music turns on a downbeat (a crash, the breakdown, the drop) the faders still jump: everything that leaves at Memory, or comes back at Everything, goes or comes at once.
+
+One Sine, the last twelve bars, is the score's longest fade. Each part falls on its own curve over its own length, so they leave one after another in the reverse of the order they came: bells, bass, arpeggio, sparkles, pad and wind. Meanwhile the sine climbs a little, to stand alone at the end, as it began. The pad and wind, the bed under everything, fade last, on the gentler S-curve.
+
+The mixer adds a control voltage without smoothing it, so each lane has a **Glide** for its jumps: a second for the pad, wind and sparkles, 0.8 s for the sine, 0.3 s for the lead, and 40 ms for the arp, bass and bells, which still land on the downbeat but never cut a tail short.
+
+**Cues**, on the right, has the rest. It [follows](../modules/utilities/arranger.md#more-than-eight-lanes-follow) Desk: Desk's **Section** is patched into its **Follow**, so its sections are always Desk's, and an edit to them on Desk is made on Cues too. **Drums** picks the drum pattern (see [Drums and fills](#drums-and-fills)). **Crash** hits on the downbeat of each big section, and its level is the cymbal's accent. **Riser** jumps to 30% for the Riser section and 32% for the Build. Its CV is the riser's level, and its gate holds the riser's envelope open for exactly those four bars. **Heat** ramps up through the opening, 8% to 48% over seven sections, and keeps climbing through the groove. The Build drops it to 50% and sweeps it up an Exp curve to its peak, 86%, on the drop. The ending darkens it back down to 10% as the parts fade. Through two Attenuverters it opens the pad's Ladder and drives the bass harder. **Memory** is the Looper's level. It swells in over the breakdown's first four bars and recedes under the Build's riser. **Rec** and **Clear** hit the Looper's pedals.
 
 ### Harmony, a chord a bar
 

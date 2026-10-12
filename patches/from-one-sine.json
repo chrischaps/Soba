@@ -9014,7 +9014,7 @@
         {
           "name": "Sections",
           "type": "Number",
-          "value": 24.0
+          "value": 22.0
         },
         {
           "name": "Loop",
@@ -9169,7 +9169,7 @@
         {
           "name": "Length 22",
           "type": "Number",
-          "value": 4.0
+          "value": 12.0
         },
         {
           "name": "Length 23",
@@ -9724,7 +9724,7 @@
         {
           "name": "Section 13 Lane 5",
           "type": "Number",
-          "value": 1000530.0
+          "value": 6040530.0
         },
         {
           "name": "Section 13 Lane 6",
@@ -9759,12 +9759,12 @@
         {
           "name": "Section 14 Lane 4",
           "type": "Number",
-          "value": 1000620.0
+          "value": 2000620.0
         },
         {
           "name": "Section 14 Lane 5",
           "type": "Number",
-          "value": 1000495.0
+          "value": 2020495.0
         },
         {
           "name": "Section 14 Lane 6",
@@ -9799,12 +9799,12 @@
         {
           "name": "Section 15 Lane 4",
           "type": "Number",
-          "value": 1000550.0
+          "value": 5000860.0
         },
         {
           "name": "Section 15 Lane 5",
           "type": "Number",
-          "value": 1000275.0
+          "value": 2020275.0
         },
         {
           "name": "Section 15 Lane 6",
@@ -9839,7 +9839,7 @@
         {
           "name": "Section 16 Lane 4",
           "type": "Number",
-          "value": 1000860.0
+          "value": 0.0
         },
         {
           "name": "Section 16 Lane 5",
@@ -9919,12 +9919,12 @@
         {
           "name": "Section 18 Lane 4",
           "type": "Number",
-          "value": 1000740.0
+          "value": 2040740.0
         },
         {
           "name": "Section 18 Lane 5",
           "type": "Number",
-          "value": 1000260.0
+          "value": 6040260.0
         },
         {
           "name": "Section 18 Lane 6",
@@ -9964,7 +9964,7 @@
         {
           "name": "Section 19 Lane 5",
           "type": "Number",
-          "value": 1000180.0
+          "value": 2040180.0
         },
         {
           "name": "Section 19 Lane 6",
@@ -10039,12 +10039,12 @@
         {
           "name": "Section 21 Lane 4",
           "type": "Number",
-          "value": 1000500.0
+          "value": 4000500.0
         },
         {
           "name": "Section 21 Lane 5",
           "type": "Number",
-          "value": 1000000.0
+          "value": 6000000.0
         },
         {
           "name": "Section 21 Lane 6",
@@ -10079,7 +10079,7 @@
         {
           "name": "Section 22 Lane 4",
           "type": "Number",
-          "value": 1000360.0
+          "value": 2000100.0
         },
         {
           "name": "Section 22 Lane 5",
@@ -10119,7 +10119,7 @@
         {
           "name": "Section 23 Lane 4",
           "type": "Number",
-          "value": 1000220.0
+          "value": 0.0
         },
         {
           "name": "Section 23 Lane 5",
@@ -10159,7 +10159,7 @@
         {
           "name": "Section 24 Lane 4",
           "type": "Number",
-          "value": 1000100.0
+          "value": 0.0
         },
         {
           "name": "Section 24 Lane 5",
@@ -10500,6 +10500,11 @@
           "name": "Section 32 Lane 8",
           "type": "Number",
           "value": 0.0
+        },
+        {
+          "name": "Section 15 Lane 4 From",
+          "type": "Number",
+          "value": 500.0
         }
       ],
       "labels": {
@@ -10525,9 +10530,7 @@
         "Section 2": "Echo",
         "Section 20": "Fill",
         "Section 21": "Return",
-        "Section 22": "Sine Returns",
-        "Section 23": "Thinning",
-        "Section 24": "One Sine",
+        "Section 22": "One Sine",
         "Section 3": "Sparkles",
         "Section 4": "Arp",
         "Section 5": "Pulse",
@@ -10553,7 +10556,7 @@
         {
           "name": "Sections",
           "type": "Number",
-          "value": 24.0
+          "value": 22.0
         },
         {
           "name": "Loop",
@@ -10708,7 +10711,7 @@
         {
           "name": "Length 22",
           "type": "Number",
-          "value": 4.0
+          "value": 12.0
         },
         {
           "name": "Length 23",
@@ -10793,7 +10796,7 @@
         {
           "name": "Section 01 Lane 7",
           "type": "Number",
-          "value": 1000220.0
+          "value": 6120280.0
         },
         {
           "name": "Section 01 Lane 8",
@@ -10833,7 +10836,7 @@
         {
           "name": "Section 02 Lane 7",
           "type": "Number",
-          "value": 1000260.0
+          "value": 0.0
         },
         {
           "name": "Section 02 Lane 8",
@@ -10858,7 +10861,7 @@
         {
           "name": "Section 03 Lane 4",
           "type": "Number",
-          "value": 1000220.0
+          "value": 4080280.0
         },
         {
           "name": "Section 03 Lane 5",
@@ -10873,7 +10876,7 @@
         {
           "name": "Section 03 Lane 7",
           "type": "Number",
-          "value": 1000280.0
+          "value": 0.0
         },
         {
           "name": "Section 03 Lane 8",
@@ -10883,12 +10886,12 @@
         {
           "name": "Section 04 Lane 1",
           "type": "Number",
-          "value": 1000660.0
+          "value": 2000660.0
         },
         {
           "name": "Section 04 Lane 2",
           "type": "Number",
-          "value": 1000350.0
+          "value": 4000420.0
         },
         {
           "name": "Section 04 Lane 3",
@@ -10898,7 +10901,7 @@
         {
           "name": "Section 04 Lane 4",
           "type": "Number",
-          "value": 1000280.0
+          "value": 0.0
         },
         {
           "name": "Section 04 Lane 5",
@@ -10928,7 +10931,7 @@
         {
           "name": "Section 05 Lane 2",
           "type": "Number",
-          "value": 1000660.0
+          "value": 6080700.0
         },
         {
           "name": "Section 05 Lane 3",
@@ -10938,7 +10941,7 @@
         {
           "name": "Section 05 Lane 4",
           "type": "Number",
-          "value": 1000180.0
+          "value": 4120000.0
         },
         {
           "name": "Section 05 Lane 5",
@@ -10948,12 +10951,12 @@
         {
           "name": "Section 05 Lane 6",
           "type": "Number",
-          "value": 1000500.0
+          "value": 2000500.0
         },
         {
           "name": "Section 05 Lane 7",
           "type": "Number",
-          "value": 1000200.0
+          "value": 4120100.0
         },
         {
           "name": "Section 05 Lane 8",
@@ -10968,7 +10971,7 @@
         {
           "name": "Section 06 Lane 2",
           "type": "Number",
-          "value": 1000700.0
+          "value": 0.0
         },
         {
           "name": "Section 06 Lane 3",
@@ -10978,12 +10981,12 @@
         {
           "name": "Section 06 Lane 4",
           "type": "Number",
-          "value": 1000140.0
+          "value": 0.0
         },
         {
           "name": "Section 06 Lane 5",
           "type": "Number",
-          "value": 1000640.0
+          "value": 4080700.0
         },
         {
           "name": "Section 06 Lane 6",
@@ -10993,7 +10996,7 @@
         {
           "name": "Section 06 Lane 7",
           "type": "Number",
-          "value": 1000160.0
+          "value": 0.0
         },
         {
           "name": "Section 06 Lane 8",
@@ -11013,17 +11016,17 @@
         {
           "name": "Section 07 Lane 3",
           "type": "Number",
-          "value": 1000380.0
+          "value": 6040400.0
         },
         {
           "name": "Section 07 Lane 4",
           "type": "Number",
-          "value": 1000100.0
+          "value": 0.0
         },
         {
           "name": "Section 07 Lane 5",
           "type": "Number",
-          "value": 1000680.0
+          "value": 0.0
         },
         {
           "name": "Section 07 Lane 6",
@@ -11033,7 +11036,7 @@
         {
           "name": "Section 07 Lane 7",
           "type": "Number",
-          "value": 1000120.0
+          "value": 0.0
         },
         {
           "name": "Section 07 Lane 8",
@@ -11053,12 +11056,12 @@
         {
           "name": "Section 08 Lane 3",
           "type": "Number",
-          "value": 1000400.0
+          "value": 4000450.0
         },
         {
           "name": "Section 08 Lane 4",
           "type": "Number",
-          "value": 1000000.0
+          "value": 0.0
         },
         {
           "name": "Section 08 Lane 5",
@@ -11068,12 +11071,12 @@
         {
           "name": "Section 08 Lane 6",
           "type": "Number",
-          "value": 1000480.0
+          "value": 0.0
         },
         {
           "name": "Section 08 Lane 7",
           "type": "Number",
-          "value": 1000100.0
+          "value": 0.0
         },
         {
           "name": "Section 08 Lane 8",
@@ -11093,7 +11096,7 @@
         {
           "name": "Section 09 Lane 3",
           "type": "Number",
-          "value": 1000450.0
+          "value": 0.0
         },
         {
           "name": "Section 09 Lane 4",
@@ -11103,7 +11106,7 @@
         {
           "name": "Section 09 Lane 5",
           "type": "Number",
-          "value": 1000700.0
+          "value": 0.0
         },
         {
           "name": "Section 09 Lane 6",
@@ -11168,12 +11171,12 @@
         {
           "name": "Section 11 Lane 2",
           "type": "Number",
-          "value": 1000660.0
+          "value": 2020660.0
         },
         {
           "name": "Section 11 Lane 3",
           "type": "Number",
-          "value": 1000350.0
+          "value": 2020350.0
         },
         {
           "name": "Section 11 Lane 4",
@@ -11258,7 +11261,7 @@
         {
           "name": "Section 13 Lane 4",
           "type": "Number",
-          "value": 1000360.0
+          "value": 6040360.0
         },
         {
           "name": "Section 13 Lane 5",
@@ -11273,7 +11276,7 @@
         {
           "name": "Section 13 Lane 7",
           "type": "Number",
-          "value": 1000330.0
+          "value": 6040330.0
         },
         {
           "name": "Section 13 Lane 8",
@@ -11293,7 +11296,7 @@
         {
           "name": "Section 14 Lane 3",
           "type": "Number",
-          "value": 1000280.0
+          "value": 6020280.0
         },
         {
           "name": "Section 14 Lane 4",
@@ -11323,22 +11326,22 @@
         {
           "name": "Section 15 Lane 1",
           "type": "Number",
-          "value": 1000300.0
+          "value": 2000300.0
         },
         {
           "name": "Section 15 Lane 2",
           "type": "Number",
-          "value": 1000450.0
+          "value": 5000700.0
         },
         {
           "name": "Section 15 Lane 3",
           "type": "Number",
-          "value": 1000000.0
+          "value": 6020000.0
         },
         {
           "name": "Section 15 Lane 4",
           "type": "Number",
-          "value": 1000000.0
+          "value": 6020000.0
         },
         {
           "name": "Section 15 Lane 5",
@@ -11353,7 +11356,7 @@
         {
           "name": "Section 15 Lane 7",
           "type": "Number",
-          "value": 1000215.0
+          "value": 2020215.0
         },
         {
           "name": "Section 15 Lane 8",
@@ -11448,22 +11451,22 @@
         {
           "name": "Section 18 Lane 2",
           "type": "Number",
-          "value": 1000720.0
+          "value": 2020720.0
         },
         {
           "name": "Section 18 Lane 3",
           "type": "Number",
-          "value": 1000480.0
+          "value": 2020480.0
         },
         {
           "name": "Section 18 Lane 4",
           "type": "Number",
-          "value": 1000360.0
+          "value": 2040360.0
         },
         {
           "name": "Section 18 Lane 5",
           "type": "Number",
-          "value": 1000740.0
+          "value": 2040740.0
         },
         {
           "name": "Section 18 Lane 6",
@@ -11478,12 +11481,12 @@
         {
           "name": "Section 18 Lane 8",
           "type": "Number",
-          "value": 1000000.0
+          "value": 6020000.0
         },
         {
           "name": "Section 19 Lane 1",
           "type": "Number",
-          "value": 1000460.0
+          "value": 2020460.0
         },
         {
           "name": "Section 19 Lane 2",
@@ -11493,12 +11496,12 @@
         {
           "name": "Section 19 Lane 3",
           "type": "Number",
-          "value": 1000450.0
+          "value": 2020450.0
         },
         {
           "name": "Section 19 Lane 4",
           "type": "Number",
-          "value": 1000285.0
+          "value": 2020285.0
         },
         {
           "name": "Section 19 Lane 5",
@@ -11568,12 +11571,12 @@
         {
           "name": "Section 21 Lane 2",
           "type": "Number",
-          "value": 1000620.0
+          "value": 4000620.0
         },
         {
           "name": "Section 21 Lane 3",
           "type": "Number",
-          "value": 1000350.0
+          "value": 4000350.0
         },
         {
           "name": "Section 21 Lane 4",
@@ -11583,7 +11586,7 @@
         {
           "name": "Section 21 Lane 5",
           "type": "Number",
-          "value": 1000560.0
+          "value": 4000400.0
         },
         {
           "name": "Section 21 Lane 6",
@@ -11598,42 +11601,42 @@
         {
           "name": "Section 21 Lane 8",
           "type": "Number",
-          "value": 1000000.0
+          "value": 6000000.0
         },
         {
           "name": "Section 22 Lane 1",
           "type": "Number",
-          "value": 1000595.0
+          "value": 4080640.0
         },
         {
           "name": "Section 22 Lane 2",
           "type": "Number",
-          "value": 1000420.0
+          "value": 6060000.0
         },
         {
           "name": "Section 22 Lane 3",
           "type": "Number",
-          "value": 1000250.0
+          "value": 6030000.0
         },
         {
           "name": "Section 22 Lane 4",
           "type": "Number",
-          "value": 1000190.0
+          "value": 6080000.0
         },
         {
           "name": "Section 22 Lane 5",
           "type": "Number",
-          "value": 1000000.0
+          "value": 6040000.0
         },
         {
           "name": "Section 22 Lane 6",
           "type": "Number",
-          "value": 1000395.0
+          "value": 2100000.0
         },
         {
           "name": "Section 22 Lane 7",
           "type": "Number",
-          "value": 1000215.0
+          "value": 2000000.0
         },
         {
           "name": "Section 22 Lane 8",
@@ -11643,22 +11646,22 @@
         {
           "name": "Section 23 Lane 1",
           "type": "Number",
-          "value": 1000635.0
+          "value": 0.0
         },
         {
           "name": "Section 23 Lane 2",
           "type": "Number",
-          "value": 1000000.0
+          "value": 0.0
         },
         {
           "name": "Section 23 Lane 3",
           "type": "Number",
-          "value": 1000000.0
+          "value": 0.0
         },
         {
           "name": "Section 23 Lane 4",
           "type": "Number",
-          "value": 1000135.0
+          "value": 0.0
         },
         {
           "name": "Section 23 Lane 5",
@@ -11668,12 +11671,12 @@
         {
           "name": "Section 23 Lane 6",
           "type": "Number",
-          "value": 1000275.0
+          "value": 0.0
         },
         {
           "name": "Section 23 Lane 7",
           "type": "Number",
-          "value": 1000175.0
+          "value": 0.0
         },
         {
           "name": "Section 23 Lane 8",
@@ -11698,7 +11701,7 @@
         {
           "name": "Section 24 Lane 4",
           "type": "Number",
-          "value": 1000000.0
+          "value": 0.0
         },
         {
           "name": "Section 24 Lane 5",
@@ -11708,12 +11711,12 @@
         {
           "name": "Section 24 Lane 6",
           "type": "Number",
-          "value": 1000000.0
+          "value": 0.0
         },
         {
           "name": "Section 24 Lane 7",
           "type": "Number",
-          "value": 1000000.0
+          "value": 0.0
         },
         {
           "name": "Section 24 Lane 8",
@@ -12044,6 +12047,51 @@
           "name": "Section 02 Lane 6 From",
           "type": "Number",
           "value": 280.0
+        },
+        {
+          "name": "Section 01 Lane 7 From",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 03 Lane 4 From",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 04 Lane 2 From",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 06 Lane 5 From",
+          "type": "Number",
+          "value": 400.0
+        },
+        {
+          "name": "Section 07 Lane 3 From",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 14 Lane 3 From",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 15 Lane 2 From",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Section 22 Lane 1 From",
+          "type": "Number",
+          "value": 595.0
+        },
+        {
+          "name": "Section 22 Lane 7 From",
+          "type": "Number",
+          "value": 215.0
         }
       ],
       "labels": {
@@ -12070,9 +12118,7 @@
         "Section 2": "Echo",
         "Section 20": "Fill",
         "Section 21": "Return",
-        "Section 22": "Sine Returns",
-        "Section 23": "Thinning",
-        "Section 24": "One Sine",
+        "Section 22": "One Sine",
         "Section 3": "Sparkles",
         "Section 4": "Arp",
         "Section 5": "Pulse",
@@ -13158,7 +13204,7 @@
   ],
   "notes": [
     {
-      "text": "**This patch is its own score.** Two **Arrangers** count the song in bars, 24 sections from First Sound to One Sine. **Desk**, on the left, rides eight faders. **Cues** follows Desk's sections, through the cable into its **Follow**, and picks the drum pattern, strikes the crash, holds the riser, brightens the pad and bass, and presses the Looper's pedals.",
+      "text": "**This patch is its own score.** Two **Arrangers** count the song in bars, 22 sections from First Sound to One Sine. **Desk**, on the left, rides eight faders. **Cues** follows Desk's sections, through the cable into its **Follow**, and picks the drum pattern, strikes the crash, holds the riser, brightens the pad and bass, and presses the Looper's pedals.",
       "position": [
         24.0,
         450.0

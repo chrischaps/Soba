@@ -173,3 +173,27 @@ fn the_pad_enters_and_swells_through_the_opening() {
     // There on bar 17's downbeat, where Pulse lifts it again
     assert!((pad[bar_17 - 1] - 0.42).abs() < 1e-4, "42% by bar 17: {}", pad[bar_17 - 1]);
 }
+
+#[test]
+fn the_parts_fade_away_in_the_order_they_came() {
+    // Desk's lanes: the sine, arp, bells, sparkles, bass, pad, wind and lead.
+    // From bar 117 each part but the sine fades, and they leave in the
+    // reverse of the order the opening brought them in
+    let (played, _) = play("Sine", 275.0);
+    let clocks = rises(&played.clock);
+    let (bar_117, bar_129) = (clocks[116 * 16], clocks[128 * 16]);
+    let settled = bar_117 + RATE as usize;
+    let gone = |lane: usize| {
+        let cv = &played.lanes[lane];
+        assert!(cv[settled] > 0.1, "lane {} still playing as the sine returns", lane + 1);
+        for t in settled + 1..bar_129 {
+            assert!(cv[t] <= cv[t - 1], "lane {} rises at sample {t}", lane + 1);
+        }
+        assert_eq!(cv[bar_129 - 1], 0.0, "lane {} silent by the loop", lane + 1);
+        (settled..bar_129).find(|&t| cv[t] < 0.01).unwrap()
+    };
+    let (wind, pad, sparkles, arp, bass, bells) = (gone(6), gone(5), gone(3), gone(1), gone(4), gone(2));
+    assert!(bells < bass && bass < arp && arp < sparkles && sparkles < pad && pad < wind, "bells, bass, arp, sparkles, pad, wind");
+    // Leaving the sine alone, as it began
+    assert!(played.lanes[0][bar_129 - 1] > 0.6, "the sine at the end: {}", played.lanes[0][bar_129 - 1]);
+}
