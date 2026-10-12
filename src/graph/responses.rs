@@ -41,6 +41,13 @@ pub enum SynthResponse {
         param_name: String,
         value: f32,
     },
+    /// A chord played on a node's outputs from its face while a hand is
+    /// down, or `None` once it lifts: played, like `PlayParameter`, and
+    /// never kept or undone.
+    Audition {
+        node_id: egui_node_graph2::NodeId,
+        chord: Option<crate::dsp::Audition>,
+    },
     /// A node was selected by right-clicking it, so its menu acts on it.
     NodeSelected(egui_node_graph2::NodeId),
     /// A node was deselected.

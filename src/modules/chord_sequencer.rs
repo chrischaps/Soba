@@ -13,10 +13,14 @@
 //! With Strum up, the voices don't all start on the clock: each channel's
 //! gate rises a little after the one before, up or down the chord, as a
 //! guitarist's pick or a harpist's fingers sound it.
+//!
+//! A chord being played into its face can be heard on its outputs (see
+//! [`DspModule::audition`]): it sounds for as long as the hand is down,
+//! clock or no clock, and the sequence comes back on its next chord.
 
 use crate::dsp::{
     context::ProcessContext,
-    module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
+    module_trait::{Audition, DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
     signal::{SignalBuffer, MAX_CHANNELS},
@@ -475,6 +479,14 @@ pub struct ChordSequencer {
     sounding: Sounding,
     /// The chord before it, which voice leading moves from.
     before: Option<Chord>,
+    /// A chord played from the face: sounding while `auditioning`, and
+    /// after that holding its pitches through the release until the
+    /// sequence strikes a chord of its own.
+    audition: Option<Audition>,
+    auditioning: bool,
+    /// The audition has just begun: its first sample's gates are low, so
+    /// an envelope already open starts again.
+    audition_attack: bool,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
 }
@@ -580,6 +592,9 @@ impl ChordSequencer {
             sample_rate: 44100.0,
             sounding: Sounding::SILENT,
             before: None,
+            audition: None,
+            auditioning: false,
+            audition_attack: false,
             ports,
             parameters,
         }
@@ -753,12 +768,23 @@ impl ChordSequencer {
         }
     }
 
-    /// The note on a channel now: the chord before, until the strum
-    /// reaches it.
+    /// The note on a channel now: an audition's, or the chord before,
+    /// until the strum reaches it.
     fn playing(&self, channel: usize) -> i32 {
+        if let Some(notes) = self.audition.as_ref().map(Audition::notes).filter(|notes| !notes.is_empty()) {
+            return notes[channel.min(notes.len() - 1)] as i32;
+        }
         match self.strum_wait[channel] {
             Some(_) => self.held[channel],
             None => self.sounding.channels.notes[channel],
+        }
+    }
+
+    /// How many channels have a note to show.
+    fn notes_shown(&self) -> usize {
+        match self.audition {
+            Some(audition) if self.auditioning => audition.notes().len(),
+            _ => self.sounding.channels.len,
         }
     }
 
@@ -915,6 +941,10 @@ impl DspModule for ChordSequencer {
                     for channel in 0..channels {
                         self.held[channel] = self.playing(channel);
                     }
+                    // An audition let go of rings until now, as a chord before would
+                    if !self.auditioning {
+                        self.audition = None;
+                    }
                     self.legato = self.tied;
                     self.gate_len = self.gate_samples(gate_length, tie);
                     self.tied = tie;
@@ -940,7 +970,14 @@ impl DspModule for ChordSequencer {
                 self.current_step = 0;
             }
 
-            let velocity = params[Self::step_velocity_param(self.current_step)] / 127.0;
+            let velocity = match self.audition {
+                Some(audition) => audition.velocity,
+                None => params[Self::step_velocity_param(self.current_step)] / 127.0,
+            };
+            // An audition's gates are held while the hand is down, over
+            // whatever the sequence is doing underneath
+            let auditioned = self.audition.filter(|_| self.auditioning).map(|a| if self.audition_attack { 0 } else { a.notes().len() });
+            self.audition_attack = false;
             for channel in 0..channels {
                 // The strum reaches this channel: its note moves and, unless
                 // the chord was tied into, its gate drops for this sample so
@@ -951,15 +988,21 @@ impl DspModule for ChordSequencer {
                     retrigger = self.gate_high[channel] && !self.legato;
                     self.gate_timers[channel] = self.gate_len;
                 }
-                let gate_active = self.gate_timers[channel] > 0 && !retrigger;
+                let gate_active = match auditioned {
+                    Some(notes) => channel < notes,
+                    None => self.gate_timers[channel] > 0 && !retrigger,
+                };
                 self.gate_high[channel] = gate_active;
                 outputs[Self::PORT_PITCH].channel_mut(channel)[i] = note_to_voct(self.playing(channel));
                 outputs[Self::PORT_GATE].channel_mut(channel)[i] = if gate_active { 1.0 } else { 0.0 };
                 outputs[Self::PORT_VELOCITY].channel_mut(channel)[i] = velocity;
             }
-            let sounding = &self.sounding;
-            outputs[Self::PORT_ROOT].samples[i] = note_to_voct(sounding.spec.root);
-            outputs[Self::PORT_BASS].samples[i] = note_to_voct(sounding.spec.bass_note());
+            let (root, bass) = match self.audition {
+                Some(audition) => (audition.root as i32, audition.bass as i32),
+                None => (self.sounding.spec.root, self.sounding.spec.bass_note()),
+            };
+            outputs[Self::PORT_ROOT].samples[i] = note_to_voct(root);
+            outputs[Self::PORT_BASS].samples[i] = note_to_voct(bass);
             outputs[Self::PORT_EOC].samples[i] = if self.eoc_timer > 0 { 1.0 } else { 0.0 };
 
             for timer in &mut self.gate_timers {
@@ -990,15 +1033,40 @@ impl DspModule for ChordSequencer {
         self.eoc_timer = 0;
         self.sounding = Sounding::SILENT;
         self.before = None;
+        self.audition = None;
+        self.auditioning = false;
+        self.audition_attack = false;
     }
 
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
         let mut readout = Readout::default();
         readout.values[Self::READOUT_STEP] = self.current_step as f32;
+        let shown = self.notes_shown();
         for (i, value) in readout.values[Self::READOUT_NOTES..].iter_mut().enumerate() {
-            *value = if i < self.sounding.channels.len { self.playing(i) as f32 } else { -1.0 };
+            *value = if i < shown { self.playing(i) as f32 } else { -1.0 };
         }
         Some(readout)
+    }
+
+    /// A chord played in from the face sounds at once and is held until
+    /// the hand lifts. Then the sequence's own gates are let go of, so its
+    /// next chord, not one struck while the hand was down, is what's heard
+    /// after.
+    fn audition(&mut self, chord: Option<Audition>) {
+        match chord.filter(|chord| !chord.notes().is_empty()) {
+            Some(chord) => {
+                self.audition_attack |= !self.auditioning;
+                self.audition = Some(chord);
+                self.auditioning = true;
+            }
+            None if self.auditioning => {
+                self.auditioning = false;
+                self.audition_attack = false;
+                self.gate_timers = [0; MAX_VOICES];
+                self.strum_wait = [None; MAX_VOICES];
+            }
+            None => {}
+        }
     }
 
     fn polyphonic(&self) -> bool {
@@ -1673,6 +1741,88 @@ mod tests {
         let small = run_with(&mut ChordSequencer::new(), &params, 1200, &clocks, 16);
         assert_eq!(whole.notes[..4], small.notes[..4]);
         assert_eq!(whole.gates[..4], small.gates[..4]);
+    }
+
+    /// A chord as the popover auditions it.
+    fn audition(notes: &[u8], root: u8, bass: u8) -> Audition {
+        let mut chord = Audition { len: notes.len() as u8, root, bass, velocity: 0.5, ..Audition::default() };
+        chord.notes[..notes.len()].copy_from_slice(notes);
+        chord
+    }
+
+    #[test]
+    fn an_audition_sounds_without_a_clock() {
+        let params = params_with(&[(48, MAJ7)]);
+        let mut seq = ChordSequencer::new();
+        let quiet = run_with(&mut seq, &params, 50, &[], 50);
+        assert!(quiet.gates[..4].iter().flatten().all(|&g| g == 0.0), "nothing plays before a clock");
+
+        // Am/G#, held
+        seq.audition(Some(audition(&[56, 57, 60, 64], 57, 56)));
+        let held = run_with(&mut seq, &params, 100, &[], 100);
+        assert_eq!(held.chord(50), [56, 57, 60, 64]);
+        assert_eq!((held.root[50], held.bass[50]), (57.0, 56.0));
+        for gate in &held.gates[..4] {
+            assert_eq!(rises(gate), [1], "every gate rises together, after one low sample");
+            assert!(gate[1..].iter().all(|&g| g == 1.0), "and stays up while the hand is down");
+        }
+        let readout = seq.readout(&params).unwrap();
+        assert_eq!(&readout.values[1..6], &[56.0, 57.0, 60.0, 64.0, -1.0], "the face shows it");
+
+        // Let go: the gates fall, and the notes ring where they were
+        seq.audition(None);
+        let after = run_with(&mut seq, &params, 100, &[], 100);
+        assert!(after.gates[..4].iter().flatten().all(|&g| g == 0.0));
+        assert_eq!(after.chord(99), [56, 57, 60, 64], "the release fades on the chord heard");
+    }
+
+    #[test]
+    fn an_audition_strikes_over_a_chord_already_sounding() {
+        let params = params_with(&[(48, MAJ7)]);
+        let mut seq = ChordSequencer::new();
+        run_with(&mut seq, &params, 50, &[0], 50);
+        seq.audition(Some(audition(&[45, 48, 52, 55], 45, 45)));
+        let struck = run_with(&mut seq, &params, 10, &[], 10);
+        for gate in &struck.gates[..4] {
+            assert_eq!(gate[..3], [0.0, 1.0, 1.0], "an open envelope starts again");
+        }
+        // A note more under the same hand moves the pitches, without a new attack
+        seq.audition(Some(audition(&[43, 45, 48, 52], 45, 43)));
+        let moved = run_with(&mut seq, &params, 10, &[], 10);
+        assert_eq!(moved.chord(0), [43, 45, 48, 52]);
+        assert!(moved.gates[..4].iter().flatten().all(|&g| g == 1.0));
+    }
+
+    #[test]
+    fn the_sequence_comes_back_on_its_next_chord() {
+        let params = params_with(&[(48, MAJ7), (45, M7)]);
+        let mut seq = ChordSequencer::new();
+        run_with(&mut seq, &params, 100, &[0], 100);
+        // Held over a clock: the audition goes on sounding
+        seq.audition(Some(audition(&[50, 53, 57, 60], 50, 50)));
+        let held = run_with(&mut seq, &params, 100, &[50], 100);
+        assert_eq!(held.chord(99), [50, 53, 57, 60]);
+        assert!(held.gates[..4].iter().all(|gate| gate[99] == 1.0));
+        // Let go: the chord the clock struck underneath isn't heard
+        seq.audition(None);
+        let after = run_with(&mut seq, &params, 100, &[50], 100);
+        assert!(after.gates[..4].iter().all(|gate| gate[..50].iter().all(|&g| g == 0.0)));
+        assert_eq!(after.chord(49), [50, 53, 57, 60], "the audition rings until the next chord");
+        // The next clock plays the sequence's own chord, Cmaj7
+        assert!(after.gates[..4].iter().all(|gate| rises(gate) == [50]));
+        assert_eq!(after.chord(60), [48, 52, 55, 59]);
+        assert_eq!(after.root[60], 48.0);
+    }
+
+    #[test]
+    fn stopping_forgets_an_audition() {
+        let params = params_with(&[(48, MAJ7)]);
+        let mut seq = ChordSequencer::new();
+        seq.audition(Some(audition(&[60, 64, 67], 60, 60)));
+        seq.reset();
+        let after = run_with(&mut seq, &params, 20, &[], 20);
+        assert!(after.gates[..4].iter().flatten().all(|&g| g == 0.0));
+        assert_eq!(after.chord(0), [48, 52, 55, 59]);
     }
 
     #[test]

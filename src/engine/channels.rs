@@ -227,8 +227,9 @@ pub struct UiHandle {
     unsent_plan: Option<Box<GraphPlan>>,
     /// Play/stop changes that didn't fit in the queue yet.
     unsent_transport: UnsentTransport,
-    /// Recording starts and stops, and audio inputs connected and
-    /// disconnected, that didn't fit in the queue yet, in order.
+    /// Recording starts and stops, audio inputs connected and
+    /// disconnected, and chords auditioned, that didn't fit in the queue
+    /// yet, in order.
     unsent_handoffs: Vec<AudioMessage>,
     /// Recordings for running modules, and snapshots of them, waiting
     /// until the plans holding those modules are sent, and then for room in
@@ -264,6 +265,12 @@ impl UiHandle {
                 if self.message_tx.push(AudioMessage::SetBypass { node_id, bypassed }).is_err() {
                     self.graph.mark_dirty();
                 }
+            }
+            EngineCommand::Audition { node_id, chord } => {
+                // Kept until there's room, in order: a chord let go of mustn't
+                // be lost, or it would go on sounding
+                self.unsent_handoffs.push(AudioMessage::Audition { node_id, chord });
+                self.send_handoffs();
             }
             EngineCommand::SetPlaying(playing) => {
                 self.unsent_transport.push(playing);
@@ -637,6 +644,10 @@ mod tests {
                 AudioMessage::SetBypass { node_id, bypassed } => {
                     current.set_bypass(node_id, bypassed);
                     seen.push("bypass");
+                }
+                AudioMessage::Audition { node_id, chord } => {
+                    current.audition(node_id, chord);
+                    seen.push(if chord.is_some() { "audition" } else { "audition off" });
                 }
                 AudioMessage::SetParameter { node_id, param_index, value } => {
                     current.set_parameter(node_id, param_index, value);

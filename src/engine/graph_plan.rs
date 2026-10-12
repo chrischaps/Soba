@@ -30,7 +30,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::dsp::{DspModule, MeterLevels, OutputLevels, ProcessContext, Readout, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
+use crate::dsp::{Audition, DspModule, MeterLevels, OutputLevels, ProcessContext, Readout, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
 use crate::engine::commands::{ChannelPeaks, NodeId, PortIndex};
 
 pub use crate::dsp::module_trait::MAX_INPUTS;
@@ -299,6 +299,16 @@ impl GraphPlan {
             .find(|node| node.node_id == node_id && !node.dry.is_empty())
             .map(|node| node.bypassed = bypassed)
             .is_some()
+    }
+
+    /// Plays a chord on a module's outputs from its face, or stops (see
+    /// [`DspModule::audition`]). Ignored if the node isn't in this plan.
+    ///
+    /// REAL-TIME SAFE.
+    pub fn audition(&mut self, node_id: NodeId, chord: Option<Audition>) {
+        if let Some(module) = self.nodes.iter_mut().find(|node| node.node_id == node_id).and_then(|node| node.module.as_mut()) {
+            module.audition(chord);
+        }
     }
 
     /// Resets the internal state of every module (oscillator phases, filter

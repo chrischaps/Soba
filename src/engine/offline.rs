@@ -102,6 +102,10 @@ impl OfflineRenderer {
             EngineCommand::SetBypass { node_id, bypassed } => {
                 self.plan.set_bypass(node_id, bypassed);
             }
+            EngineCommand::Audition { node_id, chord } => {
+                self.plan.audition(node_id, chord);
+                return true;
+            }
             _ => {}
         }
         self.graph.handle_command(command)

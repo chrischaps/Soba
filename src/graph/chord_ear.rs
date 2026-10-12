@@ -7,7 +7,8 @@
 //! While the popover is open the letter keys are its, the way a text field
 //! takes them: the Keyboard modules don't hear them (see [`letter_keys_taken`]),
 //! so writing a chord doesn't also play the patch's lead. They play the
-//! popover's piano, Z on its lowest C, so its ‹ › move them an octave too.
+//! popover's piano, Z on its lowest C, so its ‹ › move them an octave too,
+//! and the chord sounds through the sequencer's own voices while it's held.
 //! A MIDI keyboard plays through to the patch as always.
 
 use eframe::egui::{self, Id, Key};
@@ -21,6 +22,8 @@ pub(super) struct ChordEar {
     keys: Vec<(Key, u8)>,
     /// Every note held since the first went down, lowest first.
     heard: Vec<u8>,
+    /// Whether a letter key is among them.
+    keyed: bool,
 }
 
 impl ChordEar {
@@ -54,8 +57,10 @@ impl ChordEar {
     pub fn listen(&mut self, midi: &[u8]) -> Option<Vec<u8>> {
         let held = self.held(midi);
         if held.is_empty() {
+            self.keyed = false;
             return (!self.heard.is_empty()).then(|| std::mem::take(&mut self.heard));
         }
+        self.keyed |= !self.keys.is_empty();
         self.heard.extend(held);
         self.heard.sort_unstable();
         self.heard.dedup();
@@ -65,6 +70,12 @@ impl ChordEar {
     /// The notes gathered so far, while a chord is being played.
     pub fn gathering(&self) -> &[u8] {
         &self.heard
+    }
+
+    /// Whether the chord being gathered was played, in part, on the letter
+    /// keys, which nothing else in the patch hears while the popover's open.
+    pub fn keyed(&self) -> bool {
+        self.keyed
     }
 }
 
@@ -125,6 +136,21 @@ mod tests {
         assert_eq!(ear.listen(&[64, 67]), None);
         ear.follow_keys(&[key(Key::Z, false)], 36);
         assert_eq!(ear.listen(&[]), Some(vec![36, 64, 67]));
+    }
+
+    #[test]
+    fn the_ear_knows_a_chord_played_on_the_letter_keys() {
+        let mut ear = ChordEar::default();
+        ear.listen(&[60, 64]);
+        assert!(!ear.keyed(), "MIDI alone");
+        // A letter key joins, and lifts before the MIDI notes do
+        ear.follow_keys(&[key(Key::B, true)], 60);
+        ear.listen(&[60, 64]);
+        ear.follow_keys(&[key(Key::B, false)], 60);
+        ear.listen(&[60, 64]);
+        assert!(ear.keyed(), "still part of the chord being gathered");
+        assert_eq!(ear.listen(&[]), Some(vec![60, 64, 67]));
+        assert!(!ear.keyed(), "the next chord starts afresh");
     }
 
     #[test]

@@ -159,6 +159,10 @@ pub struct SynthApp {
     /// Whether the gate is currently being held high (for minimum duration).
     gate_held_high: bool,
 
+    /// The engine node a chord popover is auditioning a chord on, so it
+    /// can be stopped if the popover goes without lifting it.
+    auditioning: Option<u64>,
+
     /// Current CPU load percentage from the audio engine (0-100).
     cpu_load: f32,
 
@@ -418,6 +422,7 @@ impl SynthApp {
             pressed_keys: Vec::new(),
             last_gate_on: None,
             gate_held_high: false,
+            auditioning: None,
             cpu_load: 0.0,
             toolbar_full_width: None,
             audio_heartbeat: (0, Instant::now()),
@@ -789,6 +794,16 @@ impl SynthApp {
         self.send_command(EngineCommand::SetParameter { node_id: engine_node_id, param_index, value });
         self.cached_params.insert((engine_node_id, param_index), value);
         self.update_graph_param_from_cc(engine_node_id, param_index, value);
+    }
+
+    /// Plays a chord on a node's outputs from its face, or stops it.
+    fn audition(&mut self, node_id: egui_node_graph2::NodeId, chord: Option<crate::dsp::Audition>) {
+        let Some(engine_node_id) = self.user_state.get_engine_node_id(node_id) else { return };
+        if let Some(other) = self.auditioning.filter(|&other| other != engine_node_id) {
+            self.send_command(EngineCommand::Audition { node_id: other, chord: None });
+        }
+        self.send_command(EngineCommand::Audition { node_id: engine_node_id, chord });
+        self.auditioning = chord.map(|_| engine_node_id);
     }
 
     /// Update a graph parameter value from a CC change.
@@ -1803,6 +1818,9 @@ impl SynthApp {
                         }
                         NodeResponse::User(crate::graph::SynthResponse::PlayParameter { node_id: response_node_id, param_name, value }) => {
                             self.play_parameter(response_node_id, &param_name, value);
+                        }
+                        NodeResponse::User(crate::graph::SynthResponse::Audition { node_id: response_node_id, chord }) => {
+                            self.audition(response_node_id, chord);
                         }
                         NodeResponse::User(crate::graph::SynthResponse::EditParameters {
                             node_id: response_node_id,
@@ -3588,6 +3606,12 @@ impl SynthApp {
     fn handle_keyboard_events(&mut self, ctx: &egui::Context) {
         // Asked every frame, so the popover's claim lapses once it closes
         let chord_popover = crate::graph::letter_keys_taken(ctx);
+        // A popover that went (its node deleted, or out of view) without
+        // lifting its chord leaves it sounding: stop it
+        if let (false, Some(node_id)) = (chord_popover, self.auditioning) {
+            self.send_command(EngineCommand::Audition { node_id, chord: None });
+            self.auditioning = None;
+        }
 
         // Skip if modifier keys are held (those are shortcuts, not notes)
         let skip_keyboard = ctx.input(|i| {

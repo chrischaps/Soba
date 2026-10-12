@@ -20,7 +20,7 @@ pub mod smoothed_value;
 
 // Re-export commonly used types
 pub use context::{InputAudio, ProcessContext, TransportState};
-pub use module_trait::{DspModule, MeterLevels, ModuleCategory, ModuleError, ModuleInfo, OutputLevels, Readout, MAX_METERS, MAX_READOUT};
+pub use module_trait::{Audition, DspModule, MeterLevels, ModuleCategory, ModuleError, ModuleInfo, OutputLevels, Readout, MAX_METERS, MAX_READOUT};
 pub use parameter::{ParameterDefinition, ParameterDisplay};
 pub use poly::Poly;
 pub use port::{PortDefinition, PortDirection};

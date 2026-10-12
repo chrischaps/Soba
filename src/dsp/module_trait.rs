@@ -7,7 +7,7 @@ use super::context::{ProcessContext, TransportState};
 use super::parameter::ParameterDefinition;
 use super::port::PortDefinition;
 use super::sample::{SampleData, Snapshot, SnapshotOutcome};
-use super::SignalBuffer;
+use super::{SignalBuffer, MAX_CHANNELS};
 use egui::Color32;
 use egui_node_graph2::CategoryTrait;
 use std::fmt;
@@ -53,6 +53,29 @@ pub const MAX_READOUT: usize = 32;
 pub struct Readout {
     /// The values, in the module's own order.
     pub values: [f32; MAX_READOUT],
+}
+
+/// A chord played on a module's own outputs from its face while a hand is
+/// down: a Chord Sequencer's popover lets it be heard as it's written.
+/// Fixed-size, so it reaches the audio thread without allocating.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Audition {
+    /// The notes as MIDI numbers, one per channel, lowest channel first.
+    pub notes: [u8; MAX_CHANNELS],
+    /// How many of `notes` play.
+    pub len: u8,
+    /// The chord's root and bass, as MIDI numbers.
+    pub root: u8,
+    pub bass: u8,
+    /// How hard it's played, 0 to 1.
+    pub velocity: f32,
+}
+
+impl Audition {
+    /// The notes that play.
+    pub fn notes(&self) -> &[u8] {
+        &self.notes[..(self.len as usize).min(MAX_CHANNELS)]
+    }
 }
 
 /// Category of a DSP module, used for organization and UI coloring.
@@ -374,6 +397,13 @@ pub trait DspModule: Send + 'static {
     fn is_live_input(&self) -> bool {
         false
     }
+
+    /// Plays `chord` on the module's outputs in place of its own until
+    /// it's taken away with `None`, for a module whose face lets a chord be
+    /// heard as it's played in. Modules that don't audition ignore it.
+    ///
+    /// REAL-TIME SAFE: called on the audio thread between blocks.
+    fn audition(&mut self, _chord: Option<Audition>) {}
 
     /// Gives the module a recording to play (a Sampler's file), or takes
     /// its recording away with `None`. Called on the audio thread, or on

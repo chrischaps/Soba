@@ -87,8 +87,9 @@ With the popover open, you can also play the chord. Hold it on a MIDI keyboard, 
 - **Leaving out the 5th is fine.** C E B♭ D is C9, and C E B♭ A is C13: players often leave out the 5th, and a 13's 9th.
 - **A single note sets the root.** The step keeps its type and loses any slash bass.
 - **Notes that fit no chord get the nearest one.** The popover shows what it heard and what didn't fit, such as "nearest: no G · Db left out". Fix it with the chips, or play it again.
+- **You hear the chord as it will play.** While your hand is down, the sequencer plays the chord on its own cables, so the patch's voices sound it whether or not the Clock is running. You hear it already named and voiced: in the **Range** octave, as many notes as **Voices**, with the bass on the first channel if **Bass Voice** is on. Am/G# and G#dim7 sound different, even though you played the same keys. When you let go, the chord fades out on its release, and the sequence comes back with its next chord. If the patch has a MIDI module, it already plays the MIDI keyboard, so only chords with letter keys in them are heard this way. The patch must be playing for any of this to sound.
 
-While the popover is open, the letter keys belong to it, the way a text field takes them. The Keyboard modules don't hear them, so writing chords doesn't play the patch's lead. The letter keys play the popover's piano, with **Z** on its lowest C, and **‹ ›** move them an octave as well. A MIDI keyboard still plays the patch as usual. Each chord you play is one undo step.
+While the popover is open, the letter keys belong to it, the way a text field takes them. The Keyboard modules don't hear them, so writing chords plays the chord, not the patch's lead. The letter keys play the popover's piano, with **Z** on its lowest C, and **‹ ›** move them an octave as well. A MIDI keyboard still plays the patch as usual. Each chord you play is one undo step.
 
 ## Chord types
 

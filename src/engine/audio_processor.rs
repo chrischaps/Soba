@@ -413,6 +413,9 @@ impl AudioProcessor {
                 AudioMessage::SetBypass { node_id, bypassed } => {
                     self.plan.set_bypass(node_id, bypassed);
                 }
+                AudioMessage::Audition { node_id, chord } => {
+                    self.plan.audition(node_id, chord);
+                }
                 AudioMessage::SetPlaying(playing) => {
                     if self.is_playing && !playing {
                         // Clear tails so pressing Play again starts from silence

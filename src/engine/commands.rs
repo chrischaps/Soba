@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use crate::dsp::{MeterLevels, OutputLevels, Readout, SampleData, SignalBuffer, Snapshot, MAX_CHANNELS};
+use crate::dsp::{Audition, MeterLevels, OutputLevels, Readout, SampleData, SignalBuffer, Snapshot, MAX_CHANNELS};
 use crate::modules::oscilloscope::SCOPE_BUFFER_SIZE;
 
 use super::audio_input::InputFeed;
@@ -127,6 +127,15 @@ pub enum EngineCommand {
         /// The recording, at the engine's sample rate.
         sample: Option<Arc<SampleData>>,
     },
+
+    /// Play a chord on a module's outputs from its face, or stop with
+    /// `None` (see [`DspModule::audition`](crate::dsp::DspModule::audition)).
+    /// Played, not edited: nothing of it is kept in the graph.
+    Audition {
+        /// Target node.
+        node_id: NodeId,
+        chord: Option<Audition>,
+    },
 }
 
 /// Messages delivered to the audio thread.
@@ -164,6 +173,8 @@ pub enum AudioMessage {
     /// Copy a module's recording (a Looper's loop) into room the UI set
     /// aside, a piece each callback, and hand it back when it's done.
     SnapshotLoop { node_id: NodeId, snapshot: Box<Snapshot> },
+    /// Play a chord on a running module's outputs, or stop.
+    Audition { node_id: NodeId, chord: Option<Audition> },
 }
 
 /// One oscilloscope capture, sent from the audio thread by value so that

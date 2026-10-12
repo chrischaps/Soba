@@ -18,6 +18,10 @@
 //!   [`recognise`]) and written, and the popover moves to the next step, the
 //!   way the Step Sequencer's piano step-records. The keys light on its
 //!   piano while they're held, and the chord's name shows as it's played.
+//! - While the hand is down, the chord sounds through the sequencer's own
+//!   cables as it will be written: named, then voiced by Range, Voices and
+//!   Bass Voice, clock or no clock (see [`audition_of`]). A MIDI keyboard's
+//!   chords are left to the patch when a MIDI module there plays them.
 
 use std::sync::OnceLock;
 
@@ -25,7 +29,7 @@ use eframe::egui::{self, Color32, CursorIcon, Id, Key, Modifiers, PopupCloseBeha
 use egui_node_graph2::NodeId;
 
 use crate::app::theme;
-use crate::dsp::DspModule;
+use crate::dsp::{Audition, DspModule, MAX_CHANNELS};
 use crate::modules::chord_sequencer::recognition::{pitch_classes, recognise, Heard};
 use crate::modules::chord_sequencer::{kept_tones, voice_chord, ChordSequencer, ChordSpec, VoicingSettings, Voicing, CHORD_TYPES, MAX_STEPS};
 use crate::modules::sequencer::note_to_name;
@@ -49,6 +53,8 @@ const KEY_HEIGHT: f32 = 44.0;
 /// The order the popover lists the chord types in: as the Type dropdown,
 /// but with each one beside its kin, where a later type joined the list.
 const TYPE_ORDER: [usize; 19] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 13, 14, 15, 16, 17];
+/// Modules that play a MIDI keyboard's notes themselves.
+const MIDI_MODULES: [&str; 2] = ["input.midi_note", "input.poly_midi"];
 const HINT: &str = "Click: chord on/off · Shift+click: tie\nDrag up or down: root (Shift: by octave)\nRight-click: edit the chord";
 
 /// A Chord Sequencer's pattern and settings, as its face shows them.
@@ -105,7 +111,11 @@ impl ChordPattern {
     /// A step's chord as it would sound on its own, in root position: what
     /// the keyboard shows before the engine has played anything.
     fn preview(&self, step: usize) -> Vec<i32> {
-        let spec = &self.specs[step];
+        self.voiced(&self.specs[step])
+    }
+
+    /// A chord voiced in root position, the bass voice first if on.
+    fn voiced(&self, spec: &ChordSpec) -> Vec<i32> {
         let mut notes = Vec::with_capacity(self.channels);
         if self.bass_voice {
             notes.push(spec.bass_note());
@@ -127,11 +137,13 @@ struct ChordEntry {
     anchor: usize,
 }
 
-/// The popover's ear, and the chord it last wrote.
+/// The popover's ear, the chord it last wrote, and the chord sounding on
+/// the cables while one's played.
 #[derive(Clone, Debug, Default)]
 struct Listening {
     ear: ChordEar,
     last: Option<Played>,
+    sounding: Option<Audition>,
 }
 
 /// A chord played into a step: the notes, and what they were heard as.
@@ -166,6 +178,27 @@ impl Played {
             (format!("Step {n} Gate"), 1.0),
         ]
     }
+}
+
+/// The chord being played into `step` (`notes`, lowest first), as the
+/// sequencer will play it once written: named as it will be, keeping the
+/// step's top and velocity, and voiced in root position, as the face shows a
+/// step before it's played. `None` while nothing's held.
+fn audition_of(notes: &[u8], step: usize, pattern: &ChordPattern) -> Option<Audition> {
+    let played = Played::new(notes.to_vec(), step, pattern)?;
+    let spec = ChordSpec { top: pattern.specs[step].top, ..played.heard.spec };
+    let voiced = pattern.voiced(&spec);
+    let mut audition = Audition {
+        len: voiced.len().min(MAX_CHANNELS) as u8,
+        root: spec.root.clamp(0, 127) as u8,
+        bass: spec.bass_note().clamp(0, 127) as u8,
+        velocity: pattern.velocities[step],
+        ..Audition::default()
+    };
+    for (slot, &note) in audition.notes.iter_mut().zip(&voiced) {
+        *slot = note.clamp(0, 127) as u8;
+    }
+    Some(audition)
 }
 
 /// Pitch classes as the chord spells them: G# under Am, not Ab.
@@ -227,6 +260,8 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
     let ear_id = Id::new(("chord_ear", node_id));
     let drag_id = Id::new(("chord_drag", node_id));
     let mut played = None;
+    // A change to the chord sounding, to send to the engine
+    let mut audition = None;
     let mut entry = ui
         .memory(|m| m.is_popup_open(entry_id))
         .then(|| ui.data(|d| d.get_temp::<ChordEntry>(entry_id)))
@@ -362,6 +397,13 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
             played = Some(chord.clone());
             listening.last = Some(chord);
         }
+        // Heard while the hand is down, unless the patch already plays it
+        let plays_midi = graph.nodes.iter().any(|(_, node)| MIDI_MODULES.contains(&node.user_data.module_id));
+        let sounding = (listening.ear.keyed() || !plays_midi).then(|| audition_of(listening.ear.gathering(), open.step, &pattern)).flatten();
+        if sounding != listening.sounding {
+            audition = Some(sounding);
+            listening.sounding = sounding;
+        }
 
         let anchor = &cells[open.anchor].1;
         egui::popup_below_widget(ui, entry_id, anchor, PopupCloseBehavior::CloseOnClickOutside, |ui| {
@@ -380,8 +422,15 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
                 d.remove::<ChordEntry>(entry_id);
                 d.remove::<Listening>(ear_id);
             });
+            // Closed with the hand still down: the chord stops with it
+            if listening.sounding.is_some() {
+                audition = Some(None);
+            }
         }
     });
+    if let Some(chord) = audition {
+        edits.push(SynthResponse::Audition { node_id, chord });
+    }
     // A chord played is one undo step, named for it
     if let Some(chord) = played {
         let label = format!("Play {} into step {}", chord.heard.spec.name(), chord.step + 1);
@@ -623,7 +672,7 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
     });
     ui.label(RichText::new("Play a root, pick a bass if it has one, then a type: it writes the step and moves on").small().weak());
     ui.label(RichText::new("Or hold the chord on a MIDI keyboard or the letter keys, and let go").small().weak())
-        .on_hover_text("The letter keys play this piano: Z is its lowest C, and ‹ › move them too");
+        .on_hover_text("The letter keys play this piano: Z is its lowest C, and ‹ › move them too. The chord sounds through this sequencer while it's held, as it will be written");
 }
 
 /// Under the piano: the chord being played, named as it's held, or else
@@ -683,6 +732,41 @@ mod tests {
         assert_eq!(key_position(71, 24), Some((27.5, false)), "B4, the last of four octaves");
         assert_eq!(key_position(72, 24), None, "off the end");
         assert_eq!(key_position(23, 24), None, "below it");
+    }
+
+    /// The default pattern (Cmaj7, Am7, Fmaj7, G7), `voices` channels wide.
+    fn pattern(voices: usize, bass_voice: bool) -> ChordPattern {
+        let params: Vec<f32> = ChordSequencer::new().parameters().iter().map(|p| p.default).collect();
+        ChordPattern {
+            steps: 4,
+            specs: std::array::from_fn(|s| ChordSequencer::spec(&params, s)),
+            gates: [true; MAX_STEPS],
+            ties: [false; MAX_STEPS],
+            velocities: [0.75; MAX_STEPS],
+            settings: VoicingSettings { voicing: Voicing::Close, voices: voices - bass_voice as usize, range: 3, rootless: bass_voice },
+            channels: voices,
+            bass_voice,
+        }
+    }
+
+    #[test]
+    fn a_chord_is_heard_as_it_will_be_written() {
+        let four = pattern(4, false);
+        // C E G played up high sounds in the Range octave, as the step will
+        let c = audition_of(&[72, 76, 79], 0, &four).unwrap();
+        assert_eq!(c.notes(), [48, 52, 55, 60]);
+        // ...and the Root output plays the root in the octave it was played in
+        assert_eq!((c.root, c.bass, c.velocity), (72, 72, 0.75));
+        // One note is a root: the step keeps its type, Cmaj7 becomes Amaj7
+        let a = audition_of(&[57], 0, &four).unwrap();
+        assert_eq!(a.notes(), [57, 61, 64, 68]);
+        assert_eq!(audition_of(&[], 0, &four), None, "nothing held");
+
+        // G# A C E is Am over G#: with Bass Voice, the G# is the first channel
+        let bass = audition_of(&[56, 57, 60, 64], 1, &pattern(4, true)).unwrap();
+        assert_eq!((bass.root, bass.notes()[0]), (57, bass.bass));
+        assert_eq!(bass.bass % 12, 8);
+        assert_eq!(bass.notes().len(), 4);
     }
 
     #[test]

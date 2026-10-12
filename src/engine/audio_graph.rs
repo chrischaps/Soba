@@ -660,6 +660,8 @@ impl AudioGraph {
                 true
             }
             EngineCommand::LoadSample { node_id, sample } => self.load_sample(node_id, sample),
+            // Played on the running module, not kept in the graph
+            EngineCommand::Audition { node_id, .. } => self.nodes.contains_key(&node_id),
         }
     }
 
