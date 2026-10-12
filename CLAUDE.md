@@ -141,6 +141,15 @@ cargo test # If tests exist
 
 For audio-related issues, verify sound output works.
 
+If you changed a module's face (a port, knob, row, display or anything else that can change its size), check the examples still fit around it:
+
+```bash
+CARGO_TARGET_DIR=target/capture cargo build --release
+python tools/showcase/check_layout.py   # modules inside their frames, clear of notes and each other
+```
+
+Fix any example it flags by growing the frame or moving its neighbours, and re-shoot that example's recipe image (`docs/src/images/recipe-<name>.png`). A face change that keeps the size can still leave recipe images stale, so look at the ones that show the module.
+
 ### 5. Commit the Changes
 
 ```bash
