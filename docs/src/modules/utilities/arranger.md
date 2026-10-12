@@ -190,7 +190,7 @@ The sections' lengths are `Length 01` to `Length 32`, their repeats `Repeat 01` 
 
 ## Related
 
-- [From One Sine](../../recipes/from-one-sine.md) – a whole song on two Arrangers: eight faders, and the drums, crash, riser, brightness and Looper pedals
+- [From One Sine](../../recipes/from-one-sine.md) – a whole song on two Arrangers: eight faders, and the drums, crash, riser, brightness, Looper pedals and the melody's patterns
 - [Trigger Sequencer](./trigger-sequencer.md) – patterns for an Arranger lane to pick
 - [Mixer](./mixer.md) – the faders a lane rides
 - [Clock](../modulation/clock.md) – tempo and swing

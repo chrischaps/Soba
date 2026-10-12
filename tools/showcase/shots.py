@@ -331,6 +331,24 @@ def from_one_sine(s):
     s.at(281.0, "end")
 
 
+@shot("patches/from-one-sine.json", ppp=1.0, fps=30)
+def from_one_sine_line(s):
+    """A still for the recipe: the motif sequencer's tabs at the Lift, as the
+    lead's line reaches its C pattern."""
+    # The song plays through the warmup, so the first frame is mid-Lift: two
+    # bars into unit 15, the line's third pass
+    t = u(15) + SONG_UNIT / 2
+    c = (960.0, 508.0)
+    (x, y), zoom = (456, 2077), 1.75
+    s.at(-t, "play").at(-t, f"camera {-(x - c[0]) * zoom:.1f} {-(y - c[1]) * zoom:.1f} {zoom} 0.05")
+    # Edit the pattern playing, so the grid shows C, then move the pointer
+    # off the face
+    s.click(-1.5, 875, 799)
+    s.at(-0.8, "move 1900 1000 0.2")
+    s.at(0.0, "still from-one-sine-line")
+    s.at(0.1, "end")
+
+
 def run(name, script_only=False, preview=False):
     fn, patch, ppp, fps, crf, preset = SHOTS[name]
     s = Script()
