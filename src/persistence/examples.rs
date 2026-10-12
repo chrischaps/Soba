@@ -35,6 +35,8 @@ pub const EXAMPLE_SAMPLES: &[(&str, &[u8])] = &[
     // "Hello. I am Soba. I sing in sines.", from tools/voice/speak.py's
     // formant synthesizer
     ("samples/soba-speaks.wav", include_bytes!("../../patches/samples/soba-speaks.wav")),
+    // The same line in Chris's voice, recorded with tools/voice/record.py
+    ("samples/soba-speaks-chris.wav", include_bytes!("../../patches/samples/soba-speaks-chris.wav")),
     // Clair de Satellite's sung lines, twelve slots of one file, and its
     // one plain word: Chris's voice, cloned with ElevenLabs
     ("samples/clair-lines.wav", include_bytes!("../../patches/samples/clair-lines.wav")),
@@ -124,7 +126,7 @@ pub const EXAMPLES: &[Example] = &[
     Example {
         name: "Soba Speaks",
         file_name: "soba-speaks.json",
-        description: "Plays itself: a Vocoder puts a spoken line on a pad of four falling chords. Move one cable and it wears your own voice from a mic",
+        description: "Plays itself: a Vocoder puts a spoken line on a pad of four falling chords. Mixer mutes switch the voice between a person, a robot and your own mic",
         json: include_str!("../../patches/soba-speaks.json"),
     },
     Example {

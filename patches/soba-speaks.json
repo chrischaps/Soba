@@ -58,7 +58,7 @@
       ]
     },
     {
-      "id": 3,
+      "id": 15,
       "module_id": "source.sampler",
       "position": [
         270.0,
@@ -131,6 +131,82 @@
           "value": 1.0
         }
       ],
+      "file": "samples/soba-speaks-chris.wav"
+    },
+    {
+      "id": 3,
+      "module_id": "source.sampler",
+      "position": [
+        270.0,
+        690.0
+      ],
+      "parameters": [
+        {
+          "name": "Start",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "End",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Loop",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Loop Start",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Loop End",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Mode",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Tune",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Fine",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Root",
+          "type": "Number",
+          "value": 60.0
+        },
+        {
+          "name": "Speed",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Attack",
+          "type": "Number",
+          "value": 0.002
+        },
+        {
+          "name": "Release",
+          "type": "Number",
+          "value": 0.05
+        },
+        {
+          "name": "Level",
+          "type": "Number",
+          "value": 0.56
+        }
+      ],
       "file": "samples/soba-speaks.wav"
     },
     {
@@ -138,16 +214,156 @@
       "module_id": "source.audio_input",
       "position": [
         270.0,
-        720.0
+        1306.0
       ],
       "parameters": []
+    },
+    {
+      "id": 16,
+      "module_id": "util.mixer",
+      "position": [
+        580.0,
+        74.0
+      ],
+      "parameters": [
+        {
+          "name": "Level 1",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Level 2",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Level 3",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Level 4",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Pan 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Pan 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Pan 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Pan 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Mute 1",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Mute 2",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Mute 3",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Mute 4",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 1",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 2",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 3",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 4",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Return",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Master",
+          "type": "Number",
+          "value": 0.0
+        }
+      ]
     },
     {
       "id": 5,
       "module_id": "seq.chord",
       "position": [
         40.0,
-        1280.0
+        1840.0
       ],
       "parameters": [
         {
@@ -677,7 +893,7 @@
       "module_id": "osc.sine",
       "position": [
         420.0,
-        1280.0
+        1840.0
       ],
       "parameters": [
         {
@@ -737,7 +953,7 @@
       "module_id": "filter.svf",
       "position": [
         680.0,
-        1520.0
+        2080.0
       ],
       "parameters": [
         {
@@ -762,7 +978,7 @@
       "module_id": "util.vca",
       "position": [
         960.0,
-        1520.0
+        2080.0
       ],
       "parameters": [
         {
@@ -782,7 +998,7 @@
       "module_id": "mod.adsr",
       "position": [
         960.0,
-        1740.0
+        2300.0
       ],
       "parameters": [
         {
@@ -831,7 +1047,7 @@
       "id": 10,
       "module_id": "fx.vocoder",
       "position": [
-        640.0,
+        1220.0,
         74.0
       ],
       "parameters": [
@@ -881,19 +1097,19 @@
       "id": 11,
       "module_id": "util.mixer",
       "position": [
-        950.0,
+        1530.0,
         74.0
       ],
       "parameters": [
         {
           "name": "Level 1",
           "type": "Number",
-          "value": 0.11
+          "value": 0.278
         },
         {
           "name": "Level 2",
           "type": "Number",
-          "value": 0.11
+          "value": 0.278
         },
         {
           "name": "Level 3",
@@ -1021,7 +1237,7 @@
       "id": 12,
       "module_id": "fx.delay",
       "position": [
-        1400.0,
+        1980.0,
         74.0
       ],
       "parameters": [
@@ -1071,7 +1287,7 @@
       "id": 13,
       "module_id": "fx.reverb",
       "position": [
-        1730.0,
+        2310.0,
         74.0
       ],
       "parameters": [
@@ -1116,7 +1332,7 @@
       "id": 14,
       "module_id": "output.audio",
       "position": [
-        2010.0,
+        2590.0,
         114.0
       ],
       "parameters": [
@@ -1170,6 +1386,36 @@
       "to_port": "Gate"
     },
     {
+      "from_node": 2,
+      "from_port": "Trig",
+      "to_node": 15,
+      "to_port": "Gate"
+    },
+    {
+      "from_node": 3,
+      "from_port": "L",
+      "to_node": 16,
+      "to_port": "Ch 2"
+    },
+    {
+      "from_node": 15,
+      "from_port": "L",
+      "to_node": 16,
+      "to_port": "Ch 1"
+    },
+    {
+      "from_node": 4,
+      "from_port": "L",
+      "to_node": 16,
+      "to_port": "Ch 3"
+    },
+    {
+      "from_node": 16,
+      "from_port": "Out L",
+      "to_node": 10,
+      "to_port": "Modulator"
+    },
+    {
       "from_node": 5,
       "from_port": "Pitch",
       "to_node": 6,
@@ -1186,12 +1432,6 @@
       "from_port": "Out",
       "to_node": 10,
       "to_port": "Carrier"
-    },
-    {
-      "from_node": 3,
-      "from_port": "L",
-      "to_node": 10,
-      "to_port": "Modulator"
     },
     {
       "from_node": 6,
@@ -1275,8 +1515,8 @@
         16.0
       ],
       "size": [
-        560.0,
-        1180.0
+        1140.0,
+        1740.0
       ],
       "color": "blue"
     },
@@ -1284,7 +1524,7 @@
       "title": "The chords",
       "position": [
         16.0,
-        1222.0
+        1782.0
       ],
       "size": [
         1200.0,
@@ -1295,7 +1535,7 @@
     {
       "title": "Vocoder and room",
       "position": [
-        606.0,
+        1186.0,
         16.0
       ],
       "size": [
@@ -1307,18 +1547,18 @@
   ],
   "notes": [
     {
-      "text": "The Sampler says one line every two bars: \"Hello. I am Soba. I sing in sines.\" The voice was made by a formant synthesizer, from pulses and noise, so it is no one's recording.",
+      "text": "Two Samplers say one line every two bars: \"Hello. I am Soba. I sing in sines.\" The first voice is Chris, who made Soba. The second was made by a formant synthesizer, from pulses and noise. This Mixer's mutes pick which one the Vocoder hears: unmute **2** and mute **1** to hear a robot say it.",
       "position": [
-        680.0,
-        500.0
+        580.0,
+        470.0
       ],
-      "width": 240.0
+      "width": 300.0
     },
     {
-      "text": "**Your own voice:** move the Vocoder's **Modulator** cable from the Sampler's **L** to this Audio Input's **L**, and speak or sing into a mic. Use headphones, so the mic doesn't hear the speakers.",
+      "text": "**Your own voice:** on the voice Mixer, mute **1** and unmute **3**, then speak or sing into a mic. Use headphones, so the mic doesn't hear the speakers.",
       "position": [
         270.0,
-        1040.0
+        1630.0
       ],
       "width": 290.0
     },
@@ -1326,7 +1566,7 @@
       "text": "The same pad plays twice: bright and raw into the Vocoder's **Carrier**, and filtered dark underneath, so the chords carry on between the words.",
       "position": [
         40.0,
-        1830.0
+        2390.0
       ],
       "width": 380.0
     }
