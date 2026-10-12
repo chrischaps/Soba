@@ -1,4 +1,4 @@
 -188.5714 play
--188.5714 camera 1225.6 -1553.6 1.6 0.05
+-188.5714 camera 1149.0 -1570.5 1.5 0.05
 0.0000 still from-one-sine-harmony
 0.1000 end

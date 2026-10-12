@@ -147,7 +147,7 @@
       "module_id": "seq.chord",
       "position": [
         24.0,
-        1216.0
+        1261.0
       ],
       "parameters": [
         {
@@ -762,7 +762,7 @@
       "module_id": "seq.step",
       "position": [
         302.0,
-        1827.0
+        1935.0
       ],
       "parameters": [
         {
@@ -2112,7 +2112,7 @@
       "module_id": "osc.sine",
       "position": [
         640.0,
-        1827.0
+        1935.0
       ],
       "parameters": [
         {
@@ -2172,7 +2172,7 @@
       "module_id": "mod.adsr",
       "position": [
         640.0,
-        2414.0
+        2522.0
       ],
       "parameters": [
         {
@@ -2222,7 +2222,7 @@
       "module_id": "util.vca",
       "position": [
         898.0,
-        1827.0
+        1935.0
       ],
       "parameters": [
         {
@@ -2242,7 +2242,7 @@
       "module_id": "osc.sine",
       "position": [
         1052.0,
-        1827.0
+        1935.0
       ],
       "parameters": [
         {
@@ -2302,7 +2302,7 @@
       "module_id": "mod.adsr",
       "position": [
         1052.0,
-        2414.0
+        2522.0
       ],
       "parameters": [
         {
@@ -2352,7 +2352,7 @@
       "module_id": "filter.svf",
       "position": [
         1310.0,
-        1827.0
+        1935.0
       ],
       "parameters": [
         {
@@ -2382,7 +2382,7 @@
       "module_id": "util.vca",
       "position": [
         1310.0,
-        2196.0
+        2304.0
       ],
       "parameters": [
         {
@@ -2402,7 +2402,7 @@
       "module_id": "osc.sine",
       "position": [
         24.0,
-        2889.0
+        2997.0
       ],
       "parameters": [
         {
@@ -2462,7 +2462,7 @@
       "module_id": "osc.sine",
       "position": [
         237.0,
-        2889.0
+        2997.0
       ],
       "parameters": [
         {
@@ -2522,7 +2522,7 @@
       "module_id": "util.mix",
       "position": [
         450.0,
-        2889.0
+        2997.0
       ],
       "parameters": [
         {
@@ -2557,7 +2557,7 @@
       "module_id": "filter.ladder",
       "position": [
         760.0,
-        2889.0
+        2997.0
       ],
       "parameters": [
         {
@@ -2587,7 +2587,7 @@
       "module_id": "util.attenuverter",
       "position": [
         760.0,
-        3214.0
+        3322.0
       ],
       "parameters": [
         {
@@ -2607,7 +2607,7 @@
       "module_id": "fx.compressor",
       "position": [
         1018.0,
-        2889.0
+        2997.0
       ],
       "parameters": [
         {
@@ -2657,7 +2657,7 @@
       "module_id": "fx.chorus",
       "position": [
         1432.0,
-        2889.0
+        2997.0
       ],
       "parameters": [
         {
@@ -2702,7 +2702,7 @@
       "module_id": "mod.lfo",
       "position": [
         1018.0,
-        3154.0
+        3262.0
       ],
       "parameters": [
         {
@@ -4843,7 +4843,7 @@
       "module_id": "util.looper",
       "position": [
         1568.0,
-        1827.0
+        1935.0
       ],
       "parameters": [
         {
@@ -4913,7 +4913,7 @@
       "module_id": "seq.trigger",
       "position": [
         302.0,
-        3924.0
+        4032.0
       ],
       "parameters": [
         {
@@ -7898,7 +7898,7 @@
       "module_id": "source.drum",
       "position": [
         1170.0,
-        3924.0
+        4032.0
       ],
       "parameters": [
         {
@@ -7938,7 +7938,7 @@
       "module_id": "source.drum",
       "position": [
         1170.0,
-        4303.0
+        4411.0
       ],
       "parameters": [
         {
@@ -7978,7 +7978,7 @@
       "module_id": "source.drum",
       "position": [
         1480.0,
-        3924.0
+        4032.0
       ],
       "parameters": [
         {
@@ -8018,7 +8018,7 @@
       "module_id": "source.drum",
       "position": [
         1480.0,
-        4303.0
+        4411.0
       ],
       "parameters": [
         {
@@ -8058,7 +8058,7 @@
       "module_id": "source.drum",
       "position": [
         1790.0,
-        3924.0
+        4032.0
       ],
       "parameters": [
         {
@@ -8098,7 +8098,7 @@
       "module_id": "source.drum",
       "position": [
         1790.0,
-        4303.0
+        4411.0
       ],
       "parameters": [
         {
@@ -8138,7 +8138,7 @@
       "module_id": "source.drum",
       "position": [
         2100.0,
-        3924.0
+        4032.0
       ],
       "parameters": [
         {
@@ -8178,7 +8178,7 @@
       "module_id": "source.drum",
       "position": [
         2100.0,
-        4303.0
+        4411.0
       ],
       "parameters": [
         {
@@ -8218,7 +8218,7 @@
       "module_id": "util.mixer",
       "position": [
         2410.0,
-        3924.0
+        4032.0
       ],
       "parameters": [
         {
@@ -8358,7 +8358,7 @@
       "module_id": "util.mixer",
       "position": [
         2828.0,
-        3924.0
+        4032.0
       ],
       "parameters": [
         {
@@ -13169,7 +13169,7 @@
       ],
       "size": [
         1794.0,
-        745.0
+        790.0
       ],
       "color": "slate"
     },
@@ -13177,11 +13177,11 @@
       "title": "Harmony: a chord a bar",
       "position": [
         0.0,
-        1178.0
+        1223.0
       ],
       "size": [
         388.0,
-        602.0
+        665.0
       ],
       "color": "violet"
     },
@@ -13189,7 +13189,7 @@
       "title": "Motif, lead and memory",
       "position": [
         0.0,
-        1795.0
+        1903.0
       ],
       "size": [
         1822.0,
@@ -13201,7 +13201,7 @@
       "title": "Pad",
       "position": [
         0.0,
-        2849.0
+        2957.0
       ],
       "size": [
         1738.0,
@@ -13261,7 +13261,7 @@
       "title": "Drums",
       "position": [
         0.0,
-        3884.0
+        3992.0
       ],
       "size": [
         3246.0,
@@ -13295,7 +13295,7 @@
       "text": "**The motif** is four bars of quarter notes. A lone sine plays it first, and the **Looper** keeps four bars of it, set to play back reversed at half speed: in the breakdown the rack remembers how it began. At the lift the motif grows into a sixteen-bar line. It's the sequencer's pattern **A**, and the **Line** cue walks its **Pattern** input through A, B, C and D, one a pass.",
       "position": [
         24.0,
-        1827.0
+        1935.0
       ],
       "width": 250.0
     },
@@ -13303,7 +13303,7 @@
       "text": "The **Drums** cue picks the pattern: **A** silence, **B** a pulse, **C** the groove, **D** a build. Each phrase ends on a one-bar **Fill** section, which jumps the cue to D for that bar.",
       "position": [
         24.0,
-        3924.0
+        4032.0
       ],
       "width": 250.0
     }

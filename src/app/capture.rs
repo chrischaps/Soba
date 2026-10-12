@@ -53,8 +53,9 @@
 //!                                   # first framed, scaled 0.5 about the
 //!                                   # centre and shifted (-300, 0), over 3 s
 //! 5.0  still filter-opens           # save this frame as filter-opens.ppm
-//! 5.0  layout voice                 # save where each module is drawn, in
-//!                                   # patch space, as voice.json
+//! 5.0  layout voice                 # save where each module, frame and
+//!                                   # note is drawn, in patch space, as
+//!                                   # voice.json
 //! 5.0  input voice.wav              # Audio Input modules hear this WAV
 //!                                   # from now on, in place of a device
 //! 9.0  end

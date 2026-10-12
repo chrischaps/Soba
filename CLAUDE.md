@@ -205,6 +205,9 @@ python tools/showcase/encode.py hero out.mp4 --loop 2 --fps 30 --crf 27 --poster
 # Captures are lossless by default (~20 MB/s at 1080p30). A long shot passes
 # `--crf 12 --preset fast` to soba --capture (a shot sets crf= in shots.py): ~4-5 MB/s
 python tools/showcase/shots.py from-one-sine     # the whole 4:41 song, ~10 min to film, 1.3 GB
+# After a module grows: are every example's modules still inside their frames,
+# clear of notes and of each other? (Re-shoot the recipe images it flags)
+python tools/showcase/check_layout.py
 # Never stop a capture with taskkill /IM: it closes every open copy of Soba. Kill by PID
 
 # Open a patch at launch (otherwise the First Sound example opens)

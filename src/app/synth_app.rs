@@ -544,22 +544,36 @@ impl SynthApp {
         capture.commit_audio();
     }
 
-    /// Writes where each module was last drawn, in patch space, for a
-    /// capture's `layout` cue: what frames around them need to clear.
+    /// Writes where each module, frame and note was last drawn, in patch
+    /// space, for a capture's `layout` cue: what frames around modules need
+    /// to clear, and whether a module covers a note.
     fn write_layout(&self, ctx: &egui::Context, path: &Path) {
         let zoom = self.graph_state.pan_zoom.zoom;
         let to_patch = |screen: egui::Pos2| self.history.to_patch(self.screen_to_node(screen), zoom);
+        let patch_rect = |r: egui::Rect| {
+            let (min, max) = (to_patch(r.min), to_patch(r.max));
+            [min.x, min.y, max.x, max.y]
+        };
         let modules: Vec<serde_json::Value> = self.graph_state.node_order.iter().filter_map(|&node_id| {
             let rect = annotation_ui::module_rect(ctx, node_id)?;
             let position = self.history.to_patch(*self.graph_state.node_positions.get(node_id)?, zoom);
-            let (min, max) = (to_patch(rect.min), to_patch(rect.max));
             Some(serde_json::json!({
                 "module_id": self.graph_state.graph.nodes.get(node_id)?.user_data.module_id,
                 "position": [position.x, position.y],
-                "rect": [min.x, min.y, max.x, max.y],
+                "rect": patch_rect(rect),
             }))
         }).collect();
-        let json = serde_json::to_string_pretty(&modules).unwrap_or_default();
+        let annotations = &self.user_state.annotations;
+        let (mut frames, mut notes) = (Vec::new(), Vec::new());
+        for (id, annotation) in annotations.iter() {
+            let Some(&rect) = annotations.drawn.get(&id) else { continue };
+            match annotation {
+                Annotation::Frame(frame) => frames.push(serde_json::json!({ "title": frame.title, "rect": patch_rect(rect) })),
+                Annotation::Note(note) => notes.push(serde_json::json!({ "text": note.text, "rect": patch_rect(rect) })),
+            }
+        }
+        let layout = serde_json::json!({ "modules": modules, "frames": frames, "notes": notes });
+        let json = serde_json::to_string_pretty(&layout).unwrap_or_default();
         if let Err(e) = std::fs::write(path, json) {
             eprintln!("capture: couldn't write {}: {}", path.display(), e);
         }

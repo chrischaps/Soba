@@ -226,7 +226,7 @@
       "id": 6,
       "module_id": "fx.reverb",
       "position": [
-        980.0,
+        1000.0,
         70.0
       ],
       "parameters": [
@@ -312,7 +312,7 @@
       "module_id": "source.drum",
       "position": [
         350.0,
-        1130.0
+        1160.0
       ],
       "parameters": [
         {
@@ -669,7 +669,7 @@
       ],
       "size": [
         350.0,
-        700.0
+        764.0
       ],
       "color": "slate"
     }
