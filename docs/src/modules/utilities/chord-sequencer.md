@@ -253,7 +253,7 @@ Patch **Root** into an oscillator's **Exp FM** (at 1.0 octave per volt) while a 
 3. **Ties on a pad** turn a progression into one long breath.
 4. **Dir Rnd** over a set of related chords (Fmaj7, Am7, Cmaj7, Em7) makes ambient harmony that never quite repeats.
 5. **EOC** can clock a second sequencer once per progression, or a Clock Divider for a turnaround every few passes.
-6. **Strummed rhythm guitar:** clock at eighth notes, write each chord on two steps, set **Strum dir** to Alt, **Strum** to about 25 ms and **Taper** to about 40%, and give the upstrokes a lower velocity. Where the rhythm needs a stroke the clock doesn't give, set that step's **Strum** to **Up** or **Down**. **Voicing** Spread with five or six voices and **Bass voice** on spreads the notes out like a guitar's six strings.
+6. **Strummed rhythm guitar:** clock at eighth notes, write each chord on two steps, set **Strum dir** to Alt, **Strum** to about 25 ms and **Taper** to about 40%, and give the upstrokes a lower velocity. Where the rhythm needs a stroke the clock doesn't give, set that step's **Strum** to **Up** or **Down**. **Voicing** Spread with five or six voices and **Bass voice** on spreads the notes out like a guitar's six strings. [Front Porch](../../recipes/front-porch.md) is built this way, with ties for the strokes the hand misses.
 
 ## Related Modules
 

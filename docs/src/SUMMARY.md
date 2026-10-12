@@ -72,6 +72,7 @@
 - [Drum Machine](./recipes/drum-machine.md)
 - [Roll Call](./recipes/roll-call.md)
 - [Afterglow](./recipes/afterglow.md)
+- [Front Porch](./recipes/front-porch.md)
 - [Soba Speaks](./recipes/soba-speaks.md)
 - [Interlock](./recipes/interlock.md)
 - [From One Sine](./recipes/from-one-sine.md)

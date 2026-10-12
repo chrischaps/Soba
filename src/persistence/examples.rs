@@ -141,6 +141,12 @@ pub const EXAMPLES: &[Example] = &[
         json: include_str!("../../patches/afterglow.json"),
     },
     Example {
+        name: "Front Porch",
+        file_name: "front-porch.json",
+        description: "Plays itself: rhythm guitar on the Electric Piano. A Chord Sequencer strums G, D/F#, Em7 and Cadd9 down and up in eighths, rolling each chord across its strings and brushing the last ones lightly",
+        json: include_str!("../../patches/front-porch.json"),
+    },
+    Example {
         name: "Soba Speaks",
         file_name: "soba-speaks.json",
         description: "Plays itself: a Vocoder puts a spoken line on a pad of four falling chords. Mixer mutes switch the voice between a person, a robot and your own mic",
