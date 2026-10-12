@@ -53,7 +53,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Chorus](./effects/chorus.md) | `fx.chorus` | Stereo chorus and flanger |
 | [Tape](./effects/tape.md) | `fx.tape` | A tape machine for a bus: wow, flutter, saturation, age and hiss |
 | [Compressor](./effects/compressor.md) | `fx.compressor` | Dynamics compressor with sidechain and a gain-reduction output |
-| [Vocoder](./effects/vocoder.md) | `fx.vocoder` | Puts a voice's spectrum on a synth: 8 to 24 bands, formant shift, sibilance and unvoiced noise |
+| [Vocoder](./effects/vocoder.md) | `fx.vocoder` | Puts a voice's spectrum on a synth: 8 to 24 bands, formant shift, sibilance and unvoiced noise, Freeze and carrier Flatten |
 
 ### Utility
 

@@ -2298,17 +2298,20 @@ in   Carrier            Audio    ConnectionOnly       inline=true  port
 in   Modulator          Audio    ConnectionOnly       inline=true  port
 in   Formant            Control  ConnectionOrConstant inline=true  num 0 [-1..1] oct
 in   Bands              Control  ConstantOnly         inline=true  select 1 ["8", "16", "24"] "Bands"
+in   Freeze             Gate     ConnectionOrConstant inline=true  toggle false ""
 in   Attack             Control  ConstantOnly         inline=false num 4 [0.5..200] ms log
 in   Release            Control  ConstantOnly         inline=false num 40 [5..2000] ms log
 in   Sibilance          Control  ConstantOnly         inline=false num 0.25 [0..1] %
 in   Unvoiced           Control  ConstantOnly         inline=false num 0.25 [0..1] %
 in   Width              Control  ConstantOnly         inline=false num 0.5 [0..1] %
 in   Mix                Control  ConstantOnly         inline=false num 1 [0..1] %
+in   Flatten            Control  ConstantOnly         inline=false num 0 [0..1] %
 out  Out L              Audio
 out  Out R              Audio
 knob Attack             "Attack" KnobOnly
 knob Release            "Release" KnobOnly
 knob Formant            "Formant" Modulatable
+knob Flatten            "Flatten" KnobOnly
 knob Sibilance          "Sibil" KnobOnly
 knob Unvoiced           "Unvoic" KnobOnly
 knob Width              "Width" KnobOnly

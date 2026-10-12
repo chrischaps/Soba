@@ -8,6 +8,11 @@
 //! or down. The highs Sibilance lets through are a shaded strip on the right,
 //! and while the voice hisses, noise glitters over the bank in proportion to
 //! how much Unvoiced lets it in.
+//!
+//! The bars' feet sit on the carrier's slope as the bank plays it, so a dull
+//! carrier's feet fall to the right; as Flatten evens it out they level, and a
+//! faint line stays behind on the slope the carrier came in with. Frozen,
+//! the bars turn solid and icy, and a snowflake sits by the band count.
 
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Stroke, Vec2};
 use egui_node_graph2::NodeId;
@@ -54,6 +59,10 @@ pub fn vocoder_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let unvoiced = readout.map_or(0.0, |r| r.values[Vocoder::READOUT_UNVOICED]) * value_of("Unvoiced").unwrap_or(0.25);
     let width_knob = value_of("Width").unwrap_or(0.5).clamp(0.0, 1.0);
     let sibilance = value_of("Sibilance").unwrap_or(0.25).clamp(0.0, 1.0);
+    let flatten = value_of("Flatten").unwrap_or(0.0).clamp(0.0, 1.0);
+    let frozen = readout.is_some_and(|r| r.values[Vocoder::READOUT_FROZEN] > 0.5);
+    // The carrier's slope, in dB an octave: its own, and as the bank plays it
+    let (own_tilt, played_tilt) = readout.map_or((0.0, 0.0), |r| (r.values[Vocoder::READOUT_TILT], r.values[Vocoder::READOUT_EVENED]));
 
     // As wide as the four knobs below
     let gap = ui.spacing().item_spacing.x;
@@ -97,7 +106,8 @@ pub fn vocoder_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let strip = Rect::from_min_max(Pos2::new(sibilance_x, plot.top()), plot.right_bottom());
     painter.rect_filled(strip, 0.0, Color32::from_rgba_premultiplied(5, 7, 9, 6));
     painter.vline(sibilance_x, plot.y_range(), Stroke::new(0.6 * z, Color32::from_rgba_premultiplied(20, 26, 30, 30)));
-    let highs = readout.map_or(0.0, |r| r.values[Vocoder::READOUT_HIGHS]);
+    // Frozen, the voice's own highs aren't heard at all
+    let highs = if frozen { 0.0 } else { readout.map_or(0.0, |r| r.values[Vocoder::READOUT_HIGHS]) };
     let highs_top = y_at(highs);
     if highs_top < plot.bottom() - 0.5 {
         let column = Rect::from_min_max(Pos2::new(sibilance_x + 3.0 * z, highs_top), Pos2::new(plot.right() - 3.0 * z, plot.bottom()));
@@ -119,6 +129,23 @@ pub fn vocoder_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let bar = (spacing * 0.62).clamp(1.5 * z, 7.0 * z);
     let shift = 2f32.powf(formant);
     let shifted = formant.abs() > 0.02;
+
+    // The feet lie along the carrier's slope, centred on the middle of the
+    // bank: a slope of -2.5 dB an octave tips them 2.5 points at either end
+    let foot_y = |centre: f32, slope: f32| {
+        let octaves = (centre / LOWEST_BAND).log2() - BANK_OCTAVES / 2.0;
+        plot.bottom() + 3.5 * z - (slope * octaves * z / 3.0).clamp(-2.5 * z, 2.5 * z)
+    };
+    // Where Flatten has evened the carrier, the slope it came in with stays
+    // behind as a faint line
+    if flatten > 0.02 && (own_tilt - played_tilt).abs() > 0.3 {
+        let (from, to) = (band_centre(0, bands), band_centre(bands - 1, bands));
+        painter.line_segment(
+            [Pos2::new(x_at(from), foot_y(from, own_tilt)), Pos2::new(x_at(to), foot_y(to, own_tilt))],
+            Stroke::new(0.6 * z, Color32::from_rgba_unmultiplied(cyan.r(), cyan.g(), cyan.b(), 50)),
+        );
+    }
+
     let mut lively = false;
     for band in 0..bands {
         let centre = band_centre(band, bands);
@@ -128,12 +155,19 @@ pub fn vocoder_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         lively |= top < plot.bottom() - 0.5 || highs_top < plot.bottom() - 0.5;
 
         // The band's foot, always there, so a quiet vocoder still shows its bank
-        painter.circle_filled(Pos2::new(x, plot.bottom() + 3.0 * z), 1.0 * z, tint(band, 0.45));
+        let foot = Pos2::new(x, foot_y(centre, played_tilt));
+        painter.circle_filled(foot, 1.0 * z, tint(band, 0.45));
 
         if top < plot.bottom() - 0.5 {
             let column = Rect::from_min_max(Pos2::new(x - bar / 2.0, top), Pos2::new(x + bar / 2.0, plot.bottom()));
-            painter.rect_filled(column, 1.0 * z, tint(band, 0.28));
-            painter.line_segment([Pos2::new(x - bar / 2.0, top), Pos2::new(x + bar / 2.0, top)], Stroke::new(1.6 * z, tint(band, 0.95)));
+            if frozen {
+                // Held: solid, and touched with frost along the top
+                painter.rect_filled(column, 1.0 * z, tint(band, 0.6));
+                painter.line_segment([Pos2::new(x - bar / 2.0, top), Pos2::new(x + bar / 2.0, top)], Stroke::new(1.6 * z, FROST));
+            } else {
+                painter.rect_filled(column, 1.0 * z, tint(band, 0.28));
+                painter.line_segment([Pos2::new(x - bar / 2.0, top), Pos2::new(x + bar / 2.0, top)], Stroke::new(1.6 * z, tint(band, 0.95)));
+            }
         }
 
         // Where the carrier plays it, once Formant has moved it
@@ -141,7 +175,7 @@ pub fn vocoder_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             let carried = x_at(centre * shift);
             if carried <= plot.right() {
                 painter.line_segment(
-                    [Pos2::new(x, plot.bottom() + 3.0 * z), Pos2::new(carried, plot.bottom())],
+                    [foot, Pos2::new(carried, plot.bottom())],
                     Stroke::new(0.6 * z, tint(band, 0.25)),
                 );
                 painter.line_segment(
@@ -174,7 +208,10 @@ pub fn vocoder_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     // The band count and the throat
     let small = egui::FontId::proportional(8.0 * z);
     let ink = theme::text::SECONDARY;
-    painter.text(rect.left_top() + Vec2::new(4.0 * z, 2.0 * z), egui::Align2::LEFT_TOP, format!("{bands} bands"), small.clone(), ink);
+    let label = painter.text(rect.left_top() + Vec2::new(4.0 * z, 2.0 * z), egui::Align2::LEFT_TOP, format!("{bands} bands"), small.clone(), ink);
+    if frozen {
+        snowflake(&painter, Pos2::new(label.right() + 6.0 * z, label.center().y), 3.2 * z);
+    }
     if shifted {
         painter.text(
             rect.right_top() + Vec2::new(-4.0 * z, 2.0 * z),
@@ -198,10 +235,38 @@ pub fn vocoder_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             text.push_str(&format!("\nThe carrier's bands {} {:.2} octave", if formant > 0.0 { "up" } else { "down" }, formant.abs()));
         }
         text.push_str("\nBars: the voice's level in each band");
+        if frozen {
+            text.push_str(", frozen where they were");
+        }
+        if readout.is_some() {
+            text.push_str(&format!("\nFeet: the carrier's slope, {played_tilt:+.1} dB an octave"));
+            if flatten > 0.02 {
+                text.push_str(&format!(" (evened from {own_tilt:+.1})"));
+            }
+        }
         response.on_hover_text(text);
     }
 
     if lively {
         ui.ctx().request_repaint();
+    }
+}
+
+/// Frozen bars' caps and the snowflake: an icy white.
+const FROST: Color32 = Color32::from_rgb(214, 238, 255);
+
+/// A six-armed snowflake of radius `r`, each arm with a pair of twigs.
+fn snowflake(painter: &egui::Painter, centre: Pos2, r: f32) {
+    let stroke = Stroke::new(0.11 * r, FROST);
+    for arm in 0..6 {
+        let angle = std::f32::consts::FRAC_PI_3 * arm as f32 + std::f32::consts::FRAC_PI_2;
+        let along = Vec2::angled(angle);
+        let tip = centre + along * r;
+        painter.line_segment([centre, tip], stroke);
+        let fork = centre + along * (0.55 * r);
+        for side in [-1.0f32, 1.0] {
+            let twig = Vec2::angled(angle + side * std::f32::consts::FRAC_PI_4) * (0.35 * r);
+            painter.line_segment([fork, fork + twig], stroke);
+        }
     }
 }

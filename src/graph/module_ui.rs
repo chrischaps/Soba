@@ -450,11 +450,13 @@ static MODULE_UI: &[ModuleUi] = &[
     },
     ModuleUi {
         module_id: "fx.vocoder",
-        // How the voice is heard, then what passes besides, then the output
+        // How the bank plays (the voice heard, the carrier evened), then what
+        // passes besides, then the output
         knobs: &[
             knob("Attack"),
             knob("Release"),
             modulatable("Formant", "Formant"),
+            knob("Flatten"),
             knob_as("Sibilance", "Sibil"),
             knob_as("Unvoiced", "Unvoic"),
             knob("Width"),

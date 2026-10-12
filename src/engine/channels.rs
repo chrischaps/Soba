@@ -579,6 +579,9 @@ impl EngineHandle {
     /// Returns Ok(()) if the event was queued, or Err(event) if the buffer is full.
     ///
     /// REAL-TIME SAFE: Non-blocking operation.
+    // The rejected event comes back by value: boxing it would allocate on the
+    // audio thread
+    #[allow(clippy::result_large_err)]
     pub fn send_event(&mut self, event: EngineEvent) -> Result<(), EngineEvent> {
         self.event_tx
             .push(event)

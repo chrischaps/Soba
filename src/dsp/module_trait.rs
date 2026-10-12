@@ -44,7 +44,7 @@ pub struct MeterLevels {
 }
 
 /// How many values a [`Readout`] carries.
-pub const MAX_READOUT: usize = 28;
+pub const MAX_READOUT: usize = 32;
 
 /// Live values a module shows on its node that aren't signals or meters: a
 /// Clock's received tempo and where it is in the bar, say. Fixed-size, so

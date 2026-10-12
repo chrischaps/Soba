@@ -13,6 +13,10 @@
 //! - **Unvoiced** swaps the carrier for noise while the voice is hissing,
 //!   so an "s" or a "t" comes through even over a dull carrier, or none.
 //! - The bands alternate left and right, as far apart as **Width** says.
+//! - **Freeze** holds every band's follower where it is, so a vowel lasts as
+//!   long as the chord does.
+//! - **Flatten** evens out the carrier's own spectrum before the voice's is
+//!   put on it, so a dull carrier speaks as clearly as a bright one.
 //!
 //! Each band is two cascaded second-order sections (TPT state-variable
 //! band-passes), so neighbours cross at -3 dB and the bank sums flat. The
@@ -27,7 +31,7 @@ use crate::dsp::{
     parameter::ParameterDefinition,
     port::PortDefinition,
     primitives::noise::NoiseFloor,
-    signal::SignalBuffer,
+    signal::{connected_input, SignalBuffer},
     smoothed_value::SmoothedValue,
     ParameterDisplay, Readout, SignalType, MAX_READOUT,
 };
@@ -75,6 +79,44 @@ const SWITCH_MS: f32 = 6.0;
 /// The bank's synthesis tuning follows Formant in steps this many samples
 /// apart.
 const RETUNE_EVERY: usize = 16;
+
+/// Flatten's carrier followers catch a band's peak at once, so a band a
+/// new note fills is turned down before it can blast, and let go as fast as
+/// the voice's bands do by default, so the bands an old chord leaves soon
+/// stop holding up the level the rest are brought to.
+const EVEN_ATTACK_MS: f32 = 0.5;
+const EVEN_RELEASE_MS: f32 = 40.0;
+
+/// Flatten at full turns the bank up this much (+3 dB): evening the carrier
+/// out takes away what its loud low partials leaked into the voice's bands
+/// through the filters' skirts, and this puts it back. Measured, like
+/// [`MAKEUP`], with speech and with formant vowels on saw and triangle chords.
+const FLATTEN_MAKEUP: f32 = 1.41;
+
+/// How long Flatten listens to the voice to weigh the bands, in ms.
+const VOICE_SPECTRUM_MS: f32 = 1000.0;
+
+/// Flatten lifts a carrier band at most this far (-40 dB) below the
+/// carrier's average band, so an empty band isn't raised into noise...
+const EVEN_FLOOR: f32 = 0.01;
+
+/// ...and nothing below this level (-100 dBFS) is lifted at all.
+const EVEN_SILENCE: f32 = 1e-5;
+
+/// A band rising this far past its peak follower between two aims has its
+/// lift held back.
+const EVEN_GUARD: f32 = 1.25;
+
+/// Flatten tips the carrier up 6 dB an octave from 200 Hz, by up to this
+/// much (+30 dB) at the top of the bank: a first-order shelf.
+const EMPHASIS: f32 = 31.0;
+const EMPHASIS_HZ: f32 = 6400.0;
+
+/// How long the voice's own highs take to fade out on Freeze, and back in.
+const FREEZE_FADE_MS: f32 = 3.0;
+
+/// A gate at Freeze is high from here.
+const GATE_THRESHOLD: f32 = 0.5;
 
 /// Two cascaded sections each this much sharper than the pair should be
 /// give the pair the bandwidth wanted (√(√2 - 1)).
@@ -178,13 +220,67 @@ fn one_pole(ms: f32, sample_rate: f32) -> f32 {
 }
 
 /// One band: the voice's side and the carrier's side.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 struct Band {
     analysis: SvfCoefficients,
     synthesis: SvfCoefficients,
     voice: [Svf; 2],
     carrier: [Svf; 2],
     follower: Follower,
+    /// How loud the carrier is in this band, for Flatten.
+    carrier_level: Follower,
+    /// Flatten's gain on the carrier's band, and its step per sample toward
+    /// the next one.
+    evening: f32,
+    evening_step: f32,
+    /// How far the pre-emphasis lifts this band's centre: Flatten's gain
+    /// on what the carrier itself has here is `evening · tipped`.
+    tipped: f32,
+    /// The voice's level in this band over the last second or so.
+    voice_spectrum: f32,
+    /// The loudest the band may be before its lift is held back.
+    ceiling: f32,
+}
+
+impl Default for Band {
+    fn default() -> Self {
+        Self {
+            analysis: SvfCoefficients::default(),
+            synthesis: SvfCoefficients::default(),
+            voice: [Svf::default(); 2],
+            carrier: [Svf::default(); 2],
+            follower: Follower::default(),
+            carrier_level: Follower::default(),
+            evening: 1.0,
+            evening_step: 0.0,
+            tipped: 1.0,
+            ceiling: 0.0,
+            voice_spectrum: 0.0,
+        }
+    }
+}
+
+/// The slope of `levels` (amplitudes, one per band of a bank of `bands`) in
+/// dB per octave: a least-squares line through the bands loud enough to hear.
+fn tilt(levels: impl Iterator<Item = f32>, bands: usize) -> f32 {
+    let octaves_per_band = BANK_OCTAVES / (bands - 1).max(1) as f32;
+    let (mut n, mut sx, mut sy, mut sxx, mut sxy) = (0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32);
+    for (band, level) in levels.enumerate().take(bands) {
+        if level < EVEN_SILENCE {
+            continue;
+        }
+        let (x, y) = (band as f32 * octaves_per_band, 20.0 * level.log10());
+        n += 1.0;
+        sx += x;
+        sy += y;
+        sxx += x * x;
+        sxy += x * y;
+    }
+    let spread = n * sxx - sx * sx;
+    if n < 2.0 || spread <= 1e-6 {
+        return 0.0;
+    }
+    (n * sxy - sx * sy) / spread
 }
 
 /// The vocoder.
@@ -195,14 +291,19 @@ struct Band {
 ///   A polyphonic cable is summed.
 /// - **Modulator** (Audio, Input): the sound whose spectrum it wears, a voice.
 /// - **Formant** (Control, Input): adds to the Formant knob, ±1 an octave.
+/// - **Freeze** (Gate, Input): high holds the bands; patched, it takes over
+///   from the switch.
 /// - **Out L** / **Out R** (Audio, Output): the bands, alternating sides.
 ///
 /// # Parameters
 ///
 /// - **Formant** (−1..+1 octave): the carrier's bands against the voice's.
 /// - **Bands** (8 / 16 / 24).
+/// - **Freeze** (toggle): holds every band's follower where it is.
 /// - **Attack** and **Release** of the band followers.
 /// - **Sibilance**, **Unvoiced**, **Width** and **Mix**.
+/// - **Flatten** (0–100%): evens out the carrier's bands before the voice's
+///   levels are put on them.
 pub struct Vocoder {
     sample_rate: f32,
     bands: [Band; MAX_BANDS],
@@ -218,16 +319,25 @@ pub struct Vocoder {
     sibilance_coefficients: [SvfCoefficients; 2],
     hiss_filter: Svf,
     hiss_coefficients: SvfCoefficients,
+    /// The pre-emphasis's one-pole low-pass state, and its coefficient.
+    emphasis: f32,
+    emphasis_coefficient: f32,
     hiss_level: Follower,
     voice_level: Follower,
     /// How unvoiced the voice is right now, 0 to 1.
     unvoiced: f32,
+    /// Whether Freeze held the bands on the last sample.
+    frozen: bool,
+    /// How far the voice's own highs are let through: 0 while frozen, 1
+    /// otherwise, gliding between.
+    listening: f32,
     noise: NoiseFloor,
     formant: SmoothedValue,
     sibilance: SmoothedValue,
     unvoiced_amount: SmoothedValue,
     width: SmoothedValue,
     mix: SmoothedValue,
+    flatten: SmoothedValue,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
 }
@@ -236,17 +346,20 @@ impl Vocoder {
     pub const PORT_CARRIER: usize = 0;
     pub const PORT_MODULATOR: usize = 1;
     pub const PORT_FORMANT: usize = 2;
+    pub const PORT_FREEZE: usize = 3;
     pub const PORT_OUT_L: usize = 0;
     pub const PORT_OUT_R: usize = 1;
 
     pub const PARAM_FORMANT: usize = 0;
     pub const PARAM_BANDS: usize = 1;
-    pub const PARAM_ATTACK: usize = 2;
-    pub const PARAM_RELEASE: usize = 3;
-    pub const PARAM_SIBILANCE: usize = 4;
-    pub const PARAM_UNVOICED: usize = 5;
-    pub const PARAM_WIDTH: usize = 6;
-    pub const PARAM_MIX: usize = 7;
+    pub const PARAM_FREEZE: usize = 2;
+    pub const PARAM_ATTACK: usize = 3;
+    pub const PARAM_RELEASE: usize = 4;
+    pub const PARAM_SIBILANCE: usize = 5;
+    pub const PARAM_UNVOICED: usize = 6;
+    pub const PARAM_WIDTH: usize = 7;
+    pub const PARAM_MIX: usize = 8;
+    pub const PARAM_FLATTEN: usize = 9;
 
     /// Readout: the voice's level in each band, in amplitude, from 0 up to
     /// [`MAX_BANDS`].
@@ -259,6 +372,12 @@ impl Vocoder {
     pub const READOUT_UNVOICED: usize = MAX_BANDS + 2;
     /// Readout: the voice's level above the hiss detector's high-pass.
     pub const READOUT_HIGHS: usize = MAX_BANDS + 3;
+    /// Readout: 1 while Freeze holds the bands, by the switch or the gate.
+    pub const READOUT_FROZEN: usize = MAX_BANDS + 4;
+    /// Readout: the carrier's own tilt across the bank, in dB per octave.
+    pub const READOUT_TILT: usize = MAX_BANDS + 5;
+    /// Readout: the carrier's tilt as the bank plays it, after Flatten.
+    pub const READOUT_EVENED: usize = MAX_BANDS + 6;
 
     pub fn new() -> Self {
         let sample_rate = 44100.0;
@@ -274,14 +393,19 @@ impl Vocoder {
             hiss_filter: Svf::default(),
             hiss_coefficients: SvfCoefficients::default(),
             hiss_level: Follower::default(),
+            emphasis: 0.0,
+            emphasis_coefficient: 0.0,
             voice_level: Follower::default(),
             unvoiced: 0.0,
+            frozen: false,
+            listening: 1.0,
             noise: NoiseFloor::new(NOISE_LEVEL),
             formant: SmoothedValue::with_default_smoothing(0.0, sample_rate),
             sibilance: SmoothedValue::with_default_smoothing(0.25, sample_rate),
             unvoiced_amount: SmoothedValue::with_default_smoothing(0.25, sample_rate),
             width: SmoothedValue::with_default_smoothing(0.5, sample_rate),
             mix: SmoothedValue::with_default_smoothing(1.0, sample_rate),
+            flatten: SmoothedValue::with_default_smoothing(0.0, sample_rate),
             ports: vec![
                 PortDefinition::input_with_default("carrier", "Carrier", SignalType::Audio, 0.0)
                     .describe("The sound that's played, a synth chord; a polyphonic cable is summed"),
@@ -289,6 +413,8 @@ impl Vocoder {
                     .describe("The sound whose spectrum the carrier wears, usually a voice"),
                 PortDefinition::input_with_default("formant_cv", "Formant", SignalType::Control, 0.0)
                     .describe("Adds to the Formant knob: +1 moves the carrier's bands an octave up"),
+                PortDefinition::input_with_default("freeze", "Freeze", SignalType::Gate, 0.0)
+                    .describe("While high, the bands hold the voice where it is; patched, it takes over from the switch"),
                 PortDefinition::output("out_l", "Out L", SignalType::Audio).describe("The odd bands, toward the left as Width opens"),
                 PortDefinition::output("out_r", "Out R", SignalType::Audio).describe("The even bands, toward the right as Width opens"),
             ],
@@ -297,6 +423,9 @@ impl Vocoder {
                     .describe("Moves the carrier's bands against the voice's: up for a smaller throat, down for a larger"),
                 ParameterDefinition::choice("bands", "Bands", &["8", "16", "24"], 1)
                     .describe("How many bands the spectrum is split into: fewer is rougher and more robotic, more is clearer"),
+                // Freeze before Attack: its jack must come before any knob-only row
+                ParameterDefinition::toggle("freeze", "Freeze", false)
+                    .describe("Holds every band where it is, so a vowel lasts as long as the chord does"),
                 ParameterDefinition::new("attack", "Attack", 0.5, 200.0, 4.0, ParameterDisplay::logarithmic("ms"))
                     .describe("How fast a band opens when the voice gets louder there"),
                 ParameterDefinition::new("release", "Release", 5.0, 2000.0, 40.0, ParameterDisplay::logarithmic("ms"))
@@ -309,6 +438,8 @@ impl Vocoder {
                     .describe("Spreads the bands, alternating left and right"),
                 ParameterDefinition::normalized("mix", "Mix", 1.0)
                     .describe("Blend from the carrier alone (0) to the vocoded sound (1)"),
+                ParameterDefinition::normalized("flatten", "Flatten", 0.0)
+                    .describe("Evens out the carrier's own spectrum first, so a dull pad speaks as clearly as a bright saw"),
             ],
         };
         vocoder.tune_all();
@@ -327,6 +458,12 @@ impl Vocoder {
             band.voice = [Svf::default(); 2];
             band.carrier = [Svf::default(); 2];
             band.follower = Follower::default();
+            band.carrier_level = Follower::default();
+            band.evening = 1.0;
+            band.evening_step = 0.0;
+            band.tipped = 1.0;
+            band.ceiling = 0.0;
+            band.voice_spectrum = 0.0;
         }
         // A fourth-order Butterworth high-pass
         self.sibilance_coefficients = [
@@ -334,6 +471,7 @@ impl Vocoder {
             SvfCoefficients::new(SIBILANCE_HZ, 1.306_563, self.sample_rate),
         ];
         self.hiss_coefficients = SvfCoefficients::new(HISS_HZ, FRAC_1_SQRT_2, self.sample_rate);
+        self.emphasis_coefficient = 1.0 - (-2.0 * PI * EMPHASIS_HZ / self.sample_rate).exp();
     }
 
     /// Tunes the carrier's bank `formant` octaves from the voice's.
@@ -344,6 +482,57 @@ impl Vocoder {
             band.synthesis = SvfCoefficients::new(band_centre(index, self.active) * shift, q, self.sample_rate);
         }
         self.tuned_formant = formant;
+    }
+
+    /// Sets each carrier band's Flatten gain gliding, over the next
+    /// [`RETUNE_EVERY`] samples, `flatten` of the way (in dB) from 1 to the
+    /// gain that brings the band to the carrier's average band level.
+    ///
+    /// The average is weighted by where the voice has been over the last
+    /// second or so, so evening the carrier out keeps the vocoder about as
+    /// loud as it was: a chord and a voice are both loudest low down, and an
+    /// even average would turn the voice's own bands down.
+    ///
+    /// The bands were measured after the pre-emphasis, which is taken back
+    /// out here: it only keeps the bands apart, and the levels they end up
+    /// at are the carrier's own, evened.
+    fn aim_evening(&mut self, flatten: f32) {
+        let (active, shift, sample_rate) = (self.active, 2f32.powf(self.tuned_formant), self.sample_rate);
+        let bands = &mut self.bands[..active];
+        let listen = 1.0 - (-(RETUNE_EVERY as f32) * 1000.0 / (VOICE_SPECTRUM_MS * sample_rate)).exp();
+        for band in bands.iter_mut() {
+            band.voice_spectrum = flush(band.voice_spectrum + listen * (band.follower.level - band.voice_spectrum));
+        }
+        let aim = |band: &mut Band, target: f32| band.evening_step = (target - band.evening) / RETUNE_EVERY as f32;
+        if flatten <= 0.0 {
+            for band in bands {
+                band.tipped = 1.0;
+                aim(band, 1.0);
+            }
+            return;
+        }
+        let tip = flatten * EMPHASIS;
+        // Each band's weight is the voice's power there, plus a little for
+        // every band so a silent voice weighs them all alike
+        let voice_power = bands.iter().map(|b| b.voice_spectrum * b.voice_spectrum).sum::<f32>();
+        let even_weight = 0.01 * voice_power / active as f32 + 1e-12;
+        let (mut weighed, mut weights) = (0.0, 0.0);
+        for (index, band) in bands.iter_mut().enumerate() {
+            // The shelf's gain at the band's centre: |1 + tip · jw / (jw + wc)|
+            let w = (band_centre(index, active) * shift).min(sample_rate * 0.45) / EMPHASIS_HZ;
+            band.tipped = ((w * w * (1.0 + tip) * (1.0 + tip) + 1.0) / (w * w + 1.0)).sqrt();
+            let own = band.carrier_level.level / band.tipped;
+            let weight = band.voice_spectrum * band.voice_spectrum + even_weight;
+            weighed += weight * own * own;
+            weights += weight;
+        }
+        let average = (weighed / weights).sqrt();
+        let floor = (average * EVEN_FLOOR).max(EVEN_SILENCE);
+        for band in bands {
+            let lift = average / (band.carrier_level.level / band.tipped).max(floor);
+            band.ceiling = EVEN_GUARD * band.carrier_level.level;
+            aim(band, (lift * FLATTEN_MAKEUP).powf(flatten) / band.tipped);
+        }
     }
 }
 
@@ -376,7 +565,7 @@ impl DspModule for Vocoder {
 
     fn prepare(&mut self, sample_rate: f32, _max_block_size: usize) {
         self.sample_rate = sample_rate;
-        for smoothed in [&mut self.formant, &mut self.sibilance, &mut self.unvoiced_amount, &mut self.width, &mut self.mix] {
+        for smoothed in [&mut self.formant, &mut self.sibilance, &mut self.unvoiced_amount, &mut self.width, &mut self.mix, &mut self.flatten] {
             smoothed.set_sample_rate(sample_rate);
         }
         self.tune_all();
@@ -388,7 +577,11 @@ impl DspModule for Vocoder {
         let release = one_pole(params[Self::PARAM_RELEASE], sample_rate);
         // The hiss detector listens as fast as speech moves
         let (hiss_attack, hiss_release) = (one_pole(2.0, sample_rate), one_pole(25.0, sample_rate));
+        let (even_attack, even_release) = (one_pole(EVEN_ATTACK_MS, sample_rate), one_pole(EVEN_RELEASE_MS, sample_rate));
         let switch_step = 1.0 / (SWITCH_MS * 0.001 * sample_rate);
+        let listen_step = 1.0 / (FREEZE_FADE_MS * 0.001 * sample_rate);
+        let freeze_in = connected_input(inputs, Self::PORT_FREEZE);
+        let freeze_switch = params[Self::PARAM_FREEZE] > 0.5;
         let wanted = band_count(params[Self::PARAM_BANDS]);
 
         self.formant.set_target(params[Self::PARAM_FORMANT]);
@@ -396,6 +589,7 @@ impl DspModule for Vocoder {
         self.unvoiced_amount.set_target(params[Self::PARAM_UNVOICED]);
         self.width.set_target(params[Self::PARAM_WIDTH]);
         self.mix.set_target(params[Self::PARAM_MIX]);
+        self.flatten.set_target(params[Self::PARAM_FLATTEN]);
 
         let carrier = &inputs[Self::PORT_CARRIER].samples;
         let modulator = &inputs[Self::PORT_MODULATOR].samples;
@@ -420,21 +614,38 @@ impl DspModule for Vocoder {
             }
 
             let formant = (self.formant.next() + formant_cv[i]).clamp(-1.0, 1.0);
+            let flatten = self.flatten.next();
             if self.retune_in == 0 {
                 if (formant - self.tuned_formant).abs() > 1e-4 {
                     self.retune_synthesis(formant);
                 }
+                self.aim_evening(flatten);
                 self.retune_in = RETUNE_EVERY;
             }
             self.retune_in -= 1;
 
+            // Frozen, every follower holds and the voice's own highs fade
+            let frozen = match freeze_in {
+                Some(gate) => gate.samples[i] >= GATE_THRESHOLD,
+                None => freeze_switch,
+            };
+            self.frozen = frozen;
+            self.listening = if frozen { (self.listening - listen_step).max(0.0) } else { (self.listening + listen_step).min(1.0) };
+
             // How much of the voice is hiss: noise stands in for the carrier
-            let hiss = self.hiss_level.follow(self.hiss_filter.high(&self.hiss_coefficients, voice), hiss_attack, hiss_release);
-            let whole = self.voice_level.follow(voice, hiss_attack, hiss_release);
-            let share = hiss / (whole + 1e-6);
-            self.unvoiced = ((share - HISS_FROM) / (HISS_TO - HISS_FROM)).clamp(0.0, 1.0);
+            let hissing = self.hiss_filter.high(&self.hiss_coefficients, voice);
+            if !frozen {
+                let hiss = self.hiss_level.follow(hissing, hiss_attack, hiss_release);
+                let whole = self.voice_level.follow(voice, hiss_attack, hiss_release);
+                let share = hiss / (whole + 1e-6);
+                self.unvoiced = ((share - HISS_FROM) / (HISS_TO - HISS_FROM)).clamp(0.0, 1.0);
+            }
             let swap = self.unvoiced * self.unvoiced_amount.next();
-            let excitation = dry + swap * (self.noise.sample() - dry);
+            // Flatten first tips the carrier up, so the bands it lifts most aren't
+            // swamped by their louder neighbours through the filters' skirts
+            self.emphasis = flush(self.emphasis + self.emphasis_coefficient * (dry - self.emphasis));
+            let tipped = dry + flatten * EMPHASIS * (dry - self.emphasis);
+            let excitation = tipped + swap * (self.noise.sample() - tipped);
 
             // Odd bands lean left and even bands right, at constant power
             let angle = FRAC_PI_4 * (1.0 - self.width.next());
@@ -443,9 +654,17 @@ impl DspModule for Vocoder {
             let mut sides = [0.0f32; 2];
             for (index, band) in self.bands.iter_mut().enumerate().take(self.active) {
                 let heard = band_pair(&mut band.voice, &band.analysis, voice);
-                let level = band.follower.follow(heard, attack, release);
+                let level = if frozen { band.follower.level } else { band.follower.follow(heard, attack, release) };
                 let played = band_pair(&mut band.carrier, &band.synthesis, excitation);
-                let y = played * level;
+                band.carrier_level.follow(played, even_attack, even_release);
+                band.evening += band.evening_step;
+                // A band far louder than when its lift was set gets none of the
+                // lift until the next aim, so a new note can't burst through it
+                let mut evening = band.evening;
+                if evening > 1.0 && played.abs() > band.ceiling {
+                    evening = (evening * band.ceiling / played.abs()).max(1.0);
+                }
+                let y = played * evening * level;
                 let side = index & 1;
                 sides[side] += near * y;
                 sides[1 - side] += far * y;
@@ -453,7 +672,7 @@ impl DspModule for Vocoder {
 
             let [low_stage, high_stage] = &mut self.sibilance_filter;
             let highs = high_stage.high(&self.sibilance_coefficients[1], low_stage.high(&self.sibilance_coefficients[0], voice));
-            let sibilance = SIBILANCE_GAIN * self.sibilance.next() * highs;
+            let sibilance = SIBILANCE_GAIN * self.sibilance.next() * self.listening * highs;
 
             // Rectified, a band reads 2/π of its amplitude
             let wet_gain = MAKEUP * FRAC_PI_2 * (self.active as f32).sqrt() * self.switch_gain;
@@ -470,7 +689,10 @@ impl DspModule for Vocoder {
         self.hiss_level = Follower::default();
         self.voice_level = Follower::default();
         self.unvoiced = 0.0;
-        for smoothed in [&mut self.formant, &mut self.sibilance, &mut self.unvoiced_amount, &mut self.width, &mut self.mix] {
+        self.frozen = false;
+        self.listening = 1.0;
+        self.emphasis = 0.0;
+        for smoothed in [&mut self.formant, &mut self.sibilance, &mut self.unvoiced_amount, &mut self.width, &mut self.mix, &mut self.flatten] {
             smoothed.reset(smoothed.target());
         }
     }
@@ -488,11 +710,15 @@ impl DspModule for Vocoder {
         readout.values[Self::READOUT_FORMANT] = self.tuned_formant;
         readout.values[Self::READOUT_UNVOICED] = self.unvoiced;
         readout.values[Self::READOUT_HIGHS] = self.hiss_level.level * FRAC_PI_2;
+        readout.values[Self::READOUT_FROZEN] = if self.frozen { 1.0 } else { 0.0 };
+        let bands = &self.bands[..self.active];
+        readout.values[Self::READOUT_TILT] = tilt(bands.iter().map(|b| b.carrier_level.level / b.tipped), self.active);
+        readout.values[Self::READOUT_EVENED] = tilt(bands.iter().map(|b| b.carrier_level.level * b.evening), self.active);
         Some(readout)
     }
 }
 
-const _: () = assert!(Vocoder::READOUT_HIGHS < MAX_READOUT);
+const _: () = assert!(Vocoder::READOUT_EVENED < MAX_READOUT);
 
 #[cfg(test)]
 mod tests {
@@ -501,9 +727,22 @@ mod tests {
     const SR: f32 = 48000.0;
     const BLOCK: usize = 256;
 
-    /// Knobs: Formant, Bands, Attack, Release, Sibilance, Unvoiced, Width, Mix.
-    fn knobs(formant: f32, bands: f32, sibilance: f32, unvoiced: f32, width: f32, mix: f32) -> [f32; 8] {
-        [formant, bands, 4.0, 40.0, sibilance, unvoiced, width, mix]
+    /// Knobs: Formant, Bands, Freeze, Attack, Release, Sibilance, Unvoiced,
+    /// Width, Mix, Flatten.
+    type Knobs = [f32; 10];
+
+    /// The knobs, with Freeze off and Flatten at 0.
+    fn knobs(formant: f32, bands: f32, sibilance: f32, unvoiced: f32, width: f32, mix: f32) -> Knobs {
+        [formant, bands, 0.0, 4.0, 40.0, sibilance, unvoiced, width, mix, 0.0]
+    }
+
+    /// Knobs with Freeze set and Flatten at `flatten`, and everything else
+    /// plain: 16 bands, Sibilance and Unvoiced off, mono, all wet.
+    fn knobs_with(freeze: bool, flatten: f32) -> Knobs {
+        let mut k = knobs(0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
+        k[Vocoder::PARAM_FREEZE] = if freeze { 1.0 } else { 0.0 };
+        k[Vocoder::PARAM_FLATTEN] = flatten;
+        k
     }
 
     /// Plays `seconds` through a new vocoder at 48 kHz. See [`play_on`].
@@ -512,7 +751,7 @@ mod tests {
         carrier: impl FnMut(usize) -> f32,
         voice: impl FnMut(usize) -> f32,
         formant_cv: f32,
-        params: impl Fn(usize) -> [f32; 8],
+        params: impl Fn(usize) -> Knobs,
     ) -> (Vec<f32>, Vec<f32>) {
         play_on(&mut Vocoder::new(), seconds, carrier, voice, formant_cv, params)
     }
@@ -522,29 +761,60 @@ mod tests {
     fn play_on(
         vocoder: &mut Vocoder,
         seconds: f32,
-        mut carrier: impl FnMut(usize) -> f32,
-        mut voice: impl FnMut(usize) -> f32,
+        carrier: impl FnMut(usize) -> f32,
+        voice: impl FnMut(usize) -> f32,
         formant_cv: f32,
-        params: impl Fn(usize) -> [f32; 8],
+        params: impl Fn(usize) -> Knobs,
     ) -> (Vec<f32>, Vec<f32>) {
-        vocoder.prepare(SR, BLOCK);
-        let ctx = ProcessContext::new(SR, BLOCK);
-        let mut c = SignalBuffer::audio(BLOCK);
-        let mut m = SignalBuffer::audio(BLOCK);
-        let mut cv = SignalBuffer::control(BLOCK);
-        cv.fill(formant_cv);
-        let mut outputs = vec![SignalBuffer::audio(BLOCK), SignalBuffer::audio(BLOCK)];
-        let (mut left, mut right) = (Vec::new(), Vec::new());
-        for b in 0..(seconds * SR) as usize / BLOCK {
-            for j in 0..BLOCK {
-                c.samples[j] = carrier(b * BLOCK + j);
-                m.samples[j] = voice(b * BLOCK + j);
+        let mut stage = Stage { vocoder, freeze: None, after_block: &mut |_, _| {} };
+        stage.play(seconds, carrier, voice, formant_cv, params)
+    }
+
+    /// A vocoder to play, with a gate at Freeze if it has one, and a look
+    /// at it after every block.
+    struct Stage<'a> {
+        vocoder: &'a mut Vocoder,
+        freeze: Option<&'a dyn Fn(usize) -> f32>,
+        after_block: &'a mut dyn FnMut(usize, &Vocoder),
+    }
+
+    impl Stage<'_> {
+        fn play(
+            &mut self,
+            seconds: f32,
+            mut carrier: impl FnMut(usize) -> f32,
+            mut voice: impl FnMut(usize) -> f32,
+            formant_cv: f32,
+            params: impl Fn(usize) -> Knobs,
+        ) -> (Vec<f32>, Vec<f32>) {
+            self.vocoder.prepare(SR, BLOCK);
+            let ctx = ProcessContext::new(SR, BLOCK);
+            let mut c = SignalBuffer::audio(BLOCK);
+            let mut m = SignalBuffer::audio(BLOCK);
+            let mut cv = SignalBuffer::control(BLOCK);
+            cv.fill(formant_cv);
+            let mut gate = match self.freeze {
+                Some(_) => SignalBuffer::gate(BLOCK),
+                None => SignalBuffer::unconnected(BLOCK, SignalType::Gate),
+            };
+            let mut outputs = vec![SignalBuffer::audio(BLOCK), SignalBuffer::audio(BLOCK)];
+            let (mut left, mut right) = (Vec::new(), Vec::new());
+            for b in 0..(seconds * SR) as usize / BLOCK {
+                for j in 0..BLOCK {
+                    let n = b * BLOCK + j;
+                    c.samples[j] = carrier(n);
+                    m.samples[j] = voice(n);
+                    if let Some(freeze) = self.freeze {
+                        gate.samples[j] = freeze(n);
+                    }
+                }
+                self.vocoder.process(&[&c, &m, &cv, &gate], &mut outputs, &params(b), &ctx);
+                left.extend_from_slice(&outputs[0].samples);
+                right.extend_from_slice(&outputs[1].samples);
+                (self.after_block)(b, self.vocoder);
             }
-            vocoder.process(&[&c, &m, &cv], &mut outputs, &params(b), &ctx);
-            left.extend_from_slice(&outputs[0].samples);
-            right.extend_from_slice(&outputs[1].samples);
+            (left, right)
         }
-        (left, right)
     }
 
     /// A bright carrier: a sawtooth at `hz`.
@@ -615,12 +885,14 @@ mod tests {
         assert_eq!(vocoder.info().id, "fx.vocoder");
         assert_eq!(vocoder.info().category, ModuleCategory::Effect);
         let ports = vocoder.ports();
-        assert_eq!(ports.len(), 5);
+        assert_eq!(ports.len(), 6);
         assert_eq!(ports[Vocoder::PORT_CARRIER].name, "Carrier");
         assert_eq!(ports[Vocoder::PORT_MODULATOR].name, "Modulator");
         assert_eq!(ports[Vocoder::PORT_FORMANT].name, "Formant");
+        assert_eq!(ports[Vocoder::PORT_FREEZE].name, "Freeze");
+        assert_eq!(ports[Vocoder::PORT_FREEZE].signal_type, SignalType::Gate);
         let names: Vec<&str> = vocoder.parameters().iter().map(|p| p.name).collect();
-        assert_eq!(names, ["Formant", "Bands", "Attack", "Release", "Sibilance", "Unvoiced", "Width", "Mix"]);
+        assert_eq!(names, ["Formant", "Bands", "Freeze", "Attack", "Release", "Sibilance", "Unvoiced", "Width", "Mix", "Flatten"]);
     }
 
     #[test]
@@ -813,11 +1085,229 @@ mod tests {
         assert!(values[16..MAX_BANDS].iter().all(|&v| v == 0.0), "bands past 16 are silent");
     }
 
+    /// The bands' levels in a readout, for the 16-band bank.
+    fn bands_of(vocoder: &Vocoder) -> [f32; 16] {
+        let values = vocoder.readout(&[]).unwrap().values;
+        std::array::from_fn(|band| values[Vocoder::READOUT_BANDS + band])
+    }
+
+    #[test]
+    fn freeze_holds_the_bands_exactly_and_lets_go_without_a_jump() {
+        // "Ahh" for 0.4 s, frozen until 1 s while the voice says "ee" and
+        // then stops, and let go at 1 s with the voice silent
+        let (freeze_from, freeze_to) = (75, 188);
+        let (mut ahh, mut ee) = (vowel(&[700.0, 1100.0]), vowel(&[300.0, 2300.0]));
+        let voice = move |n: usize| match n {
+            0..24000 => ahh(n),
+            24000..36000 => ee(n),
+            _ => 0.0,
+        };
+        let mut levels = Vec::new();
+        let mut frozen = Vec::new();
+        let mut vocoder = Vocoder::new();
+        let tone = |n: usize| 0.4 * (2.0 * PI * 220.0 * n as f32 / SR).sin();
+        let (l, r) = Stage {
+            vocoder: &mut vocoder,
+            freeze: None,
+            after_block: &mut |_, v| {
+                levels.push(bands_of(v));
+                frozen.push(v.readout(&[]).unwrap().values[Vocoder::READOUT_FROZEN]);
+            },
+        }
+        .play(1.5, tone, voice, 0.0, |b| knobs_with((freeze_from..freeze_to).contains(&b), 0.0));
+
+        // Held to the last bit through the new vowel and the silence
+        let held = levels[freeze_from - 1];
+        assert!(held.iter().any(|&level| level > 0.01), "nothing to hold: {held:?}");
+        for b in freeze_from..freeze_to {
+            assert_eq!(levels[b], held, "block {b} moved");
+            assert_eq!(frozen[b], 1.0);
+        }
+        assert_eq!(frozen[freeze_to], 0.0);
+        // ...and still sounding, though the voice has stopped
+        let before = rms(&mono(&l[14000..19000], &r[14000..19000]));
+        let during = rms(&mono(&l[40000..47000], &r[40000..47000]));
+        assert!(during > 0.7 * before, "frozen at {during}, against {before} before");
+
+        // Let go, the bands fall away from where they were held at the
+        // Release rate: no step, and silence soon after
+        let after = levels[freeze_to];
+        for (band, (&was, &now)) in held.iter().zip(&after).enumerate() {
+            assert!(now < was || was == 0.0, "band {band} rose from {was} to {now}");
+            assert!(now > 0.6 * was, "band {band} dropped from {was} to {now} in one block");
+        }
+        assert!(levels.last().unwrap().iter().all(|&level| level < 1e-4));
+        for side in [&l, &r] {
+            let steepest = steepest(&side[24000..60000], 220.0);
+            assert!(steepest < 3.0, "clicked: {steepest} times a tone's steepest");
+        }
+    }
+
+    #[test]
+    fn freeze_gate_takes_over_from_the_switch() {
+        // The gate high for the second quarter-second, the switch on all along
+        let gate = |n: usize| if (12000..24000).contains(&n) { 1.0 } else { 0.0 };
+        let mut states = Vec::new();
+        let mut levels = Vec::new();
+        Stage {
+            vocoder: &mut Vocoder::new(),
+            freeze: Some(&gate),
+            after_block: &mut |_, v| {
+                states.push(v.readout(&[]).unwrap().values[Vocoder::READOUT_FROZEN]);
+                levels.push(bands_of(v));
+            },
+        }
+        .play(0.75, saw(125.0), vowel(&[500.0, 2000.0]), 0.0, |_| knobs_with(true, 0.0));
+        let block_at = |n: usize| n / BLOCK;
+        assert_eq!(states[block_at(6000)], 0.0, "the gate is low: the switch is ignored");
+        assert_ne!(levels[block_at(6000)], levels[block_at(6000) + 1], "the bands follow the voice");
+        assert_eq!(states[block_at(18000)], 1.0, "the gate is high");
+        assert_eq!(levels[block_at(18000)], levels[block_at(18000) + 1], "the bands hold");
+        assert_eq!(states[block_at(30000)], 0.0, "the gate fell");
+
+        // Unpatched, the switch freezes
+        let mut vocoder = Vocoder::new();
+        play_on(&mut vocoder, 0.25, saw(125.0), vowel(&[500.0]), 0.0, |_| knobs_with(true, 0.0));
+        assert_eq!(vocoder.readout(&[]).unwrap().values[Vocoder::READOUT_FROZEN], 1.0);
+    }
+
+    #[test]
+    fn freeze_mutes_the_voices_own_highs() {
+        // Sibilance passes the voice's highs, but a frozen vowel is the held
+        // bands alone: what the voice does next isn't heard
+        let tone = |n: usize| 0.3 * (2.0 * PI * 9000.0 * n as f32 / SR).sin();
+        let sibilant = |freeze| {
+            let mut k = knobs(0.0, 1.0, 1.0, 0.0, 0.0, 1.0);
+            k[Vocoder::PARAM_FREEZE] = if freeze { 1.0 } else { 0.0 };
+            k
+        };
+        let (l, _) = play(0.5, |_| 0.0, tone, 0.0, |_| sibilant(false));
+        assert!(rms(&l[12000..]) > 0.3);
+        let (l, _) = play(0.5, |_| 0.0, tone, 0.0, |_| sibilant(true));
+        assert!(rms(&l[12000..]) < 1e-4, "frozen, the highs still pass: {}", rms(&l[12000..]));
+    }
+
+    /// A dull carrier: every harmonic of `hz` up to 8 kHz falling 12 dB an
+    /// octave, like a pad through a low-pass. Its 2 kHz is 48 dB below its
+    /// fundamental.
+    fn dull(hz: f32) -> impl FnMut(usize) -> f32 {
+        let harmonics = (8000.0 / hz) as usize;
+        move |n| (1..=harmonics).map(|k| 0.4 / (k * k) as f32 * (2.0 * PI * (k as f32 * hz * n as f32 / SR).fract()).sin()).sum()
+    }
+
+    /// Like [`harmonics_of_a_vowel`], on any carrier and with Flatten.
+    fn harmonics_with_flatten(carrier: impl FnMut(usize) -> f32, flatten: f32) -> Vec<(f32, f32)> {
+        let (l, r) = play(2.0, carrier, vowel(&[500.0, 2000.0]), 0.0, |_| knobs_with(false, flatten));
+        let out = mono(&l[48000..], &r[48000..]);
+        (1..=48).map(|k| k as f32 * 125.0).map(|hz| (hz, level_at(&out, hz))).collect()
+    }
+
+    /// How far the output stands above the vowel's valley at 1 kHz near
+    /// `formant`.
+    fn contrast(levels: &[(f32, f32)], formant: f32) -> f32 {
+        let near = |hz: f32, octaves: f32| {
+            levels.iter().filter(|(h, _)| (h / hz).log2().abs() <= octaves).map(|(_, l)| *l).fold(0.0, f32::max)
+        };
+        near(formant, 0.3) / near(1000.0, 0.15)
+    }
+
+    #[test]
+    fn flatten_lets_a_dull_carrier_speak() {
+        // Without it, the vowel's 2 kHz formant is lost under the carrier's
+        // own slope: the loudest harmonic is the fundamental
+        let plain = harmonics_with_flatten(dull(125.0), 0.0);
+        let loudest = plain.iter().max_by(|a, b| a.1.total_cmp(&b.1)).unwrap().0;
+        assert!(loudest < 300.0, "the loudest harmonic is {loudest} Hz");
+        assert!(contrast(&plain, 2000.0) < 1.0, "a dull carrier's 2 kHz already stands out: {}", contrast(&plain, 2000.0));
+
+        // Flattened, both formants stand out of the valley as far as they do
+        // from a bright saw, to within 1.5 dB
+        let flattened = harmonics_with_flatten(dull(125.0), 1.0);
+        let saw = harmonics_with_flatten(saw(125.0), 0.0);
+        let db = |levels: &[(f32, f32)]| [500.0, 2000.0].map(|f| 20.0 * contrast(levels, f).log10());
+        println!("contrast in dB at 500 Hz and 2 kHz: flattened {:?}, a saw {:?}", db(&flattened), db(&saw));
+        for formant in [500.0, 2000.0] {
+            let (ours, theirs) = (contrast(&flattened, formant), contrast(&saw, formant));
+            assert!(ours > 0.84 * theirs, "{formant} Hz: flattened {ours}, a saw {theirs}");
+            assert!(ours > 1.5, "{formant} Hz: flattened {ours}");
+        }
+    }
+
+    #[test]
+    fn flatten_keeps_the_level_and_shows_the_tilt() {
+        let mut tilts = Vec::new();
+        let mut levels = Vec::new();
+        for flatten in [0.0, 0.5, 1.0] {
+            let mut vocoder = Vocoder::new();
+            let (l, r) = play_on(&mut vocoder, 1.5, dull(110.0), vowel(&[600.0, 1200.0, 2600.0]), 0.0, |_| knobs_with(false, flatten));
+            levels.push(rms(&mono(&l[48000..], &r[48000..])));
+            let values = vocoder.readout(&[]).unwrap().values;
+            tilts.push((values[Vocoder::READOUT_TILT], values[Vocoder::READOUT_EVENED]));
+        }
+        // The dull carrier falls steeply across the bank, and Flatten levels
+        // it by its share
+        let (own, played) = tilts[0];
+        assert!(own < -6.0, "a dull carrier's tilt {own}");
+        assert!((played - own).abs() < 0.01, "unflattened, played as it is: {played}");
+        let (own, played) = tilts[1];
+        assert!((played - own / 2.0).abs() < 0.1 * own.abs(), "half flattened: {own} played as {played}");
+        assert!(tilts[2].1.abs() < 0.5, "flattened {:?}", tilts[2]);
+        for level in &levels {
+            assert!((20.0 * (level / levels[0]).log10()).abs() < 3.0, "{levels:?}");
+        }
+    }
+
+    #[test]
+    fn flatten_does_not_raise_silence_into_noise() {
+        // A carrier that's silent but for a hiss at -100 dBFS stays silent
+        let mut faint = white(11);
+        let (l, _) = play(1.0, move |_| 1e-5 * faint(), vowel(&[700.0, 1100.0]), 0.0, |_| knobs_with(false, 1.0));
+        assert!(rms(&l[24000..]) < 1e-5, "raised to {}", rms(&l[24000..]));
+
+        // Beside a low tone, the bands it doesn't reach are lifted no more
+        // than 40 dB: the hiss up there stays far below the tone
+        let mut faint = white(11);
+        let low = move |n: usize| 0.4 * (2.0 * PI * 200.0 * n as f32 / SR).sin() + 1e-5 * faint();
+        let mut open = white(5);
+        let (l, _) = play(1.0, low, move |_| 0.3 * open(), 0.0, |_| knobs_with(false, 1.0));
+        let c = SvfCoefficients::new(2000.0, 0.7, SR);
+        let (mut first, mut second) = (Svf::default(), Svf::default());
+        let highs: Vec<f32> = l.iter().map(|&s| second.high(&c, first.high(&c, s))).collect();
+        assert!(rms(&highs[24000..]) < 0.01 * rms(&l[24000..]), "hiss {} under {}", rms(&highs[24000..]), rms(&l[24000..]));
+    }
+
+    #[test]
+    fn flatten_does_not_blast_a_new_chord() {
+        // The bands a new chord fills were lifted while they were empty, and
+        // must come down before they're heard. A vocoder swells a little on
+        // any new note as its bands fill (1.35 times here). Flattened, the
+        // lifted highs fill faster and it swells a little more (1.8 times),
+        // which is no burst
+        let swell = |flatten: f32| {
+            // A dull oscillator stepping up a fifth, as one does on a new
+            // note: the wave carries on from where it was
+            let mut phase = 0.0f32;
+            let carrier = move |n: usize| {
+                let hz = if n < 36000 { 110.0 } else { 165.0 };
+                phase = (phase + hz / SR).fract();
+                (1..=48).map(|k| 0.4 / (k * k) as f32 * (2.0 * PI * (k as f32 * phase).fract()).sin()).sum::<f32>()
+            };
+            let mut open = white(5);
+            let (l, r) = play(1.25, carrier, move |_| 0.3 * open(), 0.0, |_| knobs_with(false, flatten));
+            assert!(l.iter().chain(&r).all(|s| s.is_finite()));
+            let peak = |x: &[f32]| x.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+            let steady = peak(&l[24000..36000]).max(peak(&r[24000..36000]));
+            peak(&l[36000..40800]).max(peak(&r[36000..40800])) / steady
+        };
+        let (plain, flattened) = (swell(0.0), swell(1.0));
+        assert!(flattened < 1.5 * plain.max(1.0), "flattened, the new note swells {flattened}×; plain, {plain}×");
+    }
+
     #[test]
     fn registry_makes_one() {
         let mut registry = crate::dsp::ModuleRegistry::new();
         registry.register::<Vocoder>();
         let module = registry.create("fx.vocoder").unwrap();
-        assert_eq!(module.parameters().len(), 8);
+        assert_eq!(module.parameters().len(), 10);
     }
 }
