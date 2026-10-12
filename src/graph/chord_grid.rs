@@ -5,12 +5,14 @@
 //!   over its key that glides to its next note, so voice leading can be
 //!   watched: most dots creep a step or stay put while the chord changes.
 //! - A step shows its chord's name ("Am9", with "/G#" under it for a slash
-//!   chord), its velocity as a line along its foot, and a notch in its head
-//!   when it names the tone on top.
+//!   chord), its velocity as a line along its foot, a notch in its head
+//!   when it names the tone on top, and a small arrow in its corner when it
+//!   names its own strum, up or down.
 //! - Click switches a step on or off, Shift+click its tie; drag up or down
 //!   moves its root by semitones (Shift: octaves), as on the Step Sequencer.
 //! - Right-click opens the chord under the step: a piano for the root, rows
-//!   for the slash bass and the tone on top, and the chord types. Choosing a type writes the step
+//!   for the slash bass and the tone on top, and the chord types; its
+//!   velocity, tie and stroke under them. Choosing a type writes the step
 //!   and moves to the next, so a progression goes in as a lead sheet reads:
 //!   root, type, root, type.
 //! - Or play the chord, on a MIDI keyboard or the letter keys, while the
@@ -36,7 +38,7 @@ use egui_node_graph2::NodeId;
 use crate::app::theme;
 use crate::dsp::{Audition, DspModule, MAX_CHANNELS};
 use crate::modules::chord_sequencer::recognition::{pitch_classes, recognise, Heard};
-use crate::modules::chord_sequencer::{kept_tones, looped_voicings, voice_chord, Chord, ChordSequencer, ChordSpec, VoicingSettings, Voicing, CHORD_TYPES, MAX_STEPS};
+use crate::modules::chord_sequencer::{kept_tones, looped_voicings, voice_chord, Chord, ChordSequencer, ChordSpec, StrumDirection, VoicingSettings, Voicing, CHORD_TYPES, MAX_STEPS};
 use crate::modules::sequencer::{note_to_name, SequenceDirection};
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
@@ -69,6 +71,9 @@ struct ChordPattern {
     gates: [bool; MAX_STEPS],
     ties: [bool; MAX_STEPS],
     velocities: [f32; MAX_STEPS],
+    /// Each step's own stroke, or `None` to follow `strum_dir`.
+    strums: [Option<StrumDirection>; MAX_STEPS],
+    strum_dir: StrumDirection,
     settings: VoicingSettings,
     channels: usize,
     bass_voice: bool,
@@ -109,6 +114,8 @@ impl ChordPattern {
             gates: std::array::from_fn(|s| params[ChordSequencer::step_gate_param(s)] > 0.5),
             ties: std::array::from_fn(|s| params[ChordSequencer::step_tie_param(s)] > 0.5),
             velocities: std::array::from_fn(|s| params[ChordSequencer::step_velocity_param(s)] / 127.0),
+            strums: std::array::from_fn(|s| StrumDirection::from_step_param(params[ChordSequencer::step_strum_param(s)])),
+            strum_dir: StrumDirection::from_param(params[ChordSequencer::PARAM_STRUM_DIR]),
             settings,
             channels,
             bass_voice,
@@ -392,6 +399,10 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
                 let notch = Rect::from_center_size(egui::pos2(rect.center().x, rect.top() + 2.5 * z), egui::vec2(8.0 * z, 1.5 * z));
                 painter.rect_filled(notch, 0.0, if on { Color32::from_rgba_unmultiplied(18, 40, 20, 150) } else { OFF_TEXT });
             }
+            // Its own stroke: a small arrow in the corner, up the chord or down
+            if let Some(stroke) = pattern.strums[step] {
+                stroke_arrow(painter, *rect, stroke == StrumDirection::Up, if on { Color32::from_rgba_unmultiplied(18, 40, 20, 150) } else { OFF_TEXT }, z);
+            }
             chord_label(painter, *rect, spec, if on { ON_TEXT } else { OFF_TEXT }, z);
 
             if response.clicked() {
@@ -524,6 +535,20 @@ fn chord_label(painter: &egui::Painter, rect: Rect, spec: &ChordSpec, color: Col
             painter.galley(pos, top, color);
         }
     }
+}
+
+/// A step's own stroke, in its top right corner: a small triangle pointing
+/// up for a strum from the lowest note, down for one from the highest.
+fn stroke_arrow(painter: &egui::Painter, rect: Rect, up: bool, color: Color32, z: f32) {
+    let centre = egui::pos2(rect.right() - 5.0 * z, rect.top() + 5.0 * z);
+    let (w, h) = (2.5 * z, 2.0 * z);
+    let (tip, base) = if up { (-h, h) } else { (h, -h) };
+    let points = vec![
+        egui::pos2(centre.x, centre.y + tip),
+        egui::pos2(centre.x - w, centre.y + base),
+        egui::pos2(centre.x + w, centre.y + base),
+    ];
+    painter.add(egui::Shape::convex_polygon(points, color, Stroke::NONE));
 }
 
 /// Where a note's key sits along a strip starting on the C `low`, in white
@@ -728,9 +753,34 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
             set(format!("Step {} Tie", step + 1), if tie { 1.0 } else { 0.0 });
         }
     });
+    strum_row(ui, step, pattern, set);
     ui.label(RichText::new("Play a root, pick a bass if it has one, then a type: it writes the step and moves on").small().weak());
     ui.label(RichText::new("Or hold the chord on a MIDI keyboard or the letter keys, and let go").small().weak())
         .on_hover_text("The letter keys play this piano: Z is its lowest C, and ‹ › move them too. The chord sounds through this sequencer while it's held, as it will be written");
+}
+
+/// The step's own stroke: Auto, following Strum dir, or Up or Down for this
+/// step alone, so a written rhythm puts an upstroke where it belongs.
+fn strum_row(ui: &mut egui::Ui, step: usize, pattern: &ChordPattern, set: &mut impl FnMut(String, f32)) {
+    let follows = match pattern.strum_dir {
+        StrumDirection::Up => "Up",
+        StrumDirection::Down => "Down",
+        StrumDirection::Alternate => "Alt, by the clock",
+    };
+    let choices = [
+        (None, "Auto", format!("Follows Strum dir ({follows})")),
+        (Some(StrumDirection::Up), "Up ▴", "Strums this chord from its lowest note, as a guitar's downstroke".to_string()),
+        (Some(StrumDirection::Down), "Down ▾", "Strums this chord from its highest note, as a guitar's upstroke".to_string()),
+    ];
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        ui.label(RichText::new("Strum").weak());
+        for (value, (stroke, label, hint)) in choices.into_iter().enumerate() {
+            if ui.selectable_label(pattern.strums[step] == stroke, label).on_hover_text(hint).clicked() {
+                set(format!("Step {} Strum", step + 1), value as f32);
+            }
+        }
+    });
 }
 
 /// Under the piano: the chord being played into `step`, named as it's held,
@@ -816,6 +866,8 @@ mod tests {
             gates: [true; MAX_STEPS],
             ties: [false; MAX_STEPS],
             velocities: [0.75; MAX_STEPS],
+            strums: [None; MAX_STEPS],
+            strum_dir: StrumDirection::Up,
             settings: VoicingSettings { voicing: Voicing::Close, voices: voices - bass_voice as usize, range: 3, rootless: bass_voice },
             channels: voices,
             bass_voice,

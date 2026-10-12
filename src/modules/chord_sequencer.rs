@@ -12,7 +12,9 @@
 //!
 //! With Strum up, the voices don't all start on the clock: each channel's
 //! gate rises a little after the one before, up or down the chord, as a
-//! guitarist's pick or a harpist's fingers sound it.
+//! guitarist's pick or a harpist's fingers sound it. Strum Taper weights
+//! the strings struck later, softer or louder, and a step can name its own
+//! stroke, up or down, over Strum Dir.
 //!
 //! A chord being played into its face can be heard on its outputs (see
 //! [`DspModule::audition`]): it sounds for as long as the hand is down,
@@ -65,6 +67,7 @@ static GATE: StepNames = per_step!("Gate", "gate");
 static VELOCITY: StepNames = per_step!("Velocity", "velocity");
 static TIE: StepNames = per_step!("Tie", "tie");
 static TOP: StepNames = per_step!("Top", "top");
+static STRUM: StepNames = per_step!("Strum", "strum");
 
 /// A kind of chord: its name and its tones.
 #[derive(Debug)]
@@ -168,6 +171,30 @@ impl StrumDirection {
             2 => StrumDirection::Alternate,
             _ => StrumDirection::Up,
         }
+    }
+
+    /// A step's own stroke, from its Strum parameter: Up or Down, or `None`
+    /// for Auto, which leaves it to Strum Dir.
+    pub fn from_step_param(value: f32) -> Option<Self> {
+        match value.round() as i32 {
+            1 => Some(StrumDirection::Up),
+            2 => Some(StrumDirection::Down),
+            _ => None,
+        }
+    }
+}
+
+/// How hard the string struck `turn`th of `strings` is played, as a share
+/// of the step's velocity, with Strum Taper at `taper` (-1 to 1). Above 0
+/// the strings struck later are softer, as a pick digs into the first and
+/// brushes the last, down to nothing at 1. Below 0 they're louder.
+pub fn taper_scale(turn: usize, strings: usize, taper: f32) -> f32 {
+    let along = if strings > 1 { turn.min(strings - 1) as f32 / (strings - 1) as f32 } else { 0.0 };
+    let taper = taper.clamp(-1.0, 1.0);
+    if taper >= 0.0 {
+        1.0 - taper * along
+    } else {
+        1.0 + taper * (1.0 - along)
     }
 }
 
@@ -475,7 +502,9 @@ const UNMEASURED_HOLD: f32 = 4.0;
 ///
 /// A strum reaches each channel in turn. Until it does, the channel goes on
 /// playing the chord before, as a string rings until it's struck again.
-/// Then its pitch moves and its gate rises, the pitch never after the gate.
+/// Then its pitch moves and its gate rises, the pitch never after the gate,
+/// and its velocity becomes the new step's, tapered by its place in the
+/// strum.
 pub struct ChordSequencer {
     current_step: usize,
     ping_pong_direction: i32,
@@ -496,6 +525,12 @@ pub struct ChordSequencer {
     legato: bool,
     /// Clocks since a reset: Alt strums down on the odd ones.
     strokes: u32,
+    /// The step being strummed, and whether from the top down.
+    stroke_step: usize,
+    stroke_down: bool,
+    /// Each channel's step and place in the strum when it was last struck,
+    /// which its velocity is read from.
+    struck: [(usize, usize); MAX_VOICES],
     tied: bool,
     timer: StepTimer,
     eoc_timer: usize,
@@ -538,7 +573,7 @@ impl ChordSequencer {
             PortDefinition::input_with_default("run", "Run", SignalType::Gate, 1.0).describe("Steps only advance while high; runs when unpatched"),
             PortDefinition::output("pitch", "Pitch", SignalType::Control).describe("Poly V/Oct, one channel per note of the chord, lowest first"),
             PortDefinition::output("gate", "Gate", SignalType::Gate).describe("Poly gate, one channel per note, rising together unless Strum staggers them; patch into a voice's envelope"),
-            PortDefinition::output("velocity", "Velocity", SignalType::Control).describe("Poly velocity of the step, 0 to 1"),
+            PortDefinition::output("velocity", "Velocity", SignalType::Control).describe("Poly velocity of the step, 0 to 1, each channel tapered by Strum Taper"),
             PortDefinition::output("root", "Root", SignalType::Control).describe("The chord's root as V/Oct, in the octave the step names: a bass line, or a transpose for an arp"),
             PortDefinition::output("bass", "Bass", SignalType::Control).describe("The slash chord's bass note as V/Oct, or the root when there is none"),
             PortDefinition::output("eoc", "EOC", SignalType::Gate).describe("Short pulse when the sequence reaches its end"),
@@ -566,7 +601,9 @@ impl ChordSequencer {
             ParameterDefinition::new("strum", "Strum", 0.0, 100.0, 0.0, ParameterDisplay::linear("ms"))
                 .describe("Time between one channel's gate and the next, as a strummed guitar or a harp sounds a chord; 0 strikes every note at once"),
             ParameterDefinition::choice("strum_dir", "Strum Dir", &["Up", "Down", "Alt"], StrumDirection::Up as usize)
-                .describe("Where the strum starts: the lowest note (Up), the highest (Down), or down and up on alternate clocks (Alt)"),
+                .describe("Where the strum starts: the lowest note (Up), the highest (Down), or down and up on alternate clocks (Alt). A step can name its own"),
+            ParameterDefinition::new("strum_taper", "Strum Taper", -100.0, 100.0, 0.0, ParameterDisplay::linear("%"))
+                .describe("Softens the notes struck later in a strum, down to nothing at 100%, as a pick digs into the first strings and brushes the last; below 0 they grow louder instead"),
         ];
 
         // A progression to start from: Cmaj7, Am7, Fmaj7, G7, the bass
@@ -596,6 +633,10 @@ impl ChordSequencer {
                 ParameterDefinition::choice(TOP.1[step], TOP.0[step], &TOP_LABELS, 0)
                     .describe("A chord tone to put on top of the voicing, as an arranger writes a pad's top line; Auto leaves it to the voicing"),
             );
+            parameters.push(
+                ParameterDefinition::choice(STRUM.1[step], STRUM.0[step], &["Auto", "Up", "Down"], 0)
+                    .describe("Which way this chord is strummed: from the lowest note (Up) or the highest (Down); Auto follows Strum Dir"),
+            );
         }
 
         Self {
@@ -611,6 +652,9 @@ impl ChordSequencer {
             held: [0; MAX_VOICES],
             legato: false,
             strokes: 0,
+            stroke_step: 0,
+            stroke_down: false,
+            struck: std::array::from_fn(|channel| (0, channel)),
             tied: false,
             timer: StepTimer::new(),
             eoc_timer: 0,
@@ -647,8 +691,9 @@ impl ChordSequencer {
     pub const PARAM_ROOTLESS: usize = 8;
     pub const PARAM_STRUM: usize = 9;
     pub const PARAM_STRUM_DIR: usize = 10;
-    const STEP_PARAMS: usize = 11;
-    const PER_STEP: usize = 7;
+    pub const PARAM_STRUM_TAPER: usize = 11;
+    const STEP_PARAMS: usize = 12;
+    const PER_STEP: usize = 8;
 
     pub const fn step_root_param(step: usize) -> usize {
         Self::STEP_PARAMS + step * Self::PER_STEP
@@ -670,6 +715,9 @@ impl ChordSequencer {
     }
     pub const fn step_top_param(step: usize) -> usize {
         Self::step_root_param(step) + 6
+    }
+    pub const fn step_strum_param(step: usize) -> usize {
+        Self::step_root_param(step) + 7
     }
 
     /// The readout: the step playing, then each channel's MIDI note (-1
@@ -875,6 +923,7 @@ impl DspModule for ChordSequencer {
         let gate_length = params[Self::PARAM_GATE_LENGTH] / 100.0;
         let strum_ms = params[Self::PARAM_STRUM];
         let strum_direction = StrumDirection::from_param(params[Self::PARAM_STRUM_DIR]);
+        let taper = params[Self::PARAM_STRUM_TAPER] / 100.0;
 
         // As many channels as the knob asks for and the cables have room for
         let room = outputs[..Self::PORT_ROOT].iter().map(|output| output.max_channels()).min().unwrap_or(1);
@@ -949,9 +998,11 @@ impl DspModule for ChordSequencer {
                     self.advance_step(num_steps, direction)
                 };
 
-                // The hand moves on every clock, rests and ties included, so
-                // Alt keeps time as a rhythm guitarist's does
-                let down = match strum_direction {
+                // The hand moves on every clock, rests, ties and steps that
+                // name their own stroke included, so Alt keeps time as a
+                // rhythm guitarist's does
+                let step = self.current_step;
+                let down = match StrumDirection::from_step_param(params[Self::step_strum_param(step)]).unwrap_or(strum_direction) {
                     StrumDirection::Up => false,
                     StrumDirection::Down => true,
                     StrumDirection::Alternate => self.strokes % 2 == 1,
@@ -961,7 +1012,6 @@ impl DspModule for ChordSequencer {
                 // A chord that plays is voiced from the one sounding, then
                 // strummed: each channel keeps its note until its turn. A rest
                 // leaves the pitches alone, so the release ends where it began
-                let step = self.current_step;
                 if params[Self::step_gate_param(step)] > 0.5 {
                     let tie = params[Self::step_tie_param(step)] > 0.5;
                     for channel in 0..channels {
@@ -977,6 +1027,8 @@ impl DspModule for ChordSequencer {
                     self.before = (!fresh && self.sounding.chord.len > 0).then_some(self.sounding.chord);
                     self.voice(params, Self::spec(params, step), channels);
                     let spacing = self.strum_spacing(strum_ms, channels);
+                    self.stroke_step = step;
+                    self.stroke_down = down;
                     for channel in 0..channels {
                         let turn = if down { channels - 1 - channel } else { channel };
                         self.strum_wait[channel] = Some(turn * spacing);
@@ -996,10 +1048,7 @@ impl DspModule for ChordSequencer {
                 self.current_step = 0;
             }
 
-            let velocity = match self.audition {
-                Some(audition) => audition.velocity,
-                None => params[Self::step_velocity_param(self.current_step)] / 127.0,
-            };
+            let audition_velocity = self.audition.map(|audition| audition.velocity);
             // An audition's gates are held while the hand is down, over
             // whatever the sequence is doing underneath
             let auditioned = self.audition.filter(|_| self.auditioning).map(|a| if self.audition_attack { 0 } else { a.notes().len() });
@@ -1013,6 +1062,8 @@ impl DspModule for ChordSequencer {
                     self.strum_wait[channel] = None;
                     retrigger = self.gate_high[channel] && !self.legato;
                     self.gate_timers[channel] = self.gate_len;
+                    let turn = if self.stroke_down { channels - 1 - channel } else { channel };
+                    self.struck[channel] = (self.stroke_step, turn);
                 }
                 let gate_active = match auditioned {
                     Some(notes) => channel < notes,
@@ -1021,6 +1072,12 @@ impl DspModule for ChordSequencer {
                 self.gate_high[channel] = gate_active;
                 outputs[Self::PORT_PITCH].channel_mut(channel)[i] = note_to_voct(self.playing(channel));
                 outputs[Self::PORT_GATE].channel_mut(channel)[i] = if gate_active { 1.0 } else { 0.0 };
+                // A channel plays as hard as the step that last struck it,
+                // tapered by its place in that strum
+                let velocity = audition_velocity.unwrap_or_else(|| {
+                    let (step, turn) = self.struck[channel];
+                    params[Self::step_velocity_param(step)] / 127.0 * taper_scale(turn, channels, taper)
+                });
                 outputs[Self::PORT_VELOCITY].channel_mut(channel)[i] = velocity;
             }
             let (root, bass) = match self.audition {
@@ -1054,6 +1111,9 @@ impl DspModule for ChordSequencer {
         self.strum_wait = [None; MAX_VOICES];
         self.legato = false;
         self.strokes = 0;
+        self.stroke_step = 0;
+        self.stroke_down = false;
+        self.struck = std::array::from_fn(|channel| (0, channel));
         self.tied = false;
         self.timer.forget();
         self.eoc_timer = 0;
@@ -1140,6 +1200,7 @@ mod tests {
         /// Each channel's pitch, as MIDI notes, sample by sample.
         notes: Vec<Vec<f32>>,
         gates: Vec<Vec<f32>>,
+        velocities: Vec<Vec<f32>>,
         root: Vec<f32>,
         bass: Vec<f32>,
         eoc: Vec<f32>,
@@ -1161,6 +1222,7 @@ mod tests {
         let mut run = Run {
             notes: vec![Vec::new(); MAX_VOICES],
             gates: vec![Vec::new(); MAX_VOICES],
+            velocities: vec![Vec::new(); MAX_VOICES],
             root: Vec::new(),
             bass: Vec::new(),
             eoc: Vec::new(),
@@ -1180,6 +1242,7 @@ mod tests {
             for channel in 0..run.channels {
                 run.notes[channel].extend(outputs[ChordSequencer::PORT_PITCH].voice(channel).samples.iter().map(midi));
                 run.gates[channel].extend(&outputs[ChordSequencer::PORT_GATE].voice(channel).samples);
+                run.velocities[channel].extend(&outputs[ChordSequencer::PORT_VELOCITY].voice(channel).samples);
             }
             run.root.extend(outputs[ChordSequencer::PORT_ROOT].samples.iter().map(midi));
             run.bass.extend(outputs[ChordSequencer::PORT_BASS].samples.iter().map(midi));
@@ -1205,17 +1268,19 @@ mod tests {
         let ids: Vec<_> = seq.ports().iter().map(|p| p.id).collect();
         assert_eq!(ids, ["clock", "reset", "run", "pitch", "gate", "velocity", "root", "bass", "eoc"]);
         let params = seq.parameters();
-        assert_eq!(params.len(), 11 + 7 * MAX_STEPS);
+        assert_eq!(params.len(), 12 + 8 * MAX_STEPS);
         assert_eq!(params[ChordSequencer::PARAM_BASS_VOICE].id, "bass_voice");
         assert_eq!(params[ChordSequencer::PARAM_ROOTLESS].id, "rootless");
         assert_eq!(params[ChordSequencer::PARAM_STRUM].id, "strum");
         assert_eq!(params[ChordSequencer::PARAM_STRUM_DIR].id, "strum_dir");
+        assert_eq!(params[ChordSequencer::PARAM_STRUM_TAPER].id, "strum_taper");
         assert_eq!(params[ChordSequencer::step_root_param(0)].name, "Step 1 Root");
         assert_eq!(params[ChordSequencer::step_type_param(15)].name, "Step 16 Type");
         assert_eq!(params[ChordSequencer::step_bass_param(2)].id, "step_3_bass");
         assert_eq!(params[ChordSequencer::step_tie_param(15)].id, "step_16_tie");
         assert_eq!(params[ChordSequencer::step_top_param(4)].id, "step_5_top");
-        assert_eq!(params.last().unwrap().id, "step_16_top");
+        assert_eq!(params[ChordSequencer::step_strum_param(2)].id, "step_3_strum");
+        assert_eq!(params.last().unwrap().id, "step_16_strum");
         assert_eq!(TYPE_LABELS.len(), CHORD_TYPES.len());
         for (label, kind) in TYPE_LABELS.iter().zip(&CHORD_TYPES) {
             assert_eq!(*label, kind.label);
@@ -1593,6 +1658,58 @@ mod tests {
         params[ChordSequencer::step_gate_param(2)] = 0.0;
         let played = run(&params, 5000, &[0, 1000, 2000, 3000, 4000]);
         assert_eq!(rises_by_channel(&played), [[0, 1020, 3020, 4000], [10, 1010, 3010, 4010], [20, 1000, 3000, 4020]]);
+    }
+
+    #[test]
+    fn the_taper_softens_the_strings_struck_later() {
+        // Four strings: the first at the step's velocity, the last at none
+        let near = |turns: [f32; 4], expected: [f32; 4]| turns.iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-6);
+        assert!(near([0, 1, 2, 3].map(|turn| taper_scale(turn, 4, 1.0)), [1.0, 2.0 / 3.0, 1.0 / 3.0, 0.0]));
+        // Below 0 the first is softest and the last full
+        assert!(near([0, 1, 2, 3].map(|turn| taper_scale(turn, 4, -0.5)), [0.5, 2.0 / 3.0, 5.0 / 6.0, 1.0]));
+        assert_eq!(taper_scale(0, 1, 1.0), 1.0, "one string is struck as written");
+        assert!((0..4).all(|turn| taper_scale(turn, 4, 0.0) == 1.0), "no taper, no change");
+    }
+
+    #[test]
+    fn each_channels_velocity_follows_the_taper_in_strum_order() {
+        // Velocity 127, Taper 60%: up from the lowest channel on the first
+        // chord, down from the highest on the second
+        let mut params = strummed(&[(48, MAJ), (53, MAJ)], 20.0, StrumDirection::Alternate);
+        params[ChordSequencer::PARAM_STRUM_TAPER] = 60.0;
+        params[ChordSequencer::step_velocity_param(0)] = 127.0;
+        params[ChordSequencer::step_velocity_param(1)] = 63.5;
+        let played = run(&params, 2000, &[0, 1000]);
+        let velocity = |channel: usize, t: usize| played.velocities[channel][t];
+        let up = [1.0, 0.8, 0.6, 0.4];
+        for channel in 0..4 {
+            assert!((velocity(channel, 500) - up[channel]).abs() < 1e-6, "channel {channel} up: {}", velocity(channel, 500));
+            let down = 0.5 * up[3 - channel];
+            assert!((velocity(channel, 1500) - down).abs() < 1e-6, "channel {channel} down: {}", velocity(channel, 1500));
+        }
+        // A channel the strum hasn't reached yet rings on as hard as it was
+        // struck; it takes the new step's velocity with its new note
+        assert_eq!(velocity(0, 1059), velocity(0, 500), "channel 1 is struck last, at 1060");
+        assert_eq!(velocity(0, 1060), velocity(0, 1500));
+    }
+
+    #[test]
+    fn a_steps_own_stroke_overrides_strum_dir_for_that_step_only() {
+        // Strum Dir Up, but step 2 is written Down: steps 1 and 3 still
+        // strum up
+        let mut params = strummed(&[(48, MAJ), (53, MAJ), (55, MAJ)], 10.0, StrumDirection::Up);
+        params[ChordSequencer::PARAM_VOICES] = 3.0;
+        params[ChordSequencer::PARAM_GATE_LENGTH] = 50.0;
+        params[ChordSequencer::step_strum_param(1)] = 2.0;
+        let played = run(&params, 3000, &[0, 1000, 2000]);
+        assert_eq!(rises_by_channel(&played), [[0, 1020, 2000], [10, 1010, 2010], [20, 1000, 2020]]);
+
+        // Under Alt, a step's Up stands where a down was due, and the hand
+        // keeps time: the stroke after it is up again, as the clock has it
+        params[ChordSequencer::PARAM_STRUM_DIR] = StrumDirection::Alternate as usize as f32;
+        params[ChordSequencer::step_strum_param(1)] = 1.0;
+        let played = run(&params, 3000, &[0, 1000, 2000]);
+        assert_eq!(rises_by_channel(&played), [[0, 1000, 2000], [10, 1010, 2010], [20, 1020, 2020]]);
     }
 
     #[test]

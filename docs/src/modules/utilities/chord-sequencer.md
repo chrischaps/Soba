@@ -25,7 +25,7 @@ The **Root** and **Bass** outputs carry single notes as well: a bass line to pla
 |------|-------------|-------------|
 | **Pitch** | Control (Orange), poly | One channel per note of the chord, as V/Oct, lowest first |
 | **Gate** | Gate (Green), poly | The chord's gate, one channel per note. The channels rise together, or one after another with **Strum**. Stays high across a tie |
-| **Velocity** | Control (Orange), poly | The step's velocity, 0 to 1, on every channel |
+| **Velocity** | Control (Orange), poly | The step's velocity, 0 to 1, on every channel, or shaded along the strum by **Taper** |
 | **Root** | Control (Orange) | The chord's root as V/Oct, in the octave the step was written in |
 | **Bass** | Control (Orange) | The slash chord's bass note, at or below the root; the root when there's no slash |
 | **EOC** | Gate (Green) | End of cycle: a 1 ms pulse each time the progression comes round |
@@ -44,13 +44,14 @@ The **Root** and **Bass** outputs carry single notes as well: a bass line to pla
 | **Voice lead** (Voice Leading) | on / off | on | Each chord takes the inversion nearest the last |
 | **Bass voice** | on / off | off | Puts the bass note under the chord as the first channel (below) |
 | **Rootless** | on / off | off | The chord leaves out its root first, for a bass that plays it elsewhere (below). Always so with **Bass voice** on |
-| **Strum dir** | Up / Down / Alt | Up | Where a strum starts: on the lowest note, on the highest, or on each in turn, clock by clock |
+| **Strum dir** | Up / Down / Alt | Up | Where a strum starts: on the lowest note, on the highest, or on each in turn, clock by clock. A step can name its own |
+| **Taper** (Strum Taper) | −100 – 100% | 0% | Softens the notes struck later in a strum, down to nothing at 100%. Below 0 they grow louder instead (see [Taper](#taper)) |
 
-Each step also stores a root (a note, with its octave), a type, a bass (the root, or one of the twelve notes), a gate, a velocity, a tie, and a top (Auto, or the chord tone to put on top). A new Chord Sequencer starts on Cmaj7, Am7, Fmaj7, G7, with the roots walking down from C2. Patch a [Clock](../modulation/clock.md) into it and it plays a progression straight away.
+Each step also stores a root (a note, with its octave), a type, a bass (the root, or one of the twelve notes), a gate, a velocity, a tie, a top (Auto, or the chord tone to put on top), and a strum (Auto, Up or Down). A new Chord Sequencer starts on Cmaj7, Am7, Fmaj7, G7, with the roots walking down from C2. Patch a [Clock](../modulation/clock.md) into it and it plays a progression straight away.
 
 ## Writing chords
 
-Each step shows its chord's name, with a slash bass written under it. A line along the foot of the step shows its velocity, and a notch in its head shows that it names its top note. Steps beyond **Steps** are hidden, not lost.
+Each step shows its chord's name, with a slash bass written under it. A line along the foot of the step shows its velocity, a notch in its head shows that it names its top note, and a small arrow in its corner that it names its own strum, up or down. Steps beyond **Steps** are hidden, not lost.
 
 - **Click** a step to switch it on (green) or make it a rest (dark).
 - **Shift + click** a step to tie it into the next step. A bar joins the two.
@@ -71,6 +72,7 @@ Right-click a step and its chord opens under it:
 - **Top.** **Auto**, or one of the chord's tones to put on top of the voicing (see [The top note](#the-top-note)). Only the tones the voicing keeps are offered.
 - **Type.** All 19 chord types, each named on this root. Clicking a type writes the step, switches it on if it was a rest, and moves to the next step.
 - **Velocity** and **Tie**, for this step.
+- **Strum.** **Auto** follows **Strum dir**. **Up ▴** or **Down ▾** strums this step that way, whatever **Strum dir** says (see [A step's own stroke](#a-steps-own-stroke)).
 
 So a progression goes in the way a lead sheet reads: a root, then a type, then the next root and type. The popover stays where it opened, and an outline marks the step it's writing. **◂ ▸** (or **←** **→**) move between steps without writing. **Esc**, or a click outside, closes it. Each change is one undo step.
 
@@ -196,6 +198,26 @@ Until the strum reaches a note, that channel keeps playing the chord before, as 
 
 For a guitar, 10 to 30 ms is a quick strum, and around 50 ms a slow one. A harp's rolled chord is 60 to 100 ms. Sixteenth notes at a fast tempo leave little room, so there the strum shortens to fit the step.
 
+### Taper
+
+A real strum isn't even. A downstroke digs into the low strings and only brushes the top ones, and an upstroke catches the top few and fades out before the bass. **Taper** gives each note a velocity by its place in the strum. At 50%, the first note plays at the step's velocity and the last at half of it, with the notes between stepping down evenly. At 100% the last note has no velocity at all: an upstroke that misses the bass strings.
+
+Below 0 the shading runs the other way, so the notes struck last are the loudest. With **Strum dir** on **Down**, a negative **Taper** leans on the bass notes at the end of the strum.
+
+- **Taper follows the strum's order**, not the pitch. Up shades from the bottom note, Down from the top, and Alt changes direction with each stroke, as a guitarist's hand does.
+- **It works with Strum at 0.** The notes all start together, but they're still shaded lowest first (Up) or highest first (Down). With **Down** and a little **Taper**, the top of a pad's chord carries over the rest.
+- **Each note keeps its velocity until the strum reaches it**, along with its pitch. A string still ringing from the chord before stays as loud as it was struck.
+- How much you hear depends on the voice. The [Electric Piano](../../concepts/groups.md) gets quieter as its velocity drops, so **Taper** is plain on it. A voice whose velocity only shapes its attack shows it less.
+
+### A step's own stroke
+
+**Alt** strums up and down by the clock, which suits a steady eighth-note rhythm. A written rhythm needs more control than that: an upstroke on the "and" of 2, a downstroke on the next beat after a rest. Each step has a **Strum** of its own in the popover:
+
+- **Auto** follows **Strum dir**, Alt included.
+- **Up** or **Down** strums this step that way, whatever **Strum dir** says. A small arrow marks the step.
+
+The hand keeps time through a step that names its own stroke, as it does through rests. Under **Alt**, a step written **Up** where a down was due is strummed up, and the step after it takes the stroke the clock gives it.
+
 ## Example patches
 
 ### A pad that plays a progression
@@ -231,7 +253,7 @@ Patch **Root** into an oscillator's **Exp FM** (at 1.0 octave per volt) while a 
 3. **Ties on a pad** turn a progression into one long breath.
 4. **Dir Rnd** over a set of related chords (Fmaj7, Am7, Cmaj7, Em7) makes ambient harmony that never quite repeats.
 5. **EOC** can clock a second sequencer once per progression, or a Clock Divider for a turnaround every few passes.
-6. **Strummed rhythm guitar:** clock at eighth notes, write each chord on two steps, set **Strum dir** to Alt and **Strum** to about 25 ms, and give the upstrokes a lower velocity. **Voicing** Spread with five or six voices and **Bass voice** on spreads the notes out like a guitar's six strings.
+6. **Strummed rhythm guitar:** clock at eighth notes, write each chord on two steps, set **Strum dir** to Alt, **Strum** to about 25 ms and **Taper** to about 40%, and give the upstrokes a lower velocity. Where the rhythm needs a stroke the clock doesn't give, set that step's **Strum** to **Up** or **Down**. **Voicing** Spread with five or six voices and **Bass voice** on spreads the notes out like a guitar's six strings.
 
 ## Related Modules
 

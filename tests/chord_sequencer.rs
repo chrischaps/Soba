@@ -188,3 +188,23 @@ fn a_strummed_tie_strikes_nothing_again() {
         assert_eq!(difference, 0.0, "{}: the tie struck again", entry.name);
     }
 }
+
+#[test]
+fn a_tapered_strum_brushes_the_last_string() {
+    // Strummed up with Taper 75%: C, struck first, is as loud as ever, E
+    // softer, and G, struck last at a quarter of the step's velocity,
+    // softer still. (The Mallet's velocity only reaches its strike, and its
+    // ring barely follows it: a quarter of the velocity is 1.5 dB. The
+    // Electric Piano's level follows the touch, so it's the one to hear)
+    for entry in struck_voices().filter(|g| g.name == "Electric Piano") {
+        let even = render(&played(entry, &strummed(80.0)), 0.6);
+        let mut params = strummed(80.0);
+        params.push(("Strum Taper", ParameterValue::Number(75.0)));
+        let tapered = render(&played(entry, &params), 0.6);
+        let after = |audio: &[f32]| audio[(0.25 * RATE) as usize..(0.55 * RATE) as usize].to_vec();
+        let level = |audio: &[f32], note: i32| amp_to_db(strength(&after(audio), hz(note)));
+        let [c, e, g] = [48, 52, 55].map(|note| level(&even, note) - level(&tapered, note));
+        assert!(c.abs() < 0.5, "{}: C {c:.1} dB off", entry.name);
+        assert!(e > 1.0 && g > e + 1.0, "{}: E {e:.1} dB and G {g:.1} dB softer, not stepping down", entry.name);
+    }
+}
