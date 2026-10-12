@@ -81,6 +81,22 @@ Issues are organized into 6 phases:
 
 ---
 
+## Working Alongside Other Agents
+
+Assume another agent (or Chris) is working in this repo at the same time as you, in this checkout or in a sibling worktree (`../Modular-<n>` on branch `issue-<n>`). Structure the work so that two sessions can't trip over each other:
+
+- **Look before you start.** Run `git status`, `git worktree list` and `git fetch`, and skim `git log origin/master` since your base. An existing worktree or `issue-<n>` branch means someone has claimed issue #n.
+- **Work in your own worktree** for anything bigger than a one-line fix: `git worktree add ../Modular-<n> -b issue-<n>`. Leave the main checkout on `master` for whoever is there.
+- **Changes you didn't make aren't yours.** Unexpected edits, untracked files or a running build in the working tree probably belong to another session. Don't revert, stash, delete, reformat or commit them. Ask if they block you.
+- **Stage by path, never `git add -A`.** Commit only the files you changed, and check `git diff --cached` before committing.
+- **Keep diffs narrow in the shared hot spots.** The files most often touched are `src/app/synth_app.rs`, `src/graph/node_data.rs`, `src/graph/module_ui.rs`, `src/graph/templates.rs`, `src/modules/mod.rs`, `src/engine/audio_processor.rs`, `src/graph/fixtures/node_templates.snap`, `docs/src/SUMMARY.md`, `docs/src/modules/index.md` and `README.md`. Add to them rather than reorganizing them. Put new behavior in new files where you can. Don't run repo-wide `cargo fmt` or renames as a side effect.
+- **Regenerate shared fixtures last.** Snapshots like `node_templates.snap`, rendered goldens and `Cargo.lock` should come from your rebased tree just before you commit, not hand-merged.
+- **Rebase, re-verify, then push.** `git fetch && git rebase origin/master`, rerun `cargo test`, then push. If the push is rejected, repeat. Never force-push `master`.
+- **Don't fight over processes or build output.** Use your own `CARGO_TARGET_DIR` (e.g. `target/<your-branch>`) when another build or a running Soba might lock the exe. Kill only processes you started, by PID (never `taskkill /IM`).
+- **Clean up after yourself.** Once your branch has landed, remove your worktree and branch (`git worktree remove`, `git branch -d`). Leave other sessions' worktrees and branches alone.
+
+---
+
 ## Issue Implementation Workflow
 
 When asked to implement the next issue, follow this workflow:
@@ -88,10 +104,10 @@ When asked to implement the next issue, follow this workflow:
 ### 1. Find the Next Issue
 
 ```bash
-gh issue list --state open --limit 30
+gh issue list --state open --limit 30 --search "-label:deferred"
 ```
 
-The **lowest issue number** is the next to implement. Issues are ordered by phase and dependency.
+The **lowest issue number** is the next to implement. Issues are ordered by phase and dependency. Issues labeled `deferred` are parked: skip them unless Chris asks for one by number. If the lowest one is already claimed (see `git worktree list` / `git branch -a`), take the next one that doesn't depend on it.
 
 ### 2. Read the Issue Details
 
@@ -128,7 +144,7 @@ For audio-related issues, verify sound output works.
 ### 5. Commit the Changes
 
 ```bash
-git add -A
+git add <the files you changed>   # not -A: other agents may have work in the tree
 git status  # Review what's being committed
 git commit -m "$(cat <<'EOF'
 [Phase X] Issue title
@@ -141,6 +157,7 @@ Closes #<issue_number>
 Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
+git fetch && git rebase origin/master   # then re-run cargo test if anything came in
 git push
 ```
 
@@ -206,7 +223,7 @@ gh issue close <number> --comment "Done"
 # Git
 git status
 git diff
-git add -A
+git add <paths>   # stage by path; see "Working Alongside Other Agents"
 git commit -m "message"
 git push
 ```
