@@ -5,7 +5,8 @@
 //! tape between the guides trembles with the flutter as it crosses the
 //! head, and the head glows as Saturation drives it. Age fades the oxide
 //! from a fresh dark brown to a dusty tan, and a dropout thins the tape
-//! where it crosses the head.
+//! where it crosses the head. When the Stop gate brakes the transport, the
+//! reels slow to a halt and the speed between them counts down to nothing.
 
 use std::f32::consts::{FRAC_PI_2, TAU};
 
@@ -51,6 +52,7 @@ pub fn tape_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user
     let lag = values[Tape::READOUT_LAG];
     let pitch = values[Tape::READOUT_PITCH];
     let drive = values[Tape::READOUT_DRIVE];
+    let running = 1.0 - values[Tape::READOUT_BRAKE].clamp(0.0, 1.25);
     // Before the engine has said anything, the tape is whole
     let dropout = if values[Tape::READOUT_DROPOUT] > 0.0 { values[Tape::READOUT_DROPOUT] } else { 1.0 };
     let turns = values[Tape::READOUT_REEL] - lag * REEL_TURNS_PER_SECOND * speed.rate * LAG_EXAGGERATION;
@@ -97,7 +99,7 @@ pub fn tape_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user
     painter.line_segment([guide_right, right + Vec2::new(pack * 0.2, pack * 0.98)], tape_ink);
 
     // Across the head the tape trembles with the flutter, and thins in a dropout
-    let tremble = (pitch.abs() * TREMBLE_PER_CENT * z).min(2.5 * z);
+    let tremble = (pitch.abs() * TREMBLE_PER_CENT * z).min(2.5 * z) * running.min(1.0);
     let segments = 24;
     let across: Vec<Pos2> = (0..=segments)
         .map(|s| {
@@ -143,13 +145,25 @@ pub fn tape_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user
         painter.circle_filled(center, radius * 0.06, Color32::from_rgb(20, 22, 30));
     }
 
-    // The speed, between the reels
+    // The speed, between the reels: while the Stop brakes it, the speed the
+    // tape is really running at, reddening as it slows
+    let braking = (running - 1.0).abs() > 0.005;
+    let label = if braking {
+        format!("{:.1}", 15.0 * speed.rate * running.max(0.0))
+    } else {
+        ["7½", "15", "30"][speed_index].to_string()
+    };
+    let ink = if braking {
+        lerp_color(theme::text::SECONDARY, Color32::from_rgb(232, 88, 72), (1.0 - running).clamp(0.0, 1.0))
+    } else {
+        theme::text::SECONDARY
+    };
     painter.text(
         Pos2::new(rect.center().x, reel_y - 4.0 * z),
         egui::Align2::CENTER_CENTER,
-        ["7½", "15", "30"][speed_index],
+        label,
         egui::FontId::new(12.0 * z, egui::FontFamily::Name(theme::TITLE_FAMILY.into())),
-        theme::text::SECONDARY,
+        ink,
     );
     painter.text(
         Pos2::new(rect.center().x, reel_y + 8.0 * z),
@@ -159,8 +173,15 @@ pub fn tape_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user
         theme::text::DISABLED,
     );
 
+    let stopping = if !braking {
+        String::new()
+    } else if running <= 0.0 {
+        " · stopped".to_string()
+    } else {
+        format!(" · running at {:.0}% speed", running * 100.0)
+    };
     response.on_hover_text(format!(
-        "{} ips · playing {:+.1} cents · head driven to {:.0}% of its level",
+        "{} ips · playing {:+.1} cents · head driven to {:.0}% of its level{stopping}",
         ["7½", "15", "30"][speed_index],
         pitch,
         drive * 100.0

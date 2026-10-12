@@ -2272,6 +2272,7 @@ knob Mix                "Mix" KnobOnly
 in   In L               Audio    ConnectionOnly       inline=true  port
 in   In R               Audio    ConnectionOnly       inline=true  port
 in   Wow                Control  ConnectionOrConstant inline=true  num 0.25 [0..1] %
+in   Stop               Gate     ConnectionOnly       inline=true  port
 in   Flutter            Control  ConstantOnly         inline=false num 0.2 [0..1] %
 in   Width              Control  ConstantOnly         inline=false num 0.3 [0..1] %
 in   Saturation         Control  ConstantOnly         inline=false num 0.3 [0..1] %
@@ -2279,6 +2280,7 @@ in   Age                Control  ConstantOnly         inline=false num 0.15 [0..
 in   Hiss               Control  ConstantOnly         inline=false num 0.15 [0..1] %
 in   Mix                Control  ConstantOnly         inline=false num 1 [0..1] %
 in   Speed              Control  ConstantOnly         inline=true  select 1 ["7½ ips", "15 ips", "30 ips"] "Speed"
+in   Stop Time          Control  ConstantOnly         inline=false num 1 [0.05..4] s log
 out  Out L              Audio
 out  Out R              Audio
 knob Saturation         "Sat" KnobOnly
@@ -2288,6 +2290,7 @@ knob Mix                "Mix" KnobOnly
 knob Wow                "Wow" Modulatable
 knob Flutter            "Flut" KnobOnly
 knob Width              "Width" KnobOnly
+knob Stop Time          "Stop" KnobOnly
 display TapeReels
 
 == fx.vocoder "Vocoder" finder="Vocoder" Effect

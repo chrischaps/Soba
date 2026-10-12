@@ -433,7 +433,7 @@ static MODULE_UI: &[ModuleUi] = &[
     },
     ModuleUi {
         module_id: "fx.tape",
-        // The tape's colour on top, the transport's motion below
+        // The tape's colour on top, the transport's motion (and its stop) below
         knobs: &[
             knob_as("Saturation", "Sat"),
             knob("Age"),
@@ -442,6 +442,7 @@ static MODULE_UI: &[ModuleUi] = &[
             modulatable("Wow", "Wow"),
             knob_as("Flutter", "Flut"),
             knob("Width"),
+            knob_as("Stop Time", "Stop"),
         ],
         display: NodeDisplay::TapeReels,
         knobs_per_row: 4,

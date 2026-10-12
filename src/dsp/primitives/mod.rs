@@ -11,6 +11,7 @@ pub mod noise;
 pub mod oversample;
 pub mod saturation;
 pub mod tape;
+pub mod tape_stop;
 pub mod tpt;
 
 pub use blep::BlepDelay;
@@ -22,4 +23,5 @@ pub use adaa::{Adaa1, BiasedTanh, Curve, HardClip, RoundedFolder, Tanh};
 pub use oversample::{Downsampler2x, Downsampler4x, Upsampler2x, Upsampler4x};
 pub use saturation::{fast_tanh, SoftSaturator};
 pub use tape::{RecordHead, TapeTransport};
+pub use tape_stop::{StopHeads, TapeStop};
 pub use tpt::{prewarp, TptIntegrator};

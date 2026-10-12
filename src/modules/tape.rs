@@ -19,15 +19,19 @@
 //! 3. **Playback.** Hiss, then the age of the tape: gap loss rolling off the
 //!    top, and dropouts where the oxide has worn away.
 //!
+//! The **Stop** gate brakes the transport to a halt over the Stop Time, so the
+//! whole bus falls in pitch to nothing, and winds it back up when let go (see
+//! [`TapeStop`]). At rest it adds nothing, and no latency.
+//!
 //! With every knob at zero each stage passes its input through bit for bit.
 
 use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     context::ProcessContext,
     denormal::flush,
-    parameter::ParameterDefinition,
+    parameter::{ParameterDefinition, ParameterDisplay},
     port::PortDefinition,
-    primitives::{prewarp, Adaa1, BiasedTanh, Curve, FracDelay, NoiseFloor, RecordHead, TapeTransport},
+    primitives::{prewarp, Adaa1, BiasedTanh, Curve, FracDelay, NoiseFloor, RecordHead, StopHeads, TapeStop, TapeTransport},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     connected_input, SignalType,
@@ -43,6 +47,13 @@ pub const FLUTTER_CENTS: f32 = 12.0;
 /// Longest the read head can lag, with room to spare: full wow at 7½ ips
 /// pulls it back about 68 ms.
 const MAX_LAG_SECONDS: f32 = 0.1;
+
+/// The Stop Time's range, in seconds.
+pub const MIN_STOP_SECONDS: f32 = 0.05;
+pub const MAX_STOP_SECONDS: f32 = 4.0;
+
+/// Room on the tape for the longest stop's lag, on top of the wobble's.
+const STOP_ROOM_SECONDS: f32 = 2.5;
 
 /// Glide on the wobble's depth. A deeper wobble lags the read head further,
 /// which bends the pitch down while it happens, as a dragging reel does; this
@@ -257,7 +268,7 @@ impl Track {
     }
 
     fn line_length(sample_rate: f32) -> usize {
-        (MAX_LAG_SECONDS * sample_rate) as usize + 4
+        ((MAX_LAG_SECONDS + STOP_ROOM_SECONDS) * sample_rate) as usize + 4
     }
 
     /// Records `x` onto the tape: the record path, faded in by `amount`.
@@ -287,6 +298,17 @@ impl Track {
         } else {
             self.line.read(lag)
         }
+    }
+
+    /// Plays the tape through the stop's heads: the wobble's lag `wobble`
+    /// plus the stop's, fading from the old head if there is one.
+    #[inline]
+    fn play_stopping(&self, newest: f32, wobble: f32, heads: &StopHeads) -> f32 {
+        let mut y = self.play(newest, wobble + heads.lag);
+        if heads.old_weight > 0.0 {
+            y += heads.old_weight * (self.play(newest, wobble + heads.old_lag) - y);
+        }
+        y * heads.gain
     }
 
     /// Hiss at `level` (peak), mostly treble.
@@ -384,6 +406,8 @@ impl Dropouts {
 ///
 /// - **In L** / **In R** (Audio, Input): the bus; R copies L when unpatched.
 /// - **Wow CV** (Control, Input): adds to Wow, for a deliberate warped moment.
+/// - **Stop** (Gate, Input): brakes the tape to a halt while high, and winds
+///   it back up when let go.
 /// - **Out L** / **Out R** (Audio, Output): the bus, off tape.
 ///
 /// # Parameters
@@ -399,6 +423,8 @@ impl Dropouts {
 /// - **Mix** (0-100%): dry to tape.
 /// - **Speed** (7½, 15, 30 ips): slower is wobblier, darker, with a lower
 ///   head bump.
+/// - **Stop Time** (50 ms-4 s): how long the tape takes to stop; winding
+///   back up takes half as long.
 pub struct Tape {
     sample_rate: f32,
     left: Track,
@@ -407,6 +433,7 @@ pub struct Tape {
     transport_left: TapeTransport,
     transport_right: TapeTransport,
     dropouts: Dropouts,
+    stop: TapeStop,
     curve: BiasedTanh,
     coeffs: Coeffs,
     /// Each partial's peak lag, in samples.
@@ -443,6 +470,7 @@ impl Tape {
             transport_left: TapeTransport::new(sample_rate),
             transport_right: TapeTransport::with_start(sample_rate, RIGHT_TRACK_TURNS),
             dropouts: Dropouts::new(sample_rate),
+            stop: TapeStop::new(sample_rate, STOP_ROOM_SECONDS),
             curve: BiasedTanh::new(RecordHead::BIAS as f64),
             coeffs: Coeffs::new(&SPEEDS[1], 0.0, sample_rate),
             lag: [glide(0.0), glide(0.0), glide(0.0), glide(0.0)],
@@ -462,6 +490,8 @@ impl Tape {
                 PortDefinition::input_with_default("in_l", "In L", SignalType::Audio, 0.0).describe("Left of the bus to put on tape"),
                 PortDefinition::input_with_default("in_r", "In R", SignalType::Audio, 0.0).describe("Right of the bus; copies left when unpatched"),
                 PortDefinition::input_with_default("wow_cv", "Wow CV", SignalType::Control, 0.0).describe("CV that adds to Wow, for a warped moment"),
+                PortDefinition::input_with_default("stop", "Stop", SignalType::Gate, 0.0)
+                    .describe("Brakes the tape to a halt while high, pitching the bus down to nothing; winds it back up when let go"),
                 PortDefinition::output("out_l", "Out L", SignalType::Audio).describe("Left, off tape"),
                 PortDefinition::output("out_r", "Out R", SignalType::Audio).describe("Right, off tape"),
             ],
@@ -475,6 +505,8 @@ impl Tape {
                 ParameterDefinition::normalized("mix", "Mix", 1.0).describe("Blend from dry (0) to tape only (1)"),
                 ParameterDefinition::choice("speed", "Speed", &["7½ ips", "15 ips", "30 ips"], 1)
                     .describe("Tape speed: slower is wobblier and darker, with a lower head bump"),
+                ParameterDefinition::new("stop_time", "Stop Time", MIN_STOP_SECONDS, MAX_STOP_SECONDS, 1.0, ParameterDisplay::logarithmic("s"))
+                    .describe("How long the Stop gate takes to brake the tape to a halt; winding back up takes half as long"),
             ],
         }
     }
@@ -482,6 +514,7 @@ impl Tape {
     const PORT_IN_L: usize = 0;
     const PORT_IN_R: usize = 1;
     const PORT_WOW_CV: usize = 2;
+    const PORT_STOP: usize = 3;
 
     pub const PARAM_WOW: usize = 0;
     pub const PARAM_FLUTTER: usize = 1;
@@ -491,6 +524,7 @@ impl Tape {
     pub const PARAM_HISS: usize = 5;
     pub const PARAM_MIX: usize = 6;
     pub const PARAM_SPEED: usize = 7;
+    pub const PARAM_STOP_TIME: usize = 8;
 
     /// Readout slots.
     pub const READOUT_REEL: usize = 0;
@@ -499,6 +533,8 @@ impl Tape {
     pub const READOUT_DROPOUT: usize = 3;
     /// How far the left read head lags, in seconds.
     pub const READOUT_LAG: usize = 4;
+    /// How far the Stop has slowed the transport: 0 at speed, 1 stopped.
+    pub const READOUT_BRAKE: usize = 5;
 
     /// The drive into the record head for a Saturation setting.
     fn drive_for(saturation: f32) -> f32 {
@@ -572,6 +608,7 @@ impl DspModule for Tape {
         self.transport_left.set_sample_rate(sample_rate);
         self.transport_right.set_sample_rate(sample_rate);
         self.dropouts.set_sample_rate(sample_rate);
+        self.stop.set_sample_rate(sample_rate, STOP_ROOM_SECONDS);
     }
 
     fn process(
@@ -589,6 +626,7 @@ impl DspModule for Tape {
         let saturation = params[Self::PARAM_SATURATION].clamp(0.0, 1.0);
         let age = params[Self::PARAM_AGE].clamp(0.0, 1.0);
         let hiss = params[Self::PARAM_HISS].clamp(0.0, 1.0);
+        let stop_time = params.get(Self::PARAM_STOP_TIME).copied().unwrap_or(1.0).clamp(MIN_STOP_SECONDS, MAX_STOP_SECONDS);
 
         // Each stage fades in over the bottom of its knob, so at zero it's bypassed exactly
         self.saturation.set_target((saturation * 10.0).min(1.0));
@@ -624,6 +662,7 @@ impl DspModule for Tape {
         let in_left = inputs.get(Self::PORT_IN_L);
         let in_right = connected_input(inputs, Self::PORT_IN_R);
         let wow_cv = inputs.get(Self::PORT_WOW_CV);
+        let stop_gate = inputs.get(Self::PORT_STOP);
 
         let (out_left, rest) = outputs.split_at_mut(1);
         let out_left = &mut out_left[0];
@@ -631,6 +670,7 @@ impl DspModule for Tape {
 
         let mut drive_peak = 0.0f32;
         let mut lag_left = self.last_lag;
+        let mut travelled = 0.0;
         for i in 0..context.block_size {
             let x_left = in_left.and_then(|buf| buf.samples.get(i).copied()).unwrap_or(0.0);
             let x_right = match in_right {
@@ -663,13 +703,16 @@ impl DspModule for Tape {
             self.left.line.push(rec_left);
             self.right.line.push(rec_right);
 
-            // Play back, with hiss, through the tape's age
+            // Play back, with hiss, through the tape's age; a stopped tape plays nothing
+            let gate = stop_gate.and_then(|buf| buf.samples.get(i).copied()).unwrap_or(0.0) > 0.5;
+            let heads = self.stop.next(gate, stop_time);
+            travelled += self.stop.speed();
             let hiss = self.hiss.next();
             let age = self.age.next();
             let age_amount = (age * 5.0).min(1.0);
             let dropout = self.dropouts.next(age, sr);
-            let play_left = self.left.play(rec_left, lag_left) + self.left.hiss(hiss, &c);
-            let play_right = self.right.play(rec_right, lag_right) + self.right.hiss(hiss, &c);
+            let play_left = self.left.play_stopping(rec_left, lag_left, &heads) + heads.gain * self.left.hiss(hiss, &c);
+            let play_right = self.right.play_stopping(rec_right, lag_right, &heads) + heads.gain * self.right.hiss(hiss, &c);
             let wet_left = self.left.age(play_left, age_amount, dropout, &c);
             let wet_right = self.right.age(play_right, age_amount, dropout, &c);
 
@@ -682,7 +725,7 @@ impl DspModule for Tape {
         let block = context.block_size as f32;
         if block > 0.0 {
             self.pitch_cents = -(lag_left - self.last_lag) / block * CENTS_PER_DEVIATION;
-            self.reel_turns = (self.reel_turns + REEL_TURNS_PER_SECOND * speed.rate * block / sr).fract();
+            self.reel_turns = (self.reel_turns + REEL_TURNS_PER_SECOND * speed.rate * travelled / sr).fract();
         }
         self.last_lag = lag_left;
         self.drive_peak = drive_peak / RecordHead::LEVEL;
@@ -694,6 +737,7 @@ impl DspModule for Tape {
         self.transport_left.reset();
         self.transport_right.reset();
         self.dropouts.reset();
+        self.stop.reset();
         for value in self.lag.iter_mut().chain([
             &mut self.width,
             &mut self.saturation,
@@ -717,6 +761,7 @@ impl DspModule for Tape {
         readout.values[Self::READOUT_DRIVE] = self.drive_peak;
         readout.values[Self::READOUT_DROPOUT] = self.dropouts.gain;
         readout.values[Self::READOUT_LAG] = self.last_lag / self.sample_rate;
+        readout.values[Self::READOUT_BRAKE] = 1.0 - self.stop.speed();
         Some(readout)
     }
 }
@@ -806,9 +851,9 @@ mod tests {
         assert_eq!(tape.info().id, "fx.tape");
         assert_eq!(tape.info().category, ModuleCategory::Effect);
         let ids: Vec<_> = tape.ports().iter().map(|p| p.id).collect();
-        assert_eq!(ids, ["in_l", "in_r", "wow_cv", "out_l", "out_r"]);
+        assert_eq!(ids, ["in_l", "in_r", "wow_cv", "stop", "out_l", "out_r"]);
         let ids: Vec<_> = tape.parameters().iter().map(|p| p.id).collect();
-        assert_eq!(ids, ["wow", "flutter", "width", "saturation", "age", "hiss", "mix", "speed"]);
+        assert_eq!(ids, ["wow", "flutter", "width", "saturation", "age", "hiss", "mix", "speed", "stop_time"]);
     }
 
     #[test]
@@ -1113,12 +1158,122 @@ mod tests {
         assert_eq!(readout.values[Tape::READOUT_DROPOUT], 1.0);
     }
 
+    /// Runs a mono input with a Stop gate, high over `stopped` (in seconds).
+    fn run_stopping(tape: &mut Tape, input: &[f32], params: &[f32], stopped: std::ops::Range<f32>) -> Vec<f32> {
+        let ctx = ProcessContext::new(SR, BLOCK);
+        let cv = SignalBuffer::control(BLOCK);
+        let r = SignalBuffer::unconnected(BLOCK, SignalType::Audio);
+        let mut outputs = vec![SignalBuffer::audio(BLOCK), SignalBuffer::audio(BLOCK)];
+        let mut out = Vec::new();
+        for (n, chunk) in input.chunks(BLOCK).enumerate() {
+            let mut l = SignalBuffer::audio(BLOCK);
+            l.samples[..chunk.len()].copy_from_slice(chunk);
+            let mut gate = SignalBuffer::gate(BLOCK);
+            for (i, g) in gate.samples.iter_mut().enumerate() {
+                let t = (n * BLOCK + i) as f32 / SR;
+                *g = if stopped.contains(&t) { 1.0 } else { 0.0 };
+            }
+            tape.process(&[&l, &r, &cv, &gate], &mut outputs, params, &ctx);
+            out.extend_from_slice(&outputs[0].samples[..chunk.len()]);
+        }
+        out
+    }
+
+    /// Every knob at zero but Mix, with a Stop Time.
+    fn stop_params(stop_time: f32) -> [f32; 9] {
+        let mut p = [0.0; 9];
+        p[Tape::PARAM_SPEED] = 1.0;
+        p[Tape::PARAM_MIX] = 1.0;
+        p[Tape::PARAM_STOP_TIME] = stop_time;
+        p
+    }
+
+    /// The largest second difference: a click shows up here long before it's
+    /// loud enough to see in the waveform.
+    fn roughness(signal: &[f32]) -> f32 {
+        signal.windows(3).map(|w| (w[2] - 2.0 * w[1] + w[0]).abs()).fold(0.0, f32::max)
+    }
+
+    #[test]
+    fn test_stop_pitches_a_sine_down_to_nothing_over_the_stop_time() {
+        // 1 kHz, stopping at 0.5 s over a second: the pitch falls in a straight
+        // line, 1000 Hz less each second, so a quarter in it's at 750 Hz
+        let input = sine(1000.0, 0.3, 3.0);
+        let out = run_stopping(&mut tape(), &input, &stop_params(1.0), 0.5..2.0);
+        let crossings: Vec<f32> = out
+            .windows(2)
+            .enumerate()
+            .filter(|(_, w)| w[0] < 0.0 && w[1] >= 0.0)
+            .map(|(i, w)| i as f32 + w[0] / (w[0] - w[1]))
+            .collect();
+        let mut checked = 0;
+        for pair in crossings.windows(2) {
+            let t = 0.5 * (pair[0] + pair[1]) / SR - 0.5;
+            if (0.05..0.85).contains(&t) {
+                let heard = SR / (pair[1] - pair[0]);
+                let expected = 1000.0 * (1.0 - t);
+                assert!((heard / expected - 1.0).abs() < 0.02, "{t:.3} s in: {heard:.1} Hz, expected {expected:.1}");
+                checked += 1;
+            }
+        }
+        assert!(checked > 300, "only {checked} cycles measured");
+        // Stopped, it's silent: no frozen sample held as DC
+        let stopped = &out[(1.6 * SR) as usize..(2.0 * SR) as usize];
+        assert!(stopped.iter().all(|&s| s == 0.0));
+    }
+
+    #[test]
+    fn test_stop_and_wind_up_without_clicks() {
+        // Sounding at no more than 1.25 kHz (the wind-up's peak), a sine can't
+        // bend faster than this; a click would be many times over it
+        let input = sine(1000.0, 0.3, 4.0);
+        let limit = 0.3 * (std::f32::consts::TAU * 1250.0 / SR).powi(2) * 1.2;
+        // All the way to a stop and back, then let go halfway down (the
+        // crossfade), and at the shortest and longest Stop Times
+        for (stop_time, stopped) in [(1.0, 0.5..2.0), (1.0, 0.5..1.0), (0.05, 0.5..0.53), (0.05, 0.5..1.0), (4.0, 0.2..1.0)] {
+            let out = run_stopping(&mut tape(), &input, &stop_params(stop_time), stopped.clone());
+            let rough = roughness(&out);
+            assert!(rough < limit, "stop time {stop_time}, stopped {stopped:?}: second difference {rough}, limit {limit}");
+        }
+    }
+
+    #[test]
+    fn test_wind_up_lands_back_in_time_with_no_latency() {
+        // After a stop and its wind-up, the tape plays its input again bit for bit
+        let input = noise(3.0, 0.5, 21);
+        for stopped in [0.5..1.8, 0.5..0.9] {
+            let out = run_stopping(&mut tape(), &input, &stop_params(1.0), stopped.clone());
+            let back = ((stopped.end + 0.5 + 0.05) * SR) as usize;
+            assert_eq!(out[back..], input[back..], "stopped {stopped:?}");
+            // and before the gate rose, nothing had changed
+            let before = (stopped.start * SR) as usize;
+            assert_eq!(out[..before], input[..before]);
+        }
+    }
+
+    #[test]
+    fn test_the_reels_slow_to_a_halt() {
+        let mut tape = tape();
+        let p = stop_params(0.5);
+        run_stopping(&mut tape, &vec![0.0; SR as usize], &p, 0.0..1.0);
+        let readout = tape.readout(&p).unwrap();
+        assert_eq!(readout.values[Tape::READOUT_BRAKE], 1.0);
+        let still = readout.values[Tape::READOUT_REEL];
+        run_stopping(&mut tape, &vec![0.0; BLOCK * 10], &p, 0.0..1.0);
+        assert_eq!(tape.readout(&p).unwrap().values[Tape::READOUT_REEL], still);
+    }
+
+    #[test]
+    fn test_the_tape_has_room_for_the_longest_stop() {
+        assert!(TapeStop::lag_needed(MAX_STOP_SECONDS) < STOP_ROOM_SECONDS);
+    }
+
     #[test]
     fn test_tape_registry_instantiation() {
         use crate::dsp::ModuleRegistry;
         let mut registry = ModuleRegistry::new();
         registry.register::<Tape>();
         let module = registry.create("fx.tape").unwrap();
-        assert_eq!(module.parameters().len(), 8);
+        assert_eq!(module.parameters().len(), 9);
     }
 }
