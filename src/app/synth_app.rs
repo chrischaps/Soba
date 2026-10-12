@@ -46,6 +46,7 @@ use super::WEB;
 #[cfg(target_arch = "wasm32")]
 use super::web;
 
+mod framing;
 mod grouping;
 mod loops;
 mod samples;
@@ -296,6 +297,8 @@ pub struct SynthApp {
     /// its modules are drawn and measured; 0 when no fit is under way. Patches
     /// opened in the browser fit, where a phone shows only a corner of one.
     fit_pending: u8,
+    /// The view on its way to framing the selection, or the whole level (F)
+    glide: Option<framing::Glide>,
     /// A finger is dragging the canvas: on a touch screen that pans, where a
     /// mouse would draw a selection box.
     touch_panning: bool,
@@ -470,6 +473,7 @@ impl SynthApp {
             reframe_level: false,
             embedded: false,
             fit_pending: 0,
+            glide: None,
             touch_panning: false,
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
@@ -1725,6 +1729,9 @@ impl SynthApp {
                 // Reset widget context menu flag before drawing
                 self.user_state.widget_context_menu_open = false;
 
+                // F's glide, first, so all of this frame is drawn where it's got to
+                self.step_glide(ui);
+
                 // Update zoom for widget scaling, and where frames and notes go
                 self.user_state.zoom = self.graph_state.pan_zoom.zoom;
                 self.user_state.view_origin = self.history.view_origin();
@@ -1979,6 +1986,7 @@ impl SynthApp {
             let mut saved_to_add: Option<SavedModule> = None;
             let mut open_library = false;
             let mut annotation_to_create: Option<NewAnnotation> = None;
+            let mut zoom_to: Option<framing::Target> = None;
 
             // Hover delay before switching submenus (in seconds)
             const SUBMENU_HOVER_DELAY: f32 = 0.15;
@@ -2067,6 +2075,32 @@ impl SynthApp {
                             }
                             if response.on_hover_text(hint).clicked() {
                                 annotation_to_create = Some(kind);
+                                close_menu = true;
+                            }
+                        }
+
+                        // Bringing things into view: F, and Shift+F for all of it
+                        ui.separator();
+                        let selection = self.selection_target();
+                        let selected = selection != framing::Target::All;
+                        for (label, shortcut, target, hint) in [
+                            ("Zoom to Selection", "F", selection, "Bring the selected modules, frames and notes into view"),
+                            ("Zoom to Fit", if selected { "Shift+F" } else { "F" }, framing::Target::All,
+                                if self.user_state.level.is_some() { "Bring everything in this group into view" }
+                                else { "Bring the whole patch into view, frames and notes too" }),
+                        ].into_iter().filter(|item| selected || item.2 == framing::Target::All) {
+                            let response = ui.add(
+                                egui::Button::new(RichText::new(label).color(theme::text::SECONDARY))
+                                    .shortcut_text(shortcut)
+                                    .min_size(egui::vec2(110.0, 0.0))
+                                    .frame(false),
+                            );
+                            if response.hovered() {
+                                self.user_state.context_menu_open_category = None;
+                                self.user_state.context_menu_hover_intent = None;
+                            }
+                            if response.on_hover_text(hint).clicked() {
+                                zoom_to = Some(target);
                                 close_menu = true;
                             }
                         }
@@ -2200,6 +2234,9 @@ impl SynthApp {
                 Some(NewAnnotation::Frame) => self.add_frame_at(menu_pos),
                 Some(NewAnnotation::Note) => self.add_note_at(menu_pos),
                 None => {}
+            }
+            if let Some(target) = zoom_to {
+                self.start_glide(ctx, target);
             }
 
             if close_menu {
@@ -4048,6 +4085,7 @@ impl eframe::App for SynthApp {
         if !ctx.wants_keyboard_input() && self.quick_add.is_none() && !prompt_open {
             self.handle_group_shortcuts(ctx);
             self.handle_editing_shortcuts(ctx);
+            self.handle_framing_shortcut(ctx);
         }
 
         // Handle musical keyboard input (QWERTY to notes)

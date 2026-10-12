@@ -39,7 +39,7 @@ mod validation;
 mod value_types;
 
 pub use arranger_display::claim_wheel as claim_arranger_wheel;
-pub use chord_ear::letter_keys_taken;
+pub use chord_ear::{letter_keys_held, letter_keys_taken};
 pub use data_types::SynthDataType;
 pub use groups::{GroupId, NodeKind};
 pub use port_mapping::SynthGraph;

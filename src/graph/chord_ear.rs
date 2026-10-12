@@ -124,6 +124,12 @@ pub fn letter_keys_taken(ctx: &egui::Context) -> bool {
     ctx.data_mut(|d| d.remove_temp::<bool>(taken_id())).unwrap_or(false)
 }
 
+/// Whether a chord popover has the letter keys, as [`letter_keys_taken`]
+/// asks, but leaving the answer for it.
+pub fn letter_keys_held(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(taken_id())).unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

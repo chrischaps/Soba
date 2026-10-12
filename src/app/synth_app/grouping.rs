@@ -24,9 +24,9 @@ use super::SynthApp;
 const PREVIEW_ZOOM: f32 = 1.0;
 
 /// Space kept around a level's nodes when the view frames them.
-const FRAME_MARGIN: f32 = 40.0;
+pub(super) const FRAME_MARGIN: f32 = 40.0;
 /// Room left at the top of the canvas for the breadcrumb trail.
-const TRAIL_HEIGHT: f32 = 56.0;
+pub(super) const TRAIL_HEIGHT: f32 = 56.0;
 
 impl SynthApp {
     /// Works out what this frame shows: the nodes on the current level, the

@@ -36,6 +36,8 @@ If a patch loads with problems (a module this version doesn't know, a cable to a
 | Zoom | Scroll the mouse wheel. A trackpad pinch, or `Ctrl` and scroll, zooms about the pointer |
 | Pan | Drag with the middle mouse button, or hold `Ctrl` and drag empty canvas |
 | On a touch screen | Pinch to zoom; drag empty canvas with one finger, or two, to pan |
+| Bring it all into view | Press `F` with nothing selected: the view glides to fit the whole patch, frames and notes too (inside a group, everything in it). It comes no closer than life size, and a patch too big to fit at the furthest zoom shows from its top left |
+| Zoom to the selection | Press `F`: the view glides to fit the selected modules, frames and notes, closing in a little past life size on a single module. `Shift + F` fits everything even with a selection. Both are in the canvas's right-click menu too |
 | Select a module | Click it |
 | Select several | Drag a box across empty canvas. It also takes in any frames and notes wholly inside it |
 | Move modules | Drag a module by its body; a selection moves together |
@@ -291,6 +293,8 @@ Recent files, the autosave, your cable style and the window's size and position 
 | `Ctrl + D` | Duplicate the selected modules, frames and notes |
 | `Ctrl + C` / `Ctrl + X` | Copy / cut the selected modules, frames and notes |
 | `Ctrl + V` | Paste at the cursor |
+| `F` | Zoom to the selection, or with nothing selected, to fit the whole patch |
+| `Shift + F` | Zoom to fit the whole patch |
 | `Ctrl + Shift + F` | Frame the selected modules |
 | `Ctrl + B` | Bypass or switch on the selected filters and effects |
 | `Ctrl + Z` | Undo |
