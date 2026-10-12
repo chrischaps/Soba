@@ -491,7 +491,10 @@ impl Vocoder {
     /// The average is weighted by where the voice has been over the last
     /// second or so, so evening the carrier out keeps the vocoder about as
     /// loud as it was: a chord and a voice are both loudest low down, and an
-    /// even average would turn the voice's own bands down.
+    /// even average would turn the voice's own bands down. Frozen, the
+    /// weights hold with the bands: they would otherwise go on settling
+    /// towards the held vowel for a second, and the held chord would swell
+    /// or fade as they did.
     ///
     /// The bands were measured after the pre-emphasis, which is taken back
     /// out here: it only keeps the bands apart, and the levels they end up
@@ -499,7 +502,7 @@ impl Vocoder {
     fn aim_evening(&mut self, flatten: f32) {
         let (active, shift, sample_rate) = (self.active, 2f32.powf(self.tuned_formant), self.sample_rate);
         let bands = &mut self.bands[..active];
-        let listen = 1.0 - (-(RETUNE_EVERY as f32) * 1000.0 / (VOICE_SPECTRUM_MS * sample_rate)).exp();
+        let listen = if self.frozen { 0.0 } else { 1.0 - (-(RETUNE_EVERY as f32) * 1000.0 / (VOICE_SPECTRUM_MS * sample_rate)).exp() };
         for band in bands.iter_mut() {
             band.voice_spectrum = flush(band.voice_spectrum + listen * (band.follower.level - band.voice_spectrum));
         }
@@ -1141,6 +1144,27 @@ mod tests {
             let steepest = steepest(&side[24000..60000], 220.0);
             assert!(steepest < 3.0, "clicked: {steepest} times a tone's steepest");
         }
+    }
+
+    #[test]
+    fn frozen_and_flattened_a_chord_holds_its_level() {
+        // A second and a half of "ooh", a quarter second of "ahh", then
+        // frozen on the "ahh" as the voice stops: a held vowel on a dull
+        // pad, as Held Vowels plays one. Flatten's weights were still mostly
+        // "ooh" when it froze, and must hold there with the bands
+        let freeze_from = (1.75 * SR) as usize / BLOCK;
+        let (mut ooh, mut ahh) = (vowel(&[300.0, 870.0]), vowel(&[730.0, 1090.0]));
+        let voice = move |n: usize| match n {
+            0..72000 => ooh(n),
+            72000..84000 => ahh(n),
+            _ => 0.0,
+        };
+        let (l, r) = play(3.5, dull(110.0), voice, 0.0, |b| knobs_with(b >= freeze_from, 1.0));
+        let out = mono(&l, &r);
+        let soon = rms(&out[88000..96000]);
+        let later = rms(&out[155000..167000]);
+        let drift = 20.0 * (later / soon).log10();
+        assert!(drift.abs() < 0.5, "the held vowel moved {drift:.2} dB");
     }
 
     #[test]

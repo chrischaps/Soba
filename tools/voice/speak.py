@@ -1,8 +1,10 @@
 """Speaks the Vocoder example's line with a small formant synthesizer.
 
     python tools/voice/speak.py patches/samples/soba-speaks.wav
+    python tools/voice/speak.py --vowels patches/samples/held-vowels.wav
 
-"Hello. I am Soba. I sing in sines." The voice is made here, from nothing
+"Hello. I am Soba. I sing in sines." With --vowels it sings Held Vowels'
+line instead: "ohh", "ooh", "ee", "ahh", a bar apart. The voice is made here, from nothing
 but a glottal pulse and noise, so the example ships no one's recording. It's
 a Klatt-style cascade synthesizer (Klatt, "Software for a cascade/parallel
 formant synthesizer", JASA 1980): a pulse train at the speaking pitch,
@@ -36,6 +38,15 @@ VOWELS = {
     "AH": (620, 1220, 2550, 80, 50, 140),
     "OW": ((540, 1100, 2300, 70, 70, 110), (450, 900, 2300, 70, 70, 110)),
     "AY": ((660, 1200, 2550, 100, 70, 200), (400, 1880, 2500, 70, 100, 200)),
+}
+
+# The sung vowels, held pure, after Peterson and Barney's 1952 averages for
+# men. Sung bandwidths run a little wider than spoken ones.
+SUNG_VOWELS = {
+    "ahh": (730, 1090, 2440, 90, 110, 170),
+    "ohh": (570, 840, 2410, 80, 100, 160),
+    "ooh": (300, 870, 2240, 60, 90, 150),
+    "ee": (270, 2290, 3010, 60, 110, 180),
 }
 
 # Consonants: formants, voicing, aspiration and frication levels, nasal.
@@ -228,11 +239,83 @@ def speak():
     return speech
 
 
+# Held Vowels' line: one vowel a bar, each sung on the last beat before the
+# chord that will hold it, on a note that chord shares with the one before.
+# (vowel, pitch in Hz, dBFS RMS). The Sampler starts it on beat 4 of the
+# first bar. The open vowels are sung louder, as a singer sings them, and as
+# the pad needs: their first formant falls between the chord's notes, where
+# a triangle has little to give, and they'd come out quieter than the rest.
+SUNG_BPM = 66
+SUNG_LINE = [("ohh", 146.83, -12.5), ("ooh", 123.47, -20.0), ("ee", 110.0, -20.0), ("ahh", 146.83, -16.0)]
+SUNG_BEATS = 1.4  # how long each vowel lasts, past the downbeat it's held on
+SUNG_RATE = OUT_RATE // 2  # vowels need nothing above 11 kHz
+
+
+def sing():
+    """Held Vowels' line: each vowel steady, with a singer's slow vibrato
+    and soft edges, a bar apart."""
+    bar = 4 * 60.0 / SUNG_BPM
+    held = SUNG_BEATS * 60.0 / SUNG_BPM
+    length = int(RATE * ((len(SUNG_LINE) - 1) * bar + held + 0.1))
+    t = np.arange(length) / RATE
+    formants = np.zeros((6, length))
+    pitch = np.zeros(length)
+    voice = np.zeros(length)
+    vibrato = np.zeros(length)
+    for k, (vowel, hz, _) in enumerate(SUNG_LINE):
+        start = k * bar
+        # Each vowel's shape and pitch reach on to the next, so the silence
+        # between them glides nowhere
+        span = (t >= start) & (t < start + bar)
+        formants[:, span] = np.array(SUNG_VOWELS[vowel], float)[:, None]
+        pitch[span] = hz
+        local = t[span] - start
+        # A 70 ms swell in and a 220 ms fall away, raised-cosine both
+        rise = 0.5 - 0.5 * np.cos(np.pi * np.clip(local / 0.07, 0.0, 1.0))
+        fall = 0.5 + 0.5 * np.cos(np.pi * np.clip((local - held + 0.22) / 0.22, 0.0, 1.0))
+        voice[span] = rise * fall
+        # Vibrato grows in after the first 250 ms, as a singer's does
+        vibrato[span] = np.clip((local - 0.25) / 0.35, 0.0, 1.0)
+
+    drift = smooth(np.random.default_rng(5).standard_normal(length), 40.0)
+    pitch = pitch * (1.0 + 0.004 * drift / drift.std() + 0.011 * vibrato * np.sin(2 * np.pi * 5.3 * t))
+    formants = np.vstack([smooth(f, 20.0) for f in formants])
+
+    noise = np.random.default_rng(13).uniform(-1.0, 1.0, length)
+    pulses = glottal(pitch)
+    breath = noise * (0.5 + 0.5 * (np.cumsum(pitch / RATE) % 1.0 < 0.5))
+    source = voice * (pulses + 0.04 * breath)
+    ones = np.ones(length)
+    tract = resonate(source, 6500.0 * ones, 1600.0 * ones)
+    tract = resonate(tract, 4900.0 * ones, 1000.0 * ones)
+    tract = resonate(tract, 3850.0 * ones, 300.0 * ones)
+    tract = resonate(tract, 3300.0 * ones, 250.0 * ones)
+    for k in (2, 1, 0):
+        tract = resonate(tract, formants[k], formants[k + 3])
+    presence = sosfilt(butter(2, 3500.0, btype="highpass", fs=RATE, output="sos"), pulses + 0.4 * breath)
+    song = resample_poly(tract + 0.06 * voice * presence, 1, RATE // SUNG_RATE)
+
+    # Each vowel at its own level, measured where it's sung
+    for k, (_, _, db) in enumerate(SUNG_LINE):
+        part = slice(int(k * bar * SUNG_RATE), int((k * bar + held) * SUNG_RATE))
+        loud = np.abs(song[part]) > 0.05 * np.abs(song[part]).max()
+        song[part] *= 10 ** (db / 20) / np.sqrt(np.mean(song[part][loud] ** 2))
+    peak = np.abs(song).max()
+    if peak > 10 ** (-1 / 20):
+        song *= 10 ** (-1 / 20) / peak
+    return song
+
+
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else "soba-speaks.wav"
-    speech = speak()
-    wavfile.write(out, OUT_RATE, np.round(speech * 32767).astype(np.int16))
-    print(f"{out}: {len(speech) / OUT_RATE:.2f} s, peak {20 * np.log10(np.abs(speech).max()):.1f} dBFS")
+    args = sys.argv[1:]
+    if args and args[0] == "--vowels":
+        out = args[1] if len(args) > 1 else "held-vowels.wav"
+        audio, rate = sing(), SUNG_RATE
+    else:
+        out = args[0] if args else "soba-speaks.wav"
+        audio, rate = speak(), OUT_RATE
+    wavfile.write(out, rate, np.round(audio * 32767).astype(np.int16))
+    print(f"{out}: {len(audio) / rate:.2f} s, peak {20 * np.log10(np.abs(audio).max()):.1f} dBFS")
 
 
 if __name__ == "__main__":

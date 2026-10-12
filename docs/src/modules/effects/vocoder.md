@@ -89,7 +89,7 @@ Bars stand on a frequency axis, one per band, each as tall as the voice is in th
 
 **Mix.** At 0% you hear only the carrier, centred. In between, a little of the raw chord fills the gaps between the words.
 
-**Freeze.** Sing an "ahh", switch on Freeze, and every band holds exactly where it was. Now play chords: each one says the same vowel for as long as you hold it, and you can stop singing. The voice's own highs (the Sibilance path) are muted while frozen, so whatever you say next doesn't leak through, and the Unvoiced noise holds where it was too. Switch Freeze off and the bands carry on from where they were held, at the Attack and Release rates, so there's no jump. Patch a gate into the **Freeze** input and it takes over from the switch: high holds, low lets go.
+**Freeze.** Sing an "ahh", switch on Freeze, and every band holds exactly where it was. Now play chords: each one says the same vowel for as long as you hold it, and you can stop singing. The voice's own highs (the Sibilance path) are muted while frozen, so whatever you say next doesn't leak through, and the Unvoiced noise holds where it was too. With **Flatten** up, the voice's weighting of the bands holds as well, so a held vowel keeps one level through the whole chord. Switch Freeze off and the bands carry on from where they were held, at the Attack and Release rates, so there's no jump. Patch a gate into the **Freeze** input and it takes over from the switch: high holds, low lets go.
 
 **Flatten.** The bank can only put the voice where the carrier has something to give. A dull carrier, like a pad through a low-pass filter or a triangle or sine chord, is loud low down and nearly silent at 2 kHz, where much of a vowel lives. Its words come out muffled. Flatten measures the carrier in each band and lifts the quiet bands and lowers the loud ones until they're even, before the voice's levels are applied. At 0% the carrier keeps its own tilt, exactly as before. At 100% every band of the carrier is the same level, the "spectral whitening" of modern vocoders. In between, it goes that share of the way, in dB. Flattened, a triangle chord speaks its vowels as plainly as a saw does unflattened.
 
@@ -97,7 +97,7 @@ A few things keep Flatten clean:
 
 - A band is lifted no more than about 40 dB above where the carrier has it, and nothing below −100 dBFS is lifted at all, so empty bands and a silent carrier don't turn into hiss.
 - When a new note fills a band that was being lifted, the lift comes off at once, so the note doesn't burst through.
-- The vocoder stays about as loud as you turn it, within a dB or so. The level every band is brought to is weighted by where the voice has been over the last second, so evening the carrier out doesn't turn down the bands the voice uses most. A chord and a voice are both loudest low down.
+- The vocoder stays about as loud as you turn it, within a dB or so. The level every band is brought to is weighted by where the voice has been over the last second, so evening the carrier out doesn't turn down the bands the voice uses most. A chord and a voice are both loudest low down. Frozen, the weighting holds with the bands.
 
 Flatten can only even out what the carrier has. A pure sine chord has nothing above its top note, and there's nothing there to lift, so give it a little brightness first: a triangle or a soft saw is plenty. A bright saw is already close to even across the bank, so Flatten changes it little.
 
@@ -144,14 +144,14 @@ Any of these works on a dull carrier with **Flatten** at 70 to 100%. Freeze and 
 
 **A vowel to play chords on.** Sing or play a sustained vowel into **Modulator** and switch on **Freeze** mid-vowel. Now the [Chord Sequencer](../utilities/chord-sequencer.md) or a keyboard plays the chords, and each one comes out as "ahh" or "ooh", with no voice needed any more. A long **Release** before you freeze softens the held vowel.
 
-**A stutter of held vowels.** Patch a [Clock Divider](../utilities/divider.md)'s **Gate** into **Freeze** while a voice speaks. Each gate holds the syllable it lands on for as long as the gate is high, then lets the voice run on until the next one. Short gates on the beat give a rhythmic, chopped vocal, and longer ones give a held word at the start of each bar.
+**A stutter of held vowels.** Patch a [Clock Divider](../utilities/divider.md)'s **Gate** into **Freeze** while a voice speaks. Each gate holds the syllable it lands on for as long as the gate is high, then lets the voice run on until the next one. Short gates on the beat give a rhythmic, chopped vocal, and longer ones give a held word at the start of each bar. [Held Vowels](../../recipes/held-vowels.md) turns this round: its gate is high for three beats of every four and lets go only for the beat a singer sings on, so each new chord holds the vowel sung just before it.
 
 ```text
 [Clock Divider Gate] ──> [Vocoder Freeze]
 [Sampler L] ──> [Vocoder Modulator]
 ```
 
-**A pad that speaks.** A triangle chord, or a saw through a low-pass, makes a soft pad but a mumbling vocoder. Turn **Flatten** up to 100% and the vowels come through. Mix the pad back in beside the vocoder and it still sounds soft.
+**A pad that speaks.** A triangle chord, or a saw through a low-pass, makes a soft pad but a mumbling vocoder. Turn **Flatten** up to 100% and the vowels come through. Mix the pad back in beside the vocoder and it still sounds soft. [Held Vowels](../../recipes/held-vowels.md) sings on a triangle chord this way.
 
 ## Related modules
 

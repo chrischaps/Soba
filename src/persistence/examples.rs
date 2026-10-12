@@ -58,6 +58,9 @@ pub const EXAMPLE_SAMPLES: &[(&str, &[u8])] = &[
     // one plain word: Chris's voice, cloned with ElevenLabs
     shipped!("samples/clair-lines.wav"),
     shipped!("samples/clair-still.wav"),
+    // Held Vowels' line, "ohh", "ooh", "ee", "ahh" a bar apart, sung by
+    // tools/voice/speak.py --vowels
+    shipped!("samples/held-vowels.wav"),
 ];
 
 /// Every example, in menu order: from a first note to self-playing patches.
@@ -151,6 +154,12 @@ pub const EXAMPLES: &[Example] = &[
         file_name: "soba-speaks.json",
         description: "Plays itself: a Vocoder puts a spoken line on a pad of four falling chords. Mixer mutes switch the voice between a person, a robot and your own mic",
         json: include_str!("../../patches/soba-speaks.json"),
+    },
+    Example {
+        name: "Held Vowels",
+        file_name: "held-vowels.json",
+        description: "Plays itself: a soft triangle pad sings ohh, ooh, ee and ahh. The Vocoder's Freeze holds each vowel through a chord and lets go for one beat to take the next, and Flatten lets a dull pad speak",
+        json: include_str!("../../patches/held-vowels.json"),
     },
     Example {
         name: "Interlock",

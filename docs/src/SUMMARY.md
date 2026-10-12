@@ -74,6 +74,7 @@
 - [Afterglow](./recipes/afterglow.md)
 - [Front Porch](./recipes/front-porch.md)
 - [Soba Speaks](./recipes/soba-speaks.md)
+- [Held Vowels](./recipes/held-vowels.md)
 - [Interlock](./recipes/interlock.md)
 - [From One Sine](./recipes/from-one-sine.md)
 - [Clair de Satellite](./recipes/clair-de-satellite.md)

@@ -8,8 +8,9 @@ For each example in patches/ that has a docs/src/images/recipe-<name>.png
 
     -2.0 play / -1.0 fit / 0.0 layout / 0.0 still
 
-so the patch has played for two seconds (cables glow, displays show signal)
-and the view frames the whole level, as F does. The `layout` cue says where
+so the patch has played for two seconds (cables glow, displays show signal;
+an example that needs longer to show itself is listed in PLAYED) and the
+view frames the whole level, as F does. The `layout` cue says where
 every module, frame and note was drawn and where the view was, so the still
 is cropped to them with a little grid around, resized to 1594 px wide with
 Lanczos and saved as a 256-colour palette (median cut, no dither): the house
@@ -51,7 +52,10 @@ PPP = 2.0
 LARGEST = (6000, 4000)
 # Grid kept around the patch, in screen points
 MARGIN = 6
-SCRIPT = "-2.0 play\n-1.0 fit\n0.0 layout shot\n0.0 still shot\n0.1 end\n"
+SCRIPT = "-{played} play\n-1.0 fit\n0.0 layout shot\n0.0 still shot\n0.1 end\n"
+# How long an example plays before its still, in seconds, where two isn't
+# enough to show what it does: Held Vowels, frozen on its "ee"
+PLAYED = {"held-vowels": 13.0}
 
 # How far apart two pictures may be before one is stale: a pixel counts as
 # changed past this much in any channel, and a picture as stale past this
@@ -63,7 +67,7 @@ STALE_FRACTION = 0.002
 def film(patch, out, size, ppp):
     """Films one still of the patch, fitted, and returns its layout."""
     script = out / "recipe.txt"
-    script.write_text(SCRIPT)
+    script.write_text(SCRIPT.format(played=PLAYED.get(patch.stem, 2.0)))
     subprocess.run([str(EXE), str(patch), "--capture", str(script), "--out", str(out), "--fps", "10",
                     "--size", f"{size[0]}x{size[1]}", "--ppp", str(ppp)],
                    check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
