@@ -51,6 +51,7 @@ impl NumberSpec {
             return match self.unit {
                 "st" => ParamFormat::Semitones,
                 "note" => ParamFormat::Note,
+                "slices" => ParamFormat::Slices,
                 "" => ParamFormat::Raw { decimals: 0 },
                 unit => ParamFormat::RawWithUnit { decimals: 0, unit },
             };

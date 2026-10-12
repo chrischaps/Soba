@@ -28363,7 +28363,7 @@
             {
               "name": "End",
               "type": "Number",
-              "value": 1.0
+              "value": 0.6666667
             },
             {
               "name": "Loop Start",
@@ -28404,6 +28404,11 @@
               "name": "Level",
               "type": "Number",
               "value": 1.0
+            },
+            {
+              "name": "Slices",
+              "type": "Number",
+              "value": 8.0
             }
           ],
           "file": "samples/clair-lines.wav"
@@ -28901,7 +28906,7 @@
           "from_node": 91,
           "from_port": "Pitch",
           "to_node": 92,
-          "to_port": "Start"
+          "to_port": "V/Oct"
         },
         {
           "from_node": 92,

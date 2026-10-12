@@ -128,16 +128,18 @@ static MODULE_UI: &[ModuleUi] = &[
     },
     ModuleUi {
         module_id: "source.sampler",
-        // What plays (the markers on the waveform), then pitch, then the
-        // envelope and level
+        // What plays (the markers on the waveform), then how notes play
+        // it (Slices beside Root, the key slice 1 is on), then the envelope
+        // and level
         knobs: &[
             modulatable("Start", "Start"),
             knob("End"),
             knob_as("Loop Start", "Lp St"),
             knob_as("Loop End", "Lp End"),
+            knob("Slices"),
+            knob("Root"),
             knob("Tune"),
             knob("Fine"),
-            knob("Root"),
             modulatable("Speed", "Speed"),
             knob_as("Attack", "Atk"),
             knob_as("Release", "Rel"),

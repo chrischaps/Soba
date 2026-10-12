@@ -9,7 +9,11 @@
 //!
 //! Each voice draws a playhead where it is in the recording, as bright as
 //! it's loud, so a chord is several lines moving at their own speeds and a
-//! released note fades where it stands. Under the waveform: the file's
+//! released note fades where it stands.
+//!
+//! Sliced, Start–End is ruled into its slices, numbered while they're wide
+//! enough to read, and each slice glows while a voice plays it. A loop then
+//! goes round each slice, so the loop's markers step aside. Under the waveform: the file's
 //! name, and a button to open another. With no file, the panel asks for
 //! one, and a file dragged over the node lights it up to take it.
 
@@ -17,7 +21,10 @@ use eframe::egui::{self, Color32, CursorIcon, Pos2, Rect, Sense, Shape, Stroke, 
 use egui_node_graph2::NodeId;
 
 use crate::app::theme;
+use crate::dsp::primitives::{Slices, MAX_SLICES};
+use crate::dsp::MAX_CHANNELS;
 use crate::modules::sampler::{LoopMode, Sampler};
+use crate::modules::sequencer::note_to_name;
 use crate::persistence::sample_files;
 
 use super::sample_shelf::ShelvedSample;
@@ -49,7 +56,10 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let loop_start = value_of("Loop Start").unwrap_or(0.0).clamp(lo, hi);
     let loop_end = value_of("Loop End").unwrap_or(1.0).clamp(lo, hi);
     let (loop_lo, loop_hi) = if loop_end < loop_start { (loop_end, loop_start) } else { (loop_start, loop_end) };
-    let looping = loop_mode != LoopMode::Off && loop_hi > loop_lo;
+    let slices = Slices::from_param(value_of("Slices").unwrap_or(1.0));
+    let root = value_of("Root").unwrap_or(60.0).round();
+    // Sliced, each slice is its own loop: the loop's markers have nothing to say
+    let looping = loop_mode != LoopMode::Off && loop_hi > loop_lo && slices.is_none();
 
     let key = node.user_data.file.as_deref();
     let shelved = key.and_then(|key| user_state.samples.get(key));
@@ -81,6 +91,24 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let orange = theme::signal::CONTROL;
     let small = egui::FontId::proportional(8.0 * z);
 
+    // How loud each slice is playing, from the voices playing it
+    let readout = user_state.get_engine_node_id(node_id).and_then(|id| user_state.readouts.get(&id)).copied();
+    let mut lit = [0.0f32; MAX_SLICES];
+    if let (Some(readout), Some(slices)) = (readout, slices) {
+        for c in 0..MAX_CHANNELS {
+            let slice = readout.values[Sampler::READOUT_SLICES + c].round() as usize;
+            let level = Sampler::unpack_playhead(readout.values[c]).map_or(0.0, |(_, level)| level.sqrt());
+            if (1..=slices.count()).contains(&slice) {
+                lit[slice - 1] = lit[slice - 1].max(level);
+            }
+        }
+    }
+    let slice_at = |place: f32| slices.and_then(|slices| slices.at(place as f64, lo as f64, hi as f64));
+    let span_of = |slices: Slices, index: usize| {
+        let (from, to) = slices.span(index, lo as f64, hi as f64);
+        (from as f32, to as f32)
+    };
+
     match loaded {
         Some(sample) => {
             // What plays, against what doesn't
@@ -88,6 +116,14 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             if looping {
                 let band = Rect::from_x_y_ranges(x_at(loop_lo)..=x_at(loop_hi), plot.y_range());
                 painter.rect_filled(band, 0.0, orange.gamma_multiply(0.1));
+            }
+            // A slice glows while it plays
+            if let Some(slices) = slices {
+                for (index, &level) in lit.iter().enumerate().take(slices.count()).filter(|(_, &level)| level > 0.0) {
+                    let (from, to) = span_of(slices, index);
+                    let band = Rect::from_x_y_ranges(x_at(from)..=x_at(to), plot.y_range());
+                    painter.rect_filled(band, 0.0, blue.gamma_multiply(0.08 + 0.17 * level));
+                }
             }
 
             // The waveform, a column at a time, scaled to fill the panel
@@ -107,7 +143,9 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                 let x = plot.left() + place * plot.width();
                 let inside = place >= lo && place <= hi;
                 let in_loop = looping && place >= loop_lo && place <= loop_hi;
+                let glow = slice_at(place).map_or(0.0, |index| lit[index]);
                 let color = match (inside, in_loop) {
+                    (true, _) if glow > 0.0 => blue.lerp_to_gamma(Color32::WHITE, 0.25 * glow),
                     (true, true) => blue.gamma_multiply(0.95),
                     (true, false) => blue.gamma_multiply(0.75),
                     _ => gray.gamma_multiply(0.6),
@@ -125,10 +163,33 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                 painter.rect_filled(Rect::from_x_y_ranges(x_at(hi)..=plot.right(), plot.y_range()), 0.0, outside);
             }
 
+            // The slices: a rule between each, and its number while there's room
+            if let Some(slices) = slices {
+                let width = (x_at(hi) - x_at(lo)) / slices.count() as f32;
+                // Rules close together fade, so 64 slices are a texture rather than a fence
+                let rule = Color32::WHITE.gamma_multiply(0.08 + 0.17 * (width / (16.0 * z)).min(1.0));
+                for index in 0..slices.count() {
+                    let (from, _) = span_of(slices, index);
+                    if index > 0 {
+                        painter.vline(x_at(from), plot.y_range(), Stroke::new(1.0 * z, rule));
+                    }
+                    if width >= 11.0 * z {
+                        let color = if lit[index] > 0.0 { Color32::WHITE } else { theme::text::SECONDARY.gamma_multiply(0.8) };
+                        painter.text(
+                            Pos2::new(x_at(from) + 2.0 * z, plot.top() + 1.0 * z),
+                            egui::Align2::LEFT_TOP,
+                            (index + 1).to_string(),
+                            egui::FontId::proportional(7.0 * z),
+                            color,
+                        );
+                    }
+                }
+            }
+
             // The voices playing, each as bright as it's loud
-            let readout = user_state.get_engine_node_id(node_id).and_then(|id| user_state.readouts.get(&id)).copied();
             if let Some(readout) = readout {
-                for value in readout.values {
+                for value in &readout.values[..MAX_CHANNELS] {
+                    let value = *value;
                     let Some((place, level)) = Sampler::unpack_playhead(value) else { continue };
                     let x = x_at(place);
                     let bright = level.sqrt().clamp(0.0, 1.0);
@@ -236,7 +297,13 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     if response.hovered() && dragging.is_none() {
         let tip = match (hot, loaded, key) {
             (Some(m), _, _) => format!("{}: drag to move it", MARKERS[m].1),
-            (None, Some(sample), Some(key)) => describe(key, sample),
+            (None, Some(sample), Some(key)) => match (slices, pointer.and_then(|p| slice_at(place_at(p.x)))) {
+                (Some(slices), Some(index)) => {
+                    let key = note_to_name((root + index as f32).clamp(0.0, 127.0) as u8);
+                    format!("Slice {} of {}, played by {key}", index + 1, slices.count())
+                }
+                _ => describe(key, sample),
+            },
             (None, None, Some(key)) => format!("{key}\n{}\nClick to open another WAV", problem.filter(|p| !sample_files::is_loading(p)).unwrap_or("Loading…")),
             _ => "Click to open a WAV, or drag one from your files onto the node".to_string(),
         };

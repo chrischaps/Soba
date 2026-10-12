@@ -31,6 +31,8 @@ pub enum ParamFormat {
     Pan,
     /// A MIDI note number, by name: "C4", "F#2".
     Note,
+    /// How many slices a recording is cut into: "Off" below 2.
+    Slices,
 }
 
 impl ParamFormat {
@@ -78,6 +80,10 @@ impl ParamFormat {
                 }
             }
             ParamFormat::Note => crate::modules::sequencer::note_to_name(value.round().clamp(0.0, 127.0) as u8),
+            ParamFormat::Slices => match value.round() {
+                count if count < 2.0 => "Off".to_string(),
+                count => format!("{count:.0}"),
+            },
             ParamFormat::Pan => {
                 let percent = (value * 100.0).round();
                 if percent == 0.0 {
@@ -791,6 +797,13 @@ mod tests {
         assert_eq!(ParamFormat::Milliseconds.format(1500.0), "1.50 s");
         assert_eq!(ParamFormat::Time.format(0.0), "Off");
         assert_eq!(ParamFormat::Milliseconds.format(0.0), "Off");
+    }
+
+    #[test]
+    fn test_param_format_slices() {
+        assert_eq!(ParamFormat::Slices.format(1.0), "Off");
+        assert_eq!(ParamFormat::Slices.format(2.0), "2");
+        assert_eq!(ParamFormat::Slices.format(11.6), "12");
     }
 
     #[test]

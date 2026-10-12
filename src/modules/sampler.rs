@@ -11,6 +11,10 @@
 //! engine's still plays in tune. Every start and stop is shaped by a short
 //! envelope, so nothing clicks: a gate, a release, a voice stolen by a new
 //! note, the end of the recording, even a new file loaded mid-note.
+//!
+//! Sliced, Start–End is cut into equal parts and each note plays one of
+//! them: Root plays slice 1, a semitone up slice 2, as a chopped break is
+//! laid across the keys. The note then picks the slice instead of the pitch.
 
 use std::sync::Arc;
 
@@ -20,6 +24,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
+    primitives::{Slices, MAX_SLICES},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     ParameterDisplay, SampleData, SignalType, MAX_CHANNELS, MAX_READOUT,
@@ -91,6 +96,8 @@ struct Voice {
     fall: f32,
     /// The gate's velocity, latched as the note starts.
     velocity: f32,
+    /// The slice it plays, from 0, when the recording is sliced.
+    slice: Option<usize>,
     /// Whether it reads the recording being replaced, while it fades out.
     outgoing: bool,
     /// What it played last, before velocity and level, for the readout.
@@ -166,6 +173,22 @@ impl Region {
     fn is_playable(&self) -> bool {
         self.end - self.start >= 1.0
     }
+
+    /// Slice `index` of this region, cut into `slices`: it plays from the
+    /// slice's start to its end, and a loop goes round the whole slice.
+    fn slice(&self, params: &[f32], slices: Slices, index: usize) -> Self {
+        let (start, end) = slices.span(index, self.start, self.end);
+        let loop_mode = if end - start < 2.0 { LoopMode::Off } else { LoopMode::from_param(params[Sampler::PARAM_LOOP]) };
+        Self { start, end, loop_mode, loop_start: start, loop_end: end }
+    }
+
+    /// The region a voice plays: its slice, while the recording is sliced.
+    fn for_voice(&self, params: &[f32], slices: Option<Slices>, voice: &Voice) -> Self {
+        match (slices, voice.slice) {
+            (Some(slices), Some(index)) => self.slice(params, slices, index),
+            _ => *self,
+        }
+    }
 }
 
 /// Plays a recording from a WAV file.
@@ -174,8 +197,12 @@ impl Region {
 /// - **Gate** (Gate, poly): a rising edge starts a voice; in Gated mode the
 ///   falling edge releases it.
 /// - **V/Oct** (Control): pitch, 1 V an octave; 0 V (C4) plays the Root note.
+///   Sliced, it picks the slice instead: Root plays slice 1.
 /// - **Velocity** (Control, 0–1): each note's level, read as it starts.
-/// - **Start**, **Speed** (Control): added to their knobs.
+/// - **Start**, **Speed** (Control): added to their knobs. Sliced, 1 V of
+///   Start is the whole slice.
+/// - **Slice** (Control, 0–1 across the slices): added to the note's
+///   slice as it starts.
 ///
 /// # Outputs
 /// - **L**, **R** (Audio, poly): a mono recording plays on both.
@@ -192,6 +219,7 @@ impl Region {
 ///   backwards, from End to Start.
 /// - **Attack**, **Release** (s): the amplitude envelope.
 /// - **Level** (0–1).
+/// - **Slices** (Off, 2–64): cuts Start–End into equal slices, played by note.
 pub struct Sampler {
     /// The recording voices start on.
     sample: Option<Arc<SampleData>>,
@@ -223,13 +251,15 @@ impl Sampler {
                 PortDefinition::input_with_default("gate", "Gate", SignalType::Gate, 0.0)
                     .describe("A rising edge starts a note; in Gated mode the falling edge releases it. A polyphonic gate plays a voice per channel"),
                 PortDefinition::input_with_default("voct", "V/Oct", SignalType::Control, 0.0)
-                    .describe("Pitch, 1 V an octave: 0 V (C4) plays the Root note as recorded"),
+                    .describe("Pitch, 1 V an octave: 0 V (C4) plays the Root note as recorded. Sliced, it picks the slice instead: Root plays slice 1, a semitone up slice 2"),
                 PortDefinition::input_with_default("velocity", "Velocity", SignalType::Control, 1.0)
                     .describe("Each note's level, 0 to 1, read as it starts. Unpatched, every note is full"),
                 PortDefinition::input_with_default("start_cv", "Start", SignalType::Control, 0.0)
-                    .describe("Added to Start as each note begins (1 V is the whole recording): an LFO here scrubs where notes start"),
+                    .describe("Added to Start as each note begins (1 V is the whole recording, or the whole slice when sliced): an LFO here scrubs where notes start"),
                 PortDefinition::input_with_default("speed_cv", "Speed", SignalType::Control, 0.0)
                     .describe("Added to Speed while it plays, as on tape: pitch follows, and below zero it plays backwards"),
+                PortDefinition::input_with_default("slice_cv", "Slice", SignalType::Control, 0.0)
+                    .describe("Sliced, picks a slice as each note begins: 0 to 1 across them, added to the note's slice. An Arranger lane or a Sample & Hold here rearranges a break"),
                 PortDefinition::output("out_l", "L", SignalType::Audio).describe("Left; a mono recording plays the same on both sides"),
                 PortDefinition::output("out_r", "R", SignalType::Audio).describe("Right"),
             ],
@@ -253,13 +283,15 @@ impl Sampler {
                 ParameterDefinition::new("fine", "Fine", -100.0, 100.0, 0.0, ParameterDisplay::linear("ct"))
                     .describe("Fine tuning in cents"),
                 ParameterDefinition::new("root", "Root", 0.0, 127.0, 60.0, ParameterDisplay::stepped("note"))
-                    .describe("The note the recording was made at: playing it plays the recording unchanged"),
+                    .describe("The note the recording was made at: playing it plays the recording unchanged. Sliced, the note that plays slice 1"),
                 ParameterDefinition::new("attack", "Attack", 0.001, 2.0, 0.002, ParameterDisplay::logarithmic("s"))
                     .describe("How long each note takes to fade in"),
                 ParameterDefinition::new("release", "Release", 0.001, 5.0, 0.01, ParameterDisplay::logarithmic("s"))
                     .describe("How long a note takes to fade out once let go"),
                 ParameterDefinition::new("level", "Level", 0.0, 1.0, 0.8, ParameterDisplay::linear(""))
                     .describe("Output level"),
+                ParameterDefinition::new("slices", "Slices", 1.0, MAX_SLICES as f32, 1.0, ParameterDisplay::stepped("slices"))
+                    .describe("Cuts Start–End into equal slices, each played by its own note from Root up, and only to its own end. Off plays the recording across the keyboard"),
             ],
         }
     }
@@ -269,6 +301,7 @@ impl Sampler {
     const PORT_VELOCITY: usize = 2;
     const PORT_START_CV: usize = 3;
     const PORT_SPEED_CV: usize = 4;
+    const PORT_SLICE_CV: usize = 5;
 
     // The parameters with something to show beside the jacks (the knobs
     // CV can turn, and the menus) come first: the node editor places jacks
@@ -286,6 +319,11 @@ impl Sampler {
     pub const PARAM_ATTACK: usize = 10;
     pub const PARAM_RELEASE: usize = 11;
     pub const PARAM_LEVEL: usize = 12;
+    pub const PARAM_SLICES: usize = 13;
+
+    /// Where the readout holds the slice each channel's voice plays, from 1
+    /// (0 for none), after the playheads.
+    pub const READOUT_SLICES: usize = MAX_CHANNELS;
 
     const GATE_THRESHOLD: f32 = 0.5;
 
@@ -416,7 +454,7 @@ impl DspModule for Sampler {
             id: SAMPLER_ID,
             name: "Sampler",
             category: ModuleCategory::Source,
-            description: "Plays a WAV file: one-shots from a gate, or an instrument across the keyboard",
+            description: "Plays a WAV file: one-shots from a gate, an instrument across the keyboard, or its slices by note",
         };
         &INFO
     }
@@ -449,6 +487,7 @@ impl DspModule for Sampler {
         let velocity = connected_input(inputs, Self::PORT_VELOCITY);
         let start_cv = connected_input(inputs, Self::PORT_START_CV);
         let speed_cv = connected_input(inputs, Self::PORT_SPEED_CV);
+        let slice_cv = connected_input(inputs, Self::PORT_SLICE_CV);
 
         // A voice per channel of the widest cable in, as far as there's room
         let wanted = [gate, voct, velocity].iter().flatten().map(|buffer| buffer.channels()).max().unwrap_or(1);
@@ -467,8 +506,13 @@ impl DspModule for Sampler {
         let release = params[Self::PARAM_RELEASE].max(0.0005);
         let end_fade = (END_FADE_SECONDS * sample_rate) as f64;
         self.level.set_target(params[Self::PARAM_LEVEL].clamp(0.0, 1.0));
-        // Pitch from the knobs, in semitones, before V/Oct
-        let tuning = params[Self::PARAM_TUNE].round() + params[Self::PARAM_FINE] / 100.0 + (60.0 - params[Self::PARAM_ROOT].round());
+        // Pitch from the knobs, in semitones, before V/Oct. Sliced, the
+        // note picks the slice instead, from Root up, and only Tune and Fine
+        // move the pitch
+        let slices = Slices::from_param(params[Self::PARAM_SLICES]);
+        let root = params[Self::PARAM_ROOT].round();
+        let transpose = params[Self::PARAM_TUNE].round() + params[Self::PARAM_FINE] / 100.0;
+        let tuning = transpose + (60.0 - root);
         let speed_knob = params[Self::PARAM_SPEED];
 
         let Self { sample, outgoing, channels: voices, level, .. } = self;
@@ -488,15 +532,29 @@ impl DspModule for Sampler {
                     buffer.map_or(default, |b| b.voice(c).samples.get(i).copied().unwrap_or(default))
                 };
                 let speed = (speed_knob + read(speed_cv, 0.0)).clamp(-4.0, 4.0) as f64;
-                let pitch = ((tuning + 12.0 * read(voct, 0.0)) / 12.0).clamp(-8.0, 8.0).exp2() as f64;
+                let semitones = if slices.is_some() { transpose } else { tuning + 12.0 * read(voct, 0.0) };
+                let pitch = (semitones / 12.0).clamp(-8.0, 8.0).exp2() as f64;
                 let rate = (speed * pitch).clamp(-MAX_RATE, MAX_RATE);
 
                 // The gate
                 let gate_high = read(gate, 0.0) > Self::GATE_THRESHOLD;
                 if gate_high && !channel.prev_gate {
                     if let Some(data) = current {
-                        let region = if start_cv.is_some() { Region::new(params, start_offset(c, i), data.frames()) } else { unmoved };
-                        if region.is_playable() {
+                        let note = match slices {
+                            // The note's slice, if it has one, with Start CV
+                            // moving where in it the note starts
+                            Some(slices) => {
+                                let key = 12.0 * read(voct, 0.0) + 60.0 - root;
+                                slices.by_note(key + slices.by_control(read(slice_cv, 0.0)) as f32).map(|index| {
+                                    let mut region = unmoved.slice(params, slices, index);
+                                    region.start += start_offset(c, i).clamp(0.0, 1.0) as f64 * (region.end - region.start);
+                                    (region, Some(index))
+                                })
+                            }
+                            None if start_cv.is_some() => Some((Region::new(params, start_offset(c, i), data.frames()), None)),
+                            None => Some((unmoved, None)),
+                        };
+                        if let Some((region, slice)) = note.filter(|(region, _)| region.is_playable()) {
                             // A voice still sounding hands over to the tail, which lets go quickly
                             if channel.voice.is_active() {
                                 channel.tail = channel.voice;
@@ -511,6 +569,7 @@ impl DspModule for Sampler {
                                 envelope: 0.0,
                                 fall: 0.0,
                                 velocity: read(velocity, 1.0).clamp(0.0, 1.0),
+                                slice,
                                 outgoing: false,
                                 gain: 0.0,
                             };
@@ -536,7 +595,8 @@ impl DspModule for Sampler {
                         *voice = Voice::default();
                         continue;
                     };
-                    let (l, r) = Self::step_voice(voice, data, region, rate * scale, attack_rise, end_fade);
+                    let region = region.for_voice(params, slices, voice);
+                    let (l, r) = Self::step_voice(voice, data, &region, rate * scale, attack_rise, end_fade);
                     left += l * voice.velocity;
                     right += r * voice.velocity;
                 }
@@ -560,11 +620,12 @@ impl DspModule for Sampler {
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
         let mut readout = Readout::default();
         let frames = self.sample.as_ref().map_or(0, |s| s.frames()).max(1) as f64;
-        for (value, channel) in readout.values.iter_mut().zip(&self.channels).take(self.active.min(MAX_READOUT)) {
+        for (c, channel) in self.channels.iter().enumerate().take(self.active.min(MAX_READOUT - Self::READOUT_SLICES)) {
             // The note playing, or the one letting go if that's all there is
             let voice = [channel.voice, channel.tail].into_iter().find(|v| v.is_active() && !v.outgoing);
             if let Some(voice) = voice {
-                *value = Self::pack_playhead((voice.position / frames) as f32, voice.gain * voice.velocity);
+                readout.values[c] = Self::pack_playhead((voice.position / frames) as f32, voice.gain * voice.velocity);
+                readout.values[Self::READOUT_SLICES + c] = voice.slice.map_or(0.0, |index| (index + 1) as f32);
             }
         }
         Some(readout)
@@ -658,6 +719,9 @@ mod tests {
         gates: Vec<(usize, usize)>,
         voct: f32,
         velocity: Option<f32>,
+        /// What the Start and Slice inputs hold, when patched.
+        start: Option<f32>,
+        slice: Option<f32>,
     }
 
     /// Plays `seconds` of `lanes`, one channel each, returning the left
@@ -672,6 +736,12 @@ mod tests {
         let mut velocity = SignalBuffer::polyphonic(BLOCK, SignalType::Control);
         velocity.set_channels(lanes.len());
         let velocity_patched = lanes.iter().any(|lane| lane.velocity.is_some());
+        let mut start_cv = SignalBuffer::polyphonic(BLOCK, SignalType::Control);
+        start_cv.set_channels(lanes.len());
+        let start_patched = lanes.iter().any(|lane| lane.start.is_some());
+        let mut slice_cv = SignalBuffer::polyphonic(BLOCK, SignalType::Control);
+        slice_cv.set_channels(lanes.len());
+        let slice_patched = lanes.iter().any(|lane| lane.slice.is_some());
         let unpatched = SignalBuffer::unconnected(BLOCK, SignalType::Control);
         let mut outputs = vec![SignalBuffer::polyphonic(BLOCK, SignalType::Audio), SignalBuffer::polyphonic(BLOCK, SignalType::Audio)];
         let mut rendered = vec![Vec::with_capacity(total + BLOCK); lanes.len()];
@@ -685,9 +755,19 @@ mod tests {
                 }
                 voct.channel_mut(c).fill(lane.voct);
                 velocity.channel_mut(c).fill(lane.velocity.unwrap_or(1.0));
+                start_cv.channel_mut(c).fill(lane.start.unwrap_or(0.0));
+                slice_cv.channel_mut(c).fill(lane.slice.unwrap_or(0.0));
             }
-            let velocity_in = if velocity_patched { &velocity } else { &unpatched };
-            sampler.process(&[&gate, &voct, velocity_in, &unpatched, &unpatched], &mut outputs, params, &ctx);
+            let patched = |buffer, patched| if patched { buffer } else { &unpatched };
+            let inputs = [
+                &gate,
+                &voct,
+                patched(&velocity, velocity_patched),
+                patched(&start_cv, start_patched),
+                &unpatched,
+                patched(&slice_cv, slice_patched),
+            ];
+            sampler.process(&inputs, &mut outputs, params, &ctx);
             assert_eq!(outputs[0].channels(), lanes.len());
             for (c, out) in rendered.iter_mut().enumerate() {
                 out.extend_from_slice(&outputs[0].voice(c).samples);
@@ -702,7 +782,7 @@ mod tests {
 
     /// One channel, gated over `gates`, at `voct`.
     fn play(sampler: &mut Sampler, params: &[f32], seconds: f32, gates: &[(usize, usize)], voct: f32) -> Vec<f32> {
-        let lane = Lane { gates: gates.to_vec(), voct, velocity: None };
+        let lane = Lane { gates: gates.to_vec(), voct, ..Lane::default() };
         play_lanes(sampler, params, seconds, &[lane]).remove(0)
     }
 
@@ -737,8 +817,10 @@ mod tests {
         assert_eq!(sampler.info().id, SAMPLER_ID);
         assert_eq!(sampler.info().category, ModuleCategory::Source);
         let names: Vec<&str> = sampler.ports().iter().map(|p| p.name).collect();
-        assert_eq!(names, ["Gate", "V/Oct", "Velocity", "Start", "Speed", "L", "R"]);
-        assert_eq!(sampler.parameters().len(), 13);
+        assert_eq!(names, ["Gate", "V/Oct", "Velocity", "Start", "Speed", "Slice", "L", "R"]);
+        assert_eq!(sampler.parameters().len(), 14);
+        // Old patches, saved without Slices, play the whole recording
+        assert_eq!(Slices::from_param(sampler.parameters()[Sampler::PARAM_SLICES].default), None);
         assert!(sampler.polyphonic());
     }
 
@@ -888,7 +970,7 @@ mod tests {
 
     #[test]
     fn test_velocity_scales_each_note() {
-        let lane = Lane { gates: vec![(0, 1)], voct: 0.0, velocity: Some(0.25) };
+        let lane = Lane { gates: vec![(0, 1)], velocity: Some(0.25), ..Lane::default() };
         let out = play_lanes(&mut sampler(dc(0.8, 1.0)), &with(&[]), 0.05, &[lane]).remove(0);
         assert!((out[ms(20.0)] - 0.2).abs() < 1e-4);
     }
@@ -904,7 +986,7 @@ mod tests {
                 if c == 0 {
                     gates.push((ms(200.0), ms(200.0) + 1));
                 }
-                Lane { gates, voct: c as f32 / 12.0, velocity: None }
+                Lane { gates, voct: c as f32 / 12.0, ..Lane::default() }
             })
             .collect();
         let out = play_lanes(&mut sampler(source), &with(&[]), 0.4, &lanes);
@@ -956,7 +1038,7 @@ mod tests {
     #[test]
     fn test_readout_shows_each_voices_place() {
         let lanes = [
-            Lane { gates: vec![(0, 1)], voct: 0.0, velocity: None },
+            Lane { gates: vec![(0, 1)], ..Lane::default() },
             Lane::default(),
         ];
         let mut s = sampler(dc(0.5, 1.0));
@@ -986,6 +1068,144 @@ mod tests {
         s.reset();
         assert!(Arc::ptr_eq(&s.take_retired_sample().unwrap(), &first));
         assert_eq!(peak(&play(&mut s, &with(&[]), 0.02, &[], 0.0)), 0.0);
+    }
+
+    /// A recording in `parts` steps of 100 ms, step `k` held at (k + 1) / 10.
+    fn staircase(parts: usize) -> Arc<SampleData> {
+        let samples = (0..parts * ms(100.0)).map(|n| (n / ms(100.0) + 1) as f32 / 10.0).collect();
+        Arc::new(SampleData::mono(samples, SAMPLE_RATE))
+    }
+
+    /// One note, struck at the start, with `lane`'s other inputs.
+    fn note(sampler: &mut Sampler, params: &[f32], seconds: f32, lane: Lane) -> Vec<f32> {
+        play_lanes(sampler, params, seconds, &[Lane { gates: vec![(0, 1)], ..lane }]).remove(0)
+    }
+
+    /// A lane `k` semitones above C4.
+    fn semitone(k: f32) -> Lane {
+        Lane { voct: k / 12.0, ..Lane::default() }
+    }
+
+    #[test]
+    fn test_sliced_each_note_plays_its_own_slice_and_nothing_past_its_end() {
+        let params = with(&[(Sampler::PARAM_SLICES, 8.0)]);
+        for k in 0..8 {
+            let out = note(&mut sampler(staircase(8)), &params, 0.3, semitone(k as f32));
+            let value = (k + 1) as f32 / 10.0;
+            // All of it, past the attack and before the end's fade
+            for (n, &sample) in out.iter().enumerate().take(ms(96.0)).skip(ms(3.0)) {
+                assert!((sample - value).abs() < 1e-4, "slice {k} at {n}: {sample}");
+            }
+            // Never a neighbour, even in the fade
+            assert!(out.iter().all(|&sample| sample <= value + 1e-3), "slice {k}");
+            assert_eq!(peak(&out[ms(100.0)..]), 0.0, "slice {k} stops at its end");
+        }
+    }
+
+    #[test]
+    fn test_sliced_notes_below_root_or_past_the_last_slice_play_nothing() {
+        let params = with(&[(Sampler::PARAM_SLICES, 8.0)]);
+        for k in [-1.0, 8.0, 20.0] {
+            assert_eq!(peak(&note(&mut sampler(staircase(8)), &params, 0.2, semitone(k))), 0.0, "{k}");
+        }
+        // Root moves the first slice's key: C3 plays slice 1
+        let low = with(&[(Sampler::PARAM_SLICES, 8.0), (Sampler::PARAM_ROOT, 48.0)]);
+        let out = note(&mut sampler(staircase(8)), &low, 0.2, Lane { voct: -1.0, ..Lane::default() });
+        assert!((out[ms(50.0)] - 0.1).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_sliced_the_note_picks_the_slice_not_the_pitch() {
+        // Four slices of a steady sine: any of them is 1 kHz
+        let source = sine(1000.0, SAMPLE_RATE, 1.0);
+        let sliced = with(&[(Sampler::PARAM_SLICES, 4.0)]);
+        let out = note(&mut sampler(source.clone()), &sliced, 0.3, semitone(2.0));
+        assert!((frequency(&out[ms(10.0)..ms(240.0)]) - 1000.0).abs() < 0.5);
+        // ...but Tune still transposes, and the slice goes by twice as fast
+        let up = with(&[(Sampler::PARAM_SLICES, 4.0), (Sampler::PARAM_TUNE, 12.0)]);
+        let out = note(&mut sampler(source), &up, 0.3, semitone(2.0));
+        assert!((frequency(&out[ms(10.0)..ms(120.0)]) - 2000.0).abs() < 1.0);
+        assert_eq!(peak(&out[ms(126.0)..]), 0.0);
+    }
+
+    #[test]
+    fn test_sliced_gated_stops_at_the_slice_end_and_a_loop_goes_round_it() {
+        let held = |params: &[f32]| {
+            let lane = Lane { gates: vec![(0, ms(500.0))], voct: 3.0 / 12.0, ..Lane::default() };
+            play_lanes(&mut sampler(staircase(8)), params, 0.6, &[lane]).remove(0)
+        };
+        let gated = held(&with(&[(Sampler::PARAM_SLICES, 8.0), (Sampler::PARAM_MODE, 1.0)]));
+        assert_eq!(peak(&gated[ms(100.0)..]), 0.0, "held past its end, it still stops");
+        let looped = held(&with(&[(Sampler::PARAM_SLICES, 8.0), (Sampler::PARAM_MODE, 1.0), (Sampler::PARAM_LOOP, 1.0)]));
+        assert!((looped[ms(350.0)] - 0.4).abs() < 1e-4, "{}", looped[ms(350.0)]);
+        assert!(looped.iter().all(|&sample| sample <= 0.4 + 1e-3));
+        assert_eq!(peak(&looped[ms(520.0)..]), 0.0, "and lets go with the gate");
+    }
+
+    #[test]
+    fn test_sliced_backwards_plays_the_slice_from_its_end() {
+        let ramp: Vec<f32> = (0..4800).map(|n| n as f32 / 4800.0).collect();
+        let source = Arc::new(SampleData::mono(ramp, SAMPLE_RATE));
+        let params = with(&[(Sampler::PARAM_SLICES, 4.0), (Sampler::PARAM_SPEED, -1.0)]);
+        // Slice 2 is frames 1200 to 2400
+        let out = note(&mut sampler(source), &params, 0.1, semitone(1.0));
+        for n in [ms(5.0), ms(15.0)] {
+            let expected = (2400 - n) as f32 / 4800.0;
+            assert!((out[n] - expected).abs() < 0.002, "at {n}: {} vs {expected}", out[n]);
+        }
+        assert_eq!(peak(&out[ms(25.0)..]), 0.0);
+    }
+
+    #[test]
+    fn test_slices_divide_start_to_end() {
+        // The second half of eight steps, in four slices: slice 1 is step 5
+        let params = with(&[(Sampler::PARAM_SLICES, 4.0), (Sampler::PARAM_START, 0.5)]);
+        let out = note(&mut sampler(staircase(8)), &params, 0.3, semitone(0.0));
+        assert!((out[ms(50.0)] - 0.5).abs() < 1e-4);
+        assert_eq!(peak(&out[ms(100.0)..]), 0.0);
+    }
+
+    #[test]
+    fn test_the_slice_input_picks_a_slice_and_adds_to_the_note() {
+        let params = with(&[(Sampler::PARAM_SLICES, 8.0)]);
+        for (voct, cv, slice) in [(0.0, 0.5, 4), (1.0, 0.5, 5), (0.0, 1.0, 7)] {
+            let lane = Lane { slice: Some(cv), ..semitone(voct) };
+            let out = note(&mut sampler(staircase(8)), &params, 0.2, lane);
+            let value = (slice + 1) as f32 / 10.0;
+            assert!((out[ms(50.0)] - value).abs() < 1e-4, "{voct} st, {cv}: {}", out[ms(50.0)]);
+        }
+        // Pushed past the last slice by the note, there's nothing to play
+        let lane = Lane { slice: Some(1.0), ..semitone(1.0) };
+        assert_eq!(peak(&note(&mut sampler(staircase(8)), &params, 0.2, lane)), 0.0);
+    }
+
+    #[test]
+    fn test_sliced_start_cv_moves_the_start_inside_the_slice() {
+        let ramp: Vec<f32> = (0..4800).map(|n| n as f32 / 4800.0).collect();
+        let source = Arc::new(SampleData::mono(ramp, SAMPLE_RATE));
+        // Halfway into slice 1 (frames 0 to 1200), so it plays 600 to 1200
+        let params = with(&[(Sampler::PARAM_SLICES, 4.0)]);
+        let out = note(&mut sampler(source), &params, 0.1, Lane { start: Some(0.5), ..Lane::default() });
+        let n = ms(5.0);
+        assert!((out[n] - (600 + n) as f32 / 4800.0).abs() < 0.002, "{}", out[n]);
+        assert_eq!(peak(&out[ms(12.5)..]), 0.0);
+    }
+
+    #[test]
+    fn test_readout_shows_each_voices_slice() {
+        let lanes = [semitone(5.0), Lane::default()].map(|lane| Lane { gates: vec![(0, 1)], ..lane });
+        let params = with(&[(Sampler::PARAM_SLICES, 8.0)]);
+        let mut s = sampler(staircase(8));
+        play_lanes(&mut s, &params, 0.05, &lanes);
+        let readout = s.readout(&params).unwrap();
+        assert_eq!(readout.values[Sampler::READOUT_SLICES], 6.0);
+        assert_eq!(readout.values[Sampler::READOUT_SLICES + 1], 1.0);
+        let (place, _) = Sampler::unpack_playhead(readout.values[0]).expect("playing");
+        assert!((place - 0.6875).abs() < 0.01, "{place}");
+        // Unsliced, no slice
+        let mut s = sampler(staircase(8));
+        play_lanes(&mut s, &with(&[]), 0.05, &lanes);
+        assert_eq!(s.readout(&with(&[])).unwrap().values[Sampler::READOUT_SLICES], 0.0);
     }
 
     #[test]

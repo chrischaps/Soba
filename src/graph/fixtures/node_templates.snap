@@ -64,6 +64,7 @@ in   V/Oct              Control  ConnectionOnly       inline=true  port
 in   Velocity           Control  ConnectionOnly       inline=true  port
 in   Start              Control  ConnectionOrConstant inline=true  num 0 [0..1] %
 in   Speed              Control  ConnectionOrConstant inline=true  num 1 [-2..2] x
+in   Slice              Control  ConnectionOnly       inline=true  port
 in   Loop               Control  ConstantOnly         inline=true  select 0 ["Off", "Forward", "Ping-Pong"] "Loop"
 in   Mode               Control  ConstantOnly         inline=true  select 0 ["One-Shot", "Gated"] "Mode"
 in   End                Control  ConstantOnly         inline=false num 1 [0..1] %
@@ -75,15 +76,17 @@ in   Root               Control  ConstantOnly         inline=false num 60 [0..12
 in   Attack             Control  ConstantOnly         inline=false num 0.002 [0.001..2] s log
 in   Release            Control  ConstantOnly         inline=false num 0.01 [0.001..5] s log
 in   Level              Control  ConstantOnly         inline=false num 0.8 [0..1]
+in   Slices             Control  ConstantOnly         inline=false num 1 [1..64] slices stepped
 out  L                  Audio
 out  R                  Audio
 knob Start              "Start" Modulatable
 knob End                "End" KnobOnly
 knob Loop Start         "Lp St" KnobOnly
 knob Loop End           "Lp End" KnobOnly
+knob Slices             "Slices" KnobOnly
+knob Root               "Root" KnobOnly
 knob Tune               "Tune" KnobOnly
 knob Fine               "Fine" KnobOnly
-knob Root               "Root" KnobOnly
 knob Speed              "Speed" Modulatable
 knob Attack             "Atk" KnobOnly
 knob Release            "Rel" KnobOnly

@@ -7,6 +7,8 @@
 
 Sampler plays a WAV file. Patch a gate in and it plays one-shots: a kick under a sequencer, a vocal chop, a door slam. Patch in V/Oct as well and a polyphonic gate, and it becomes an instrument: one recorded note spread across the keyboard, each key playing it at its own pitch.
 
+Set **Slices** and it becomes a chopped break: the recording is cut into equal slices, and each key plays one of them.
+
 Every other sound in Soba is synthesized. The Sampler brings in sound you've recorded, or one Soba rendered itself, and keeps it with the patch.
 
 ## Loading a file
@@ -22,10 +24,11 @@ Loading a file is a step you can undo. A file is read and converted once. Sample
 | Port | Signal Type | Description |
 |------|-------------|-------------|
 | **Gate** | Gate (Green) | A rising edge starts a note. In **Gated** mode the falling edge lets it go. A polyphonic gate plays a voice per channel |
-| **V/Oct** | Control (Orange) | Pitch, 1 V an octave. 0 V (C4) plays the **Root** note: the recording as it was made. Read all the time, so pitch bend and glide work |
+| **V/Oct** | Control (Orange) | Pitch, 1 V an octave. 0 V (C4) plays the **Root** note: the recording as it was made. Read all the time, so pitch bend and glide work. When sliced, it picks the slice instead, as each note starts |
 | **Velocity** | Control (Orange) | Each note's level, 0 to 1, read as the note starts. Unpatched, every note is full |
-| **Start** | Control (Orange) | Added to the **Start** knob as each note begins. 1 V is the whole recording |
+| **Start** | Control (Orange) | Added to the **Start** knob as each note begins. 1 V is the whole recording, or the whole slice when sliced |
 | **Speed** | Control (Orange) | Added to the **Speed** knob while the note plays, as on tape: pitch follows, and below zero it plays backwards |
+| **Slice** | Control (Orange) | When sliced, picks a slice as each note begins: 0 to 1 across the slices, added to the note's own. Does nothing with **Slices** off |
 
 ## Outputs
 
@@ -48,13 +51,14 @@ Both outputs carry a channel per voice when the gate is polyphonic.
 | **Lp End** (Loop End) | 0 – 100% | 100% | Where the loop turns back. Kept between Start and End |
 | **Tune** | ±24 st | 0 st | Transpose in semitones |
 | **Fine** | ±100 cents | 0 | Fine tuning |
-| **Root** | C-1 – G9 | C4 | The note the recording was made at. Playing it plays the recording unchanged |
+| **Slices** | Off, 2 – 64 | Off | Cuts **Start**–**End** into equal slices, each played by its own key. See [Slices](#slices) |
+| **Root** | C-1 – G9 | C4 | The note the recording was made at. Playing it plays the recording unchanged. When sliced, the key that plays slice 1 |
 | **Speed** | −2 – 2× | 1× | Tape speed. 2 is twice as fast and an octave up, 0.5 half as fast and an octave down, and below 0 plays backwards |
 | **Atk** (Attack) | 1 ms – 2 s | 2 ms | How long each note takes to fade in |
 | **Rel** (Release) | 1 ms – 5 s | 10 ms | How long a note takes to fade out once let go |
 | **Level** | 0 – 100% | 80% | Output level |
 
-The four region knobs sit in the top row, under the waveform where their markers are. You can drag the markers instead of the knobs.
+The four region knobs sit in the top row, under the waveform where their markers are. You can drag the markers instead of the knobs. **Slices** and **Root** start the second row, since together they say which key plays which slice.
 
 ## Playing it
 
@@ -79,6 +83,21 @@ At negative **Speed** a note plays backwards, starting at **End** and finishing 
 With **Loop** on, a note plays from **Start** to **Lp End**, then goes round. **Forward** jumps back to **Lp St**. **Ping-Pong** turns around and plays backwards to **Lp St**, then forwards again. A loop over whole cycles of a steady sound is seamless. Elsewhere, set the loop points where the waveform crosses zero, or use Ping-Pong, which never jumps.
 
 In **Gated** mode a looping note keeps looping through its release, then fades. In **One-Shot** mode a looping note never ends. It plays until a new note takes its voice or the transport stops. That's a drone: a field recording slowed down an octave, looping forever.
+
+## Slices
+
+Set **Slices** to cut the recording into equal parts, and each key plays one part: **Root** (C4 unless you move it) plays slice 1, C#4 slice 2, D4 slice 3, and so on up the keys. This is how samplers lay a chopped drum break or a set of vocal phrases across the keyboard.
+
+- **Each slice plays only itself.** A note starts at its slice's start and stops at its end, with the same 3 ms fade as at **End**. In **One-Shot** mode a short gate still plays the whole slice. In **Gated** mode the note stops at the slice's end or when the gate falls, whichever comes first.
+- **The key picks the slice, not the pitch.** **V/Oct** no longer transposes. **Tune**, **Fine** and **Speed** still do, and a slice played faster goes by sooner. Notes below **Root**, or past the last slice, play nothing.
+- **Slices divide Start–End.** Move **Start** past a silence at the head of the file and the slices are cut from there.
+- **A loop goes round the slice.** With **Loop** on, a held note in **Gated** mode repeats its slice until it's let go. That's a stutter. The **Lp St** and **Lp End** markers step aside while sliced.
+- **Backwards**, at negative **Speed**, a slice plays from its end to its start.
+- **Start** CV moves where a note starts inside its slice. 0.5 V starts halfway in.
+
+Patch an [Arranger](../utilities/arranger.md) lane, a [Sample & Hold](../utilities/sample-hold.md) or an LFO into **Slice** to pick slices without a keyboard. Its value spreads evenly across them, 0 for the first and 1 for the last, and adds to whatever the note picked. With **V/Oct** unpatched, **Slice** alone chooses.
+
+On the display, rules divide the waveform into its slices, numbered while they're wide enough to read. The slice a voice is playing glows. Hover a slice to see which key plays it.
 
 ## Voices
 
@@ -147,6 +166,14 @@ One Sampler per sound, each in **One-Shot** mode, into a [Mixer](../utilities/mi
 ### A drone from anything
 
 Load a long recording (rain, a room, a held note) and set **Speed** to 0.5, **Loop** to **Ping-Pong** with the loop over a steady stretch, **Atk** to 2 s and **Mode** to **One-Shot**. One gate starts a drone an octave down that never ends. Two Samplers on the same file, one at **Speed** 0.5 and one at 0.749 (a fifth above it), make a chord.
+
+### A chopped break
+
+Load a one-bar drum loop and set **Slices** to 8 or 16, so each slice is an eighth or a sixteenth note. Patch a [Step Sequencer](../utilities/sequencer.md)'s **Pitch** into **V/Oct** and its **Gate** into **Gate**, clocked at the same division. Steps on C4, C#4, D4… play the break as recorded. Change a step's note and that step plays another hit. Patch a [Sample & Hold](../utilities/sample-hold.md) of noise into **Slice** instead of **V/Oct** and the break rearranges itself on every hit.
+
+### Many lines in one file
+
+The [Clair de Satellite](../../recipes/clair-de-satellite.md) example keeps all eight of its sung lines in one file, a line to a slice. A Step Sequencer that steps every two bars sings line *k* on note C4 + *k*.
 
 ### Scrubbing
 

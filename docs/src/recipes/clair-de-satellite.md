@@ -36,7 +36,7 @@ Left running, the song starts again on the satellite.
 - **Chords on one cable.** Two [Chord Sequencers](../modules/utilities/chord-sequencer.md) play the same sixteen-bar progression: close and voice-led for the Rhodes, spread and tied for the strings. The slash basses (Am/G#, Am7/G, D9/F#) make the walking line on the **Bass** output.
 - **A rhythm from one module, chords from another.** The Rhodes takes its notes from a Chord Sequencer and its rhythm from a [Step Sequencer](../modules/utilities/sequencer.md)'s gate. A mono gate into a polyphonic voice strikes every note of the chord.
 - **A vocoder that can be understood.** A vocoder reads words best from a carrier that is low, dense and held. Here that's the strings' spread chord, with its lows filtered off. The voice is brightened and compressed on its way in, and the vocoder's attack and release are kept short. A carrier up in a melody's register, an octave or two higher, loses most of the words.
-- **Many lines in one sample.** The voice's eight lines sit in twelve equal slots of one file. A Step Sequencer that steps every two bars picks a slot through the [Sampler](../modules/sources/sampler.md)'s **Start** input: note C4 + *k* starts *k*/12 of the way in.
+- **Many lines in one sample.** The voice's eight lines are eight [slices](../modules/sources/sampler.md#slices) of one file. A Step Sequencer that steps every two bars picks a line by note: C4 sings the first, C#4 the second, and so on.
 - **Groups as instruments.** Each part is a group with named jacks: Bass takes **Clock**, **Reset**, **Pattern** and **Bass note**, and gives **Out**. A few knobs are pinned to each group's face.
 - **Slides.** The Solo's lead glides into chosen notes, the way a Minimoog player slurs a phrase.
 - **The song on tape.** The whole mix runs through [Tape](../modules/effects/tape.md), and an Arranger lane on its **Wow** input warps it in the Ring.
@@ -84,7 +84,7 @@ The strings' Chord Sequencer ties every step, so the String Machine's swell neve
 ### The voice
 
 ```text
-[Lyrics Pitch] ──> [Sampler Start]          (note 60 + k plays slot k)
+[Lyrics Pitch] ──> [Sampler V/Oct]          (8 slices: note 60 + k sings line k + 1)
 [Lyrics Gate]  ──> [Sampler Gate]           (Gated: one line, then stop)
 [Sampler L] ──> [EQ] ──> [Compressor] ──> [Vocoder Modulator]
 [Strings' Chord Sequencer Pitch] ──> [Saw] ──> [Chorus] ──> [SVF high-pass] ──> [Vocoder Carrier]

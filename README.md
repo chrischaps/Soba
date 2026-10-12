@@ -21,7 +21,7 @@ It doesn't imitate hardware panels. Every module is a node with jacks on its sid
 
   | Category | Modules |
   |---|---|
-  | Sources | Oscillator (BLEP anti-aliasing, sync, through-zero FM, sub, supersaw unison), Noise (white, pink, brown, smooth random), Drum (kick, snare, tom, clap, hats, cymbal, rim, cowbell, with accent and choke), Sampler (one-shots or a poly instrument from a WAV), Audio Input (mic or line in, envelope follower, gate), Keyboard, MIDI Note, Poly MIDI |
+  | Sources | Oscillator (BLEP anti-aliasing, sync, through-zero FM, sub, supersaw unison), Noise (white, pink, brown, smooth random), Drum (kick, snare, tom, clap, hats, cymbal, rim, cowbell, with accent and choke), Sampler (one-shots, a poly instrument, or slices by note from a WAV), Audio Input (mic or line in, envelope follower, gate), Keyboard, MIDI Note, Poly MIDI |
   | Filters | SVF Filter (self-oscillating, notch), Ladder Filter (oversampled) |
   | Modulation | ADSR Envelope, LFO, Slope (slew, trigger envelopes, cycling with skew, EOR/EOC), Clock |
   | Effects | Stereo Delay (with tape mode), Reverb (8-line FDN), Chorus, Distortion (oversampled, wavefolder), Tape (wow, flutter, saturation, age and hiss for a bus), Compressor, Parametric EQ, Vocoder (8 to 24 bands, formant shift) |
