@@ -246,14 +246,14 @@
       "id": 8,
       "module_id": "output.audio",
       "position": [
-        1294.0,
-        914.0
+        2072.0,
+        954.0
       ],
       "parameters": [
         {
           "name": "Volume",
           "type": "Number",
-          "value": 0.8
+          "value": 1.0
         },
         {
           "name": "Limiter",
@@ -376,6 +376,196 @@
           "value": -0.3
         }
       ]
+    },
+    {
+      "id": 14,
+      "module_id": "util.mixer",
+      "position": [
+        1354.0,
+        914.0
+      ],
+      "parameters": [
+        {
+          "name": "Level 1",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Level 2",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Level 3",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Level 4",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Pan 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Pan 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Pan 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Pan 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Mute 1",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Mute 2",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Mute 3",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Mute 4",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 1",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 2",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 3",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 4",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Return",
+          "type": "Number",
+          "value": 0.708
+        },
+        {
+          "name": "Master",
+          "type": "Number",
+          "value": 3.0
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "module_id": "fx.tape",
+      "position": [
+        1780.0,
+        914.0
+      ],
+      "parameters": [
+        {
+          "name": "Wow",
+          "type": "Number",
+          "value": 0.2
+        },
+        {
+          "name": "Flutter",
+          "type": "Number",
+          "value": 0.15
+        },
+        {
+          "name": "Width",
+          "type": "Number",
+          "value": 0.3
+        },
+        {
+          "name": "Saturation",
+          "type": "Number",
+          "value": 0.35
+        },
+        {
+          "name": "Age",
+          "type": "Number",
+          "value": 0.2
+        },
+        {
+          "name": "Hiss",
+          "type": "Number",
+          "value": 0.08
+        },
+        {
+          "name": "Mix",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Speed",
+          "type": "Select",
+          "value": 1
+        }
+      ]
     }
   ],
   "connections": [
@@ -454,14 +644,14 @@
     {
       "from_node": 7,
       "from_port": "Out L",
-      "to_node": 8,
-      "to_port": "Left"
+      "to_node": 14,
+      "to_port": "Return L"
     },
     {
       "from_node": 7,
       "from_port": "Out R",
-      "to_node": 8,
-      "to_port": "Right"
+      "to_node": 14,
+      "to_port": "Return R"
     },
     {
       "from_node": 9,
@@ -484,8 +674,8 @@
     {
       "from_node": 11,
       "from_port": "LowPass",
-      "to_node": 8,
-      "to_port": "Mono"
+      "to_node": 14,
+      "to_port": "Ch 1"
     },
     {
       "from_node": 12,
@@ -504,6 +694,30 @@
       "from_port": "AND",
       "to_node": 5,
       "to_port": "Gate"
+    },
+    {
+      "from_node": 14,
+      "from_port": "Out L",
+      "to_node": 15,
+      "to_port": "In L"
+    },
+    {
+      "from_node": 14,
+      "from_port": "Out R",
+      "to_node": 15,
+      "to_port": "In R"
+    },
+    {
+      "from_node": 15,
+      "from_port": "Out L",
+      "to_node": 8,
+      "to_port": "Left"
+    },
+    {
+      "from_node": 15,
+      "from_port": "Out R",
+      "to_node": 8,
+      "to_port": "Right"
     }
   ],
   "midi_mappings": [],
@@ -531,6 +745,18 @@
         671.0
       ],
       "color": "blue"
+    },
+    {
+      "title": "On tape",
+      "position": [
+        1330.0,
+        856.0
+      ],
+      "size": [
+        704.0,
+        516.0
+      ],
+      "color": "amber"
     }
   ],
   "notes": [

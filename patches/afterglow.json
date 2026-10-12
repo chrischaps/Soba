@@ -1471,7 +1471,7 @@
       "id": 18,
       "module_id": "output.audio",
       "position": [
-        2778.0,
+        3070.0,
         114.0
       ],
       "parameters": [
@@ -1489,6 +1489,56 @@
           "name": "Character",
           "type": "Toggle",
           "value": false
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "module_id": "fx.tape",
+      "position": [
+        2776.0,
+        74.0
+      ],
+      "parameters": [
+        {
+          "name": "Wow",
+          "type": "Number",
+          "value": 0.2
+        },
+        {
+          "name": "Flutter",
+          "type": "Number",
+          "value": 0.15
+        },
+        {
+          "name": "Width",
+          "type": "Number",
+          "value": 0.3
+        },
+        {
+          "name": "Saturation",
+          "type": "Number",
+          "value": 0.35
+        },
+        {
+          "name": "Age",
+          "type": "Number",
+          "value": 0.2
+        },
+        {
+          "name": "Hiss",
+          "type": "Number",
+          "value": 0.08
+        },
+        {
+          "name": "Mix",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Speed",
+          "type": "Select",
+          "value": 1
         }
       ]
     }
@@ -1647,11 +1697,23 @@
     {
       "from_node": 17,
       "from_port": "Out L",
+      "to_node": 19,
+      "to_port": "In L"
+    },
+    {
+      "from_node": 17,
+      "from_port": "Out R",
+      "to_node": 19,
+      "to_port": "In R"
+    },
+    {
+      "from_node": 19,
+      "from_port": "Out L",
       "to_node": 18,
       "to_port": "Left"
     },
     {
-      "from_node": 17,
+      "from_node": 19,
       "from_port": "Out R",
       "to_node": 18,
       "to_port": "Right"
@@ -1694,6 +1756,18 @@
         507.0
       ],
       "color": "cyan"
+    },
+    {
+      "title": "On tape",
+      "position": [
+        2752.0,
+        16.0
+      ],
+      "size": [
+        278.0,
+        507.0
+      ],
+      "color": "amber"
     }
   ],
   "notes": [

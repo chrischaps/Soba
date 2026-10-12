@@ -1,6 +1,6 @@
 # Shoreline
 
-Surf rolls in and draws back, and a glass chime somewhere up the beach turns in the wind. Nothing here is a recording, and nothing repeats: a single [Noise](../modules/sources/noise.md) module makes the water, decides when each wave arrives, and picks every note the chime plays. It plays itself; press Play and let it run.
+Surf rolls in and draws back, and a glass chime somewhere up the beach turns in the wind. Nothing here is a recording, and nothing repeats: a single [Noise](../modules/sources/noise.md) module makes the water, decides when each wave arrives, and picks every note the chime plays. It plays itself; press Play and let it run. It all comes back off tape, like a field recording made on a portable deck.
 
 > **Load it:** choose **📚 Examples → Shoreline** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/shoreline.json`](https://github.com/chrischaps/Soba/blob/master/patches/shoreline.json).
@@ -9,13 +9,14 @@ Surf rolls in and draws back, and a glass chime somewhere up the beach turns in 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
 ![The Shoreline patch](../images/recipe-shoreline.png)
-*The chime runs along the top and the surf along the bottom. The Noise module on the left feeds both.*
+*The chime runs along the top and the surf along the bottom. The Noise module on the left feeds both, and the two meet on tape at the bottom right.*
 
 ## What it teaches
 
 - **Noise as sound.** Pink and brown noise through a moving lowpass filter make convincing surf.
 - **Noise as decision.** White noise, sampled on a clock, chooses notes. Noise's smooth **Random** output decides how fast the waves come, whether the chime rings at all, and how hard it's struck.
 - **One source, many voices.** Every output of the Noise module is patched, and each does a different job. Because one random signal drives both the waves and the chime, the two move together: when the wind picks up, the waves come quicker and the chime starts to ring. When it drops, the chime falls silent.
+- **A field recording.** The surf and the chime meet on a Mixer and go to tape together, which gives the scene a little sway and grain, as if someone had recorded it on the beach.
 
 ## Modules
 
@@ -33,7 +34,9 @@ Surf rolls in and draws back, and a glass chime somewhere up the beach turns in 
 | [Mix](../modules/utilities/mix.md) | **Level 1** 100%, **Level 2** 60% |
 | [VCA](../modules/utilities/vca.md) (surf) | **Level** 90%, **CV Amt** 75% |
 | [SVF Filter](../modules/filters/svf-filter.md) | **Cutoff** 500 Hz, **Res** 15% |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |
+| [Mixer](../modules/utilities/mixer.md) | **Return** 71%, **Master** +3 dB, the rest at their defaults |
+| [Tape](../modules/effects/tape.md) | **Speed** 15 ips, **Sat** 35%, **Age** 20%, **Hiss** 8%, **Wow** 20%, **Flut** 15%, **Width** 30% |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 100% |
 
 ## How it's built
 
@@ -44,7 +47,7 @@ Surf rolls in and draws back, and a glass chime somewhere up the beach turns in 
 [Noise Brown] ──> [Mix In 2]
 [Mix Out] ──> [VCA (surf) In]
 [VCA (surf) Out] ──> [SVF Filter In]
-[SVF Filter LowPass] ──> [Audio Output Mono]
+[SVF Filter LowPass] ──> [Mixer Ch 1]
 ```
 
 Pink noise has the even, rushing quality of water. Brown noise, mixed in a little lower, adds the deep rumble underneath. The lowpass filter at 500 Hz takes off the hiss and leaves something that sounds far away.
@@ -96,13 +99,32 @@ The same **Random** also sets how hard each strike lands. With **Vel** at 80%, a
 ```text
 [VCA (chime) Out] ──> [Reverb In L]
                   ──> [Reverb In R]
-[Reverb Out L] ──> [Audio Output Left]
-[Reverb Out R] ──> [Audio Output Right]
+[Reverb Out L] ──> [Mixer Return L]
+[Reverb Out R] ──> [Mixer Return R]
 ```
 
-A large, six-second reverb spreads the chime across the stereo field and blurs each note into the next. The surf skips the reverb and goes straight to **Mono**. That keeps the water close and the chime farther off.
+A large, six-second reverb spreads the chime across the stereo field and blurs each note into the next. The surf skips the reverb and goes straight to the Mixer's **Ch 1**, in the middle. That keeps the water close and the chime farther off.
+
+The reverb comes back on the Mixer's **Return**. Nothing is sent from the Mixer here, so the Return is simply a stereo input. A sound in the middle of the Mixer is 3 dB down on each side, so **Master** at +3 dB brings the surf back to full level, and **Return** at 71% (−3 dB) keeps the chime where it was.
+
+### On tape
+
+```text
+[Mixer Out L/R] ──> [Tape In L/R]
+[Tape Out L/R] ──> [Audio Output Left/Right]
+```
+
+The whole scene is recorded onto tape at 15 ips, gently:
+
+- **Sat** at 35% rounds off the crests of the surf, a breaker's roar squashed slightly, as a small recorder squashes it. That takes about 2 dB off the surf's loudness, so the Audio Output's **Vol** is at 100% rather than the usual 80% to win it back. The head bump also adds body to the low rumble.
+- **Wow** at 20% sways the pitch by about ±1.5 cents. On the surf you won't hear it, but each ringing chime note bends a hair, like a chime heard on a recording rather than in the room.
+- **Age** at 20% and **Hiss** at 8% add a little grain. The hiss mostly hides in the surf and only shows in the calms.
+
+To hear the difference, select the Tape and press **Ctrl+B** to bypass it. Bypassed, the scene is about 2 dB louder, because the Output is making up what the tape takes. To make it more of a memory than a recording, set **Speed** to 7½ ips and turn **Wow** up to 50% and **Age** to 60%: the chime starts to waver, the surf dulls, and dropouts come and go.
 
 ## Variations
+
+**An old tape.** On the Tape, set **Speed** to 7½ ips, **Age** to 70%, **Hiss** to 30%, **Wow** to 60% and **Flut** to 40%. It's the same beach, found years later on a tape in a drawer.
 
 **Stormier.** Raise the LFO's **Rate** to 0.3 Hz and the filter's **Res** to 40%. Swap the **Level 1** and **Level 2** settings on the Mix for a heavier, browner sea.
 
@@ -122,5 +144,6 @@ A large, six-second reverb spreads the chime across the stereo field and blurs e
 
 - [Noise](../modules/sources/noise.md) – every output used here, explained
 - [Sample & Hold](../modules/utilities/sample-hold.md) – turning noise into notes
+- [Tape](../modules/effects/tape.md) – what each knob does to a mix
 - [Generative Ambient](./generative-ambient.md) – variety from cycles that don't line up, and chance kept in key
 - [Rhythmic Sequence](./rhythmic-sequence.md) – noise as a hi-hat

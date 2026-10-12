@@ -1,6 +1,6 @@
 # Afterglow
 
-A patch that plays itself and sounds finished: a soft, plucked arpeggio rolls through a four-chord progression over a warm pad. Its notes bounce between the speakers on dotted-eighth tape echoes. A Step Sequencer plays the arpeggio. A Chord Sequencer moves it from chord to chord and plays the same chords on the pad: Fmaj9, Cadd9, G6, Am9.
+A patch that plays itself and sounds finished: a soft, plucked arpeggio rolls through a four-chord progression over a warm pad. Its notes bounce between the speakers on dotted-eighth tape echoes, and the whole mix plays back off tape. A Step Sequencer plays the arpeggio. A Chord Sequencer moves it from chord to chord and plays the same chords on the pad: Fmaj9, Cadd9, G6, Am9.
 
 > **Load it:** choose **📚 Examples → Afterglow** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/afterglow.json`](https://github.com/chrischaps/Soba/blob/master/patches/afterglow.json).
@@ -9,7 +9,7 @@ A patch that plays itself and sounds finished: a soft, plucked arpeggio rolls th
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
 ![The Afterglow patch](../images/recipe-afterglow.png)
-*The arpeggio voice and the effects run along the top, and the pad runs along the bottom. The cable from the Chord Sequencer's **Root** up to the arpeggio's oscillator is what moves the arpeggio from chord to chord.*
+*The arpeggio voice and the effects run along the top, ending on tape, and the pad runs along the bottom. The cable from the Chord Sequencer's **Root** up to the arpeggio's oscillator is what moves the arpeggio from chord to chord.*
 
 ## What it teaches
 
@@ -18,6 +18,7 @@ A patch that plays itself and sounds finished: a soft, plucked arpeggio rolls th
 - **Chords on one cable.** The Chord Sequencer sends each chord down a polyphonic cable, voiced and voice-led, with the bass underneath. One pad voice plays the whole progression.
 - **Chords without a third.** Sus2 shapes are neither major nor minor, so the same arpeggio shape works on any root.
 - **Two voices, one space.** A bright lead and a dark pad share one chorus, delay and reverb, so they sound as if they're in the same room.
+- **A mix on tape.** A Tape module last in the chain softens the peaks and lets the pitch sway a little, for the warmth of a record rather than a computer.
 
 ## Modules
 
@@ -40,6 +41,7 @@ A patch that plays itself and sounds finished: a soft, plucked arpeggio rolls th
 | [Chorus](../modules/effects/chorus.md) | **Rate** 0.3 Hz, **Depth** 35%, **Delay** 12 ms, **Voices** 2, **Mix** 35% |
 | [Stereo Delay](../modules/effects/delay.md) | **Sync** 1/8D, **FB** 45%, **Mix** 30%, **HiCut** 3.5 kHz, **LoCut** 350 Hz, **P-P** on, **Tape** on |
 | [Reverb](../modules/effects/reverb.md) | **Size** 80%, **Decay** 5 s, **PreD** 30 ms, **Mix** 35%, **Mod** 30% |
+| [Tape](../modules/effects/tape.md) | **Speed** 15 ips, **Sat** 35%, **Age** 20%, **Hiss** 8%, **Wow** 20%, **Flut** 15%, **Width** 30% |
 | [Audio Output](../modules/output/audio-output.md) | **Vol** 100% |
 
 ## How it's built
@@ -100,10 +102,25 @@ VCA 2's **CV Amt** of 60% means the envelope controls only part of the level, an
 [Mixer Out L/R] ──> [Chorus In L/R]
 [Chorus Out L/R] ──> [Stereo Delay In L/R]
 [Stereo Delay Out L/R] ──> [Reverb In L/R]
-[Reverb Out L/R] ──> [Audio Output Left/Right]
+[Reverb Out L/R] ──> [Tape In L/R]
 ```
 
 The Mixer sets the arpeggio a little to the right and keeps the pad, which carries the bass, in the middle. Its **Master** at +3 dB wins back the 3 dB that panning takes from a centred sound on each side. The Chorus widens both parts. The Stereo Delay is synced to a dotted eighth, which is three sixteenths. Each echo therefore falls between the notes of the arpeggio, and **Ping-Pong** moves it to the other speaker. The arpeggio sounds busier than it is, the echoes stay in time with it, and the rhythm keeps moving. **Tape** gives the repeats a little wobble and wear. **LoCut** keeps the bass out of the echoes, so the low end stays clean. The first echo of each note leaves from the arpeggio's side and lands on the other, so the echoes answer the notes across the room. A medium reverb with a five-second tail puts everything in the same room.
+
+### On tape
+
+```text
+[Reverb Out L/R] ──> [Tape In L/R]
+[Tape Out L/R] ──> [Audio Output Left/Right]
+```
+
+Last of all, the whole mix is recorded onto tape and played back. The settings are gentle, a well-kept machine at 15 ips, and each knob adds one thing:
+
+- **Sat** at 35% pushes the mix into the record head. The plucks' attacks round off, so the peaks come down about 1.5 dB while the mix gets slightly louder (about 0.5 LU). The arpeggio sits into the pad instead of on top of it, and the head bump adds weight to the bass.
+- **Wow** at 20% sways the pitch by about ±1.5 cents, too little to hear as out of tune. The chords seem to breathe. **Flut** adds a faint shiver, and **Width** lets the two sides sway a little apart, which widens the pad.
+- **Age** at 20% takes a little off the top, and **Hiss** at 8% leaves a quiet bed of tape noise that you only notice in the gaps.
+
+To hear what the tape adds, select it and press **Ctrl+B** to bypass it, then press it again. For more of it, turn up **Wow** first. Around 40% the chords start to go seasick, which can be lovely for a few bars. Then try **Speed** at 7½ ips, which sways deeper and dulls the top, like a cassette. For less, set **Speed** to 30 ips and **Wow** to 0, so only the glue of **Sat** is left.
 
 ## Variations
 
@@ -121,6 +138,8 @@ The Mixer sets the arpeggio a little to the right and keeps the pad, which carri
 
 **Glassier.** Switch Oscillator 1's **Wave** to Tri and raise the Ladder Filter's **Cutoff** to 2 kHz. The pluck goes from felt to glass.
 
+**A worn cassette.** On the Tape, set **Speed** to 7½ ips, **Age** to 45%, **Hiss** to 25% and **Wow** to 55%. The arpeggio sways like a tape that's been played every day for a summer.
+
 **Slower and wider.** Turn the Clock down to 70 BPM. The delay follows the new tempo. Then raise the Reverb's **Decay** to 9 s and its **Mix** to 50%.
 
 ## Related
@@ -128,5 +147,6 @@ The Mixer sets the arpeggio a little to the right and keeps the pad, which carri
 - [Chord Sequencer](../modules/utilities/chord-sequencer.md) – chord types, voicing and the bass voice
 - [Step Sequencer](../modules/utilities/sequencer.md) – editing steps and the EOC output
 - [Oscillator](../modules/sources/oscillator.md) – V/Oct and Exp FM
+- [Tape](../modules/effects/tape.md) – what each knob does to a mix, and more starting points
 - [Generative Ambient](./generative-ambient.md) – one sequencer, and a second voice that wanders in key
 - [Rhythmic Sequence](./rhythmic-sequence.md) – the same dotted-eighth delay under an acid bassline

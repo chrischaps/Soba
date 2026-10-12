@@ -149,6 +149,8 @@ Each was checked by rendering [Afterglow](../../recipes/afterglow.md) through it
 [Tape Out R] ──> [Audio Output Right]
 ```
 
+[Afterglow](../../recipes/afterglow.md), [Shoreline](../../recipes/shoreline.md) and [Clair de Satellite](../../recipes/clair-de-satellite.md) all end this way. Each recipe says what its tape adds.
+
 **A warped moment.** Patch an [Arranger](../utilities/arranger.md) lane into **Wow**, with the knob low. Ramp the lane up through a breakdown and back down for the drop, and the whole mix bends out of shape and back.
 
 **Breathing tape.** A slow [LFO](../modulation/lfo.md), around 0.05 Hz, into **Wow** with a small depth makes the sway itself come and go.
