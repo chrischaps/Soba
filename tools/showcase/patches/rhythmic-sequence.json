@@ -294,6 +294,21 @@
           "name": "Step 16 Velocity",
           "type": "Number",
           "value": 100.0
+        },
+        {
+          "name": "Glide",
+          "type": "Number",
+          "value": 0.07
+        },
+        {
+          "name": "Step 9 Slide",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 16 Slide",
+          "type": "Toggle",
+          "value": true
         }
       ]
     },

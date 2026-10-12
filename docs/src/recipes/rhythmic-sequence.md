@@ -1,6 +1,6 @@
 # Rhythmic Sequence
 
-A 16-step acid bassline at 120 BPM: a saw through a resonant lowpass that snaps open on every note, warmed with distortion and pushed along by a dotted-eighth echo, over a ticking line of noise hi-hats. It plays itself, and it's built to be tweaked while it runs. Grab the filter's **Cutoff** and **Res** knobs and play them like a 303.
+A 16-step acid bassline at 120 BPM: a saw through a resonant lowpass that snaps open on every struck note, with two notes slid into the way a 303 slurs them, warmed with distortion and pushed along by a dotted-eighth echo, over a ticking line of noise hi-hats. It plays itself, and it's built to be tweaked while it runs. Grab the filter's **Cutoff** and **Res** knobs and play them like a 303.
 
 > **Load it:** choose **📚 Examples → Rhythmic Sequence** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/rhythmic-sequence.json`](https://github.com/chrischaps/Soba/blob/master/patches/rhythmic-sequence.json).
@@ -15,6 +15,7 @@ A 16-step acid bassline at 120 BPM: a saw through a resonant lowpass that snaps 
 
 - **Sequencing a bassline.** Pitches, rests and an octave jump, all in one 16-step pattern.
 - **The filter envelope as the instrument.** Short decay and high resonance are the sound of acid.
+- **Slides.** Two notes glide in from the note before without striking the envelopes again, so the line slurs like one player's phrase.
 - **Tempo sync.** The delay locks to the Clock's tempo, so its echoes land on the beat.
 - **Noise as a drum.** An envelope into a Noise module's **Level** turns hiss into a hi-hat, with no VCA needed.
 
@@ -23,7 +24,7 @@ A 16-step acid bassline at 120 BPM: a saw through a resonant lowpass that snaps 
 | Module | Settings |
 |--------|----------|
 | [Clock](../modules/modulation/clock.md) | **BPM** 120, **Div** 1/16 |
-| [Step Sequencer](../modules/utilities/sequencer.md) | **Steps** 16, **Dir** Fwd, **Gate** 50%, **Gate of** 100 ms |
+| [Step Sequencer](../modules/utilities/sequencer.md) | **Steps** 16, **Dir** Fwd, **Gate** 50%, **Gate of** 100 ms, **Glide** 70 ms; slides into steps 9 and 16 |
 | [Oscillator](../modules/sources/oscillator.md) | **Wave** Saw |
 | [SVF Filter](../modules/filters/svf-filter.md) | **Cutoff** 300 Hz, **Res** 70%, **CV Amt** 2 oct |
 | [ADSR Envelope](../modules/modulation/adsr.md) (filter) | **Atk** 1 ms, **Dec** 200 ms, **Sus** 10%, **Rel** 50 ms |
@@ -50,8 +51,9 @@ At 120 BPM with **Div** at 1/16, the Clock pulses four times a beat, every 125 m
 | Step | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 |
 |------|---|---|---|---|---|---|---|---|---|----|----|----|----|----|----|----|
 | Note | C2 | C2 | – | G2 | C2 | – | D#2 | C2 | C3 | – | G2 | C2 | – | D#2 | F2 | G2 |
+| Slide | | | | | | | | | ⌒ | | | | | | | ⌒ |
 
-A dash is a step with its gate off: a rest. The line sits on the root, C2, and moves through notes of C minor (D# is the minor third) with an octave leap on the downbeat of the second half. The rests do as much as the notes: they're what make it groove rather than drone.
+A dash is a step with its gate off: a rest. The line sits on the root, C2, and moves through notes of C minor (D# is the minor third) with an octave leap on the downbeat of the second half. The rests do as much as the notes: they're what make it groove rather than drone. The two slides are covered [below](#slides).
 
 ### The squelch
 
@@ -61,7 +63,7 @@ A dash is a step with its gate off: a rest. The line sits on the root, C2, and m
 [ADSR (filter) Out] ──> [SVF Filter Cutoff]
 ```
 
-The filter sits low, at 300 Hz, with **Res** at 70%. The filter envelope kicks it open on every step with a gate, then drops it back in 200 ms. That fast sweep of a sharp resonant peak is the acid sound.
+The filter sits low, at 300 Hz, with **Res** at 70%. The filter envelope kicks it open on every struck note, then drops it back in 200 ms. That fast sweep of a sharp resonant peak is the acid sound.
 
 The filter's **Cutoff** input works in octaves, and an envelope peaks at 1.0. The filter's **CV Amt** sets how many octaves that peak is worth: at 2, each step's envelope throws the cutoff two octaves up, to 1.2 kHz, and lets it fall back to the bass.
 
@@ -77,11 +79,20 @@ The filter's **Cutoff** input works in octaves, and an envelope peaks at 1.0. Th
 [Stereo Delay Out R] ──> [Audio Output Right]
 ```
 
-The amp envelope is short and punchy, so each note is a distinct pluck. With **Gate** at 50%, each of the sequencer's gates lasts 50 ms (**Gate of** is set to 100 ms, so Gate is a share of a fixed 100 ms), well inside the 125 ms step.
+The amp envelope is short and punchy, so each note is a distinct pluck. With **Gate** at 50%, each of the sequencer's gates lasts 50 ms (**Gate of** is set to 100 ms, so Gate is a share of a fixed 100 ms), well inside the 125 ms step. The exception is a note that leads into a slide, which holds its gate until the slide begins.
 
 Soft distortion at 30% drive, mixed at 70%, rounds and thickens the bass and makes the resonant peak growl.
 
 The Stereo Delay's **Sync** is set to 1/8D, a dotted eighth. It takes its tempo from the Clock, so at 120 BPM each echo comes 375 ms after its note: three sixteenths later, falling between the notes and filling the gaps. Its **LoCut** keeps the echoes out of the bass register, so they don't muddy the line.
+
+### Slides
+
+Steps 9 and 16 are slides, each marked on the grid by an orange slur from the step before. When a slide step comes round, two things happen:
+
+- **The pitch glides** from the note before over the sequencer's **Glide** time, 70 ms, instead of jumping. C2 rises an octave into C3 on the downbeat of the second half, and at the end of the bar F2 slurs up a step to G2.
+- **The gate stays high** across the join, so neither envelope is struck again. The filter envelope keeps falling through the slid note, and the amp envelope sinks toward its 30% sustain, so the note arrives darker and about 3 dB softer than a struck one.
+
+That contrast is the 303's sound: most notes are plucked, and a few melt into the note before, so the line sounds like one player's phrase. Each slide is a short two-note gesture, and step 1 is always struck, so every bar still starts with a pluck.
 
 ### Hi-hats
 
@@ -107,7 +118,9 @@ The highpass filter at 4.5 kHz keeps only the sizzle. Pink noise rather than whi
 
 **Different tempo.** Turn the Clock's **BPM**. The delay follows, staying on the dotted eighth.
 
-**Slide.** Patch the sequencer's **Pitch** through a [Slope](../modules/modulation/slope.md) on its way to the Oscillator's **V/Oct**, with **Rise** and **Fall** at 60 ms and **Shape** at 0. Every note now slides into the next: the octave leap to C3 in 60 ms, a fifth in 35 ms, so each slide is over well inside its step and the line still lands on its notes. Repeated notes don't slide, so the pattern keeps its stabs. Turn **Rise** and **Fall** up to 200 ms for a lazier, more vocal line.
+**Move the slides.** Ctrl + click a step to slide into it, and Ctrl + click again to strike it. Slide into step 8 as well, so D#2 falls to C2 and leaps to C3 in one breath, three notes on a single strike. Or clear both slides to hear how much plainer the line plucks without them. Raise **Glide** to 200 ms for a lazier, more vocal slur.
+
+**Slide everything.** Patch the sequencer's **Pitch** through a [Slope](../modules/modulation/slope.md) on its way to the Oscillator's **V/Oct**, with **Rise** and **Fall** at 60 ms and **Shape** at 0. Every note now glides into the next: the octave leap to C3 in 60 ms, a fifth in 35 ms, so each glide is over well inside its step and the line still lands on its notes. Unlike a slide step, Slope only moves the pitch, so every note is still struck. Repeated notes don't glide, so the pattern keeps its stabs.
 
 **Shorter loop.** Set **Steps** to 12 or 7 for a pattern that cycles against the bar.
 

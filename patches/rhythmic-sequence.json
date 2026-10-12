@@ -294,6 +294,21 @@
           "name": "Step 16 Velocity",
           "type": "Number",
           "value": 100.0
+        },
+        {
+          "name": "Glide",
+          "type": "Number",
+          "value": 0.07
+        },
+        {
+          "name": "Step 9 Slide",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 16 Slide",
+          "type": "Toggle",
+          "value": true
         }
       ]
     },
@@ -842,7 +857,7 @@
       ],
       "size": [
         541.0,
-        486.0
+        617.0
       ],
       "color": "green"
     },
@@ -888,7 +903,7 @@
       "text": "Sixteen steps make one bar at 120 BPM. The rests do as much as the notes: they're what make it groove.",
       "position": [
         16.0,
-        518.0
+        649.0
       ],
       "width": 300.0
     },
