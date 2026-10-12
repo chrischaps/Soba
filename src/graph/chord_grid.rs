@@ -16,8 +16,10 @@
 //! - Or play the chord, on a MIDI keyboard or the letter keys, while the
 //!   popover is open. When the hand lifts, the chord is named (see
 //!   [`recognise`]) and written, and the popover moves to the next step, the
-//!   way the Step Sequencer's piano step-records. The keys light on its
-//!   piano while they're held, and the chord's name shows as it's played.
+//!   way the Step Sequencer's piano step-records. Its top note is written as
+//!   the step's top where voice leading wouldn't put it there (see
+//!   [`Played::new`]). The keys light on its piano while they're held,
+//!   and the chord's name shows as it's played.
 //!   A MIDI keyboard's touch writes the step's velocity too: the mean of
 //!   the chord's notes, so a progression's accents go in as they're played.
 //!   The letter keys leave it as it was.
@@ -34,8 +36,8 @@ use egui_node_graph2::NodeId;
 use crate::app::theme;
 use crate::dsp::{Audition, DspModule, MAX_CHANNELS};
 use crate::modules::chord_sequencer::recognition::{pitch_classes, recognise, Heard};
-use crate::modules::chord_sequencer::{kept_tones, voice_chord, ChordSequencer, ChordSpec, VoicingSettings, Voicing, CHORD_TYPES, MAX_STEPS};
-use crate::modules::sequencer::note_to_name;
+use crate::modules::chord_sequencer::{kept_tones, looped_voicings, voice_chord, Chord, ChordSequencer, ChordSpec, VoicingSettings, Voicing, CHORD_TYPES, MAX_STEPS};
+use crate::modules::sequencer::{note_to_name, SequenceDirection};
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
 use super::chord_ear::{take_letter_keys, ChordEar, Hand};
@@ -70,6 +72,8 @@ struct ChordPattern {
     settings: VoicingSettings,
     channels: usize,
     bass_voice: bool,
+    leading: bool,
+    direction: SequenceDirection,
 }
 
 impl ChordPattern {
@@ -108,6 +112,8 @@ impl ChordPattern {
             settings,
             channels,
             bass_voice,
+            leading: params[ChordSequencer::PARAM_VOICE_LEADING] > 0.5,
+            direction: SequenceDirection::from_param(params[ChordSequencer::PARAM_DIRECTION]),
         }
     }
 
@@ -127,6 +133,26 @@ impl ChordPattern {
             notes.extend(voice_chord(spec, &self.settings, None).notes());
         }
         notes
+    }
+
+    /// How `spec` would sound written into `step` with its top left to the
+    /// voicing, once the pattern has looped a while: led from the chord
+    /// before it, or in root position with Voice Leading off. `None` when no
+    /// one chord comes before it, played ping-pong or at random.
+    fn left_to_voicing(&self, step: usize, spec: ChordSpec) -> Option<Chord> {
+        let spec = ChordSpec { top: None, ..spec };
+        if !self.leading {
+            return Some(voice_chord(&spec, &self.settings, None));
+        }
+        let order: Vec<usize> = match self.direction {
+            SequenceDirection::Forward => (0..self.steps).collect(),
+            SequenceDirection::Backward => (0..self.steps).rev().collect(),
+            SequenceDirection::PingPong | SequenceDirection::Random => return None,
+        };
+        let (mut specs, mut gates) = (self.specs, self.gates);
+        specs[step] = spec;
+        gates[step] = true;
+        looped_voicings(&specs, &gates, &order, &self.settings)[step]
     }
 }
 
@@ -149,31 +175,49 @@ struct Listening {
     sounding: Option<Audition>,
 }
 
-/// A chord played into a step: the notes, what they were heard as, and how
-/// hard they were struck, if a MIDI keyboard played them.
+/// A chord played into a step: the notes, what they were heard as (with the
+/// top it writes), how hard they were struck, if a MIDI keyboard played
+/// them, and the hand's top note, when the voicing keeps it.
 #[derive(Clone, Debug)]
 struct Played {
     notes: Vec<u8>,
     heard: Heard,
     velocity: Option<u8>,
     step: usize,
+    top: Option<i32>,
 }
 
 impl Played {
     /// Names the notes played into `step` (lowest first). A note alone, or
-    /// in octaves, is a root: the step keeps its type, without a slash bass.
+    /// in octaves, is a root: the step keeps its type and top, without a
+    /// slash bass.
+    ///
+    /// A chord keeps the voicing it was played in: its top note goes on top,
+    /// if it's one of the tones the voicing keeps. The step's Top is written
+    /// only where Voice Leading would put another tone there, so most steps
+    /// stay on Auto and go on following the chords around them.
     fn new(hand: Hand, step: usize, pattern: &ChordPattern) -> Option<Self> {
         let Hand { notes, velocity } = hand;
         let lowest = *notes.first()? as i32;
-        let heard = if notes.iter().all(|&n| (n as i32 - lowest) % 12 == 0) {
-            Heard { spec: ChordSpec { root: lowest, kind: pattern.specs[step].kind, bass: None, top: None }, extra: 0, missing: 0 }
-        } else {
-            recognise(&notes.iter().map(|&n| n as i32).collect::<Vec<_>>())?
-        };
-        Some(Self { notes, heard, velocity, step })
+        if notes.iter().all(|&n| (n as i32 - lowest) % 12 == 0) {
+            let spec = ChordSpec { root: lowest, bass: None, ..pattern.specs[step] };
+            return Some(Self { notes, heard: Heard { spec, extra: 0, missing: 0 }, velocity, step, top: None });
+        }
+        let mut heard = recognise(&notes.iter().map(|&n| n as i32).collect::<Vec<_>>())?;
+        let highest = *notes.last()? as i32 % 12;
+        let top = kept_tones(&heard.spec, &pattern.settings).contains(&highest).then_some(highest);
+        let on_top_anyway = |pc: i32| pattern.left_to_voicing(step, heard.spec).is_some_and(|chord| chord.notes()[chord.len - 1] % 12 == pc);
+        heard.spec.top = top.filter(|&pc| !on_top_anyway(pc));
+        Some(Self { notes, heard, velocity, step, top })
     }
 
-    /// The step's parameters, as written: root, type, bass and gate, and
+    /// The chord as it sounds: with the hand's top on top, whether or not the
+    /// step needs to name it.
+    fn sounding(&self) -> ChordSpec {
+        ChordSpec { top: self.top.or(self.heard.spec.top), ..self.heard.spec }
+    }
+
+    /// The step's parameters, as written: root, type, bass, top and gate, and
     /// velocity when it was played with a touch.
     fn changes(&self) -> Vec<(String, f32)> {
         let n = self.step + 1;
@@ -182,6 +226,7 @@ impl Played {
             (format!("Step {n} Root"), spec.root.clamp(0, 127) as f32),
             (format!("Step {n} Type"), spec.kind as f32),
             (format!("Step {n} Bass"), spec.bass.map_or(0.0, |pc| pc as f32 + 1.0)),
+            (format!("Step {n} Top"), spec.top.map_or(0.0, |pc| pc as f32 + 1.0)),
             (format!("Step {n} Gate"), 1.0),
         ];
         if let Some(velocity) = self.velocity {
@@ -192,13 +237,13 @@ impl Played {
 }
 
 /// The chord being played into `step`, as the sequencer will play it once
-/// written: named as it will be, as hard as it's struck (or at the step's
-/// velocity, on the letter keys), keeping the step's top, and voiced in root
-/// position, as the face shows a step before it's played. `None` while
+/// written: named as it will be, with the hand's top note on top, as hard as
+/// it's struck (or at the step's velocity, on the letter keys), and voiced in
+/// root position, as the face shows a step before it's played. `None` while
 /// nothing's held.
 fn audition_of(hand: Hand, step: usize, pattern: &ChordPattern) -> Option<Audition> {
     let played = Played::new(hand, step, pattern)?;
-    let spec = ChordSpec { top: pattern.specs[step].top, ..played.heard.spec };
+    let spec = played.sounding();
     let voiced = pattern.voiced(&spec);
     let mut audition = Audition {
         len: voiced.len().min(MAX_CHANNELS) as u8,
@@ -612,7 +657,7 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         set(format!("Step {} Root", step + 1), note as f32);
         switch_on(set);
     }
-    heard_line(ui, listening);
+    heard_line(ui, listening, pattern, step);
 
     // Bass
     ui.add_space(2.0);
@@ -688,24 +733,24 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         .on_hover_text("The letter keys play this piano: Z is its lowest C, and ‹ › move them too. The chord sounds through this sequencer while it's held, as it will be written");
 }
 
-/// Under the piano: the chord being played, named as it's held, or else
-/// the last one written, with what didn't fit when it was only the nearest.
-fn heard_line(ui: &mut egui::Ui, listening: &Listening) {
+/// Under the piano: the chord being played into `step`, named as it's held,
+/// or else the last one written, with the top it names and what didn't fit
+/// when it was only the nearest.
+fn heard_line(ui: &mut egui::Ui, listening: &Listening, pattern: &ChordPattern, step: usize) {
     let gathering = listening.ear.gathering();
-    let (verb, notes, heard, velocity, step) = match &listening.last {
-        _ if !gathering.is_empty() => {
-            let notes: Vec<i32> = gathering.iter().map(|&n| n as i32).collect();
-            let heard = recognise(&notes);
-            ("Hearing", notes, heard, listening.ear.velocity(), None)
-        }
-        Some(last) => ("Heard", last.notes.iter().map(|&n| n as i32).collect(), Some(last.heard), last.velocity, Some(last.step)),
-        None => return,
+    let hand = Hand { notes: gathering.to_vec(), velocity: listening.ear.velocity() };
+    let hearing = (!gathering.is_empty()).then(|| Played::new(hand, step, pattern)).flatten();
+    let (verb, played, step) = match (&hearing, &listening.last) {
+        _ if !gathering.is_empty() => ("Hearing", hearing.as_ref(), None),
+        (_, Some(last)) => ("Heard", Some(last), Some(last.step)),
+        (_, None) => return,
     };
-    let Some(heard) = heard else { return };
+    let Some(played) = played else { return };
+    let (notes, heard) = (&played.notes, &played.heard);
     let spec = &heard.spec;
     // Each pitch once, from the bass up
     let mut classes: Vec<i32> = Vec::new();
-    for pc in notes.iter().map(|n| n.rem_euclid(12)) {
+    for pc in notes.iter().map(|&n| n as i32 % 12) {
         if !classes.contains(&pc) {
             classes.push(pc);
         }
@@ -717,14 +762,25 @@ fn heard_line(ui: &mut egui::Ui, listening: &Listening) {
         ui.label(RichText::new(format!("{verb} {}  →", spelled(spec, classes.iter().copied()))).weak());
         let name = if one_note { format!("root {}", spec.root_name()) } else { spec.name() };
         ui.label(RichText::new(name).color(theme::signal::CONTROL).strong());
+        // The hand's top, named for the step or left to voice leading
+        match (spec.top.filter(|_| !one_note), played.top) {
+            (Some(top), _) => {
+                ui.label(RichText::new(format!("{} on top", spec.spell(top))).color(theme::signal::CONTROL));
+            }
+            (None, Some(top)) => {
+                ui.label(RichText::new(format!("{} on top", spec.spell(top))).weak())
+                    .on_hover_text("Voice leading puts it on top here already, so the step's Top stays on Auto");
+            }
+            (None, None) => {}
+        }
         if let Some(step) = step {
             ui.label(RichText::new(format!("in step {}", step + 1)).weak());
         }
-        if let Some(velocity) = velocity {
+        if let Some(velocity) = played.velocity {
             ui.label(RichText::new(format!("at velocity {velocity}")).weak())
                 .on_hover_text("How hard it's played, the mean of its notes: written as the step's Velocity");
         }
-        if let Some(misfit) = misfit(&heard).filter(|_| !one_note) {
+        if let Some(misfit) = misfit(heard).filter(|_| !one_note) {
             ui.label(RichText::new(format!("nearest: {misfit}")).weak().italics());
         }
     });
@@ -763,6 +819,8 @@ mod tests {
             settings: VoicingSettings { voicing: Voicing::Close, voices: voices - bass_voice as usize, range: 3, rootless: bass_voice },
             channels: voices,
             bass_voice,
+            leading: true,
+            direction: SequenceDirection::Forward,
         }
     }
 
@@ -771,12 +829,76 @@ mod tests {
         Hand { notes: notes.to_vec(), velocity: None }
     }
 
+    /// Two chords looping, C then Dm(add9), voiced in three voices without
+    /// their roots, as a pad over a bass is.
+    fn c_then_d_minor_add_9() -> ChordPattern {
+        let mut two = pattern(3, false);
+        two.steps = 2;
+        two.specs[0] = ChordSpec { root: 48, kind: 0, bass: None, top: None };
+        two.specs[1] = Played::new(keys(&[50, 53, 57, 64]), 1, &two).unwrap().heard.spec;
+        two.settings.rootless = true;
+        two
+    }
+
+    /// The Top a chord played into `step` writes, as the parameter holds it.
+    fn top_written(notes: &[u8], step: usize, pattern: &ChordPattern) -> f32 {
+        let played = Played::new(keys(notes), step, pattern).unwrap();
+        let name = format!("Step {} Top", step + 1);
+        played.changes().into_iter().find(|(param, _)| *param == name).unwrap().1
+    }
+
+    #[test]
+    fn a_chord_played_keeps_its_top_note() {
+        let two = c_then_d_minor_add_9();
+        assert_eq!(CHORD_TYPES[two.specs[1].kind].suffix, "madd9");
+        // Led from E G C, Dm(add9) would take E F A, with A on top. Played
+        // F A E over D, the E stays on top
+        assert_eq!(two.left_to_voicing(1, two.specs[1]).unwrap().notes(), [52, 53, 57]);
+        assert_eq!(top_written(&[50, 53, 57, 64], 1, &two), 5.0, "E on top");
+        // Played D E F A, it's what voice leading picks: Top stays Auto
+        assert_eq!(top_written(&[50, 52, 53, 57], 1, &two), 0.0);
+        // ...though it sounds with the A on top while it's held
+        let held = audition_of(keys(&[50, 52, 53, 57]), 1, &two).unwrap();
+        assert_eq!(held.notes().last().map(|n| n % 12), Some(9));
+    }
+
+    #[test]
+    fn a_top_note_the_voicing_leaves_out_is_left_to_it() {
+        let mut two = c_then_d_minor_add_9();
+        two.specs[1].top = Some(5);
+        // Rootless, the D isn't kept: the step goes back to Auto
+        assert_eq!(top_written(&[53, 57, 62, 64, 74], 1, &two), 0.0);
+        // One note is only a root: the step keeps the top it had
+        assert_eq!(top_written(&[50], 1, &two), 6.0);
+    }
+
+    #[test]
+    fn without_one_chord_before_it_the_top_is_always_written() {
+        let mut two = c_then_d_minor_add_9();
+        // With Voice Leading off, F A E is root position: nothing to write
+        two.leading = false;
+        assert_eq!(top_written(&[50, 53, 57, 64], 1, &two), 0.0);
+        // Ping-pong and random come to a step from more than one chord, so
+        // the top played is written, to be sure of it
+        two.leading = true;
+        for direction in [SequenceDirection::PingPong, SequenceDirection::Random] {
+            two.direction = direction;
+            assert_eq!(top_written(&[50, 53, 57, 64], 1, &two), 5.0, "{direction:?}");
+        }
+        // Backward, the loop starts on the Dm(add9), in root position, and
+        // settles there with the E on top: it's the A that needs writing
+        two.direction = SequenceDirection::Backward;
+        assert_eq!(top_written(&[50, 53, 57, 64], 1, &two), 0.0);
+        assert_eq!(top_written(&[50, 52, 53, 57], 1, &two), 10.0);
+    }
+
     #[test]
     fn a_chord_is_heard_as_it_will_be_written() {
         let four = pattern(4, false);
-        // C E G played up high sounds in the Range octave, as the step will
+        // C E G played up high sounds in the Range octave, as the step will,
+        // with the G on top, as it was played
         let c = audition_of(keys(&[72, 76, 79]), 0, &four).unwrap();
-        assert_eq!(c.notes(), [48, 52, 55, 60]);
+        assert_eq!(c.notes(), [55, 60, 64, 67]);
         // ...and the Root output plays the root in the octave it was played in
         assert_eq!((c.root, c.bass, c.velocity), (72, 72, 0.75));
         // One note is a root: the step keeps its type, Cmaj7 becomes Amaj7

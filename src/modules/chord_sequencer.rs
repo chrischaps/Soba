@@ -423,6 +423,32 @@ pub fn voice_chord(spec: &ChordSpec, settings: &VoicingSettings, previous: Optio
     best
 }
 
+/// How many times round a looping pattern is played, at most, before its
+/// voicings are taken to have settled.
+const SETTLE_LOOPS: usize = 8;
+
+/// Each step's chord as Voice Leading voices it in a pattern left looping:
+/// the steps played in `order`, rests (`gates` off) skipped, each chord led
+/// from the one before it. The first time round starts from root position,
+/// as after a reset, and the pattern goes round again until it plays the
+/// same voicings twice. `None` for a rest, or a step not in `order`.
+pub fn looped_voicings(specs: &[ChordSpec], gates: &[bool], order: &[usize], settings: &VoicingSettings) -> [Option<Chord>; MAX_STEPS] {
+    let mut voiced = [None; MAX_STEPS];
+    let mut before: Option<Chord> = None;
+    for _ in 0..SETTLE_LOOPS {
+        let last = voiced;
+        for &step in order.iter().filter(|&&step| gates[step]) {
+            let chord = voice_chord(&specs[step], settings, before.as_ref());
+            voiced[step] = Some(chord);
+            before = Some(chord);
+        }
+        if voiced == last {
+            break;
+        }
+    }
+    voiced
+}
+
 /// The step a chord's gate is a share of, in seconds, before the clock has
 /// been measured: a beat at 120 BPM.
 const GUESSED_STEP: f32 = 0.5;
@@ -1394,6 +1420,26 @@ mod tests {
         assert_eq!(played.chord(50), [50, 53, 57, 60], "D3 F3 A3 C4");
         assert_eq!(played.chord(150), [50, 53, 55, 59], "D3 F3 G3 B3");
         assert_eq!(played.chord(250), [48, 52, 55, 59], "C3 E3 G3 B3");
+    }
+
+    #[test]
+    fn a_looping_pattern_plays_the_voicings_foreseen() {
+        // ii-V-I, a rest, then IV, looped three times: by the third time
+        // round, the chords sound as looped_voicings foresees them
+        let mut params = params_with(&[(50, M7), (55, DOM7), (48, MAJ7), (57, M7), (53, MAJ7)]);
+        params[ChordSequencer::step_gate_param(3)] = 0.0;
+        let clocks: Vec<usize> = (0..15).map(|i| i * 100).collect();
+        let played = run(&params, 1500, &clocks);
+        let specs: Vec<ChordSpec> = (0..5).map(|s| ChordSequencer::spec(&params, s)).collect();
+        let gates: Vec<bool> = (0..5).map(|s| params[ChordSequencer::step_gate_param(s)] > 0.5).collect();
+        let (settings, _) = ChordSequencer::settings(&params, played.channels);
+        let voiced = looped_voicings(&specs, &gates, &[0, 1, 2, 3, 4], &settings);
+        for step in [0, 1, 2, 4] {
+            assert_eq!(played.chord(1000 + step * 100 + 50), voiced[step].unwrap().notes(), "step {}", step + 1);
+        }
+        assert_eq!(voiced[3], None, "a rest isn't voiced");
+        // ...which isn't how it began: the first time round, step 1 was in root position
+        assert_ne!(played.chord(50), voiced[0].unwrap().notes());
     }
 
     #[test]
