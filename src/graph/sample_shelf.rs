@@ -5,7 +5,8 @@
 //! node to draw, and a copy resampled to the engine's rate for the module
 //! to play. Each is made on the UI thread, the first time it's wanted.
 //! A file that couldn't be read is remembered as such, so a missing file
-//! is reported once rather than looked for every frame.
+//! is reported once rather than looked for every frame. A sample the
+//! browser is still fetching isn't: it's asked for again until it comes.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -76,11 +77,21 @@ impl SampleShelf {
 
     /// The recording a key names, decoding the file the first time.
     pub fn load(&mut self, key: &str) -> Result<&mut ShelvedSample, String> {
-        let entry = self
-            .entries
-            .entry(key.to_string())
-            .or_insert_with(|| sample_files::load(key).map(ShelvedSample::new));
+        self.load_with(key, sample_files::load)
+    }
+
+    /// [`load`](Self::load), reading with `read`.
+    fn load_with(&mut self, key: &str, read: impl FnOnce(&str) -> Result<Decoded, String>) -> Result<&mut ShelvedSample, String> {
+        if self.entries.get(key).is_some_and(|entry| entry.as_ref().is_err_and(|e| sample_files::is_loading(e))) {
+            self.entries.remove(key);
+        }
+        let entry = self.entries.entry(key.to_string()).or_insert_with(|| read(key).map(ShelvedSample::new));
         entry.as_mut().map_err(|e| e.clone())
+    }
+
+    /// Whether a sample is still on its way (in the browser, being fetched).
+    pub fn waiting(&self) -> bool {
+        self.entries.values().any(|entry| entry.as_ref().is_err_and(|e| sample_files::is_loading(e)))
     }
 
     /// Puts a decoded recording on the shelf under `key`, replacing
@@ -149,6 +160,18 @@ mod tests {
         assert!(matches!(shelf.get(&key), Some(Err(_))));
         shelf.forget(&key);
         assert!(shelf.get(&key).is_none());
+    }
+
+    #[test]
+    fn a_sample_on_its_way_is_asked_for_again_until_it_comes() {
+        let mut shelf = SampleShelf::default();
+        let key = "example:samples/bell.wav";
+        assert!(shelf.load_with(key, |_| Err(sample_files::LOADING.to_string())).is_err());
+        assert!(shelf.waiting());
+        assert!(shelf.load_with(key, |_| Ok(decoded(48000.0))).is_ok());
+        assert!(!shelf.waiting());
+        // Once here, it stays: no reading again
+        assert!(shelf.load_with(key, |_| panic!("read again")).is_ok());
     }
 
     #[test]

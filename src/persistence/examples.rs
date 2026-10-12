@@ -27,20 +27,37 @@ impl Example {
     }
 }
 
-/// The samples the examples play, as (path in `patches/`, the WAV),
-/// compiled in with them.
+/// A sample that ships with the examples: its path in `patches/`, and the
+/// WAV, compiled in. The browser build leaves the WAV out (an empty slice)
+/// so every visitor doesn't download every example's samples; it fetches
+/// one from beside the page when a patch first plays it (see
+/// [`super::sample_files`]).
+#[cfg(not(target_arch = "wasm32"))]
+macro_rules! shipped {
+    ($path:literal) => {
+        ($path, include_bytes!(concat!("../../patches/", $path)))
+    };
+}
+#[cfg(target_arch = "wasm32")]
+macro_rules! shipped {
+    ($path:literal) => {
+        ($path, &[])
+    };
+}
+
+/// The samples the examples play, as (path in `patches/`, the WAV).
 pub const EXAMPLE_SAMPLES: &[(&str, &[u8])] = &[
     // One strike of the FM Synthesis bell at C4, rendered by Soba
-    ("samples/fm-bell-c4.wav", include_bytes!("../../patches/samples/fm-bell-c4.wav")),
+    shipped!("samples/fm-bell-c4.wav"),
     // "Hello. I am Soba. I sing in sines.", from tools/voice/speak.py's
     // formant synthesizer
-    ("samples/soba-speaks.wav", include_bytes!("../../patches/samples/soba-speaks.wav")),
+    shipped!("samples/soba-speaks.wav"),
     // The same line in Chris's voice, recorded with tools/voice/record.py
-    ("samples/soba-speaks-chris.wav", include_bytes!("../../patches/samples/soba-speaks-chris.wav")),
+    shipped!("samples/soba-speaks-chris.wav"),
     // Clair de Satellite's sung lines, twelve slots of one file, and its
     // one plain word: Chris's voice, cloned with ElevenLabs
-    ("samples/clair-lines.wav", include_bytes!("../../patches/samples/clair-lines.wav")),
-    ("samples/clair-still.wav", include_bytes!("../../patches/samples/clair-still.wav")),
+    shipped!("samples/clair-lines.wav"),
+    shipped!("samples/clair-still.wav"),
 ];
 
 /// Every example, in menu order: from a first note to self-playing patches.

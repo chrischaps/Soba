@@ -16,6 +16,9 @@
     <meta name="description" content="A node-based modular synthesizer, playable in the browser." />
 
     <link data-trunk rel="rust" data-bin="soba" data-wasm-opt="2" />
+    <!-- The examples' samples, fetched when a patch first plays one rather
+         than carried in the wasm (src/persistence/example_fetch.rs) -->
+    <link data-trunk rel="copy-dir" href="patches/samples" />
 
     <script>
         // Browsers hold a page's sound until it's clicked or a key is pressed

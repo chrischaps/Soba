@@ -201,6 +201,8 @@ impl SynthApp {
                     warnings.push(format!("Sample {saved} is longer than the 5 minutes a Sampler keeps, and was cut"));
                 }
                 Ok(_) => {}
+                // In the browser: fetched in a moment, and the Sampler says so meanwhile
+                Err(e) if sample_files::is_loading(&e) => {}
                 Err(e) if looper => warnings.push(format!("Couldn't load loop {saved}: {e}. The Looper opens empty")),
                 Err(e) => warnings.push(format!("Couldn't load sample {saved}: {e}")),
             }

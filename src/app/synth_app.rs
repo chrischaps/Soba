@@ -3020,6 +3020,9 @@ impl SynthApp {
                                 AudioStatus::NoAudio => {
                                     ui.label(RichText::new("⚠ No audio").color(theme::accent::ERROR).small());
                                 }
+                                _ if self.user_state.samples.waiting() => {
+                                    ui.label(RichText::new("loading samples…").color(theme::text::SECONDARY).small());
+                                }
                                 // The computer's keys play Keyboard and Poly MIDI modules
                                 _ if self.has_keyboard_modules() || self.has_poly_midi_modules() => {
                                     ui.label(RichText::new("play its piano, or the Z–M keys").color(theme::text::SECONDARY).small());
@@ -4169,7 +4172,11 @@ impl eframe::App for SynthApp {
 
         // The engine's cables follow whatever this frame did to the graph's
         self.sync_cables();
-        // ...and its Samplers the files their nodes name
+        // ...and its Samplers the files their nodes name. One the browser is
+        // still fetching is looked for again shortly, and drawn the frame after
+        if self.user_state.samples.waiting() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
+        }
         self.sync_samples();
 
         // Whatever this frame changed becomes an undo step, once the mouse

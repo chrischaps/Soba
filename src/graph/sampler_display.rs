@@ -144,6 +144,9 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             let color = if drop_here { blue } else { theme::text::DISABLED.gamma_multiply(0.6) };
             dashed_rect(&painter, outline, Stroke::new(1.0 * z, color), 4.0 * z);
             let (hint, hint_color) = match (key, problem) {
+                (Some(key), Some(problem)) if sample_files::is_loading(problem) => {
+                    (format!("Loading {}…", sample_files::file_name(key)), theme::text::SECONDARY)
+                }
                 (Some(key), Some(problem)) => (format!("{}: {problem}", sample_files::file_name(key)), theme::accent::WARNING),
                 _ => ("Drop a WAV here".to_string(), if drop_here { blue } else { theme::text::SECONDARY }),
             };
@@ -234,7 +237,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         let tip = match (hot, loaded, key) {
             (Some(m), _, _) => format!("{}: drag to move it", MARKERS[m].1),
             (None, Some(sample), Some(key)) => describe(key, sample),
-            (None, None, Some(key)) => format!("{key}\n{}\nClick to open another WAV", problem.unwrap_or("Loading")),
+            (None, None, Some(key)) => format!("{key}\n{}\nClick to open another WAV", problem.filter(|p| !sample_files::is_loading(p)).unwrap_or("Loading…")),
             _ => "Click to open a WAV, or drag one from your files onto the node".to_string(),
         };
         response.on_hover_text(tip);
@@ -244,7 +247,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let row_height = 14.0 * z;
     let (row, _) = ui.allocate_exact_size(Vec2::new(width, row_height), Sense::hover());
     let name = key.map(sample_files::file_name).unwrap_or("No file");
-    let name_color = if problem.is_some() { theme::accent::WARNING } else if key.is_some() { theme::text::SECONDARY } else { theme::text::DISABLED };
+    let name_color = if problem.is_some_and(|p| !sample_files::is_loading(p)) { theme::accent::WARNING } else if key.is_some() { theme::text::SECONDARY } else { theme::text::DISABLED };
     let button_width = 34.0 * z;
     let label = match loaded {
         Some(sample) => format!("{}  {}", truncate(name, 22), duration(sample.source.seconds())),

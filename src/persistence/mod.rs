@@ -4,6 +4,8 @@
 
 pub mod compile;
 pub mod examples;
+#[cfg(target_arch = "wasm32")]
+mod example_fetch;
 pub mod graph_io;
 pub mod library;
 pub mod patch;

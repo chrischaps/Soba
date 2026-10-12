@@ -7,6 +7,10 @@
 //! when the sample sits beside or below it, and absolute otherwise, so a
 //! patch folder can be moved or zipped and shared whole. [`resolve`] turns
 //! a saved path back into a key, and [`to_patch_path`] goes the other way.
+//!
+//! In the browser the examples' samples aren't inside the app: each is
+//! fetched from beside the page the first time it's loaded, and reads as
+//! [`LOADING`] until it arrives.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -17,6 +21,15 @@ use super::examples::EXAMPLE_SAMPLES;
 
 /// What keys for the samples that ship with the examples start with.
 pub const EXAMPLE_PREFIX: &str = "example:";
+
+/// Why [`load`] has no recording yet for a shipped sample the browser is
+/// still fetching: ask again later, rather than report it.
+pub const LOADING: &str = "loading";
+
+/// Whether a load failed only because the sample is still on its way.
+pub fn is_loading(problem: &str) -> bool {
+    problem == LOADING
+}
 
 /// A decoded WAV file.
 #[derive(Debug)]
@@ -68,17 +81,27 @@ pub fn read_wav_file(path: &Path) -> Result<Decoded, String> {
     decode_wav(std::io::BufReader::new(file))
 }
 
-/// The bytes of a sample that ships with the examples, by key.
+/// The bytes of a sample that ships with the examples, by key. In the
+/// browser, [`LOADING`] until it's been fetched (asking starts the fetch).
+fn shipped(key: &str) -> Result<&'static [u8], String> {
+    let name = key.strip_prefix(EXAMPLE_PREFIX).ok_or("not an example sample")?;
+    let shipped = EXAMPLE_SAMPLES.iter().find(|(path, _)| *path == name).ok_or("no such example sample")?;
+    #[cfg(target_arch = "wasm32")]
+    return super::example_fetch::fetch(shipped.0);
+    #[cfg(not(target_arch = "wasm32"))]
+    Ok(shipped.1)
+}
+
+/// The bytes of a sample that ships with the examples, by key, if they're
+/// here (in the browser, once fetched).
 pub fn example_bytes(key: &str) -> Option<&'static [u8]> {
-    let name = key.strip_prefix(EXAMPLE_PREFIX)?;
-    EXAMPLE_SAMPLES.iter().find(|(path, _)| *path == name).map(|(_, bytes)| *bytes)
+    shipped(key).ok()
 }
 
 /// Loads the recording a key names: a shipped example's, or a file's.
 pub fn load(key: &str) -> Result<Decoded, String> {
     if key.starts_with(EXAMPLE_PREFIX) {
-        let bytes = example_bytes(key).ok_or_else(|| "no such example sample".to_string())?;
-        return decode_wav(std::io::Cursor::new(bytes));
+        return decode_wav(std::io::Cursor::new(shipped(key)?));
     }
     let path = Path::new(key);
     if !path.exists() {
