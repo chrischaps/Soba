@@ -163,5 +163,5 @@ Each was checked by rendering [Afterglow](../../recipes/afterglow.md) through it
 
 - [Stereo Delay](./delay.md): the same tape machine, on the echoes only
 - [Distortion](./distortion.md): Tube saturates without the wobble or the dulling
-- [Audio Output](../output/audio-output.md): Character, a fixed soft clip on the master
+- [Audio Output](../output/audio-output.md): Character, a fixed soft clip on the master's peaks. See [Character or Tape?](../output/audio-output.md#character-or-tape)
 - [Arranger](../utilities/arranger.md) and [LFO](../modulation/lfo.md): move Wow, and press Stop

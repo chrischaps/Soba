@@ -25,7 +25,7 @@ The module has no outputs.
 |---------|-------|---------|-------------|
 | **Vol** (Volume) | 0 – 100% | 80% | Master volume |
 | **Limiter** | On / Off | On | Catches peaks before they can clip |
-| **Character** | On / Off | Off | Gentle soft-clip saturation, for color |
+| **Character** | On / Off | Off | Rounds off peaks above -3 dBFS, for a little warmth. See [Character or Tape?](#character-or-tape) |
 
 ## Routing
 
@@ -44,6 +44,16 @@ The signal passes through these stages, in order:
 5. **Limiter** (when on). A stereo-linked, look-ahead peak limiter with a ceiling of -0.3 dBFS. It sees each peak 1 ms before it arrives and turns the gain down just in time, so peaks are caught rather than clipped. It lets go quickly after a single transient and more slowly when it's working continuously, so it neither ducks audibly nor pumps. Linking the channels keeps the stereo image from shifting. The output never goes over the ceiling.
 
 The limiter's look-ahead delays the output by 1 ms. The delay stays in place when the limiter is off, so switching it doesn't shift the timing.
+
+## Character or Tape?
+
+Character and the [Tape](../effects/tape.md) module both add warmth, but they do different jobs.
+
+**Character** works only on the peaks. It has no memory and no tone of its own: below -3 dBFS it does nothing, and above that it rounds every sample off on the same curve, whatever its pitch. Quiet passages pass through unchanged, and loud ones gain a little density and reach the limiter a little softer. It needs no setting up, and on a patch that never gets loud it changes nothing.
+
+**Tape** colours everything that passes through it, quiet or loud. You patch it in front of the output, and it has its own level calibration (0 VU is a sine at -18 dBFS RMS). The record head squashes the treble first, the head bump lifts the lows, the top end rolls off with speed and age, and wow, flutter and hiss make the sound move. Putting a patch on tape is a decision about how the whole patch sounds.
+
+The two work together. Tape colours the mix, Character rounds whatever peaks still reach the output, and the limiter holds the ceiling. [Clair de Satellite](../../recipes/clair-de-satellite.md) uses the whole chain. [From One Sine](../../recipes/from-one-sine.md) uses Character alone.
 
 ## The meter
 

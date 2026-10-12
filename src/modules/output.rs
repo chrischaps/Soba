@@ -84,7 +84,7 @@ impl AudioOutput {
             parameters: vec![
                 ParameterDefinition::normalized("volume", "Volume", 0.8).describe("Master volume"),
                 ParameterDefinition::toggle("limiter", "Limiter", true).describe("Squashes peaks transparently to prevent clipping"),
-                ParameterDefinition::toggle("character", "Character", false).describe("Adds gentle soft-clip saturation for warmth"),
+                ParameterDefinition::toggle("character", "Character", false).describe("Rounds off peaks above -3 dBFS; quieter material passes untouched"),
             ],
             output_buffer: [Vec::new(), Vec::new()],
             volume_smooth: SmoothedValue::with_default_smoothing(0.8, sample_rate),
