@@ -18,6 +18,9 @@
 //!   [`recognise`]) and written, and the popover moves to the next step, the
 //!   way the Step Sequencer's piano step-records. The keys light on its
 //!   piano while they're held, and the chord's name shows as it's played.
+//!   A MIDI keyboard's touch writes the step's velocity too: the mean of
+//!   the chord's notes, so a progression's accents go in as they're played.
+//!   The letter keys leave it as it was.
 //! - While the hand is down, the chord sounds through the sequencer's own
 //!   cables as it will be written: named, then voiced by Range, Voices and
 //!   Bass Voice, clock or no clock (see [`audition_of`]). A MIDI keyboard's
@@ -35,7 +38,7 @@ use crate::modules::chord_sequencer::{kept_tones, voice_chord, ChordSequencer, C
 use crate::modules::sequencer::note_to_name;
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
-use super::chord_ear::{take_letter_keys, ChordEar};
+use super::chord_ear::{take_letter_keys, ChordEar, Hand};
 use super::step_grid::{drag_badge, dragged_pitch};
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
@@ -146,53 +149,62 @@ struct Listening {
     sounding: Option<Audition>,
 }
 
-/// A chord played into a step: the notes, and what they were heard as.
+/// A chord played into a step: the notes, what they were heard as, and how
+/// hard they were struck, if a MIDI keyboard played them.
 #[derive(Clone, Debug)]
 struct Played {
     notes: Vec<u8>,
     heard: Heard,
+    velocity: Option<u8>,
     step: usize,
 }
 
 impl Played {
     /// Names the notes played into `step` (lowest first). A note alone, or
     /// in octaves, is a root: the step keeps its type, without a slash bass.
-    fn new(notes: Vec<u8>, step: usize, pattern: &ChordPattern) -> Option<Self> {
+    fn new(hand: Hand, step: usize, pattern: &ChordPattern) -> Option<Self> {
+        let Hand { notes, velocity } = hand;
         let lowest = *notes.first()? as i32;
         let heard = if notes.iter().all(|&n| (n as i32 - lowest) % 12 == 0) {
             Heard { spec: ChordSpec { root: lowest, kind: pattern.specs[step].kind, bass: None, top: None }, extra: 0, missing: 0 }
         } else {
             recognise(&notes.iter().map(|&n| n as i32).collect::<Vec<_>>())?
         };
-        Some(Self { notes, heard, step })
+        Some(Self { notes, heard, velocity, step })
     }
 
-    /// The step's parameters, as written: root, type, bass and gate.
+    /// The step's parameters, as written: root, type, bass and gate, and
+    /// velocity when it was played with a touch.
     fn changes(&self) -> Vec<(String, f32)> {
         let n = self.step + 1;
         let spec = &self.heard.spec;
-        vec![
+        let mut changes = vec![
             (format!("Step {n} Root"), spec.root.clamp(0, 127) as f32),
             (format!("Step {n} Type"), spec.kind as f32),
             (format!("Step {n} Bass"), spec.bass.map_or(0.0, |pc| pc as f32 + 1.0)),
             (format!("Step {n} Gate"), 1.0),
-        ]
+        ];
+        if let Some(velocity) = self.velocity {
+            changes.push((format!("Step {n} Velocity"), velocity as f32));
+        }
+        changes
     }
 }
 
-/// The chord being played into `step` (`notes`, lowest first), as the
-/// sequencer will play it once written: named as it will be, keeping the
-/// step's top and velocity, and voiced in root position, as the face shows a
-/// step before it's played. `None` while nothing's held.
-fn audition_of(notes: &[u8], step: usize, pattern: &ChordPattern) -> Option<Audition> {
-    let played = Played::new(notes.to_vec(), step, pattern)?;
+/// The chord being played into `step`, as the sequencer will play it once
+/// written: named as it will be, as hard as it's struck (or at the step's
+/// velocity, on the letter keys), keeping the step's top, and voiced in root
+/// position, as the face shows a step before it's played. `None` while
+/// nothing's held.
+fn audition_of(hand: Hand, step: usize, pattern: &ChordPattern) -> Option<Audition> {
+    let played = Played::new(hand, step, pattern)?;
     let spec = ChordSpec { top: pattern.specs[step].top, ..played.heard.spec };
     let voiced = pattern.voiced(&spec);
     let mut audition = Audition {
         len: voiced.len().min(MAX_CHANNELS) as u8,
         root: spec.root.clamp(0, 127) as u8,
         bass: spec.bass_note().clamp(0, 127) as u8,
-        velocity: pattern.velocities[step],
+        velocity: played.velocity.map_or(pattern.velocities[step], |v| v as f32 / 127.0),
         ..Audition::default()
     };
     for (slot, &note) in audition.notes.iter_mut().zip(&voiced) {
@@ -390,16 +402,17 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
         // A chord played on the keys writes the step and moves along
         let mut listening = ui.data(|d| d.get_temp::<Listening>(ear_id)).unwrap_or_default();
         ui.input(|i| listening.ear.follow_keys(&i.raw.events, open.base));
-        let midi = user_state.midi_active_notes();
-        let held = listening.ear.held(midi);
-        if let Some(chord) = listening.ear.listen(midi).and_then(|notes| Played::new(notes, open.step, &pattern)) {
+        let midi = user_state.midi_held();
+        let held = listening.ear.held(&midi);
+        if let Some(chord) = listening.ear.listen(&midi).and_then(|hand| Played::new(hand, open.step, &pattern)) {
             open.step = step_along(open.step, 1, pattern.steps);
             played = Some(chord.clone());
             listening.last = Some(chord);
         }
         // Heard while the hand is down, unless the patch already plays it
         let plays_midi = graph.nodes.iter().any(|(_, node)| MIDI_MODULES.contains(&node.user_data.module_id));
-        let sounding = (listening.ear.keyed() || !plays_midi).then(|| audition_of(listening.ear.gathering(), open.step, &pattern)).flatten();
+        let hand = Hand { notes: listening.ear.gathering().to_vec(), velocity: listening.ear.velocity() };
+        let sounding = (listening.ear.keyed() || !plays_midi).then(|| audition_of(hand, open.step, &pattern)).flatten();
         if sounding != listening.sounding {
             audition = Some(sounding);
             listening.sounding = sounding;
@@ -679,13 +692,13 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
 /// the last one written, with what didn't fit when it was only the nearest.
 fn heard_line(ui: &mut egui::Ui, listening: &Listening) {
     let gathering = listening.ear.gathering();
-    let (verb, notes, heard, step) = match &listening.last {
+    let (verb, notes, heard, velocity, step) = match &listening.last {
         _ if !gathering.is_empty() => {
             let notes: Vec<i32> = gathering.iter().map(|&n| n as i32).collect();
             let heard = recognise(&notes);
-            ("Hearing", notes, heard, None)
+            ("Hearing", notes, heard, listening.ear.velocity(), None)
         }
-        Some(last) => ("Heard", last.notes.iter().map(|&n| n as i32).collect(), Some(last.heard), Some(last.step)),
+        Some(last) => ("Heard", last.notes.iter().map(|&n| n as i32).collect(), Some(last.heard), last.velocity, Some(last.step)),
         None => return,
     };
     let Some(heard) = heard else { return };
@@ -706,6 +719,10 @@ fn heard_line(ui: &mut egui::Ui, listening: &Listening) {
         ui.label(RichText::new(name).color(theme::signal::CONTROL).strong());
         if let Some(step) = step {
             ui.label(RichText::new(format!("in step {}", step + 1)).weak());
+        }
+        if let Some(velocity) = velocity {
+            ui.label(RichText::new(format!("at velocity {velocity}")).weak())
+                .on_hover_text("How hard it's played, the mean of its notes: written as the step's Velocity");
         }
         if let Some(misfit) = misfit(&heard).filter(|_| !one_note) {
             ui.label(RichText::new(format!("nearest: {misfit}")).weak().italics());
@@ -749,24 +766,43 @@ mod tests {
         }
     }
 
+    /// Notes played on the letter keys, with no touch.
+    fn keys(notes: &[u8]) -> Hand {
+        Hand { notes: notes.to_vec(), velocity: None }
+    }
+
     #[test]
     fn a_chord_is_heard_as_it_will_be_written() {
         let four = pattern(4, false);
         // C E G played up high sounds in the Range octave, as the step will
-        let c = audition_of(&[72, 76, 79], 0, &four).unwrap();
+        let c = audition_of(keys(&[72, 76, 79]), 0, &four).unwrap();
         assert_eq!(c.notes(), [48, 52, 55, 60]);
         // ...and the Root output plays the root in the octave it was played in
         assert_eq!((c.root, c.bass, c.velocity), (72, 72, 0.75));
         // One note is a root: the step keeps its type, Cmaj7 becomes Amaj7
-        let a = audition_of(&[57], 0, &four).unwrap();
+        let a = audition_of(keys(&[57]), 0, &four).unwrap();
         assert_eq!(a.notes(), [57, 61, 64, 68]);
-        assert_eq!(audition_of(&[], 0, &four), None, "nothing held");
+        assert_eq!(audition_of(keys(&[]), 0, &four), None, "nothing held");
 
         // G# A C E is Am over G#: with Bass Voice, the G# is the first channel
-        let bass = audition_of(&[56, 57, 60, 64], 1, &pattern(4, true)).unwrap();
+        let bass = audition_of(keys(&[56, 57, 60, 64]), 1, &pattern(4, true)).unwrap();
         assert_eq!((bass.root, bass.notes()[0]), (57, bass.bass));
         assert_eq!(bass.bass % 12, 8);
         assert_eq!(bass.notes().len(), 4);
+    }
+
+    #[test]
+    fn a_chord_played_with_a_touch_writes_how_hard() {
+        let four = pattern(4, false);
+        let struck = Hand { notes: vec![57, 60, 64], velocity: Some(127) };
+        // It's heard as hard as it's struck...
+        assert_eq!(audition_of(struck.clone(), 1, &four).unwrap().velocity, 1.0);
+        // ...and written so
+        let played = Played::new(struck, 1, &four).unwrap();
+        assert!(played.changes().contains(&("Step 2 Velocity".to_string(), 127.0)));
+        // The letter keys leave the step's velocity as it was
+        let keyed = Played::new(keys(&[57, 60, 64]), 1, &four).unwrap();
+        assert!(keyed.changes().iter().all(|(name, _)| !name.ends_with("Velocity")));
     }
 
     #[test]

@@ -164,6 +164,10 @@ pub struct SynthGraphState {
     /// Updated by the MIDI event handler.
     pub midi_active_notes: Vec<u8>,
 
+    /// How hard each of `midi_active_notes` was struck (1 to 127), in the
+    /// same order.
+    pub midi_active_velocities: Vec<u8>,
+
     /// The key of a Keyboard or Poly MIDI module's piano held down with the
     /// mouse or a finger, as a note from C like a computer key's (0 is C).
     /// Set as the piano is drawn, and played on the next frame.
@@ -254,6 +258,7 @@ impl Default for SynthGraphState {
             is_playing: false,
             keyboard_active_notes: Vec::new(),
             midi_active_notes: Vec::new(),
+            midi_active_velocities: Vec::new(),
             piano_pointer: None,
             output_meter: LevelMeter::default(),
             module_meters: HashMap::new(),
@@ -357,6 +362,7 @@ impl SynthGraphState {
         self.scope_data.clear();
         self.keyboard_active_notes.clear();
         self.midi_active_notes.clear();
+        self.midi_active_velocities.clear();
         self.output_meter = LevelMeter::default();
         self.module_meters.clear();
         self.readouts.clear();
@@ -551,14 +557,21 @@ impl SynthGraphState {
         &self.keyboard_active_notes
     }
 
-    /// Set the active notes for the MIDI Note module display.
-    pub fn set_midi_active_notes(&mut self, notes: Vec<u8>) {
-        self.midi_active_notes = notes;
+    /// Set the notes held on the MIDI keyboard, each with how hard it was
+    /// struck.
+    pub fn set_midi_active_notes(&mut self, held: &[(u8, u8)]) {
+        self.midi_active_notes = held.iter().map(|&(note, _)| note).collect();
+        self.midi_active_velocities = held.iter().map(|&(_, velocity)| velocity).collect();
     }
 
     /// Get the active notes for the MIDI Note module display.
     pub fn midi_active_notes(&self) -> &[u8] {
         &self.midi_active_notes
+    }
+
+    /// The notes held on the MIDI keyboard, each with how hard it was struck.
+    pub fn midi_held(&self) -> Vec<(u8, u8)> {
+        self.midi_active_notes.iter().copied().zip(self.midi_active_velocities.iter().copied()).collect()
     }
 }
 

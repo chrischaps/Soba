@@ -191,8 +191,9 @@ pub struct SynthApp {
     /// MIDI error message to display.
     midi_error_message: Option<String>,
 
-    /// MIDI notes currently held, in order of press, for the piano display.
-    midi_held_notes: Vec<u8>,
+    /// MIDI notes currently held, in order of press, each with its velocity:
+    /// for the piano display and the chord popover.
+    midi_held_notes: Vec<(u8, u8)>,
 
     // --- MIDI CC Mapping state ---
     /// Active MIDI CC to parameter mappings.
@@ -684,7 +685,7 @@ impl SynthApp {
     /// Clears the piano display's held notes.
     fn clear_midi_held_notes(&mut self) {
         self.midi_held_notes.clear();
-        self.user_state.set_midi_active_notes(Vec::new());
+        self.user_state.set_midi_active_notes(&[]);
     }
 
     /// Process the UI's copy of pending MIDI events.
@@ -707,14 +708,14 @@ impl SynthApp {
                 self.user_state.push_midi_event(event);
 
                 match event {
-                    MidiEvent::NoteOn { note, .. } => {
-                        if !self.midi_held_notes.contains(&note) {
-                            self.midi_held_notes.push(note);
+                    MidiEvent::NoteOn { note, velocity, .. } => {
+                        if !self.midi_held_notes.iter().any(|&(n, _)| n == note) {
+                            self.midi_held_notes.push((note, velocity));
                             notes_changed = true;
                         }
                     }
                     MidiEvent::NoteOff { note, .. } => {
-                        if let Some(pos) = self.midi_held_notes.iter().position(|&n| n == note) {
+                        if let Some(pos) = self.midi_held_notes.iter().position(|&(n, _)| n == note) {
                             self.midi_held_notes.remove(pos);
                             notes_changed = true;
                         }
@@ -791,7 +792,7 @@ impl SynthApp {
         }
 
         if notes_changed {
-            self.user_state.set_midi_active_notes(self.midi_held_notes.clone());
+            self.user_state.set_midi_active_notes(&self.midi_held_notes);
         }
     }
 
