@@ -698,6 +698,25 @@ fn edit_jacks(graph: &mut SynthGraph, index: &GroupIndex, id: GroupId, side: Sid
     }
 }
 
+/// Calls a module's pinned control `name` on the groups' faces. A blank
+/// name, or the module's own short name for it, takes the face's name off.
+/// Returns what the face called it and calls it now, or `None` if that's
+/// the same.
+pub fn name_face_control(graph: &mut SynthGraph, node_id: NodeId, param_name: &str, name: &str) -> Option<(String, String)> {
+    graph.nodes.get(node_id)?;
+    let own = control_label(graph, node_id, param_name);
+    let data = &mut graph[node_id].user_data;
+    let was = data.face_label(param_name).unwrap_or(&own).to_string();
+    let name = name.trim();
+    if name.is_empty() || name == own {
+        data.face_labels.remove(param_name);
+    } else {
+        data.face_labels.insert(param_name.to_string(), name.to_string());
+    }
+    let now = data.face_label(param_name).unwrap_or(&own).to_string();
+    (now != was).then_some((was, now))
+}
+
 /// Renames the jack a port is, on a group's node or its Inputs or Outputs.
 /// A name another jack on that side has already is numbered. Returns the
 /// group and the jack's old and new names, or `None` if the name is blank
@@ -932,6 +951,22 @@ pub fn controls(graph: &SynthGraph, node_id: NodeId) -> Vec<(&str, Control)> {
         switch.then_some((name.as_str(), Control::Switch))
     });
     knobs.chain(switches).collect()
+}
+
+/// What a module calls one of its controls, and a group's face does too
+/// until it's given a name of its own: a knob's label, or the one a dropdown
+/// or toggle wears beside it ("FM", "Wave"), else the parameter's name.
+pub fn control_label(graph: &SynthGraph, node_id: NodeId, param_name: &str) -> String {
+    let node = &graph[node_id];
+    if let Some(knob) = node.user_data.knob_params.iter().find(|k| k.param_name == param_name) {
+        if !knob.label.is_empty() {
+            return knob.label.clone();
+        }
+    }
+    match node.inputs.iter().find(|(name, _)| name == param_name).map(|(_, id)| &graph.get_input(*id).value) {
+        Some(SynthValueType::Select { label, .. } | SynthValueType::Toggle { label, .. }) if !label.is_empty() => label.clone(),
+        _ => param_name.to_string(),
+    }
 }
 
 /// A group's name being typed, in a field on its face.
@@ -1194,6 +1229,33 @@ mod tests {
         let keys_gate = graph[keys].get_output("Gate").unwrap();
         graph.add_connection(keys_gate, pitch_jack, 0);
         assert!(rig.leaf().contains(&("Keyboard".into(), "Gate".into(), "Oscillator".into(), "V/Oct".into())));
+    }
+
+    #[test]
+    fn a_face_control_takes_a_name_and_a_blank_one_gives_it_back() {
+        let mut rig = Rig::new();
+        let [_, osc, filter, ..] = voice(&mut rig);
+        rig.editor.graph[filter].user_data.pins.insert("Cutoff".into(), 1);
+        rig.editor.graph[osc].user_data.pins.insert("Waveform".into(), 1);
+        rig.group(&[osc, filter], "Tone");
+        let graph = &mut rig.editor.graph;
+        let own = control_label(graph, filter, "Cutoff");
+
+        let named = name_face_control(graph, filter, "Cutoff", "  Bright ");
+        assert_eq!(named, Some((own.clone(), "Bright".to_string())));
+        assert_eq!(graph[filter].user_data.face_label("Cutoff"), Some("Bright"));
+        // The same name again changes nothing
+        assert_eq!(name_face_control(graph, filter, "Cutoff", "Bright"), None);
+        // A blank name, or its own, goes back to the module's
+        assert_eq!(name_face_control(graph, filter, "Cutoff", " "), Some(("Bright".to_string(), own.clone())));
+        assert!(graph[filter].user_data.face_labels.is_empty());
+        name_face_control(graph, filter, "Cutoff", "Bright");
+        name_face_control(graph, filter, "Cutoff", &own);
+        assert!(graph[filter].user_data.face_labels.is_empty());
+
+        // A dropdown is named the same way
+        name_face_control(graph, osc, "Waveform", "Shape");
+        assert_eq!(graph[osc].user_data.face_label("Waveform"), Some("Shape"));
     }
 
     #[test]

@@ -96,6 +96,9 @@
           ],
           "pinned": {
             "Amount": 1
+          },
+          "face_labels": {
+            "Amount": "Width"
           }
         },
         {

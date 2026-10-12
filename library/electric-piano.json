@@ -231,6 +231,9 @@
           ],
           "pinned": {
             "Velocity Amount": 1
+          },
+          "face_labels": {
+            "Velocity Amount": "Bark"
           }
         },
         {
@@ -364,6 +367,9 @@
           ],
           "pinned": {
             "FM Depth": 1
+          },
+          "face_labels": {
+            "FM Depth": "Tine"
           }
         },
         {
@@ -467,6 +473,9 @@
           ],
           "pinned": {
             "Decay": 1
+          },
+          "face_labels": {
+            "Decay": "Decay"
           }
         },
         {
@@ -490,6 +499,9 @@
           ],
           "pinned": {
             "CV Amount": 1
+          },
+          "face_labels": {
+            "CV Amount": "Tremolo"
           }
         },
         {

@@ -255,7 +255,7 @@ impl WidgetValueTrait for SynthValueType {
         };
         [name, control]
             .iter()
-            .filter_map(|response| node_data.switch_menu(response, node_id, param_name, KnobPlace::Module, user_state))
+            .filter_map(|response| node_data.switch_menu(response, node_id, param_name, param_name, KnobPlace::Module, user_state))
             .collect()
     }
 

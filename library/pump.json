@@ -57,6 +57,9 @@
           ],
           "pinned": {
             "CV Amount": 1
+          },
+          "face_labels": {
+            "CV Amount": "Depth"
           }
         },
         {

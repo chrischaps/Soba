@@ -11,7 +11,7 @@ use eframe::egui::{self, vec2, FontId, RichText};
 use egui_node_graph2::NodeId;
 
 use crate::graph::groups::{self, Face, GroupIndex, JackAction, JackEdit, Renaming, Side};
-use crate::graph::{annotation_ui, GroupId, SynthValueType};
+use crate::graph::{annotation_ui, GroupId};
 use crate::persistence::{capture_level, Patch};
 use super::super::editing;
 use super::super::library::{self, SavedModule};
@@ -226,19 +226,16 @@ impl SynthApp {
     /// around it, `levels` groups up, or with 0, on none.
     pub(super) fn pin_knob(&mut self, node_id: NodeId, param_name: &str, levels: u8) {
         let graph = &mut self.graph_state.graph;
-        let Some(node) = graph.nodes.get(node_id) else { return };
-        // A knob's label, or the one a dropdown or toggle wears beside it
-        let label = match node.user_data.knob_params.iter().find(|k| k.param_name == param_name) {
-            Some(knob) => knob.label.clone(),
-            None => match node.inputs.iter().find(|(name, _)| name == param_name).map(|(_, id)| &graph.get_input(*id).value) {
-                Some(SynthValueType::Select { label, .. } | SynthValueType::Toggle { label, .. }) if !label.is_empty() => label.clone(),
-                _ => param_name.to_string(),
-            },
-        };
+        if !graph.nodes.contains_key(node_id) {
+            return;
+        }
+        let label = groups::control_label(graph, node_id, param_name);
         let data = &mut graph[node_id].user_data;
         let before = data.pin_levels(param_name);
         if levels == 0 {
+            // Off every face, it has no use for a face's name
             data.pins.remove(param_name);
+            data.face_labels.remove(param_name);
         } else {
             data.pins.insert(param_name.to_string(), levels);
         }
@@ -246,6 +243,21 @@ impl SynthApp {
         let (verb, done) = if levels > before { ("Pin", "on its group's face") } else { ("Unpin", "off the group's face") };
         self.history.name_next(format!("{verb} {what}"));
         self.status_message = Some(format!("{what} {done}"));
+    }
+
+    /// Calls a pinned control `name` on the groups' faces. A blank name, or
+    /// its module's own short name, takes the face's name off it.
+    pub(super) fn name_face_control(&mut self, node_id: NodeId, param_name: &str, name: &str) {
+        let graph = &mut self.graph_state.graph;
+        let Some((was, now)) = groups::name_face_control(graph, node_id, param_name, name) else { return };
+        let own = groups::control_label(graph, node_id, param_name);
+        let module = &graph[node_id].user_data.display_name;
+        self.history.name_next(format!("Rename {was} to {now} on face"));
+        self.status_message = Some(if now == own {
+            format!("{module} {own} goes by its own name on the face again")
+        } else {
+            format!("{module} {own} reads {now} on the face")
+        });
     }
 
     /// Does what a port's menu chose with groups' jacks: shows the port on

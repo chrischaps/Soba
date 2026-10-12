@@ -182,6 +182,11 @@ pub struct NodeData {
     /// written when there are some.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub pinned: BTreeMap<String, u8>,
+    /// What pinned controls are called on the groups' faces, by parameter
+    /// name, where they've been named; the rest wear their own short names.
+    /// Only written when there are some.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub face_labels: BTreeMap<String, String>,
     /// The file the module plays (a Sampler's): relative to the patch, with
     /// forward slashes, when it's beside or below it, and absolute
     /// otherwise. Only written when there is one.
@@ -204,6 +209,7 @@ impl NodeData {
             parameters: Vec::new(),
             bypassed: false,
             pinned: BTreeMap::new(),
+            face_labels: BTreeMap::new(),
             file: None,
             labels: BTreeMap::new(),
         }
@@ -457,6 +463,7 @@ pub fn migrate_v2_to_v3(old: PatchV2) -> Patch {
                     .collect(),
                 bypassed: false,
                 pinned: BTreeMap::new(),
+                face_labels: BTreeMap::new(),
                 file: None,
                 labels: BTreeMap::new(),
             }
@@ -712,6 +719,7 @@ mod tests {
             ],
             bypassed: false,
             pinned: BTreeMap::new(),
+            face_labels: BTreeMap::new(),
             file: None,
             labels: BTreeMap::new(),
         });

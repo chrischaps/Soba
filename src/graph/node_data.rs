@@ -348,6 +348,9 @@ pub struct SynthNodeData {
     /// Knobs shown on the faces of the groups around the module: parameter
     /// name to how many groups up it shows (1 is the group it's in).
     pub pins: BTreeMap<String, u8>,
+    /// What its pinned controls are called on the groups' faces, by
+    /// parameter name, where they've been given a name of their own.
+    pub face_labels: BTreeMap<String, String>,
     /// The file the module plays (a Sampler's), by sample key: an absolute
     /// path, or an example's (see [`crate::persistence::sample_files`]).
     pub file: Option<String>,
@@ -394,6 +397,7 @@ impl SynthNodeData {
             kind: NodeKind::Module,
             parent: None,
             pins: BTreeMap::new(),
+            face_labels: BTreeMap::new(),
             file: None,
             labels: BTreeMap::new(),
         }
@@ -407,6 +411,11 @@ impl SynthNodeData {
     /// How many groups up a knob shows, or 0 if only on the module.
     pub fn pin_levels(&self, param_name: &str) -> u8 {
         self.pins.get(param_name).copied().unwrap_or(0)
+    }
+
+    /// The name a pinned control has been given for the groups' faces.
+    pub fn face_label(&self, param_name: &str) -> Option<&str> {
+        self.face_labels.get(param_name).map(String::as_str)
     }
 
     /// Builder method to set the tooltip description.
@@ -848,6 +857,12 @@ impl SynthNodeData {
                     max_value,
                 };
 
+                // On a face, the name it's been given there
+                let label = match place {
+                    KnobPlace::Face { .. } => self.face_label(&knob_param.param_name).unwrap_or(&knob_param.label),
+                    KnobPlace::Module => &knob_param.label,
+                };
+
                 // Render the knob based on value type
                 let knob_response = ui.scope(|ui| {
                     ui.vertical(|ui| {
@@ -925,7 +940,7 @@ impl SynthNodeData {
                         Self::render_knob_for_value(
                             ui,
                             &input.value,
-                            &knob_param.label,
+                            label,
                             knob_size,
                             should_disable,
                             node_id,
@@ -947,13 +962,21 @@ impl SynthNodeData {
                     egui::Id::new(("knob_context", node_id, current_param_index, place.is_face())),
                     egui::Sense::click(),
                 );
-                let interact_response = hints::attach(interact_response, Hint::knob(self.module_id, &knob_param.param_name));
+                let hint = Hint::knob(self.module_id, &knob_param.param_name);
+                let interact_response = hints::attach(interact_response, self.face_hint(hint, &knob_param.param_name, place));
+                let named = if label.is_empty() { knob_param.param_name.as_str() } else { label };
+                if place.is_face() && interact_response.secondary_clicked() {
+                    super::group_face::reset_name_field(ui.ctx(), super::group_face::face_name_id(node_id, &knob_param.param_name));
+                }
 
                 // Handle right-click context menu for MIDI Learn
                 if let Some(engine_id) = engine_node_id {
                     let menu_response = interact_response.context_menu(|ui| {
                         // The menu is as wide as its longest entry, not wrapped to the knob
                         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                        if place.is_face() {
+                            responses.extend(self.face_name_item(ui, node_id, &knob_param.param_name, named).map(NodeResponse::User));
+                        }
                         if is_learn_target {
                             // Already waiting for a CC: the way out
                             if ui.button("Cancel MIDI Learn").clicked() {
@@ -1047,20 +1070,45 @@ impl SynthNodeData {
         chosen
     }
 
+    /// The top of a face control's menu: the name it goes by on the face,
+    /// `named`, selected to type over. Enter renames it; a blank name gives
+    /// it back its module's own.
+    fn face_name_item(&self, ui: &mut egui::Ui, node_id: egui_node_graph2::NodeId, param_name: &str, named: &str) -> Option<SynthResponse> {
+        let id = super::group_face::face_name_id(node_id, param_name);
+        let hint = "What this control is called on the group's face. Enter names it; a blank name goes back to the module's own";
+        let name = super::group_face::name_field(ui, id, named, hint);
+        ui.separator();
+        name.map(|name| SynthResponse::NameFaceControl { node_id, param_name: param_name.to_string(), name })
+    }
+
+    /// A control's tooltip, which on a face where it's been named leads with
+    /// that name and says what it drives.
+    pub(super) fn face_hint(&self, hint: Option<Hint>, param_name: &str, place: KnobPlace) -> Option<Hint> {
+        match (hint, place, self.face_label(param_name)) {
+            (Some(hint), KnobPlace::Face { .. }, Some(name)) => Some(hint.named(name, &self.display_name)),
+            (hint, ..) => hint,
+        }
+    }
+
     /// A dropdown's or toggle's right-click menu, among the module's inputs
     /// or on a group's face: its jack on the group, if it has a jack,
     /// pinning, and why there's no MIDI Learn.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn switch_menu(
         &self,
         response: &egui::Response,
         node_id: egui_node_graph2::NodeId,
         param_name: &str,
+        named: &str,
         place: KnobPlace,
         user_state: &mut super::SynthGraphState,
     ) -> Option<SynthResponse> {
         // Outside a group there's nothing to offer
         if self.parent.is_none() && !place.is_face() {
             return None;
+        }
+        if place.is_face() && response.secondary_clicked() {
+            super::group_face::reset_name_field(&response.ctx, super::group_face::face_name_id(node_id, param_name));
         }
         let jack_actions = match place {
             KnobPlace::Module => user_state.jack_actions(node_id, Side::Input, param_name).to_vec(),
@@ -1069,6 +1117,9 @@ impl SynthNodeData {
         let mut chosen = None;
         let menu = response.context_menu(|ui| {
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+            if place.is_face() {
+                chosen = self.face_name_item(ui, node_id, param_name, named);
+            }
             if !jack_actions.is_empty() {
                 chosen = super::group_face::jack_items(ui, &jack_actions, node_id, Side::Input, param_name);
                 ui.separator();

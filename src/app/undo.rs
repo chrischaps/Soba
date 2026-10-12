@@ -71,6 +71,8 @@ enum Body {
         params: Vec<f32>,
         bypassed: bool,
         pins: BTreeMap<String, u8>,
+        /// What its pinned controls are called on the groups' faces.
+        face_labels: BTreeMap<String, String>,
         /// The file it plays, by sample key.
         file: Option<String>,
         /// Names given to its sections and lanes.
@@ -105,9 +107,9 @@ impl NodeState {
         self.parent == other.parent
             && match (&self.body, &other.body) {
                 (
-                    Body::Module { template: t1, bypassed: b1, pins: p1, file: f1, labels: l1, .. },
-                    Body::Module { template: t2, bypassed: b2, pins: p2, file: f2, labels: l2, .. },
-                ) => t1 == t2 && b1 == b2 && p1 == p2 && f1 == f2 && l1 == l2,
+                    Body::Module { template: t1, bypassed: b1, pins: p1, face_labels: n1, file: f1, labels: l1, .. },
+                    Body::Module { template: t2, bypassed: b2, pins: p2, face_labels: n2, file: f2, labels: l2, .. },
+                ) => t1 == t2 && b1 == b2 && p1 == p2 && n1 == n2 && f1 == f2 && l1 == l2,
                 (a, b) => a == b,
             }
     }
@@ -200,6 +202,7 @@ impl Snapshot {
                         params,
                         bypassed: data.bypassed,
                         pins: data.pins.clone(),
+                        face_labels: data.face_labels.clone(),
                         file: data.file.clone(),
                         labels: data.labels.clone(),
                     }
@@ -441,11 +444,12 @@ impl Step {
             let Some(state) = &diff.after else { continue };
             let position = anchor.zoomed(state.position, zoom);
             let node_id = match (&state.body, diff.key) {
-                (Body::Module { template, bypassed, pins, file, labels, .. }, NodeKey::Module(engine_id)) => {
+                (Body::Module { template, bypassed, pins, face_labels, file, labels, .. }, NodeKey::Module(engine_id)) => {
                     let node_id = editing::place_node(editor, user_state, *template, position);
                     let data = &mut editor.graph[node_id].user_data;
                     data.bypassed = *bypassed;
                     data.pins = pins.clone();
+                    data.face_labels = face_labels.clone();
                     data.labels = labels.clone();
                     // Its recording follows from the file, as the app syncs samples
                     data.file = file.clone();
@@ -486,9 +490,10 @@ impl Step {
                 }
             }
             match &after.body {
-                Body::Module { pins, file, labels, .. } => {
+                Body::Module { pins, face_labels, file, labels, .. } => {
                     let data = &mut editor.graph[node_id].user_data;
                     data.pins = pins.clone();
+                    data.face_labels = face_labels.clone();
                     data.file = file.clone();
                     data.labels = labels.clone();
                 }
@@ -625,6 +630,15 @@ fn describe(nodes: &[NodeDiff], cables: &[CableDiff], before: &Snapshot, after: 
     let only = |same: fn(&NodeState, &NodeState) -> bool| {
         pairs().all(|(_, a, b)| changed_params(a, b).next().is_none() && !moved(a.position, b.position) && same(a, b))
     };
+    if only(|a, b| {
+        a.parent == b.parent && pins(a) == pins(b) && a.bypassed() == b.bypassed() && file(a) == file(b) && labels(a) == labels(b)
+            && face_labels(a) != face_labels(b)
+    }) {
+        return match changed.as_slice() {
+            [one] => format!("Name {} control on face", one.name()),
+            _ => "Name face controls".to_string(),
+        };
+    }
     if only(|a, b| a.parent == b.parent && pins(a) == pins(b) && a.bypassed() == b.bypassed() && file(a) == file(b) && labels(a) != labels(b)) {
         return match changed.as_slice() {
             [one] => format!("Rename in {}", one.name()),
@@ -676,6 +690,14 @@ fn pins(state: &NodeState) -> BTreeMap<String, u8> {
     match &state.body {
         Body::Module { pins, .. } => pins.clone(),
         _ => BTreeMap::new(),
+    }
+}
+
+/// What a module's pinned controls are called on the groups' faces.
+fn face_labels(state: &NodeState) -> Option<&BTreeMap<String, String>> {
+    match &state.body {
+        Body::Module { face_labels, .. } => Some(face_labels),
+        _ => None,
     }
 }
 
@@ -1630,6 +1652,18 @@ mod tests {
         assert!(undone.commands.is_empty());
         rig.undo();
         assert!(rig.editor.graph[filter].user_data.pins.is_empty());
+        rig.redo();
+
+        // Naming it on the face: no sound changes, and undo takes the name off
+        let (undone, redone) = round_trip(&mut rig, |rig| {
+            rig.editor.graph[filter].user_data.face_labels.insert("Cutoff".into(), "Bright".into());
+        });
+        assert_eq!(undone.label, "Name SVF Filter control on face");
+        assert!(undone.commands.is_empty() && redone.commands.is_empty());
+        assert_eq!(rig.editor.graph[filter].user_data.face_label("Cutoff"), Some("Bright"));
+        rig.undo();
+        assert_eq!(rig.editor.graph[filter].user_data.face_label("Cutoff"), None);
+        assert_eq!(rig.editor.graph[filter].user_data.pin_levels("Cutoff"), 1);
     }
 
     #[test]

@@ -112,7 +112,7 @@ pub fn port_menu(
     }
     // Each time the menu opens, its name field starts from the jack's name
     if response.secondary_clicked() {
-        response.ctx.data_mut(|d| d.remove::<(String, bool)>(name_field_id(node_id, side, port)));
+        reset_name_field(&response.ctx, jack_name_id(node_id, side, port));
     }
     let mut chosen = None;
     let menu = response.context_menu(|ui| {
@@ -125,10 +125,21 @@ pub fn port_menu(
     chosen
 }
 
-/// Where a jack's menu keeps the name being typed, and whether the field
-/// has been drawn yet.
-fn name_field_id(node_id: NodeId, side: Side, port: &str) -> egui::Id {
+/// Where a jack's menu keeps the name being typed.
+fn jack_name_id(node_id: NodeId, side: Side, port: &str) -> egui::Id {
     egui::Id::new((node_id, side, port, "jack name"))
+}
+
+/// Where a face control's menu keeps the name being typed.
+pub fn face_name_id(node_id: NodeId, param_name: &str) -> egui::Id {
+    egui::Id::new((node_id, param_name, "face name"))
+}
+
+/// Starts a menu's name field afresh, from the name it names, as the menu
+/// opens. Not while it's open: the menu's code runs more than once a frame,
+/// and clearing it then would swallow the typing.
+pub fn reset_name_field(ctx: &egui::Context, id: egui::Id) {
+    ctx.data_mut(|d| d.remove::<(String, bool)>(id));
 }
 
 /// The menu items for what a port can do with groups' jacks. A jack's own
@@ -162,7 +173,10 @@ pub fn jack_items(ui: &mut egui::Ui, actions: &[JackAction], node_id: NodeId, si
                 JackEdit::Hide,
             ),
             JackAction::Jack { slot, count } => {
-                let renamed = name_field(ui, node_id, side, port).map(JackEdit::Rename).and_then(&choose);
+                let renamed = name_field(ui, jack_name_id(node_id, side, port), port, "Type a new name and press Enter")
+                    .filter(|name| !name.trim().is_empty())
+                    .map(JackEdit::Rename)
+                    .and_then(&choose);
                 ui.separator();
                 let up = item(ui, slot > 0, "Move up", "One place up the group's jacks", JackEdit::Move { up: true });
                 let down = item(ui, slot + 1 < count, "Move down", "One place down the group's jacks", JackEdit::Move { up: false });
@@ -176,11 +190,11 @@ pub fn jack_items(ui: &mut egui::Ui, actions: &[JackAction], node_id: NodeId, si
     chosen
 }
 
-/// A jack's name, ready to type over. Enter renames it: returns the name
-/// typed, if it's new.
-fn name_field(ui: &mut egui::Ui, node_id: NodeId, side: Side, port: &str) -> Option<String> {
-    let id = name_field_id(node_id, side, port);
-    let (mut text, fresh) = ui.data_mut(|d| d.get_temp::<(String, bool)>(id)).unwrap_or_else(|| (port.to_string(), true));
+/// A name in a menu (a jack's, a face control's), ready to type over, kept
+/// at `id` while the menu's open. Enter renames it: returns what was typed,
+/// if it's new, blank included.
+pub fn name_field(ui: &mut egui::Ui, id: egui::Id, current: &str, hint: &str) -> Option<String> {
+    let (mut text, fresh) = ui.data_mut(|d| d.get_temp::<(String, bool)>(id)).unwrap_or_else(|| (current.to_string(), true));
     let mut renamed = None;
     ui.horizontal(|ui| {
         ui.label(RichText::new("Name").small().color(theme::text::SECONDARY));
@@ -192,9 +206,9 @@ fn name_field(ui: &mut egui::Ui, node_id: NodeId, side: Side, port: &str) -> Opt
             output.state.cursor.set_char_range(Some(all));
             output.state.store(ui.ctx(), edit_id);
         }
-        let response = output.response.on_hover_text("Type a new name and press Enter");
+        let response = output.response.on_hover_text(hint);
         if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            if text.trim() != port && !text.trim().is_empty() {
+            if text.trim() != current {
                 renamed = Some(text.clone());
             }
             ui.close_menu();
@@ -402,12 +416,14 @@ fn switch_chip(
     let accent = data.category.color();
     // A dropdown with a jack is the cable's while one is plugged in
     let patched = graph.iter_connections().any(|(to, _)| to == input_id);
-    let hint = || hints::Hint::input(data.module_id, &control.param);
+    let place = KnobPlace::Face { depth: control.depth, outer };
+    let hint = || data.face_hint(hints::Hint::input(data.module_id, &control.param), &control.param, place);
 
     ui.vertical(|ui| {
         ui.set_width(width);
-        let label = match &input.value {
-            SynthValueType::Select { label, .. } | SynthValueType::Toggle { label, .. } if !label.is_empty() => label.as_str(),
+        let label = match (data.face_label(&control.param), &input.value) {
+            (Some(name), _) => name,
+            (None, SynthValueType::Select { label, .. } | SynthValueType::Toggle { label, .. }) if !label.is_empty() => label.as_str(),
             _ => control.param.as_str(),
         };
         let name = ui.add(
@@ -467,9 +483,8 @@ fn switch_chip(
             }));
         }
 
-        let place = KnobPlace::Face { depth: control.depth, outer };
         for response in [name, response] {
-            if let Some(pin) = data.switch_menu(&response, control.node, &control.param, place, user_state) {
+            if let Some(pin) = data.switch_menu(&response, control.node, &control.param, label, place, user_state) {
                 responses.push(NodeResponse::User(pin));
             }
         }

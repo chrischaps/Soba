@@ -272,6 +272,7 @@ impl Builder<'_> {
             user_data.bypassed = node_data.bypassed && user_data.bypassable;
             user_data.parent = parent;
             user_data.pins = node_data.pinned.clone();
+            user_data.face_labels = node_data.face_labels.clone();
             user_data.file = node_data.file.clone();
             user_data.labels = node_data.labels.clone();
 
@@ -503,6 +504,7 @@ pub fn capture_level(
                 let mut node_data = NodeData::new(id, data.module_id, position(node_id));
                 node_data.bypassed = data.bypassed;
                 node_data.pinned = data.pins.clone();
+                node_data.face_labels = data.face_labels.clone();
                 node_data.file = data.file.clone();
                 node_data.labels = data.labels.clone();
                 node_data.parameters = node
@@ -698,6 +700,53 @@ mod tests {
             && c.from_port == "Res"
             && c.to_node == ladder_id
             && c.to_port == "Resonance"));
+    }
+
+    #[test]
+    fn test_face_names_survive_a_round_trip_two_groups_up() {
+        use crate::graph::GroupId;
+        use crate::persistence::GroupData;
+        // The Electric Piano inside a Rig, its tine raised to the Rig's face
+        let mut piano = patch_from_json(include_str!("../../library/electric-piano.json")).unwrap();
+        let mut inner = piano.groups.remove(0);
+        let osc = inner.nodes.iter_mut().find(|n| n.face_labels.contains_key("FM Depth")).unwrap();
+        assert_eq!(osc.face_labels["FM Depth"], "Tine");
+        osc.pinned.insert("FM Depth".into(), 2);
+        let mut patch = Patch::new("rig");
+        patch.groups.push(GroupData {
+            id: 9000,
+            name: "Rig".into(),
+            position: (0.0, 0.0),
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            inputs_position: (-320.0, 0.0),
+            outputs_position: (640.0, 0.0),
+            nodes: Vec::new(),
+            connections: Vec::new(),
+            groups: vec![inner],
+        });
+
+        // Both faces show it, under its name
+        let staged = stage_patch(&patch).unwrap();
+        let graph = &staged.graph;
+        let index = GroupIndex::of(graph);
+        let ids: Vec<GroupId> = graph.nodes.values().filter_map(|n| n.user_data.kind.group()).collect();
+        assert_eq!(ids.len(), 2);
+        for id in ids {
+            let faces = groups::face_controls(graph, |_| None, &index, id);
+            let tine = faces.iter().find(|c| c.param == "FM Depth").unwrap();
+            assert_eq!(graph[tine.node].user_data.face_label("FM Depth"), Some("Tine"));
+        }
+
+        let engine_ids: HashMap<NodeId, u64> = staged.nodes.iter().map(|n| (n.graph_id, n.patch_id)).collect();
+        let saved = capture_patch(&patch.name, graph, |g| engine_ids.get(&g).copied(), |_| (0.0, 0.0), &[]);
+        let json = serde_json::to_string(&saved).unwrap();
+        let reloaded = patch_from_json(&json).unwrap();
+        assert_eq!(reloaded, saved);
+        let osc = reloaded.groups[0].groups[0].nodes.iter().find(|n| n.pinned.get("FM Depth") == Some(&2)).unwrap();
+        assert_eq!(osc.face_labels["FM Depth"], "Tine");
+        // Only modules named on a face mention it
+        assert_eq!(json.matches("\"face_labels\"").count(), 4);
     }
 
     #[test]

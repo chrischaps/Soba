@@ -124,6 +124,9 @@
           ],
           "pinned": {
             "Resonance": 1
+          },
+          "face_labels": {
+            "Resonance": "Ring"
           }
         },
         {
@@ -220,6 +223,9 @@
           ],
           "pinned": {
             "Amount": 1
+          },
+          "face_labels": {
+            "Amount": "Strike"
           }
         }
       ],

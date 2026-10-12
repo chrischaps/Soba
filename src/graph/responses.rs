@@ -78,6 +78,13 @@ pub enum SynthResponse {
         param_name: String,
         levels: u8,
     },
+    /// Call a pinned control `name` on the groups' faces, or with a blank
+    /// name, by its module's own short name again.
+    NameFaceControl {
+        node_id: egui_node_graph2::NodeId,
+        param_name: String,
+        name: String,
+    },
     /// Show a port on the group it's in as a new jack, unplug it from the
     /// group's jack, or rename, move or take away the jack it is.
     Jack {

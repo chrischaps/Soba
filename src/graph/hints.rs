@@ -20,11 +20,14 @@ pub struct Hint {
     signal: Option<SignalType>,
     /// A knob's range, e.g. "20 Hz to 20.0 kHz".
     range: Option<String>,
+    /// On a group's face where it's been named: that name, and the module
+    /// whose control it is.
+    face: Option<(String, String)>,
 }
 
 impl Hint {
     fn port(port: &PortDefinition) -> Self {
-        Self { name: port.name, description: port.description, signal: Some(port.signal_type), range: None }
+        Self { name: port.name, description: port.description, signal: Some(port.signal_type), range: None, face: None }
     }
 
     fn parameter(def: &ParameterDefinition) -> Self {
@@ -36,7 +39,7 @@ impl Hint {
             let format = NumberSpec::from_definition(def).format();
             format!("{} to {}", format.format(def.min), format.format(def.max))
         });
-        Self { name: def.name, description: def.description, signal: None, range }
+        Self { name: def.name, description: def.description, signal: None, range, face: None }
     }
 
     /// The tooltip for an editor input, by its name. A jack describes its
@@ -60,11 +63,24 @@ impl Hint {
         find_parameter(catalog::module(module_id)?, param_name).map(Self::parameter)
     }
 
+    /// The tooltip for a control a group's face calls `name`: it leads with
+    /// that, then names `module` and the parameter it drives.
+    pub fn named(mut self, name: &str, module: &str) -> Self {
+        self.face = Some((name.to_string(), module.to_string()));
+        self
+    }
+
     /// Draws the tooltip: the name with the jack's signal type in its cable
-    /// colour, what it does, and a knob's range.
+    /// colour, what it does, and a knob's range. A control named on a face
+    /// reads "Tine: Oscillator FM Depth".
     pub fn show(&self, ui: &mut egui::Ui) {
         ui.set_max_width(260.0);
         ui.horizontal(|ui| {
+            if let Some((name, module)) = &self.face {
+                ui.label(RichText::new(format!("{name}:")).strong().color(theme::text::PRIMARY));
+                ui.label(RichText::new(format!("{module} {}", self.name)).color(theme::text::SECONDARY));
+                return;
+            }
             ui.label(RichText::new(self.name).strong().color(theme::text::PRIMARY));
             if let Some(signal) = self.signal {
                 ui.label(RichText::new(format!("● {}", signal.name())).small().color(signal.color()));

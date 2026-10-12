@@ -326,6 +326,7 @@ enum NodeMenuAction {
     StartRename(egui_node_graph2::NodeId),
     Rename(egui_node_graph2::NodeId, String),
     Pin(egui_node_graph2::NodeId, String, u8),
+    NameFace(egui_node_graph2::NodeId, String, String),
     /// A port's menu chose what to do with groups' jacks.
     Jack(egui_node_graph2::NodeId, crate::graph::groups::Side, String, crate::graph::groups::JackEdit),
     SaveToLibrary(egui_node_graph2::NodeId),
@@ -1899,6 +1900,9 @@ impl SynthApp {
                         NodeResponse::User(crate::graph::SynthResponse::PinKnob { node_id, param_name, levels }) => {
                             node_menu_actions.push(NodeMenuAction::Pin(node_id, param_name, levels));
                         }
+                        NodeResponse::User(crate::graph::SynthResponse::NameFaceControl { node_id, param_name, name }) => {
+                            node_menu_actions.push(NodeMenuAction::NameFace(node_id, param_name, name));
+                        }
                         NodeResponse::User(crate::graph::SynthResponse::Jack { node_id, side, port, edit }) => {
                             node_menu_actions.push(NodeMenuAction::Jack(node_id, side, port, edit));
                         }
@@ -2410,6 +2414,7 @@ impl SynthApp {
             NodeMenuAction::StartRename(node_id) => self.start_rename(node_id),
             NodeMenuAction::Rename(node_id, name) => self.rename_group(node_id, &name),
             NodeMenuAction::Pin(node_id, param_name, levels) => self.pin_knob(node_id, &param_name, levels),
+            NodeMenuAction::NameFace(node_id, param_name, name) => self.name_face_control(node_id, &param_name, &name),
             NodeMenuAction::Jack(node_id, side, port, edit) => self.edit_jack(node_id, side, &port, edit),
             NodeMenuAction::SaveToLibrary(node_id) => self.save_to_library(node_id),
             NodeMenuAction::OpenSample(node_id) => self.open_sample_dialog(node_id),

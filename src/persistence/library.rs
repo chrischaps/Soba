@@ -84,7 +84,7 @@ pub const LIBRARY: &[LibraryGroup] = &[
         name: "Electric Piano",
         file_name: "electric-piano.json",
         section: Section::Voices,
-        description: "A Rhodes-style tine: FM at 1:1 that barks the harder you play and mellows as it rings, under a slow tremolo. FM is the tine, Vel the bark, Dec how long it rings, CV Amt and Rate the tremolo",
+        description: "A Rhodes-style tine: FM at 1:1 that barks the harder you play and mellows as it rings, under a slow tremolo",
         json: include_str!("../../library/electric-piano.json"),
     },
     LibraryGroup {
@@ -98,14 +98,14 @@ pub const LIBRARY: &[LibraryGroup] = &[
         name: "String Machine",
         file_name: "string-machine.json",
         section: Section::Voices,
-        description: "A Solina-style ensemble: detuned saws at 8' and 4', thinned and swelling, through a three-voice chorus. Cutoff is the brightness, Depth the ensemble, Atk the swell and 2 the 4' octave",
+        description: "A Solina-style ensemble: detuned saws at 8' and 4', thinned and swelling, through a three-voice chorus",
         json: include_str!("../../library/string-machine.json"),
     },
     LibraryGroup {
         name: "Mallet",
         file_name: "mallet.json",
         section: Section::Voices,
-        description: "A short strike rings a resonant filter tuned to the note, like a marimba bar. Resonance is how long it rings, Amount how hard it's struck",
+        description: "A short strike rings a resonant filter tuned to the note, like a marimba bar",
         json: include_str!("../../library/mallet.json"),
     },
     LibraryGroup {
@@ -133,7 +133,7 @@ pub const LIBRARY: &[LibraryGroup] = &[
         name: "Random Melody",
         file_name: "random-melody.json",
         section: Section::Generators,
-        description: "Plays itself: a wandering voltage, sampled on the beat and kept in a scale, A minor pentatonic until you change Root and Scale. Amount is its range, Threshold how many beats rest",
+        description: "Plays itself: a wandering voltage, sampled on the beat and kept in a scale, A minor pentatonic until you change Root and Scale",
         json: include_str!("../../library/random-melody.json"),
     },
     LibraryGroup {
@@ -154,14 +154,14 @@ pub const LIBRARY: &[LibraryGroup] = &[
         name: "Pump",
         file_name: "pump.json",
         section: Section::Effects,
-        description: "Each trigger ducks the sound and lets it swell back, like a compressor keyed from the kick. CV Amount is the depth",
+        description: "Each trigger ducks the sound and lets it swell back, like a compressor keyed from the kick",
         json: include_str!("../../library/pump.json"),
     },
     LibraryGroup {
         name: "Auto-Pan",
         file_name: "auto-pan.json",
         section: Section::Effects,
-        description: "An LFO sweeps a mono sound from side to side. Amount is how wide, and Tempo locks the sweep to the Clock",
+        description: "An LFO sweeps a mono sound from side to side. Tempo locks the sweep to the Clock",
         json: include_str!("../../library/auto-pan.json"),
     },
 ];
@@ -231,6 +231,11 @@ mod tests {
                 let graph_id = staged.nodes.iter().find(|n| n.patch_id == node.id).unwrap().graph_id;
                 for name in node.pinned.keys() {
                     assert!(shown.contains(&(graph_id, name.clone())), "{}: {name} is pinned but not on the face", entry.name);
+                }
+                // A face's names are for controls that are on it
+                for (name, label) in &node.face_labels {
+                    assert!(node.pinned.contains_key(name), "{}: {name} is named {label} but not pinned", entry.name);
+                    assert!(!label.trim().is_empty(), "{}: {name} has a blank name", entry.name);
                 }
             }
         }

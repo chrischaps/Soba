@@ -191,6 +191,9 @@
           ],
           "pinned": {
             "Level 2": 1
+          },
+          "face_labels": {
+            "Level 2": "4'"
           }
         },
         {
@@ -254,6 +257,9 @@
           ],
           "pinned": {
             "Cutoff": 1
+          },
+          "face_labels": {
+            "Cutoff": "Bright"
           }
         },
         {
@@ -328,6 +334,10 @@
           "pinned": {
             "Attack": 1,
             "Release": 1
+          },
+          "face_labels": {
+            "Attack": "Swell",
+            "Release": "Release"
           }
         },
         {
@@ -376,6 +386,9 @@
           ],
           "pinned": {
             "Depth": 1
+          },
+          "face_labels": {
+            "Depth": "Ensemble"
           }
         }
       ],

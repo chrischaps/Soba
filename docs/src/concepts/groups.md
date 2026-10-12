@@ -61,6 +61,15 @@ Controls from modules nearer the face come first, then top to bottom by where th
 
 Right-click a control on the face and choose **Hide from group** to take it off. If the group is inside another group, **Show on outer group too** puts it on that group's face as well.
 
+## Naming a face control
+
+A pinned control wears its module's short name, such as **FM**, **CV Amt** or **2**. That says what the knob is, not what it does for this group. To name it, right-click it on the face. The menu opens on **Name** with the current name selected: type a new one and press `Enter`. An electric piano's **FM** might become **Tine**, and a mixer's **2** might become **4'**.
+
+- The name shows only on the face. Inside the group, the module keeps its own names, so you can still see which knob is which when you open it.
+- Hover a named control to see what it drives, such as *Tine: Oscillator FM Depth*.
+- Clear the field and press `Enter`, or type the module's own name, to go back to it.
+- The name goes with the control to an outer group's face, and into a saved patch or My Modules. Undo takes it back.
+
 ## My Modules
 
 Right-click a group and choose **Save to My Modules**. The group is saved as a file named after it, in *Documents/Soba/My Modules*.
@@ -78,14 +87,14 @@ The **Library** is a shelf of ready-made groups that ships with Soba. Each one i
 | **Subtractive Voice** | A saw through a ladder filter, one envelope opening the filter and one shaping the level | Pitch, Gate, Velocity → Out |
 | **FM Voice** | Two-operator FM at 1:1, an electric-piano bark that mellows as it rings. **Oct** and **Semi** set the ratio | Pitch, Gate, Velocity → Out |
 | **FM Bell** | Two-operator FM at 1:3.5: clangorous partials that fade to a pure tone | Pitch, Gate, Velocity → Out |
-| **Electric Piano** | A Rhodes-style tine: FM at 1:1 that barks the harder you play and mellows as it rings, with a 14:1 ping on the strike and a slow tremolo. **FM** is the tine, **Vel** the bark, **Dec** how long it rings, **CV Amt** and **Rate** the tremolo | Pitch, Gate, Velocity → Out |
+| **Electric Piano** | A Rhodes-style tine: FM at 1:1 that barks the harder you play and mellows as it rings, with a 14:1 ping on the strike and a slow tremolo. Its face: **Tine**, **Bark**, **Decay**, **Tremolo** and **Rate** | Pitch, Gate, Velocity → Out |
 | **Supersaw Pad** | Seven detuned saws, a slow swell and a filter that breathes | Pitch, Gate, Velocity → Out |
-| **String Machine** | A Solina-style ensemble: detuned saws at 8' and 4', thinned and swelling, through a three-voice chorus. **Cutoff** is the brightness, **Depth** the ensemble, **Atk** the swell and **2** the 4' octave | Pitch, Gate, Velocity → Out |
+| **String Machine** | A Solina-style ensemble: detuned saws at 8' and 4', thinned and swelling, through a three-voice chorus. Its face: **Swell**, **Release**, **Ensemble**, **Bright** and **4'** | Pitch, Gate, Velocity → Out |
 | **Mallet** | A short strike rings a resonant filter tuned to the note, like a marimba bar | Pitch, Gate, Velocity → Out |
 | **Acid Bass** | A resonant, driven ladder snapped open on every note; velocity accents. Step Sequencer [slides](../modules/utilities/sequencer.md#slides) glide it like a 303 | Pitch, Gate, Velocity → Out |
 | **Reese Bass** | Three detuned saws beating against each other, with a slow LFO in the filter | Pitch, Gate, Velocity → Out |
 | **Drum Kit** | Kick, snare and hats on a stereo mixer, the closed hat choking the open one | Kick, Snare, Hat, Open Hat, Accent → Out L, Out R |
-| **Random Melody** | Plays itself: a wandering voltage sampled on the beat and kept in a scale, A minor pentatonic until you change **Root** and **Scale**. **Amt** is its range, **Thresh** how many beats rest | → Pitch, Gate |
+| **Random Melody** | Plays itself: a wandering voltage sampled on the beat and kept in a scale, A minor pentatonic until you change **Root** and **Scale**. **Range** sets how far it wanders, **Rests** how many beats it sits out | → Pitch, Gate |
 | **Wind** | Plays itself: pink noise through a wandering band-pass, whistling higher as each gust rises | → Out L, Out R |
 | **Stereo Space** | Chorus, ping-pong tape echo and a room, in pedalboard order | In L, In R → Out L, Out R |
 | **Pump** | Each trigger ducks the sound and lets it swell back, like a compressor keyed from the kick | In, Trig → Out |
@@ -97,7 +106,7 @@ A Library group you've changed can be saved to My Modules under its own name, li
 
 ## Editing and undo
 
-Copy, paste, duplicate and delete treat a group as a whole: deleting one deletes everything inside it. Undo covers grouping, ungrouping, renaming, pinning, changing jacks and every edit you make inside a group. Undoing an edit that was made inside a group shows you that group as it happens.
+Copy, paste, duplicate and delete treat a group as a whole: deleting one deletes everything inside it. Undo covers grouping, ungrouping, renaming, pinning, naming face controls, changing jacks and every edit you make inside a group. Undoing an edit that was made inside a group shows you that group as it happens.
 
 ## How the sound works
 
