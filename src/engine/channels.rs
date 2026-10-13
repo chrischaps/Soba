@@ -15,7 +15,9 @@
 //!   the UI set aside, coming back to be saved
 //! - **takes** (audio -> UI): takes Samplers have just recorded, shared,
 //!   for the UI to keep with the patch
-//! - **events** (audio -> UI): metering, monitor values, status
+//! - **events** (audio -> UI): output metering, CPU load, status
+//! - **monitor boards** (audio -> UI): the newest monitor values, module
+//!   meters and readouts, one board per plan (see [`super::monitor_board`])
 //! - **scope frames** (audio -> UI): oscilloscope captures, by value
 //!
 //! The UI side owns the [`AudioGraph`]. Structural commands edit it there,
@@ -32,6 +34,7 @@ use super::audio_processor::create_module_registry;
 use super::commands::{AudioMessage, EngineCommand, EngineEvent, NodeId, ScopeFrame};
 use crate::dsp::{SampleData, Snapshot};
 use super::graph_plan::GraphPlan;
+use super::monitor_board::Monitors;
 use super::audio_input::InputFeed;
 use super::recorder::RecordTap;
 
@@ -176,6 +179,7 @@ impl EngineChannels {
                 take_rx,
                 event_rx,
                 scope_rx,
+                monitors: Monitors::default(),
                 config: Arc::clone(&config),
                 unsent_plan: None,
                 unsent_transport: UnsentTransport::default(),
@@ -231,6 +235,8 @@ pub struct UiHandle {
     take_rx: Consumer<(NodeId, u32, Arc<SampleData>)>,
     event_rx: Consumer<EngineEvent>,
     scope_rx: Consumer<ScopeFrame>,
+    /// Where each plan's taps, meters and readouts are read
+    monitors: Monitors,
     config: Arc<AudioConfig>,
     /// A compiled plan that didn't fit in the queue yet. Plans must arrive in
     /// order, so no newer plan is compiled until this one is sent.
@@ -397,7 +403,8 @@ impl UiHandle {
             if self.plans_in_flight >= MAX_PLANS_IN_FLIGHT {
                 break;
             }
-            let Some(plan) = self.unsent_plan.take().or_else(|| self.graph.take_plan()) else {
+            let fresh = || self.graph.take_plan().map(|plan| self.monitors.watch(plan));
+            let Some(plan) = self.unsent_plan.take().or_else(fresh) else {
                 break;
             };
             match self.message_tx.push(AudioMessage::InstallPlan(plan)) {
@@ -486,12 +493,16 @@ impl UiHandle {
     /// Receive an event from the audio engine.
     /// Returns Some(event) if available, None if no events pending.
     ///
+    /// Monitored values, meters and readouts come last, the newest of each
+    /// once per drain (see [`Monitors::next`]), however many callbacks ran.
+    ///
     /// This is a non-blocking operation.
     pub fn recv_event(&mut self) -> Option<EngineEvent> {
         self.event_rx
             .pop()
             .ok()
             .or_else(|| self.scope_rx.pop().ok().map(ScopeFrame::into_event))
+            .or_else(|| self.monitors.next())
     }
 
     /// Drain all pending events from the engine.

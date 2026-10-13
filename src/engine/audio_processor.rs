@@ -269,11 +269,9 @@ impl AudioProcessor {
         self.record(output, channels);
         self.play_cue(output, channels);
 
-        self.send_monitor_values();
+        self.plan.publish_monitors();
         self.send_scope_captures();
         self.send_output_level();
-        self.send_meter_levels();
-        self.send_readouts();
 
         // Calculate CPU load
         let elapsed = start_time.elapsed();
@@ -317,11 +315,9 @@ impl AudioProcessor {
         self.record(output, channels);
         self.play_cue(output, channels);
 
-        self.send_monitor_values();
+        self.plan.publish_monitors();
         self.send_scope_captures();
         self.send_output_level();
-        self.send_meter_levels();
-        self.send_readouts();
     }
 
     /// Runs the graph over a buffer in plan-sized blocks, each with the MIDI
@@ -377,18 +373,6 @@ impl AudioProcessor {
         }
     }
 
-    /// Sends monitored input and output values to the UI thread, for knob
-    /// animation and LED indicators.
-    fn send_monitor_values(&mut self) {
-        let Self { plan, engine_handle, .. } = self;
-        for (node_id, input_index, value) in plan.input_values() {
-            engine_handle.send_event_lossy(EngineEvent::InputValue { node_id, input_index, value });
-        }
-        for (node_id, output_index, value, channels) in plan.output_values() {
-            engine_handle.send_event_lossy(EngineEvent::OutputValue { node_id, output_index, value, channels });
-        }
-    }
-
     /// Sends oscilloscope captures to the UI thread for waveform display.
     fn send_scope_captures(&mut self) {
         let Self { plan, engine_handle, .. } = self;
@@ -402,22 +386,6 @@ impl AudioProcessor {
         if let Some(levels) = self.plan.take_output_levels() {
             self.engine_handle.send_event_lossy(EngineEvent::OutputLevel(levels));
         }
-    }
-
-    /// Sends this callback's module meter readings to the UI.
-    fn send_meter_levels(&mut self) {
-        let Self { plan, engine_handle, .. } = self;
-        plan.take_meter_levels(|node_id, levels| {
-            engine_handle.send_event_lossy(EngineEvent::MeterLevels { node_id, levels });
-        });
-    }
-
-    /// Sends this callback's module readouts to the UI.
-    fn send_readouts(&mut self) {
-        let Self { plan, engine_handle, .. } = self;
-        plan.readouts(|node_id, readout| {
-            engine_handle.send_event_lossy(EngineEvent::Readout { node_id, readout });
-        });
     }
 
     /// Applies all pending messages from the UI thread, then does a
@@ -709,6 +677,38 @@ mod tests {
 
         assert_eq!(processor.plan().len(), 2);
         assert!(output.iter().any(|&s| s.abs() > 0.01), "patch should be audible");
+    }
+
+    #[test]
+    fn test_a_big_patch_reports_every_module_however_many_callbacks_ran() {
+        let (mut ui, mut processor) = processor();
+        // More readings each callback than the event queue holds
+        let lfos = 1..=200;
+        for node_id in lfos.clone() {
+            ui.send_command(EngineCommand::AddModule { node_id, module_id: "mod.lfo" });
+            ui.send_command(EngineCommand::MonitorOutput { node_id, output_index: 0 });
+        }
+        ui.send_command(EngineCommand::SetPlaying(true));
+        ui.flush();
+
+        // Several callbacks between two UI frames
+        let mut output = vec![0.0; 512];
+        for _ in 0..8 {
+            processor.process(&mut output, 2);
+        }
+        ui.flush();
+        let (mut outputs, mut readouts) = (Vec::new(), Vec::new());
+        for event in ui.drain_events() {
+            match event {
+                EngineEvent::OutputValue { node_id, .. } => outputs.push(node_id),
+                EngineEvent::Readout { node_id, .. } => readouts.push(node_id),
+                _ => {}
+            }
+        }
+        outputs.sort_unstable();
+        readouts.sort_unstable();
+        assert_eq!(outputs, lfos.clone().collect::<Vec<_>>(), "every output, once");
+        assert_eq!(readouts, lfos.collect::<Vec<_>>(), "every readout, once");
     }
 
     #[test]

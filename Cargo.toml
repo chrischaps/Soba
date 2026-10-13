@@ -29,6 +29,7 @@ chrono = { version = "0.4.41", default-features = false, features = ["clock"] }
 image = { version = "0.25", default-features = false, features = ["png"], optional = true }
 # std::time's clocks panic in the browser; this is std's on the desktop
 web-time = "1.1"
+triple_buffer = "9.0.0"
 
 # Updates (src/app/update): one request to GitHub's releases API, then the
 # release's zip, checked against its SHA256SUMS before it's unpacked

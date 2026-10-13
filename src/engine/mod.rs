@@ -14,6 +14,7 @@ pub mod graph_plan;
 pub mod latency;
 pub mod midi_engine;
 pub mod midi_scheduler;
+mod monitor_board;
 pub mod offline;
 pub mod recorder;
 

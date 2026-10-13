@@ -30,9 +30,10 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::dsp::{Audition, DspModule, MeterLevels, OutputLevels, ProcessContext, Readout, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
+use crate::dsp::{Audition, DspModule, OutputLevels, ProcessContext, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
 use crate::dsp::primitives::Markers;
 use crate::engine::commands::{ChannelPeaks, NodeId, PortIndex};
+use crate::engine::monitor_board::MonitorWriter;
 
 pub use crate::dsp::module_trait::MAX_INPUTS;
 
@@ -164,6 +165,9 @@ pub struct GraphPlan {
     pub(crate) late: Vec<LateLine>,
     pub(crate) input_taps: Vec<InputTap>,
     pub(crate) output_taps: Vec<OutputTap>,
+    /// Where the UI reads the taps, meters and readouts, once the UI side
+    /// has given the plan a board (see [`super::monitor_board`]).
+    pub(crate) monitor: Option<MonitorWriter>,
     /// The number of samples every buffer currently holds.
     pub(crate) block_len: usize,
     /// The capacity every buffer was allocated with.
@@ -182,6 +186,7 @@ impl GraphPlan {
             late: Vec::new(),
             input_taps: Vec::new(),
             output_taps: Vec::new(),
+            monitor: None,
             block_len: max_block_size,
             max_block_size,
         }
@@ -495,17 +500,6 @@ impl GraphPlan {
         self.transport().and_then(|transport| transport.tempo_bpm)
     }
 
-    /// Calls `f` with the readout of every module that has one.
-    ///
-    /// REAL-TIME SAFE.
-    pub fn readouts(&self, mut f: impl FnMut(NodeId, Readout)) {
-        for node in &self.nodes {
-            if let Some(readout) = node.module.as_ref().and_then(|module| module.readout(&node.params)) {
-                f(node.node_id, readout);
-            }
-        }
-    }
-
     /// Sets every buffer's length to `len`, within its allocated capacity.
     fn set_block_len(&mut self, len: usize) {
         if len == self.block_len {
@@ -570,14 +564,14 @@ impl GraphPlan {
         self.output_module().and_then(|module| module.get_audio_output())
     }
 
-    /// Calls `f` with each metering module's readings since the last call.
+    /// Hands the UI this callback's monitored readings, the modules' meters
+    /// and readouts among them, if the plan has a board to put them on.
     ///
-    /// REAL-TIME SAFE.
-    pub fn take_meter_levels(&mut self, mut f: impl FnMut(NodeId, MeterLevels)) {
-        for node in &mut self.nodes {
-            if let Some(levels) = node.module.as_mut().and_then(|module| module.take_meter_levels()) {
-                f(node.node_id, levels);
-            }
+    /// REAL-TIME SAFE: the board was made with the plan.
+    pub fn publish_monitors(&mut self) {
+        if let Some(mut board) = self.monitor.take() {
+            board.publish(self);
+            self.monitor = Some(board);
         }
     }
 

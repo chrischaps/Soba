@@ -114,8 +114,10 @@ Four lock-free `rtrb` ring buffers:
 |-------|-----------|---------|
 | messages | UI → audio | `AudioMessage::{InstallPlan, SetParameter, SetPlaying}` |
 | retired plans | audio → UI | the plan each install replaced, to be dropped on the UI thread |
-| events | audio → UI | `EngineEvent` metering, monitor values, status |
+| events | audio → UI | `EngineEvent` output metering, CPU load, status |
 | scope frames | audio → UI | `ScopeFrame`: oscilloscope captures in fixed arrays |
+
+Monitor values, module meters and readouts are states, not events, so they don't queue. Each plan carries a monitor board (`src/engine/monitor_board.rs`), a lock-free triple buffer with a fixed place for every reading. The audio thread rewrites it after each callback, and the UI reads the newest once a frame. Peaks (cabled outputs, meters) keep the louder reading until the UI has taken it. A big patch can't overflow it, and the UI's work doesn't grow with the callbacks in a frame. `UiHandle::recv_event` hands its readings out as `EngineEvent`s after the queued ones.
 
 Plans and parameter changes share one queue, so they apply in the order they were sent. A parameter change can overtake its node's plan, because the plan is only sent at the end of the frame. That's harmless: the audio thread ignores the change for an unknown node, and the plan already carries the value.
 
@@ -152,7 +154,7 @@ pub fn process(&mut self, output: &mut [f32], channels: usize) {
         self.write_output(chunk, channels, frames);
     }
 
-    // 3. Report monitor values, scope captures, levels, CPU load
+    // 3. Publish the monitor board; report scope captures, levels, CPU load
 }
 ```
 
