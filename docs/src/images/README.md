@@ -14,7 +14,11 @@ Screenshots for the manual. This file isn't part of the book; it's a note for wh
 | `groups-inside.png` | Inside Voice: the trail, Inputs and Outputs, re-laid so no cable crosses a module, zoomed to 0.78 | Groups |
 | `tutorial-complete-patch.png` | The finished First Patch (`tools/showcase/patches/first-patch.json`), playing a note | Your First Patch |
 | `module-<page>.png` | One module, playing, cropped with a margin of grid | Each module page (`module-svf-filter.png` for `svf-filter.md`) |
-| `recipe-<page>.png` | The whole example patch, playing, frames and notes included | Each recipe (`recipe-lush-pad.png` for `lush-pad.md`) |
+| `recipe-live-looper.png` | The whole Live Looper patch as it opens, frames and notes included | Live Looper |
+| `recipe-from-one-sine-harmony.png`, `recipe-from-one-sine-line.png` | One frame of From One Sine mid-song: the Chord Sequencer playing Everything, and the motif's Step Sequencer on pattern C | From One Sine |
+| `recipe-held-vowels-faces.png` | The Vocoder's bands frozen on each of the four vowels, side by side | Held Vowels |
+
+A recipe with a playable embed (`<iframe class="patch-embed">`) has no picture of its whole patch: the embed shows the patch, fitted, and plays it. What a still would have said about the layout goes in the italic line under the embed. A recipe keeps a picture only for what the embed can't show: a patch with no embed (Live Looper needs a live input), a moment minutes into a song, or a face at several moments at once.
 
 ## Guidelines
 
@@ -26,9 +30,11 @@ Screenshots for the manual. This file isn't part of the book; it's a note for wh
 
 ## Re-shooting recipe images
 
-`python tools/showcase/recipe_images.py` films every example that has a `recipe-<page>.png` and writes it again (name examples to do only those, or a new one). It plays the patch for two seconds, frames it with the capture's `fit` cue, crops to its modules, frames and notes with a little grid around, and saves it 1594 px wide in a 256-colour palette. `--check` writes nothing and lists the pictures that no longer match the build. Build into `target/capture` first (see `tools/showcase/shots.py`).
+`python tools/showcase/recipe_images.py` films every recipe picture above and writes it again (name pictures to do only those, or a new example to picture it whole). For a whole patch, listed in the script's `STILLS`, it plays the patch for two seconds, frames it with the capture's `fit` cue, crops to its modules, frames and notes with a little grid around, and saves it 1594 px wide in a 256-colour palette. `--check` writes nothing and lists the pictures that no longer match the build. Build into `target/capture` first (see `tools/showcase/shots.py`).
 
 `recipe-from-one-sine-harmony.png` and `recipe-from-one-sine-line.png` show the song mid-performance. They're listed in the script's `MOMENTS` table, and it re-shoots and checks them with the rest. Each one plays the song up to its moment, aims the view at one frame at the scale the picture has always had, and crops to that frame without resizing it. Playing three minutes of song frame by frame takes a few minutes.
+
+`recipe-held-vowels-faces.png` is a close-up, listed in the script's `CLOSEUPS` table: the patch is filmed once for each vowel, with the view aimed at the Vocoder, and the same crop of its face from each take is set on a grid.
 
 ## Re-shooting the interface pictures
 

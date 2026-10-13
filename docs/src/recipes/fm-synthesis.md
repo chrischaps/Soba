@@ -6,10 +6,8 @@ One sine wave bends the pitch of another, hundreds of times a second, and a bell
 > The patch file is [`patches/fm-synthesis.json`](https://github.com/chrischaps/Soba/blob/master/patches/fm-synthesis.json).
 
 <iframe class="patch-embed" src="../play/?patch=fm-synthesis" title="FM Synthesis, playable in the browser" loading="lazy"></iframe>
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
-![The FM Synthesis patch](../images/recipe-fm-synthesis.png)
-*A modulator and a carrier, each with its own VCA and envelope.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. A modulator and a carrier, each with its own VCA and envelope.*
 
 ## What it teaches
 

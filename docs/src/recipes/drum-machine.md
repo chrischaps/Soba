@@ -6,10 +6,8 @@ A drum machine in 14 modules: one Clock, five sequencer lanes, and a [Drum](../m
 > The patch file is [`patches/drum-machine.json`](https://github.com/chrischaps/Soba/blob/master/patches/drum-machine.json).
 
 <iframe class="patch-embed" src="../play/?patch=drum-machine" title="Drum Machine, playable in the browser" loading="lazy"></iframe>
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
-![The Drum Machine patch](../images/recipe-drum-machine.png)
-*Time on the left, then one lane per drum from the top: kick, snare, closed hat, open hat, toms. Each sequencer plays the Drum beside it. The Mixer, a touch of room and the output sit at the right.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. Time on the left, then one lane per drum from the top: kick, snare, closed hat, open hat, toms. Each sequencer plays the Drum beside it. The Mixer, a touch of room and the output sit at the right.*
 
 ## What it teaches
 

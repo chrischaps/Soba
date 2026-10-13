@@ -6,10 +6,8 @@ A bell you can play across the keyboard, made from one recorded note. The record
 > The patch file is [`patches/sampled-keys.json`](https://github.com/chrischaps/Soba/blob/master/patches/sampled-keys.json), and its sample is [`patches/samples/fm-bell-c4.wav`](https://github.com/chrischaps/Soba/blob/master/patches/samples/fm-bell-c4.wav).
 
 <iframe class="patch-embed" src="../play/?patch=sampled-keys" title="Sampled Keys, playable in the browser" loading="lazy"></iframe>
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
-![The Sampled Keys patch](../images/recipe-sampled-keys.png)
-*A chord on the bell: each white line on the waveform is a key, playing the recording at its own speed.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. Hold a chord and a white line runs along the waveform for each key, playing the recording at its own speed.*
 
 ## What it teaches
 

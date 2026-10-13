@@ -8,10 +8,8 @@ The patch plays the whole song itself. Three [Arrangers](../modules/utilities/ar
 > The patch file is [`patches/canopy.json`](https://github.com/chrischaps/Soba/blob/master/patches/canopy.json), and its singer is [`patches/samples/canopy-chops.wav`](https://github.com/chrischaps/Soba/blob/master/patches/samples/canopy-chops.wav).
 
 <iframe class="patch-embed" src="../play/?patch=canopy" title="Canopy, playable in the browser" loading="lazy"></iframe>
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
-![The Canopy patch](../images/recipe-canopy.png)
-*The whole song at the widest zoom. The score's three Arrangers and the mixing desk run along the top. Below them, left to right: the harmony (three Chord Sequencers and the Rhodes, Strings and Harp they play), the two loops, the band, and the forest.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The score's three Arrangers and the mixing desk run along the top. Below them, left to right: the harmony (three Chord Sequencers and the Rhodes, Strings and Harp they play), the two loops, the band, and the forest.*
 
 ## The song
 

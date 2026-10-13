@@ -6,10 +6,8 @@ A patch that plays itself. A slow pentatonic melody repeats every twelve seconds
 > The patch file is [`patches/generative-ambient.json`](https://github.com/chrischaps/Soba/blob/master/patches/generative-ambient.json).
 
 <iframe class="patch-embed" src="../play/?patch=generative-ambient" title="Generative Ambient, playable in the browser" loading="lazy"></iframe>
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
-![The Generative Ambient patch](../images/recipe-generative-ambient.png)
-*Clock and sequencer play the melody, top left, with the Clock Divider under the Clock. Below, the LFO and Sample & Hold set the brightness, and Noise and the Quantizer sing the second voice.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. Clock and sequencer play the melody, top left, with the Clock Divider under the Clock. Below, the LFO and Sample & Hold set the brightness, and Noise and the Quantizer sing the second voice.*
 
 ## What it teaches
 

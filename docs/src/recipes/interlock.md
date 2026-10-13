@@ -8,10 +8,8 @@ This patch plays a kotekan, and [Logic](../modules/utilities/logic.md) is what s
 > The patch file is [`patches/interlock.json`](https://github.com/chrischaps/Soba/blob/master/patches/interlock.json).
 
 <iframe class="patch-embed" src="../play/?patch=interlock" title="Interlock, playable in the browser" loading="lazy"></iframe>
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
-![The Interlock patch](../images/recipe-interlock.png)
-*The rhythm and its three Logic modules are on the left: Where they meet, The gaps, and Tide in the sangsih lane. The two players are the blue and violet lanes. The meeting tone is at the bottom left and the tide at the bottom. Captured at high tide, with both parts playing and the pad in.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The rhythm and its three Logic modules are on the left: Where they meet, The gaps, and Tide in the sangsih lane. The two players are the blue and violet lanes. The meeting tone is at the bottom left and the tide at the bottom. The tide starts out: give it ten seconds or so to bring the sangsih and the pad in.*
 
 ## What it teaches
 

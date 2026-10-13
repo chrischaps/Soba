@@ -222,10 +222,11 @@ python tools/showcase/encode.py hero out.mp4 --loop 2 --fps 30 --crf 27 --poster
 # `--crf 12 --preset fast` to soba --capture (a shot sets crf= in shots.py): ~4-5 MB/s
 python tools/showcase/shots.py from-one-sine     # the whole 4:41 song, ~10 min to film, 1.3 GB
 # After a module grows: are every example's modules still inside their frames,
-# clear of notes and of each other? (Re-shoot the recipe images it flags)
+# clear of notes and of each other? (Re-shoot any recipe image of an example it flags)
 python tools/showcase/check_layout.py
-# Re-shoot every recipe image (docs/src/images/recipe-<name>.png): played, fitted with
-# the capture's `fit` cue, cropped and paletted. --check lists the stale ones instead
+# Re-shoot every recipe image (docs/src/images/recipe-<name>.png): Live Looper's whole
+# patch, From One Sine's mid-song moments and Held Vowels' frozen faces. A recipe with
+# an embed has no whole-patch still. --check lists the stale ones instead
 python tools/showcase/recipe_images.py [name ...]
 python tools/showcase/recipe_images.py --check
 # The same for the interface pictures and the tutorial's finished patch (interface-*.png,

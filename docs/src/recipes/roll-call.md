@@ -6,10 +6,8 @@ A full drum kit on one [Trigger Sequencer](../modules/utilities/trigger-sequence
 > The patch file is [`patches/roll-call.json`](https://github.com/chrischaps/Soba/blob/master/patches/roll-call.json).
 
 <iframe class="patch-embed" src="../play/?patch=roll-call" title="Roll Call, playable in the browser" loading="lazy"></iframe>
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
-![The Roll Call patch](../images/recipe-roll-call.png)
-*The Clock, then the Trigger Sequencer, whose eight lanes fan out to the kit two drums at a time: kick and snare, closed and open hat, tom and rim, cowbell and cymbal. Two Mixers, a room and the output sit at the right.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The Clock, then the Trigger Sequencer, whose eight lanes fan out to the kit two drums at a time: kick and snare, closed and open hat, tom and rim, cowbell and cymbal. Two Mixers, a room and the output sit at the right.*
 
 ## What it teaches
 

@@ -1,16 +1,19 @@
-"""Re-shoots the recipe images: each example, playing, fitted and cropped.
+"""Re-shoots the recipe images that show what a recipe's embed can't.
 
     python tools/showcase/recipe_images.py [name ...]
     python tools/showcase/recipe_images.py --check [name ...]
 
-For each example in patches/ that has a docs/src/images/recipe-<name>.png
-(or the ones named, which may be new), this films one still with
+A recipe with a playable embed shows its whole patch there, so it has no
+picture of it (#225). The pictures left are of a patch with no embed, listed
+in STILLS, and the moments and close-ups below.
+
+For each example in STILLS (or one named, which may be new), this films one
+still with
 
     -2.0 play / -1.0 fit / 0.0 layout / 0.0 still
 
-so the patch has played for two seconds (cables glow, displays show signal;
-an example that needs longer to show itself is listed in PLAYED) and the
-view frames the whole level, as F does. The `layout` cue says where
+so the patch has played for two seconds (cables glow, displays show signal)
+and the view frames the whole level, as F does. The `layout` cue says where
 every module, frame and note was drawn and where the view was, so the still
 is cropped to them with a little grid around, resized to 1594 px wide with
 Lanczos and saved as a 256-colour palette (median cut, no dither): the house
@@ -18,8 +21,8 @@ style for the manual's full-patch pictures.
 
 A patch too big to come out at least 1594 px wide in the first window is
 filmed again in a window grown to suit, so pictures are only ever scaled down.
-One too big to fit even at the editor's furthest zoom (From One Sine) is
-filmed again with the interface drawn smaller, so the window holds more.
+One too big to fit even at the editor's furthest zoom is filmed again with
+the interface drawn smaller, so the window holds more.
 
 --check films each one the same way but writes nothing: it reports which
 images no longer match the current build. A capture plays out the same way
@@ -65,10 +68,11 @@ PPP = 2.0
 LARGEST = (6000, 4000)
 # Grid kept around the patch, in screen points
 MARGIN = 6
-SCRIPT = "-{played} play\n-1.0 fit\n0.0 layout shot\n0.0 still shot\n0.1 end\n"
-# How long an example plays before its still, in seconds, where two isn't
-# enough to show what it does: Held Vowels, frozen on its "ee"
-PLAYED = {"held-vowels": 13.0}
+SCRIPT = "-2.0 play\n-1.0 fit\n0.0 layout shot\n0.0 still shot\n0.1 end\n"
+# The examples pictured whole, each as `recipe-<name>.png`: those whose
+# recipe has no embed. Live Looper needs a live input, which an embed
+# can't give it
+STILLS = ["live-looper"]
 
 # A picture of one moment in a song: `recipe-<image>.png` shows `frame`
 # (by title) of patches/<patch>.json once it has played `at` seconds, drawn
@@ -112,7 +116,7 @@ STALE_FRACTION = 0.002
 def film(patch, out, size, ppp, script=None):
     """Films one still of the patch, fitted unless a script says otherwise,
     and returns its layout."""
-    text = script or SCRIPT.format(played=PLAYED.get(patch.stem, 2.0))
+    text = script or SCRIPT
     script = out / "recipe.txt"
     script.write_text(text)
     subprocess.run([str(EXE), str(patch), "--capture", str(script), "--out", str(out), "--fps", "10",
@@ -288,7 +292,7 @@ def changed(new, path):
 def main(args):
     check = "--check" in args
     names = [a for a in args if not a.startswith("--")]
-    names = names or sorted(p.stem for p in (ROOT / "patches").glob("*.json") if (IMAGES / f"recipe-{p.stem}.png").exists()) + list(MOMENTS) + list(CLOSEUPS)
+    names = names or STILLS + list(MOMENTS) + list(CLOSEUPS)
     stale = []
     with tempfile.TemporaryDirectory() as tmp:
         for name in names:

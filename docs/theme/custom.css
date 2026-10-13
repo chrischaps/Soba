@@ -40,6 +40,13 @@
     margin: 1em 0 0.25em;
 }
 
+/* An embed's or film's italic caption sits close under it, as an image's
+   caption does */
+.patch-embed + p:has(> em:only-child),
+.patch-film + p:has(> em:only-child) {
+    margin-top: 0.25em;
+}
+
 /* Steinberg's ASIO Compatible logo and trademark line, which its licence
    asks for on every page that mentions ASIO. A dark tile keeps the white
    logo visible in the light themes too */

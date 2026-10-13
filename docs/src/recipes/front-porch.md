@@ -6,10 +6,8 @@ Rhythm guitar played on an electric piano. A Chord Sequencer strums G, D/F♯, E
 > The patch file is [`patches/front-porch.json`](https://github.com/chrischaps/Soba/blob/master/patches/front-porch.json).
 
 <iframe class="patch-embed" src="../play/?patch=front-porch" title="Front Porch, playable in the browser" loading="lazy"></iframe>
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
-![The Front Porch patch](../images/recipe-front-porch.png)
-*The hand, the instrument and the room along the top, and the porch under the hand. Everything that makes it sound like strumming happens in the Chord Sequencer: the Electric Piano is the Library's, unchanged. The one Clock plays the hand and the porch, and a Mixer brings them into the one room.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The hand, the instrument and the room along the top, and the porch under the hand. Everything that makes it sound like strumming happens in the Chord Sequencer: the Electric Piano is the Library's, unchanged. The one Clock plays the hand and the porch, and a Mixer brings them into the one room.*
 
 ## What it teaches
 

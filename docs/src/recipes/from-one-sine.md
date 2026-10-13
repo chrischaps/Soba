@@ -8,14 +8,13 @@ Nothing outside the patch tells it what to do. Three [Arrangers](../modules/util
 > The patch file is [`patches/from-one-sine.json`](https://github.com/chrischaps/Soba/blob/master/patches/from-one-sine.json).
 
 <iframe class="patch-embed" src="../play/?patch=from-one-sine" title="From One Sine, playable in the browser" loading="lazy"></iframe>
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
-![The From One Sine patch](../images/recipe-from-one-sine.png)
-*The whole song at the widest zoom, at the drop. The score's three Arrangers and the harmony are on the top left, the instruments are in strips with signal running left to right, the drums run along the bottom, and the mixing desk is on the right, with the master tape in amber. Orange cables from the score reach every fader.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The score's three Arrangers and the harmony are on the top left, the instruments are in strips with signal running left to right, the drums run along the bottom, and the mixing desk is on the right, with the master tape in amber. Orange cables from the score reach every fader.*
 
 ## The song
 
 <iframe class="patch-film" src="https://www.youtube-nocookie.com/embed/NlWGFWRZs-U?rel=0" title="From One Sine, filmed in Soba as it plays" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
+
 *The whole song, filmed in the app as it plays. The camera follows the score: it opens close on the lone sine, visits each part as it enters, watches the master tape bend the mix through the build, pulls back to the whole rack for the drop, and ends where it began. [Watch on YouTube](https://youtu.be/NlWGFWRZs-U).*
 
 Each section of the song is sixteen bars. On the Arrangers they're 22 sections: a new one wherever a part enters or the band changes, a one-bar **Fill** to close each phrase of the groove, and a long last one where the song fades back to its first sound.

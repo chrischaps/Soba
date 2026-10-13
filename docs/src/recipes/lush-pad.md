@@ -6,10 +6,8 @@ A wide, slow-blooming pad for holding chords. Each note fades in over most of a 
 > The patch file is [`patches/lush-pad.json`](https://github.com/chrischaps/Soba/blob/master/patches/lush-pad.json).
 
 <iframe class="patch-embed" src="../play/?patch=lush-pad" title="Lush Pad, playable in the browser" loading="lazy"></iframe>
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
-![The Lush Pad patch](../images/recipe-lush-pad.png)
-*The bundled cables carry one strand per voice.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The bundled cables carry one strand per voice.*
 
 ## What it teaches
 

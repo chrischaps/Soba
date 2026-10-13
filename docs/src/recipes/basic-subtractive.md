@@ -6,10 +6,8 @@ A saw wave through a lowpass filter, with one envelope shaping its brightness an
 > The patch file is [`patches/basic-subtractive.json`](https://github.com/chrischaps/Soba/blob/master/patches/basic-subtractive.json).
 
 <iframe class="patch-embed" src="../play/?patch=basic-subtractive" title="Basic Subtractive Synth, playable in the browser" loading="lazy"></iframe>
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
-![The Basic Subtractive patch](../images/recipe-basic-subtractive.png)
-*Two envelopes from one gate: one for the filter, one for the VCA.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. Two envelopes from one gate: one for the filter, one for the VCA.*
 
 ## What it teaches
 
