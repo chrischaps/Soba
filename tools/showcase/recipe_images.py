@@ -97,7 +97,7 @@ Closeup = namedtuple("Closeup", "patch module at crop zoom columns")
 CLOSEUPS = {
     # The Vocoder's bands frozen on each of the four sung vowels: ohh, ooh,
     # ee and ahh, each held from one downbeat to the next
-    "held-vowels-faces": Closeup("held-vowels", "fx.vocoder", (5.6, 9.3, 13.0, 16.6), (18, 202, 203.5, 261.5), 2.0, 2),
+    "held-vowels-faces": Closeup("held-vowels", "fx.vocoder", (5.6, 9.3, 13.0, 16.6), (18, 202, 151, 261.5), 2.0, 2),
 }
 GAP = 28
 BACKGROUND = "#1e202c"

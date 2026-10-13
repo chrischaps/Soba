@@ -17,6 +17,8 @@
 //!   long as the chord does.
 //! - **Flatten** evens out the carrier's own spectrum before the voice's is
 //!   put on it, so a dull carrier speaks as clearly as a bright one.
+//! - **Level** sets how loud it all comes out. Flattened, the output follows
+//!   the carrier's level less closely, so this is where its loudness is set.
 //!
 //! Each band is two cascaded second-order sections (TPT state-variable
 //! band-passes), so neighbours cross at -3 dB and the bank sums flat. The
@@ -27,6 +29,7 @@ use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, PI, SQRT_2};
 use crate::dsp::{
     context::ProcessContext,
     denormal::flush,
+    dynamics::db_to_gain,
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -304,6 +307,7 @@ fn tilt(levels: impl Iterator<Item = f32>, bands: usize) -> f32 {
 /// - **Sibilance**, **Unvoiced**, **Width** and **Mix**.
 /// - **Flatten** (0–100%): evens out the carrier's bands before the voice's
 ///   levels are put on them.
+/// - **Level** (−24..+12 dB): the output's gain, dry and wet alike.
 pub struct Vocoder {
     sample_rate: f32,
     bands: [Band; MAX_BANDS],
@@ -338,6 +342,8 @@ pub struct Vocoder {
     width: SmoothedValue,
     mix: SmoothedValue,
     flatten: SmoothedValue,
+    /// Level, as a gain.
+    level: SmoothedValue,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
 }
@@ -360,6 +366,7 @@ impl Vocoder {
     pub const PARAM_WIDTH: usize = 7;
     pub const PARAM_MIX: usize = 8;
     pub const PARAM_FLATTEN: usize = 9;
+    pub const PARAM_LEVEL: usize = 10;
 
     /// Readout: the voice's level in each band, in amplitude, from 0 up to
     /// [`MAX_BANDS`].
@@ -406,6 +413,7 @@ impl Vocoder {
             width: SmoothedValue::with_default_smoothing(0.5, sample_rate),
             mix: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             flatten: SmoothedValue::with_default_smoothing(0.0, sample_rate),
+            level: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             ports: vec![
                 PortDefinition::input_with_default("carrier", "Carrier", SignalType::Audio, 0.0)
                     .describe("The sound that's played, a synth chord; a polyphonic cable is summed"),
@@ -440,6 +448,8 @@ impl Vocoder {
                     .describe("Blend from the carrier alone (0) to the vocoded sound (1)"),
                 ParameterDefinition::normalized("flatten", "Flatten", 0.0)
                     .describe("Evens out the carrier's own spectrum first, so a dull pad speaks as clearly as a bright saw"),
+                ParameterDefinition::new("level", "Level", -24.0, 12.0, 0.0, ParameterDisplay::linear("dB"))
+                    .describe("How loud it comes out: set the part's loudness here, since Flatten makes the carrier's matter less"),
             ],
         };
         vocoder.tune_all();
@@ -568,7 +578,7 @@ impl DspModule for Vocoder {
 
     fn prepare(&mut self, sample_rate: f32, _max_block_size: usize) {
         self.sample_rate = sample_rate;
-        for smoothed in [&mut self.formant, &mut self.sibilance, &mut self.unvoiced_amount, &mut self.width, &mut self.mix, &mut self.flatten] {
+        for smoothed in [&mut self.formant, &mut self.sibilance, &mut self.unvoiced_amount, &mut self.width, &mut self.mix, &mut self.flatten, &mut self.level] {
             smoothed.set_sample_rate(sample_rate);
         }
         self.tune_all();
@@ -593,6 +603,7 @@ impl DspModule for Vocoder {
         self.width.set_target(params[Self::PARAM_WIDTH]);
         self.mix.set_target(params[Self::PARAM_MIX]);
         self.flatten.set_target(params[Self::PARAM_FLATTEN]);
+        self.level.set_target(db_to_gain(params[Self::PARAM_LEVEL]));
 
         let carrier = &inputs[Self::PORT_CARRIER].samples;
         let modulator = &inputs[Self::PORT_MODULATOR].samples;
@@ -680,8 +691,9 @@ impl DspModule for Vocoder {
             // Rectified, a band reads 2/π of its amplitude
             let wet_gain = MAKEUP * FRAC_PI_2 * (self.active as f32).sqrt() * self.switch_gain;
             let mix = self.mix.next();
-            out_l[i] = dry * (1.0 - mix) + mix * (sides[0] * wet_gain + sibilance);
-            out_r[i] = dry * (1.0 - mix) + mix * (sides[1] * wet_gain + sibilance);
+            let level = self.level.next();
+            out_l[i] = level * (dry * (1.0 - mix) + mix * (sides[0] * wet_gain + sibilance));
+            out_r[i] = level * (dry * (1.0 - mix) + mix * (sides[1] * wet_gain + sibilance));
         }
     }
 
@@ -695,7 +707,7 @@ impl DspModule for Vocoder {
         self.frozen = false;
         self.listening = 1.0;
         self.emphasis = 0.0;
-        for smoothed in [&mut self.formant, &mut self.sibilance, &mut self.unvoiced_amount, &mut self.width, &mut self.mix, &mut self.flatten] {
+        for smoothed in [&mut self.formant, &mut self.sibilance, &mut self.unvoiced_amount, &mut self.width, &mut self.mix, &mut self.flatten, &mut self.level] {
             smoothed.reset(smoothed.target());
         }
     }
@@ -731,12 +743,12 @@ mod tests {
     const BLOCK: usize = 256;
 
     /// Knobs: Formant, Bands, Freeze, Attack, Release, Sibilance, Unvoiced,
-    /// Width, Mix, Flatten.
-    type Knobs = [f32; 10];
+    /// Width, Mix, Flatten, Level.
+    type Knobs = [f32; 11];
 
-    /// The knobs, with Freeze off and Flatten at 0.
+    /// The knobs, with Freeze off, Flatten at 0 and Level at 0 dB.
     fn knobs(formant: f32, bands: f32, sibilance: f32, unvoiced: f32, width: f32, mix: f32) -> Knobs {
-        [formant, bands, 0.0, 4.0, 40.0, sibilance, unvoiced, width, mix, 0.0]
+        [formant, bands, 0.0, 4.0, 40.0, sibilance, unvoiced, width, mix, 0.0, 0.0]
     }
 
     /// Knobs with Freeze set and Flatten at `flatten`, and everything else
@@ -895,7 +907,7 @@ mod tests {
         assert_eq!(ports[Vocoder::PORT_FREEZE].name, "Freeze");
         assert_eq!(ports[Vocoder::PORT_FREEZE].signal_type, SignalType::Gate);
         let names: Vec<&str> = vocoder.parameters().iter().map(|p| p.name).collect();
-        assert_eq!(names, ["Formant", "Bands", "Freeze", "Attack", "Release", "Sibilance", "Unvoiced", "Width", "Mix", "Flatten"]);
+        assert_eq!(names, ["Formant", "Bands", "Freeze", "Attack", "Release", "Sibilance", "Unvoiced", "Width", "Mix", "Flatten", "Level"]);
     }
 
     #[test]
@@ -959,6 +971,30 @@ mod tests {
         let tail = 12000..;
         let diff = knob_only.0[tail.clone()].iter().zip(&with_cv.0[tail.clone()]).map(|(a, b)| (a - b).abs()).fold(0.0, f32::max);
         assert!(diff < 0.05 * rms(&knob_only.0[tail]), "differ by {diff}");
+    }
+
+    #[test]
+    fn level_scales_both_outputs_and_nothing_else() {
+        // Half wet, so the carrier and the vocoded voice are both in it, with
+        // Flatten, Sibilance and Unvoiced all at work
+        let at = |db: f32| {
+            let mut k = knobs(0.3, 1.0, 0.5, 0.5, 0.8, 0.5);
+            k[Vocoder::PARAM_FLATTEN] = 0.5;
+            k[Vocoder::PARAM_LEVEL] = db;
+            let mut vocoder = Vocoder::new();
+            let out = play_on(&mut vocoder, 0.5, saw(125.0), vowel(&[500.0, 2000.0, 5000.0]), 0.0, |_| k);
+            (out, bands_of(&vocoder))
+        };
+        let ((l0, r0), bands0) = at(0.0);
+        assert!(rms(&l0) > 0.01 && rms(&r0) > 0.01);
+        for db in [-24.0, -8.0, 12.0] {
+            let ((l, r), bands) = at(db);
+            let gain = db_to_gain(db);
+            for (ours, unity) in l.iter().zip(&l0).chain(r.iter().zip(&r0)) {
+                assert!((ours - gain * unity).abs() <= 1e-5 * gain.max(1.0), "{db} dB: {ours} against {unity}");
+            }
+            assert_eq!(bands, bands0, "{db} dB moved the bands");
+        }
     }
 
     #[test]
@@ -1332,6 +1368,6 @@ mod tests {
         let mut registry = crate::dsp::ModuleRegistry::new();
         registry.register::<Vocoder>();
         let module = registry.create("fx.vocoder").unwrap();
-        assert_eq!(module.parameters().len(), 10);
+        assert_eq!(module.parameters().len(), 11);
     }
 }

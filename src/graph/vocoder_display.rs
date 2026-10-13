@@ -64,9 +64,9 @@ pub fn vocoder_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     // The carrier's slope, in dB an octave: its own, and as the bank plays it
     let (own_tilt, played_tilt) = readout.map_or((0.0, 0.0), |r| (r.values[Vocoder::READOUT_TILT], r.values[Vocoder::READOUT_EVENED]));
 
-    // As wide as the four knobs below
+    // As wide as the three knobs below
     let gap = ui.spacing().item_spacing.x;
-    let width = 4.0 * 44.0 * z + 3.0 * gap - 8.0 * z;
+    let width = 3.0 * 44.0 * z + 2.0 * gap - 8.0 * z;
     let height = 62.0 * z;
 
     ui.add_space(8.0 * z);

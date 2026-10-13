@@ -2484,6 +2484,7 @@ in   Unvoiced           Control  ConstantOnly         inline=false num 0.25 [0..
 in   Width              Control  ConstantOnly         inline=false num 0.5 [0..1] %
 in   Mix                Control  ConstantOnly         inline=false num 1 [0..1] %
 in   Flatten            Control  ConstantOnly         inline=false num 0 [0..1] %
+in   Level              Control  ConstantOnly         inline=false num 0 [-24..12] dB
 out  Out L              Audio
 out  Out R              Audio
 knob Attack             "Attack" KnobOnly
@@ -2494,6 +2495,7 @@ knob Sibilance          "Sibil" KnobOnly
 knob Unvoiced           "Unvoic" KnobOnly
 knob Width              "Width" KnobOnly
 knob Mix                "Mix" KnobOnly
+knob Level              "Level" KnobOnly
 display VocoderBands
 
 == fx.compressor "Compressor" finder="Compressor" Effect

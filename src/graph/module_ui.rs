@@ -479,8 +479,8 @@ static MODULE_UI: &[ModuleUi] = &[
     },
     ModuleUi {
         module_id: "fx.vocoder",
-        // How the bank plays (the voice heard, the carrier evened), then what
-        // passes besides, then the output
+        // Three rows: how the voice is heard, the carrier and what passes
+        // besides it, then the output
         knobs: &[
             knob("Attack"),
             knob("Release"),
@@ -490,9 +490,10 @@ static MODULE_UI: &[ModuleUi] = &[
             knob_as("Unvoiced", "Unvoic"),
             knob("Width"),
             knob("Mix"),
+            knob("Level"),
         ],
         display: NodeDisplay::VocoderBands,
-        knobs_per_row: 4,
+        knobs_per_row: 3,
         ..ModuleUi::DEFAULT
     },
     ModuleUi {

@@ -59,6 +59,7 @@ The sibilance and the dry carrier (below 100% **Mix**) sit in the middle of both
 | **Unvoic** (Unvoiced) | 0 – 100% | 25% | How far noise replaces the carrier while the voice hisses |
 | **Width** | 0 – 100% | 50% | How far apart the odd and even bands sit |
 | **Mix** | 0 – 100% | 100% | From the carrier alone (0%) to the vocoded sound (100%) |
+| **Level** | −24 – +12 dB | 0 dB | The output's gain, after everything else |
 
 The **Formant** input adds to the knob, and the sum stops at an octave either way. While it's patched, the knob stays live and sets the centre the CV works around.
 
@@ -89,6 +90,8 @@ Bars stand on a frequency axis, one per band, each as tall as the voice is in th
 
 **Mix.** At 0% you hear only the carrier, centred. In between, a little of the raw chord fills the gaps between the words.
 
+**Level.** Turns both outputs up or down, the dry carrier, the bank and the sibilance alike, and changes nothing else: the bands, the display and Flatten's weighting hear the same thing at any Level. Set the part's loudness here and leave the faders after it free for the mix.
+
 **Freeze.** Sing an "ahh", switch on Freeze, and every band holds exactly where it was. Now play chords: each one says the same vowel for as long as you hold it, and you can stop singing. The voice's own highs (the Sibilance path) are muted while frozen, so whatever you say next doesn't leak through, and the Unvoiced noise holds where it was too. With **Flatten** up, the voice's weighting of the bands holds as well, so a held vowel keeps one level through the whole chord. Switch Freeze off and the bands carry on from where they were held, at the Attack and Release rates, so there's no jump. Patch a gate into the **Freeze** input and it takes over from the switch: high holds, low lets go.
 
 **Flatten.** The bank can only put the voice where the carrier has something to give. A dull carrier, like a pad through a low-pass filter or a triangle or sine chord, is loud low down and nearly silent at 2 kHz, where much of a vowel lives. Its words come out muffled. Flatten measures the carrier in each band and lifts the quiet bands and lowers the loud ones until they're even, before the voice's levels are applied. At 0% the carrier keeps its own tilt, exactly as before. At 100% every band of the carrier is the same level, the "spectral whitening" of modern vocoders. In between, it goes that share of the way, in dB. Flattened, a triangle chord speaks its vowels as plainly as a saw does unflattened.
@@ -107,7 +110,9 @@ The vocoder can only carry what the carrier has to give. A **bright, sustained**
 
 **Keep the carrier low.** A carrier's harmonics are where the vowels get drawn, and a high note spaces them too far apart to trace the formants. Measured with speech recognition on a spoken line, a saw at A2 or A3 kept about 60% of the words, and the same saw at A4 about 20%. A chord voiced low and wide, held while the words move, works best of all. [Clair de Satellite](../../recipes/clair-de-satellite.md) sings on the string section's chord for this reason, not on its melody.
 
-The output follows both inputs: a loud chord and a loud voice make a loud vocoder. A five-note chord of detuned saws arrives several times louder than one voice, so turn the vocoder down after it, on a [Mixer](../utilities/mixer.md) strip.
+The output follows both inputs: a loud chord and a loud voice make a loud vocoder. A five-note chord of detuned saws arrives several times louder than one voice, so turn **Level** down to sit it with the rest.
+
+Turning the carrier down is a poorer way to the same place. The bank does come down with it, dB for dB, with or without **Flatten**. But the Sibilance path and the Unvoiced noise take their level from the voice, not the carrier, so they stay where they were. The vocoder comes down by less than the carrier did, and the mix tips toward hiss. **Level** turns everything down together.
 
 ## Bypass
 
