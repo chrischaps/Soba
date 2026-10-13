@@ -25,6 +25,7 @@ mod lfo_display;
 mod logic_display;
 mod oscillator_display;
 mod looper_display;
+mod slicer_display;
 mod slope_display;
 mod tape_display;
 mod vocoder_display;

@@ -58,6 +58,11 @@ MODULES = {
         -2.25 release
         -2.2 move face 600 300 0.2
     """, palette=False),
+    # A swung, ping-ponged row through a saw chord, the step filter half up: the dot
+    # rides a slice partway through the bar, violet slices bound for the right
+    "slicer": Module("slicer", "fx.slicer", 1.0, 400, """
+        -2.65 play
+    """, palette=False),
 }
 
 

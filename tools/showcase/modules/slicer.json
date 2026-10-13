@@ -1,0 +1,234 @@
+{
+  "name": "Slicer close-up",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "util.clock",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "parameters": [
+        {
+          "name": "Tempo",
+          "type": "Number",
+          "value": 112.0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "module_id": "osc.sine",
+      "position": [
+        0.0,
+        300.0
+      ],
+      "parameters": [
+        {
+          "name": "Octave",
+          "type": "Number",
+          "value": -1.0
+        },
+        {
+          "name": "Waveform",
+          "type": "Select",
+          "value": 1
+        },
+        {
+          "name": "Voices",
+          "type": "Number",
+          "value": 5.0
+        },
+        {
+          "name": "Detune",
+          "type": "Number",
+          "value": 0.35
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "module_id": "fx.slicer",
+      "position": [
+        400.0,
+        40.0
+      ],
+      "parameters": [
+        {
+          "name": "Depth",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Rate",
+          "type": "Select",
+          "value": 1
+        },
+        {
+          "name": "Ping-Pong",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Steps",
+          "type": "Number",
+          "value": 16.0
+        },
+        {
+          "name": "Duty",
+          "type": "Number",
+          "value": 60.0
+        },
+        {
+          "name": "Shape",
+          "type": "Number",
+          "value": 0.3
+        },
+        {
+          "name": "Filter",
+          "type": "Number",
+          "value": 0.45
+        },
+        {
+          "name": "Swing",
+          "type": "Number",
+          "value": 56.0
+        },
+        {
+          "name": "Mix",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Step 01",
+          "type": "Number",
+          "value": 3.0
+        },
+        {
+          "name": "Step 02",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Step 03",
+          "type": "Number",
+          "value": 2.0
+        },
+        {
+          "name": "Step 04",
+          "type": "Number",
+          "value": 3.0
+        },
+        {
+          "name": "Step 05",
+          "type": "Number",
+          "value": 2.0
+        },
+        {
+          "name": "Step 06",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Step 07",
+          "type": "Number",
+          "value": 2.0
+        },
+        {
+          "name": "Step 08",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Step 09",
+          "type": "Number",
+          "value": 3.0
+        },
+        {
+          "name": "Step 10",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Step 11",
+          "type": "Number",
+          "value": 2.0
+        },
+        {
+          "name": "Step 12",
+          "type": "Number",
+          "value": 3.0
+        },
+        {
+          "name": "Step 13",
+          "type": "Number",
+          "value": 2.0
+        },
+        {
+          "name": "Step 14",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Step 15",
+          "type": "Number",
+          "value": 2.0
+        },
+        {
+          "name": "Step 16",
+          "type": "Number",
+          "value": 2.0
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "module_id": "output.audio",
+      "position": [
+        1000.0,
+        400.0
+      ],
+      "parameters": [
+        {
+          "name": "Volume",
+          "type": "Number",
+          "value": 0.8
+        },
+        {
+          "name": "Limiter",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Character",
+          "type": "Toggle",
+          "value": false
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from_node": 2,
+      "from_port": "Out",
+      "to_node": 3,
+      "to_port": "In L"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Out L",
+      "to_node": 4,
+      "to_port": "Left"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Out R",
+      "to_node": 4,
+      "to_port": "Right"
+    }
+  ],
+  "midi_mappings": [],
+  "frames": [],
+  "notes": []
+}

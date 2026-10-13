@@ -412,6 +412,18 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
+        module_id: "fx.slicer",
+        // How the slices cut, then the row's groove and tone
+        knobs: &[modulatable("Depth", "Depth"), knob("Duty"), knob("Shape"), knob("Mix"), knob("Steps"), knob("Swing"), knob("Filter")],
+        labels: &[("Rate", "Rate"), ("Ping-Pong", "P-P")],
+        // The row edits these
+        hidden: &["Step *"],
+        monitor: &["Gate"],
+        display: NodeDisplay::SlicerRow,
+        knobs_per_row: 4,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
         module_id: "fx.reverb",
         knobs: &[
             // The room and its tail on top, placement in the mix below

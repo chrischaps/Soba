@@ -296,6 +296,9 @@ pub enum NodeDisplay {
     SlopeShape,
     /// Dancer: a stick figure dancing on a stage, as big as its Size.
     Dancer,
+    /// Slicer: the row of steps, each drawn as the slice it cuts, and a
+    /// dot riding the one playing.
+    SlicerRow,
     /// Tape: two reels turning, and the tape trembling across a glowing head.
     TapeReels,
     /// Vocoder: a bar per band, the voice's level there, on a frequency
@@ -2068,6 +2071,11 @@ impl NodeDataTrait for SynthNodeData {
         if self.display == NodeDisplay::ChopperRow {
             let actions = super::chopper_display::chopper_display(ui, node_id, graph, user_state, zoom);
             responses.extend(actions.into_iter().map(NodeResponse::User));
+        }
+
+        if self.display == NodeDisplay::SlicerRow {
+            let edits = super::slicer_display::slicer_display(ui, node_id, graph, user_state, zoom);
+            responses.extend(edits.into_iter().map(NodeResponse::User));
         }
 
         if self.display == NodeDisplay::LooperRing {

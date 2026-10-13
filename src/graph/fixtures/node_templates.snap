@@ -2479,6 +2479,49 @@ knob Width              "Width" KnobOnly
 knob Stop Time          "Stop" KnobOnly
 display TapeReels
 
+== fx.slicer "Slicer" finder="Slicer" Effect
+in   In L               Audio    ConnectionOnly       inline=true  port
+in   In R               Audio    ConnectionOnly       inline=true  port
+in   Reset              Gate     ConnectionOnly       inline=true  port
+in   Depth              Control  ConnectionOrConstant inline=true  num 1 [0..1] %
+in   Rate               Control  ConstantOnly         inline=true  select 1 ["1/8", "1/16", "1/32", "1/8T", "1/16T"] "Rate"
+in   Ping-Pong          Control  ConstantOnly         inline=true  toggle false "P-P"
+in   Steps              Control  ConstantOnly         inline=false num 16 [1..16] steps stepped
+in   Duty               Control  ConstantOnly         inline=false num 55 [5..100] %
+in   Shape              Control  ConstantOnly         inline=false num 0.1 [0..1] %
+in   Filter             Control  ConstantOnly         inline=false num 0 [0..1] %
+in   Swing              Control  ConstantOnly         inline=false num 50 [50..75] %
+in   Mix                Control  ConstantOnly         inline=false num 1 [0..1] %
+in   Step 01            Control  ConstantOnly         inline=false num 3 [0..4]  stepped
+in   Step 02            Control  ConstantOnly         inline=false num 0 [0..4]  stepped
+in   Step 03            Control  ConstantOnly         inline=false num 2 [0..4]  stepped
+in   Step 04            Control  ConstantOnly         inline=false num 3 [0..4]  stepped
+in   Step 05            Control  ConstantOnly         inline=false num 2 [0..4]  stepped
+in   Step 06            Control  ConstantOnly         inline=false num 0 [0..4]  stepped
+in   Step 07            Control  ConstantOnly         inline=false num 2 [0..4]  stepped
+in   Step 08            Control  ConstantOnly         inline=false num 0 [0..4]  stepped
+in   Step 09            Control  ConstantOnly         inline=false num 3 [0..4]  stepped
+in   Step 10            Control  ConstantOnly         inline=false num 0 [0..4]  stepped
+in   Step 11            Control  ConstantOnly         inline=false num 2 [0..4]  stepped
+in   Step 12            Control  ConstantOnly         inline=false num 3 [0..4]  stepped
+in   Step 13            Control  ConstantOnly         inline=false num 2 [0..4]  stepped
+in   Step 14            Control  ConstantOnly         inline=false num 0 [0..4]  stepped
+in   Step 15            Control  ConstantOnly         inline=false num 2 [0..4]  stepped
+in   Step 16            Control  ConstantOnly         inline=false num 2 [0..4]  stepped
+out  Out L              Audio
+out  Out R              Audio
+out  Gate               Gate
+out  Env                Control
+knob Depth              "Depth" Modulatable
+knob Duty               "Duty" KnobOnly
+knob Shape              "Shape" KnobOnly
+knob Mix                "Mix" KnobOnly
+knob Steps              "Steps" KnobOnly
+knob Swing              "Swing" KnobOnly
+knob Filter             "Filter" KnobOnly
+monitor [2]
+display SlicerRow
+
 == fx.vocoder "Vocoder" finder="Vocoder" Effect
 in   Carrier            Audio    ConnectionOnly       inline=true  port
 in   Modulator          Audio    ConnectionOnly       inline=true  port

@@ -39,6 +39,7 @@
   - [Distortion](./modules/effects/distortion.md)
   - [Chorus](./modules/effects/chorus.md)
   - [Tape](./modules/effects/tape.md)
+  - [Slicer](./modules/effects/slicer.md)
   - [Compressor](./modules/effects/compressor.md)
   - [Vocoder](./modules/effects/vocoder.md)
   - [Clock](./modules/modulation/clock.md)

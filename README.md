@@ -17,14 +17,14 @@ It doesn't imitate hardware panels. Every module is a node with jacks on its sid
 - **Colour-coded signals.** Blue cables carry audio, orange carry control voltage, green carry gates, and purple carry MIDI. Connections that can't work are refused as you make them.
 - **Inputs vs. knobs.** Most parameters have a knob and a jack. Patch a cable into the jack and it takes over: the knob dims and follows the incoming signal, as on an analog modular.
 - **Polyphony on a single cable.** Poly MIDI and the Chord Sequencer send up to 8 voices down one cable, and every module after it plays each voice on its own. Poly cables are drawn as a bundle of strands, one per voice.
-- **40 modules:**
+- **41 modules:**
 
   | Category | Modules |
   |---|---|
   | Sources | Oscillator (BLEP anti-aliasing, sync, through-zero FM, sub, supersaw unison), Noise (white, pink, brown, smooth random), Drum (kick, snare, tom, clap, hats, cymbal, rim, cowbell, with accent and choke), Sampler (one-shots, a poly instrument, or slices by note from a WAV), Chopper (a sliced break in time with the Clock at any tempo, rearranged step by step), Audio Input (mic or line in, envelope follower, gate), Keyboard, MIDI Note, Poly MIDI |
   | Filters | SVF Filter (self-oscillating, notch), Ladder Filter (oversampled) |
   | Modulation | ADSR Envelope, LFO, Slope (slew, trigger envelopes, cycling with skew, EOR/EOC), Clock |
-  | Effects | Stereo Delay (with tape mode), Reverb (8-line FDN), Chorus, Distortion (oversampled, wavefolder), Tape (wow, flutter, saturation, age and hiss for a bus), Compressor, Parametric EQ, Vocoder (8 to 24 bands, formant shift) |
+  | Effects | Stereo Delay (with tape mode), Reverb (8-line FDN), Chorus, Distortion (oversampled, wavefolder), Tape (wow, flutter, saturation, age and hiss for a bus), Slicer (chops a held sound into a rhythm, with a step filter), Compressor, Parametric EQ, Vocoder (8 to 24 bands, formant shift) |
   | Utilities | VCA, Mix, Mixer (4 stereo channels, pan, mute, poly spread), Attenuverter, Sample & Hold, Quantizer (scales, custom scale from a clickable piano), Clock Divider, Logic (AND/OR/XOR/NOT, comparator), Looper (record, overdub and undo live layers, clock-synced), Step Sequencer, Chord Sequencer (16 chords with slash basses, voice-led, on poly cables), Trigger Sequencer (8 drum lanes, chained patterns, probability, ratchets), Arranger (song sections and automation lanes) |
   | Output | Audio Output (with metering and limiter), Oscilloscope, Dancer, MIDI Monitor |
 

@@ -10,7 +10,7 @@ use rtrb::Consumer;
 
 use crate::dsp::denormal::DenormalGuard;
 use crate::dsp::{InputAudio, MidiEvent, ModuleRegistry, Poly, ProcessContext, Snapshot, SnapshotOutcome};
-use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Chorus, Clock, ClockDivider, Compressor, Dancer, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, Logic, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Oscillator, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
+use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Chorus, Clock, ClockDivider, Compressor, Dancer, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, Logic, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Oscillator, Slicer, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
 
 use super::audio_input::InputFeed;
 use super::channels::{EngineHandle, MAX_SNAPSHOTS};
@@ -67,6 +67,7 @@ pub fn create_module_registry() -> ModuleRegistry {
     registry.register::<Distortion>();
     registry.register::<Chorus>();
     registry.register::<Tape>();
+    registry.register::<Slicer>();
     registry.register::<Vocoder>();
     registry.register::<Compressor>();
     registry.register::<MidiMonitor>();
@@ -610,6 +611,7 @@ mod tests {
         assert!(registry.contains("seq.step"));
         assert!(registry.contains("fx.delay"));
         assert!(registry.contains("fx.reverb"));
+        assert!(registry.contains("fx.slicer"));
         assert!(registry.contains("fx.eq"));
         assert!(registry.contains("fx.distortion"));
         assert!(registry.contains("fx.chorus"));
@@ -631,7 +633,7 @@ mod tests {
         assert!(registry.contains("seq.chord"));
         assert!(registry.contains("fx.vocoder"));
         assert!(registry.contains("source.chopper"));
-        assert_eq!(registry.len(), 40);
+        assert_eq!(registry.len(), 41);
     }
 
     #[test]

@@ -75,6 +75,7 @@ pub fn law(module_id: &str, param: &str) -> Option<CvLaw> {
         ("fx.chorus", "Rate") => Stretch { scale: 0.5 },
         ("fx.chorus", "Depth") => Add { scale: 0.5 },
         ("fx.tape", "Wow") => Add { scale: 1.0 },
+        ("fx.slicer", "Depth") => Add { scale: 1.0 }, // slicer.rs: knob + cv
         ("fx.vocoder", "Formant") => Readout(Vocoder::READOUT_FORMANT),
         // Knobs whose CV comes through another jack (see `jack`)
         ("util.vca", "Level") => GainBy("CV Amount"),      // vca.rs: level * (1 - amt + cv * amt)

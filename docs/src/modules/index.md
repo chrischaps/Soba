@@ -53,6 +53,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Distortion](./effects/distortion.md) | `fx.distortion` | Oversampled soft clip, hard clip, wavefolder, tube and bit crush |
 | [Chorus](./effects/chorus.md) | `fx.chorus` | Stereo chorus and flanger |
 | [Tape](./effects/tape.md) | `fx.tape` | A tape machine for a bus: wow, flutter, saturation, age and hiss |
+| [Slicer](./effects/slicer.md) | `fx.slicer` | Chops a held sound into a rhythm in time with the Clock: sixteen steps, a step filter and ping-pong |
 | [Compressor](./effects/compressor.md) | `fx.compressor` | Dynamics compressor with sidechain and a gain-reduction output |
 | [Vocoder](./effects/vocoder.md) | `fx.vocoder` | Puts a voice's spectrum on a synth: 8 to 24 bands, formant shift, sibilance and unvoiced noise, Freeze and carrier Flatten |
 
@@ -148,6 +149,7 @@ Drive a voice from a sequence instead of a keyboard:
 | Combine signals | [Mix](./utilities/mix.md) |
 | Place sounds left and right | [Mixer](./utilities/mixer.md) |
 | Add space and depth | [Stereo Delay](./effects/delay.md), [Reverb](./effects/reverb.md), [Chorus](./effects/chorus.md) |
+| Turn a pad or a drone into a rhythm | [Slicer](./effects/slicer.md) |
 | Add grit or warmth | [Distortion](./effects/distortion.md), [Tape](./effects/tape.md) |
 | Make a synth talk or sing | [Vocoder](./effects/vocoder.md), with a voice from a [Sampler](./sources/sampler.md) or [Audio Input](./sources/audio-input.md) |
 | Balance tone and dynamics | [3-Band EQ](./effects/eq.md), [Compressor](./effects/compressor.md) |
