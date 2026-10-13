@@ -405,7 +405,7 @@ display SlopeShape
 
 == util.clock "Clock" finder="Clock" Utility
 in   Sync               Gate     ConnectionOnly       inline=true  port
-in   Tempo              Control  ConstantOnly         inline=false num 120 [20..300] BPM
+in   Tempo              Control  ConnectionOrConstant inline=true  num 120 [20..300] BPM
 in   Gate Length        Control  ConstantOnly         inline=false num 50 [1..99] %
 in   Division           Control  ConstantOnly         inline=true  select 2 ["1", "1/2", "1/4", "1/8", "1/16"] "Div"
 in   Run                Control  ConstantOnly         inline=true  toggle true "Run"
@@ -414,7 +414,7 @@ in   Swing              Control  ConstantOnly         inline=false num 50 [50..7
 out  Gate               Gate
 out  Run                Gate
 out  Reset              Gate
-knob Tempo              "BPM" KnobOnly
+knob Tempo              "BPM" Modulatable
 knob Gate Length        "Gate" KnobOnly
 knob Swing              "Swing" KnobOnly
 monitor [0, 1, 2]
