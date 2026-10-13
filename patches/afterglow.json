@@ -507,7 +507,7 @@
       "module_id": "seq.chord",
       "position": [
         246.0,
-        1094.0
+        1178.0
       ],
       "parameters": [
         {
@@ -1037,7 +1037,7 @@
       "module_id": "osc.sine",
       "position": [
         620.0,
-        1094.0
+        1178.0
       ],
       "parameters": [
         {
@@ -1097,7 +1097,7 @@
       "module_id": "filter.svf",
       "position": [
         842.0,
-        1094.0
+        1178.0
       ],
       "parameters": [
         {
@@ -1122,7 +1122,7 @@
       "module_id": "util.vca",
       "position": [
         1102.0,
-        1134.0
+        1218.0
       ],
       "parameters": [
         {
@@ -1142,7 +1142,7 @@
       "module_id": "mod.adsr",
       "position": [
         1102.0,
-        1394.0
+        1478.0
       ],
       "parameters": [
         {
@@ -1729,7 +1729,7 @@
       ],
       "size": [
         1320.0,
-        871.0
+        955.0
       ],
       "color": "blue"
     },
@@ -1737,11 +1737,11 @@
       "title": "Bass and pad",
       "position": [
         222.0,
-        1036.0
+        1120.0
       ],
       "size": [
         1134.0,
-        718.0
+        802.0
       ],
       "color": "violet"
     },
@@ -1775,7 +1775,7 @@
       "text": "The Chord Sequencer steps once a bar, on the Step Sequencer's **EOC**. Its **Root** moves the whole arpeggio: F, C, G, A. Its chords, Fmaj9, Cadd9, G6 and Am9, play on the pad, with each root underneath as the bass.",
       "position": [
         1392.0,
-        1036.0
+        1120.0
       ],
       "width": 300.0
     },
@@ -1783,7 +1783,7 @@
       "text": "**CV Amt** at 60% leaves 40% of the pad always sounding. Each chord change swells it.",
       "position": [
         222.0,
-        1770.0
+        1938.0
       ],
       "width": 300.0
     },

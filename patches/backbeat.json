@@ -352,7 +352,7 @@
       "module_id": "mod.adsr",
       "position": [
         810.0,
-        434.0
+        518.0
       ],
       "parameters": [
         {
@@ -482,7 +482,7 @@
       "module_id": "seq.step",
       "position": [
         440.0,
-        876.0
+        1044.0
       ],
       "parameters": [
         {
@@ -747,7 +747,7 @@
       "module_id": "mod.adsr",
       "position": [
         810.0,
-        876.0
+        1044.0
       ],
       "parameters": [
         {
@@ -797,7 +797,7 @@
       "module_id": "mod.adsr",
       "position": [
         810.0,
-        1236.0
+        1488.0
       ],
       "parameters": [
         {
@@ -847,7 +847,7 @@
       "module_id": "osc.sine",
       "position": [
         1070.0,
-        876.0
+        1044.0
       ],
       "parameters": [
         {
@@ -907,7 +907,7 @@
       "module_id": "source.noise",
       "position": [
         1300.0,
-        1176.0
+        1344.0
       ],
       "parameters": [
         {
@@ -927,7 +927,7 @@
       "module_id": "filter.svf",
       "position": [
         1530.0,
-        1176.0
+        1344.0
       ],
       "parameters": [
         {
@@ -952,7 +952,7 @@
       "module_id": "util.vca",
       "position": [
         1530.0,
-        916.0
+        1084.0
       ],
       "parameters": [
         {
@@ -972,7 +972,7 @@
       "module_id": "seq.step",
       "position": [
         440.0,
-        1678.0
+        2014.0
       ],
       "parameters": [
         {
@@ -1237,7 +1237,7 @@
       "module_id": "mod.adsr",
       "position": [
         810.0,
-        1678.0
+        2014.0
       ],
       "parameters": [
         {
@@ -1287,7 +1287,7 @@
       "module_id": "mod.adsr",
       "position": [
         810.0,
-        2038.0
+        2458.0
       ],
       "parameters": [
         {
@@ -1337,7 +1337,7 @@
       "module_id": "util.vca",
       "position": [
         1070.0,
-        2008.0
+        2344.0
       ],
       "parameters": [
         {
@@ -1357,7 +1357,7 @@
       "module_id": "source.noise",
       "position": [
         1070.0,
-        1678.0
+        2014.0
       ],
       "parameters": [
         {
@@ -1377,7 +1377,7 @@
       "module_id": "source.noise",
       "position": [
         1300.0,
-        2008.0
+        2344.0
       ],
       "parameters": [
         {
@@ -1397,7 +1397,7 @@
       "module_id": "filter.svf",
       "position": [
         1300.0,
-        1678.0
+        2014.0
       ],
       "parameters": [
         {
@@ -1422,7 +1422,7 @@
       "module_id": "filter.svf",
       "position": [
         1530.0,
-        2008.0
+        2344.0
       ],
       "parameters": [
         {
@@ -1447,7 +1447,7 @@
       "module_id": "util.divider",
       "position": [
         40.0,
-        2480.0
+        2984.0
       ],
       "parameters": [
         {
@@ -1472,7 +1472,7 @@
       "module_id": "seq.step",
       "position": [
         440.0,
-        2480.0
+        2984.0
       ],
       "parameters": [
         {
@@ -1737,7 +1737,7 @@
       "module_id": "mod.adsr",
       "position": [
         810.0,
-        2480.0
+        2984.0
       ],
       "parameters": [
         {
@@ -1787,7 +1787,7 @@
       "module_id": "osc.sine",
       "position": [
         1070.0,
-        2480.0
+        2984.0
       ],
       "parameters": [
         {
@@ -1847,7 +1847,7 @@
       "module_id": "util.vca",
       "position": [
         1530.0,
-        2520.0
+        3024.0
       ],
       "parameters": [
         {
@@ -1867,7 +1867,7 @@
       "module_id": "mod.adsr",
       "position": [
         810.0,
-        3154.0
+        3742.0
       ],
       "parameters": [
         {
@@ -1917,7 +1917,7 @@
       "module_id": "source.noise",
       "position": [
         1070.0,
-        3154.0
+        3742.0
       ],
       "parameters": [
         {
@@ -1937,7 +1937,7 @@
       "module_id": "filter.svf",
       "position": [
         1300.0,
-        3154.0
+        3742.0
       ],
       "parameters": [
         {
@@ -2889,7 +2889,7 @@
       ],
       "size": [
         1264.0,
-        778.0
+        946.0
       ],
       "color": "slate"
     },
@@ -2897,11 +2897,11 @@
       "title": "Snare",
       "position": [
         416.0,
-        818.0
+        986.0
       ],
       "size": [
         1368.0,
-        777.9999389648438
+        945.9999389648438
       ],
       "color": "slate"
     },
@@ -2909,11 +2909,11 @@
       "title": "Hi-hats",
       "position": [
         416.0,
-        1620.0
+        1956.0
       ],
       "size": [
         1368.0,
-        778.0
+        946.0
       ],
       "color": "slate"
     },
@@ -2921,11 +2921,11 @@
       "title": "Toms",
       "position": [
         416.0,
-        2422.0
+        2926.0
       ],
       "size": [
         1264.0,
-        626.0
+        710.0
       ],
       "color": "slate"
     },
@@ -2933,11 +2933,11 @@
       "title": "Crash",
       "position": [
         786.0,
-        3096.0
+        3684.0
       ],
       "size": [
         768.0,
-        418.0
+        502.0
       ],
       "color": "slate"
     },
@@ -2945,7 +2945,7 @@
       "title": "Phrase",
       "position": [
         16.0,
-        2422.0
+        2926.0
       ],
       "size": [
         210.0,
@@ -2983,7 +2983,7 @@
       "text": "Ghost notes are the same snare at a third of the level. Velocity does it: both envelopes have **Vel** at 85%.",
       "position": [
         16.0,
-        818.0
+        986.0
       ],
       "width": 300.0
     },
@@ -2991,7 +2991,7 @@
       "text": "A hat step on **C5** opens the hat, and the next one on C4 chokes it shut, the way a drummer's foot does.",
       "position": [
         16.0,
-        1620.0
+        1956.0
       ],
       "width": 300.0
     },
@@ -2999,7 +2999,7 @@
       "text": "The divider counts the sixteenths: 64 are four bars. Its Gate opens on bar 1 and holds for 17 clocks, the fill bar and the downbeat after it.",
       "position": [
         16.0,
-        2836.0
+        3340.0
       ],
       "width": 300.0
     }

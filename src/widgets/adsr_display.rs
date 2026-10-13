@@ -9,7 +9,8 @@
 use eframe::egui::{self, Color32, Pos2, Response, Sense, Stroke, Ui, Vec2};
 
 use crate::app::theme;
-use crate::modules::envelope::{curve_steepness, stage_shape};
+use crate::dsp::Readout;
+use crate::modules::envelope::{curve_steepness, stage_shape, AdsrEnvelope};
 
 /// Configuration for the ADSR display widget.
 #[derive(Clone)]
@@ -110,6 +111,9 @@ pub struct AdsrParams {
     /// Peak at the softest velocity (1.0 when velocity isn't patched).
     /// Below 1, a faint second envelope shows the softest note.
     pub softest_peak: f32,
+    /// Which stages CV is moving, A, D, S, R: their letters light, and
+    /// they're drawn as the envelope is running them.
+    pub moved: [bool; 4],
 }
 
 impl Default for AdsrParams {
@@ -123,6 +127,7 @@ impl Default for AdsrParams {
             decay_curve: 0.5,
             release_curve: 0.5,
             softest_peak: 1.0,
+            moved: [false; 4],
         }
     }
 }
@@ -159,6 +164,30 @@ impl AdsrParams {
     /// Sets the peak of the softest note (1 - velocity amount).
     pub fn with_softest_peak(mut self, peak: f32) -> Self {
         self.softest_peak = peak.clamp(0.0, 1.0);
+        self
+    }
+
+    /// With CV patched into a stage (`moved`, in A, D, S, R order), draws
+    /// that stage as the envelope's `readout` says CV has moved it, and
+    /// lights its letter. Before the engine has reported, the knob stands in.
+    pub fn with_cv(mut self, moved: [bool; 4], readout: Option<&Readout>) -> Self {
+        self.moved = moved;
+        if let Some(values) = readout.map(|readout| readout.values) {
+            let time = |index: usize| values[index].clamp(0.001, 10.0);
+            let [attack, decay, sustain, release] = moved;
+            if attack {
+                self.attack = time(AdsrEnvelope::READOUT_ATTACK);
+            }
+            if decay {
+                self.decay = time(AdsrEnvelope::READOUT_DECAY);
+            }
+            if sustain {
+                self.sustain = values[AdsrEnvelope::READOUT_SUSTAIN].clamp(0.0, 1.0);
+            }
+            if release {
+                self.release = time(AdsrEnvelope::READOUT_RELEASE);
+            }
+        }
         self
     }
 
@@ -385,35 +414,19 @@ pub fn adsr_display(ui: &mut Ui, params: &AdsrParams, config: &AdsrConfig) -> Re
             let sustain_x = rect.left() + ((decay_end + sustain_end) * 0.5) * rect.width();
             let release_x = rect.left() + ((sustain_end + 1.0) * 0.5) * rect.width();
 
-            // Draw labels centered under each segment
-            painter.text(
-                Pos2::new(attack_x, label_y),
-                egui::Align2::CENTER_BOTTOM,
-                "A",
-                font.clone(),
-                label_color,
-            );
-            painter.text(
-                Pos2::new(decay_x, label_y),
-                egui::Align2::CENTER_BOTTOM,
-                "D",
-                font.clone(),
-                label_color,
-            );
-            painter.text(
-                Pos2::new(sustain_x, label_y),
-                egui::Align2::CENTER_BOTTOM,
-                "S",
-                font.clone(),
-                label_color,
-            );
-            painter.text(
-                Pos2::new(release_x, label_y),
-                egui::Align2::CENTER_BOTTOM,
-                "R",
-                font,
-                label_color,
-            );
+            // Draw labels centered under each segment; a stage CV is
+            // moving lights in the envelope's colour
+            let lit = Color32::from_rgba_unmultiplied(config.color.r(), config.color.g(), config.color.b(), 230);
+            let segments = [(attack_x, "A"), (decay_x, "D"), (sustain_x, "S"), (release_x, "R")];
+            for ((x, letter), moved) in segments.into_iter().zip(params.moved) {
+                painter.text(
+                    Pos2::new(x, label_y),
+                    egui::Align2::CENTER_BOTTOM,
+                    letter,
+                    font.clone(),
+                    if moved { lit } else { label_color },
+                );
+            }
         }
 
         // Draw border

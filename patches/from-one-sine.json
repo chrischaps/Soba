@@ -2402,7 +2402,7 @@
       "module_id": "osc.sine",
       "position": [
         24.0,
-        2997.0
+        3081.0
       ],
       "parameters": [
         {
@@ -2462,7 +2462,7 @@
       "module_id": "osc.sine",
       "position": [
         237.0,
-        2997.0
+        3081.0
       ],
       "parameters": [
         {
@@ -2522,7 +2522,7 @@
       "module_id": "util.mix",
       "position": [
         450.0,
-        2997.0
+        3081.0
       ],
       "parameters": [
         {
@@ -2557,7 +2557,7 @@
       "module_id": "filter.ladder",
       "position": [
         760.0,
-        2997.0
+        3081.0
       ],
       "parameters": [
         {
@@ -2587,7 +2587,7 @@
       "module_id": "util.attenuverter",
       "position": [
         760.0,
-        3322.0
+        3406.0
       ],
       "parameters": [
         {
@@ -2607,7 +2607,7 @@
       "module_id": "fx.compressor",
       "position": [
         1018.0,
-        2997.0
+        3081.0
       ],
       "parameters": [
         {
@@ -2657,7 +2657,7 @@
       "module_id": "fx.chorus",
       "position": [
         1432.0,
-        2997.0
+        3081.0
       ],
       "parameters": [
         {
@@ -2702,7 +2702,7 @@
       "module_id": "mod.lfo",
       "position": [
         1018.0,
-        3262.0
+        3346.0
       ],
       "parameters": [
         {
@@ -3182,7 +3182,7 @@
       "module_id": "util.attenuverter",
       "position": [
         2872.0,
-        427.0
+        510.9999694824219
       ],
       "parameters": [
         {
@@ -3282,7 +3282,7 @@
       "module_id": "util.vca",
       "position": [
         3343.0,
-        409.0
+        492.9999694824219
       ],
       "parameters": [
         {
@@ -3302,7 +3302,7 @@
       "module_id": "seq.step",
       "position": [
         2213.0,
-        733.0
+        816.9999694824219
       ],
       "parameters": [
         {
@@ -3652,7 +3652,7 @@
       "module_id": "osc.sine",
       "position": [
         2659.0,
-        733.0
+        816.9999694824219
       ],
       "parameters": [
         {
@@ -3712,7 +3712,7 @@
       "module_id": "mod.adsr",
       "position": [
         2872.0,
-        733.0
+        816.9999694824219
       ],
       "parameters": [
         {
@@ -3762,7 +3762,7 @@
       "module_id": "mod.adsr",
       "position": [
         2872.0,
-        1102.0
+        1269.9999694824219
       ],
       "parameters": [
         {
@@ -3812,7 +3812,7 @@
       "module_id": "filter.ladder",
       "position": [
         3130.0,
-        733.0
+        816.9999694824219
       ],
       "parameters": [
         {
@@ -3842,7 +3842,7 @@
       "module_id": "util.vca",
       "position": [
         3130.0,
-        1058.0
+        1141.9999694824219
       ],
       "parameters": [
         {
@@ -3862,7 +3862,7 @@
       "module_id": "util.attenuverter",
       "position": [
         3343.0,
-        1058.0
+        1141.9999694824219
       ],
       "parameters": [
         {
@@ -3882,7 +3882,7 @@
       "module_id": "fx.distortion",
       "position": [
         3388.0,
-        733.0
+        816.9999694824219
       ],
       "parameters": [
         {
@@ -3927,7 +3927,7 @@
       "module_id": "fx.eq",
       "position": [
         3594.0,
-        733.0
+        816.9999694824219
       ],
       "parameters": [
         {
@@ -3977,7 +3977,7 @@
       "module_id": "seq.step",
       "position": [
         2213.0,
-        1577.0
+        1828.9999694824219
       ],
       "parameters": [
         {
@@ -4327,7 +4327,7 @@
       "module_id": "source.sampler",
       "position": [
         2659.0,
-        1577.0
+        1828.9999694824219
       ],
       "parameters": [
         {
@@ -4403,7 +4403,7 @@
       "module_id": "source.noise",
       "position": [
         2917.0,
-        1577.0
+        1828.9999694824219
       ],
       "parameters": [
         {
@@ -4423,7 +4423,7 @@
       "module_id": "util.sample_hold",
       "position": [
         3130.0,
-        1577.0
+        1828.9999694824219
       ],
       "parameters": [
         {
@@ -4438,7 +4438,7 @@
       "module_id": "util.quantizer",
       "position": [
         3130.0,
-        1786.0
+        2037.9999694824219
       ],
       "parameters": [
         {
@@ -4468,7 +4468,7 @@
       "module_id": "osc.sine",
       "position": [
         3382.0,
-        1577.0
+        1828.9999694824219
       ],
       "parameters": [
         {
@@ -4528,7 +4528,7 @@
       "module_id": "mod.adsr",
       "position": [
         3382.0,
-        2164.0
+        2415.999969482422
       ],
       "parameters": [
         {
@@ -4578,7 +4578,7 @@
       "module_id": "util.vca",
       "position": [
         3640.0,
-        1577.0
+        1828.9999694824219
       ],
       "parameters": [
         {
@@ -4598,7 +4598,7 @@
       "module_id": "source.noise",
       "position": [
         2213.0,
-        2639.0
+        2974.999969482422
       ],
       "parameters": [
         {
@@ -4618,7 +4618,7 @@
       "module_id": "filter.svf",
       "position": [
         2534.0,
-        2639.0
+        2974.999969482422
       ],
       "parameters": [
         {
@@ -4648,7 +4648,7 @@
       "module_id": "mod.lfo",
       "position": [
         2534.0,
-        3008.0
+        3427.999969482422
       ],
       "parameters": [
         {
@@ -4683,7 +4683,7 @@
       "module_id": "mod.adsr",
       "position": [
         2792.0,
-        2639.0
+        2974.999969482422
       ],
       "parameters": [
         {
@@ -4733,7 +4733,7 @@
       "module_id": "osc.sine",
       "position": [
         3050.0,
-        2639.0
+        2974.999969482422
       ],
       "parameters": [
         {
@@ -4793,7 +4793,7 @@
       "module_id": "filter.svf",
       "position": [
         3263.0,
-        2639.0
+        2974.999969482422
       ],
       "parameters": [
         {
@@ -4823,7 +4823,7 @@
       "module_id": "util.vca",
       "position": [
         3263.0,
-        3008.0
+        3427.999969482422
       ],
       "parameters": [
         {
@@ -4913,7 +4913,7 @@
       "module_id": "seq.trigger",
       "position": [
         302.0,
-        4032.0
+        4535.999969482422
       ],
       "parameters": [
         {
@@ -7898,7 +7898,7 @@
       "module_id": "source.drum",
       "position": [
         1170.0,
-        4032.0
+        4535.999969482422
       ],
       "parameters": [
         {
@@ -7938,7 +7938,7 @@
       "module_id": "source.drum",
       "position": [
         1170.0,
-        4411.0
+        4914.999969482422
       ],
       "parameters": [
         {
@@ -7978,7 +7978,7 @@
       "module_id": "source.drum",
       "position": [
         1480.0,
-        4032.0
+        4535.999969482422
       ],
       "parameters": [
         {
@@ -8018,7 +8018,7 @@
       "module_id": "source.drum",
       "position": [
         1480.0,
-        4411.0
+        4914.999969482422
       ],
       "parameters": [
         {
@@ -8058,7 +8058,7 @@
       "module_id": "source.drum",
       "position": [
         1790.0,
-        4032.0
+        4535.999969482422
       ],
       "parameters": [
         {
@@ -8098,7 +8098,7 @@
       "module_id": "source.drum",
       "position": [
         1790.0,
-        4411.0
+        4914.999969482422
       ],
       "parameters": [
         {
@@ -8138,7 +8138,7 @@
       "module_id": "source.drum",
       "position": [
         2100.0,
-        4032.0
+        4535.999969482422
       ],
       "parameters": [
         {
@@ -8178,7 +8178,7 @@
       "module_id": "source.drum",
       "position": [
         2100.0,
-        4411.0
+        4914.999969482422
       ],
       "parameters": [
         {
@@ -8218,7 +8218,7 @@
       "module_id": "util.mixer",
       "position": [
         2410.0,
-        4032.0
+        4535.999969482422
       ],
       "parameters": [
         {
@@ -8358,7 +8358,7 @@
       "module_id": "util.mixer",
       "position": [
         2828.0,
-        4032.0
+        4535.999969482422
       ],
       "parameters": [
         {
@@ -14824,7 +14824,7 @@
       ],
       "size": [
         1822.0,
-        984.0
+        1068.0
       ],
       "color": "blue"
     },
@@ -14832,7 +14832,7 @@
       "title": "Pad",
       "position": [
         0.0,
-        2957.0
+        3041.0
       ],
       "size": [
         1738.0,
@@ -14848,7 +14848,7 @@
       ],
       "size": [
         1408.0,
-        623.0
+        706.9999694824219
       ],
       "color": "cyan"
     },
@@ -14856,11 +14856,11 @@
       "title": "Bass",
       "position": [
         2189.0,
-        693.0
+        776.9999694824219
       ],
       "size": [
         1867.0,
-        774.0
+        942.0
       ],
       "color": "blue"
     },
@@ -14868,11 +14868,11 @@
       "title": "Bells and sparkles",
       "position": [
         2189.0,
-        1537.0
+        1788.9999694824219
       ],
       "size": [
         1601.0,
-        992.0
+        1076.0
       ],
       "color": "amber"
     },
@@ -14880,11 +14880,11 @@
       "title": "Wind and riser",
       "position": [
         2189.0,
-        2599.0
+        2934.999969482422
       ],
       "size": [
         1324.0,
-        792.0
+        876.0
       ],
       "color": "slate"
     },
@@ -14892,7 +14892,7 @@
       "title": "Drums",
       "position": [
         0.0,
-        3992.0
+        4495.999969482422
       ],
       "size": [
         3246.0,
@@ -14946,7 +14946,7 @@
       "text": "The **Drums** cue picks the pattern: **A** silence, **B** a pulse, **C** the groove, **D** a build. Each phrase ends on a one-bar **Fill** section, which jumps the cue to D for that bar.",
       "position": [
         24.0,
-        4032.0
+        4535.999969482422
       ],
       "width": 250.0
     }

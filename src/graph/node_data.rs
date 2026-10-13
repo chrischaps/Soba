@@ -1792,13 +1792,14 @@ impl NodeDataTrait for SynthNodeData {
                         })
                         .unwrap_or(default)
                 };
+                let patched = |jack: &str| {
+                    node.inputs
+                        .iter()
+                        .find(|(name, _)| name == jack)
+                        .is_some_and(|(_, id)| graph.iter_connections().any(|(input, _)| input == *id))
+                };
                 // The softest note only differs when velocity is patched in
-                let velocity_patched = node
-                    .inputs
-                    .iter()
-                    .find(|(name, _)| name == "Velocity")
-                    .is_some_and(|(_, id)| graph.iter_connections().any(|(input, _)| input == *id));
-                let softest_peak = if velocity_patched {
+                let softest_peak = if patched("Velocity") {
                     1.0 - number("Velocity Amount", 0.0)
                 } else {
                     1.0
@@ -1816,6 +1817,10 @@ impl NodeDataTrait for SynthNodeData {
                     number("Release Curve", defaults.release_curve),
                 )
                 .with_softest_peak(softest_peak)
+                .with_cv(
+                    super::envelope_cv::patched_stages(graph, node_id),
+                    super::envelope_cv::readout(user_state, node_id),
+                )
             } else {
                 AdsrParams::default()
             };

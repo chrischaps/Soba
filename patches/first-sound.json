@@ -253,7 +253,7 @@
       ],
       "size": [
         450.0,
-        658.0
+        742.0
       ],
       "color": "amber"
     }
@@ -271,7 +271,7 @@
       "text": "The envelope draws each note's shape: up when a key goes down, away when it's let go. The VCA turns that shape into volume.",
       "position": [
         540.0,
-        738.0
+        822.0
       ],
       "width": 300.0
     }

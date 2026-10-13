@@ -9,6 +9,11 @@
 //! visible stretch is nearly a straight line; aimed just past, it is a deep
 //! analog curve. [`stage_shape`] is that curve in closed form, and the ADSR
 //! display draws with it, so the picture is the sound.
+//!
+//! Attack, Decay and Release CV stretch their stages by octaves of time: +1
+//! doubles the knob's time, -1 halves it. Sustain CV adds to its knob's
+//! level. CV is read every sample, so a cue that lands while a release is
+//! already falling stretches the rest of it.
 
 use crate::dsp::{
     connected_input,
@@ -17,8 +22,13 @@ use crate::dsp::{
     parameter::ParameterDefinition,
     port::PortDefinition,
     signal::SignalBuffer,
-    ParameterDisplay, SignalType,
+    ParameterDisplay, Readout, SignalType,
 };
+
+/// The shortest and longest stage times, the knobs' range, which CV stays
+/// within too.
+pub const MIN_TIME: f32 = 0.001;
+pub const MAX_TIME: f32 = 10.0;
 
 /// Steepness at Curve = 100%. The stage aims 1/(e^10 − 1) ≈ 0.005% of its
 /// span past its target: a deep curve that is still on time.
@@ -80,6 +90,34 @@ impl StageRate {
     }
 }
 
+/// One stage's time as CV stretches it, and the rate that runs it.
+#[derive(Clone, Copy, Debug)]
+struct StageTime {
+    knob: f32,
+    curve: f32,
+    /// The CV the rate was last worked out for: a held CV costs nothing.
+    octaves: f32,
+    seconds: f32,
+    rate: StageRate,
+}
+
+impl StageTime {
+    fn new(knob: f32, curve: f32, sample_rate: f32) -> Self {
+        let knob = knob.clamp(MIN_TIME, MAX_TIME);
+        Self { knob, curve, octaves: 0.0, seconds: knob, rate: StageRate::new(knob, curve, sample_rate) }
+    }
+
+    /// Follows CV of `octaves`, if patched.
+    #[inline]
+    fn follow(&mut self, octaves: Option<f32>, sample_rate: f32) {
+        if let Some(octaves) = octaves.filter(|&octaves| octaves != self.octaves) {
+            self.octaves = octaves;
+            self.seconds = AdsrEnvelope::stretched(self.knob, octaves);
+            self.rate = StageRate::new(self.seconds, self.curve, sample_rate);
+        }
+    }
+}
+
 /// ADSR Envelope generator.
 ///
 /// Generates a control signal that follows the classic ADSR envelope shape:
@@ -93,6 +131,9 @@ impl StageRate {
 /// - **Gate** (Gate, Input): Triggers the envelope (high = note on, low = note off).
 /// - **Retrigger** (Gate, Input): Restarts attack from current level when high.
 /// - **Velocity** (Control, Input): Scales the peak, read at each note on.
+/// - **Attack**, **Decay**, **Release** (Control, Input): CV around each
+///   knob in octaves of time; +1 doubles it, -1 halves it.
+/// - **Sustain** (Control, Input): CV added to the Sustain knob.
 /// - **Out** (Control, Output): The envelope output (0.0 to 1.0).
 ///
 /// # Parameters
@@ -122,6 +163,11 @@ pub struct AdsrEnvelope {
     prev_gate: bool,
     /// Previous retrigger state (for edge detection).
     prev_retrigger: bool,
+    /// Stage times and sustain after CV, as of the last sample, for the display.
+    attack_seconds: f32,
+    decay_seconds: f32,
+    sustain_target: f32,
+    release_seconds: f32,
     /// Sample rate from last prepare() call.
     sample_rate: f32,
     /// Port definitions.
@@ -144,12 +190,27 @@ impl AdsrEnvelope {
             sustain_coeff: 0.0,
             prev_gate: false,
             prev_retrigger: false,
+            attack_seconds: 0.01,
+            decay_seconds: 0.1,
+            sustain_target: 0.7,
+            release_seconds: 0.3,
             sample_rate: 44100.0,
             ports: vec![
                 // Input ports
                 PortDefinition::input_with_default("gate", "Gate", SignalType::Gate, 0.0).describe("Gate that starts the envelope when high and releases it when low"),
                 PortDefinition::input_with_default("retrigger", "Retrig", SignalType::Gate, 0.0).describe("A rising edge restarts the attack from the current level"),
                 PortDefinition::input_with_default("velocity", "Velocity", SignalType::Control, 1.0).describe("Scales the peak at each note on; unpatched means full peak"),
+                // A jack for every stage: the editor lays jacks before
+                // knob-only parameters, so Decay's and Release's need
+                // Attack's and Sustain's beside them
+                PortDefinition::input_with_default("attack_cv", "Attack", SignalType::Control, 0.0)
+                    .describe("CV that stretches the attack around its knob: +1 doubles it, -1 halves it"),
+                PortDefinition::input_with_default("decay_cv", "Decay", SignalType::Control, 0.0)
+                    .describe("CV that stretches the decay around its knob: +1 doubles it, -1 halves it. Velocity here rings harder notes longer"),
+                PortDefinition::input_with_default("sustain_cv", "Sustain", SignalType::Control, 0.0)
+                    .describe("CV added to the Sustain knob's level"),
+                PortDefinition::input_with_default("release_cv", "Release", SignalType::Control, 0.0)
+                    .describe("CV that stretches the release around its knob: +1 doubles it, -1 halves it, even mid-release. An Arranger lane here lets a last chord ring"),
                 // Output port
                 PortDefinition::output("out", "Out", SignalType::Control).describe("Envelope level, 0 to 1"),
             ],
@@ -160,8 +221,8 @@ impl AdsrEnvelope {
                 ParameterDefinition::new(
                     "attack",
                     "Attack",
-                    0.001,
-                    10.0,
+                    MIN_TIME,
+                    MAX_TIME,
                     0.01, // 10ms default
                     ParameterDisplay::logarithmic("s"),
                 ).describe("Time to rise to the peak after the gate goes high"),
@@ -169,8 +230,8 @@ impl AdsrEnvelope {
                 ParameterDefinition::new(
                     "decay",
                     "Decay",
-                    0.001,
-                    10.0,
+                    MIN_TIME,
+                    MAX_TIME,
                     0.1, // 100ms default
                     ParameterDisplay::logarithmic("s"),
                 ).describe("Time to fall from the peak to the sustain level"),
@@ -187,8 +248,8 @@ impl AdsrEnvelope {
                 ParameterDefinition::new(
                     "release",
                     "Release",
-                    0.001,
-                    10.0,
+                    MIN_TIME,
+                    MAX_TIME,
                     0.3, // 300ms default
                     ParameterDisplay::logarithmic("s"),
                 ).describe("Time to fade to silence after the gate goes low"),
@@ -237,6 +298,10 @@ impl AdsrEnvelope {
     const PORT_GATE: usize = 0;
     const PORT_RETRIGGER: usize = 1;
     const PORT_VELOCITY: usize = 2;
+    const PORT_ATTACK_CV: usize = 3;
+    const PORT_DECAY_CV: usize = 4;
+    const PORT_SUSTAIN_CV: usize = 5;
+    const PORT_RELEASE_CV: usize = 6;
     const PORT_OUT: usize = 0;
 
     /// Parameter index constants.
@@ -249,11 +314,24 @@ impl AdsrEnvelope {
     const PARAM_RELEASE_CURVE: usize = 6;
     const PARAM_VELOCITY_AMOUNT: usize = 7;
 
+    /// Readout indices: the stage times after CV, in seconds, and the
+    /// sustain level after CV.
+    pub const READOUT_ATTACK: usize = 0;
+    pub const READOUT_DECAY: usize = 1;
+    pub const READOUT_SUSTAIN: usize = 2;
+    pub const READOUT_RELEASE: usize = 3;
+
     /// Gate threshold for detecting high/low states.
     const GATE_THRESHOLD: f32 = 0.5;
 
     /// Time constant for sustain knob moves.
     const SUSTAIN_SMOOTHING_SECONDS: f32 = 0.005;
+
+    /// A stage time: the knob's `seconds`, stretched by `octaves` of CV.
+    #[inline]
+    fn stretched(seconds: f32, octaves: f32) -> f32 {
+        (seconds * octaves.exp2()).clamp(MIN_TIME, MAX_TIME)
+    }
 
     /// Begins a stage from the current level.
     fn enter(&mut self, stage: EnvelopeStage) {
@@ -301,7 +379,7 @@ impl DspModule for AdsrEnvelope {
             id: "mod.adsr",
             name: "ADSR Envelope",
             category: ModuleCategory::Modulation,
-            description: "Attack-Decay-Sustain-Release envelope with exact stage times, curve shaping and velocity",
+            description: "Attack-Decay-Sustain-Release envelope with exact stage times, curve shaping, velocity and CV on every stage",
         };
         &INFO
     }
@@ -327,17 +405,19 @@ impl DspModule for AdsrEnvelope {
         params: &[f32],
         context: &ProcessContext,
     ) {
-        let sustain_param = params[Self::PARAM_SUSTAIN].clamp(0.0, 1.0) as f64;
+        let sustain_knob = params[Self::PARAM_SUSTAIN];
         let velocity_amount = params[Self::PARAM_VELOCITY_AMOUNT];
 
         // Rates are worked out per block, so turning a knob mid-stage
         // reshapes the rest of the stage rather than waiting for the next note
-        let attack = StageRate::new(params[Self::PARAM_ATTACK], params[Self::PARAM_ATTACK_CURVE], self.sample_rate);
-        let decay = StageRate::new(params[Self::PARAM_DECAY], params[Self::PARAM_DECAY_CURVE], self.sample_rate);
-        let release = StageRate::new(params[Self::PARAM_RELEASE], params[Self::PARAM_RELEASE_CURVE], self.sample_rate);
+        let sr = self.sample_rate;
+        let mut attack = StageTime::new(params[Self::PARAM_ATTACK], params[Self::PARAM_ATTACK_CURVE], sr);
+        let mut decay = StageTime::new(params[Self::PARAM_DECAY], params[Self::PARAM_DECAY_CURVE], sr);
+        let mut release = StageTime::new(params[Self::PARAM_RELEASE], params[Self::PARAM_RELEASE_CURVE], sr);
+        let mut sustain_target = sustain_knob.clamp(0.0, 1.0);
 
         if !self.sustain_primed {
-            self.sustain = sustain_param;
+            self.sustain = sustain_target as f64;
             self.sustain_primed = true;
         }
 
@@ -345,6 +425,11 @@ impl DspModule for AdsrEnvelope {
         let gate_in = inputs.get(Self::PORT_GATE);
         let retrigger_in = inputs.get(Self::PORT_RETRIGGER);
         let velocity_in = connected_input(inputs, Self::PORT_VELOCITY);
+        let attack_cv = connected_input(inputs, Self::PORT_ATTACK_CV);
+        let decay_cv = connected_input(inputs, Self::PORT_DECAY_CV);
+        let sustain_cv = connected_input(inputs, Self::PORT_SUSTAIN_CV);
+        let release_cv = connected_input(inputs, Self::PORT_RELEASE_CV);
+        let cv_at = |cv: Option<&SignalBuffer>, i: usize| cv.and_then(|buf| buf.samples.get(i).copied());
 
         // Get output buffer
         let output = &mut outputs[Self::PORT_OUT];
@@ -357,6 +442,14 @@ impl DspModule for AdsrEnvelope {
                 .and_then(|buf| buf.samples.get(i))
                 .is_some_and(|&v| v > Self::GATE_THRESHOLD);
             let velocity = velocity_in.and_then(|buf| buf.samples.get(i).copied());
+
+            // CV stretches the stage times and moves the sustain, sample by sample
+            attack.follow(cv_at(attack_cv, i), sr);
+            decay.follow(cv_at(decay_cv, i), sr);
+            release.follow(cv_at(release_cv, i), sr);
+            if let Some(cv) = cv_at(sustain_cv, i) {
+                sustain_target = (sustain_knob + cv).clamp(0.0, 1.0);
+            }
 
             let gate_rising = gate_high && !self.prev_gate;
             let retrigger_rising = retrigger_high && !self.prev_retrigger;
@@ -386,6 +479,7 @@ impl DspModule for AdsrEnvelope {
             }
 
             // Sustain glides toward its knob
+            let sustain_param = sustain_target as f64;
             self.sustain = sustain_param + (self.sustain - sustain_param) * self.sustain_coeff;
             let sustain_level = self.sustain * self.peak;
 
@@ -396,7 +490,7 @@ impl DspModule for AdsrEnvelope {
             match self.stage {
                 EnvelopeStage::Idle => {}
                 EnvelopeStage::Attack => {
-                    let landed = self.advance(attack);
+                    let landed = self.advance(attack.rate);
                     self.level = self.stage_start + (self.peak - self.stage_start) * self.progress;
                     if landed {
                         self.enter(EnvelopeStage::Decay);
@@ -404,7 +498,7 @@ impl DspModule for AdsrEnvelope {
                 }
                 EnvelopeStage::Decay => {
                     // Aimed at the smoothed sustain, so a knob move mid-decay bends the curve
-                    let landed = self.advance(decay);
+                    let landed = self.advance(decay.rate);
                     self.level = self.stage_start + (sustain_level - self.stage_start) * self.progress;
                     if landed {
                         self.enter(EnvelopeStage::Sustain);
@@ -414,7 +508,7 @@ impl DspModule for AdsrEnvelope {
                     self.level = sustain_level;
                 }
                 EnvelopeStage::Release => {
-                    let landed = self.advance(release);
+                    let landed = self.advance(release.rate);
                     self.level = self.stage_start * (1.0 - self.progress);
                     if landed {
                         self.level = 0.0;
@@ -423,6 +517,11 @@ impl DspModule for AdsrEnvelope {
                 }
             }
         }
+
+        self.attack_seconds = attack.seconds;
+        self.decay_seconds = decay.seconds;
+        self.sustain_target = sustain_target;
+        self.release_seconds = release.seconds;
     }
 
     fn reset(&mut self) {
@@ -434,6 +533,16 @@ impl DspModule for AdsrEnvelope {
         self.sustain_primed = false;
         self.prev_gate = false;
         self.prev_retrigger = false;
+    }
+
+    /// The stage times and sustain CV has moved them to, for the display.
+    fn readout(&self, _params: &[f32]) -> Option<Readout> {
+        let mut readout = Readout::default();
+        readout.values[Self::READOUT_ATTACK] = self.attack_seconds;
+        readout.values[Self::READOUT_DECAY] = self.decay_seconds;
+        readout.values[Self::READOUT_SUSTAIN] = self.sustain_target;
+        readout.values[Self::READOUT_RELEASE] = self.release_seconds;
+        Some(readout)
     }
 }
 
@@ -492,7 +601,7 @@ mod tests {
         let env = AdsrEnvelope::new();
         let ports = env.ports();
 
-        assert_eq!(ports.len(), 4);
+        assert_eq!(ports.len(), 8);
 
         // Gate input
         assert!(ports[0].is_input());
@@ -509,10 +618,19 @@ mod tests {
         assert_eq!(ports[2].id, "velocity");
         assert_eq!(ports[2].signal_type, SignalType::Control);
 
+        // CV for each stage, named after its knob so each shares one input
+        // with its knob, in the knobs' order
+        let cv: Vec<_> = ports[3..7].iter().map(|p| (p.id, p.name)).collect();
+        assert_eq!(
+            cv,
+            [("attack_cv", "Attack"), ("decay_cv", "Decay"), ("sustain_cv", "Sustain"), ("release_cv", "Release")]
+        );
+        assert!(ports[3..7].iter().all(|p| p.is_input() && p.signal_type == SignalType::Control));
+
         // Output
-        assert!(ports[3].is_output());
-        assert_eq!(ports[3].id, "out");
-        assert_eq!(ports[3].signal_type, SignalType::Control);
+        assert!(ports[7].is_output());
+        assert_eq!(ports[7].id, "out");
+        assert_eq!(ports[7].signal_type, SignalType::Control);
     }
 
     #[test]
@@ -809,8 +927,131 @@ mod tests {
         let module = module.unwrap();
         assert_eq!(module.info().id, "mod.adsr");
         assert_eq!(module.info().name, "ADSR Envelope");
-        assert_eq!(module.ports().len(), 4);
+        assert_eq!(module.ports().len(), 8);
         assert_eq!(module.parameters().len(), 8);
+    }
+
+    // --- Stage CV (#182) ---
+
+    /// CV jacks, by port index.
+    const ATTACK: usize = AdsrEnvelope::PORT_ATTACK_CV;
+    const DECAY: usize = AdsrEnvelope::PORT_DECAY_CV;
+    const SUSTAIN: usize = AdsrEnvelope::PORT_SUSTAIN_CV;
+    const RELEASE: usize = AdsrEnvelope::PORT_RELEASE_CV;
+
+    /// Runs the envelope over a gate high for `gate_samples` of `total`, with
+    /// each `(jack, cv)` patched to follow `cv` sample by sample and the
+    /// other jacks unpatched. Returns the output and the envelope.
+    fn render_cv(
+        params: &[f32],
+        gate_samples: usize,
+        total: usize,
+        patched: &[(usize, &dyn Fn(usize) -> f32)],
+    ) -> (Vec<f32>, AdsrEnvelope) {
+        let mut env = AdsrEnvelope::new();
+        env.prepare(SR, total);
+        let mut inputs: Vec<SignalBuffer> =
+            (0..=RELEASE).map(|_| SignalBuffer::unconnected(total, SignalType::Control)).collect();
+        inputs[AdsrEnvelope::PORT_GATE] = SignalBuffer::control(total);
+        inputs[AdsrEnvelope::PORT_GATE].samples[..gate_samples].fill(1.0);
+        for &(jack, cv) in patched {
+            inputs[jack] = SignalBuffer::control(total);
+            inputs[jack].samples.iter_mut().enumerate().for_each(|(i, s)| *s = cv(i));
+        }
+        let inputs: Vec<&SignalBuffer> = inputs.iter().collect();
+        let mut outputs = vec![SignalBuffer::control(total)];
+        env.process(&inputs, &mut outputs, params, &ProcessContext::new(SR, total));
+        (outputs.remove(0).samples, env)
+    }
+
+    #[test]
+    fn test_attack_cv_is_in_octaves() {
+        let total = (0.5 * SR) as usize;
+        for (octaves, seconds) in [(0.0, 0.05), (1.0, 0.1), (-1.0, 0.025)] {
+            let (out, _) = render_cv(&params(0.05, 0.1, 0.5, 0.1), total, total, &[(ATTACK, &|_| octaves)]);
+            assert_within_5_percent(first_reaching(&out, 0, 1.0, true), seconds, &format!("attack at {octaves:+} oct"));
+        }
+    }
+
+    #[test]
+    fn test_sustain_cv_adds_to_the_knob() {
+        let total = (0.5 * SR) as usize;
+        for (cv, level) in [(0.0, 0.4), (0.3, 0.7), (-0.6, 0.0), (1.0, 1.0)] {
+            let (out, _) = render_cv(&params(0.001, 0.01, 0.4, 0.1), total, total, &[(SUSTAIN, &|_| cv)]);
+            assert!((out[total - 1] - level).abs() < 1e-3, "sustain CV {cv}: {} not {level}", out[total - 1]);
+        }
+    }
+
+    #[test]
+    fn test_release_cv_is_in_octaves() {
+        // +1 doubles the release, -1 halves it, 0 is the knob
+        let hold = 4800;
+        for (octaves, seconds) in [(0.0, 0.2), (1.0, 0.4), (-1.0, 0.1), (2.0, 0.8)] {
+            let total = hold + (1.0 * SR) as usize;
+            let (out, _) = render_cv(&params(0.01, 0.01, 0.6, 0.2), hold, total, &[(RELEASE, &|_| octaves)]);
+            let silent = first_reaching(&out, hold, 0.0, false);
+            assert_within_5_percent(silent - hold, seconds, &format!("release at {octaves:+} oct"));
+        }
+    }
+
+    #[test]
+    fn test_harder_hits_decay_longer() {
+        // Velocity into Decay CV: a full-velocity note decays twice as long
+        // as the knob, a silent one at the knob
+        let total = (1.0 * SR) as usize;
+        let decay_time = |velocity: f32| {
+            let (out, _) = render_cv(&params(0.001, 0.2, 0.0, 0.3), total, total, &[(DECAY, &|_| velocity)]);
+            let peak = first_reaching(&out, 0, 1.0, true);
+            first_reaching(&out, peak, 0.0, false) - peak
+        };
+        assert_within_5_percent(decay_time(0.0), 0.2, "soft note");
+        assert_within_5_percent(decay_time(1.0), 0.4, "hard note");
+        assert!(decay_time(0.5) > decay_time(0.0) && decay_time(0.5) < decay_time(1.0));
+    }
+
+    #[test]
+    fn test_release_cv_stretches_a_release_already_falling() {
+        // Halfway through a 100 ms release, CV goes to +1: the other half
+        // takes 100 ms rather than 50, and the curve doesn't jump
+        let hold = 4800;
+        let cue = hold + (0.05 * SR) as usize;
+        let total = hold + (0.5 * SR) as usize;
+        let (out, _) = render_cv(&params(0.001, 0.001, 0.8, 0.1), hold, total, &[(RELEASE, &|i| if i >= cue { 1.0 } else { 0.0 })]);
+        let silent = first_reaching(&out, hold, 0.0, false);
+        assert_within_5_percent(silent - hold, 0.15, "release cued halfway");
+        let biggest_step = out[hold..].windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f32::max);
+        assert!(biggest_step < 0.01, "release stepped by {biggest_step}");
+    }
+
+    #[test]
+    fn test_cv_stays_within_the_knob_range() {
+        // A 5 s release can't be stretched past 10 s, nor 2 ms shrunk below 1 ms
+        assert_eq!(AdsrEnvelope::stretched(5.0, 3.0), MAX_TIME);
+        assert_eq!(AdsrEnvelope::stretched(0.002, -4.0), MIN_TIME);
+        assert!((AdsrEnvelope::stretched(0.3, 1.0) - 0.6).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_readout_reports_the_stretched_times() {
+        let total = 4800;
+        let p = params(0.01, 0.25, 0.5, 0.5);
+        let read = |env: AdsrEnvelope| {
+            let values = env.readout(&[]).unwrap().values;
+            [AdsrEnvelope::READOUT_ATTACK, AdsrEnvelope::READOUT_DECAY, AdsrEnvelope::READOUT_SUSTAIN, AdsrEnvelope::READOUT_RELEASE]
+                .map(|index| values[index])
+        };
+
+        // Unpatched: the knobs
+        let (_, env) = render_cv(&p, total, total, &[]);
+        assert_eq!(read(env), [0.01, 0.25, 0.5, 0.5]);
+
+        // Patched: what CV made of them
+        let (_, env) = render_cv(&p, total, total, &[(ATTACK, &|_| 2.0), (DECAY, &|_| 1.0), (SUSTAIN, &|_| 0.25), (RELEASE, &|_| -1.0)]);
+        let [attack, decay, sustain, release] = read(env);
+        assert!((attack - 0.04).abs() < 1e-6, "attack {attack}");
+        assert!((decay - 0.5).abs() < 1e-6, "decay {decay}");
+        assert!((sustain - 0.75).abs() < 1e-6, "sustain {sustain}");
+        assert!((release - 0.25).abs() < 1e-6, "release {release}");
     }
 
     #[test]

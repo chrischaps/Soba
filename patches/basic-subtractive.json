@@ -340,7 +340,7 @@
       ],
       "size": [
         278.0,
-        788.0
+        872.0
       ],
       "color": "teal"
     },
@@ -352,7 +352,7 @@
       ],
       "size": [
         278.0,
-        678.0
+        762.0
       ],
       "color": "amber"
     }
@@ -370,7 +370,7 @@
       "text": "The filter envelope opens the cutoff an octave on every note, then lets it settle: that's the pluck. Turn **Res** up slowly and listen for the whistle.",
       "position": [
         540.0,
-        828.0
+        912.0
       ],
       "width": 280.0
     },
@@ -378,7 +378,7 @@
       "text": "One gate starts both envelopes. This one shapes the volume, and falls more slowly than the tone.",
       "position": [
         842.0,
-        738.0
+        822.0
       ],
       "width": 280.0
     }

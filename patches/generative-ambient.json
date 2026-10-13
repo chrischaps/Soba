@@ -362,7 +362,7 @@
       "module_id": "osc.sine",
       "position": [
         965.0,
-        854.0
+        938.0
       ],
       "parameters": [
         {
@@ -607,7 +607,7 @@
       "module_id": "mod.lfo",
       "position": [
         40.0,
-        854.0
+        938.0
       ],
       "parameters": [
         {
@@ -637,7 +637,7 @@
       "module_id": "util.sample_hold",
       "position": [
         262.0,
-        874.0
+        958.0
       ],
       "parameters": [
         {
@@ -702,7 +702,7 @@
       "module_id": "mod.lfo",
       "position": [
         1246.0,
-        854.0
+        938.0
       ],
       "parameters": [
         {
@@ -732,7 +732,7 @@
       "module_id": "source.noise",
       "position": [
         503.0,
-        854.0
+        938.0
       ],
       "parameters": [
         {
@@ -752,7 +752,7 @@
       "module_id": "util.quantizer",
       "position": [
         725.0,
-        864.0
+        948.0
       ],
       "parameters": [
         {
@@ -1105,7 +1105,7 @@
       ],
       "size": [
         868.0,
-        715.0
+        799.0
       ],
       "color": "teal"
     },
@@ -1125,7 +1125,7 @@
       "title": "Brightness",
       "position": [
         16.0,
-        796.0
+        880.0
       ],
       "size": [
         439.0,
@@ -1137,7 +1137,7 @@
       "title": "Second voice",
       "position": [
         479.0,
-        796.0
+        880.0
       ],
       "size": [
         695.0,
@@ -1149,7 +1149,7 @@
       "title": "Drift",
       "position": [
         1222.0,
-        796.0
+        880.0
       ],
       "size": [
         233.0,
@@ -1171,7 +1171,7 @@
       "text": "The S&H catches the LFO every third beat, on the Clock Divider, so the brightness moves in threes against the eight-note melody. The cycles don't line up, so no two passes sound alike.",
       "position": [
         16.0,
-        1243.0
+        1327.0
       ],
       "width": 300.0
     },
@@ -1179,7 +1179,7 @@
       "text": "Noise picks a pitch every few seconds and the Quantizer snaps it to the melody's scale: chance, without a wrong note.",
       "position": [
         479.0,
-        1438.0
+        1522.0
       ],
       "width": 360.0
     }

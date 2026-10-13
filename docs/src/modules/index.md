@@ -37,7 +37,7 @@ The **ID** is the name a patch file uses to refer to the module.
 
 | Module | ID | What it does |
 |--------|----|--------------|
-| [ADSR Envelope](./modulation/adsr.md) | `mod.adsr` | Attack, decay, sustain and release, with exact stage times, curve shaping and velocity |
+| [ADSR Envelope](./modulation/adsr.md) | `mod.adsr` | Attack, decay, sustain and release, with exact stage times, curve shaping, velocity and CV on every stage |
 | [LFO](./modulation/lfo.md) | `mod.lfo` | Low-frequency oscillator for cyclic modulation, free or locked to the beat |
 | [Slope](./modulation/slope.md) | `mod.slope` | Rises and falls at set rates: slew and glide, a trigger envelope, or a cycling LFO with skew |
 

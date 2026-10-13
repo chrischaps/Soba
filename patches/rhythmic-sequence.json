@@ -647,7 +647,7 @@
       "module_id": "mod.adsr",
       "position": [
         60.0,
-        954.0
+        1038.0
       ],
       "parameters": [
         {
@@ -697,7 +697,7 @@
       "module_id": "source.noise",
       "position": [
         325.0,
-        954.0
+        1038.0
       ],
       "parameters": [
         {
@@ -717,7 +717,7 @@
       "module_id": "filter.svf",
       "position": [
         545.0,
-        954.0
+        1038.0
       ],
       "parameters": [
         {
@@ -869,7 +869,7 @@
       ],
       "size": [
         833.0,
-        795.0
+        879.0
       ],
       "color": "teal"
     },
@@ -889,11 +889,11 @@
       "title": "Hi-hats",
       "position": [
         36.0,
-        896.0
+        980.0
       ],
       "size": [
         763.0,
-        418.0
+        502.0
       ],
       "color": "rose"
     }
@@ -919,7 +919,7 @@
       "text": "An envelope into the Noise module's **Level** turns hiss into a hi-hat: 1 ms in, 45 ms out.",
       "position": [
         823.0,
-        896.0
+        980.0
       ],
       "width": 280.0
     }

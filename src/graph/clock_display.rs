@@ -129,6 +129,7 @@ pub fn knob_takeover(
             locked: false,
         }),
         ("seq.arranger", "Steps") => super::arranger_follow::steps_takeover(graph, user_state, node_id),
+        (super::envelope_cv::MODULE, _) => super::envelope_cv::stage_takeover(graph, user_state, node_id, param),
         _ => None,
     }
 }

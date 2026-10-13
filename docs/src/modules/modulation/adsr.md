@@ -16,6 +16,8 @@ Every stage takes exactly the time on its knob: a 100 ms release is silent 100 m
 | **Gate** | Gate (Green) | A rising edge starts the attack; a falling edge starts the release |
 | **Retrig** | Gate (Green) | While the gate is held, a rising edge restarts the attack from the current level |
 | **Velocity** | Control (Orange) | Note velocity (0.0 to 1.0), read at each note-on. Scales the peak; see **Vel** |
+| **Attack**, **Decay**, **Release** | Control (Orange) | Stretch the stage's time around its knob, in octaves: +1 doubles it, −1 halves it. See [Stage CV](#stage-cv) |
+| **Sustain** | Control (Orange) | Added to the **Sus** knob's level |
 
 ## Outputs
 
@@ -71,6 +73,17 @@ Sustain is a fraction of the peak, so a soft note sustains lower too. With veloc
 
 With nothing patched into **Velocity**, every note peaks at 1.0, whatever the knob says.
 
+## Stage CV
+
+Each stage has a jack beside its knob. CV there moves the stage around where the knob puts it, so the knob stays the starting point and the cable bends it:
+
+- **Attack**, **Decay** and **Release** count in octaves of time. +1 doubles the knob's time, +2 quadruples it, and −1 halves it. A 500 ms release with +3 patched in rings for 4 s. The time stays within the knob's 1 ms – 10 s.
+- **Sustain** adds to the knob's level, so +0.3 lifts a 40% sustain to 70%.
+
+The envelope reads CV on every sample, not just at each note. A cue that lands while a release is already falling stretches what's left of it, and the curve bends there without a step.
+
+While a stage's jack is patched, an orange dot sits by its knob, and the display draws that stage the way the envelope is running it, with its letter lit. When a lane ramps the release out, you can watch the tail widen.
+
 ## Patch examples
 
 ### Volume envelope
@@ -111,6 +124,23 @@ Add this to the two-envelope patch and harder notes come out brighter but no lou
 
 The filter closes as the note opens and opens again as it releases, for "backwards" sweeps. On a filter you can skip the Attenuverter: patch the envelope straight into **Cutoff** and turn the filter's **CV Amt** below zero.
 
+### Harder notes ring longer
+
+```text
+[Keyboard Velocity] ──> [ADSR Velocity]
+                    ──> [ADSR Decay]
+```
+
+A struck string rings longer when it's struck harder. With a short decay and no sustain, velocity into **Decay** gives a full-strength note twice the knob's decay and the softest one the knob's own. For a gentler spread, run velocity through an [Attenuverter](../utilities/attenuverter.md) first. Pitch CV into **Decay** through an Attenuverter turned below zero makes high notes shorter, the way a piano's are.
+
+### A last chord that rings
+
+```text
+[Arranger Lane 3] ──> [ADSR Release]
+```
+
+The plucks keep their short release all song. In the last section a lane rises from 0 to 1 or 2 and holds, and the final chord rings for a second or more instead of a few hundred milliseconds. Ramp the lane so the tails lengthen as the song slows.
+
 ### Retriggering a held note
 
 ```text
@@ -131,7 +161,7 @@ While the key is held, each clock pulse restarts the attack from the current lev
 
 ## Polyphony
 
-The ADSR Envelope is polyphonic. Patch a polyphonic gate (from [Poly MIDI](../midi/poly-midi.md)) into **Gate** and every voice gets its own envelope, with its own stage and level, so each note of a chord attacks and releases on its own. See [Polyphony](../../concepts/polyphony.md).
+The ADSR Envelope is polyphonic. Patch a polyphonic gate (from [Poly MIDI](../midi/poly-midi.md)) into **Gate** and every voice gets its own envelope, with its own stage and level, so each note of a chord attacks and releases on its own. Polyphonic velocity into **Decay** gives each note its own decay; a mono cable, like an Arranger lane, moves every voice together. The display shows the first voice. See [Polyphony](../../concepts/polyphony.md).
 
 ## Related modules
 

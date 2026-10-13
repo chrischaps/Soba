@@ -221,10 +221,10 @@ static MODULE_UI: &[ModuleUi] = &[
         // Two rows: times and level, then each stage's curve under its time
         // (velocity sits under sustain, both being about level)
         knobs: &[
-            knob_as("Attack", "Atk"),
-            knob_as("Decay", "Dec"),
-            knob_as("Sustain", "Sus"),
-            knob_as("Release", "Rel"),
+            modulatable("Attack", "Atk"),
+            modulatable("Decay", "Dec"),
+            modulatable("Sustain", "Sus"),
+            modulatable("Release", "Rel"),
             knob_as("Attack Curve", "A Crv"),
             knob_as("Decay Curve", "D Crv"),
             knob_as("Velocity Amount", "Vel"),

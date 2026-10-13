@@ -395,7 +395,7 @@
       ],
       "size": [
         500.0,
-        698.0
+        782.0
       ],
       "color": "rose"
     },
@@ -407,7 +407,7 @@
       ],
       "size": [
         500.0,
-        698.0
+        782.0
       ],
       "color": "blue"
     }
@@ -417,7 +417,7 @@
       "text": "You don't hear the modulator. It bends the carrier's pitch so fast that the bending becomes tone color. Its envelope strikes the bell bright and fades it pure.",
       "position": [
         254.0,
-        738.0
+        822.0
       ],
       "width": 380.0
     },
@@ -425,7 +425,7 @@
       "text": "The carrier is the one you hear. Its envelope is a bell's: an instant strike and a long ring.",
       "position": [
         801.0,
-        738.0
+        822.0
       ],
       "width": 320.0
     }
