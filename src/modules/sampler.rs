@@ -15,6 +15,11 @@
 //! Sliced, Start–End is cut into equal parts and each note plays one of
 //! them: Root plays slice 1, a semitone up slice 2, as a chopped break is
 //! laid across the keys. The note then picks the slice instead of the pitch.
+//!
+//! With something patched into In, Rec records a take straight into it,
+//! which it plays from then on (see [`recorder`]).
+
+mod recorder;
 
 use std::sync::Arc;
 
@@ -29,6 +34,8 @@ use crate::dsp::{
     smoothed_value::SmoothedValue,
     ParameterDisplay, SampleData, SignalType, MAX_CHANNELS, MAX_READOUT,
 };
+use recorder::{Controls, Recorder};
+pub use recorder::{RecState, LATE_TAP_SECONDS, NO_THRESHOLD_DB, PRE_ROLL_SECONDS, TAKE_COLUMNS, TAKE_LENGTHS, TAKE_ROOM_SECONDS};
 
 /// The Sampler's module ID.
 pub const SAMPLER_ID: &str = "source.sampler";
@@ -203,6 +210,10 @@ impl Region {
 ///   Start is the whole slice.
 /// - **Slice** (Control, 0–1 across the slices): added to the note's
 ///   slice as it starts.
+/// - **In L**, **In R** (Audio): what Rec records; one side patched records
+///   on both.
+/// - **Rec** (Gate): records while high; patched, it takes over from the
+///   button.
 ///
 /// # Outputs
 /// - **L**, **R** (Audio, poly): a mono recording plays on both.
@@ -220,6 +231,11 @@ impl Region {
 /// - **Attack**, **Release** (s): the amplitude envelope.
 /// - **Level** (0–1).
 /// - **Slices** (Off, 2–64): cuts Start–End into equal slices, played by note.
+/// - **Take** (Free, 1–16 bars): with a Clock running, a take starts on the
+///   next bar and lasts that long.
+/// - **Rec Threshold** (-∞ to 0 dB): above -∞, a take waits for the input
+///   to be this loud.
+/// - **Rec Button**: the face's Rec, pressed to start a take and again to stop.
 pub struct Sampler {
     /// The recording voices start on.
     sample: Option<Arc<SampleData>>,
@@ -232,6 +248,11 @@ pub struct Sampler {
     /// How many channels ran in the last block.
     active: usize,
     level: SmoothedValue,
+    /// Records takes from In.
+    recorder: Recorder,
+    /// The take it plays, by count, until it's swapped for the same
+    /// recording made to measure.
+    holding_take: Option<u32>,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
 }
@@ -247,6 +268,8 @@ impl Sampler {
             channels: [Channel::default(); MAX_CHANNELS],
             active: 1,
             level: SmoothedValue::with_default_smoothing(0.8, sample_rate),
+            recorder: Recorder::default(),
+            holding_take: None,
             ports: vec![
                 PortDefinition::input_with_default("gate", "Gate", SignalType::Gate, 0.0)
                     .describe("A rising edge starts a note; in Gated mode the falling edge releases it. A polyphonic gate plays a voice per channel"),
@@ -260,6 +283,11 @@ impl Sampler {
                     .describe("Added to Speed while it plays, as on tape: pitch follows, and below zero it plays backwards"),
                 PortDefinition::input_with_default("slice_cv", "Slice", SignalType::Control, 0.0)
                     .describe("Sliced, picks a slice as each note begins: 0 to 1 across them, added to the note's slice. An Arranger lane or a Sample & Hold here rearranges a break"),
+                PortDefinition::input_with_default("in_l", "In L", SignalType::Audio, 0.0)
+                    .describe("What Rec records: an Audio Input to record yourself, or the patch's own sound to resample it. One side patched records on both"),
+                PortDefinition::input_with_default("in_r", "In R", SignalType::Audio, 0.0).describe("The right side of what Rec records"),
+                PortDefinition::input_with_default("rec", "Rec", SignalType::Gate, 0.0)
+                    .describe("Records while high: the take starts as it rises (or as Take and Thresh say) and ends as it falls. Patched, it takes over from the button"),
                 PortDefinition::output("out_l", "L", SignalType::Audio).describe("Left; a mono recording plays the same on both sides"),
                 PortDefinition::output("out_r", "R", SignalType::Audio).describe("Right"),
             ],
@@ -272,6 +300,9 @@ impl Sampler {
                     .describe("Off plays once; Forward goes round from Loop End to Loop Start; Ping-Pong goes back and forth"),
                 ParameterDefinition::choice("mode", "Mode", PLAY_MODES, 0)
                     .describe("One-Shot plays to the end whatever the gate does; Gated lets go when the gate falls"),
+                // A menu: before the knob-only parameters, beside the jacks
+                ParameterDefinition::choice("take", "Take", TAKE_LENGTHS, 0)
+                    .describe("Free records until Rec is pressed again. In bars, with a Clock running, a take starts on the next bar and lasts exactly that long, so it's already a loop"),
                 ParameterDefinition::new("end", "End", 0.0, 1.0, 1.0, ParameterDisplay::linear("%"))
                     .describe("Where notes end, through the recording"),
                 ParameterDefinition::new("loop_start", "Loop Start", 0.0, 1.0, 0.0, ParameterDisplay::linear("%"))
@@ -292,6 +323,10 @@ impl Sampler {
                     .describe("Output level"),
                 ParameterDefinition::new("slices", "Slices", 1.0, MAX_SLICES as f32, 1.0, ParameterDisplay::stepped("slices"))
                     .describe("Cuts Start–End into equal slices, each played by its own note from Root up, and only to its own end. Off plays the recording across the keyboard"),
+                ParameterDefinition::new("rec_threshold", "Rec Threshold", NO_THRESHOLD_DB, 0.0, NO_THRESHOLD_DB, ParameterDisplay::linear("dB"))
+                    .describe("At -∞ a take starts as soon as Rec is pressed. Turned up, it waits until In is this loud, keeping a moment before, so it starts on the first word"),
+                ParameterDefinition::new("rec_button", "Rec Button", 0.0, 1.0, 0.0, ParameterDisplay::on_off())
+                    .describe("The Rec button on the face: pressed to start a take, and again to stop it"),
             ],
         }
     }
@@ -302,6 +337,9 @@ impl Sampler {
     const PORT_START_CV: usize = 3;
     const PORT_SPEED_CV: usize = 4;
     const PORT_SLICE_CV: usize = 5;
+    const PORT_IN_L: usize = 6;
+    const PORT_IN_R: usize = 7;
+    const PORT_REC: usize = 8;
 
     // The parameters with something to show beside the jacks (the knobs
     // CV can turn, and the menus) come first: the node editor places jacks
@@ -310,20 +348,35 @@ impl Sampler {
     pub const PARAM_SPEED: usize = 1;
     pub const PARAM_LOOP: usize = 2;
     pub const PARAM_MODE: usize = 3;
-    pub const PARAM_END: usize = 4;
-    pub const PARAM_LOOP_START: usize = 5;
-    pub const PARAM_LOOP_END: usize = 6;
-    pub const PARAM_TUNE: usize = 7;
-    pub const PARAM_FINE: usize = 8;
-    pub const PARAM_ROOT: usize = 9;
-    pub const PARAM_ATTACK: usize = 10;
-    pub const PARAM_RELEASE: usize = 11;
-    pub const PARAM_LEVEL: usize = 12;
-    pub const PARAM_SLICES: usize = 13;
+    pub const PARAM_TAKE: usize = 4;
+    pub const PARAM_END: usize = 5;
+    pub const PARAM_LOOP_START: usize = 6;
+    pub const PARAM_LOOP_END: usize = 7;
+    pub const PARAM_TUNE: usize = 8;
+    pub const PARAM_FINE: usize = 9;
+    pub const PARAM_ROOT: usize = 10;
+    pub const PARAM_ATTACK: usize = 11;
+    pub const PARAM_RELEASE: usize = 12;
+    pub const PARAM_LEVEL: usize = 13;
+    pub const PARAM_SLICES: usize = 14;
+    pub const PARAM_REC_THRESHOLD: usize = 15;
+    pub const PARAM_REC_BUTTON: usize = 16;
 
     /// Where the readout holds the slice each channel's voice plays, from 1
     /// (0 for none), after the playheads.
     pub const READOUT_SLICES: usize = MAX_CHANNELS;
+    /// Where the recorder is (a [`RecState`] code).
+    pub const READOUT_REC_STATE: usize = 2 * MAX_CHANNELS;
+    /// Seconds the take under way holds.
+    pub const READOUT_REC_SECONDS: usize = 2 * MAX_CHANNELS + 1;
+    /// Takes recorded so far.
+    pub const READOUT_TAKES: usize = 2 * MAX_CHANNELS + 2;
+    /// Seconds of room it holds to record into: 0 with none.
+    pub const READOUT_ROOM: usize = 2 * MAX_CHANNELS + 3;
+    /// Seconds the live overview of a take spans.
+    pub const READOUT_REC_SCALE: usize = 2 * MAX_CHANNELS + 4;
+    /// How loud In is, its peak falling slowly.
+    pub const READOUT_REC_LEVEL: usize = 2 * MAX_CHANNELS + 5;
 
     const GATE_THRESHOLD: f32 = 0.5;
 
@@ -342,6 +395,14 @@ impl Sampler {
                 drop(sample);
             }
         }
+    }
+
+    /// Plays a take just recorded from now on, as a file loaded would be.
+    fn play_take(&mut self, take: Arc<SampleData>) {
+        if let Some(old) = self.load_sample(Some(take)) {
+            self.retire(old);
+        }
+        self.holding_take = Some(self.recorder.takes());
     }
 
     /// Hands the outgoing recording back once no voice reads it.
@@ -470,6 +531,9 @@ impl DspModule for Sampler {
     fn prepare(&mut self, sample_rate: f32, _max_block_size: usize) {
         self.sample_rate = sample_rate;
         self.level.set_sample_rate(sample_rate);
+        // Off the audio thread: room for another rate can go here
+        self.recorder.prepare(sample_rate);
+        drop(self.recorder.take_let_go());
     }
 
     fn process(
@@ -488,6 +552,22 @@ impl DspModule for Sampler {
         let start_cv = connected_input(inputs, Self::PORT_START_CV);
         let speed_cv = connected_input(inputs, Self::PORT_SPEED_CV);
         let slice_cv = connected_input(inputs, Self::PORT_SLICE_CV);
+
+        // Recording: a take that ends plays from now on
+        let controls = Controls {
+            left: connected_input(inputs, Self::PORT_IN_L),
+            right: connected_input(inputs, Self::PORT_IN_R),
+            gate: connected_input(inputs, Self::PORT_REC),
+            button: params.get(Self::PARAM_REC_BUTTON).is_some_and(|&v| v >= 0.5),
+            threshold_db: params.get(Self::PARAM_REC_THRESHOLD).copied().unwrap_or(NO_THRESHOLD_DB),
+            length: params.get(Self::PARAM_TAKE).copied().unwrap_or(0.0),
+        };
+        if let Some(take) = self.recorder.run(&controls, context) {
+            self.play_take(take);
+        }
+        if let Some(room) = self.recorder.take_let_go() {
+            self.retire(room);
+        }
 
         // A voice per channel of the widest cable in, as far as there's room
         let wanted = [gate, voct, velocity].iter().flatten().map(|buffer| buffer.channels()).max().unwrap_or(1);
@@ -615,6 +695,10 @@ impl DspModule for Sampler {
         if self.outgoing.is_some() {
             self.retire_outgoing_if_unused();
         }
+        // A take under way ends with the transport
+        if let Some(take) = self.recorder.stop() {
+            self.play_take(take);
+        }
     }
 
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
@@ -628,7 +712,19 @@ impl DspModule for Sampler {
                 readout.values[Self::READOUT_SLICES + c] = voice.slice.map_or(0.0, |index| (index + 1) as f32);
             }
         }
+        let recorder = &self.recorder;
+        let rate = self.sample_rate.max(1.0);
+        readout.values[Self::READOUT_REC_STATE] = recorder.state().code();
+        readout.values[Self::READOUT_REC_SECONDS] = recorder.recorded() as f32 / rate;
+        readout.values[Self::READOUT_TAKES] = recorder.takes() as f32;
+        readout.values[Self::READOUT_ROOM] = recorder.room() as f32 / rate;
+        readout.values[Self::READOUT_REC_SCALE] = recorder.scale_seconds();
+        readout.values[Self::READOUT_REC_LEVEL] = recorder.meter();
         Some(readout)
+    }
+
+    fn take_scope_data(&mut self) -> Option<(&[f32], &[f32], bool)> {
+        self.recorder.take_overview().map(|(highs, lows)| (highs, lows, false))
     }
 
     fn polyphonic(&self) -> bool {
@@ -636,6 +732,7 @@ impl DspModule for Sampler {
     }
 
     fn load_sample(&mut self, sample: Option<Arc<SampleData>>) -> Option<Arc<SampleData>> {
+        self.holding_take = None;
         // Still fading out of an older recording: let those voices go now
         if let Some(older) = self.outgoing.take() {
             for channel in &mut self.channels {
@@ -671,6 +768,25 @@ impl DspModule for Sampler {
 
     fn take_retired_sample(&mut self) -> Option<Arc<SampleData>> {
         self.retired.iter_mut().find_map(Option::take)
+    }
+
+    fn give_room(&mut self, room: Arc<SampleData>) -> Option<Arc<SampleData>> {
+        self.recorder.give_room(room)
+    }
+
+    fn take_finished_take(&mut self) -> Option<(u32, Arc<SampleData>)> {
+        self.recorder.take_finished()
+    }
+
+    fn settle_take(&mut self, take: u32, sample: Arc<SampleData>) -> Option<Arc<SampleData>> {
+        let same = self.holding_take == Some(take)
+            && self.sample.as_ref().is_some_and(|held| held.frames() == sample.frames() && held.sample_rate() == sample.sample_rate());
+        if !same {
+            return Some(sample);
+        }
+        // The same sound, frame for frame: voices read on where they are
+        self.holding_take = None;
+        self.sample.replace(sample)
     }
 }
 
@@ -817,8 +933,11 @@ mod tests {
         assert_eq!(sampler.info().id, SAMPLER_ID);
         assert_eq!(sampler.info().category, ModuleCategory::Source);
         let names: Vec<&str> = sampler.ports().iter().map(|p| p.name).collect();
-        assert_eq!(names, ["Gate", "V/Oct", "Velocity", "Start", "Speed", "Slice", "L", "R"]);
-        assert_eq!(sampler.parameters().len(), 14);
+        assert_eq!(names, ["Gate", "V/Oct", "Velocity", "Start", "Speed", "Slice", "In L", "In R", "Rec", "L", "R"]);
+        assert_eq!(sampler.parameters().len(), 17);
+        for (index, name) in [(Sampler::PARAM_TAKE, "Take"), (Sampler::PARAM_SLICES, "Slices"), (Sampler::PARAM_REC_BUTTON, "Rec Button")] {
+            assert_eq!(sampler.parameters()[index].name, name);
+        }
         // Old patches, saved without Slices, play the whole recording
         assert_eq!(Slices::from_param(sampler.parameters()[Sampler::PARAM_SLICES].default), None);
         assert!(sampler.polyphonic());

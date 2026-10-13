@@ -144,7 +144,10 @@ static MODULE_UI: &[ModuleUi] = &[
             knob_as("Attack", "Atk"),
             knob_as("Release", "Rel"),
             knob("Level"),
+            // Recording: how loud In must be before a take starts
+            knob_as("Rec Threshold", "Thresh"),
         ],
+        hidden: &["Rec Button"],
         display: NodeDisplay::SamplerWave,
         knobs_per_row: 4,
         ..ModuleUi::DEFAULT

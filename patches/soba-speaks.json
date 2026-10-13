@@ -129,6 +129,11 @@
           "name": "Level",
           "type": "Number",
           "value": 1.0
+        },
+        {
+          "name": "Rec Threshold",
+          "type": "Number",
+          "value": -40.0
         }
       ],
       "file": "samples/soba-speaks-chris.wav"
@@ -138,7 +143,7 @@
       "module_id": "source.sampler",
       "position": [
         270.0,
-        690.0
+        880.0
       ],
       "parameters": [
         {
@@ -214,7 +219,7 @@
       "module_id": "source.audio_input",
       "position": [
         270.0,
-        1306.0
+        1690.0
       ],
       "parameters": []
     },
@@ -363,7 +368,7 @@
       "module_id": "seq.chord",
       "position": [
         40.0,
-        1840.0
+        2299.0
       ],
       "parameters": [
         {
@@ -893,7 +898,7 @@
       "module_id": "osc.sine",
       "position": [
         420.0,
-        1840.0
+        2299.0
       ],
       "parameters": [
         {
@@ -953,7 +958,7 @@
       "module_id": "filter.svf",
       "position": [
         680.0,
-        2080.0
+        2539.0
       ],
       "parameters": [
         {
@@ -978,7 +983,7 @@
       "module_id": "util.vca",
       "position": [
         960.0,
-        2080.0
+        2539.0
       ],
       "parameters": [
         {
@@ -998,7 +1003,7 @@
       "module_id": "mod.adsr",
       "position": [
         960.0,
-        2300.0
+        2759.0
       ],
       "parameters": [
         {
@@ -1504,6 +1509,12 @@
       "from_port": "Out R",
       "to_node": 14,
       "to_port": "Right"
+    },
+    {
+      "from_node": 4,
+      "from_port": "L",
+      "to_node": 15,
+      "to_port": "In L"
     }
   ],
   "midi_mappings": [],
@@ -1516,7 +1527,7 @@
       ],
       "size": [
         1140.0,
-        1740.0
+        2199.0
       ],
       "color": "blue"
     },
@@ -1524,7 +1535,7 @@
       "title": "The chords",
       "position": [
         16.0,
-        1782.0
+        2241.0
       ],
       "size": [
         1200.0,
@@ -1555,10 +1566,10 @@
       "width": 300.0
     },
     {
-      "text": "**Your own voice:** on the voice Mixer, mute **1** and unmute **3**, then speak or sing into a mic. Use headphones, so the mic doesn't hear the speakers.",
+      "text": "**Your own voice:** pick your mic under **Input**. Press **Rec** on the top Sampler, then say the line: the take starts on your first word, and the Sampler says it every two bars from then on (**Ctrl+Z** brings Chris back). Or mute **1** and unmute **3** on the voice Mixer to be heard live. Use headphones, so the mic doesn't hear the speakers.",
       "position": [
         270.0,
-        1630.0
+        2010.0
       ],
       "width": 290.0
     },
@@ -1566,7 +1577,7 @@
       "text": "The same pad plays twice: bright and raw into the Vocoder's **Carrier**, and filtered dark underneath, so the chords carry on between the words.",
       "position": [
         40.0,
-        2416.0
+        2905.0
       ],
       "width": 380.0
     }

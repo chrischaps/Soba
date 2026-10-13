@@ -65,8 +65,12 @@ in   Velocity           Control  ConnectionOnly       inline=true  port
 in   Start              Control  ConnectionOrConstant inline=true  num 0 [0..1] %
 in   Speed              Control  ConnectionOrConstant inline=true  num 1 [-2..2] x
 in   Slice              Control  ConnectionOnly       inline=true  port
+in   In L               Audio    ConnectionOnly       inline=true  port
+in   In R               Audio    ConnectionOnly       inline=true  port
+in   Rec                Gate     ConnectionOnly       inline=true  port
 in   Loop               Control  ConstantOnly         inline=true  select 0 ["Off", "Forward", "Ping-Pong"] "Loop"
 in   Mode               Control  ConstantOnly         inline=true  select 0 ["One-Shot", "Gated"] "Mode"
+in   Take               Control  ConstantOnly         inline=true  select 0 ["Free", "1 bar", "2 bars", "4 bars", "8 bars", "16 bars"] "Take"
 in   End                Control  ConstantOnly         inline=false num 1 [0..1] %
 in   Loop Start         Control  ConstantOnly         inline=false num 0 [0..1] %
 in   Loop End           Control  ConstantOnly         inline=false num 1 [0..1] %
@@ -77,6 +81,8 @@ in   Attack             Control  ConstantOnly         inline=false num 0.002 [0.
 in   Release            Control  ConstantOnly         inline=false num 0.01 [0.001..5] s log
 in   Level              Control  ConstantOnly         inline=false num 0.8 [0..1]
 in   Slices             Control  ConstantOnly         inline=false num 1 [1..64] slices stepped
+in   Rec Threshold      Control  ConstantOnly         inline=false num -60 [-60..0] dB
+in   Rec Button         Control  ConstantOnly         inline=false toggle false ""
 out  L                  Audio
 out  R                  Audio
 knob Start              "Start" Modulatable
@@ -91,6 +97,7 @@ knob Speed              "Speed" Modulatable
 knob Attack             "Atk" KnobOnly
 knob Release            "Rel" KnobOnly
 knob Level              "Level" KnobOnly
+knob Rec Threshold      "Thresh" KnobOnly
 display SamplerWave
 
 == source.audio_input "Audio Input" finder="Audio Input" Source

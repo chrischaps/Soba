@@ -129,6 +129,25 @@ pub enum EngineCommand {
         sample: Option<Arc<SampleData>>,
     },
 
+    /// Give a module room to record a take into (a Sampler's Rec): an
+    /// empty recording with room set aside, at the engine's sample rate,
+    /// that nothing else holds. Ignored by modules that don't record.
+    GiveRoom {
+        /// Target node.
+        node_id: NodeId,
+        room: Arc<SampleData>,
+    },
+
+    /// Swap the room a module recorded take `take` into for the same
+    /// recording made to measure (see
+    /// [`DspModule::settle_take`](crate::dsp::DspModule::settle_take)).
+    SettleTake {
+        /// Target node.
+        node_id: NodeId,
+        take: u32,
+        sample: Arc<SampleData>,
+    },
+
     /// Play a chord on a module's outputs from its face, or stop with
     /// `None` (see [`DspModule::audition`](crate::dsp::DspModule::audition)).
     /// Played, not edited: nothing of it is kept in the graph.
@@ -174,6 +193,12 @@ pub enum AudioMessage {
     /// Copy a module's recording (a Looper's loop) into room the UI set
     /// aside, a piece each callback, and hand it back when it's done.
     SnapshotLoop { node_id: NodeId, snapshot: Box<Snapshot> },
+    /// Give a running module room to record a take into. Room it's done
+    /// with goes back to the UI to be dropped.
+    GiveRoom { node_id: NodeId, room: Arc<SampleData> },
+    /// Swap a running module's take for the same recording made to
+    /// measure. What it's done with goes back to the UI to be dropped.
+    SettleTake { node_id: NodeId, take: u32, sample: Arc<SampleData> },
     /// Play a chord on a running module's outputs, or stop.
     Audition { node_id: NodeId, chord: Option<Audition> },
     /// Hear a recording from a module's face, beside the patch, playing or

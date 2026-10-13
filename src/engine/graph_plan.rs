@@ -247,6 +247,41 @@ impl GraphPlan {
         }
     }
 
+    /// Gives a module room to record a take into. Returns room to drop off
+    /// the audio thread: the module's old room, or this if the node isn't
+    /// in this plan or doesn't record.
+    ///
+    /// REAL-TIME SAFE.
+    pub fn give_room(&mut self, node_id: NodeId, room: Arc<SampleData>) -> Option<Arc<SampleData>> {
+        match self.nodes.iter_mut().find(|node| node.node_id == node_id).and_then(|node| node.module.as_mut()) {
+            Some(module) => module.give_room(room),
+            None => Some(room),
+        }
+    }
+
+    /// Swaps a module's take for the same recording made to measure.
+    /// Returns what to drop off the audio thread.
+    ///
+    /// REAL-TIME SAFE.
+    pub fn settle_take(&mut self, node_id: NodeId, take: u32, sample: Arc<SampleData>) -> Option<Arc<SampleData>> {
+        match self.nodes.iter_mut().find(|node| node.node_id == node_id).and_then(|node| node.module.as_mut()) {
+            Some(module) => module.settle_take(take, sample),
+            None => Some(sample),
+        }
+    }
+
+    /// Calls `f` with every take a module finished since the last call:
+    /// its node, its count of takes, and the recording, shared.
+    ///
+    /// REAL-TIME SAFE.
+    pub fn take_finished_takes(&mut self, mut f: impl FnMut(NodeId, u32, Arc<SampleData>)) {
+        for node in &mut self.nodes {
+            if let Some((take, sample)) = node.module.as_mut().and_then(|module| module.take_finished_take()) {
+                f(node.node_id, take, sample);
+            }
+        }
+    }
+
     /// Calls `f` with every recording a module has finished with, to be
     /// dropped off the audio thread.
     ///

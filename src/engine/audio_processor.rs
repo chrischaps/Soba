@@ -481,6 +481,16 @@ impl AudioProcessor {
                 AudioMessage::Cue(cue) => {
                     self.cue.play(cue, self.sample_rate);
                 }
+                AudioMessage::GiveRoom { node_id, room } => {
+                    if let Some(old) = self.plan.give_room(node_id, room) {
+                        self.engine_handle.retire_sample(old);
+                    }
+                }
+                AudioMessage::SettleTake { node_id, take, sample } => {
+                    if let Some(old) = self.plan.settle_take(node_id, take, sample) {
+                        self.engine_handle.retire_sample(old);
+                    }
+                }
                 AudioMessage::SnapshotLoop { node_id, mut snapshot } => {
                     if self.snapshots.len() < self.snapshots.capacity() {
                         self.snapshots.push((node_id, snapshot));
@@ -499,10 +509,12 @@ impl AudioProcessor {
         self.retire_samples();
     }
 
-    /// Hands recordings modules have let go of back to the UI.
+    /// Hands recordings modules have let go of back to the UI, and tells
+    /// it of takes they've just recorded.
     fn retire_samples(&mut self) {
         let Self { plan, engine_handle, .. } = self;
         plan.take_retired_samples(|sample| engine_handle.retire_sample(sample));
+        plan.take_finished_takes(|node_id, take, sample| engine_handle.send_take(node_id, take, sample));
     }
 
     /// Copies the next pieces of loops being loaded and snapshotted, within
@@ -761,6 +773,52 @@ mod tests {
         let left: Vec<f32> = (0..frames).map(|n| (n as f32 * hz / 48000.0 * std::f32::consts::TAU).sin() * 0.5).collect();
         let right: Vec<f32> = left.iter().map(|s| s * -0.5).collect();
         std::sync::Arc::new(crate::dsp::SampleData::stereo(left, right, 48000.0))
+    }
+
+    #[test]
+    fn test_a_take_comes_back_to_the_ui_and_settling_it_lets_the_room_go() {
+        use crate::modules::Sampler;
+        use std::sync::Arc;
+        let (mut ui, engine) = EngineChannels::with_defaults().split();
+        let mut processor = AudioProcessor::new(48000.0, 256, engine);
+        let mut output = vec![0.0; 512];
+        let mut run = |ui: &mut UiHandle, callbacks: usize| {
+            for _ in 0..callbacks {
+                ui.flush();
+                processor.process(&mut output, 2);
+            }
+            ui.flush();
+        };
+        // A sine into a Sampler's In L
+        let registry = create_module_registry();
+        let port = |module: &str, name: &str| registry.create(module).unwrap().ports().iter().position(|p| p.name == name).unwrap();
+        ui.send_command(EngineCommand::AddModule { node_id: 1, module_id: "osc.sine" });
+        ui.send_command(EngineCommand::AddModule { node_id: 2, module_id: "source.sampler" });
+        ui.send_command(EngineCommand::Connect { from_node: 1, from_port: port("osc.sine", "Out"), to_node: 2, to_port: port("source.sampler", "In L") });
+        ui.send_command(EngineCommand::SetPlaying(true));
+        run(&mut ui, 1);
+
+        // Room, given to the running Sampler, and Rec pressed twice
+        let room = Arc::new(crate::dsp::SampleData::with_room(48000, 48000.0));
+        ui.send_command(EngineCommand::GiveRoom { node_id: 2, room });
+        run(&mut ui, 1);
+        for _ in 0..2 {
+            ui.send_command(EngineCommand::SetParameter { node_id: 2, param_index: Sampler::PARAM_REC_BUTTON, value: 1.0 });
+            run(&mut ui, 1);
+            ui.send_command(EngineCommand::SetParameter { node_id: 2, param_index: Sampler::PARAM_REC_BUTTON, value: 0.0 });
+            run(&mut ui, 10);
+        }
+        let (node_id, take, sample) = ui.take_finished_take().expect("the take comes back");
+        assert_eq!((node_id, take), (2, 1));
+        assert_eq!(sample.frames(), 11 * 256, "from one press to the next");
+        assert!(sample.left().iter().any(|&s| s.abs() > 0.5), "the sine");
+
+        // Settled with a copy made to measure, the room comes back to be dropped here
+        let measured = Arc::new(sample.to_measure());
+        ui.send_command(EngineCommand::SettleTake { node_id: 2, take, sample: Arc::clone(&measured) });
+        run(&mut ui, 2);
+        assert_eq!(Arc::strong_count(&sample), 1, "the room is let go of");
+        assert!(Arc::ptr_eq(ui.graph().sample(2).unwrap(), &measured));
     }
 
     /// Runs callbacks until a snapshot comes back, returning it and how

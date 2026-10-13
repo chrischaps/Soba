@@ -176,4 +176,5 @@ The louder the input, the quieter the pad: it dips under each word and swells ba
 - [ADSR Envelope](../modulation/adsr.md): triggered by Gate
 - [Compressor](../effects/compressor.md): evens out a voice or a guitar
 - [Vocoder](../effects/vocoder.md): speak or sing into it, and a synth chord speaks with your voice
+- [Sampler](./sampler.md): patched into its **In**, records a take of you to play from a key or a gate
 - [Audio Output](../output/audio-output.md): its limiter catches feedback

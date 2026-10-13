@@ -26,9 +26,9 @@ A patch that talks. Every two bars a voice says *"Hello. I am Soba. I sing in si
 |--------|----------|
 | [Clock](../modules/modulation/clock.md) | **BPM** 76, **Div** 1 (a pulse every bar) |
 | [Clock Divider](../modules/utilities/divider.md) | **Div** 2 (every other bar) |
-| [Sampler](../modules/sources/sampler.md) | `samples/soba-speaks-chris.wav` (Chris's voice), **Mode** One-Shot, **Atk** 2 ms, **Rel** 50 ms, **Level** 100% |
+| [Sampler](../modules/sources/sampler.md) | `samples/soba-speaks-chris.wav` (Chris's voice), **Mode** One-Shot, **Atk** 2 ms, **Rel** 50 ms, **Level** 100%, **Thresh** −40 dB (for recording your own line) |
 | [Sampler](../modules/sources/sampler.md) | `samples/soba-speaks.wav` (the synthesized voice), the same but **Level** 56% |
-| [Audio Input](../modules/sources/audio-input.md) | Defaults: for your own voice |
+| [Audio Input](../modules/sources/audio-input.md) | Defaults: for your own voice, live and recorded |
 | [Mixer](../modules/utilities/mixer.md) (the voices) | **Level 1** to **3** 100%, pans centred, **Mute 2** and **Mute 3** on |
 | [Chord Sequencer](../modules/utilities/chord-sequencer.md) | **Steps** 4, **Gate** 100%, **Voices** 5, **Range** 4, **Voicing** Close, **Voice lead** on, **Bass voice** on. Chords Fmaj9 (F3), Em7 (E3), Dm9 (D3), Cmaj7 (C3) |
 | [Oscillator](../modules/sources/oscillator.md) | **Wave** Saw, **Voices** 2, **Detune** 10%, **Spread** 50% |
@@ -51,6 +51,7 @@ A patch that talks. Every two bars a voice says *"Hello. I am Soba. I sing in si
 [Sampler L] ──> [Mixer Ch 1]                     (Chris's voice)
 [Sampler L] ──> [Mixer Ch 2]                     (the synthesized voice, muted)
 [Audio Input L] ──> [Mixer Ch 3]                 (your voice, muted)
+               ──> [Sampler In L]               (Chris's Sampler, to record your line)
 [Mixer Out L] ──> [Vocoder Modulator]
 ```
 
@@ -59,6 +60,8 @@ The Clock pulses once a bar. The Clock Divider passes every second pulse to both
 The voice you hear first belongs to Chris, who made Soba. It was recorded for this example with [`tools/voice/record.py`](https://github.com/chrischaps/Soba/blob/master/tools/voice/record.py). The script counts in at the patch's tempo, and trims the take to the words. A real voice gives the vocoder what a machine has to fake: breath before the words, a pitch that wanders and falls, consonants that are never quite the same twice.
 
 The other voice isn't anyone's recording. It was made by a small formant synthesizer, [`tools/voice/speak.py`](https://github.com/chrischaps/Soba/blob/master/tools/voice/speak.py). A pulse train at a speaking pitch, shaped like the airflow through the vocal folds, runs through a chain of resonators. The lowest three glide from sound to sound: they're the formants that make an "ah" an "ah". The "s" sounds are filtered noise. To a vocoder, that's all a voice is: formants that move, and hiss. Unmute **Ch 2** and mute **Ch 1** on the voice Mixer to hear how close it gets.
+
+The Audio Input also feeds the top Sampler's **In L**, so it can record your line in place of Chris's. Its **Thresh** is at −40 dB: press **Rec** and it waits for you to speak, so the take starts on your first word and the Clock Divider's gate finds it there every two bars.
 
 The voice Mixer only switches, so every strip sits at 100% and centre, and only **Out L** goes on to the vocoder. The synthesized voice's Sampler sits at 56%, 5 dB down, because two voices at one level dry don't come out at one level through a vocoder. A deep voice carries much of its weight below 200 Hz, under most of the bands, while the synthesized one is all mid-range formants. At 56% they come out of the vocoder at one loudness.
 
@@ -93,6 +96,7 @@ A five-note chord is loud, so the vocoder's strips sit at 28%. The ping-pong ech
 
 ## Try this
 
+- **Record your own line.** Pick your microphone under **Input** in the toolbar and press **Rec** on the top Sampler. It waits for a sound: say the line, *"Hello. I am Soba. I sing in sines,"* or any line of your own, then press **Rec** again. The Sampler plays your take from the next two bars on, in Chris's place, and keeps it beside the patch. **Ctrl+Z** brings Chris back. Wear headphones, or the take hears the speakers.
 - **Speak into it.** On the voice Mixer, mute **Ch 1** and unmute **Ch 3**, pick your microphone under **Input** in the toolbar, and talk or sing. Wear headphones, or the mic hears the speakers. Sustained vowels make the chords bloom. A whisper comes through as hiss.
 - **Two voices at once.** Unmute **Ch 2** as well as **Ch 1**. The person and the synthesizer start together and drift apart word by word, and the vocoder wears both at once.
 - **Robot.** Set **Bands** to 8 and **Release** to 20 ms.

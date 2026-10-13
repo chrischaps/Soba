@@ -263,7 +263,7 @@
       ],
       "size": [
         600.0,
-        700.0
+        857.0
       ],
       "color": "blue"
     }
@@ -273,7 +273,7 @@
       "text": "The bell is one strike of the FM Synthesis example at C4, rendered by Soba itself. The Sampler plays it at every key's pitch, as tape would: an octave up is twice as fast and half as long.",
       "position": [
         300.0,
-        740.0
+        897.0
       ],
       "width": 340.0
     },
@@ -281,7 +281,7 @@
       "text": "Each key gets a voice of its own, so a chord rings as several playheads crossing the waveform at their own speeds. Gated mode lets a bell fade when you let go of its key.",
       "position": [
         680.0,
-        740.0
+        897.0
       ],
       "width": 320.0
     }

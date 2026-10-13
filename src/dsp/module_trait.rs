@@ -442,6 +442,35 @@ pub trait DspModule: Send + 'static {
         snapshot.finish(SnapshotOutcome::Unsupported, 0);
         true
     }
+
+    /// Gives the module room to record a take into (a Sampler's Rec): an
+    /// empty recording with room set aside off the audio thread, held by
+    /// nothing else, so the module can write it and then play it. Called
+    /// on the audio thread.
+    ///
+    /// Returns room it's done with, to be dropped off the audio thread: the
+    /// room it had, or, for a module that doesn't record, this.
+    fn give_room(&mut self, room: Arc<SampleData>) -> Option<Arc<SampleData>> {
+        Some(room)
+    }
+
+    /// A take the module finished since the last call, and now plays, with
+    /// its count of takes so far: shared, for the UI to keep. Asked after
+    /// every callback.
+    fn take_finished_take(&mut self) -> Option<(u32, Arc<SampleData>)> {
+        None
+    }
+
+    /// Swaps the room take `take` was recorded into for the same recording
+    /// made to measure, without a break in the voices playing it: it's
+    /// the same sound. A module that has moved on since (another take, or
+    /// another file) keeps what it has.
+    ///
+    /// Returns the recording it's done with, to be dropped off the audio
+    /// thread: the room, or the one it was given if it kept its own.
+    fn settle_take(&mut self, _take: u32, sample: Arc<SampleData>) -> Option<Arc<SampleData>> {
+        Some(sample)
+    }
 }
 
 /// The most input ports a module may have. Inputs are passed to modules as a

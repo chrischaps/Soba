@@ -13,6 +13,8 @@
 //!   so a long file is never freed in the audio callback
 //! - **snapshots** (audio -> UI): copies of Loopers' loops, made into room
 //!   the UI set aside, coming back to be saved
+//! - **takes** (audio -> UI): takes Samplers have just recorded, shared,
+//!   for the UI to keep with the patch
 //! - **events** (audio -> UI): metering, monitor values, status
 //! - **scope frames** (audio -> UI): oscilloscope captures, by value
 //!
@@ -60,6 +62,10 @@ const RETIRED_SAMPLE_BUFFER_SIZE: usize = 64;
 /// at once: more than a patch has Loopers. The audio thread holds as many
 /// while it copies them.
 pub const MAX_SNAPSHOTS: usize = 64;
+
+/// Finished takes that can wait for the UI: more than a patch records
+/// between two UI frames.
+const TAKE_BUFFER_SIZE: usize = 16;
 
 /// Oscilloscope captures that can wait for the UI.
 const SCOPE_FRAME_BUFFER_SIZE: usize = 8;
@@ -150,6 +156,7 @@ impl EngineChannels {
         let (retired_input_tx, retired_input_rx) = RingBuffer::new(RETIRED_INPUT_BUFFER_SIZE);
         let (retired_sample_tx, retired_sample_rx) = RingBuffer::new(RETIRED_SAMPLE_BUFFER_SIZE);
         let (snapshot_tx, snapshot_rx) = RingBuffer::new(MAX_SNAPSHOTS);
+        let (take_tx, take_rx) = RingBuffer::new(TAKE_BUFFER_SIZE);
 
         // Placeholder settings until an AudioProcessor reports the real ones
         let graph = AudioGraph::with_registry(44100.0, 256, create_module_registry());
@@ -166,6 +173,7 @@ impl EngineChannels {
                 retired_sample_rx,
                 snapshot_rx,
                 snapshots_out: 0,
+                take_rx,
                 event_rx,
                 scope_rx,
                 config: Arc::clone(&config),
@@ -184,6 +192,7 @@ impl EngineChannels {
                 retired_input_tx,
                 retired_sample_tx,
                 snapshot_tx,
+                take_tx,
                 event_tx,
                 scope_tx,
                 config,
@@ -219,6 +228,7 @@ pub struct UiHandle {
     snapshot_rx: Consumer<(NodeId, Box<Snapshot>)>,
     /// Snapshots asked for and not yet back.
     snapshots_out: usize,
+    take_rx: Consumer<(NodeId, u32, Arc<SampleData>)>,
     event_rx: Consumer<EngineEvent>,
     scope_rx: Consumer<ScopeFrame>,
     config: Arc<AudioConfig>,
@@ -407,6 +417,7 @@ impl UiHandle {
         }
         let loads = self.graph.take_sample_loads();
         self.unsent_samples.extend(loads.into_iter().map(|(node_id, sample)| AudioMessage::LoadSample { node_id, sample }));
+        self.unsent_samples.extend(self.graph.take_take_handoffs());
         if !self.send_samples() {
             return false;
         }
@@ -438,6 +449,13 @@ impl UiHandle {
     /// Snapshots asked for and not yet taken back.
     pub fn snapshots_out(&self) -> usize {
         self.snapshots_out
+    }
+
+    /// A take a module (a Sampler) has just recorded, with its count of
+    /// takes so far, if one is waiting. The module plays it already: this
+    /// is shared, for the UI to keep.
+    pub fn take_finished_take(&mut self) -> Option<(NodeId, u32, Arc<SampleData>)> {
+        self.take_rx.pop().ok()
     }
 
     /// Sends any recordings waiting for room in the queue. Returns true if
@@ -503,6 +521,7 @@ pub struct EngineHandle {
     retired_input_tx: Producer<InputFeed>,
     retired_sample_tx: Producer<Arc<SampleData>>,
     snapshot_tx: Producer<(NodeId, Box<Snapshot>)>,
+    take_tx: Producer<(NodeId, u32, Arc<SampleData>)>,
     event_tx: Producer<EngineEvent>,
     scope_tx: Producer<ScopeFrame>,
     config: Arc<AudioConfig>,
@@ -574,6 +593,18 @@ impl EngineHandle {
         if let Err(PushError::Full(back)) = self.snapshot_tx.push((node_id, snapshot)) {
             debug_assert!(false, "snapshot queue full");
             drop(back);
+        }
+    }
+
+    /// Tells the UI of a take a module has just recorded.
+    ///
+    /// REAL-TIME SAFE: should the queue ever be full, the UI never hears
+    /// of it, and the module plays it unkept; it's handed back to be
+    /// dropped, rather than freed here.
+    pub fn send_take(&mut self, node_id: NodeId, take: u32, sample: Arc<SampleData>) {
+        if let Err(PushError::Full((_, _, sample))) = self.take_tx.push((node_id, take, sample)) {
+            debug_assert!(false, "take queue full");
+            self.retire_sample(sample);
         }
     }
 
@@ -690,6 +721,18 @@ mod tests {
                     current.fill_snapshot(node_id, &mut snapshot, &mut budget);
                     engine.return_snapshot(node_id, snapshot);
                     seen.push("snapshot");
+                }
+                AudioMessage::GiveRoom { node_id, room } => {
+                    if let Some(old) = current.give_room(node_id, room) {
+                        engine.retire_sample(old);
+                    }
+                    seen.push("room");
+                }
+                AudioMessage::SettleTake { node_id, take, sample } => {
+                    if let Some(old) = current.settle_take(node_id, take, sample) {
+                        engine.retire_sample(old);
+                    }
+                    seen.push("settle");
                 }
             }
         }

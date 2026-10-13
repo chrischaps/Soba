@@ -21,6 +21,9 @@
 //! whether or not the transport runs; Alt-click plays it from anywhere.
 //! That cue has a playhead of its own: a plain white line capped at both
 //! ends, unlike the voices', with what it has played washed faintly behind it.
+//!
+//! Rec, beside Open…, records what's patched into In; while it does, the
+//! panel shows the take coming in (see [`super::sampler_take`]).
 
 use eframe::egui::{self, Color32, CursorIcon, Pos2, Rect, Sense, Shape, Stroke, Vec2};
 use egui_node_graph2::NodeId;
@@ -28,11 +31,12 @@ use egui_node_graph2::NodeId;
 use crate::app::theme;
 use crate::dsp::primitives::{Slices, MAX_SLICES};
 use crate::dsp::MAX_CHANNELS;
-use crate::modules::sampler::{LoopMode, Sampler};
+use crate::modules::sampler::{LoopMode, RecState, Sampler, NO_THRESHOLD_DB};
 use crate::modules::sequencer::note_to_name;
 use crate::persistence::sample_files;
 
 use super::sample_shelf::ShelvedSample;
+use super::sampler_take::{self, RecBlock, RecView, REC_BUTTON};
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
 /// The four markers, as (parameter, short name).
@@ -98,7 +102,27 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let small = egui::FontId::proportional(8.0 * z);
 
     // How loud each slice is playing, from the voices playing it
-    let readout = user_state.get_engine_node_id(node_id).and_then(|id| user_state.readouts.get(&id)).copied();
+    let engine_id = user_state.get_engine_node_id(node_id);
+    let readout = engine_id.and_then(|id| user_state.readouts.get(&id)).copied();
+
+    // Recording: what it's doing, and whether Rec can start a take now
+    let rec = RecView::read(readout.as_ref(), value_of("Rec Threshold").unwrap_or(NO_THRESHOLD_DB));
+    let live = rec.state == RecState::Recording;
+    let patched = |name: &str| node.get_input(name).is_ok_and(|input| graph.connection(input).is_some());
+    let in_patched = patched("In L") || patched("In R");
+    let blocked = if !in_patched {
+        Some(RecBlock::NoInput)
+    } else if patched("Rec") {
+        Some(RecBlock::Jack)
+    } else if !user_state.is_playing {
+        Some(RecBlock::Stopped)
+    } else if !rec.room {
+        Some(RecBlock::NoRoom)
+    } else {
+        None
+    };
+    // While a take comes in, the panel is its: the old recording waits
+    let shown = loaded.filter(|_| !live);
     let mut lit = [0.0f32; MAX_SLICES];
     if let (Some(readout), Some(slices)) = (readout, slices) {
         for c in 0..MAX_CHANNELS {
@@ -115,7 +139,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         (from as f32, to as f32)
     };
 
-    match loaded {
+    match shown {
         Some(sample) => {
             // What plays, against what doesn't
             let outside = Color32::from_rgba_unmultiplied(0, 0, 0, 90);
@@ -219,6 +243,11 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                 }
             }
         }
+        None if live => {
+            let scope = engine_id.and_then(|id| user_state.get_scope_data(id));
+            sampler_take::draw_take(&painter, plot, &rec, scope, &format!("REC  {:.1} s", rec.seconds), z);
+            ui.ctx().request_repaint();
+        }
         None => {
             // Ask for a file: a dashed outline round a hint
             let outline = plot.shrink(2.0 * z);
@@ -229,6 +258,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                     (format!("Loading {}…", sample_files::file_name(key)), theme::text::SECONDARY)
                 }
                 (Some(key), Some(problem)) => (format!("{}: {problem}", sample_files::file_name(key)), theme::accent::WARNING),
+                _ if in_patched => ("Press Rec to record, or drop a WAV".to_string(), if drop_here { blue } else { theme::text::SECONDARY }),
                 _ => ("Drop a WAV here".to_string(), if drop_here { blue } else { theme::text::SECONDARY }),
             };
             painter.text(outline.center() - Vec2::new(0.0, 5.0 * z), egui::Align2::CENTER_CENTER, truncate(&hint, 34), egui::FontId::proportional(9.0 * z), hint_color);
@@ -240,6 +270,12 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                 theme::text::DISABLED,
             );
         }
+    }
+
+    // Waiting to record: for a sound, or the next bar
+    if matches!(rec.state, RecState::Armed | RecState::Waiting) {
+        sampler_take::draw_waiting(&painter, rect, plot, &rec, ui.input(|i| i.time), z);
+        ui.ctx().request_repaint();
     }
 
     // A file dragged over: this is where it lands
@@ -264,15 +300,15 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             .min_by(|a, b| a.1.total_cmp(&b.1))
             .map(|(m, _)| m)
     };
-    let hot = dragging.or_else(|| if loaded.is_some() { pointer.and_then(|p| nearest(p.x)) } else { None });
+    let hot = dragging.or_else(|| if shown.is_some() { pointer.and_then(|p| nearest(p.x)) } else { None });
     // With Alt down, a click plays from the pointer: a faint line shows where
     let alt = ui.input(|i| i.modifiers.alt);
-    if let (true, Some(_), Some(p), None) = (alt, loaded, response.hover_pos(), dragging) {
+    if let (true, Some(_), Some(p), None) = (alt, shown, response.hover_pos(), dragging) {
         let x = x_at(place_at(p.x));
         let line = [Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())];
         painter.extend(Shape::dashed_line(&line, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.6)), 2.0 * z, 2.0 * z));
     }
-    if loaded.is_some() {
+    if shown.is_some() {
         for (m, &place) in marker_places.iter().enumerate() {
             if m >= 2 && !looping {
                 continue;
@@ -295,7 +331,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     }
 
     // Drag a marker; click anywhere else (or an empty panel) to open a file
-    if loaded.is_some() {
+    if shown.is_some() {
         if response.drag_started() {
             // Where the button went down: by the time a drag counts as one,
             // a quick hand is already a few points away
@@ -326,11 +362,12 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         } else if hot.is_some() {
             ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
         }
-    } else if response.clicked() {
+    } else if response.clicked() && !live {
         responses.push(SynthResponse::OpenSample(node_id));
     }
     if response.hovered() && dragging.is_none() {
-        let tip = match (hot, loaded, key) {
+        let tip = match (hot, shown, key) {
+            _ if live => "Recording what's patched into In: press Rec to stop".to_string(),
             (_, Some(_), _) if alt => "Click to hear it from here".to_string(),
         (Some(m), _, _) => format!("{}: drag to move it", MARKERS[m].1),
             (None, Some(sample), Some(key)) => match (slices, pointer.and_then(|p| slice_at(place_at(p.x)))) {
@@ -394,6 +431,11 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     if open.on_hover_text("Open a WAV file for this Sampler").clicked() {
         responses.push(SynthResponse::OpenSample(node_id));
     }
+
+    // Rec, beside it
+    let rec_rect = Rect::from_min_size(Pos2::new(button.left() - 22.0 * z, row.top() + 1.0 * z), Vec2::new(18.0 * z, row_height - 2.0 * z));
+    let held = value_of(REC_BUTTON).is_some_and(|v| v >= 0.5);
+    responses.extend(sampler_take::rec_button(ui, rec_rect, node_id, user_state, &rec, held, blocked, z));
     responses
 }
 

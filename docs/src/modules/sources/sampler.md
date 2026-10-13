@@ -3,13 +3,13 @@
 **Module ID** `source.sampler` · **Category** Source
 
 ![Sampler Module](../../images/module-sampler.png)
-*A five-note chord on a looped bell. The orange flags mark the loop and the blue ones what plays. Each white line is a voice, circling inside the loop at its own speed.*
+*A five-note chord on a looped bell, and the file heard from **▶**. The orange flags mark the loop and the blue ones what plays. Each white line with a dot is a voice, circling inside the loop at its own speed. The line capped at both ends is **▶**'s, out in the bell's tail.*
 
 Sampler plays a WAV file. Patch a gate in and it plays one-shots: a kick under a sequencer, a vocal chop, a door slam. Patch in V/Oct as well and a polyphonic gate, and it becomes an instrument: one recorded note spread across the keyboard, each key playing it at its own pitch.
 
 Set **Slices** and it becomes a chopped break: the recording is cut into equal slices, and each key plays one of them.
 
-Every other sound in Soba is synthesized. The Sampler brings in sound you've recorded, or one Soba rendered itself, and keeps it with the patch.
+Every other sound in Soba is synthesized. The Sampler brings in sound you've recorded, or one Soba rendered itself, and keeps it with the patch. It can make the recording itself, too: patch something into **In** and press **Rec** (see [Recording into it](#recording-into-it)).
 
 ## Loading a file
 
@@ -34,6 +34,29 @@ One file plays at a time. Starting another, from this Sampler or any other, fade
 
 While it plays, a white playhead capped at both ends shows where it is, with the part it has played washed faintly behind it. The voices' playheads are lines with a blue dot, so the two never look alike.
 
+## Recording into it
+
+Patch something into **In L** (and **In R**, for stereo) and press the red **Rec** button beside **Open…**. Press it again to stop. There's no file dialog: the take plays at once, and becomes the Sampler's file.
+
+- **Anything can be recorded.** Patch an [Audio Input](./audio-input.md) to record yourself. Patch the patch's own sound, a [Vocoder](../effects/vocoder.md)'s output or a [Mixer](../utilities/mixer.md)'s send, to *resample* it into a new instrument. One side patched records the same on both.
+- **Start on a sound.** Turn **Thresh** up from −∞ dB and Rec waits until **In** is that loud before it starts, keeping the 30 ms before. The take starts on your first word, not on reaching for the mouse. While it waits, the panel dims and shows how loud **In** is against the threshold.
+- **Takes in bars.** Set **Take** to a number of bars with a [Clock](../modulation/clock.md) running. Rec then starts on the next bar line and stops after exactly that many bars, so the take is already a loop. A press up to 50 ms after a bar line counts as on it.
+- **Stopping.** Rec again, the **Rec** gate falling, the bars running out, or the room: a take lasts at most a minute. Stopping the transport ends a take there.
+- **The Rec jack** takes over from the button, as **Freeze** does on the Vocoder: the Sampler records while the gate is high. A sequencer's gate resamples a phrase on cue.
+- **On a footswitch.** Right-click **Rec** to learn a MIDI CC for it.
+
+Live input reaches the patch a round trip after it was played, so the take is written that much earlier, as the [Looper](../utilities/looper.md)'s overdubs are. A take in bars begins with what you played on the bar line, within a few milliseconds at the latency your device reports. The patch's own sound has no round trip, and is taken as it comes.
+
+While a take comes in, the panel draws it in red, across a span that doubles whenever the take outgrows it, with the time so far in the corner and **Rec** showing ■. The Sampler goes on playing its old file until the take is done. Recording needs the patch playing.
+
+### Where takes go
+
+When a take ends it's written as a WAV beside the patch, as `<patch name> samples/Take 1.wav`, `Take 2.wav` and so on, and the Sampler's file names it. That's a step you can undo: undo gives the Sampler back the file it had before. Saving the patch saves the take with it, and opening the patch plays it again.
+
+A patch that hasn't been saved yet, a new one or an example, keeps its takes in a temporary folder until you save it. **Save As** then copies them beside the patch with its other samples. In the browser there's no folder beside the patch, so a take lives only in the session, as a dropped file does.
+
+Room for a take is set aside, a minute of stereo (about 23 MB at 48 kHz), when something is patched into **In**, so recording never has to find memory mid-take. Unpatch **In** and it's given back.
+
 ## Inputs
 
 | Port | Signal Type | Description |
@@ -44,6 +67,9 @@ While it plays, a white playhead capped at both ends shows where it is, with the
 | **Start** | Control (Orange) | Added to the **Start** knob as each note begins. 1 V is the whole recording, or the whole slice when sliced |
 | **Speed** | Control (Orange) | Added to the **Speed** knob while the note plays, as on tape: pitch follows, and below zero it plays backwards |
 | **Slice** | Control (Orange) | When sliced, picks a slice as each note begins: 0 to 1 across the slices, added to the note's own. Does nothing with **Slices** off |
+| **In L** | Audio (Blue) | What **Rec** records. Patched alone, it records on both sides |
+| **In R** | Audio (Blue) | The right side of what **Rec** records |
+| **Rec** | Gate (Green) | Records while high, starting as it rises (or as **Take** and **Thresh** say) and stopping as it falls. Patched, it takes over from the **Rec** button |
 
 ## Outputs
 
@@ -60,6 +86,7 @@ Both outputs carry a channel per voice when the gate is polyphonic.
 |---------|-------|---------|-------------|
 | **Loop** | Off, Forward, Ping-Pong | Off | Off plays once. Forward jumps from Loop End back to Loop Start. Ping-Pong plays back and forth between them |
 | **Mode** | One-Shot, Gated | One-Shot | One-Shot plays to the end whatever the gate does. Gated lets go when the gate falls |
+| **Take** | Free, 1 – 16 bars | Free | Free records until Rec is pressed again. In bars, with a Clock running, a take starts on the next bar and lasts exactly that long |
 | **Start** | 0 – 100% | 0% | Where notes start, through the recording |
 | **End** | 0 – 100% | 100% | Where notes end |
 | **Lp St** (Loop Start) | 0 – 100% | 0% | Where the loop begins. Kept between Start and End |
@@ -72,8 +99,9 @@ Both outputs carry a channel per voice when the gate is polyphonic.
 | **Atk** (Attack) | 1 ms – 2 s | 2 ms | How long each note takes to fade in |
 | **Rel** (Release) | 1 ms – 5 s | 10 ms | How long a note takes to fade out once let go |
 | **Level** | 0 – 100% | 80% | Output level |
+| **Thresh** (Rec Threshold) | −∞ – 0 dB | −∞ dB | At −∞ a take starts as soon as Rec is pressed. Turned up, it waits until **In** is this loud |
 
-The four region knobs sit in the top row, under the waveform where their markers are. You can drag the markers instead of the knobs. **Slices** and **Root** start the second row, since together they say which key plays which slice.
+The four region knobs sit in the top row, under the waveform where their markers are. You can drag the markers instead of the knobs. **Slices** and **Root** start the second row, since together they say which key plays which slice. **Thresh** sits on its own at the foot, since it's for recording.
 
 ## Playing it
 
@@ -126,7 +154,7 @@ The waveform shows the whole recording, scaled to fill the panel. What plays is 
 
 Every voice draws a white playhead where it is in the recording, as bright as it is loud. A chord is several lines moving at their own speeds, and a released note fades where it stands.
 
-Under the waveform are **▶** (see [Hearing it](#hearing-it)) and the file's name and length. A file that can't be found shows its name in orange. An empty Sampler asks for a file.
+Under the waveform are **▶** (see [Hearing it](#hearing-it)), the file's name and length, and **Rec** (see [Recording into it](#recording-into-it)), dim until something is patched into **In** and the patch is playing. A file that can't be found shows its name in orange. An empty Sampler asks for a file.
 
 ## Files and patches
 
@@ -198,6 +226,7 @@ Patch a slow [LFO](../modulation/lfo.md) into **Start**, and a Clock into **Gate
 
 - [Poly MIDI](../midi/poly-midi.md): plays the Sampler as an instrument, a voice per key
 - [Trigger Sequencer](../utilities/trigger-sequencer.md) and [Step Sequencer](../utilities/sequencer.md): one-shots in time
-- [Audio Input](./audio-input.md): outside sound live, as it happens, where the Sampler plays it back from a file
+- [Audio Input](./audio-input.md): outside sound live, as it happens. Patched into **In**, the Sampler records it
+- [Looper](../utilities/looper.md): records and layers live loops, where the Sampler records a take to play from a key or a gate
 - [Drum](./drum.md): synthesized drums to sit beside recorded ones
 - [Vocoder](../effects/vocoder.md): a recorded voice that makes a chord speak, as in the [Soba Speaks](../../recipes/soba-speaks.md) example

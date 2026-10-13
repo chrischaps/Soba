@@ -145,6 +145,80 @@ impl SampleData {
         Self { left, right, sample_rate }
     }
 
+    /// An empty stereo recording with room set aside for `frames` more, to
+    /// record a take into on the audio thread (see [`push`](Self::push)).
+    /// Off the audio thread: this allocates.
+    pub fn with_room(frames: usize, sample_rate: f32) -> Self {
+        Self::stereo(Vec::with_capacity(frames), Vec::with_capacity(frames), sample_rate)
+    }
+
+    /// How many frames it has room for, recorded or not.
+    pub fn room(&self) -> usize {
+        self.left.capacity().min(self.right.as_ref().map_or(usize::MAX, Vec::capacity))
+    }
+
+    /// Empties it, keeping its room.
+    ///
+    /// REAL-TIME SAFE.
+    pub fn clear(&mut self) {
+        self.left.clear();
+        if let Some(right) = &mut self.right {
+            right.clear();
+        }
+    }
+
+    /// Adds a frame at the end, if there's room. Returns whether it fitted.
+    ///
+    /// REAL-TIME SAFE: never grows past its room.
+    #[inline]
+    pub fn push(&mut self, [left, right]: [f32; 2]) -> bool {
+        if self.frames() >= self.room() {
+            return false;
+        }
+        self.left.push(left);
+        if let Some(r) = &mut self.right {
+            r.push(right);
+        }
+        true
+    }
+
+    /// Writes over frame `i`, if it has one.
+    ///
+    /// REAL-TIME SAFE.
+    #[inline]
+    pub fn set(&mut self, i: usize, [left, right]: [f32; 2]) {
+        if let Some(l) = self.left.get_mut(i) {
+            *l = left;
+            if let Some(r) = self.right.as_mut().and_then(|r| r.get_mut(i)) {
+                *r = right;
+            }
+        }
+    }
+
+    /// Turns its frames round, so frame `mid` comes first: a ring of
+    /// pre-roll put in order.
+    ///
+    /// REAL-TIME SAFE.
+    pub fn rotate_left(&mut self, mid: usize) {
+        let frames = self.frames();
+        if frames == 0 {
+            return;
+        }
+        self.left.rotate_left(mid % frames);
+        if let Some(right) = &mut self.right {
+            right.rotate_left(mid % frames);
+        }
+    }
+
+    /// A copy of what it holds and no more room than that: mono if both
+    /// sides are the same throughout, which a mono source makes.
+    pub fn to_measure(&self) -> Self {
+        match &self.right {
+            Some(right) if *right != self.left => Self::stereo(self.left.clone(), right.clone(), self.sample_rate),
+            _ => Self::mono(self.left.clone(), self.sample_rate),
+        }
+    }
+
     /// Its loudest and quietest sample in each of `columns` equal slices,
     /// both channels together, for drawing it as a waveform.
     pub fn overview(&self, columns: usize) -> Vec<(f32, f32)> {
@@ -376,6 +450,30 @@ mod tests {
         assert_eq!(overview[0], (0.0, 0.9));
         assert_eq!(overview[2], (-0.5, 0.0));
         assert_eq!(overview[3], (0.0, 0.0));
+    }
+
+    #[test]
+    fn a_take_records_within_its_room_and_comes_out_to_measure() {
+        let mut take = SampleData::with_room(4, 48000.0);
+        assert_eq!((take.frames(), take.room()), (0, 4));
+        for n in 0..4 {
+            assert!(take.push([n as f32, n as f32]));
+        }
+        assert!(!take.push([9.0, 9.0]), "full");
+        assert_eq!(take.room(), 4, "never grows");
+        // A ring of pre-roll, written round from frame 2, put in order
+        take.set(0, [4.0, 4.0]);
+        take.set(1, [5.0, 5.0]);
+        take.rotate_left(2);
+        assert_eq!(take.left(), &[2.0, 3.0, 4.0, 5.0]);
+        // Both sides the same: mono, and only as long as it is
+        let measured = take.to_measure();
+        assert!(!measured.is_stereo());
+        assert_eq!(measured.left().len(), 4);
+        take.set(3, [5.0, -5.0]);
+        assert!(take.to_measure().is_stereo());
+        take.clear();
+        assert_eq!((take.frames(), take.room()), (0, 4));
     }
 
     #[test]

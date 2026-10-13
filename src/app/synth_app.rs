@@ -51,6 +51,7 @@ mod framing;
 mod grouping;
 mod loops;
 mod samples;
+mod takes;
 #[cfg(not(target_arch = "wasm32"))]
 mod updates;
 
@@ -251,6 +252,8 @@ pub struct SynthApp {
     /// Loop files the patch opened or wrote, which a save may remove once
     /// no Looper names them.
     loop_files: std::collections::HashSet<String>,
+    /// When each Sampler was last handed room to record into.
+    rooms_given: HashMap<crate::engine::NodeId, web_time::Instant>,
 
     // --- Updates ---
     /// The check for new versions, and installing them.
@@ -458,6 +461,7 @@ impl SynthApp {
             record_toast: None,
             kept_loops: HashMap::new(),
             loop_files: std::collections::HashSet::new(),
+            rooms_given: HashMap::new(),
             #[cfg(not(target_arch = "wasm32"))]
             updater: Updater::new(),
             resuming: false,
@@ -542,6 +546,7 @@ impl SynthApp {
 
         // Ship the frame's edits before rendering it
         self.sync_parameters();
+        self.tend_takes();
         self.sync_samples();
         if let Some(handle) = self.ui_handle.as_mut() {
             handle.flush();
@@ -4290,6 +4295,7 @@ impl eframe::App for SynthApp {
         if self.user_state.samples.waiting() {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
+        self.tend_takes();
         self.sync_samples();
         self.tend_cue(ctx);
 

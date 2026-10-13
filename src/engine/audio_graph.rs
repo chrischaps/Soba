@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use crate::dsp::bypass::{bypass_routes, can_bypass};
 use crate::dsp::{DspModule, ModuleRegistry, PortDefinition, SampleData, SignalBuffer, SignalType};
-use crate::engine::commands::{EngineCommand, NodeId, PortIndex};
+use crate::engine::commands::{AudioMessage, EngineCommand, NodeId, PortIndex};
 use crate::engine::graph_plan::{
     GraphPlan, InputSource, InputTap, LateLine, MonitorSource, OutputTap, PlanNode, MAX_INPUTS,
 };
@@ -140,6 +140,9 @@ pub struct AudioGraph {
     /// Recordings for modules already on the audio thread, in the order
     /// they were loaded, waiting to be sent after the plan that has them.
     sample_loads: Vec<(NodeId, Option<Arc<SampleData>>)>,
+    /// Room to record takes into, and takes made to measure, for modules
+    /// already on the audio thread, waiting to be sent likewise.
+    take_handoffs: Vec<AudioMessage>,
 }
 
 impl AudioGraph {
@@ -157,6 +160,7 @@ impl AudioGraph {
             monitored_inputs: HashSet::new(),
             monitored_outputs: HashSet::new(),
             sample_loads: Vec::new(),
+            take_handoffs: Vec::new(),
         }
     }
 
@@ -281,6 +285,7 @@ impl AudioGraph {
             return false;
         }
         self.sample_loads.retain(|(id, _)| *id != node_id);
+        self.take_handoffs.retain(|handoff| handoff_node(handoff) != Some(node_id));
 
         // Remove all connections involving this node
         self.connections.retain(|conn| {
@@ -432,6 +437,7 @@ impl AudioGraph {
         self.monitored_inputs.clear();
         self.monitored_outputs.clear();
         self.sample_loads.clear();
+        self.take_handoffs.clear();
     }
 
     /// Gives a module a recording to play, or takes its away with `None`.
@@ -475,6 +481,44 @@ impl AudioGraph {
     /// The recording a module was last given, if any.
     pub fn sample(&self, node_id: NodeId) -> Option<&Arc<SampleData>> {
         self.nodes.get(&node_id).and_then(|spec| spec.sample.as_ref())
+    }
+
+    /// Gives a module room to record a take into. A module not yet handed
+    /// to a plan gets it at once; one already on the audio thread gets it
+    /// through [`take_take_handoffs`](Self::take_take_handoffs).
+    ///
+    /// Returns false if there is no such module.
+    pub fn give_room(&mut self, node_id: NodeId, room: Arc<SampleData>) -> bool {
+        let Some(spec) = self.nodes.get_mut(&node_id) else {
+            return false;
+        };
+        match spec.fresh.as_mut() {
+            Some(module) => drop(module.give_room(room)),
+            None => self.take_handoffs.push(AudioMessage::GiveRoom { node_id, room }),
+        }
+        true
+    }
+
+    /// Swaps a module's take for the same recording made to measure, which
+    /// it then holds as its recording (see [`sample`](Self::sample)).
+    ///
+    /// Returns false if there is no such module.
+    pub fn settle_take(&mut self, node_id: NodeId, take: u32, sample: Arc<SampleData>) -> bool {
+        let Some(spec) = self.nodes.get_mut(&node_id) else {
+            return false;
+        };
+        spec.sample = Some(Arc::clone(&sample));
+        match spec.fresh.as_mut() {
+            Some(module) => drop(module.settle_take(take, sample)),
+            None => self.take_handoffs.push(AudioMessage::SettleTake { node_id, take, sample }),
+        }
+        true
+    }
+
+    /// Room and settled takes for modules already on the audio thread, in
+    /// order, for the caller to deliver after the plan that holds them.
+    pub fn take_take_handoffs(&mut self) -> Vec<AudioMessage> {
+        std::mem::take(&mut self.take_handoffs)
     }
 
     /// Recordings loaded into modules already on the audio thread, in
@@ -660,6 +704,8 @@ impl AudioGraph {
                 true
             }
             EngineCommand::LoadSample { node_id, sample } => self.load_sample(node_id, sample),
+            EngineCommand::GiveRoom { node_id, room } => self.give_room(node_id, room),
+            EngineCommand::SettleTake { node_id, take, sample } => self.settle_take(node_id, take, sample),
             // Played on the running module, not kept in the graph
             EngineCommand::Audition { node_id, .. } => self.nodes.contains_key(&node_id),
         }
@@ -847,6 +893,14 @@ impl AudioGraph {
 impl Default for AudioGraph {
     fn default() -> Self {
         Self::new(44100.0, 256)
+    }
+}
+
+/// The module a take's handoff is for.
+fn handoff_node(handoff: &AudioMessage) -> Option<NodeId> {
+    match handoff {
+        AudioMessage::GiveRoom { node_id, .. } | AudioMessage::SettleTake { node_id, .. } => Some(*node_id),
+        _ => None,
     }
 }
 
