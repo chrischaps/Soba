@@ -42,7 +42,7 @@ pub struct ShelvedSample {
 }
 
 impl ShelvedSample {
-    fn new(decoded: Decoded) -> Self {
+    pub fn new(decoded: Decoded) -> Self {
         Self {
             overview: decoded.sample.overview(OVERVIEW_COLUMNS),
             source: Arc::new(decoded.sample),
@@ -117,6 +117,12 @@ impl SampleShelf {
     /// whatever was there: a dropped file, or one read again.
     pub fn insert(&mut self, key: &str, decoded: Decoded) {
         self.entries.insert(key.to_string(), Ok(ShelvedSample::new(decoded)));
+    }
+
+    /// Puts a recording already read on the shelf under `key`, replacing
+    /// whatever was there: a file read while it was dragged over a Sampler.
+    pub fn shelve(&mut self, key: &str, shelved: ShelvedSample) {
+        self.entries.insert(key.to_string(), Ok(shelved));
     }
 
     /// Forgets a key, so the next [`load`](Self::load) reads the file again.

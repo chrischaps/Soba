@@ -61,6 +61,9 @@
 //!                                   # where the view is, as voice.json
 //! 5.0  input voice.wav              # Audio Input modules hear this WAV
 //!                                   # from now on, in place of a device
+//! 6.0  hover take.wav               # drag a file over the window, from
+//! 7.0  drop                         # the desktop, and drop it at the pointer
+//! 7.0  hover off                    # ...or give the drag up
 //! 9.0  end
 //! ```
 
@@ -166,6 +169,10 @@ enum Cue {
     Layout(String),
     /// Play a WAV file into Audio Input modules.
     Input(PathBuf),
+    /// Drag a file over the window from the desktop, or give the drag up.
+    Hover(Option<PathBuf>),
+    /// Drop the file dragged over the window where the pointer is.
+    Drop,
     End,
 }
 
@@ -300,6 +307,8 @@ pub struct Capture {
     size_checked: bool,
     /// A WAV playing into Audio Input modules, and how far it has played.
     input: Option<(StereoBuffer, usize)>,
+    /// A file dragged over the window, as from the desktop.
+    hovering: Option<PathBuf>,
     /// This frame's share of `input`, interleaved stereo.
     input_frame: StereoBuffer,
 }
@@ -366,6 +375,7 @@ impl Capture {
             size_checked: false,
             input: None,
             input_frame: StereoBuffer::default(),
+            hovering: None,
         })
     }
 
@@ -407,6 +417,8 @@ impl Capture {
         }
         raw.hovered_files.clear();
         raw.dropped_files.clear();
+        // A drag lasts across passes, as a real one does
+        self.hover_into(raw);
         raw.modifiers = egui::Modifiers::default();
         raw.focused = true;
         raw.predicted_dt = self.dt() as f32;
@@ -453,6 +465,14 @@ impl Capture {
     /// egui's clock, which mustn't go below zero during warmup.
     fn ui_time(&self) -> f64 {
         (self.frame + self.warmup + 1) as f64 * self.dt()
+    }
+
+    /// Tells the pass which file is dragged over the window, if one is.
+    fn hover_into(&self, raw: &mut egui::RawInput) {
+        raw.hovered_files.clear();
+        if let Some(path) = &self.hovering {
+            raw.hovered_files.push(egui::HoveredFile { path: Some(path.clone()), ..Default::default() });
+        }
     }
 
     /// Fires the cues that fall inside this frame.
@@ -562,6 +582,16 @@ impl Capture {
                     Ok((_, rate)) => eprintln!("capture: {} is {} Hz, the capture {} Hz", path.display(), rate, self.config.sample_rate),
                     Err(e) => eprintln!("capture: {}: {}", path.display(), e),
                 },
+                Cue::Hover(path) => {
+                    self.hovering = path;
+                    self.hover_into(raw);
+                }
+                Cue::Drop => {
+                    if let Some(path) = self.hovering.take() {
+                        raw.dropped_files.push(egui::DroppedFile { path: Some(path), ..Default::default() });
+                    }
+                    self.hover_into(raw);
+                }
                 Cue::End => self.finished = true,
             }
         }
@@ -943,6 +973,13 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
             "still" => cues.push((t, Cue::Still(words.get(2).ok_or_else(|| err("missing name"))?.to_string()))),
             "layout" => cues.push((t, Cue::Layout(words.get(2).ok_or_else(|| err("missing name"))?.to_string()))),
             "input" => cues.push((t, Cue::Input(PathBuf::from(words.get(2).ok_or_else(|| err("missing file"))?)))),
+            "hover" => {
+                let file = words.get(2).ok_or_else(|| err("missing file"))?;
+                // Whole, as a drag from the desktop carries it
+                let path = (*file != "off").then(|| std::path::absolute(file).unwrap_or_else(|_| PathBuf::from(file)));
+                cues.push((t, Cue::Hover(path)));
+            }
+            "drop" => cues.push((t, Cue::Drop)),
             "end" => cues.push((t, Cue::End)),
             _ => return Err(err("unknown cue")),
         }
@@ -988,6 +1025,19 @@ mod tests {
         let cues = parse_script("0.0 fit\n1.0 fit 1.5\n2 end").unwrap();
         assert!(matches!(cues[0].1, Cue::Fit(d) if d == 0.0));
         assert!(matches!(cues[1].1, Cue::Fit(d) if d == 1.5));
+    }
+
+    #[test]
+    fn a_hovered_file_is_held_whole_until_dropped_or_given_up() {
+        let cues = parse_script("0 hover take.wav
+1 drop
+2 hover off
+3 end").unwrap();
+        assert!(matches!(&cues[0].1, Cue::Hover(Some(path)) if path.is_absolute() && path.ends_with("take.wav")));
+        assert!(matches!(cues[1].1, Cue::Drop));
+        assert!(matches!(cues[2].1, Cue::Hover(None)));
+        assert!(parse_script("0 hover
+1 end").is_err());
     }
 
     #[test]

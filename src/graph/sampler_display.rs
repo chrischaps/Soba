@@ -42,6 +42,7 @@ use crate::modules::sampler::{LoopMode, RecState, Sampler, NO_THRESHOLD_DB};
 use crate::modules::sequencer::note_to_name;
 use crate::persistence::sample_files;
 
+use super::hovered_file;
 use super::sample_shelf::ShelvedSample;
 use super::sampler_slices::SliceMarkers;
 use super::sampler_take::{self, RecBlock, RecView, REC_BUTTON};
@@ -84,6 +85,10 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let loaded: Option<&ShelvedSample> = shelved.and_then(|entry| entry.as_ref().ok());
     let problem: Option<&str> = shelved.and_then(|entry| entry.as_ref().err()).map(String::as_str);
     let drop_here = user_state.file_drop_target == Some(Some(node_id));
+    // A file dragged over, once it's read, stands in for the one it has
+    let hovered = user_state.hovered_file.as_ref().filter(|_| drop_here).and_then(|hovered| Some((hovered.key.as_str(), hovered.sample()?)));
+    let hovered_cue = user_state.cue.as_ref().filter(|cue| cue.hovered && cue.node_id == node_id);
+    let loaded = loaded.filter(|_| hovered.is_none());
     let cue = user_state.cue.as_ref().filter(|cue| cue.node_id == node_id && loaded.is_some());
 
     // Sliced by Onsets, it's cut where its hits begin, or where markers were moved to
@@ -275,6 +280,11 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             sampler_take::draw_take(&painter, plot, &rec, scope, &format!("REC  {:.1} s", rec.seconds), z);
             ui.ctx().request_repaint();
         }
+        None if hovered.is_some() => {
+            if let Some((key, sample)) = hovered {
+                hovered_file::draw(&painter, rect, plot, sample, key, (lo, hi), hovered_cue, z);
+            }
+        }
         None => {
             // Ask for a file: a dashed outline round a hint
             let outline = plot.shrink(2.0 * z);
@@ -423,7 +433,8 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     } else if response.clicked() && !live {
         responses.push(SynthResponse::OpenSample(node_id));
     }
-    if response.hovered() && dragging.is_none() {
+    // A file dragged over says what it is on the panel
+    if response.hovered() && dragging.is_none() && !drop_here {
         let tip = match (hot, shown, key) {
             _ if live => "Recording what's patched into In: press Rec to stop".to_string(),
             (_, Some(_), _) if alt => "Click to hear it from here".to_string(),

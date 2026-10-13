@@ -48,6 +48,7 @@ use super::WEB;
 use super::web;
 
 mod cue;
+mod file_hover;
 mod framing;
 mod grouping;
 mod loops;
@@ -4186,8 +4187,9 @@ impl eframe::App for SynthApp {
         // Main content area - the node graph editor. A piano held down
         // says so as it's drawn
         self.user_state.piano_pointer = None;
-        // WAV files dragged in from outside: where they'd land, and taking them
+        // WAV files dragged in from outside: where they'd land, hearing them, and taking them
         self.handle_file_drops(ctx);
+        self.tend_hovered_file(ctx);
         self.draw_main_area(ctx);
 
         // An embed's one control, over the canvas

@@ -1,15 +1,18 @@
 //! Hearing a Sampler's file from its face: its ▶, an Alt-click on its
-//! waveform, or opening a file into it. The engine plays the recording
+//! waveform, opening a file into it, or dragging one over it (see
+//! [`super::file_hover`]). The engine plays the recording
 //! beside the patch (see [`crate::engine::cue`]); this side chooses the
 //! recording and the span, follows where it's got to for the face's
 //! playhead, and stops it when its node goes or names another file.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use eframe::egui;
 use egui_node_graph2::NodeId;
 use web_time::Instant;
 
+use crate::dsp::SampleData;
 use crate::engine::{Cue, NodeId as EngineNodeId};
 use crate::graph::{SamplerCue, SynthGraphState, SynthValueType};
 use super::SynthApp;
@@ -23,22 +26,39 @@ impl SynthApp {
     /// the Sampler's Tune and Fine, replacing any cue playing.
     pub(super) fn cue_sample(&mut self, node_id: NodeId, from: f32, to: f32) {
         let Some(key) = self.graph_state.graph.nodes.get(node_id).and_then(|node| node.user_data.file.clone()) else { return };
-        let semitones = self.knob(node_id, "Tune").unwrap_or(0.0).round() + self.knob(node_id, "Fine").unwrap_or(0.0) / 100.0;
-        let Some(engine_id) = self.user_state.get_engine_node_id(node_id) else { return };
-        let Some(rate) = self.ui_handle.as_ref().map(|handle| handle.graph().sample_rate()) else { return };
+        let Some(rate) = self.engine_rate() else { return };
         // The recording the Sampler plays, so nothing new is made for it
         let Some(sample) = self.user_state.samples.playing(&key, rate) else { return };
-        if let Some(handle) = self.ui_handle.as_mut() {
-            handle.cue(Some(Cue { node_id: engine_id, sample, from, to, semitones }));
-        }
-        self.user_state.cue = Some(SamplerCue { node_id, engine_id, key, from, place: from, heard: Instant::now(), begun: false });
+        self.start_cue(node_id, key, sample, from, to, false);
+    }
+
+    /// Plays a recording from a Sampler's face, at its Tune and Fine,
+    /// replacing any cue playing. `hovered` if it's a file dragged over it.
+    pub(super) fn start_cue(&mut self, node_id: NodeId, key: String, sample: Arc<SampleData>, from: f32, to: f32, hovered: bool) {
+        let semitones = self.knob(node_id, "Tune").unwrap_or(0.0).round() + self.knob(node_id, "Fine").unwrap_or(0.0) / 100.0;
+        let Some(engine_id) = self.user_state.get_engine_node_id(node_id) else { return };
+        let Some(handle) = self.ui_handle.as_mut() else { return };
+        handle.cue(Some(Cue { node_id: engine_id, sample, from, to, semitones }));
+        self.user_state.cue = Some(SamplerCue { node_id, engine_id, key, from, place: from, heard: Instant::now(), begun: false, hovered });
+    }
+
+    /// The rate the engine plays at, if there's an engine.
+    pub(super) fn engine_rate(&self) -> Option<f32> {
+        self.ui_handle.as_ref().map(|handle| handle.graph().sample_rate())
     }
 
     /// Plays a Sampler's file from Start to End, as its ▶ does.
     pub(super) fn cue_start_to_end(&mut self, node_id: NodeId) {
+        let (from, to) = self.start_to_end(node_id);
+        self.cue_sample(node_id, from, to);
+    }
+
+    /// Where a Sampler plays from and to, 0 to 1 through its file: all of
+    /// it for a Chopper, which has no Start and End.
+    pub(super) fn start_to_end(&self, node_id: NodeId) -> (f32, f32) {
         let start = self.knob(node_id, "Start").unwrap_or(0.0);
         let end = self.knob(node_id, "End").unwrap_or(1.0);
-        self.cue_sample(node_id, start.min(end), start.max(end));
+        (start.min(end), start.max(end))
     }
 
     /// A knob's value on a node, by name.
@@ -61,11 +81,11 @@ impl SynthApp {
     }
 
     /// Once a frame: stops a cue whose Sampler has gone or names another
-    /// file, lets go of one the engine has stopped reporting, and keeps its
-    /// playhead moving.
+    /// file (unless it's a file dragged over it), lets go of one the engine
+    /// has stopped reporting, and keeps its playhead moving.
     pub(super) fn tend_cue(&mut self, ctx: &egui::Context) {
         let Some(cue) = self.user_state.cue.as_ref() else { return };
-        let still_there = self.graph_state.graph.nodes.get(cue.node_id).is_some_and(|node| node.user_data.file.as_deref() == Some(&cue.key))
+        let still_there = self.graph_state.graph.nodes.get(cue.node_id).is_some_and(|node| cue.hovered || node.user_data.file.as_deref() == Some(&cue.key))
             && self.user_state.get_engine_node_id(cue.node_id) == Some(cue.engine_id);
         if !still_there || cue.heard.elapsed() > UNHEARD {
             self.stop_cue();

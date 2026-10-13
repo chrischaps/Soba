@@ -35,6 +35,8 @@ pub struct SamplerCue {
     /// Whether the engine has said so since it started: until it has, an
     /// end it reports is the cue's this one replaced.
     pub begun: bool,
+    /// Whether it plays a file dragged over the Sampler, not the one it names.
+    pub hovered: bool,
 }
 
 /// Duration to show validation messages before auto-clearing.
@@ -235,6 +237,10 @@ pub struct SynthGraphState {
     /// on, or `None` for empty canvas. `Some` only during a drag.
     pub file_drop_target: Option<Option<NodeId>>,
 
+    /// The WAV file dragged over the window, read so it can be heard
+    /// before it's dropped (desktop only).
+    pub hovered_file: Option<super::hovered_file::HoveredFile>,
+
     /// The group whose inside the editor shows, or `None` for the top of
     /// the patch.
     pub level: Option<GroupId>,
@@ -311,6 +317,7 @@ impl Default for SynthGraphState {
             samples: Default::default(),
             cue: None,
             file_drop_target: None,
+            hovered_file: None,
             level: None,
             hidden: HashSet::new(),
             output_aliases: HashMap::new(),
@@ -413,6 +420,7 @@ impl SynthGraphState {
         self.readouts.clear();
         self.samples.clear();
         self.file_drop_target = None;
+        self.hovered_file = None;
         self.annotations.clear();
         self.over_annotation = false;
         self.level = None;

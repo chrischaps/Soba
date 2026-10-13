@@ -14,7 +14,7 @@ Every other sound in Soba is synthesized. The Sampler brings in sound you've rec
 ## Loading a file
 
 - Click **Open…** under the waveform, or click an empty Sampler's display, and choose a WAV.
-- Drag a WAV from your file manager onto a Sampler to replace its file. Drop one on empty canvas and a new Sampler appears there, already playing it. The node lights up under the file while you drag, to show where it will land.
+- Drag a WAV from your file manager onto a Sampler to replace its file. Drop one on empty canvas and a new Sampler appears there, already playing it. The node lights up under the file while you drag, to show where it will land, and plays the file from **Start** to **End** with its waveform on the panel. That way you can audition files from the file manager before you choose one. It stops when the file leaves the node or you give up the drag, and a file dropped while it plays carries on. (In the browser a file can only be heard once it's dropped.)
 - In the browser, drag a file onto the page the same way.
 
 Loading a file is a step you can undo. A file is read and converted once. Samplers that play the same file share it.

@@ -42,7 +42,7 @@ use super::SynthApp;
 const ASK_BEFORE_COPYING_BYTES: u64 = 50 * 1024 * 1024;
 
 /// Whether a dropped file looks like a WAV.
-fn is_wav(name: &str) -> bool {
+pub(super) fn is_wav(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
     name.ends_with(".wav") || name.ends_with(".wave")
 }
@@ -105,14 +105,17 @@ impl SynthApp {
     }
 
     /// Points a Sampler at a file, as one undo step, and plays it once
-    /// from its face, so you hear what you chose.
+    /// from its face, so you hear what you chose (or lets it play on, if it
+    /// was heard while dragged over).
     fn set_sample(&mut self, node_id: NodeId, key: String) {
         let name = sample_files::file_name(&key).to_string();
         self.forget_slice_markers(node_id);
         if let Some(node) = self.graph_state.graph.nodes.get_mut(node_id) {
-            node.user_data.file = Some(key);
+            node.user_data.file = Some(key.clone());
             self.history.name_next(format!("Load {name}"));
-            self.cue_start_to_end(node_id);
+            if !self.keep_dropped_cue(node_id, &key) {
+                self.cue_start_to_end(node_id);
+            }
         }
     }
 
@@ -340,7 +343,7 @@ impl SynthApp {
             self.user_state.file_drop_target = None;
             return;
         }
-        let pointer = drop_pointer(ctx);
+        let pointer = drop_pointer(ctx, self.capture.is_some());
         self.user_state.file_drop_target = hovering.then(|| pointer.and_then(|at| self.sampler_at(ctx, at)));
         if hovering {
             ctx.request_repaint();
@@ -362,7 +365,11 @@ impl SynthApp {
             let key = match (&file.path, &file.bytes) {
                 (Some(path), _) => {
                     let key = path.to_string_lossy().into_owned();
-                    self.user_state.samples.forget(&key);
+                    match self.take_hovered_file(&key) {
+                        // Read a moment ago, while it was dragged over
+                        Some(shelved) => self.user_state.samples.shelve(&key, shelved),
+                        None => self.user_state.samples.forget(&key),
+                    }
                     key
                 }
                 (None, Some(bytes)) => {
@@ -445,10 +452,11 @@ fn copy_sample(key: &str, folder: &Path) -> std::io::Result<PathBuf> {
 
 /// Where the pointer is while a file is dragged over the window, in egui
 /// points. Windows sends the window no mouse moves during a drag, so egui's
-/// pointer is stale; ask the system where the cursor is instead.
-fn drop_pointer(ctx: &egui::Context) -> Option<egui::Pos2> {
+/// pointer is stale; ask the system where the cursor is instead, unless a
+/// capture script is dragging it.
+fn drop_pointer(ctx: &egui::Context, scripted: bool) -> Option<egui::Pos2> {
     #[cfg(windows)]
-    {
+    if !scripted {
         use windows_sys::Win32::Foundation::POINT;
         use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
         let mut point = POINT { x: 0, y: 0 };
@@ -460,5 +468,6 @@ fn drop_pointer(ctx: &egui::Context) -> Option<egui::Pos2> {
             return Some(egui::pos2(point.x as f32 / ppp, point.y as f32 / ppp) - inner.min.to_vec2());
         }
     }
+    let _ = scripted;
     ctx.input(|i| i.pointer.hover_pos())
 }

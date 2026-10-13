@@ -35,6 +35,7 @@ use crate::modules::chopper::{Chopper, Step, MAX_PITCH, MAX_REPEAT, MAX_STEPS};
 use crate::modules::sampler::Sampler;
 use crate::persistence::sample_files;
 
+use super::hovered_file;
 use super::sample_shelf::ShelvedSample;
 use super::sampler_slices::SliceMarkers;
 use super::{SynthGraph, SynthGraphState, SynthResponse};
@@ -136,6 +137,10 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let loaded: Option<&ShelvedSample> = shelved.and_then(|entry| entry.as_ref().ok());
     let problem: Option<&str> = shelved.and_then(|entry| entry.as_ref().err()).map(String::as_str);
     let drop_here = user_state.file_drop_target == Some(Some(node_id));
+    // A file dragged over, once it's read, stands in for the one it has
+    let hovered = user_state.hovered_file.as_ref().filter(|_| drop_here).and_then(|hovered| Some((hovered.key.as_str(), hovered.sample()?)));
+    let hovered_cue = user_state.cue.as_ref().filter(|cue| cue.hovered && cue.node_id == node_id);
+    let loaded = loaded.filter(|_| hovered.is_none());
     let cue = user_state.cue.as_ref().filter(|cue| cue.node_id == node_id && loaded.is_some());
 
     // How it's cut: equally, or where its hits begin (or where they were moved to)
@@ -246,6 +251,11 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                 painter.vline(x, plot.y_range(), Stroke::new(1.2 * z, Color32::WHITE));
             }
         }
+        None if hovered.is_some() => {
+            if let Some((key, sample)) = hovered {
+                hovered_file::draw(&painter, wave_rect, plot, sample, key, (0.0, 1.0), hovered_cue, z);
+            }
+        }
         None => {
             let outline = plot.shrink(2.0 * z);
             let color = if drop_here { blue } else { theme::text::DISABLED.gamma_multiply(0.6) };
@@ -334,7 +344,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         }
     } else if wave.clicked() {
         responses.push(SynthResponse::OpenSample(node_id));
-    } else {
+    } else if !drop_here {
         wave.clone().on_hover_text("Click to open a WAV loop, or drag one from your files onto the node");
     }
 

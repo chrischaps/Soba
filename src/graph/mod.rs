@@ -31,6 +31,7 @@ mod module_ui;
 mod node_data;
 pub mod port_mapping;
 mod responses;
+pub mod hovered_file;
 pub mod sample_shelf;
 mod sampler_display;
 mod chopper_display;
