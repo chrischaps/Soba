@@ -23,6 +23,7 @@ mod vocoder_display;
 mod trigger_display;
 mod arranger_display;
 pub mod arranger_follow;
+mod chord_chime;
 mod chord_ear;
 mod chord_grid;
 mod step_ear;

@@ -15,6 +15,11 @@
 //!   velocity, tie and stroke under them. Choosing a type writes the step
 //!   and moves to the next, so a progression goes in as a lead sheet reads:
 //!   root, type, root, type.
+//! - Each choice is heard as it's made: a type, bass or top clicked sounds
+//!   the step's chord for a moment, as it now stands, and a key on the
+//!   piano sounds its note alone. Resting the pointer on a chip sounds its
+//!   chord without writing it, so two can be compared before one's chosen
+//!   (see [`super::chord_chime`]).
 //! - Or play the chord, on a MIDI keyboard or the letter keys, while the
 //!   popover is open. When the hand lifts, the chord is named (see
 //!   [`recognise`]) and written, and the popover moves to the next step, the
@@ -44,6 +49,7 @@ use crate::modules::chord_sequencer::{kept_tones, looped_voicings, voice_chord, 
 use crate::modules::sequencer::{note_to_name, SequenceDirection};
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
+use super::chord_chime::{ring_for, Chimes, Chip};
 use super::chord_ear::{take_letter_keys, ChordEar, Hand};
 use super::step_grid::{drag_badge, dragged_pitch};
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
@@ -76,6 +82,8 @@ struct ChordPattern {
     /// Each step's own stroke, or `None` to follow `strum_dir`.
     strums: [Option<StrumDirection>; MAX_STEPS],
     strum_dir: StrumDirection,
+    /// Seconds between one string's strike and the next.
+    strum: f32,
     settings: VoicingSettings,
     channels: usize,
     bass_voice: bool,
@@ -118,6 +126,7 @@ impl ChordPattern {
             velocities: std::array::from_fn(|s| params[ChordSequencer::step_velocity_param(s)] / 127.0),
             strums: std::array::from_fn(|s| StrumDirection::from_step_param(params[ChordSequencer::step_strum_param(s)])),
             strum_dir: StrumDirection::from_param(params[ChordSequencer::PARAM_STRUM_DIR]),
+            strum: params[ChordSequencer::PARAM_STRUM] / 1000.0,
             settings,
             channels,
             bass_voice,
@@ -204,13 +213,16 @@ struct ChordEntry {
     anchor: usize,
 }
 
-/// The popover's ear, the chord it last wrote, and the chord sounding on
-/// the cables while one's played.
+/// The popover's ear, the chord it last wrote, the chimes of chords chosen
+/// on its chips, and the chord sounding on the cables, played or chosen.
 #[derive(Clone, Debug, Default)]
 struct Listening {
     ear: ChordEar,
     last: Option<Played>,
+    chimes: Chimes,
     sounding: Option<Audition>,
+    /// Whether what's sounding is a chime, not the hand.
+    chiming: bool,
 }
 
 /// A chord played into a step: the notes, what they were heard as (with the
@@ -285,7 +297,14 @@ impl Played {
 /// nothing's held.
 fn audition_of(hand: Hand, step: usize, pattern: &ChordPattern) -> Option<Audition> {
     let played = Played::new(hand, step, pattern)?;
-    let spec = played.sounding();
+    let velocity = played.velocity.map_or(pattern.velocities[step], |v| v as f32 / 127.0);
+    Some(chord_audition(played.sounding(), step, velocity, pattern))
+}
+
+/// `spec` written into `step`, as the sequencer will play it: voiced as the
+/// pattern will reach it and strummed as the step will be struck, as hard
+/// as `velocity`. See [`audition_of`].
+fn chord_audition(spec: ChordSpec, step: usize, velocity: f32, pattern: &ChordPattern) -> Audition {
     let voiced = match pattern.looped(step, spec) {
         Some(chord) => pattern.on_channels(&spec, &chord),
         None => pattern.voiced(&spec),
@@ -294,14 +313,57 @@ fn audition_of(hand: Hand, step: usize, pattern: &ChordPattern) -> Option<Auditi
         len: voiced.len().min(MAX_CHANNELS) as u8,
         root: spec.root.clamp(0, 127) as u8,
         bass: spec.bass_note().clamp(0, 127) as u8,
-        velocity: played.velocity.map_or(pattern.velocities[step], |v| v as f32 / 127.0),
+        velocity,
         down: pattern.strummed_down(step),
         ..Audition::default()
     };
     for (slot, &note) in audition.notes.iter_mut().zip(&voiced) {
         *slot = note.clamp(0, 127) as u8;
     }
-    Some(audition)
+    audition
+}
+
+/// What a chip chosen for `step` sounds: the step's chord as the chip
+/// leaves it, or a root on the piano alone, as a piano would play it, on
+/// the first channel at the step's velocity.
+fn chime_of(sound: Sound, step: usize, pattern: &ChordPattern) -> Audition {
+    let velocity = pattern.velocities[step];
+    match sound {
+        Sound::Chord(spec) => chord_audition(spec, step, velocity, pattern),
+        Sound::Note(note) => {
+            let mut audition = Audition { len: 1, root: note, bass: note, velocity, ..Audition::default() };
+            audition.notes[0] = note;
+            audition
+        }
+    }
+}
+
+/// What a chip sounds: a chord, or a note on the piano.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Sound {
+    Chord(ChordSpec),
+    Note(u8),
+}
+
+/// The popover's chips under the pointer this frame: the one clicked, if
+/// any, and the one it's over, each with the step it's for and what it
+/// sounds.
+#[derive(Default)]
+struct Touch {
+    clicked: Option<(Chip, usize, Sound)>,
+    hovered: Option<(Chip, usize, Sound)>,
+}
+
+impl Touch {
+    /// Follows a chip's response: clicked, or under the pointer.
+    fn follow(&mut self, response: &egui::Response, chip: Chip, step: usize, sound: Sound) {
+        if response.clicked() {
+            self.clicked = Some((chip, step, sound));
+        }
+        if response.hovered() {
+            self.hovered = Some((chip, step, sound));
+        }
+    }
 }
 
 /// Pitch classes as the chord spells them: G# under Am, not Ab.
@@ -363,8 +425,8 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
     let ear_id = Id::new(("chord_ear", node_id));
     let drag_id = Id::new(("chord_drag", node_id));
     let mut played = None;
-    // A change to the chord sounding, to send to the engine
-    let mut audition = None;
+    // Changes to the chord sounding, to send to the engine
+    let mut auditions = Vec::new();
     let mut entry = ui
         .memory(|m| m.is_popup_open(entry_id))
         .then(|| ui.data(|d| d.get_temp::<ChordEntry>(entry_id)))
@@ -507,16 +569,40 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
         // Heard while the hand is down, unless the patch already plays it
         let plays_midi = graph.nodes.iter().any(|(_, node)| MIDI_MODULES.contains(&node.user_data.module_id));
         let hand = Hand { notes: listening.ear.gathering().to_vec(), velocity: listening.ear.velocity() };
-        let sounding = (listening.ear.keyed() || !plays_midi).then(|| audition_of(hand, open.step, &pattern)).flatten();
-        if sounding != listening.sounding {
-            audition = Some(sounding);
-            listening.sounding = sounding;
-        }
+        let by_hand = (listening.ear.keyed() || !plays_midi).then(|| audition_of(hand, open.step, &pattern)).flatten();
 
         let anchor = &cells[open.anchor].1;
+        let mut touch = Touch::default();
         egui::popup_below_widget(ui, entry_id, anchor, PopupCloseBehavior::CloseOnClickOutside, |ui| {
-            chord_popover(ui, &mut open, &pattern, &held, &listening, &mut set);
+            chord_popover(ui, &mut open, &pattern, &held, &listening, &mut touch, &mut set);
         });
+
+        // A chip clicked sounds the step as it now stands, and one rested on
+        // as it would, without writing it. The hand, while it's down, goes
+        // over them both
+        let now = ui.input(|i| i.time);
+        let chimes = &mut listening.chimes;
+        let rested = chimes.rest_on(touch.hovered.map(|(chip, ..)| chip), now).then_some(touch.hovered).flatten();
+        let struck = touch.clicked.or(rested).filter(|_| by_hand.is_none()).is_some_and(|(chip, step, sound)| {
+            let chime = chime_of(sound, step, &pattern);
+            chimes.strike(chip, chime, ring_for(&chime, pattern.strum), now)
+        });
+        if by_hand.is_some() {
+            chimes.hush();
+        }
+        let chime = chimes.ringing(now);
+        let sounding = by_hand.or(chime);
+        // A new chime, or the hand coming down on one, strikes afresh: the
+        // engine would only move the pitches under a chord still sounding
+        let afresh = struck || (by_hand.is_some() && listening.chiming);
+        if afresh && listening.sounding.is_some() {
+            auditions.push(None);
+        }
+        if afresh || sounding != listening.sounding {
+            auditions.push(sounding);
+        }
+        listening.sounding = sounding;
+        listening.chiming = by_hand.is_none() && chime.is_some();
         if ui.memory(|m| m.is_popup_open(entry_id)) {
             ui.data_mut(|d| {
                 d.insert_temp(entry_id, open);
@@ -530,13 +616,14 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
                 d.remove::<ChordEntry>(entry_id);
                 d.remove::<Listening>(ear_id);
             });
-            // Closed with the hand still down: the chord stops with it
+            // Closed with the hand still down, or a chime ringing: the
+            // chord stops with it
             if listening.sounding.is_some() {
-                audition = Some(None);
+                auditions.push(None);
             }
         }
     });
-    if let Some(chord) = audition {
+    for chord in auditions {
         edits.push(SynthResponse::Audition { node_id, chord });
     }
     // A chord played is one undo step, named for it
@@ -659,7 +746,7 @@ fn keyboard_strip(ui: &mut egui::Ui, node_id: NodeId, width: f32, low: i32, note
 /// The chord under a step: a piano for the root, a row for the bass, and
 /// the types. A type writes the step and moves along to the next, as does a
 /// chord played on the keys. `held` are the notes down now.
-fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPattern, held: &[u8], listening: &Listening, set: &mut impl FnMut(String, f32)) {
+fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPattern, held: &[u8], listening: &Listening, touch: &mut Touch, set: &mut impl FnMut(String, f32)) {
     let step = open.step;
     let spec = pattern.specs[step];
     let switch_on = |set: &mut dyn FnMut(String, f32)| {
@@ -709,8 +796,10 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
                 let data = PianoData { active_notes, base_note: octave, ..Default::default() };
                 let (response, key) = piano_keys(ui, &data, &config);
                 if let Some(key) = key {
-                    if response.on_hover_text(note_to_name(octave + key)).clicked() {
-                        played = Some(octave + key);
+                    let note = octave + key;
+                    if response.on_hover_text(note_to_name(note)).clicked() {
+                        played = Some(note);
+                        touch.clicked = Some((Chip::Root(note), step, Sound::Note(note)));
                     }
                 }
             }
@@ -729,13 +818,16 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         ui.spacing_mut().item_spacing.x = 2.0;
         ui.label(RichText::new("Bass").weak());
         let current = spec.bass.map_or(0, |pc| pc as usize + 1);
-        for choice in 0..=12 {
+        for choice in 0..=12usize {
             // Spelled as the chord's name will spell it: G# under Am, not Ab
+            let chosen = ChordSpec { bass: choice.checked_sub(1).map(|pc| pc as i32), ..spec };
             let label = match choice {
                 0 => format!("{} (root)", spec.root_name()),
-                _ => ChordSpec { bass: Some(choice as i32 - 1), ..spec }.bass_name().unwrap_or_default(),
+                _ => chosen.bass_name().unwrap_or_default(),
             };
-            if ui.selectable_label(current == choice, label).clicked() {
+            let chip = ui.selectable_label(current == choice, label);
+            touch.follow(&chip, Chip::Bass(choice), step, Sound::Chord(chosen));
+            if chip.clicked() {
                 set(format!("Step {} Bass", step + 1), choice as f32);
             }
         }
@@ -745,12 +837,15 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 2.0;
         ui.label(RichText::new("Top").weak());
-        if ui.selectable_label(spec.top.is_none(), "Auto").on_hover_text("Leave the top to the voicing").clicked() {
+        let auto = ui.selectable_label(spec.top.is_none(), "Auto").on_hover_text("Leave the top to the voicing");
+        touch.follow(&auto, Chip::Top(None), step, Sound::Chord(ChordSpec { top: None, ..spec }));
+        if auto.clicked() {
             set(format!("Step {} Top", step + 1), 0.0);
         }
         let tones = kept_tones(&spec, &pattern.settings);
         for &pc in &tones {
             let chip = ui.selectable_label(spec.top == Some(pc), spec.spell(pc));
+            touch.follow(&chip, Chip::Top(Some(pc)), step, Sound::Chord(ChordSpec { top: Some(pc), ..spec }));
             if chip.on_hover_text("Voice the chord with this tone on top").clicked() {
                 set(format!("Step {} Top", step + 1), pc as f32 + 1.0);
             }
@@ -770,6 +865,7 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
             let kind = &CHORD_TYPES[index];
             let name = format!("{}{}", spec.root_name(), kind.suffix);
             let chip = ui.add_sized([52.0, 20.0], egui::SelectableLabel::new(spec.kind == index, name));
+            touch.follow(&chip, Chip::Type(index), step, Sound::Chord(ChordSpec { kind: index, ..spec }));
             if chip.on_hover_text(kind.label).clicked() {
                 set(format!("Step {} Type", step + 1), index as f32);
                 switch_on(set);
@@ -793,7 +889,8 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         }
     });
     strum_row(ui, step, pattern, set);
-    ui.label(RichText::new("Play a root, pick a bass if it has one, then a type: it writes the step and moves on").small().weak());
+    ui.label(RichText::new("Play a root, pick a bass if it has one, then a type: it writes the step and moves on").small().weak())
+        .on_hover_text("Each choice sounds as it's made. Rest the pointer on a chip to hear its chord without writing it");
     ui.label(RichText::new("Or hold the chord on a MIDI keyboard or the letter keys, and let go").small().weak())
         .on_hover_text("The letter keys play this piano: Z is its lowest C, and ‹ › move them too. The chord sounds through this sequencer while it's held, as it will be written");
 }
@@ -907,6 +1004,7 @@ mod tests {
             velocities: [0.75; MAX_STEPS],
             strums: [None; MAX_STEPS],
             strum_dir: StrumDirection::Up,
+            strum: 0.0,
             settings: VoicingSettings { voicing: Voicing::Close, voices: voices - bass_voice as usize, range: 3, rootless: bass_voice },
             channels: voices,
             bass_voice,
@@ -1063,6 +1161,33 @@ mod tests {
         // The letter keys leave the step's velocity as it was
         let keyed = Played::new(keys(&[57, 60, 64]), 1, &four).unwrap();
         assert!(keyed.changes().iter().all(|(name, _)| !name.ends_with("Velocity")));
+    }
+
+    #[test]
+    fn a_chord_chosen_sounds_as_one_played_would() {
+        // Step 3's Fmaj7 made Fm7 on its chip: heard led from the Am7, as
+        // the loop will reach it, the way a chord played into it would be
+        let four = pattern(4, false);
+        let m7 = CHORD_TYPES.iter().position(|kind| kind.suffix == "m7").unwrap();
+        let fm7 = ChordSpec { kind: m7, ..four.specs[2] };
+        let chosen = chime_of(Sound::Chord(fm7), 2, &four);
+        let led = four.left_to_voicing(2, fm7).unwrap();
+        assert_eq!(chosen.notes().iter().map(|&n| n as i32).collect::<Vec<_>>(), led.notes());
+        assert_ne!(led.notes(), four.voiced(&fm7), "led, not in root position");
+        assert_eq!((chosen.root, chosen.velocity), (fm7.root as u8, 0.75), "at the step's velocity");
+        // A bass chosen under it goes on the first channel with Bass Voice on
+        let bassed = pattern(4, true);
+        let over_eb = ChordSpec { bass: Some(3), ..fm7 };
+        let chime = chime_of(Sound::Chord(over_eb), 2, &bassed);
+        assert_eq!((chime.notes()[0], chime.notes()[0] % 12), (chime.bass, 3));
+    }
+
+    #[test]
+    fn a_key_on_the_piano_sounds_alone() {
+        let four = pattern(4, false);
+        let d = chime_of(Sound::Note(50), 1, &four);
+        assert_eq!(d.notes(), [50]);
+        assert_eq!((d.root, d.bass, d.velocity), (50, 50, 0.75));
     }
 
     #[test]

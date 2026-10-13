@@ -2000,6 +2000,34 @@ mod tests {
     }
 
     #[test]
+    fn a_chord_chosen_over_one_ringing_strikes_again() {
+        // The popover's chips: Am7 chosen, then Am9 while it still rings. A
+        // let-go and a new chord before the next block are a new attack
+        let params = params_with(&[(48, MAJ7)]);
+        let mut seq = ChordSequencer::new();
+        seq.audition(Some(audition(&[45, 48, 52, 55], 45, 45)));
+        run_with(&mut seq, &params, 50, &[], 50);
+        seq.audition(None);
+        seq.audition(Some(audition(&[45, 48, 52, 59], 45, 45)));
+        let again = run_with(&mut seq, &params, 10, &[], 10);
+        for gate in &again.gates[..4] {
+            assert_eq!(gate[..3], [0.0, 1.0, 1.0]);
+        }
+        assert_eq!(again.chord(5), [45, 48, 52, 59]);
+    }
+
+    #[test]
+    fn a_key_on_the_popover_piano_sounds_alone() {
+        let params = params_with(&[(48, MAJ7)]);
+        let mut seq = ChordSequencer::new();
+        seq.audition(Some(audition(&[50], 50, 50)));
+        let key = run_with(&mut seq, &params, 10, &[], 10);
+        assert_eq!(rises(&key.gates[0]), [1]);
+        assert!(key.gates[1..4].iter().flatten().all(|&g| g == 0.0), "only the first string");
+        assert_eq!(key.root[5], 50.0);
+    }
+
+    #[test]
     fn an_audition_is_strummed_as_its_step_will_be() {
         // 20 ms between strings, Taper 60%: up from the lowest string, each
         // gate rising the sample after the strum reaches it
