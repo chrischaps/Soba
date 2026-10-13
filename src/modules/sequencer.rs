@@ -13,13 +13,18 @@
 //! Any step can be a slide: Pitch glides into it from the note before and
 //! the gate stays high across the join, as on a 303. The Glide time and the
 //! slides of all four patterns come after everything else.
+//!
+//! A note written in on the face's piano is heard as it's written, on the
+//! sequencer's own outputs (see [`DspModule::audition`]): struck at once,
+//! clock or no clock, for at least the Gate Length and for as long as the
+//! key's held.
 
 use std::sync::LazyLock;
 
 use crate::dsp::{
     context::ProcessContext,
     primitives::Glide,
-    module_trait::{DspModule, ModuleCategory, ModuleInfo},
+    module_trait::{Audition, DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
     signal::{connected_input, SignalBuffer},
@@ -347,6 +352,16 @@ pub fn note_to_name(note: u8) -> String {
 /// gate until the slide begins, whatever the Gate Length, so the two join;
 /// it looks ahead to the step the next clock will play, in the pattern that
 /// step will be in. A tie carries a slide's glide on into the next step.
+///
+/// # Auditions
+///
+/// A note played in on the piano sounds on Pitch, Gate and Velocity in
+/// place of the sequence: its gate rises at once (dipping for a sample
+/// first), stays high while the key's held and for at least a Gate Length,
+/// then falls. Another key struck under the same hand moves Pitch without
+/// striking again, as it's written tied. Once let go, the note the clock
+/// struck meanwhile isn't heard: Pitch stays on the audition, as a rest
+/// leaves it, until the sequence strikes its own next note.
 pub struct StepSequencer {
     /// Current step index (0-based).
     current_step: usize,
@@ -382,6 +397,17 @@ pub struct StepSequencer {
     /// slides. Taken by the next advance, so the steps play in the same
     /// order as when nothing looked ahead.
     next_random: Option<u32>,
+    /// A note played in from the face, on the outputs while the hand's down
+    /// or its gate is still ringing, and left on Pitch after (see
+    /// [`DspModule::audition`]).
+    audition: Option<Audition>,
+    /// The hand's down on the audition.
+    auditioning: bool,
+    /// A new audition is struck at the next block: its gate dips for a
+    /// sample, then holds for at least a Gate Length.
+    audition_struck: bool,
+    /// Samples left of the audition's Gate Length.
+    audition_gate: usize,
     /// The pattern playing.
     pattern: usize,
     /// Which Chain entry is playing.
@@ -541,6 +567,10 @@ impl StepSequencer {
             eoc_timer: 0,
             random_state: 12345, // Seed for PRNG
             next_random: None,
+            audition: None,
+            auditioning: false,
+            audition_struck: false,
+            audition_gate: 0,
             pattern: 0,
             chain_slot: 0,
             pass_clocks: 0,
@@ -692,6 +722,17 @@ impl StepSequencer {
         samples.max(1)
     }
 
+    /// How long an audition's gate holds at least: a Gate Length of the
+    /// step the clock last measured, or of 100 ms. Never more than the
+    /// step, so a click at 100% is one step's note.
+    fn audition_samples(&self, mode: GateMode, gate_length: f32) -> usize {
+        let samples = match (mode, self.timer.coming_step()) {
+            (GateMode::Step, Some(step)) => step as f32 * gate_length.min(1.0),
+            _ => self.sample_rate * 0.1 * gate_length.min(1.0),
+        };
+        (samples as usize).max(1)
+    }
+
     /// Gate threshold for edge detection.
     const GATE_THRESHOLD: f32 = 0.5;
 
@@ -831,6 +872,10 @@ impl DspModule for StepSequencer {
         let run_in = inputs.get(Self::PORT_RUN);
         let pattern_in = connected_input(inputs, Self::PORT_PATTERN);
         self.pattern_cv = pattern_in.is_some();
+        let mut audition_dip = std::mem::take(&mut self.audition_struck);
+        if audition_dip {
+            self.audition_gate = self.audition_samples(gate_mode, gate_length_percent);
+        }
 
         // Process each sample
         for i in 0..context.block_size {
@@ -931,6 +976,11 @@ impl DspModule for StepSequencer {
                     self.gate_timer = self.gate_samples(gate_mode, gate_length_percent, held);
                     self.tied = tie;
                     self.playing_note = true;
+                    // The sequence takes over from an audition let go of
+                    if !self.auditioning {
+                        self.audition = None;
+                        self.audition_gate = 0;
+                    }
                 } else {
                     self.gate_timer = 0;
                     self.tied = false;
@@ -958,16 +1008,26 @@ impl DspModule for StepSequencer {
             // Generate outputs (access directly by index to avoid multiple mutable borrows).
             // Pitch lands on the note unless it's sliding there
             let coefficient = if self.sliding { glide } else { 1.0 };
-            outputs[Self::PORT_PITCH].samples[i] = note_to_voct(self.glide.next(step_pitch as f32, coefficient));
+            outputs[Self::PORT_PITCH].samples[i] = match self.audition {
+                // A slide after it glides from the audition's note
+                Some(audition) => {
+                    self.glide.start(audition.notes[0] as f32, false);
+                    note_to_voct(audition.notes[0] as f32)
+                }
+                None => note_to_voct(self.glide.next(step_pitch as f32, coefficient)),
+            };
 
             // Gate output: high if timer > 0 and step gate is enabled. A new
             // note over a gate that's still high dips for this one sample,
             // so it starts with a rising edge
-            let gate_active = self.gate_timer > 0 && step_gate_enabled && !retrigger;
+            let gate_active = match self.audition {
+                Some(_) => (self.auditioning || self.audition_gate > 0) && !std::mem::take(&mut audition_dip),
+                None => self.gate_timer > 0 && step_gate_enabled && !retrigger,
+            };
             outputs[Self::PORT_GATE].samples[i] = if gate_active { 1.0 } else { 0.0 };
             self.gate_high = gate_active;
 
-            outputs[Self::PORT_VELOCITY].samples[i] = step_velocity;
+            outputs[Self::PORT_VELOCITY].samples[i] = self.audition.map_or(step_velocity, |audition| audition.velocity);
 
             // Step output: current step as 0-1 value
             outputs[Self::PORT_STEP].samples[i] = self.current_step as f32 / (num_steps - 1).max(1) as f32;
@@ -982,6 +1042,7 @@ impl DspModule for StepSequencer {
             if self.eoc_timer > 0 {
                 self.eoc_timer -= 1;
             }
+            self.audition_gate = self.audition_gate.saturating_sub(1);
             self.timer.tick();
         }
 
@@ -1003,9 +1064,36 @@ impl DspModule for StepSequencer {
         self.sliding = false;
         self.timer.forget();
         self.eoc_timer = 0;
+        self.audition = None;
+        self.auditioning = false;
+        self.audition_struck = false;
+        self.audition_gate = 0;
         self.pattern = 0;
         self.chain_slot = 0;
         self.pass_clocks = 0;
+    }
+
+    /// A note played in on the face's piano sounds at once, with the clock
+    /// stopped too, and holds while the key's down. A new key under the
+    /// same hand moves Pitch without striking again. When it lifts, the
+    /// sequence's own gate is let go of, so the next note it strikes, not
+    /// one struck while the hand was down, is what's heard after.
+    fn audition(&mut self, note: Option<Audition>) {
+        match note.filter(|note| !note.notes().is_empty()) {
+            Some(note) => {
+                if !self.auditioning {
+                    self.audition_struck = true;
+                }
+                self.audition = Some(note);
+                self.auditioning = true;
+            }
+            None if self.auditioning => {
+                self.auditioning = false;
+                self.gate_timer = 0;
+                self.tied = false;
+            }
+            None => {}
+        }
     }
 
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
@@ -1889,6 +1977,119 @@ mod tests {
         assert_eq!(note_to_name(69), "A4");
         assert_eq!(note_to_name(72), "C5");
         assert_eq!(note_to_name(48), "C3");
+    }
+
+    /// A one-note audition of `note`, as the piano sends it.
+    fn note(note: u8, velocity: f32) -> Audition {
+        let mut audition = Audition { len: 1, root: note, bass: note, velocity, ..Audition::default() };
+        audition.notes[0] = note;
+        audition
+    }
+
+    /// Runs `seq` at 1 kHz for `ms`, with a clock pulse at each time in
+    /// `clocks`, and returns its Pitch (as a MIDI note), Gate and Velocity.
+    fn run(seq: &mut StepSequencer, params: &[f32], ms: usize, clocks: &[usize]) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+        let mut clock = SignalBuffer::control(ms);
+        for &t in clocks {
+            clock.samples[t] = 1.0;
+        }
+        let mut outputs: Vec<SignalBuffer> = (0..5).map(|_| SignalBuffer::control(ms)).collect();
+        seq.process(&[&clock], &mut outputs, params, &ProcessContext::new(1000.0, ms));
+        let pitch = outputs[0].samples.iter().map(|v| (v * 12.0 + 60.0).round()).collect();
+        (pitch, outputs[1].samples.clone(), outputs[2].samples.clone())
+    }
+
+    fn stopped() -> StepSequencer {
+        let mut seq = StepSequencer::new();
+        seq.prepare(1000.0, 1000);
+        seq
+    }
+
+    #[test]
+    fn a_key_held_with_the_transport_stopped_sounds_until_its_lifted() {
+        let params = params_with(8.0, 0.0, 50.0);
+        let mut seq = stopped();
+        let (_, gate, _) = run(&mut seq, &params, 100, &[]);
+        assert!(gate.iter().all(|&g| g == 0.0), "silent before a key");
+
+        seq.audition(Some(note(64, 0.5)));
+        let (pitch, gate, velocity) = run(&mut seq, &params, 300, &[]);
+        assert_eq!(gate[0], 0.0, "dips a sample so the envelope's struck");
+        assert!(gate[1..].iter().all(|&g| g == 1.0), "held past the Gate Length while the key is");
+        assert!(pitch.iter().all(|&p| p == 64.0), "E4 on Pitch: {:?}", &pitch[..4]);
+        assert!(velocity.iter().all(|&v| v == 0.5));
+
+        seq.audition(None);
+        let (pitch, gate, _) = run(&mut seq, &params, 100, &[]);
+        assert!(gate.iter().all(|&g| g == 0.0), "falls as the key lifts");
+        assert!(pitch.iter().all(|&p| p == 64.0), "Pitch stays put, as after a rest");
+    }
+
+    #[test]
+    fn a_click_is_a_blip_one_gate_length_long() {
+        // 50% of the 100 ms a stopped clock's gates are a share of
+        let params = params_with(8.0, 0.0, 50.0);
+        let mut seq = stopped();
+        seq.audition(Some(note(67, 0.8)));
+        seq.audition(None);
+        let (pitch, gate, _) = run(&mut seq, &params, 200, &[]);
+        assert_eq!(rises(&gate), vec![1]);
+        assert_eq!(high_for(&gate, 1), 49);
+        assert_eq!(pitch[20], 67.0);
+    }
+
+    #[test]
+    fn a_click_rings_a_gate_length_of_the_clocks_step() {
+        // A clock every 200 ms, then stopped: a 25% gate is 50 ms
+        let params = params_with(8.0, 0.0, 25.0);
+        let mut seq = stopped();
+        run(&mut seq, &params, 600, &[0, 200, 400]);
+        seq.audition(Some(note(60, 0.8)));
+        seq.audition(None);
+        let (_, gate, _) = run(&mut seq, &params, 200, &[]);
+        assert_eq!(high_for(&gate, 1), 49);
+    }
+
+    #[test]
+    fn a_key_struck_under_the_hand_moves_pitch_without_striking() {
+        let params = params_with(8.0, 0.0, 50.0);
+        let mut seq = stopped();
+        seq.audition(Some(note(60, 0.8)));
+        run(&mut seq, &params, 50, &[]);
+        seq.audition(Some(note(62, 0.8)));
+        let (pitch, gate, _) = run(&mut seq, &params, 50, &[]);
+        assert!(gate.iter().all(|&g| g == 1.0), "tied, as it's written");
+        assert_eq!(pitch[0], 62.0);
+    }
+
+    #[test]
+    fn once_let_go_the_sequence_takes_over_at_its_next_note() {
+        let mut params = params_with(8.0, 0.0, 50.0);
+        params[StepSequencer::step_param(0, 1, StepField::Pitch)] = 72.0;
+        let mut seq = stopped();
+        // The hand comes down on G4 while step 1's C4 plays
+        run(&mut seq, &params, 50, &[0]);
+        seq.audition(Some(note(67, 0.8)));
+        let (pitch, gate, _) = run(&mut seq, &params, 100, &[]);
+        assert!(pitch.iter().all(|&p| p == 67.0) && gate[1..].iter().all(|&g| g == 1.0));
+        // Let go: step 1's note isn't heard again, and step 2 strikes C5
+        seq.audition(None);
+        let (pitch, gate, _) = run(&mut seq, &params, 200, &[100]);
+        assert!(gate[..100].iter().all(|&g| g == 0.0), "the note under the hand stays let go of");
+        assert_eq!(pitch[50], 67.0);
+        assert_eq!(rises(&gate), vec![100]);
+        assert_eq!(pitch[120], 72.0);
+    }
+
+    #[test]
+    fn stop_forgets_an_audition() {
+        let params = params_with(8.0, 0.0, 50.0);
+        let mut seq = stopped();
+        seq.audition(Some(note(64, 0.5)));
+        seq.reset();
+        let (pitch, gate, _) = run(&mut seq, &params, 50, &[]);
+        assert!(gate.iter().all(|&g| g == 0.0));
+        assert_eq!(pitch[0], 60.0);
     }
 
     #[test]

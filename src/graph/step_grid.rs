@@ -10,6 +10,9 @@
 //!   key. The piano stays put, and the step it will write next is outlined
 //!   in the pitch cable's orange. A MIDI keyboard, or the letter keys, step-
 //!   record too, writing each note's touch and its legato (see [`super::step_ear`]).
+//!   The note's heard as it's written, on the sequencer's own outputs: a key
+//!   for as long as it's held, a click for a Gate Length. A MIDI note is
+//!   left to the patch's MIDI modules if it has any, so it doesn't sound twice.
 //!
 //! A tied step reaches across the gap into the next one, the way a held note
 //! looks on a piano roll. At the end of a row it reaches out of its right
@@ -35,11 +38,13 @@ use eframe::egui::{self, Color32, CursorIcon, Id, Key, LayerId, Modifiers, Order
 use egui_node_graph2::{NodeId, NodeResponse};
 
 use crate::app::theme;
+use crate::dsp::Audition;
 use crate::modules::sequencer::{note_to_name, PatternPosition, StepField, StepSequencer as Seq, MAX_STEPS, PATTERNS, PATTERN_NAMES};
 use crate::modules::trigger_sequencer::{chain_from, CHAIN_NAMES};
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
 use super::chord_ear::take_letter_keys;
+use super::chord_grid::MIDI_MODULES;
 use super::step_ear::{StepEar, Strike};
 use super::trigger_display::{edit_pattern, pattern_tabs, PatternBar, Playing};
 use super::{SynthGraph, SynthGraphState, SynthNodeData, SynthResponse};
@@ -76,6 +81,7 @@ pub(super) struct StepPattern {
     pub current: Option<usize>,
     pub pitches: [u8; 16],
     pub gates: [bool; 16],
+    pub velocities: [u8; 16],
     pub ties: [bool; 16],
     /// Steps slurred into from the step before.
     pub slides: [bool; 16],
@@ -191,10 +197,12 @@ pub(super) fn step_sequencer_display(
         current,
         pitches: std::array::from_fn(|step| values.field(editing, step, StepField::Pitch).map_or(60, |v| v as u8)),
         gates: std::array::from_fn(|step| values.field(editing, step, StepField::Gate).is_none_or(|v| v > 0.5)),
+        velocities: std::array::from_fn(|step| values.field(editing, step, StepField::Velocity).map_or(100, |v| v as u8)),
         ties: std::array::from_fn(|step| values.field(editing, step, StepField::Tie).is_some_and(|v| v > 0.5)),
         slides: std::array::from_fn(|step| values.field(editing, step, StepField::Slide).is_some_and(|v| v > 0.5)),
     };
-    step_grid(ui, zoom, &pattern, node_id, user_state, responses);
+    let plays_midi = graph.nodes.iter().any(|(_, node)| MIDI_MODULES.contains(&node.user_data.module_id));
+    step_grid(ui, zoom, &pattern, plays_midi, node_id, user_state, responses);
 
     ui.add_space(6.0 * zoom);
     let bar = PatternBar {
@@ -260,6 +268,50 @@ struct StepEntry {
     written: Option<usize>,
 }
 
+/// What the open piano hears, and the note it has sounding.
+#[derive(Clone, Debug)]
+struct Listening {
+    ear: StepEar,
+    /// Each note's touch as it was last written, for a letter key's
+    /// audition: it sounds as hard as the step it went into will.
+    touch: [u8; 128],
+    /// The note last sent to sound, while the hand's down.
+    sounding: Option<Audition>,
+}
+
+impl Listening {
+    fn new(seen: u64) -> Self {
+        Self { ear: StepEar::new(seen), touch: [100; 128], sounding: None }
+    }
+}
+
+/// A note sounded from the piano, `touch` as a step's Velocity (0 to 127).
+fn audition_of(note: u8, touch: u8) -> Audition {
+    let mut audition = Audition { len: 1, root: note, bass: note, velocity: touch.min(127) as f32 / 127.0, ..Audition::default() };
+    audition.notes[0] = note;
+    audition
+}
+
+/// What to send the engine to sound `held` (the note under the hand now)
+/// after `sounding` (the one sent last). `struck` is the last note struck
+/// this frame that the sequencer sounds, if any, and whether it was played
+/// legato: a note under the same hand moves Pitch without striking, as it's
+/// written tied, while one struck afresh is let go of and struck again. A
+/// note struck and lifted within the frame still sounds, as a click does.
+fn auditions(sounding: Option<Audition>, held: Option<Audition>, struck: Option<(Audition, bool)>) -> Vec<Option<Audition>> {
+    let mut sent = Vec::new();
+    let afresh = struck.is_some_and(|(_, legato)| !legato);
+    if afresh && sounding.is_some() {
+        sent.push(None);
+    }
+    match struck {
+        Some((note, _)) if held.is_none() => sent.extend([Some(note), None]),
+        _ if afresh || held != sounding => sent.push(held),
+        _ => {}
+    }
+    sent
+}
+
 /// A drag under way: the step, and its note when the drag began.
 #[derive(Clone, Copy, Debug)]
 struct StepDrag {
@@ -321,13 +373,16 @@ pub(super) fn step_grid(
     ui: &mut egui::Ui,
     zoom: f32,
     pattern: &StepPattern,
+    plays_midi: bool,
     node_id: NodeId,
     user_state: &SynthGraphState,
     responses: &mut Vec<NodeResponse<SynthResponse, SynthNodeData>>,
 ) {
     let step_size = 24.0 * zoom;
-    // Notes played in, each one undo step, sent once the grid's drawn
+    // Notes played in, each one undo step, sent once the grid's drawn, and
+    // the notes to sound as they're written
     let mut played = Vec::new();
+    let mut sounded = Vec::new();
     let step_spacing = STEP_SPACING * zoom;
     let mut set = |param_name: String, value: f32| {
         responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
@@ -490,24 +545,40 @@ pub(super) fn step_grid(
         // Notes played on the keys write their steps and move along. A note
         // held as the piano opened is the hand's, not one played in
         let count = user_state.midi_note_count();
-        let mut ear = ui.data(|d| d.get_temp::<StepEar>(ear_id)).unwrap_or_else(|| StepEar::new(count));
-        let midi = user_state.midi_notes_since(ear.seen());
-        for strike in ui.input(|i| ear.hear(&i.raw.events, open.base, &midi, count)) {
+        let mut listening = ui.data(|d| d.get_temp::<Listening>(ear_id)).unwrap_or_else(|| Listening::new(count));
+        let midi = user_state.midi_notes_since(listening.ear.seen());
+        // Heard by the sequencer, unless the patch plays MIDI itself
+        let midi_too = !plays_midi;
+        let mut struck = None;
+        for strike in ui.input(|i| listening.ear.hear(&i.raw.events, open.base, &midi, count)) {
+            let touch = strike.velocity.unwrap_or(pattern.velocities[open.step]);
+            listening.touch[strike.note as usize] = touch;
+            if strike.velocity.is_none() || midi_too {
+                struck = Some((audition_of(strike.note, touch), strike.legato));
+            }
             let (label, changes) = write_strike(strike, &mut open, pattern);
             played.push(SynthResponse::EditParameters { node_id, label, changes });
         }
+        let held = listening.ear.sounding(midi_too).map(|(note, felt)| audition_of(note, felt.unwrap_or(listening.touch[note as usize])));
+        sounded.extend(auditions(listening.sounding, held, struck));
+        listening.sounding = held;
 
         let anchor = &cells[open.anchor].1;
         egui::popup_below_widget(ui, entry_id, anchor, PopupCloseBehavior::CloseOnClickOutside, |ui| {
-            if step_piano(ui, &mut open, pattern, &mut set) {
-                // Written with a click, which has no legato to tie from
+            if let Some((note, step)) = step_piano(ui, &mut open, pattern, &mut set) {
+                // Written with a click, which has no legato to tie from,
+                // and sounds for a Gate Length, over the hand if it's down
                 open.written = None;
+                if listening.sounding.take().is_some() {
+                    sounded.push(None);
+                }
+                sounded.extend([Some(audition_of(note, pattern.velocities[step])), None]);
             }
         });
         if ui.memory(|m| m.is_popup_open(entry_id)) {
             ui.data_mut(|d| {
                 d.insert_temp(entry_id, open);
-                d.insert_temp(ear_id, ear);
+                d.insert_temp(ear_id, listening);
             });
             take_letter_keys(ui.ctx());
             // MIDI arrives between frames: keep looking while the piano listens
@@ -515,10 +586,15 @@ pub(super) fn step_grid(
         } else {
             ui.data_mut(|d| {
                 d.remove::<StepEntry>(entry_id);
-                d.remove::<StepEar>(ear_id);
+                d.remove::<Listening>(ear_id);
             });
+            // Closed with the hand still down: the note stops with it
+            if listening.sounding.is_some() {
+                sounded.push(None);
+            }
         }
     });
+    responses.extend(sounded.into_iter().map(|chord| NodeResponse::User(SynthResponse::Audition { node_id, chord })));
     responses.extend(played.into_iter().map(NodeResponse::User));
 }
 
@@ -569,8 +645,8 @@ pub(super) fn drag_badge(ui: &egui::Ui, node_id: NodeId, step: egui::Rect, name:
 
 /// The piano under a step: two octaves, the step's note lit. A key writes
 /// its note to the step, switches a rest on, and moves along to the next step.
-/// Says whether one did.
-fn step_piano(ui: &mut egui::Ui, open: &mut StepEntry, pattern: &StepPattern, set: &mut impl FnMut(String, f32)) -> bool {
+/// Gives back the note a click wrote, and its step.
+fn step_piano(ui: &mut egui::Ui, open: &mut StepEntry, pattern: &StepPattern, set: &mut impl FnMut(String, f32)) -> Option<(u8, usize)> {
     let step = open.step;
     let pitch = pattern.pitches[step];
 
@@ -624,7 +700,7 @@ fn step_piano(ui: &mut egui::Ui, open: &mut StepEntry, pattern: &StepPattern, se
         }
         open.step = step_along(step, 1, pattern.steps);
     }
-    let wrote = played.is_some();
+    let wrote = played.map(|note| (note, step));
 
     ui.separator();
     let mut tie = pattern.ties[step];
@@ -638,7 +714,8 @@ fn step_piano(ui: &mut egui::Ui, open: &mut StepEntry, pattern: &StepPattern, se
         set(pattern.param(step, StepField::Slide), if slide { 1.0 } else { 0.0 });
     }
     ui.label(RichText::new("Each key writes this step, then moves to the next").small().weak()).on_hover_text(
-        "So does a note on a MIDI keyboard, with its touch, or on the letter keys (Z is the lowest C). One held into the next ties into it",
+        "So does a note on a MIDI keyboard, with its touch, or on the letter keys (Z is the lowest C). One held into the next ties into it. \
+         Each sounds on the sequencer's outputs as it's written",
     );
     wrote
 }
@@ -752,6 +829,7 @@ mod tests {
             current: None,
             pitches: [60; 16],
             gates: [true; 16],
+            velocities: [100; 16],
             ties: [false; 16],
             slides: [false; 16],
             seam: Seam::default(),
@@ -841,5 +919,37 @@ mod tests {
         let edit = write_strike(strikes[0], &mut open, &pattern);
         assert_eq!(edit.0, "Play C3 into step 1");
         assert_eq!(change(&edit, "Step 1 Velocity"), None);
+    }
+
+    #[test]
+    fn a_key_struck_sounds_and_lifting_it_stops() {
+        let c = audition_of(60, 100);
+        assert_eq!(auditions(None, Some(c), Some((c, false))), vec![Some(c)]);
+        // Held: nothing more to send
+        assert_eq!(auditions(Some(c), Some(c), None), vec![]);
+        assert_eq!(auditions(Some(c), None, None), vec![None]);
+    }
+
+    #[test]
+    fn a_key_struck_legato_moves_the_note_and_one_struck_afresh_strikes_again() {
+        let (c, d) = (audition_of(60, 100), audition_of(62, 100));
+        assert_eq!(auditions(Some(c), Some(d), Some((d, true))), vec![Some(d)]);
+        // C lifted and D struck within the frame
+        assert_eq!(auditions(Some(c), Some(d), Some((d, false))), vec![None, Some(d)]);
+        // C struck again as fast as it was lifted
+        assert_eq!(auditions(Some(c), Some(c), Some((c, false))), vec![None, Some(c)]);
+    }
+
+    #[test]
+    fn a_key_tapped_within_a_frame_still_blips() {
+        let e = audition_of(64, 100);
+        assert_eq!(auditions(None, None, Some((e, false))), vec![Some(e), None]);
+    }
+
+    #[test]
+    fn an_audition_sounds_as_hard_as_its_step() {
+        assert_eq!(audition_of(60, 127).velocity, 1.0);
+        assert_eq!(audition_of(60, 0).velocity, 0.0);
+        assert_eq!(audition_of(67, 100).notes(), &[67]);
     }
 }

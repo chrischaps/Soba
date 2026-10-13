@@ -12,8 +12,10 @@
 //!
 //! While the piano's open the letter keys are its, as they are the chord
 //! popover's (see [`super::chord_ear`]), Z on its lowest C. The Keyboard
-//! modules don't hear them. A MIDI keyboard plays through to the patch as
-//! always, so a note struck there is heard once, by the patch, and written.
+//! modules don't hear them, so the sequencer sounds the note under the hand
+//! itself (see [`StepEar::sounding`]). A MIDI keyboard plays through to the
+//! patch as always, so a note struck there is heard once, by the patch, and
+//! written; only with no MIDI module in the patch does the sequencer sound it.
 
 use eframe::egui::{self, Key};
 
@@ -40,6 +42,9 @@ pub(super) struct StepEar {
     seen: u64,
     /// The note struck last.
     last: Option<u8>,
+    /// The notes struck and still held, in the order they were, each with
+    /// its touch (`None` for a letter key).
+    down: Vec<(u8, Option<u8>)>,
 }
 
 impl StepEar {
@@ -67,6 +72,7 @@ impl StepEar {
             let down = self.keys.iter().any(|(k, _)| k == key);
             if !*pressed {
                 self.keys.retain(|(k, _)| k != key);
+                self.lifted();
             } else if !(shortcut || down) {
                 let note = (base as i32 + relative).clamp(0, 127) as u8;
                 struck.push(self.strike(note, None));
@@ -76,6 +82,7 @@ impl StepEar {
         for &(note, velocity) in midi {
             if velocity == 0 {
                 self.midi.retain(|&n| n != note);
+                self.lifted();
             } else if !self.midi.contains(&note) {
                 struck.push(self.strike(note, Some(velocity)));
                 self.midi.push(note);
@@ -85,10 +92,27 @@ impl StepEar {
         struck
     }
 
+    /// The note under the hand: the one struck last of those still held, on
+    /// the letter keys, or on a MIDI keyboard too if `midi` (when nothing
+    /// else in the patch plays it). With its touch, if it has one.
+    pub fn sounding(&self, midi: bool) -> Option<(u8, Option<u8>)> {
+        self.down.iter().rev().find(|(_, velocity)| velocity.is_none() || midi).copied()
+    }
+
     fn strike(&mut self, note: u8, velocity: Option<u8>) -> Strike {
         let legato = self.last.is_some_and(|last| last != note && self.held(last));
         self.last = Some(note);
+        self.down.push((note, velocity));
         Strike { note, velocity, legato }
+    }
+
+    /// Forgets the notes no longer held.
+    fn lifted(&mut self) {
+        let (keys, midi) = (&self.keys, &self.midi);
+        self.down.retain(|&(note, velocity)| match velocity {
+            None => keys.iter().any(|&(_, n)| n == note),
+            Some(_) => midi.contains(&note),
+        });
     }
 
     fn held(&self, note: u8) -> bool {
@@ -149,6 +173,34 @@ mod tests {
         // A key's second press without a release, as some keyboards send
         ear.hear(&[key(Key::M, true)], 48, &[], 0);
         assert_eq!(ear.hear(&[key(Key::M, true)], 48, &[], 0), vec![]);
+    }
+
+    #[test]
+    fn the_note_sounding_is_the_last_one_struck_still_held() {
+        let mut ear = StepEar::new(0);
+        assert_eq!(ear.sounding(true), None);
+        ear.hear(&[key(Key::Z, true)], 48, &[], 0);
+        assert_eq!(ear.sounding(false), Some((48, None)));
+        // B over it, then lifted: back to the Z still held
+        ear.hear(&[key(Key::B, true)], 48, &[], 0);
+        assert_eq!(ear.sounding(false), Some((55, None)));
+        ear.hear(&[key(Key::B, false)], 48, &[], 0);
+        assert_eq!(ear.sounding(false), Some((48, None)));
+        ear.hear(&[key(Key::Z, false)], 48, &[], 0);
+        assert_eq!(ear.sounding(false), None);
+    }
+
+    #[test]
+    fn a_midi_note_sounds_only_when_nothing_else_plays_it() {
+        let mut ear = StepEar::new(0);
+        ear.hear(&[], 48, &[(62, 90)], 1);
+        assert_eq!(ear.sounding(false), None, "the patch's MIDI module plays it");
+        assert_eq!(ear.sounding(true), Some((62, Some(90))));
+        // A letter key over it is the sequencer's either way
+        ear.hear(&[key(Key::Z, true)], 48, &[], 1);
+        assert_eq!(ear.sounding(false), Some((48, None)));
+        ear.hear(&[key(Key::Z, false)], 48, &[(62, 0)], 2);
+        assert_eq!(ear.sounding(true), None);
     }
 
     #[test]

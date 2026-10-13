@@ -73,7 +73,17 @@ While the piano is open, you can also play the melody in from a MIDI keyboard or
 
 - **Touch.** A MIDI keyboard writes how hard you played each note into the step's **Velocity**, so a line played with accents keeps them. The letter keys have no touch, so they leave the velocity alone.
 - **Legato.** Hold a note until the next one goes down and the first step ties into the second. Let go first and it doesn't. The phrasing you play is the phrasing written, as on a hardware step-record. A click on the piano has no length, so it never writes a tie.
-- **The letter keys** play the piano with **Z** on its lowest C, so **‹ ›** move them an octave as well. While the piano is open the letter keys belong to it, so the patch's Keyboard modules don't hear them. A MIDI keyboard still plays the patch as usual, so you hear each note once, through the patch, as it's written.
+- **The letter keys** play the piano with **Z** on its lowest C, so **‹ ›** move them an octave as well. While the piano is open the letter keys belong to it, so the patch's Keyboard modules don't hear them. A MIDI keyboard still plays the patch as usual.
+
+### Hearing it as you write
+
+Each note you write sounds as it goes in, through whatever the sequencer is patched into, so you can hear the melody you're writing. The clock doesn't need to be running. The note plays on the sequencer's own **Pitch**, **Gate** and **Velocity**, in place of the sequence:
+
+- **A key** you hold on the letter keys sounds for as long as you hold it. One struck while another is still down slides the pitch over without a new attack, which is how it's written: tied.
+- **A click** on the piano is a short note, one **Gate Length** long.
+- **A MIDI keyboard** is played by the sequencer only when the patch has no MIDI Note or Poly MIDI module. If it has one, that module already plays your notes, so the sequencer leaves them to it and you hear each note once.
+
+Each note sounds as loud as its step will play it. Once you let go, the sequence takes over again at the next note it plays. If the clock was running, the note it played while your hand was down isn't heard.
 
 A note already held when the piano opens isn't written. Strike it again to write it.
 

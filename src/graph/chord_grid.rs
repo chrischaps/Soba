@@ -69,7 +69,7 @@ const KEY_HEIGHT: f32 = 44.0;
 /// but with each one beside its kin, where a later type joined the list.
 const TYPE_ORDER: [usize; 19] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 13, 14, 15, 16, 17];
 /// Modules that play a MIDI keyboard's notes themselves.
-const MIDI_MODULES: [&str; 2] = ["input.midi_note", "input.poly_midi"];
+pub(super) const MIDI_MODULES: [&str; 2] = ["input.midi_note", "input.poly_midi"];
 const HINT: &str = "Click: chord on/off · Shift+click: tie\nDrag up or down: root (Shift: by octave)\nRight-click: edit the chord";
 
 /// A Chord Sequencer's pattern and settings, as its face shows them.
