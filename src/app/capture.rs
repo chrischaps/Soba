@@ -209,7 +209,8 @@ impl<T: Copy + std::ops::Add<Output = T> + std::ops::Sub<Output = T> + std::ops:
     }
 }
 
-/// A camera move: scale eases in log space, so a zoom feels even.
+/// A camera move: scale eases in log space, so a zoom feels even, and the
+/// point at the centre of the view travels a straight line across the patch.
 #[derive(Debug, Clone, Copy)]
 struct CameraGlide {
     from: (f32, Vec2),
@@ -226,7 +227,12 @@ impl CameraGlide {
     fn at(&self, t: f64) -> (f32, Vec2) {
         let p = ease(self.progress(t));
         let scale = (self.from.0.ln() + (self.to.0.ln() - self.from.0.ln()) * p).exp();
-        (scale, self.from.1 + (self.to.1 - self.from.1) * p)
+        // The offset scales with the zoom (see `animate`), so offset / scale
+        // is where the view's centre sits in the patch. Easing that, not the
+        // offset itself, keeps a deep pull-back from swinging out past the
+        // edge of the patch on its way to the wide shot
+        let (a, b) = (self.from.1 / self.from.0, self.to.1 / self.to.0);
+        (scale, (a + (b - a) * p) * scale)
     }
 }
 
@@ -1008,5 +1014,28 @@ mod tests {
         assert_eq!(g.at(2.0), Vec2::new(5.0, 0.0));
         assert_eq!(g.at(5.0), Vec2::new(10.0, 0.0));
         assert!(g.done(3.0) && !g.done(2.9));
+    }
+
+    #[test]
+    fn camera_glide_carries_the_centre_straight() {
+        // From a close-up on a module at the patch's right edge (centre 5366
+        // at zoom 1.4) out to the whole patch (centre 2962 at 0.2), as the
+        // shots write them: offset = -(centre - c) * zoom
+        let c = 960.0;
+        let cam = |centre: f32, zoom: f32| (zoom, Vec2::new(-(centre - c) * zoom, 0.0));
+        let g = CameraGlide { from: cam(5366.0, 1.4), to: cam(2962.0, 0.2), start: 0.0, dur: 1.0 };
+        let centre = |t: f64| {
+            let (zoom, offset) = g.at(t);
+            c - offset.x / zoom
+        };
+        assert!((centre(0.0) - 5366.0).abs() < 0.01 && (centre(1.0) - 2962.0).abs() < 0.01);
+        // Never past either end, and always moving the same way
+        let mut last = centre(0.0);
+        for i in 1..=50 {
+            let x = centre(i as f64 / 50.0);
+            assert!(x <= last + 1e-3 && x >= 2962.0 - 0.01, "centre {x} at step {i}");
+            last = x;
+        }
+        assert!((g.at(0.5).0 - (1.4f32 * 0.2).sqrt()).abs() < 1e-4, "zoom eases in log space");
     }
 }

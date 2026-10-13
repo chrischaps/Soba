@@ -11,8 +11,9 @@
 101.8571 camera -180.5 -1788.8 0.95 3.0   # Lift: the lead takes the motif
 120.0000 camera -400.4 -394.2 0.2 6.0   # the whole rack
 136.1429 camera -850.0 -2146.2 1.25 4.0   # Memory: the Looper plays the opening back
-149.7143 camera 44.0 -302.5 1.1 5.0   # the Arrangers turning the faders
-162.3571 camera -400.4 -394.2 0.2 9.0   # the build pulls back to the whole rack
+149.7143 camera -79.2 -267.3 0.9 5.0   # the three Arrangers: Desk's faders, Cues, and Tape bending the Wow
+158.7857 camera -6168.4 -2550.8 1.4 4.0   # Build: on tape, the mix bending as the reels turn
+166.8571 camera -400.4 -394.2 0.2 4.571   # the build pulls back to the whole rack, landing on the drop
 180.0000 camera -420.4 -396.9 0.21 8.0   # Everything: a breath closer, every module still in frame
 188.5714 still everything
 191.5714 camera -2033.0 -543.4 0.95 5.0   # the bass, driven harder as the song brightens

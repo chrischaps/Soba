@@ -5,6 +5,7 @@ and films it with `soba --capture`.
     python tools/showcase/shots.py --list                 list them
     python tools/showcase/shots.py <shot> --script-only   just write the script
     python tools/showcase/shots.py <shot> --preview       film frame 0 only, to aim from
+    python tools/showcase/shots.py <shot> --framings      a still of every camera move, on one sheet
 
 Each shot is a function that builds a cue script (see src/app/capture.rs for
 the cue language). Output goes to target/showcase/<shot>/: video.mkv
@@ -312,8 +313,9 @@ def from_one_sine(s):
         (u(13) - 1.0, 3.0, (1150, 2391), 0.95, "Lift: the lead takes the motif"),
         (u(15), 6.0, whole, 0.2, "the whole rack"),
         (u(17) - 1.0, 4.0, (1640, 2225), 1.25, "Memory: the Looper plays the opening back"),
-        (u(18) + 4.0, 5.0, (920, 783), 1.1, "the Arrangers turning the faders"),
-        (u(20) - 0.5, 9.0, whole, 0.2, "the build pulls back to the whole rack"),
+        (u(18) + 4.0, 5.0, (1048, 805), 0.9, "the three Arrangers: Desk's faders, Cues, and Tape bending the Wow"),
+        (u(19) + 4.5, 4.0, (5366, 2330), 1.4, "Build: on tape, the mix bending as the reels turn"),
+        (u(20) + 4.0, round(SONG_UNIT - 4.0, 3), whole, 0.2, "the build pulls back to the whole rack, landing on the drop"),
         (u(22), 8.0, (2962, 2398), 0.21, "Everything: a breath closer, every module still in frame"),
         (u(23) + 3.0, 5.0, (3100, 1080), 0.95, "the bass, driven harder as the song brightens"),
         (u(25) - 1.0, 3.0, motif, 0.88, "Second wave: the sine over the groove, its ghost beneath"),
@@ -374,16 +376,56 @@ def from_one_sine_harmony(s):
     s.at(0.1, "end")
 
 
-def run(name, script_only=False, preview=False):
+def framings(cues):
+    """Every camera move of a shot, landed one a second with a still of
+    each: a contact sheet to check the aim before a long take. The patch
+    plays from the top, so the stills show the framing, not the moment."""
+    cameras = [cue.split("#")[0].split()[:4] for t, cue in sorted(cues, key=lambda c: c[0]) if cue.startswith("camera")]
+    out = [(0.0, "play")]
+    for i, cam in enumerate(cameras):
+        out.append((i + 0.0, " ".join(cam + ["0.05"])))
+        out.append((i + 0.6, f"still shot{i:02}"))
+    out.append((len(cameras) + 0.0, "end"))
+    labels = [cue.split("#", 1)[1].strip() if "#" in cue else "" for t, cue in sorted(cues, key=lambda c: c[0])
+              if cue.startswith("camera")]
+    return out, labels
+
+
+def contact_sheet(out, labels, columns=4, width=480):
+    """Tiles the framing stills into sheet.png, each captioned with its move."""
+    from PIL import Image, ImageDraw
+    stills = sorted(out.glob("shot*.png"))
+    if not stills:
+        return
+    first = Image.open(stills[0])
+    height = round(first.height * width / first.width)
+    rows = -(-len(stills) // columns)
+    sheet = Image.new("RGB", (columns * width, rows * (height + 22)), (18, 18, 22))
+    draw = ImageDraw.Draw(sheet)
+    for i, path in enumerate(stills):
+        x, y = (i % columns) * width, (i // columns) * (height + 22)
+        sheet.paste(Image.open(path).convert("RGB").resize((width, height)), (x, y))
+        draw.text((x + 6, y + height + 5), f"{i:02} {labels[i] if i < len(labels) else ''}"[:76], fill=(220, 220, 220))
+    sheet.save(out / "sheet.png")
+    print(out / "sheet.png")
+
+
+def run(name, script_only=False, preview=False, framing=False):
     fn, patch, ppp, fps, crf, preset, size = SHOTS[name]
     s = Script()
     fn(s)
+    labels = []
     if preview:
         # Just the setup, and the first frame as a still to aim from
         s.cues = [c for c in s.cues if c[0] < 0] + [(0.0, "still preview"), (0.05, "end")]
         name += "-preview"
+    elif framing:
+        s.cues, labels = framings(s.cues)
+        crf, preset = 30, "ultrafast"
+        name += "-framings"
     SCRIPTS.mkdir(parents=True, exist_ok=True)
-    script = (OUT if preview else SCRIPTS) / f"{name}.txt"
+    OUT.mkdir(parents=True, exist_ok=True)
+    script = (OUT if preview or framing else SCRIPTS) / f"{name}.txt"
     script.write_text(s.text())
     if script_only:
         print(script)
@@ -400,6 +442,8 @@ def run(name, script_only=False, preview=False):
     for ppm in out.glob("*.ppm"):
         Image.open(ppm).save(ppm.with_suffix(".png"))
         ppm.unlink()
+    if framing:
+        contact_sheet(out, labels)
 
 
 if __name__ == "__main__":
@@ -410,4 +454,4 @@ if __name__ == "__main__":
         sys.exit(0)
     only = "--script-only" in args
     for name in [a for a in args if not a.startswith("--")]:
-        run(name, only, preview="--preview" in args)
+        run(name, only, preview="--preview" in args, framing="--framings" in args)
