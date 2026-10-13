@@ -33,6 +33,11 @@ the scale the picture has always had, and the still is cropped to that
 frame (or the part of it that's wanted) without resizing. Playing three
 minutes of song frame by frame takes a few minutes.
 
+A few more are close-ups of one module's face, listed in CLOSEUPS: the
+example plays up to each moment wanted, with the view aimed at that face,
+the same part of the face is cropped from each still, and the crops are set
+on a grid.
+
 Build into target/capture first, as for shots.py. --check exits 1 if any
 image is stale or missing.
 """
@@ -82,6 +87,20 @@ MOMENTS = {
     "from-one-sine-line": Moment("from-one-sine", 14.5 * UNIT, "Motif, lead and memory", 1.75, (826, 568),
                                  [(407, 424)]),
 }
+
+# Close-ups of one face at several moments: `recipe-<image>.png` shows `crop`
+# (x0, y0, x1, y1 in patch points from the module's top-left) of the first
+# `module` (by id) in patches/<patch>.json, drawn at `zoom` and `PPP`, as it
+# was each of `at` seconds after the patch started playing. The crops are
+# set `columns` across, GAP pixels apart and from the edge, on BACKGROUND
+Closeup = namedtuple("Closeup", "patch module at crop zoom columns")
+CLOSEUPS = {
+    # The Vocoder's bands frozen on each of the four sung vowels: ohh, ooh,
+    # ee and ahh, each held from one downbeat to the next
+    "held-vowels-faces": Closeup("held-vowels", "fx.vocoder", (5.6, 9.3, 13.0, 16.6), (18, 202, 203.5, 261.5), 2.0, 2),
+}
+GAP = 28
+BACKGROUND = "#1e202c"
 
 # How far apart two pictures may be before one is stale: a pixel counts as
 # changed past this much in any channel, and a picture as stale past this
@@ -149,6 +168,18 @@ def shoot(name, tmp):
     return image.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
 
 
+def aim(view, point, zoom):
+    """The camera cue that puts patch point `point` at the editor's centre at
+    `zoom`, from the view as it opened, and where the patch's origin will
+    then be drawn, in screen points."""
+    # The camera scales the view about the editor's centre, then shifts it
+    centre = [(view["editor"][i] + view["editor"][i + 2]) / 2 for i in range(2)]
+    scale = zoom / view["zoom"]
+    origin = [centre[i] - point[i] * zoom for i in range(2)]
+    offset = [origin[i] - centre[i] - (view["origin"][i] - centre[i]) * scale for i in range(2)]
+    return f"camera {offset[0]:.2f} {offset[1]:.2f} {scale:.5f} 0.05", origin
+
+
 def moment_rect(lay, name):
     """The part of a moment's frame its picture shows, in patch points."""
     moment = MOMENTS[name]
@@ -174,15 +205,8 @@ def shoot_moment(name, tmp):
     out.mkdir()
     lay = film(patch, out, size, 1.0, "0.0 layout shot\n0.1 end\n")
     x0, y0, x1, y1 = moment_rect(lay, name)
-    view = lay["view"]
-    # The camera scales the view about the editor's centre, then shifts it:
-    # this puts the frame's centre there, at the moment's zoom
-    centre = [(view["editor"][i] + view["editor"][i + 2]) / 2 for i in range(2)]
-    scale = moment.zoom / view["zoom"]
-    aim = [(x0 + x1) / 2, (y0 + y1) / 2]
-    origin = [centre[i] - aim[i] * moment.zoom for i in range(2)]
-    offset = [origin[i] - centre[i] - (view["origin"][i] - centre[i]) * scale for i in range(2)]
-    cues = [f"-{moment.at:.4f} play", f"-{moment.at:.4f} camera {offset[0]:.2f} {offset[1]:.2f} {scale:.5f} 0.05"]
+    camera, origin = aim(lay["view"], ((x0 + x1) / 2, (y0 + y1) / 2), moment.zoom)
+    cues = [f"-{moment.at:.4f} play", f"-{moment.at:.4f} {camera}"]
     for i, (cx, cy) in enumerate(moment.clicks):
         t = -1.5 + 0.3 * i
         x, y = origin[0] + (x0 + cx) * moment.zoom, origin[1] + (y0 + cy) * moment.zoom
@@ -201,6 +225,49 @@ def shoot_moment(name, tmp):
     return image.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
 
 
+def closeup_rect(lay, name):
+    """The part of a close-up's face its picture shows, in patch points."""
+    closeup = CLOSEUPS[name]
+    rect = next((m["rect"] for m in lay["modules"] if m["module_id"] == closeup.module), None)
+    if rect is None:
+        raise RuntimeError(f"{name}: no {closeup.module} in {closeup.patch}")
+    x0, y0, x1, y1 = closeup.crop
+    return rect[0] + x0, rect[1] + y0, rect[0] + x1, rect[1] + y1
+
+
+def shoot_closeup(name, tmp):
+    """Films a face at each of its moments and returns them on a grid."""
+    closeup = CLOSEUPS[name]
+    patch = ROOT / "patches" / f"{closeup.patch}.json"
+    out = Path(tmp) / f"{name}-probe"
+    out.mkdir()
+    lay = film(patch, out, SIZE, PPP, "0.0 layout shot\n0.1 end\n")
+    x0, y0, x1, y1 = closeup_rect(lay, name)
+    camera, _ = aim(lay["view"], ((x0 + x1) / 2, (y0 + y1) / 2), closeup.zoom)
+    rows = -(-len(closeup.at) // closeup.columns)
+    sheet = None
+    # A take for each moment, rather than one take with a still at each: the
+    # face's animations (the snowflake, the falling peaks) run on the app's
+    # clock, which starts with the warmup, so only this way is each still
+    # taken at the same clock every time
+    for i, at in enumerate(closeup.at):
+        out = Path(tmp) / f"{name}-{i}"
+        out.mkdir()
+        lay = film(patch, out, SIZE, PPP, f"-{at:.2f} play\n-{at:.2f} {camera}\n0.0 layout shot\n0.0 still shot\n0.1 end\n")
+        x0, y0, x1, y1 = closeup_rect(lay, name)
+        view = lay["view"]
+        zoom, ppp, (ox, oy) = view["zoom"], view["ppp"], view["origin"]
+        # Every crop the same size, however the face falls on the pixels
+        left, top = round((ox + x0 * zoom) * ppp), round((oy + y0 * zoom) * ppp)
+        w, h = round((x1 - x0) * zoom * ppp), round((y1 - y0) * zoom * ppp)
+        if sheet is None:
+            sheet = Image.new("RGB", (GAP + closeup.columns * (w + GAP), GAP + rows * (h + GAP)), BACKGROUND)
+        still = Image.open(out / "shot.ppm").convert("RGB")
+        row, column = divmod(i, closeup.columns)
+        sheet.paste(still.crop((left, top, left + w, top + h)), (GAP + column * (w + GAP), GAP + row * (h + GAP)))
+    return sheet.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+
+
 def changed(new, path):
     """The fraction of pixels that differ from the picture at `path`, or 1
     if it's missing or a different size."""
@@ -217,12 +284,17 @@ def changed(new, path):
 def main(args):
     check = "--check" in args
     names = [a for a in args if not a.startswith("--")]
-    names = names or sorted(p.stem for p in (ROOT / "patches").glob("*.json") if (IMAGES / f"recipe-{p.stem}.png").exists()) + list(MOMENTS)
+    names = names or sorted(p.stem for p in (ROOT / "patches").glob("*.json") if (IMAGES / f"recipe-{p.stem}.png").exists()) + list(MOMENTS) + list(CLOSEUPS)
     stale = []
     with tempfile.TemporaryDirectory() as tmp:
         for name in names:
             path = IMAGES / f"recipe-{name}.png"
-            image = shoot_moment(name, tmp) if name in MOMENTS else shoot(name, tmp)
+            if name in MOMENTS:
+                image = shoot_moment(name, tmp)
+            elif name in CLOSEUPS:
+                image = shoot_closeup(name, tmp)
+            else:
+                image = shoot(name, tmp)
             if check:
                 fraction = changed(image, path)
                 verdict = "ok" if fraction <= STALE_FRACTION else ("missing" if not path.exists() else f"stale ({fraction:.1%} changed)")
