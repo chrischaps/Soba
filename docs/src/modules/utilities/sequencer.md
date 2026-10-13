@@ -67,7 +67,17 @@ Right-click a step and a two-octave piano opens under it, with the step's note l
 
 Each note you write is its own undo step, so **Ctrl+Z** takes back the last key you played.
 
-Velocities can't be edited on the node yet. Every step plays at 100 unless the patch file says otherwise. If you do set them there, patch **Velocity** into an envelope's **Velocity** input for accents.
+### Playing it in from a keyboard
+
+While the piano is open, you can also play the melody in from a MIDI keyboard or the computer's letter keys. Each note you strike writes the step and moves on, just like a click.
+
+- **Touch.** A MIDI keyboard writes how hard you played each note into the step's **Velocity**, so a line played with accents keeps them. The letter keys have no touch, so they leave the velocity alone.
+- **Legato.** Hold a note until the next one goes down and the first step ties into the second. Let go first and it doesn't. The phrasing you play is the phrasing written, as on a hardware step-record. A click on the piano has no length, so it never writes a tie.
+- **The letter keys** play the piano with **Z** on its lowest C, so **‹ ›** move them an octave as well. While the piano is open the letter keys belong to it, so the patch's Keyboard modules don't hear them. A MIDI keyboard still plays the patch as usual, so you hear each note once, through the patch, as it's written.
+
+A note already held when the piano opens isn't written. Strike it again to write it.
+
+Velocities have no knob on the node. Each step plays at 100 until a MIDI keyboard writes its touch, or the patch file says otherwise. Patch **Velocity** into an envelope's **Velocity** input to hear the accents.
 
 ## Patterns and the Chain
 

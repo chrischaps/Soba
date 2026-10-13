@@ -8,7 +8,8 @@
 //!   the way a hardware sequencer's step-record does: each key played writes
 //!   the step and moves along to the next one, so a melody goes in key after
 //!   key. The piano stays put, and the step it will write next is outlined
-//!   in the pitch cable's orange.
+//!   in the pitch cable's orange. A MIDI keyboard, or the letter keys, step-
+//!   record too, writing each note's touch and its legato (see [`super::step_ear`]).
 //!
 //! A tied step reaches across the gap into the next one, the way a held note
 //! looks on a piano roll. At the end of a row it reaches out of its right
@@ -38,6 +39,8 @@ use crate::modules::sequencer::{note_to_name, PatternPosition, StepField, StepSe
 use crate::modules::trigger_sequencer::{chain_from, CHAIN_NAMES};
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
+use super::chord_ear::take_letter_keys;
+use super::step_ear::{StepEar, Strike};
 use super::trigger_display::{edit_pattern, pattern_tabs, PatternBar, Playing};
 use super::{SynthGraph, SynthGraphState, SynthNodeData, SynthResponse};
 
@@ -191,7 +194,7 @@ pub(super) fn step_sequencer_display(
         ties: std::array::from_fn(|step| values.field(editing, step, StepField::Tie).is_some_and(|v| v > 0.5)),
         slides: std::array::from_fn(|step| values.field(editing, step, StepField::Slide).is_some_and(|v| v > 0.5)),
     };
-    step_grid(ui, zoom, &pattern, node_id, responses);
+    step_grid(ui, zoom, &pattern, node_id, user_state, responses);
 
     ui.add_space(6.0 * zoom);
     let bar = PatternBar {
@@ -252,6 +255,9 @@ struct StepEntry {
     step: usize,
     base: u8,
     anchor: usize,
+    /// The step the last note played in wrote, which the next ties from if
+    /// it's struck legato.
+    written: Option<usize>,
 }
 
 /// A drag under way: the step, and its note when the drag began.
@@ -288,20 +294,47 @@ fn step_along(step: usize, by: isize, steps: usize) -> usize {
     (step as isize + by).rem_euclid(steps.max(1) as isize) as usize
 }
 
+/// What a note played in writes to the step the piano's on, as one undo
+/// step: the note, a rest switched on, and its touch if it has one. Its tie
+/// waits on the next note: struck legato, that one ties this one into it, if
+/// it's the step just before. Then the piano moves along.
+fn write_strike(strike: Strike, open: &mut StepEntry, pattern: &StepPattern) -> (String, Vec<(String, f32)>) {
+    let step = open.step;
+    let mut changes = vec![
+        (pattern.param(step, StepField::Pitch), strike.note as f32),
+        (pattern.param(step, StepField::Gate), 1.0),
+        (pattern.param(step, StepField::Tie), 0.0),
+    ];
+    if let Some(velocity) = strike.velocity {
+        changes.push((pattern.param(step, StepField::Velocity), velocity as f32));
+    }
+    let before = step_along(step, -1, pattern.steps);
+    if open.written.is_some_and(|written| written == before && written != step) {
+        changes.push((pattern.param(before, StepField::Tie), if strike.legato { 1.0 } else { 0.0 }));
+    }
+    open.written = Some(step);
+    open.step = step_along(step, 1, pattern.steps);
+    (format!("Play {} into step {}", note_to_name(strike.note), step + 1), changes)
+}
+
 pub(super) fn step_grid(
     ui: &mut egui::Ui,
     zoom: f32,
     pattern: &StepPattern,
     node_id: NodeId,
+    user_state: &SynthGraphState,
     responses: &mut Vec<NodeResponse<SynthResponse, SynthNodeData>>,
 ) {
     let step_size = 24.0 * zoom;
+    // Notes played in, each one undo step, sent once the grid's drawn
+    let mut played = Vec::new();
     let step_spacing = STEP_SPACING * zoom;
     let mut set = |param_name: String, value: f32| {
         responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
     };
 
     let entry_id = Id::new(("step_entry", node_id));
+    let ear_id = Id::new(("step_ear", node_id));
     let drag_id = Id::new(("step_drag", node_id));
     let mut entry = ui
         .memory(|m| m.is_popup_open(entry_id))
@@ -401,7 +434,7 @@ pub(super) fn step_grid(
                 }
             }
             if response.secondary_clicked() {
-                entry = Some(StepEntry { step, base: popover_base(pitch), anchor: step });
+                entry = Some(StepEntry { step, base: popover_base(pitch), anchor: step, written: None });
                 ui.memory_mut(|m| m.open_popup(entry_id));
             }
 
@@ -454,16 +487,39 @@ pub(super) fn step_grid(
         }
         open.step = step_along(open.step, on as isize - back as isize, pattern.steps);
 
+        // Notes played on the keys write their steps and move along. A note
+        // held as the piano opened is the hand's, not one played in
+        let count = user_state.midi_note_count();
+        let mut ear = ui.data(|d| d.get_temp::<StepEar>(ear_id)).unwrap_or_else(|| StepEar::new(count));
+        let midi = user_state.midi_notes_since(ear.seen());
+        for strike in ui.input(|i| ear.hear(&i.raw.events, open.base, &midi, count)) {
+            let (label, changes) = write_strike(strike, &mut open, pattern);
+            played.push(SynthResponse::EditParameters { node_id, label, changes });
+        }
+
         let anchor = &cells[open.anchor].1;
         egui::popup_below_widget(ui, entry_id, anchor, PopupCloseBehavior::CloseOnClickOutside, |ui| {
-            step_piano(ui, &mut open, pattern, &mut set);
+            if step_piano(ui, &mut open, pattern, &mut set) {
+                // Written with a click, which has no legato to tie from
+                open.written = None;
+            }
         });
         if ui.memory(|m| m.is_popup_open(entry_id)) {
-            ui.data_mut(|d| d.insert_temp(entry_id, open));
+            ui.data_mut(|d| {
+                d.insert_temp(entry_id, open);
+                d.insert_temp(ear_id, ear);
+            });
+            take_letter_keys(ui.ctx());
+            // MIDI arrives between frames: keep looking while the piano listens
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(16));
         } else {
-            ui.data_mut(|d| d.remove::<StepEntry>(entry_id));
+            ui.data_mut(|d| {
+                d.remove::<StepEntry>(entry_id);
+                d.remove::<StepEar>(ear_id);
+            });
         }
     });
+    responses.extend(played.into_iter().map(NodeResponse::User));
 }
 
 /// The slur from the step `from` into the slide step `to`: an arch from the
@@ -513,7 +569,8 @@ pub(super) fn drag_badge(ui: &egui::Ui, node_id: NodeId, step: egui::Rect, name:
 
 /// The piano under a step: two octaves, the step's note lit. A key writes
 /// its note to the step, switches a rest on, and moves along to the next step.
-fn step_piano(ui: &mut egui::Ui, open: &mut StepEntry, pattern: &StepPattern, set: &mut impl FnMut(String, f32)) {
+/// Says whether one did.
+fn step_piano(ui: &mut egui::Ui, open: &mut StepEntry, pattern: &StepPattern, set: &mut impl FnMut(String, f32)) -> bool {
     let step = open.step;
     let pitch = pattern.pitches[step];
 
@@ -567,6 +624,7 @@ fn step_piano(ui: &mut egui::Ui, open: &mut StepEntry, pattern: &StepPattern, se
         }
         open.step = step_along(step, 1, pattern.steps);
     }
+    let wrote = played.is_some();
 
     ui.separator();
     let mut tie = pattern.ties[step];
@@ -579,7 +637,10 @@ fn step_piano(ui: &mut egui::Ui, open: &mut StepEntry, pattern: &StepPattern, se
     if ui.checkbox(&mut slide, "Slide into this step").on_hover_text(hint).changed() {
         set(pattern.param(step, StepField::Slide), if slide { 1.0 } else { 0.0 });
     }
-    ui.label(RichText::new("Each key writes this step, then moves to the next").small().weak());
+    ui.label(RichText::new("Each key writes this step, then moves to the next").small().weak()).on_hover_text(
+        "So does a note on a MIDI keyboard, with its touch, or on the letter keys (Z is the lowest C). One held into the next ties into it",
+    );
+    wrote
 }
 
 #[cfg(test)]
@@ -681,5 +742,104 @@ mod tests {
     fn with_the_pattern_cv_patched_a_tie_only_leaves() {
         assert_eq!(Seam::of(A, &[A, B], true, |_| true), Seam::default());
         assert_eq!(Seam::of(A, &[A], true, |_| true), Seam::default());
+    }
+
+    /// Pattern A, `steps` long, every step a C4 with its gate on.
+    fn pattern_of(steps: usize) -> StepPattern {
+        StepPattern {
+            pattern: A,
+            steps,
+            current: None,
+            pitches: [60; 16],
+            gates: [true; 16],
+            ties: [false; 16],
+            slides: [false; 16],
+            seam: Seam::default(),
+        }
+    }
+
+    fn opened_on(step: usize) -> StepEntry {
+        StepEntry { step, base: 48, anchor: step, written: None }
+    }
+
+    /// The edits notes played into the piano make, MIDI notes struck and let
+    /// go between two frames.
+    fn play(open: &mut StepEntry, pattern: &StepPattern, midi: &[(u8, u8)]) -> Vec<(String, Vec<(String, f32)>)> {
+        let mut ear = StepEar::new(0);
+        ear.hear(&[], open.base, midi, midi.len() as u64).into_iter().map(|strike| write_strike(strike, open, pattern)).collect()
+    }
+
+    fn change(edit: &(String, Vec<(String, f32)>), param: &str) -> Option<f32> {
+        edit.1.iter().find(|(name, _)| name == param).map(|&(_, value)| value)
+    }
+
+    #[test]
+    fn notes_played_in_write_their_touch_and_move_along() {
+        let pattern = pattern_of(8);
+        let mut open = opened_on(0);
+        // C4 soft, let go, then E4 hard
+        let edits = play(&mut open, &pattern, &[(60, 40), (60, 0), (64, 110)]);
+        assert_eq!(edits.len(), 2, "one undo step a note");
+        assert_eq!(edits[0].0, "Play C4 into step 1");
+        assert_eq!(change(&edits[0], "Step 1 Pitch"), Some(60.0));
+        assert_eq!(change(&edits[0], "Step 1 Velocity"), Some(40.0));
+        assert_eq!(edits[1].0, "Play E4 into step 2");
+        assert_eq!(change(&edits[1], "Step 2 Pitch"), Some(64.0));
+        assert_eq!(change(&edits[1], "Step 2 Velocity"), Some(110.0));
+        // Played detached, so step 1 doesn't tie into step 2
+        assert_eq!(change(&edits[1], "Step 1 Tie"), Some(0.0));
+        assert_eq!(open.step, 2, "the next-step outline is on step 3");
+    }
+
+    #[test]
+    fn a_note_held_into_the_next_ties_into_it() {
+        let pattern = pattern_of(8);
+        let mut open = opened_on(4);
+        let edits = play(&mut open, &pattern, &[(60, 90), (62, 90), (60, 0)]);
+        assert_eq!(change(&edits[1], "Step 5 Tie"), Some(1.0));
+        assert_eq!(change(&edits[1], "Step 6 Tie"), Some(0.0), "its own tie waits on the note after");
+    }
+
+    #[test]
+    fn a_rest_played_into_sounds() {
+        let mut pattern = pattern_of(8);
+        pattern.gates[0] = false;
+        let edits = play(&mut opened_on(0), &pattern, &[(67, 100)]);
+        assert_eq!(change(&edits[0], "Step 1 Gate"), Some(1.0));
+    }
+
+    #[test]
+    fn the_last_step_ties_round_into_the_first() {
+        let pattern = pattern_of(4);
+        let mut open = opened_on(3);
+        let edits = play(&mut open, &pattern, &[(60, 90), (64, 90)]);
+        assert_eq!(edits[1].0, "Play E4 into step 1");
+        assert_eq!(change(&edits[1], "Step 4 Tie"), Some(1.0));
+        assert_eq!(open.step, 1);
+    }
+
+    #[test]
+    fn only_the_step_just_written_is_tied_from() {
+        let pattern = pattern_of(8);
+        // A step written with a click, or skipped past with →, isn't tied from
+        let mut open = StepEntry { written: Some(1), ..opened_on(3) };
+        let edits = play(&mut open, &pattern, &[(60, 90)]);
+        assert_eq!(edits[0].1.iter().filter(|(name, _)| name.ends_with("Tie")).count(), 1, "only its own tie: {:?}", edits[0].1);
+        // A pattern of one step doesn't tie into itself
+        let mut open = opened_on(0);
+        let edits = play(&mut open, &pattern_of(1), &[(60, 90), (64, 90)]);
+        assert_eq!(edits[1].1.iter().filter(|(name, _)| name == "Step 1 Tie").count(), 1);
+    }
+
+    #[test]
+    fn the_letter_keys_leave_the_touch_as_it_was() {
+        let pattern = pattern_of(8);
+        let mut open = opened_on(0);
+        let z = egui::Event::Key { key: Key::Z, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+        let mut ear = StepEar::new(0);
+        let strikes = ear.hear(&[z], open.base, &[], 0);
+        let edit = write_strike(strikes[0], &mut open, &pattern);
+        assert_eq!(edit.0, "Play C3 into step 1");
+        assert_eq!(change(&edit, "Step 1 Velocity"), None);
     }
 }

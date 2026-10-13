@@ -24,6 +24,7 @@ mod arranger_display;
 pub mod arranger_follow;
 mod chord_ear;
 mod chord_grid;
+mod step_ear;
 mod step_grid;
 mod mixer_strips;
 mod module_ui;

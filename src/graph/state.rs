@@ -43,6 +43,10 @@ const VALIDATION_MESSAGE_DURATION_SECS: f32 = 3.0;
 /// Maximum number of MIDI events to store for display.
 const MAX_MIDI_EVENTS: usize = 10;
 
+/// How many MIDI notes struck and let go are kept for the Step Sequencer's
+/// piano, which looks at them once a frame: far more than a hand plays in one.
+const MAX_MIDI_NOTES: usize = 64;
+
 /// How strongly a cable shows through what it passes under, at first (the
 /// Cables menu changes it).
 pub const CABLE_THROUGH: f32 = 0.15;
@@ -143,6 +147,13 @@ pub struct SynthGraphState {
 
     /// Timestamp of the first MIDI event received (for relative timestamps).
     midi_first_event_time: Option<Instant>,
+
+    /// The MIDI notes struck and let go lately, in order, each with its
+    /// velocity (0 for a release), and how many there have ever been. A note
+    /// tapped between two frames never shows among the notes held, but it's
+    /// here.
+    midi_notes: VecDeque<(u8, u8)>,
+    midi_note_count: u64,
 
     /// MIDI CC mappings for UI display.
     /// Key: (engine_node_id, param_index), Value: mapping info.
@@ -277,6 +288,8 @@ impl Default for SynthGraphState {
             knob_style: crate::widgets::KnobStyle::default(),
             midi_events: VecDeque::new(),
             midi_first_event_time: None,
+            midi_notes: VecDeque::new(),
+            midi_note_count: 0,
             midi_mappings: HashMap::new(),
             midi_learn_active: false,
             midi_learn_target: None,
@@ -533,11 +546,36 @@ impl SynthGraphState {
         };
 
         self.midi_events.push_back(DisplayMidiEvent { event, timestamp });
+        match event {
+            MidiEvent::NoteOn { note, velocity, .. } => self.push_midi_note(note, velocity),
+            MidiEvent::NoteOff { note, .. } => self.push_midi_note(note, 0),
+            _ => {}
+        }
 
         // Keep only the most recent events
         while self.midi_events.len() > MAX_MIDI_EVENTS {
             self.midi_events.pop_front();
         }
+    }
+
+    fn push_midi_note(&mut self, note: u8, velocity: u8) {
+        self.midi_notes.push_back((note, velocity));
+        self.midi_note_count += 1;
+        while self.midi_notes.len() > MAX_MIDI_NOTES {
+            self.midi_notes.pop_front();
+        }
+    }
+
+    /// How many MIDI notes have been struck or let go, ever.
+    pub fn midi_note_count(&self) -> u64 {
+        self.midi_note_count
+    }
+
+    /// The MIDI notes struck or let go since the count was `seen`, in order,
+    /// each with its velocity (0 for a release): as many of them as are kept.
+    pub fn midi_notes_since(&self, seen: u64) -> Vec<(u8, u8)> {
+        let new = self.midi_note_count.saturating_sub(seen).min(self.midi_notes.len() as u64) as usize;
+        self.midi_notes.iter().skip(self.midi_notes.len() - new).copied().collect()
     }
 
     /// Get the recent MIDI events for display.
@@ -709,6 +747,26 @@ mod tests {
         let state = SynthGraphState::default();
         assert!(state.selected_node.is_none());
         assert!(state.node_id_map.is_empty());
+    }
+
+    #[test]
+    fn midi_notes_are_kept_in_order_past_the_monitors_few() {
+        let mut state = SynthGraphState::default();
+        let seen = state.midi_note_count();
+        // A note tapped and let go between frames, among more events than a
+        // MIDI Monitor keeps
+        for controller in 0..20 {
+            state.push_midi_event(MidiEvent::ControlChange { channel: 0, controller, value: 64 });
+        }
+        state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 60, velocity: 40 });
+        state.push_midi_event(MidiEvent::NoteOff { channel: 0, note: 60, velocity: 64 });
+        assert_eq!(state.midi_notes_since(seen), vec![(60, 40), (60, 0)]);
+        assert_eq!(state.midi_notes_since(state.midi_note_count()), vec![]);
+        // Only as many as are kept
+        for _ in 0..MAX_MIDI_NOTES {
+            state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 61, velocity: 90 });
+        }
+        assert_eq!(state.midi_notes_since(seen).len(), MAX_MIDI_NOTES);
     }
 
     #[test]
