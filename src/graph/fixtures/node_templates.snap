@@ -1113,6 +1113,7 @@ display ChordGrid
 == seq.trigger "Trigger Sequencer" finder="Trigger Sequencer" Utility
 in   Clock              Gate     ConnectionOnly       inline=true  port
 in   Reset              Gate     ConnectionOnly       inline=true  port
+in   Run                Gate     ConnectionOnly       inline=true  port
 in   Pattern            Control  ConnectionOnly       inline=true  port
 in   Steps              Control  ConstantOnly         inline=false num 16 [1..16]  stepped
 in   Gate Length        Control  ConstantOnly         inline=false num 50 [1..100] %

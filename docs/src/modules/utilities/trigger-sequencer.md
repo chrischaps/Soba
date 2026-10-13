@@ -15,6 +15,7 @@ Where the [Step Sequencer](./sequencer.md) plays a melody, one note at a time, t
 |------|-------------|-------------|
 | **Clock** | Gate (Green) | Each rising edge plays the next step |
 | **Reset** | Gate (Green) | A rising edge starts over: the next clock plays step 1 of the Chain's first pattern |
+| **Run** | Gate (Green) | Steps advance only while this is high. With nothing patched, the sequencer runs |
 | **Pattern** | Control (Orange) | Picks the pattern for each new bar in place of the Chain: 0 to 0.25 is A, 0.25 to 0.5 is B, then C, and D from 0.75 up |
 
 ## Outputs
@@ -99,6 +100,14 @@ An accented step raises the velocity of every lane that plays on it, part of the
 A lane left at its default follows the bar. Give a lane its own length and it loops that many steps however long the bar is. A lane 3 steps long against a 16-step bar plays a figure of three over a bar of four, and the two only line up again after 3 bars. Two lanes of 3 and 5 against 16 meet the bar again after 15 bars.
 
 The bar and every lane count the same clock, so they drift against each other only on purpose. **Reset** starts them all together again.
+
+### Stop and start
+
+Patch a gate into **Run** to pause the pattern in place. While Run is low, clocks are ignored and the sequencer stays on its current step. A step that played just before Run fell still plays out its ratchet. When Run comes back high, the next clock plays the step after the one it stopped on. Hold Run low for whole bars and the Chain picks up as though those bars never came.
+
+The [Clock](../modulation/clock.md)'s **Run** and **Reset** outputs are made for this. Patch them into **Run** and **Reset** and the pattern stops with the Clock and starts again from step 1 when it does, including when the Clock follows a DAW's MIDI clock and you press Play there.
+
+To let a song's last chord ring with no more hits, patch an [Arranger](./arranger.md) lane's **Gate** into **Run** and bring the lane to zero for the closing bars.
 
 ## How patches store it
 

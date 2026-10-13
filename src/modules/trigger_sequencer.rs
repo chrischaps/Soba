@@ -181,9 +181,10 @@ impl Lane {
 /// # Ports
 ///
 /// **Inputs:** Clock (each rising edge plays the next step), Reset (the next
-/// clock plays step 1 of the chain's first pattern) and Pattern (CV that
-/// picks the pattern for each new bar, in four equal zones of 0 to 1, in
-/// place of the Chain).
+/// clock plays step 1 of the chain's first pattern), Run (steps advance only
+/// while it's high; unpatched, it runs) and Pattern (CV that picks the
+/// pattern for each new bar, in four equal zones of 0 to 1, in place of the
+/// Chain).
 ///
 /// **Outputs:** Accent (a gate on accented steps), then a Gate and a Vel for
 /// each lane. Vel holds the last hit's velocity, raised on accented steps.
@@ -225,7 +226,8 @@ pub struct TriggerSequencer {
 impl TriggerSequencer {
     pub const PORT_CLOCK: usize = 0;
     pub const PORT_RESET: usize = 1;
-    pub const PORT_PATTERN: usize = 2;
+    pub const PORT_RUN: usize = 2;
+    pub const PORT_PATTERN: usize = 3;
     /// Output index of Accent. Lane `l`'s Gate is `1 + 2l`, its Vel `2 + 2l`.
     pub const OUT_ACCENT: usize = 0;
 
@@ -265,6 +267,8 @@ impl TriggerSequencer {
                 .describe("Each rising edge plays the next step; patch a Clock gate here"),
             PortDefinition::input_with_default("reset", "Reset", SignalType::Gate, 0.0)
                 .describe("A rising edge starts over: the next clock plays step 1 of the chain's first pattern"),
+            PortDefinition::input_with_default("run", "Run", SignalType::Gate, 1.0)
+                .describe("Steps only advance while high; runs when unpatched"),
             PortDefinition::input_with_default("pattern", "Pattern", SignalType::Control, 0.0)
                 .describe("Picks the pattern for each new bar in place of the Chain: 0 to 0.25 is A, then B, C and D"),
             PortDefinition::output("accent", "Accent", SignalType::Gate)
@@ -503,6 +507,7 @@ impl DspModule for TriggerSequencer {
         context: &ProcessContext,
     ) {
         let sample = |port: usize, i: usize| inputs.get(port).and_then(|buf| buf.samples.get(i).copied()).unwrap_or(0.0);
+        let run_in = connected_input(inputs, Self::PORT_RUN);
         let pattern_in = connected_input(inputs, Self::PORT_PATTERN);
         self.pattern_cv = pattern_in.is_some();
 
@@ -513,6 +518,7 @@ impl DspModule for TriggerSequencer {
             let reset_high = sample(Self::PORT_RESET, i) > Self::GATE_THRESHOLD;
             let reset_rising = reset_high && !self.prev_reset;
             self.prev_reset = reset_high;
+            let running = run_in.is_none_or(|buf| buf.samples.get(i).copied().unwrap_or(1.0) > Self::GATE_THRESHOLD);
             let cv = pattern_in.map(|buf| buf.samples.get(i).copied().unwrap_or(0.0));
 
             if reset_rising {
@@ -524,12 +530,16 @@ impl DspModule for TriggerSequencer {
                 }
             }
 
+            // Every clock edge measures the step, and ends the last step's
+            // ratchets, running or not. Stopped, the sequencer stays on its
+            // step and plays nothing
             if clock_rising {
                 self.timer.clock();
-                // A step's ratchets end with it
                 for lane in &mut self.lanes {
                     lane.ratchets_left = 0;
                 }
+            }
+            if clock_rising && running {
                 self.advance(params, cv);
                 let step_samples = self.step_samples(context);
                 self.play_step(params, step_samples);
@@ -661,6 +671,12 @@ mod tests {
     /// 1 ms pulses, with optional reset times and Pattern CV, and returns
     /// every output.
     fn run(params: &[f32], ms: usize, period: usize, resets: &[usize], pattern_cv: Option<f32>) -> Vec<Vec<f32>> {
+        run_gated(params, ms, period, resets, pattern_cv, &[])
+    }
+
+    /// As [`run`], with Run patched and low over each `stops` range of ms.
+    /// With no stops, Run is left unpatched.
+    fn run_gated(params: &[f32], ms: usize, period: usize, resets: &[usize], pattern_cv: Option<f32>, stops: &[std::ops::Range<usize>]) -> Vec<Vec<f32>> {
         let mut seq = TriggerSequencer::new();
         seq.prepare(RATE, ms);
         let mut clock = SignalBuffer::gate(ms);
@@ -671,6 +687,16 @@ mod tests {
         for &t in resets {
             reset.samples[t] = 1.0;
         }
+        let run_gate = if stops.is_empty() {
+            SignalBuffer::unconnected(ms, SignalType::Gate)
+        } else {
+            let mut gate = SignalBuffer::gate(ms);
+            gate.samples.fill(1.0);
+            for stop in stops {
+                gate.samples[stop.clone()].fill(0.0);
+            }
+            gate
+        };
         let pattern = match pattern_cv {
             Some(cv) => {
                 let mut pattern = SignalBuffer::control(ms);
@@ -680,7 +706,7 @@ mod tests {
             None => SignalBuffer::unconnected(ms, SignalType::Control),
         };
         let mut outputs: Vec<SignalBuffer> = (0..1 + 2 * LANES).map(|_| SignalBuffer::control(ms)).collect();
-        seq.process(&[&clock, &reset, &pattern], &mut outputs, params, &ProcessContext::new(RATE, ms));
+        seq.process(&[&clock, &reset, &run_gate, &pattern], &mut outputs, params, &ProcessContext::new(RATE, ms));
         outputs.into_iter().map(|b| b.samples).collect()
     }
 
@@ -882,6 +908,53 @@ mod tests {
         let out = run(&params, 1000, 100, &[550], None);
         assert_eq!(rises(&out[1]), [0, 600]);
         assert_eq!(rises(&out[3]), [400]);
+    }
+
+    #[test]
+    fn run_low_holds_the_playhead_and_fires_nothing() {
+        let mut params = defaults();
+        for step in 0..4 {
+            set_step(&mut params, 0, 0, step, hit(100));
+            set_step(&mut params, 1, 1, step, hit(100));
+        }
+        set_chain(&mut params, "AB");
+        params[TriggerSequencer::PARAM_STEPS] = 4.0;
+        // A's bar, then Run is low for a whole bar, so B's bar comes after it
+        // as though those four clocks had never come
+        let out = run_gated(&params, 1600, 100, &[], None, &[400..800]);
+        assert_eq!(rises(&out[1]), [0, 100, 200, 300, 1200, 1300, 1400, 1500]);
+        assert_eq!(rises(&out[3]), [800, 900, 1000, 1100]);
+        assert!(out[0].iter().all(|&g| g == 0.0), "no accents were written");
+    }
+
+    #[test]
+    fn run_low_mid_bar_resumes_on_the_step_it_stopped_at() {
+        let mut params = defaults();
+        set_step(&mut params, 0, 0, 2, hit(100));
+        params[TriggerSequencer::PARAM_STEPS] = 4.0;
+        // Steps 1 and 2 play, three clocks are skipped, then step 3 plays
+        let out = run_gated(&params, 1000, 100, &[], None, &[150..450]);
+        assert_eq!(rises(&out[1]), [500, 900]);
+    }
+
+    #[test]
+    fn a_stop_lets_the_last_step_finish_its_ratchet() {
+        let mut params = defaults();
+        set_step(&mut params, 0, 0, 1, Step { ratchet: 4, ..hit(100) });
+        params[TriggerSequencer::PARAM_STEPS] = 4.0;
+        // Step 2's roll plays out in full, though Run drops halfway through
+        let out = run_gated(&params, 600, 100, &[], None, &[150..600]);
+        assert_eq!(rises(&out[1]), [100, 125, 150, 175]);
+    }
+
+    #[test]
+    fn reset_while_stopped_starts_over_when_run_comes_back() {
+        let mut params = defaults();
+        set_step(&mut params, 0, 0, 0, hit(100));
+        params[TriggerSequencer::PARAM_STEPS] = 4.0;
+        // Stopped on step 3, reset, and the first clock back plays step 1
+        let out = run_gated(&params, 1000, 100, &[350], None, &[250..600]);
+        assert_eq!(rises(&out[1]), [0, 600]);
     }
 
     #[test]
