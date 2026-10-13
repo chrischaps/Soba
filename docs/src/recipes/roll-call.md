@@ -59,7 +59,7 @@ The rim plays one quiet hit every 3 steps, and the cowbell one every 5, three ti
 |--------|----------|
 | [Clock](../modules/modulation/clock.md) | **BPM** 104, **Div** 1/16, **Gate** 50%, **Swing** 57% |
 | [Trigger Sequencer](../modules/utilities/trigger-sequencer.md) | **Steps** 16, **Gate** 50%, **Accent** 35%. Chain `C A A B`. Rim lane 3 steps long, cowbell lane 5 |
-| [Drum](../modules/sources/drum.md) (kick) | **Type** Kick, **Tune** -1 st, **Decay** 45%, **Tone** 35%, **Snap** 55%, **Level** 85% |
+| [Drum](../modules/sources/drum.md) (kick) | **Type** Kick, **Tune** -1 st, **Decay** 75%, **Tone** 35%, **Snap** 55%, **Level** 85% |
 | [Drum](../modules/sources/drum.md) (snare) | **Type** Snare, **Tune** +1 st, **Decay** 40%, **Tone** 55%, **Snap** 65%, **Level** 80% |
 | [Drum](../modules/sources/drum.md) (closed hat) | **Type** Closed Hat, **Decay** 35%, **Tone** 60%, **Snap** 40%, **Level** 70% |
 | [Drum](../modules/sources/drum.md) (open hat) | **Type** Open Hat, **Decay** 55%, **Tone** 60%, **Snap** 45%, **Level** 60% |
@@ -68,7 +68,7 @@ The rim plays one quiet hit every 3 steps, and the cowbell one every 5, three ti
 | [Drum](../modules/sources/drum.md) (cowbell) | **Type** Cowbell, **Decay** 35%, **Tone** 50%, **Snap** 50%, **Level** 50% |
 | [Drum](../modules/sources/drum.md) (cymbal) | **Type** Cymbal, **Decay** 70%, **Tone** 55%, **Snap** 50%, **Level** 50% |
 | [Mixer](../modules/utilities/mixer.md) (skins) | Snare 75% at R 10, tom 70% at L 30, rim 50% at R 45, cowbell 45% at L 45; the kick on **Return L** |
-| [Mixer](../modules/utilities/mixer.md) (metal) | Closed hat 55% and open hat 50% at R 30, cymbal 45% at L 25; the skins Mixer on **Chain In**; **Master** +4.2 dB |
+| [Mixer](../modules/utilities/mixer.md) (metal) | Closed hat 55% and open hat 50% at R 30, cymbal 45% at L 25; the skins Mixer on **Chain In**; **Master** +3.8 dB |
 | [Reverb](../modules/effects/reverb.md) | **Size** 30%, **Decay** 0.6 s, **Damp** 60%, **PreD** 8 ms, **Mix** 14% |
 | [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |
 
@@ -91,6 +91,8 @@ Accents raise the velocity of every hit on beats 1 to 4 a third of the way to fu
 ### Two mixers
 
 Five drums go to the first Mixer: the kick on its **Return L**, which puts it in the centre, and the snare, tom, rim and cowbell on its four channels. That Mixer's **Chain Out** comes into the second one's **Chain In**, on one cable, and the second adds the hats and the cymbal and sends the whole kit through a small room.
+
+The kick's **Decay** is long, at 75%, and that is what sets the kit's level. The kick is most of the kit's loudness, and its loudest instant is the first few milliseconds of each hit. A longer body adds loudness without raising that peak, so the kit plays as loud as the other examples and its peaks still stay under the Output's limiter. At 45% it had to play nearly 3 dB quieter.
 
 ## Try this
 

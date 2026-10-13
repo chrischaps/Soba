@@ -11,7 +11,7 @@ To learn how drums are made, build them like this. To make a beat quickly, use t
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**.*
 
 ![The Backbeat patch](../images/recipe-backbeat.png)
-*One lane per drum, from the top: kick, snare, hi-hats, toms, crash. The clock is at the top left. The Clock Divider that schedules the fill sits lower down in the same column. Kick and snare mix, compress and land on a drum bus at the top right. Below and to the right, the main Mixer brings the whole kit together, shares one small room among every drum, and feeds the output.*
+*One lane per drum, from the top: kick, snare, hi-hats, toms, crash. The clock is at the top left. The Clock Divider that schedules the fill sits lower down in the same column. Kick and snare mix, compress and land on a drum bus at the top right. Below and to the right, the main Mixer brings the whole kit together, shares one small room among every drum, and feeds the output through a Tape.*
 
 ## What it teaches
 
@@ -42,7 +42,7 @@ crash    on the downbeat after each fill
 | [Step Sequencer](../modules/utilities/sequencer.md) ×4 (kick, snare, hats, toms) | **Steps** 16, **Gate** 99%, **Gate of** 100 ms. Steps as in the pattern above |
 | [Oscillator](../modules/sources/oscillator.md) (kick) | **Wave** Sine, **Oct** -2, **Semi** -3 (55 Hz), **Exp FM** 2.6 oct |
 | [ADSR Envelope](../modules/modulation/adsr.md) (kick pitch) | **Atk** 1 ms, **Dec** 45 ms, **Sus** 0%, **Rel** 45 ms, **Vel** 30% |
-| [ADSR Envelope](../modules/modulation/adsr.md) (kick level) | **Atk** 1 ms, **Dec** 450 ms, **Sus** 0%, **Rel** 450 ms, **Vel** 40% |
+| [ADSR Envelope](../modules/modulation/adsr.md) (kick level) | **Atk** 1 ms, **Dec** 700 ms, **Sus** 0%, **Rel** 700 ms, **Vel** 40% |
 | [Oscillator](../modules/sources/oscillator.md) (snare body) | **Wave** Tri, **Oct** -1, **Semi** +7 (196 Hz), **Exp FM** 0.6 oct |
 | [ADSR Envelope](../modules/modulation/adsr.md) (snare body) | **Dec** 90 ms, **Rel** 90 ms, **Vel** 85% |
 | [Noise](../modules/sources/noise.md) + [SVF Filter](../modules/filters/svf-filter.md) (snare) | **Level** 0%; HighPass, **Cutoff** 1.8 kHz, **Res** 25% |
@@ -60,9 +60,10 @@ crash    on the downbeat after each fill
 | [Mix](../modules/utilities/mix.md) (kick and snare) | **Level 1** 60% kick, **Level 2** 40% snare body, **Level 3** 45% snare noise |
 | [Compressor](../modules/effects/compressor.md) | **Thresh** -16 dB, **Ratio** 3:1, **Atk** 8 ms, **Rel** 120 ms, **Mkup** 2 dB |
 | [Mixer](../modules/utilities/mixer.md) (drum bus) | **Level 1** 100%, centred; **Send 1** 15%; **Master** +3 dB |
-| [Mixer](../modules/utilities/mixer.md) (main) | Hats 44% at R 30 / R 35, toms 40%, crash 36% at L 40; every **Send** 25%; **Master** −1.4 dB |
+| [Mixer](../modules/utilities/mixer.md) (main) | Hats 44% at R 30 / R 35, toms 40%, crash 36% at L 40; every **Send** 25%; **Master** +1.5 dB |
 | [Reverb](../modules/effects/reverb.md) | **Size** 35%, **Decay** 0.9 s, **Damp** 55%, **PreD** 2.5 ms, **Mix** 100% |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |
+| [Tape](../modules/effects/tape.md) | **Speed** 15 ips, **Sat** 10%, **Age** 0%, **Hiss** 0%, **Wow** 0%, **Flut** 0%, **Width** 0% |
+| [Audio Output](../modules/output/audio-output.md) | **Vol** 100% |
 
 All drum envelopes have a 1 ms attack and 0% sustain. The sequencers' gates are a fixed 99 ms (**Gate of** 100 ms), so each envelope's **Release** matches its **Decay**: the sound falls at the same rate after the gate closes.
 
@@ -137,7 +138,8 @@ One oscillator plays all four toms. The sequencer's **Pitch** picks the drum, wi
 [Drum Bus Mixer Chain Out] ──> [Main Mixer Chain In]
 [Main Mixer Send L/R] ──> [Reverb In L/R]
 [Reverb Out L/R] ──> [Main Mixer Return L/R]
-[Main Mixer Out L/R] ──> [Audio Output Left/Right]
+[Main Mixer Out L/R] ──> [Tape In L/R]
+[Tape Out L/R] ──> [Audio Output Left/Right]
 ```
 
 Kick and snare are added on a [Mix](../modules/utilities/mix.md) and go through a compressor, which glues them together. The compressor's 8 ms attack lets each hit's crack through before it starts to work. Its output is the only channel of a small drum-bus Mixer, centred. A centred channel is 3 dB down on each side, so the bus's **Master** at +3 dB gives it back. The bus's **Chain Out** carries its mix and its send into the main Mixer's **Chain In** on one cable. Hats, toms and crash have the main Mixer's four channels, each panned to its place.
@@ -148,9 +150,13 @@ The reverb comes back on the main Mixer's **Return**. That closes a loop, from t
 
 The hats, toms and crash have exactly the balance they had when the whole second Mixer ran through the reverb at 20%: faders at 0.8 of their old level keep the dry, and a 25% send after them keeps the wet.
 
+The whole kit goes to tape on its way out. Wow, flutter, age and hiss are all at zero, which leaves only the saturation, at 10%. The first few milliseconds of a hit are far louder than the rest of it, and the tape rounds off their tops, as a machine does when a kit is recorded hot. That takes about 3 dB off the peaks and hardly touches anything quieter, so the kit comes up to the level of the other examples and its peaks still stay under the Output's limiter. The kick's level envelope rings for 700 ms for the same reason: a longer body adds loudness under the same peak. A compressor on the mix can't do this job. One slow enough to let the crack through turns down the body of each hit and leaves the peak where it was.
+
 ## Variations
 
 **Tighter or looser kick.** Shorten the kick pitch envelope's **Dec** to 25 ms for a clicky dance kick, or lengthen it to 90 ms for a boomy one. Raise the level envelope's **Dec** to 900 ms for an 808-style tail.
+
+**Hotter tape.** Raise the Tape's **Sat** to 30%. The level hardly moves, because the tape makes up the drive it adds, but the kit sounds recorded harder: the hits rounder and denser, and the hats sinking a little under each kick.
 
 **More snare.** Turn the snare filter's **Cutoff** down to 900 Hz for a fatter, rougher snare, or set it to BandPass at 4 kHz for a thin, crisp one.
 

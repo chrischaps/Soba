@@ -363,7 +363,7 @@
         {
           "name": "Decay",
           "type": "Number",
-          "value": 0.45
+          "value": 0.7
         },
         {
           "name": "Sustain",
@@ -373,7 +373,7 @@
         {
           "name": "Release",
           "type": "Number",
-          "value": 0.45
+          "value": 0.7
         },
         {
           "name": "Attack Curve",
@@ -2333,7 +2333,7 @@
         {
           "name": "Master",
           "type": "Number",
-          "value": -1.4
+          "value": 1.5
         }
       ]
     },
@@ -2341,7 +2341,7 @@
       "id": 35,
       "module_id": "fx.reverb",
       "position": [
-        3398.0,
+        3656.0,
         1396.0
       ],
       "parameters": [
@@ -2383,17 +2383,72 @@
       ]
     },
     {
-      "id": 36,
-      "module_id": "output.audio",
+      "id": 38,
+      "module_id": "fx.tape",
       "position": [
         3398.0,
         1100.0
       ],
       "parameters": [
         {
+          "name": "Wow",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Flutter",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Saturation",
+          "type": "Number",
+          "value": 0.1
+        },
+        {
+          "name": "Age",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Hiss",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Mix",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Speed",
+          "type": "Select",
+          "value": 1
+        },
+        {
+          "name": "Stop Time",
+          "type": "Number",
+          "value": 1.0
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "module_id": "output.audio",
+      "position": [
+        3656.0,
+        1100.0
+      ],
+      "parameters": [
+        {
           "name": "Volume",
           "type": "Number",
-          "value": 0.8
+          "value": 1.0
         },
         {
           "name": "Limiter",
@@ -2784,11 +2839,23 @@
     {
       "from_node": 34,
       "from_port": "Out L",
+      "to_node": 38,
+      "to_port": "In L"
+    },
+    {
+      "from_node": 38,
+      "from_port": "Out L",
       "to_node": 36,
       "to_port": "Left"
     },
     {
       "from_node": 34,
+      "from_port": "Out R",
+      "to_node": 38,
+      "to_port": "In R"
+    },
+    {
+      "from_node": 38,
       "from_port": "Out R",
       "to_node": 36,
       "to_port": "Right"
@@ -2905,7 +2972,7 @@
         1042.0
       ],
       "size": [
-        956.0,
+        1214.0,
         735.0
       ],
       "color": "cyan"

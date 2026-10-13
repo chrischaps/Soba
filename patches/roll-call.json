@@ -3048,7 +3048,7 @@
         {
           "name": "Decay",
           "type": "Number",
-          "value": 0.45
+          "value": 0.75
         },
         {
           "name": "Tone",
@@ -3623,7 +3623,7 @@
         {
           "name": "Master",
           "type": "Number",
-          "value": 4.2
+          "value": 3.8
         }
       ]
     },

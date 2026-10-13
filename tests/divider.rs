@@ -8,7 +8,9 @@
 //! Since the snare joined the kit's room (#100), its reverb tail rings into
 //! the step the fill is detected on. The renders take the snare out of the
 //! room again, and time the room's return exactly, which makes the mix the
-//! fixture's, the old one.
+//! fixture's, the old one. Since the kit came up to the house level (#174),
+//! its kick rings into that step too, and the bus goes to tape: the renders
+//! put the kick, the tape and the levels back as well.
 
 use std::path::{Path, PathBuf};
 
@@ -16,6 +18,9 @@ use soba::engine::read_wav;
 
 /// A sixteenth at Backbeat's 96 BPM, at the render tool's 48 kHz.
 const STEP: usize = 7500;
+
+/// Backbeat's kick level envelope, by its id in the patch.
+const KICK_LEVEL_ENVELOPE: u64 = 4;
 
 /// Long enough for three fills (bars 1, 5 and 9) and the crash after the
 /// third.
@@ -63,7 +68,10 @@ fn fill_bars(steps: &[f32]) -> Vec<usize> {
 /// Backbeat with its divider's Offset set, and its kick and snare kept out
 /// of the room: the drum-bus Mixer chained into the main one sends nothing. The
 /// reverb returns through a loop, a 256-sample block late at 48 kHz, so its
-/// pre-delay gives back exactly that much of the fixture's 8 ms.
+/// pre-delay gives back exactly that much of the fixture's 8 ms. The kick's
+/// level envelope falls in 450 ms, the main Mixer's Master and the Output's
+/// Volume are the fixture's -1.4 dB and 80% between them, and the Tape is
+/// taken out, its cables joined straight through.
 fn backbeat(offset: f32, path: &Path) -> PathBuf {
     let mut patch: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(repo("patches/backbeat.json")).unwrap()).unwrap();
     let chained = patch["connections"]
@@ -73,7 +81,34 @@ fn backbeat(offset: f32, path: &Path) -> PathBuf {
         .find(|c| c["to_port"] == "Chain In")
         .map(|c| c["from_node"].clone())
         .expect("the kick and snare's drum bus chains into the main Mixer");
+    let main = patch["connections"].as_array().unwrap().iter().find(|c| c["to_port"] == "Chain In").unwrap()["to_node"].clone();
+    let tape = patch["nodes"].as_array().unwrap().iter().find(|n| n["module_id"] == "fx.tape").expect("the kit goes to tape")["id"].clone();
+    let connections = patch["connections"].as_array_mut().unwrap();
+    let (into_tape, rest): (Vec<_>, Vec<_>) = connections.drain(..).partition(|c| c["to_node"] == tape);
+    let (out_of_tape, rest): (Vec<_>, Vec<_>) = rest.into_iter().partition(|c| c["from_node"] == tape);
+    connections.extend(rest);
+    for out in out_of_tape {
+        let side = out["from_port"].as_str().unwrap().replace("Out", "In");
+        let source = into_tape.iter().find(|c| c["to_port"] == side.as_str()).unwrap();
+        let mut through = out.clone();
+        through["from_node"] = source["from_node"].clone();
+        through["from_port"] = source["from_port"].clone();
+        connections.push(through);
+    }
+    let set = |node: &mut serde_json::Value, name: &str, value: f64| {
+        node["parameters"].as_array_mut().unwrap().iter_mut().find(|p| p["name"] == name).unwrap()["value"] = value.into();
+    };
     for node in patch["nodes"].as_array_mut().unwrap() {
+        if node["id"] == KICK_LEVEL_ENVELOPE {
+            set(node, "Decay", 0.45);
+            set(node, "Release", 0.45);
+        }
+        if node["id"] == main {
+            set(node, "Master", -1.4);
+        }
+        if node["module_id"] == "output.audio" {
+            set(node, "Volume", 0.8);
+        }
         let (divider, kick_and_snare) = (node["module_id"] == "util.divider", node["id"] == chained);
         if node["module_id"] == "fx.reverb" {
             let pre_delay = node["parameters"].as_array_mut().unwrap().iter_mut().find(|p| p["name"] == "Pre-Delay").unwrap();

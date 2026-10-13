@@ -1,6 +1,6 @@
 # Drum Machine
 
-A drum machine in 14 modules: one Clock, five sequencer lanes, and a [Drum](../modules/sources/drum.md) voice on each lane. It plays a swung groove with a kick, a snare with ghost notes, closed and open hats, and three tuned toms. [Backbeat](./backbeat.md) builds a kit like this from oscillators, noise and envelopes, in 35 modules and 66 cables. Here each drum is one module, and the whole patch has 31 cables. It plays itself; press Play and let it run.
+A drum machine in 14 modules: one Clock, five sequencer lanes, and a [Drum](../modules/sources/drum.md) voice on each lane. It plays a swung groove with a kick, a snare with ghost notes, closed and open hats, and three tuned toms. [Backbeat](./backbeat.md) builds a kit like this from oscillators, noise and envelopes, in 37 modules and 67 cables. Here each drum is one module, and the whole patch has 31 cables. It plays itself; press Play and let it run.
 
 > **Load it:** choose **📚 Examples → Drum Machine** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/drum-machine.json`](https://github.com/chrischaps/Soba/blob/master/patches/drum-machine.json).
@@ -37,12 +37,12 @@ toms     . . . . . G . . . . . . . D . A#
 |--------|----------|
 | [Clock](../modules/modulation/clock.md) | **BPM** 100, **Div** 1/16, **Gate** 50%, **Swing** 56% |
 | [Step Sequencer](../modules/utilities/sequencer.md) ×5 (kick, snare, closed hat, open hat, toms) | **Steps** 16, **Gate** 50%, **Gate of** Step. Steps as in the pattern above |
-| [Drum](../modules/sources/drum.md) (kick) | **Type** Kick, **Tune** -1 st, **Decay** 45%, **Tone** 35%, **Snap** 55%, **Level** 85% |
+| [Drum](../modules/sources/drum.md) (kick) | **Type** Kick, **Tune** -1 st, **Decay** 80%, **Tone** 35%, **Snap** 55%, **Level** 85% |
 | [Drum](../modules/sources/drum.md) (snare) | **Type** Snare, **Tune** +1 st, **Decay** 40%, **Tone** 55%, **Snap** 65%, **Level** 80% |
 | [Drum](../modules/sources/drum.md) (closed hat) | **Type** Closed Hat, **Decay** 35%, **Tone** 60%, **Snap** 40%, **Level** 70% |
 | [Drum](../modules/sources/drum.md) (open hat) | **Type** Open Hat, **Decay** 55%, **Tone** 60%, **Snap** 45%, **Level** 60% |
 | [Drum](../modules/sources/drum.md) (toms) | **Type** Tom, **Decay** 45%, **Tone** 30%, **Snap** 40%, **Level** 80% |
-| [Mixer](../modules/utilities/mixer.md) | Snare 80% centre, closed hat 55% and open hat 50% at R 25, toms 70% at L 30; the kick on **Return L**; **Master** +3.6 dB |
+| [Mixer](../modules/utilities/mixer.md) | Snare 80% centre, closed hat 55% and open hat 50% at R 25, toms 70% at L 30; the kick on **Return L**; **Master** +3.4 dB |
 | [Reverb](../modules/effects/reverb.md) | **Size** 30%, **Decay** 0.6 s, **Damp** 60%, **PreD** 8 ms, **Mix** 14% |
 | [Audio Output](../modules/output/audio-output.md) | **Vol** 80% |
 
@@ -63,7 +63,9 @@ A drum only cares when its trigger rises, so the length of the gate doesn't matt
 
 ### The kick and snare
 
-The kick hits on 1, the last sixteenth of beat 2 and the *and* of 3. Each hit drops two and a half octaves to 45 Hz, most of the way in the first 20 ms. **Snap** at 55% sets how far it falls and how hard the beater clicks. **Tone** at 35% rounds the sine off a little, so the kick carries on small speakers.
+The kick hits on 1, the last sixteenth of beat 2 and the *and* of 3. Each hit drops two and a half octaves to 45 Hz, most of the way in the first 20 ms. **Snap** at 55% sets how far it falls and how hard the beater clicks. **Tone** at 35% rounds the sine off a little, so the kick carries on small speakers. **Decay** at 80% lets the body ring for over a second, so the kick on the *and* of 3 lands while the one before it is still sounding, 20 dB down.
+
+That long body is what lets the kit play as loud as the other examples. The kick is nearly all of the kit's loudness, and its loudest instant is the first few milliseconds of the drop. A longer body adds loudness without raising that peak. With the kick at 45%, the kit had to play 3 dB quieter to keep its peaks under the Output's limiter. A compressor on the mix doesn't help: one slow enough to let the crack through turns the body down and leaves the peak where it was.
 
 The snare's backbeats on 2 and 4 play at full velocity. Its three ghost notes play at 34 to 46 out of 127, about a third. At that accent the Drum plays them about 10 dB down and darker, with less of the wires, so they sit under the groove like a drummer's left hand.
 
@@ -99,7 +101,7 @@ Snare, hats and toms take the Mixer's four channels. The kick comes in on **Retu
 
 **The 808 cowbell.** Set the toms' **Type** to **Cowbell**. The tom lane's three notes become a cowbell figure.
 
-**An 808 boom.** Set the kick's **Decay** to 85%, **Tone** to 10% and **Snap** to 30%. The kick becomes a long, pure sub that rings into the next hit. Tune it to the key of whatever plays over it.
+**An 808 boom.** Set the kick's **Decay** to 95%, **Tone** to 10% and **Snap** to 30%. The kick becomes a long, pure sub that rings into the next hit. Tune it to the key of whatever plays over it.
 
 **Let the hat breathe.** Turn off the closed hat's step 8. The open hat on 7 now rings until step 9.
 

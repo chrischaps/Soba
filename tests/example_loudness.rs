@@ -53,12 +53,6 @@ const SONGS: &[(&str, f32, f32)] = &[("from-one-sine.json", 128.0, 112.0), ("cla
 
 /// Examples that sit below the house level, and why.
 const QUIETER: &[(&str, &str)] = &[
-    (
-        "backbeat.json",
-        "its drums peak 20 dB above their loudness, and already come within a dB of the ceiling; it can't come up without squashing them",
-    ),
-    ("drum-machine.json", "raw drums: brought up until their peaks reach the ceiling, and no further"),
-    ("roll-call.json", "raw drums: brought up until their peaks reach the ceiling, and no further"),
     ("live-looper.json", "it plays what you play into it, as loud as you play it"),
 ];
 
