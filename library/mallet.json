@@ -255,6 +255,12 @@
           "to_port": "Velocity"
         },
         {
+          "from_node": 700,
+          "from_port": "Velocity",
+          "to_node": 4,
+          "to_port": "Velocity"
+        },
+        {
           "from_node": 1,
           "from_port": "Out",
           "to_node": 5,

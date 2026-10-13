@@ -101,7 +101,7 @@ A light chorus widens the piano into stereo, as two microphones would a guitar. 
 
 **A slower hand.** Raise **Strum** to 50 ms for a lazy strum. At 80 ms with **Strum dir** on Up, a chord rolls upward like a harp.
 
-**Another instrument.** Swap the Electric Piano for the Library's Mallet or String Machine. The strum works on any voice. **Taper** shows most on a voice that gets quieter as its velocity drops, as the Electric Piano does.
+**Another instrument.** Swap the Electric Piano for the Library's Mallet or String Machine. The strum works on any voice. **Taper** shows most on a voice that gets quieter as its velocity drops, as the Electric Piano and the Mallet do.
 
 ## Related
 

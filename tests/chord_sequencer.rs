@@ -190,13 +190,32 @@ fn a_strummed_tie_strikes_nothing_again() {
 }
 
 #[test]
+fn a_softer_touch_rings_quieter() {
+    // The ring past the strike, played at 100, 63 and 25. A struck voice
+    // follows the touch as a player expects: a quarter of the velocity is
+    // several dB down, not a shade. (The Mallet's filter rings into its
+    // resonance saturator, which levels the ring however hard the bar is
+    // struck, so its velocity reaches the ring's VCA too)
+    for entry in struck_voices() {
+        let ring = |velocity: f32| {
+            let mut params = c_major(1.0);
+            params.push(("Step 1 Velocity", ParameterValue::Number(velocity)));
+            let audio = render(&played(entry, &params), 0.6);
+            amp_to_db(rms(&audio[(0.1 * RATE) as usize..(0.5 * RATE) as usize]))
+        };
+        let full = ring(100.0);
+        let [mid, quarter] = [63.0, 25.0].map(|velocity| full - ring(velocity));
+        assert!(mid > 1.5, "{}: velocity 63 only {mid:.1} dB quieter", entry.name);
+        assert!(quarter > 4.0 && quarter < 18.0, "{}: velocity 25 {quarter:.1} dB quieter", entry.name);
+    }
+}
+
+#[test]
 fn a_tapered_strum_brushes_the_last_string() {
     // Strummed up with Taper 75%: C, struck first, is as loud as ever, E
     // softer, and G, struck last at a quarter of the step's velocity,
-    // softer still. (The Mallet's velocity only reaches its strike, and its
-    // ring barely follows it: a quarter of the velocity is 1.5 dB. The
-    // Electric Piano's level follows the touch, so it's the one to hear)
-    for entry in struck_voices().filter(|g| g.name == "Electric Piano") {
+    // softer still
+    for entry in struck_voices() {
         let even = render(&played(entry, &strummed(80.0)), 0.6);
         let mut params = strummed(80.0);
         params.push(("Strum Taper", ParameterValue::Number(75.0)));
