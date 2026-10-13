@@ -683,6 +683,8 @@ impl SynthNodeData {
     /// (the value is controlled externally).
     /// If `signal_value` is Some, the knob displays that value instead of the stored value,
     /// and if `value_text` is Some, it reads that instead of its value.
+    /// Returns the response of the control drawn, if it is one (a knob or a
+    /// checkbox), so the caller can hang the right-click menu on it.
     #[allow(clippy::too_many_arguments)]
     fn render_knob_for_value(
         ui: &mut egui::Ui,
@@ -699,12 +701,12 @@ impl SynthNodeData {
         _midi_config: &KnobMidiConfig,
         accent: Color32,
         style: KnobStyle,
-    ) {
+    ) -> Option<egui::Response> {
         // Dim the knob if it's connected (externally controlled)
         let alpha = if is_connected { 0.5 } else { 1.0 };
 
         match value {
-            SynthValueType::Port => {}
+            SynthValueType::Port => None,
             SynthValueType::Number { value: val, spec } => {
                 // Range, default, unit and curve all come from the DSP definition
                 let config = KnobConfig {
@@ -728,14 +730,14 @@ impl SynthNodeData {
                 let mut display_val = signal_value
                     .map(|sv| sv.clamp(spec.min, spec.max))
                     .unwrap_or(original_val);
-                ui.scope(|ui| {
+                let response = ui.scope(|ui| {
                     ui.style_mut().visuals.widgets.inactive.fg_stroke.color =
                         ui.style().visuals.widgets.inactive.fg_stroke.color.gamma_multiply(alpha);
                     if is_connected {
                         ui.disable();
                     }
-                    knob(ui, &mut display_val, &config);
-                });
+                    knob(ui, &mut display_val, &config)
+                }).inner;
                 // Emit response if value changed and not connected
                 let tolerance = (spec.max - spec.min).abs() * 1e-6;
                 if !is_connected && (display_val - original_val).abs() > tolerance {
@@ -745,17 +747,19 @@ impl SynthNodeData {
                         value: display_val,
                     }));
                 }
+                Some(response)
             }
             SynthValueType::Toggle { value: val, .. } => {
                 let original_val = *val;
                 let mut display_val = original_val;
-                ui.vertical(|ui| {
+                let response = ui.vertical(|ui| {
                     if is_connected {
                         ui.disable();
                     }
-                    ui.checkbox(&mut display_val, "");
+                    let response = ui.checkbox(&mut display_val, "");
                     ui.label(RichText::new(label).small());
-                });
+                    response
+                }).inner;
                 if !is_connected && display_val != original_val {
                     responses.push(NodeResponse::User(SynthResponse::ParameterChanged {
                         node_id,
@@ -763,6 +767,7 @@ impl SynthNodeData {
                         value: if display_val { 1.0 } else { 0.0 },
                     }));
                 }
+                Some(response)
             }
             SynthValueType::Select { value: val, options, .. } => {
                 // Display-only for now - selections are better handled inline
@@ -770,6 +775,7 @@ impl SynthNodeData {
                     ui.label(RichText::new(options.get(*val).map(|s| s.as_str()).unwrap_or("?")).small());
                     ui.label(RichText::new(label).small().weak());
                 });
+                None
             }
         }
     }
@@ -873,8 +879,9 @@ impl SynthNodeData {
                     KnobPlace::Module => &knob_param.label,
                 };
 
-                // Render the knob based on value type
-                let knob_response = ui.scope(|ui| {
+                // Render the knob based on value type, under an id of its
+                // own so its right-click menu stays open as the node changes
+                let knob_response = ui.push_id(("knob", node_id, current_param_index, place.is_face()), |ui| {
                     ui.vertical(|ui| {
                         ui.set_min_width(knob_size + 8.0 * zoom);
 
@@ -973,17 +980,22 @@ impl SynthNodeData {
                             &midi_config,
                             self.category.color(),
                             user_state.knob_style,
-                        );
-                    });
+                        )
+                    }).inner
                 });
 
-                // Create an interactive rect over the knob area for context menu
-                let knob_rect = knob_response.response.rect;
-                let interact_response = ui.interact(
-                    knob_rect,
-                    egui::Id::new(("knob_context", node_id, current_param_index, place.is_face())),
-                    egui::Sense::click(),
-                );
+                // The right-click menu hangs on the knob itself: an area laid
+                // over it would be the topmost widget and take its clicks, so
+                // a double-click would never reach the knob to reset it. A
+                // disabled knob senses nothing, so it gets an area of its own
+                let interact_response = match knob_response.inner {
+                    Some(control) if control.enabled() => control,
+                    _ => ui.interact(
+                        knob_response.response.rect,
+                        egui::Id::new(("knob_context", node_id, current_param_index, place.is_face())),
+                        egui::Sense::click(),
+                    ),
+                };
                 let hint = Hint::knob(self.module_id, &knob_param.param_name);
                 let interact_response = hints::attach(interact_response, self.face_hint(hint, &knob_param.param_name, place));
                 let named = if label.is_empty() { knob_param.param_name.as_str() } else { label };
