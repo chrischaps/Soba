@@ -198,6 +198,19 @@ pub fn taper_scale(turn: usize, strings: usize, taper: f32) -> f32 {
     }
 }
 
+/// A channel's place in an audition's strum: counted from the lowest
+/// channel up, or from the highest down. A channel past the chord's last
+/// note plays that note, so it shares its turn.
+fn audition_turn(audition: &Audition, channel: usize) -> usize {
+    let last = audition.notes().len().saturating_sub(1);
+    let channel = channel.min(last);
+    if audition.down {
+        last - channel
+    } else {
+        channel
+    }
+}
+
 /// A chord's notes, lowest first, as MIDI note numbers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Chord {
@@ -545,9 +558,12 @@ pub struct ChordSequencer {
     /// sequence strikes a chord of its own.
     audition: Option<Audition>,
     auditioning: bool,
-    /// The audition has just begun: its first sample's gates are low, so
-    /// an envelope already open starts again.
-    audition_attack: bool,
+    /// Samples since the audition was struck. It's strummed as a step is:
+    /// each channel is struck `audition_spacing` after the one before, its
+    /// gate low for that sample so an envelope already open starts again.
+    /// Until then the channel rings on what the sequence had on it.
+    audition_age: usize,
+    audition_spacing: usize,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
 }
@@ -664,7 +680,8 @@ impl ChordSequencer {
             before: None,
             audition: None,
             auditioning: false,
-            audition_attack: false,
+            audition_age: 0,
+            audition_spacing: 0,
             ports,
             parameters,
         }
@@ -842,10 +859,19 @@ impl ChordSequencer {
         }
     }
 
+    /// The audition on a channel, once its strum has reached it (or the
+    /// hand has lifted), and the channel's place in that strum.
+    fn auditioned(&self, channel: usize) -> Option<(Audition, usize)> {
+        let audition = self.audition.filter(|audition| !audition.notes().is_empty())?;
+        let turn = audition_turn(&audition, channel);
+        (!self.auditioning || self.audition_age >= turn * self.audition_spacing).then_some((audition, turn))
+    }
+
     /// The note on a channel now: an audition's, or the chord before,
     /// until the strum reaches it.
     fn playing(&self, channel: usize) -> i32 {
-        if let Some(notes) = self.audition.as_ref().map(Audition::notes).filter(|notes| !notes.is_empty()) {
+        if let Some((audition, _)) = self.auditioned(channel) {
+            let notes = audition.notes();
             return notes[channel.min(notes.len() - 1)] as i32;
         }
         match self.strum_wait[channel] {
@@ -938,6 +964,8 @@ impl DspModule for ChordSequencer {
         for wait in &mut self.strum_wait[channels..] {
             *wait = None;
         }
+        // A chord played from the face is strummed as the step will be
+        self.audition_spacing = self.strum_spacing(strum_ms, channels);
 
         // Before the first clock the cables carry the first chord, silent,
         // as a Step Sequencer's Pitch shows its first note: a pad that's
@@ -1048,11 +1076,6 @@ impl DspModule for ChordSequencer {
                 self.current_step = 0;
             }
 
-            let audition_velocity = self.audition.map(|audition| audition.velocity);
-            // An audition's gates are held while the hand is down, over
-            // whatever the sequence is doing underneath
-            let auditioned = self.audition.filter(|_| self.auditioning).map(|a| if self.audition_attack { 0 } else { a.notes().len() });
-            self.audition_attack = false;
             for channel in 0..channels {
                 // The strum reaches this channel: its note moves and, unless
                 // the chord was tied into, its gate drops for this sample so
@@ -1065,20 +1088,38 @@ impl DspModule for ChordSequencer {
                     let turn = if self.stroke_down { channels - 1 - channel } else { channel };
                     self.struck[channel] = (self.stroke_step, turn);
                 }
-                let gate_active = match auditioned {
-                    Some(notes) => channel < notes,
-                    None => self.gate_timers[channel] > 0 && !retrigger,
+                let sequenced = self.gate_timers[channel] > 0 && !retrigger;
+                // An audition's gates are held while the hand is down, over
+                // whatever the sequence is doing underneath, each from the
+                // sample after its strum reaches it
+                let gate_active = match self.audition.filter(|_| self.auditioning) {
+                    Some(audition) if channel < audition.notes().len() => {
+                        let strike = audition_turn(&audition, channel) * self.audition_spacing;
+                        match self.audition_age.cmp(&strike) {
+                            std::cmp::Ordering::Greater => true,
+                            std::cmp::Ordering::Equal => false,
+                            std::cmp::Ordering::Less => sequenced,
+                        }
+                    }
+                    Some(_) => false,
+                    None => sequenced,
                 };
                 self.gate_high[channel] = gate_active;
                 outputs[Self::PORT_PITCH].channel_mut(channel)[i] = note_to_voct(self.playing(channel));
                 outputs[Self::PORT_GATE].channel_mut(channel)[i] = if gate_active { 1.0 } else { 0.0 };
-                // A channel plays as hard as the step that last struck it,
-                // tapered by its place in that strum
-                let velocity = audition_velocity.unwrap_or_else(|| {
-                    let (step, turn) = self.struck[channel];
-                    params[Self::step_velocity_param(step)] / 127.0 * taper_scale(turn, channels, taper)
-                });
+                // A channel plays as hard as the step (or the hand) that last
+                // struck it, tapered by its place in that strum
+                let velocity = match self.auditioned(channel) {
+                    Some((audition, turn)) => audition.velocity * taper_scale(turn, audition.notes().len(), taper),
+                    None => {
+                        let (step, turn) = self.struck[channel];
+                        params[Self::step_velocity_param(step)] / 127.0 * taper_scale(turn, channels, taper)
+                    }
+                };
                 outputs[Self::PORT_VELOCITY].channel_mut(channel)[i] = velocity;
+            }
+            if self.auditioning {
+                self.audition_age = self.audition_age.saturating_add(1);
             }
             let (root, bass) = match self.audition {
                 Some(audition) => (audition.root as i32, audition.bass as i32),
@@ -1121,7 +1162,7 @@ impl DspModule for ChordSequencer {
         self.before = None;
         self.audition = None;
         self.auditioning = false;
-        self.audition_attack = false;
+        self.audition_age = 0;
     }
 
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
@@ -1134,20 +1175,22 @@ impl DspModule for ChordSequencer {
         Some(readout)
     }
 
-    /// A chord played in from the face sounds at once and is held until
-    /// the hand lifts. Then the sequence's own gates are let go of, so its
-    /// next chord, not one struck while the hand was down, is what's heard
-    /// after.
+    /// A chord played in from the face sounds at once, strummed as its step
+    /// will be, and is held until the hand lifts. Notes landing under the
+    /// same hand move the pitches without striking again. When it lifts,
+    /// the sequence's own gates are let go of, so its next chord, not one
+    /// struck while the hand was down, is what's heard after.
     fn audition(&mut self, chord: Option<Audition>) {
         match chord.filter(|chord| !chord.notes().is_empty()) {
             Some(chord) => {
-                self.audition_attack |= !self.auditioning;
+                if !self.auditioning {
+                    self.audition_age = 0;
+                }
                 self.audition = Some(chord);
                 self.auditioning = true;
             }
             None if self.auditioning => {
                 self.auditioning = false;
-                self.audition_attack = false;
                 self.gate_timers = [0; MAX_VOICES];
                 self.strum_wait = [None; MAX_VOICES];
             }
@@ -1954,6 +1997,62 @@ mod tests {
         let moved = run_with(&mut seq, &params, 10, &[], 10);
         assert_eq!(moved.chord(0), [43, 45, 48, 52]);
         assert!(moved.gates[..4].iter().flatten().all(|&g| g == 1.0));
+    }
+
+    #[test]
+    fn an_audition_is_strummed_as_its_step_will_be() {
+        // 20 ms between strings, Taper 60%: up from the lowest string, each
+        // gate rising the sample after the strum reaches it
+        let mut params = strummed(&[(48, MAJ7)], 20.0, StrumDirection::Up);
+        params[ChordSequencer::PARAM_STRUM_TAPER] = 60.0;
+        let mut seq = ChordSequencer::new();
+        let am7 = audition(&[45, 48, 52, 55], 45, 45);
+        seq.audition(Some(am7));
+        let up = run_with(&mut seq, &params, 200, &[], 200);
+        assert_eq!(rises_by_channel(&up), [[1], [21], [41], [61]]);
+        for channel in 0..4 {
+            let expected = 0.5 * taper_scale(channel, 4, 0.6);
+            assert!((up.velocities[channel][100] - expected).abs() < 1e-6, "channel {channel}: {}", up.velocities[channel][100]);
+        }
+
+        // Down from the highest, with the taper following the stroke
+        seq.audition(None);
+        run_with(&mut seq, &params, 100, &[], 100);
+        seq.audition(Some(Audition { down: true, ..am7 }));
+        let down = run_with(&mut seq, &params, 200, &[], 200);
+        assert_eq!(rises_by_channel(&down), [[61], [41], [21], [1]]);
+        assert!(down.velocities[3][100] > down.velocities[0][100], "the top string is struck hardest");
+
+        // A finger landing mid-strum moves the pitches without striking
+        // again: the strings not yet reached take the new notes on their turn
+        seq.audition(None);
+        run_with(&mut seq, &params, 100, &[], 100);
+        seq.audition(Some(am7));
+        run_with(&mut seq, &params, 30, &[], 30);
+        seq.audition(Some(audition(&[43, 48, 52, 57], 45, 43)));
+        let landed = run_with(&mut seq, &params, 100, &[], 100);
+        assert!(landed.gates[..2].iter().flatten().all(|&g| g == 1.0), "the strings struck ring on");
+        assert_eq!(rises(&landed.gates[2]), [11]);
+        assert_eq!(rises(&landed.gates[3]), [31]);
+        assert_eq!(landed.chord(99), [43, 48, 52, 57]);
+    }
+
+    #[test]
+    fn a_strummed_audition_rings_the_sequence_until_its_turn() {
+        let params = strummed(&[(48, MAJ7)], 20.0, StrumDirection::Up);
+        let mut seq = ChordSequencer::new();
+        let before = run_with(&mut seq, &params, 100, &[0], 100);
+        seq.audition(Some(audition(&[45, 48, 52, 55], 45, 45)));
+        let struck = run_with(&mut seq, &params, 100, &[], 100);
+        for channel in 0..4 {
+            let strike = 20 * channel;
+            let (notes, gate) = (&struck.notes[channel], &struck.gates[channel]);
+            // Cmaj7 rings on, gate up, until the strum reaches the channel
+            assert!((0..strike).all(|t| notes[t] == before.notes[channel][99] && gate[t] == 1.0), "channel {channel}");
+            // Then a sample's dip on the new note, and the rise
+            assert_eq!((notes[strike] as i32, gate[strike]), ([45, 48, 52, 55][channel], 0.0), "channel {channel}");
+            assert_eq!(gate[strike + 1], 1.0);
+        }
     }
 
     #[test]

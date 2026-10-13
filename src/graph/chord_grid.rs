@@ -26,9 +26,11 @@
 //!   the chord's notes, so a progression's accents go in as they're played.
 //!   The letter keys leave it as it was.
 //! - While the hand is down, the chord sounds through the sequencer's own
-//!   cables as it will be written: named, then voiced by Range, Voices and
-//!   Bass Voice, clock or no clock (see [`audition_of`]). A MIDI keyboard's
-//!   chords are left to the patch when a MIDI module there plays them.
+//!   cables as it will play once written: named, voiced by Range, Voices and
+//!   Bass Voice, led from the chord before it, and strummed the way its step
+//!   will be struck, clock or no clock (see [`audition_of`]). A MIDI
+//!   keyboard's chords are left to the patch when a MIDI module there plays
+//!   them.
 
 use std::sync::OnceLock;
 
@@ -132,12 +134,18 @@ impl ChordPattern {
 
     /// A chord voiced in root position, the bass voice first if on.
     fn voiced(&self, spec: &ChordSpec) -> Vec<i32> {
+        self.on_channels(spec, &voice_chord(spec, &self.settings, None))
+    }
+
+    /// A voicing of `spec` as the channels carry it, the bass voice first
+    /// if on.
+    fn on_channels(&self, spec: &ChordSpec, chord: &Chord) -> Vec<i32> {
         let mut notes = Vec::with_capacity(self.channels);
         if self.bass_voice {
             notes.push(spec.bass_note());
         }
         if !self.bass_voice || self.channels > 1 {
-            notes.extend(voice_chord(spec, &self.settings, None).notes());
+            notes.extend(chord.notes());
         }
         notes
     }
@@ -147,7 +155,30 @@ impl ChordPattern {
     /// before it, or in root position with Voice Leading off. `None` when no
     /// one chord comes before it, played ping-pong or at random.
     fn left_to_voicing(&self, step: usize, spec: ChordSpec) -> Option<Chord> {
-        let spec = ChordSpec { top: None, ..spec };
+        self.looped(step, ChordSpec { top: None, ..spec })
+    }
+
+    /// Whether `step` is strummed from its highest note down: by its own
+    /// stroke, or Strum Dir's. Alt's hand moves down on every other clock
+    /// after a reset, so a step takes the stroke of its place the first time
+    /// round, as its clock falls in the bar.
+    fn strummed_down(&self, step: usize) -> bool {
+        match self.strums[step].unwrap_or(self.strum_dir) {
+            StrumDirection::Up => false,
+            StrumDirection::Down => true,
+            StrumDirection::Alternate => {
+                let clocks = match self.direction {
+                    SequenceDirection::Backward => self.steps - 1 - step,
+                    _ => step,
+                };
+                clocks % 2 == 1
+            }
+        }
+    }
+
+    /// How `spec` sounds written into `step`, top and all, once the pattern
+    /// has looped a while. See [`Self::left_to_voicing`].
+    fn looped(&self, step: usize, spec: ChordSpec) -> Option<Chord> {
         if !self.leading {
             return Some(voice_chord(&spec, &self.settings, None));
         }
@@ -245,18 +276,26 @@ impl Played {
 
 /// The chord being played into `step`, as the sequencer will play it once
 /// written: named as it will be, with the hand's top note on top, as hard as
-/// it's struck (or at the step's velocity, on the letter keys), and voiced in
-/// root position, as the face shows a step before it's played. `None` while
+/// it's struck (or at the step's velocity, on the letter keys), and voiced
+/// as the pattern will reach it, led from the chord before. A progression
+/// typed in then sounds as it will play, whatever order its steps are
+/// written in. Ping-pong and random come to a step from more than one chord,
+/// so there it's voiced in root position, as the face shows a step before
+/// it's played. It's strummed the way the step will be struck. `None` while
 /// nothing's held.
 fn audition_of(hand: Hand, step: usize, pattern: &ChordPattern) -> Option<Audition> {
     let played = Played::new(hand, step, pattern)?;
     let spec = played.sounding();
-    let voiced = pattern.voiced(&spec);
+    let voiced = match pattern.looped(step, spec) {
+        Some(chord) => pattern.on_channels(&spec, &chord),
+        None => pattern.voiced(&spec),
+    };
     let mut audition = Audition {
         len: voiced.len().min(MAX_CHANNELS) as u8,
         root: spec.root.clamp(0, 127) as u8,
         bass: spec.bass_note().clamp(0, 127) as u8,
         velocity: played.velocity.map_or(pattern.velocities[step], |v| v as f32 / 127.0),
+        down: pattern.strummed_down(step),
         ..Audition::default()
     };
     for (slot, &note) in audition.notes.iter_mut().zip(&voiced) {
@@ -946,7 +985,9 @@ mod tests {
 
     #[test]
     fn a_chord_is_heard_as_it_will_be_written() {
-        let four = pattern(4, false);
+        // In root position, with Voice Leading off
+        let mut four = pattern(4, false);
+        four.leading = false;
         // C E G played up high sounds in the Range octave, as the step will,
         // with the G on top, as it was played
         let c = audition_of(keys(&[72, 76, 79]), 0, &four).unwrap();
@@ -963,6 +1004,51 @@ mod tests {
         assert_eq!((bass.root, bass.notes()[0]), (57, bass.bass));
         assert_eq!(bass.bass % 12, 8);
         assert_eq!(bass.notes().len(), 4);
+    }
+
+    #[test]
+    fn a_chord_is_heard_led_from_the_chord_before_it() {
+        // Fmaj7 played into step 3, after Am7: it sounds as the loop will
+        // reach it, not in root position. Played A C E F, with the F on top
+        // where voice leading puts it anyway
+        let mut four = pattern(4, false);
+        let fmaj7 = keys(&[57, 60, 64, 65]);
+        let spec = Played::new(fmaj7.clone(), 2, &four).unwrap().sounding();
+        let led = four.left_to_voicing(2, spec).unwrap();
+        let heard = audition_of(fmaj7.clone(), 2, &four).unwrap();
+        assert_eq!(heard.notes().iter().map(|&n| n as i32).collect::<Vec<_>>(), led.notes());
+        assert_ne!(led.notes(), four.voiced(&spec), "led, not in root position");
+        // A top the hand names narrows the voicing as the step's would
+        let on_top = audition_of(keys(&[53, 57, 64, 72]), 2, &four).unwrap();
+        assert_eq!(on_top.notes().last().map(|n| n % 12), Some(0), "C on top");
+        // With a Bass Voice the bass still comes first
+        let bassed = audition_of(fmaj7.clone(), 2, &pattern(4, true)).unwrap();
+        assert_eq!(bassed.notes()[0], bassed.bass);
+        // Ping-pong and random reach it from more than one chord: root position
+        for direction in [SequenceDirection::PingPong, SequenceDirection::Random] {
+            four.direction = direction;
+            let heard = audition_of(fmaj7.clone(), 2, &four).unwrap();
+            assert_eq!(heard.notes().iter().map(|&n| n as i32).collect::<Vec<_>>(), four.voiced(&spec), "{direction:?}");
+        }
+    }
+
+    #[test]
+    fn a_chord_is_heard_strummed_as_its_step_will_be_struck() {
+        let mut four = pattern(4, false);
+        let down = |pattern: &ChordPattern, step: usize| audition_of(keys(&[57, 60, 64]), step, pattern).unwrap().down;
+        assert!(!down(&four, 1), "Strum Dir Up");
+        four.strum_dir = StrumDirection::Down;
+        assert!(down(&four, 1));
+        // A step's own stroke goes over Strum Dir
+        four.strums[1] = Some(StrumDirection::Up);
+        assert!(!down(&four, 1));
+        // Alt: the hand moves down on every other clock, the first one up
+        four.strum_dir = StrumDirection::Alternate;
+        four.strums[1] = None;
+        assert_eq!((0..4).map(|step| down(&four, step)).collect::<Vec<_>>(), [false, true, false, true]);
+        // Backward, the first clock plays the last step
+        four.direction = SequenceDirection::Backward;
+        assert_eq!((0..4).map(|step| down(&four, step)).collect::<Vec<_>>(), [true, false, true, false]);
     }
 
     #[test]

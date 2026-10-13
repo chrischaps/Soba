@@ -69,6 +69,9 @@ pub struct Audition {
     pub bass: u8,
     /// How hard it's played, 0 to 1.
     pub velocity: f32,
+    /// Which way a strum sounds it: from the highest channel down, or
+    /// (false) from the lowest up.
+    pub down: bool,
 }
 
 impl Audition {
