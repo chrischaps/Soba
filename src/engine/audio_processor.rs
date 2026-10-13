@@ -10,7 +10,7 @@ use rtrb::Consumer;
 
 use crate::dsp::denormal::DenormalGuard;
 use crate::dsp::{InputAudio, MidiEvent, ModuleRegistry, Poly, ProcessContext, Snapshot, SnapshotOutcome};
-use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, ChordSequencer, Chorus, Clock, ClockDivider, Compressor, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, Logic, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Oscillator, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
+use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Chorus, Clock, ClockDivider, Compressor, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, Logic, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Oscillator, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
 
 use super::audio_input::InputFeed;
 use super::channels::{EngineHandle, MAX_SNAPSHOTS};
@@ -35,6 +35,7 @@ pub fn create_module_registry() -> ModuleRegistry {
     registry.register::<Poly<Noise>>();
     registry.register::<Poly<Drum>>();
     registry.register::<Sampler>();
+    registry.register::<Chopper>();
     registry.register::<AudioInput>();
     registry.register::<KeyboardInput>();
     registry.register::<MidiNote>();
@@ -659,7 +660,8 @@ mod tests {
         assert!(registry.contains("seq.arranger"));
         assert!(registry.contains("seq.chord"));
         assert!(registry.contains("fx.vocoder"));
-        assert_eq!(registry.len(), 38);
+        assert!(registry.contains("source.chopper"));
+        assert_eq!(registry.len(), 39);
     }
 
     #[test]

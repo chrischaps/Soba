@@ -284,6 +284,9 @@ pub enum NodeDisplay {
     /// Sampler: the recording's waveform, its markers, and a playhead for
     /// every voice playing it.
     SamplerWave,
+    /// Chopper: the break's slices in their hues, and the row of steps
+    /// under them, each tinted like the slice it plays.
+    ChopperRow,
     /// Trigger Sequencer: each lane's steps beside its Gate and Vel jacks,
     /// then the pattern tabs and the Chain.
     TriggerGrid,
@@ -2334,6 +2337,11 @@ impl NodeDataTrait for SynthNodeData {
 
         if self.display == NodeDisplay::SamplerWave {
             let actions = super::sampler_display::sampler_display(ui, node_id, graph, user_state, zoom);
+            responses.extend(actions.into_iter().map(NodeResponse::User));
+        }
+
+        if self.display == NodeDisplay::ChopperRow {
+            let actions = super::chopper_display::chopper_display(ui, node_id, graph, user_state, zoom);
             responses.extend(actions.into_iter().map(NodeResponse::User));
         }
 

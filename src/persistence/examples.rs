@@ -61,6 +61,9 @@ pub const EXAMPLE_SAMPLES: &[(&str, &[u8])] = &[
     // Held Vowels' line, "ohh", "ooh", "ee", "ahh" a bar apart, sung by
     // tools/voice/speak.py --vowels
     shipped!("samples/held-vowels.wav"),
+    // Cut-Up's break: two bars of Soba's own Drums, swung, from
+    // tools/breaks/make_break.py
+    shipped!("samples/soba-break.wav"),
 ];
 
 /// Every example, in menu order: from a first note to self-playing patches.
@@ -166,6 +169,12 @@ pub const EXAMPLES: &[Example] = &[
         file_name: "interlock.json",
         description: "Plays itself: Logic splits a three-against-four rhythm between two gamelan-style parts that interlock into one fast melody, while a slow tide brings the second part in and out",
         json: include_str!("../../patches/interlock.json"),
+    },
+    Example {
+        name: "Cut-Up",
+        file_name: "cut-up.json",
+        description: "Plays itself: a two-bar break, sliced, follows the Clock 16 BPM faster than it was played without going up in pitch. A Chopper rearranges it step by step: a slice reversed, one pitched down, a stutter into the top, and dice on a few",
+        json: include_str!("../../patches/cut-up.json"),
     },
     Example {
         name: "From One Sine",

@@ -155,6 +155,18 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
+        module_id: "source.chopper",
+        // How long the loop is and how it's cut, then how loud
+        knobs: &[knob("Beats"), knob("Slices"), knob_as("Sensitivity", "Sens"), knob("Level")],
+        labels: &[("Pulse", "Pulse")],
+        // The row of steps edits these
+        hidden: &["Step *", "Chance *"],
+        monitor: &["Gate"],
+        display: NodeDisplay::ChopperRow,
+        knobs_per_row: 4,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
         module_id: "source.audio_input",
         knobs: &[knob("Gain"), knob_as("Threshold", "Thresh"), knob("Attack"), knob("Release")],
         monitor: &["Follow", "Gate"],

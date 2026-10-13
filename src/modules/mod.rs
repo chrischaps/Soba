@@ -6,6 +6,7 @@
 pub mod arranger;
 pub mod attenuverter;
 pub mod audio_input;
+pub mod chopper;
 pub mod chord_sequencer;
 pub mod chorus;
 pub mod clock;
@@ -42,10 +43,17 @@ pub mod trigger_sequencer;
 pub mod vca;
 pub mod vocoder;
 
+/// Whether a module plays a WAV file its node names: the Sampler, and the
+/// Chopper. The editor loads, slices and drops files on both alike.
+pub fn plays_a_sample(module_id: &str) -> bool {
+    module_id == sampler::SAMPLER_ID || module_id == chopper::CHOPPER_ID
+}
+
 // Re-export commonly used types
 pub use arranger::Arranger;
 pub use attenuverter::Attenuverter;
 pub use audio_input::AudioInput;
+pub use chopper::Chopper;
 pub use chord_sequencer::ChordSequencer;
 pub use chorus::Chorus;
 pub use clock::Clock;

@@ -26,7 +26,8 @@ use soba::engine::{
     NodeId, Recording, TimestampedMidiEvent, UiHandle,
 };
 use soba::modules::looper::{LoopState, Looper};
-use soba::modules::Mixer;
+use soba::dsp::primitives::{Markers, ONSETS};
+use soba::modules::{Chopper, Mixer};
 
 struct CountingAllocator;
 
@@ -166,6 +167,22 @@ fn audio_callback_never_allocates() {
     ui.send_command(EngineCommand::LoadSample { node_id: sampler, sample: tone(220.0) });
     let mut loads = 1;
 
+    // A Chopper on the same Clock, cut at markers, given a new loop (and
+    // new markers) every so often, mid-slice or not
+    let chopper = node_of(&nodes, "source.chopper");
+    ui.send_command(EngineCommand::Connect {
+        from_node: clock,
+        from_port: port("util.clock", "Gate"),
+        to_node: chopper,
+        to_port: port("source.chopper", "Clock"),
+    });
+    ui.send_command(EngineCommand::SetParameter { node_id: chopper, param_index: Chopper::PARAM_SLICES, value: ONSETS });
+    ui.send_command(EngineCommand::SetParameter { node_id: chopper, param_index: Chopper::step_param(1), value: -101_200.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: chopper, param_index: Chopper::step_param(2), value: 314_005.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: chopper, param_index: Chopper::chance_param(3), value: 50.0 });
+    ui.send_command(EngineCommand::LoadSample { node_id: chopper, sample: tone(110.0) });
+    ui.send_command(EngineCommand::SetMarkers { node_id: chopper, markers: Markers::between(&[0.2, 0.45, 0.7], 0.0, 1.0) });
+
     // A Looper fed by the live input (with a round trip to take off its
     // overdubs), pressed through its cycle by its footswitches
     let looper = node_of(&nodes, "util.looper");
@@ -269,6 +286,11 @@ fn audio_callback_never_allocates() {
         if round % 37 == 11 {
             ui.send_command(EngineCommand::LoadSample { node_id: sampler, sample: tone(220.0 + round as f32) });
             loads += 1;
+        }
+        if round % 41 == 17 {
+            ui.send_command(EngineCommand::LoadSample { node_id: chopper, sample: tone(110.0 + round as f32) });
+            let place = (round % 9) as f32 / 10.0 + 0.05;
+            ui.send_command(EngineCommand::SetMarkers { node_id: chopper, markers: Markers::between(&[place, 0.5, 0.96], 0.0, 1.0) });
         }
         if round % 40 == 35 {
             ui.request_snapshot(looper, Box::new(Snapshot::with_capacity(48000 * 4)));

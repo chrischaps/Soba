@@ -15,7 +15,7 @@ use crate::dsp::primitives::{Markers, Slices};
 use crate::dsp::SampleData;
 use crate::engine::{EngineCommand, NodeId as EngineNodeId};
 use crate::graph::{groups, port_mapping, SynthGraph};
-use crate::modules::sampler::SAMPLER_ID;
+use crate::modules::plays_a_sample;
 
 use super::{stage_patch, Patch, PatchError};
 
@@ -154,10 +154,10 @@ fn port_name<Id: PartialEq>(ports: &[(String, Id)], id: Id) -> Option<String> {
     ports.iter().find(|(_, p)| *p == id).map(|(name, _)| name.clone())
 }
 
-/// How a Sampler is cut, if it's sliced by Onsets.
+/// How a Sampler (or a Chopper) is cut, if it's sliced by Onsets.
 fn slicing(graph: &SynthGraph, node_id: NodeId) -> Option<Slicing> {
     let node = &graph[node_id];
-    if node.user_data.module_id != SAMPLER_ID {
+    if !plays_a_sample(node.user_data.module_id) {
         return None;
     }
     let value = |name: &str| node.inputs.iter().find(|(input, _)| input == name).map(|(_, id)| graph.get_input(*id).value.actual_value());

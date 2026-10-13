@@ -30,6 +30,7 @@ use crate::engine::EngineCommand;
 use crate::graph::sample_shelf::DROPPED_PREFIX;
 use crate::graph::SynthNodeTemplate;
 use crate::modules::looper::LOOPER_ID;
+use crate::modules::plays_a_sample;
 use crate::modules::sampler::SAMPLER_ID;
 use crate::persistence::sample_files::{self, SampleBase};
 use crate::persistence::{Patch, StagedNode};
@@ -115,7 +116,7 @@ impl SynthApp {
         }
     }
 
-    /// Gives every Sampler the recording its file names, at the engine's
+    /// Gives every Sampler (and Chopper) the recording its file names, at the engine's
     /// rate, wherever that isn't what it has, and every new Looper the loop
     /// its file holds; and lets go of recordings no node plays any more.
     /// Call once a frame, after the frame's edits.
@@ -125,7 +126,7 @@ impl SynthApp {
             .graph
             .nodes
             .iter()
-            .filter(|(_, node)| node.user_data.module_id == SAMPLER_ID)
+            .filter(|(_, node)| plays_a_sample(node.user_data.module_id))
             .map(|(node_id, node)| (node_id, node.user_data.file.clone()))
             .collect();
         let loopers: Vec<(NodeId, String)> = self
@@ -406,11 +407,11 @@ impl SynthApp {
         node_id
     }
 
-    /// The Sampler on show under a point on screen, if there is one.
+    /// The Sampler (or Chopper) on show under a point on screen, if there is one.
     fn sampler_at(&self, ctx: &egui::Context, screen: egui::Pos2) -> Option<NodeId> {
         self.graph_state.node_order.iter().rev().copied().find(|&node_id| {
             !self.user_state.hidden.contains(&node_id)
-                && self.graph_state.graph.nodes.get(node_id).is_some_and(|n| n.user_data.module_id == SAMPLER_ID)
+                && self.graph_state.graph.nodes.get(node_id).is_some_and(|n| plays_a_sample(n.user_data.module_id))
                 && ctx.read_response(egui::Id::new((node_id, "window"))).is_some_and(|r| r.rect.contains(screen))
         })
     }

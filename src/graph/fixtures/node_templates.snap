@@ -102,6 +102,153 @@ knob Rec Threshold      "Thresh" KnobOnly
 knob Sensitivity        "Sens" KnobOnly
 display SamplerWave
 
+== source.chopper "Chopper" finder="Chopper" Source
+in   Clock              Gate     ConnectionOnly       inline=true  port
+in   Reset              Gate     ConnectionOnly       inline=true  port
+in   Slice              Control  ConnectionOnly       inline=true  port
+in   Pulse              Control  ConstantOnly         inline=true  select 4 ["1", "1/2", "1/4", "1/8", "1/16"] "Pulse"
+in   Beats              Control  ConstantOnly         inline=false num 4 [1..64] beats stepped
+in   Slices             Control  ConstantOnly         inline=false num 16 [2..65] slices stepped
+in   Level              Control  ConstantOnly         inline=false num 0.8 [0..1]
+in   Sensitivity        Control  ConstantOnly         inline=false num 0.5 [0..1] %
+in   Step 01            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 02            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 03            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 04            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 05            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 06            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 07            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 08            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 09            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 10            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 11            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 12            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 13            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 14            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 15            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 16            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 17            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 18            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 19            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 20            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 21            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 22            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 23            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 24            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 25            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 26            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 27            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 28            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 29            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 30            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 31            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 32            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 33            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 34            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 35            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 36            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 37            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 38            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 39            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 40            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 41            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 42            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 43            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 44            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 45            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 46            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 47            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 48            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 49            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 50            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 51            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 52            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 53            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 54            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 55            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 56            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 57            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 58            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 59            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 60            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 61            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 62            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 63            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Step 64            Control  ConstantOnly         inline=false num 101200 [-412464..412464]  stepped
+in   Chance 01          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 02          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 03          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 04          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 05          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 06          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 07          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 08          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 09          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 10          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 11          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 12          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 13          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 14          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 15          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 16          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 17          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 18          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 19          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 20          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 21          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 22          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 23          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 24          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 25          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 26          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 27          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 28          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 29          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 30          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 31          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 32          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 33          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 34          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 35          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 36          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 37          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 38          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 39          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 40          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 41          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 42          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 43          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 44          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 45          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 46          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 47          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 48          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 49          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 50          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 51          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 52          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 53          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 54          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 55          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 56          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 57          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 58          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 59          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 60          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 61          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 62          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 63          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Chance 64          Control  ConstantOnly         inline=false num 0 [0..100] %
+out  L                  Audio
+out  R                  Audio
+out  Gate               Gate
+knob Beats              "Beats" KnobOnly
+knob Slices             "Slices" KnobOnly
+knob Sensitivity        "Sens" KnobOnly
+knob Level              "Level" KnobOnly
+monitor [2]
+display ChopperRow
+
 == source.audio_input "Audio Input" finder="Audio Input" Source
 in   Gain               Control  ConstantOnly         inline=false num 0 [-24..24] dB
 in   Threshold          Control  ConstantOnly         inline=false num -30 [-60..0] dB

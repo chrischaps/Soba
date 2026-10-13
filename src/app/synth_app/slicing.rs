@@ -8,7 +8,8 @@
 //! too, and a trim moves them with the sound.
 //!
 //! Once a frame, [`SynthApp::sync_markers`] gives each Sampler sliced by
-//! Onsets the markers its node shows, wherever they aren't what it has.
+//! Onsets the markers its node shows, wherever they aren't what it has. A
+//! Chopper sliced by Onsets is cut the same way, across the whole file.
 
 use egui_node_graph2::NodeId;
 
@@ -16,7 +17,7 @@ use crate::dsp::onsets::{HandMarkers, DEFAULT_SENSITIVITY};
 use crate::dsp::primitives::{Markers, Slices};
 use crate::engine::EngineCommand;
 use crate::graph::SynthGraph;
-use crate::modules::sampler::SAMPLER_ID;
+use crate::modules::plays_a_sample;
 use super::SynthApp;
 
 /// A parameter's value on a node, by name.
@@ -65,7 +66,7 @@ impl SynthApp {
     /// Call once a frame, after the samples are synced.
     pub(super) fn sync_markers(&mut self) {
         let samplers: Vec<NodeId> =
-            self.graph_state.graph.nodes.iter().filter(|(_, node)| node.user_data.module_id == SAMPLER_ID).map(|(node_id, _)| node_id).collect();
+            self.graph_state.graph.nodes.iter().filter(|(_, node)| plays_a_sample(node.user_data.module_id)).map(|(node_id, _)| node_id).collect();
         let mut sends = Vec::new();
         for node_id in samplers {
             let graph = &mut self.graph_state.graph;

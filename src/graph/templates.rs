@@ -545,8 +545,8 @@ mod tests {
     #[test]
     fn test_all_templates() {
         let ids: Vec<&str> = AllNodeTemplates.all_kinds().iter().map(|t| t.module_id()).collect();
-        assert_eq!(ids.len(), 38);
-        for id in ["fx.vocoder", "seq.chord", "seq.arranger", "osc.sine", "source.noise", "source.drum", "source.sampler", "source.audio_input", "util.quantizer", "util.divider", "util.logic", "util.looper", "output.audio", "mod.lfo", "mod.slope", "util.mix", "util.mixer", "filter.svf", "filter.ladder", "fx.compressor", "seq.step", "seq.trigger", "fx.tape"] {
+        assert_eq!(ids.len(), 39);
+        for id in ["source.chopper", "fx.vocoder", "seq.chord", "seq.arranger", "osc.sine", "source.noise", "source.drum", "source.sampler", "source.audio_input", "util.quantizer", "util.divider", "util.logic", "util.looper", "output.audio", "mod.lfo", "mod.slope", "util.mix", "util.mixer", "filter.svf", "filter.ladder", "fx.compressor", "seq.step", "seq.trigger", "fx.tape"] {
             assert!(ids.contains(&id), "{id}");
         }
     }

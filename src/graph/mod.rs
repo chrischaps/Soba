@@ -33,6 +33,7 @@ pub mod port_mapping;
 mod responses;
 pub mod sample_shelf;
 mod sampler_display;
+mod chopper_display;
 mod sampler_slices;
 mod sampler_take;
 mod sampler_tidy;

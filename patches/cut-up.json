@@ -1,0 +1,903 @@
+{
+  "name": "Cut-Up",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "util.clock",
+      "position": [
+        40.0,
+        94.0
+      ],
+      "parameters": [
+        {
+          "name": "Tempo",
+          "type": "Number",
+          "value": 112.0
+        },
+        {
+          "name": "Gate Length",
+          "type": "Number",
+          "value": 50.0
+        },
+        {
+          "name": "Division",
+          "type": "Select",
+          "value": 4
+        },
+        {
+          "name": "Run",
+          "type": "Toggle",
+          "value": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "module_id": "source.chopper",
+      "position": [
+        300.0,
+        74.0
+      ],
+      "file": "samples/soba-break.wav",
+      "parameters": [
+        {
+          "name": "Pulse",
+          "type": "Select",
+          "value": 4
+        },
+        {
+          "name": "Beats",
+          "type": "Number",
+          "value": 8.0
+        },
+        {
+          "name": "Slices",
+          "type": "Number",
+          "value": 16.0
+        },
+        {
+          "name": "Level",
+          "type": "Number",
+          "value": 0.9
+        },
+        {
+          "name": "Step 04",
+          "type": "Number",
+          "value": 101203.0
+        },
+        {
+          "name": "Step 06",
+          "type": "Number",
+          "value": 111202.0
+        },
+        {
+          "name": "Step 08",
+          "type": "Number",
+          "value": 201200.0
+        },
+        {
+          "name": "Step 11",
+          "type": "Number",
+          "value": 101205.0
+        },
+        {
+          "name": "Step 12",
+          "type": "Number",
+          "value": 100712.0
+        },
+        {
+          "name": "Step 14",
+          "type": "Number",
+          "value": -101200.0
+        },
+        {
+          "name": "Step 15",
+          "type": "Number",
+          "value": 111213.0
+        },
+        {
+          "name": "Step 16",
+          "type": "Number",
+          "value": 401216.0
+        },
+        {
+          "name": "Chance 07",
+          "type": "Number",
+          "value": 25.0
+        },
+        {
+          "name": "Chance 10",
+          "type": "Number",
+          "value": 20.0
+        },
+        {
+          "name": "Chance 13",
+          "type": "Number",
+          "value": 15.0
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "module_id": "seq.step",
+      "position": [
+        300.0,
+        580.0
+      ],
+      "parameters": [
+        {
+          "name": "Steps",
+          "type": "Number",
+          "value": 16.0
+        },
+        {
+          "name": "Direction",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Gate Length",
+          "type": "Number",
+          "value": 60.0
+        },
+        {
+          "name": "Step 1 Pitch",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 1 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 1 Velocity",
+          "type": "Number",
+          "value": 110.0
+        },
+        {
+          "name": "Step 2 Pitch",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 2 Gate",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 2 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 3 Pitch",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 3 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 3 Velocity",
+          "type": "Number",
+          "value": 70.0
+        },
+        {
+          "name": "Step 4 Pitch",
+          "type": "Number",
+          "value": 50.0
+        },
+        {
+          "name": "Step 4 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 4 Velocity",
+          "type": "Number",
+          "value": 90.0
+        },
+        {
+          "name": "Step 5 Pitch",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 5 Gate",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 5 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 6 Pitch",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 6 Gate",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 6 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 7 Pitch",
+          "type": "Number",
+          "value": 41.0
+        },
+        {
+          "name": "Step 7 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 7 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 8 Pitch",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 8 Gate",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 8 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 9 Pitch",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 9 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 9 Velocity",
+          "type": "Number",
+          "value": 110.0
+        },
+        {
+          "name": "Step 10 Pitch",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 10 Gate",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 10 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 11 Pitch",
+          "type": "Number",
+          "value": 33.0
+        },
+        {
+          "name": "Step 11 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 11 Velocity",
+          "type": "Number",
+          "value": 90.0
+        },
+        {
+          "name": "Step 12 Pitch",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 12 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 12 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 13 Pitch",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 13 Gate",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 13 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 14 Pitch",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 14 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 14 Velocity",
+          "type": "Number",
+          "value": 80.0
+        },
+        {
+          "name": "Step 15 Pitch",
+          "type": "Number",
+          "value": 45.0
+        },
+        {
+          "name": "Step 15 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 15 Velocity",
+          "type": "Number",
+          "value": 70.0
+        },
+        {
+          "name": "Step 16 Pitch",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 16 Gate",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 16 Velocity",
+          "type": "Number",
+          "value": 100.0
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "module_id": "osc.sine",
+      "position": [
+        640.0,
+        580.0
+      ],
+      "parameters": [
+        {
+          "name": "Octave",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Waveform",
+          "type": "Select",
+          "value": 1
+        },
+        {
+          "name": "Voices",
+          "type": "Number",
+          "value": 2.0
+        },
+        {
+          "name": "Detune",
+          "type": "Number",
+          "value": 0.12
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "module_id": "filter.ladder",
+      "position": [
+        850.0,
+        580.0
+      ],
+      "parameters": [
+        {
+          "name": "Cutoff",
+          "type": "Number",
+          "value": 420.0
+        },
+        {
+          "name": "Resonance",
+          "type": "Number",
+          "value": 0.25
+        },
+        {
+          "name": "Drive",
+          "type": "Number",
+          "value": 1.4
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "module_id": "util.vca",
+      "position": [
+        1100.0,
+        580.0
+      ],
+      "parameters": [
+        {
+          "name": "Level",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "CV Amount",
+          "type": "Number",
+          "value": 1.0
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "module_id": "mod.adsr",
+      "position": [
+        850.0,
+        890.0
+      ],
+      "parameters": [
+        {
+          "name": "Attack",
+          "type": "Number",
+          "value": 0.004
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.22
+        },
+        {
+          "name": "Sustain",
+          "type": "Number",
+          "value": 0.15
+        },
+        {
+          "name": "Release",
+          "type": "Number",
+          "value": 0.06
+        },
+        {
+          "name": "Velocity Amount",
+          "type": "Number",
+          "value": 0.5
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "module_id": "mod.adsr",
+      "position": [
+        1100.0,
+        890.0
+      ],
+      "parameters": [
+        {
+          "name": "Attack",
+          "type": "Number",
+          "value": 0.004
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.18
+        },
+        {
+          "name": "Sustain",
+          "type": "Number",
+          "value": 0.6
+        },
+        {
+          "name": "Release",
+          "type": "Number",
+          "value": 0.08
+        },
+        {
+          "name": "Velocity Amount",
+          "type": "Number",
+          "value": 0.3
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "module_id": "util.mixer",
+      "position": [
+        1030.0,
+        74.0
+      ],
+      "parameters": [
+        {
+          "name": "Level 1",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Level 2",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Pan 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Pan 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 1",
+          "type": "Number",
+          "value": 0.12
+        },
+        {
+          "name": "Send 2",
+          "type": "Number",
+          "value": 0.0
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "module_id": "fx.reverb",
+      "position": [
+        1450.0,
+        74.0
+      ],
+      "parameters": [
+        {
+          "name": "Size",
+          "type": "Number",
+          "value": 0.3
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.8
+        },
+        {
+          "name": "Damping",
+          "type": "Number",
+          "value": 0.55
+        },
+        {
+          "name": "Pre-Delay",
+          "type": "Number",
+          "value": 6.0
+        },
+        {
+          "name": "Mix",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Width",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Mod",
+          "type": "Number",
+          "value": 0.15
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "module_id": "fx.compressor",
+      "position": [
+        560.0,
+        74.0
+      ],
+      "parameters": [
+        {
+          "name": "Threshold",
+          "type": "Number",
+          "value": -20.0
+        },
+        {
+          "name": "Ratio",
+          "type": "Number",
+          "value": 3.0
+        },
+        {
+          "name": "Attack",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Release",
+          "type": "Number",
+          "value": 110.0
+        },
+        {
+          "name": "Knee",
+          "type": "Number",
+          "value": 6.0
+        },
+        {
+          "name": "Makeup",
+          "type": "Number",
+          "value": 6.0
+        },
+        {
+          "name": "Mix",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Detector",
+          "type": "Select",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "module_id": "output.audio",
+      "position": [
+        1704.0,
+        74.0
+      ],
+      "parameters": [
+        {
+          "name": "Volume",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Limiter",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Character",
+          "type": "Toggle",
+          "value": false
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from_node": 1,
+      "from_port": "Gate",
+      "to_node": 2,
+      "to_port": "Clock"
+    },
+    {
+      "from_node": 1,
+      "from_port": "Reset",
+      "to_node": 2,
+      "to_port": "Reset"
+    },
+    {
+      "from_node": 1,
+      "from_port": "Gate",
+      "to_node": 3,
+      "to_port": "Clock"
+    },
+    {
+      "from_node": 1,
+      "from_port": "Reset",
+      "to_node": 3,
+      "to_port": "Reset"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Pitch",
+      "to_node": 4,
+      "to_port": "V/Oct"
+    },
+    {
+      "from_node": 4,
+      "from_port": "Out",
+      "to_node": 5,
+      "to_port": "In"
+    },
+    {
+      "from_node": 5,
+      "from_port": "LP24",
+      "to_node": 6,
+      "to_port": "In"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Gate",
+      "to_node": 7,
+      "to_port": "Gate"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Velocity",
+      "to_node": 7,
+      "to_port": "Velocity"
+    },
+    {
+      "from_node": 7,
+      "from_port": "Out",
+      "to_node": 5,
+      "to_port": "Cutoff"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Gate",
+      "to_node": 8,
+      "to_port": "Gate"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Velocity",
+      "to_node": 8,
+      "to_port": "Velocity"
+    },
+    {
+      "from_node": 8,
+      "from_port": "Out",
+      "to_node": 6,
+      "to_port": "CV"
+    },
+    {
+      "from_node": 2,
+      "from_port": "L",
+      "to_node": 12,
+      "to_port": "In"
+    },
+    {
+      "from_node": 12,
+      "from_port": "Out",
+      "to_node": 9,
+      "to_port": "Ch 1"
+    },
+    {
+      "from_node": 6,
+      "from_port": "Out",
+      "to_node": 9,
+      "to_port": "Ch 2"
+    },
+    {
+      "from_node": 9,
+      "from_port": "Send L",
+      "to_node": 10,
+      "to_port": "In L"
+    },
+    {
+      "from_node": 9,
+      "from_port": "Send R",
+      "to_node": 10,
+      "to_port": "In R"
+    },
+    {
+      "from_node": 10,
+      "from_port": "Out L",
+      "to_node": 9,
+      "to_port": "Return L"
+    },
+    {
+      "from_node": 10,
+      "from_port": "Out R",
+      "to_node": 9,
+      "to_port": "Return R"
+    },
+    {
+      "from_node": 9,
+      "from_port": "Out L",
+      "to_node": 11,
+      "to_port": "Left"
+    },
+    {
+      "from_node": 9,
+      "from_port": "Out R",
+      "to_node": 11,
+      "to_port": "Right"
+    }
+  ],
+  "midi_mappings": [],
+  "frames": [
+    {
+      "title": "Time",
+      "position": [
+        16.0,
+        70.0
+      ],
+      "size": [
+        226.0,
+        376.0
+      ],
+      "color": "green"
+    },
+    {
+      "title": "The break",
+      "position": [
+        276.0,
+        16.0
+      ],
+      "size": [
+        694.0,
+        478.0
+      ],
+      "color": "blue"
+    },
+    {
+      "title": "Mix and room",
+      "position": [
+        1006.0,
+        16.0
+      ],
+      "size": [
+        952.0,
+        451.0
+      ],
+      "color": "cyan"
+    },
+    {
+      "title": "Bass",
+      "position": [
+        276.0,
+        522.0
+      ],
+      "size": [
+        1078.0,
+        729.0
+      ],
+      "color": "teal"
+    }
+  ],
+  "notes": [
+    {
+      "text": "Sixteenths at 112 BPM. The break was played at 96: the **Chopper** starts each slice on its own beat, so it keeps up without going up in pitch.",
+      "position": [
+        16.0,
+        462.0
+      ],
+      "width": 226.0
+    },
+    {
+      "text": "Each step under the waveform plays a slice, tinted like it. Step 6 plays slice 2 backwards, step 12 plays slice 12 a fourth down, step 14 rests, and step 16 stutters into the top. The dots roll dice. Drag a step up or down to give it another slice, or right-click it for the rest.",
+      "position": [
+        560.0,
+        330.0
+      ],
+      "width": 386.0
+    },
+    {
+      "text": "A bass line in D minor, in the gaps the break leaves. Its own envelope opens the Ladder on every note.",
+      "position": [
+        16.0,
+        640.0
+      ],
+      "width": 226.0
+    }
+  ]
+}

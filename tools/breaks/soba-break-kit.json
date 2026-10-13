@@ -1,0 +1,620 @@
+{
+  "name": "Soba Break Kit",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "util.clock",
+      "position": [
+        40.0,
+        80.0
+      ],
+      "parameters": [
+        {
+          "name": "Tempo",
+          "type": "Number",
+          "value": 96.0
+        },
+        {
+          "name": "Division",
+          "type": "Select",
+          "value": 4
+        },
+        {
+          "name": "Run",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Swing",
+          "type": "Number",
+          "value": 57.0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "module_id": "seq.trigger",
+      "position": [
+        300.0,
+        40.0
+      ],
+      "parameters": [
+        {
+          "name": "Steps",
+          "type": "Number",
+          "value": 16.0
+        },
+        {
+          "name": "Chain 1",
+          "type": "Select",
+          "value": 1
+        },
+        {
+          "name": "Chain 2",
+          "type": "Select",
+          "value": 2
+        },
+        {
+          "name": "Step A1 01",
+          "type": "Number",
+          "value": 1100100.0
+        },
+        {
+          "name": "Step A1 08",
+          "type": "Number",
+          "value": 1100070.0
+        },
+        {
+          "name": "Step A1 11",
+          "type": "Number",
+          "value": 1100092.0
+        },
+        {
+          "name": "Step A2 05",
+          "type": "Number",
+          "value": 1100100.0
+        },
+        {
+          "name": "Step A2 08",
+          "type": "Number",
+          "value": 1100022.0
+        },
+        {
+          "name": "Step A2 10",
+          "type": "Number",
+          "value": 1100030.0
+        },
+        {
+          "name": "Step A2 13",
+          "type": "Number",
+          "value": 1100100.0
+        },
+        {
+          "name": "Step A2 16",
+          "type": "Number",
+          "value": 1100026.0
+        },
+        {
+          "name": "Step A3 01",
+          "type": "Number",
+          "value": 1100078.0
+        },
+        {
+          "name": "Step A3 03",
+          "type": "Number",
+          "value": 1100055.0
+        },
+        {
+          "name": "Step A3 05",
+          "type": "Number",
+          "value": 1100080.0
+        },
+        {
+          "name": "Step A3 07",
+          "type": "Number",
+          "value": 1100052.0
+        },
+        {
+          "name": "Step A3 09",
+          "type": "Number",
+          "value": 1100076.0
+        },
+        {
+          "name": "Step A3 11",
+          "type": "Number",
+          "value": 1100056.0
+        },
+        {
+          "name": "Step A3 12",
+          "type": "Number",
+          "value": 1100030.0
+        },
+        {
+          "name": "Step A3 13",
+          "type": "Number",
+          "value": 1100080.0
+        },
+        {
+          "name": "Step A4 15",
+          "type": "Number",
+          "value": 1100062.0
+        },
+        {
+          "name": "Step B1 01",
+          "type": "Number",
+          "value": 1100100.0
+        },
+        {
+          "name": "Step B1 03",
+          "type": "Number",
+          "value": 1100084.0
+        },
+        {
+          "name": "Step B1 10",
+          "type": "Number",
+          "value": 1100076.0
+        },
+        {
+          "name": "Step B1 11",
+          "type": "Number",
+          "value": 1100094.0
+        },
+        {
+          "name": "Step B2 05",
+          "type": "Number",
+          "value": 1100100.0
+        },
+        {
+          "name": "Step B2 07",
+          "type": "Number",
+          "value": 1100024.0
+        },
+        {
+          "name": "Step B2 12",
+          "type": "Number",
+          "value": 1100028.0
+        },
+        {
+          "name": "Step B2 13",
+          "type": "Number",
+          "value": 1100100.0
+        },
+        {
+          "name": "Step B2 15",
+          "type": "Number",
+          "value": 1100030.0
+        },
+        {
+          "name": "Step B2 16",
+          "type": "Number",
+          "value": 1100062.0
+        },
+        {
+          "name": "Step B3 01",
+          "type": "Number",
+          "value": 1100078.0
+        },
+        {
+          "name": "Step B3 03",
+          "type": "Number",
+          "value": 1100055.0
+        },
+        {
+          "name": "Step B3 05",
+          "type": "Number",
+          "value": 1100080.0
+        },
+        {
+          "name": "Step B3 09",
+          "type": "Number",
+          "value": 1100076.0
+        },
+        {
+          "name": "Step B3 11",
+          "type": "Number",
+          "value": 1100056.0
+        },
+        {
+          "name": "Step B3 13",
+          "type": "Number",
+          "value": 1100080.0
+        },
+        {
+          "name": "Step B3 14",
+          "type": "Number",
+          "value": 1100034.0
+        },
+        {
+          "name": "Step B4 07",
+          "type": "Number",
+          "value": 1100058.0
+        },
+        {
+          "name": "Step B4 15",
+          "type": "Number",
+          "value": 1100066.0
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "module_id": "source.drum",
+      "position": [
+        800.0,
+        260.0
+      ],
+      "parameters": [
+        {
+          "name": "Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Tune",
+          "type": "Number",
+          "value": -2.0
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.38
+        },
+        {
+          "name": "Tone",
+          "type": "Number",
+          "value": 0.4
+        },
+        {
+          "name": "Snap",
+          "type": "Number",
+          "value": 0.62
+        },
+        {
+          "name": "Level",
+          "type": "Number",
+          "value": 0.9
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "module_id": "source.drum",
+      "position": [
+        800.0,
+        480.0
+      ],
+      "parameters": [
+        {
+          "name": "Type",
+          "type": "Select",
+          "value": 1
+        },
+        {
+          "name": "Tune",
+          "type": "Number",
+          "value": 1.5
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.34
+        },
+        {
+          "name": "Tone",
+          "type": "Number",
+          "value": 0.62
+        },
+        {
+          "name": "Snap",
+          "type": "Number",
+          "value": 0.7
+        },
+        {
+          "name": "Level",
+          "type": "Number",
+          "value": 0.8
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "module_id": "source.drum",
+      "position": [
+        800.0,
+        700.0
+      ],
+      "parameters": [
+        {
+          "name": "Type",
+          "type": "Select",
+          "value": 4
+        },
+        {
+          "name": "Tune",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.3
+        },
+        {
+          "name": "Tone",
+          "type": "Number",
+          "value": 0.66
+        },
+        {
+          "name": "Snap",
+          "type": "Number",
+          "value": 0.42
+        },
+        {
+          "name": "Level",
+          "type": "Number",
+          "value": 0.62
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "module_id": "source.drum",
+      "position": [
+        800.0,
+        920.0
+      ],
+      "parameters": [
+        {
+          "name": "Type",
+          "type": "Select",
+          "value": 5
+        },
+        {
+          "name": "Tune",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.5
+        },
+        {
+          "name": "Tone",
+          "type": "Number",
+          "value": 0.62
+        },
+        {
+          "name": "Snap",
+          "type": "Number",
+          "value": 0.45
+        },
+        {
+          "name": "Level",
+          "type": "Number",
+          "value": 0.5
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "module_id": "util.mixer",
+      "position": [
+        1150.0,
+        200.0
+      ],
+      "parameters": [
+        {
+          "name": "Level 1",
+          "type": "Number",
+          "value": 0.9
+        },
+        {
+          "name": "Level 2",
+          "type": "Number",
+          "value": 0.75
+        },
+        {
+          "name": "Level 3",
+          "type": "Number",
+          "value": 0.42
+        },
+        {
+          "name": "Level 4",
+          "type": "Number",
+          "value": 0.4
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "module_id": "fx.reverb",
+      "position": [
+        1550.0,
+        200.0
+      ],
+      "parameters": [
+        {
+          "name": "Size",
+          "type": "Number",
+          "value": 0.22
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.5
+        },
+        {
+          "name": "Damping",
+          "type": "Number",
+          "value": 0.6
+        },
+        {
+          "name": "Pre-Delay",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Mix",
+          "type": "Number",
+          "value": 0.12
+        },
+        {
+          "name": "Width",
+          "type": "Number",
+          "value": 0.6
+        },
+        {
+          "name": "Mod",
+          "type": "Number",
+          "value": 0.1
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "module_id": "output.audio",
+      "position": [
+        1850.0,
+        200.0
+      ],
+      "parameters": [
+        {
+          "name": "Volume",
+          "type": "Number",
+          "value": 0.8
+        },
+        {
+          "name": "Limiter",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Character",
+          "type": "Toggle",
+          "value": false
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from_node": 1,
+      "from_port": "Gate",
+      "to_node": 2,
+      "to_port": "Clock"
+    },
+    {
+      "from_node": 1,
+      "from_port": "Reset",
+      "to_node": 2,
+      "to_port": "Reset"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Gate 1",
+      "to_node": 11,
+      "to_port": "Trig"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Vel 1",
+      "to_node": 11,
+      "to_port": "Accent"
+    },
+    {
+      "from_node": 11,
+      "from_port": "Out",
+      "to_node": 20,
+      "to_port": "Ch 1"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Gate 2",
+      "to_node": 12,
+      "to_port": "Trig"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Vel 2",
+      "to_node": 12,
+      "to_port": "Accent"
+    },
+    {
+      "from_node": 12,
+      "from_port": "Out",
+      "to_node": 20,
+      "to_port": "Ch 2"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Gate 3",
+      "to_node": 13,
+      "to_port": "Trig"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Vel 3",
+      "to_node": 13,
+      "to_port": "Accent"
+    },
+    {
+      "from_node": 13,
+      "from_port": "Out",
+      "to_node": 20,
+      "to_port": "Ch 3"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Gate 4",
+      "to_node": 14,
+      "to_port": "Trig"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Vel 4",
+      "to_node": 14,
+      "to_port": "Accent"
+    },
+    {
+      "from_node": 14,
+      "from_port": "Out",
+      "to_node": 20,
+      "to_port": "Ch 4"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Gate 3",
+      "to_node": 14,
+      "to_port": "Choke"
+    },
+    {
+      "from_node": 20,
+      "from_port": "Out L",
+      "to_node": 21,
+      "to_port": "In L"
+    },
+    {
+      "from_node": 20,
+      "from_port": "Out R",
+      "to_node": 21,
+      "to_port": "In R"
+    },
+    {
+      "from_node": 21,
+      "from_port": "Out L",
+      "to_node": 22,
+      "to_port": "Left"
+    },
+    {
+      "from_node": 21,
+      "from_port": "Out R",
+      "to_node": 22,
+      "to_port": "Right"
+    }
+  ],
+  "midi_mappings": [],
+  "frames": [],
+  "notes": []
+}
