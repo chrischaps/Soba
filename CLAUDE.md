@@ -232,6 +232,9 @@ python tools/showcase/recipe_images.py --check
 # The same for the interface pictures and the tutorial's finished patch (interface-*.png,
 # tutorial-complete-patch.png), each posed by a short cue script
 python tools/showcase/manual_images.py [name ...]   # --check lists the stale ones
+# ...and the module close-ups (module-<name>.png), each posed by a small patch in
+# tools/showcase/modules/. Only the Sampler so far: #199 brings the rest across
+python tools/showcase/module_images.py [name ...]   # --check lists the stale ones
 # Never stop a capture with taskkill /IM: it closes every open copy of Soba. Kill by PID
 
 # Open a patch at launch (otherwise the First Sound example opens)
