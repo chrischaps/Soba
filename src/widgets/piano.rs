@@ -9,8 +9,10 @@ use eframe::egui::{self, Color32, Pos2, Rect, Response, Sense, Ui, Vec2};
 /// Key layout constants - which semitones correspond to white/black keys.
 const WHITE_KEY_NOTES: [u8; 7] = [0, 2, 4, 5, 7, 9, 11]; // C D E F G A B
 const BLACK_KEY_NOTES: [u8; 5] = [1, 3, 6, 8, 10];       // C# D# F# G# A#
-/// Black key positions relative to white keys (fractional position from left).
-const BLACK_KEY_POSITIONS: [f32; 5] = [0.75, 1.75, 3.75, 4.75, 5.75]; // After C, D, F, G, A
+/// Black key centres, in white key widths from the left. Each sits over the
+/// line between two white keys, nudged the way a real piano's are: C# and D#
+/// lean apart, F# and A# lean out from G#, which sits square on its line.
+const BLACK_KEY_CENTERS: [f32; 5] = [0.92, 2.08, 3.88, 5.0, 6.12];
 
 /// Configuration for the piano keyboard widget.
 #[derive(Clone, Debug)]
@@ -171,7 +173,9 @@ fn key_rects(keyboard: Rect) -> ([(u8, Rect); 7], [(u8, Rect); 5]) {
         (WHITE_KEY_NOTES[i], Rect::from_min_size(min, Vec2::new(white_key_width - 1.0, keyboard.height())))
     });
     let blacks = std::array::from_fn(|i| {
-        let x = keyboard.left() + BLACK_KEY_POSITIONS[i] * white_key_width - black_key_width / 2.0;
+        // Less half the 1pt gap between white keys, so the line runs down the middle
+        let center = keyboard.left() + BLACK_KEY_CENTERS[i] * white_key_width - 0.5;
+        let x = center - black_key_width / 2.0;
         let min = Pos2::new(x, keyboard.top());
         (BLACK_KEY_NOTES[i], Rect::from_min_size(min, Vec2::new(black_key_width, black_key_height)))
     });
@@ -232,27 +236,10 @@ pub fn piano_keys(ui: &mut Ui, data: &PianoData, config: &PianoConfig) -> (Respo
             }
         };
 
-        // Draw white keys first (background)
-        for &(semitone, key_rect) in &whites {
+        // A white key: body, border, top highlight, scale mark and hover ring
+        let white_key = |semitone: u8, key_rect: Rect| {
             let is_active = data.is_note_active(semitone);
             let lit = data.in_scale(semitone);
-
-            // Draw glow effect for active keys
-            if is_active {
-                // Multi-layer glow
-                for layer in 0..3 {
-                    let glow_alpha = 40 - layer * 12;
-                    let expand = (3 - layer) as f32 * 2.0;
-                    let glow_rect = key_rect.expand(expand);
-                    let glow_color = Color32::from_rgba_unmultiplied(
-                        config.glow_color.r(),
-                        config.glow_color.g(),
-                        config.glow_color.b(),
-                        glow_alpha as u8,
-                    );
-                    painter.rect_filled(glow_rect, 2.0, glow_color);
-                }
-            }
 
             // Key background: keys outside the scale are left unlit
             let key_color = if is_active {
@@ -284,27 +271,42 @@ pub fn piano_keys(ui: &mut Ui, data: &PianoData, config: &PianoConfig) -> (Respo
             if config.clickable && hovered == Some(semitone) {
                 painter.rect_stroke(key_rect.shrink(0.75 * scale), 2.0, hover_stroke);
             }
+        };
+
+        // A pressed key's light spills a little onto its neighbours, evenly on
+        // both sides, and grows with the keyboard. It stays on the keys: the
+        // glow is clipped to the keyboard rather than bleeding onto the module.
+        let glow_painter = painter.with_clip_rect(painter.clip_rect().intersect(keyboard_rect));
+        let glow = |key_rect: Rect, rounding: f32| {
+            let shadow = egui::epaint::Shadow {
+                offset: Vec2::ZERO,
+                blur: 6.0 * scale,
+                spread: 1.0 * scale,
+                color: config.glow_color.gamma_multiply(0.75),
+            };
+            glow_painter.add(shadow.as_shape(key_rect, rounding));
+        };
+
+        // White keys first; then the pressed ones' glow over their neighbours,
+        // and the pressed keys again on top of their own glow
+        for &(semitone, key_rect) in &whites {
+            white_key(semitone, key_rect);
+        }
+        let pressed = || whites.iter().filter(|(semitone, _)| data.is_note_active(*semitone));
+        for &(_, key_rect) in pressed() {
+            glow(key_rect, 2.0);
+        }
+        for &(semitone, key_rect) in pressed() {
+            white_key(semitone, key_rect);
         }
 
-        // Draw black keys on top
+        // Black keys on top, each pressed one's glow just beneath it
         for &(semitone, key_rect) in &blacks {
             let is_active = data.is_note_active(semitone);
             let lit = data.in_scale(semitone);
 
-            // Draw glow effect for active keys
             if is_active {
-                for layer in 0..3 {
-                    let glow_alpha = 50 - layer * 15;
-                    let expand = (3 - layer) as f32 * 1.5;
-                    let glow_rect = key_rect.expand(expand);
-                    let glow_color = Color32::from_rgba_unmultiplied(
-                        config.glow_color.r(),
-                        config.glow_color.g(),
-                        config.glow_color.b(),
-                        glow_alpha as u8,
-                    );
-                    painter.rect_filled(glow_rect, 1.5, glow_color);
-                }
+                glow(key_rect, 1.5);
             }
 
             // Key background
