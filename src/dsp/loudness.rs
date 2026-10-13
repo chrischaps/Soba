@@ -10,6 +10,10 @@
 //! reads its RMS level on each channel, a 0 dBFS sine on one channel -3.01
 //! LUFS. The measurement is taken in 100 ms steps: 400 ms blocks for
 //! integrated loudness and 3 s windows for the range.
+//!
+//! [`true_peak`] is the same standard's peak meter (Annex 2): the highest the
+//! waveform goes between the samples, which is what a DAC or a lossy encoder
+//! clips, rather than at them.
 
 /// The two loudness readings of a render. `None` where the render is too
 /// short to measure or nothing in it clears the -70 LUFS gate.
@@ -89,6 +93,61 @@ fn range(short_term: &[f64]) -> Option<f64> {
     let at = |fraction: f64| kept[((kept.len() - 1) as f64 * fraction + 0.5) as usize];
     Some(at(0.95) - at(0.10))
 }
+
+/// The true peak of one channel as an amplitude, to read in dBTP: the largest
+/// absolute value of the waveform, oversampled 4× below 96 kHz and 2× below
+/// 192 kHz with BS.1770-4's interpolation filter. From 192 kHz up the samples
+/// are close enough together to read on their own. Never less than the sample
+/// peak, since the filter's points fall between the samples, not on them.
+pub fn true_peak(channel: &[f32], sample_rate: f32) -> f32 {
+    let phases: &[usize] = match sample_rate {
+        r if r < 96_000.0 => &[0, 1, 2, 3],
+        r if r < 192_000.0 => &[0, 2],
+        _ => &[],
+    };
+    let sample_peak = channel.iter().fold(0.0f64, |peak, &s| peak.max(s.abs() as f64));
+    if phases.is_empty() {
+        return sample_peak as f32;
+    }
+    // Silence either side, so the filter runs into the first sample and out
+    // past the last
+    let taps = INTERPOLATION_PHASES[0].len();
+    let padding = std::iter::repeat(0.0).take(taps - 1);
+    let padded: Vec<f64> = padding.clone().chain(channel.iter().map(|&s| s as f64)).chain(padding).collect();
+    padded
+        .windows(taps)
+        .flat_map(|window| {
+            phases.iter().map(move |&phase| {
+                let coefficients = INTERPOLATION_PHASES[phase].iter();
+                coefficients.zip(window.iter().rev()).map(|(c, x)| c * x).sum::<f64>().abs()
+            })
+        })
+        .fold(sample_peak, f64::max) as f32
+}
+
+/// BS.1770-4 Annex 2's 48-tap interpolation filter for 4× oversampling, as
+/// its four 12-tap phases: each makes one of the four points per sample, at
+/// an eighth, three eighths, five eighths and seven eighths of the way to
+/// the next. The last two phases are the first two reversed. Its passband is
+/// flat to within 0.1 dB up to 20 kHz at 48 kHz.
+const INTERPOLATION_PHASES: [[f64; 12]; 4] = [
+    [
+        0.0017089843750, 0.0109863281250, -0.0196533203125, 0.0332031250000, -0.0594482421875, 0.1373291015625,
+        0.9721679687500, -0.1022949218750, 0.0476074218750, -0.0266113281250, 0.0148925781250, -0.0083007812500,
+    ],
+    [
+        -0.0291748046875, 0.0292968750000, -0.0517578125000, 0.0891113281250, -0.1665039062500, 0.4650878906250,
+        0.7797851562500, -0.2003173828125, 0.1015625000000, -0.0582275390625, 0.0330810546875, -0.0189208984375,
+    ],
+    [
+        -0.0189208984375, 0.0330810546875, -0.0582275390625, 0.1015625000000, -0.2003173828125, 0.7797851562500,
+        0.4650878906250, -0.1665039062500, 0.0891113281250, -0.0517578125000, 0.0292968750000, -0.0291748046875,
+    ],
+    [
+        -0.0083007812500, 0.0148925781250, -0.0266113281250, 0.0476074218750, -0.1022949218750, 0.9721679687500,
+        0.1373291015625, -0.0594482421875, 0.0332031250000, -0.0196533203125, 0.0109863281250, 0.0017089843750,
+    ],
+];
 
 /// BS.1770's two-stage K-weighting filter, designed for any sample rate from
 /// the analog prototype behind the standard's 48 kHz coefficients.
@@ -250,5 +309,53 @@ mod tests {
         let mut s = sine(1000.0, -20.0, 48_000.0, 10.0);
         s.extend(sine(1000.0, -30.0, 48_000.0, 10.0));
         assert_near(loudness(&s, &s, 48_000.0).range, 10.0, 0.2);
+    }
+
+    fn db(amplitude: f32) -> f64 {
+        20.0 * (amplitude as f64).log10()
+    }
+
+    /// A full-scale sine at a quarter of the sample rate, a 45° phase offset
+    /// putting every sample at ±0.707: the peaks fall halfway between them.
+    fn quarter_rate_sine(samples: usize) -> Vec<f32> {
+        (0..samples).map(|i| (std::f64::consts::FRAC_PI_2 * i as f64 + std::f64::consts::FRAC_PI_4).sin() as f32).collect()
+    }
+
+    #[test]
+    fn test_peaks_between_the_samples_read_full_scale() {
+        let s = quarter_rate_sine(4800);
+        assert!((db(crate::dsp::analysis::peak(&s)) - -3.01).abs() < 0.01);
+        for sample_rate in [44_100.0, 48_000.0] {
+            let reading = db(true_peak(&s, sample_rate));
+            assert!(reading.abs() < 0.2, "{} Hz: read {:.2} dBTP", sample_rate, reading);
+        }
+    }
+
+    #[test]
+    fn test_oversampling_halves_at_96k_and_stops_at_192k() {
+        let s = quarter_rate_sine(4800);
+        // 2× finds points an eighth of a sample from the crest, 1× only the samples
+        let reading = db(true_peak(&s, 96_000.0));
+        assert!(reading > -0.5 && reading < 0.2, "96 kHz: read {:.2} dBTP", reading);
+        assert!((db(true_peak(&s, 192_000.0)) - -3.01).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_square_wave_overshoots_its_sample_peak() {
+        // A naive ±0.5 square at 1 kHz: the band-limited waveform rings past
+        // its flat tops at each edge
+        let s: Vec<f32> = (0..48_000).map(|i| if i % 48 < 24 { 0.5 } else { -0.5 }).collect();
+        let (sample, true_) = (db(crate::dsp::analysis::peak(&s)), db(true_peak(&s, 48_000.0)));
+        assert!(true_ > sample + 0.5, "sample peak {:.2} dBFS, true peak {:.2} dBTP", sample, true_);
+    }
+
+    #[test]
+    fn test_true_peak_never_reads_under_the_sample_peak() {
+        assert_eq!(true_peak(&[], 48_000.0), 0.0);
+        assert_eq!(true_peak(&[0.0; 100], 48_000.0), 0.0);
+        // A lone click: the filter's points either side of it fall short of it
+        let mut click = vec![0.0; 100];
+        click[50] = -0.8;
+        assert_eq!(true_peak(&click, 48_000.0), 0.8);
     }
 }

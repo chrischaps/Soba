@@ -152,7 +152,7 @@ Pass a patch file to open it instead of First Sound:
 cargo run --release -- patches/lush-pad.json
 ```
 
-The `render` tool plays a patch into a WAV file without opening the app or using an audio device, then prints each channel's peak and RMS level, the mix's loudness, and how hard the patch drives the output limiter:
+The `render` tool plays a patch into a WAV file without opening the app or using an audio device, then prints each channel's peak, true peak and RMS level, the mix's loudness, and how hard the patch drives the output limiter:
 
 ```bash
 cargo run --release --bin render -- patches/fm-synthesis.json out.wav --seconds 5
@@ -166,7 +166,7 @@ cargo run --release --bin render -- patches/fm-synthesis.json out.wav --seconds 
 | `--audition` | off | Plays a short phrase into the patch's Keyboard, MIDI Note and Poly MIDI modules |
 | `--input FILE.wav` | none | What [Audio Input](../modules/sources/audio-input.md) modules hear, in place of an input device. It must be at the render's sample rate |
 | `--cue FILE.txt` | none | Parameter changes to play into the patch as it renders, one per line: `<seconds> param <module>[#n] <parameter> <value>`, as in a capture script. Press a [Looper](../modules/utilities/looper.md)'s footswitches this way |
-| `--compare FILE.wav` | none | An earlier render to measure against: prints how far peak, RMS, loudness and range have moved since |
+| `--compare FILE.wav` | none | An earlier render to measure against: prints how far peak, true peak, RMS, loudness and range have moved since |
 
 A patch that waits for a player renders silence unless something inside it plays notes (a Clock or Step Sequencer, say) or you add `--audition`. Audio Input modules render silence unless you give them a file with `--input`. [Samplers](../modules/sources/sampler.md) find their files relative to the patch, as the app does.
 
@@ -174,15 +174,17 @@ Here Lush Pad's filter has been closed from 2500 Hz to 833 Hz since `before.wav`
 
 ```text
 rendered 'Lush Pad' (8.00 s @ 48000 Hz) -> after.wav
-  L: peak   -4.8 dBFS   rms  -22.2 dBFS
-  R: peak   -4.3 dBFS   rms  -21.4 dBFS
+  L: peak   -4.8 dBFS   true   -4.7 dBTP   rms  -22.2 dBFS
+  R: peak   -4.3 dBFS   true   -4.3 dBTP   rms  -21.4 dBFS
   loudness -17.4 LUFS   range 12.3 LU
   limiter in   -4.3 dBFS   took 0.0 dB at most, 0% of the time over 1 dB
 against before.wav:
-  L: peak   -1.5 dB     rms   -1.0 dB
-  R: peak   -1.2 dB     rms   -0.9 dB
+  L: peak   -1.5 dB     true   -1.5 dB     rms   -1.0 dB
+  R: peak   -1.2 dB     true   -1.2 dB     rms   -0.9 dB
   loudness  -1.3 LU     range -0.1 LU
 ```
+
+**True** is the true peak, in dBTP, also after BS.1770-4: how high the waveform goes between the samples, which can be higher than at them. A converter playing the file, or an encoder squeezing it into an MP3 or a video, rebuilds that waveform and clips whatever goes over full scale, so a render whose samples all sit under 0 dBFS can still clip when it's played. A smooth pad reads its sample peak or a tenth above it. Sharp transients go higher: Backbeat's drums read 0.8 dB above their samples. Keep it under −1 dBTP to be safe.
 
 **Loudness** is integrated loudness after ITU-R BS.1770-4, the measure streaming services normalize to. It weights the mix the way the ear does, so it's the number to compare when you want to know whether a change made a patch sound louder. RMS overweights the bass: above, it says the darker pad lost 1 dB, but the ear hears the treble it lost and puts it at 1.3. **Range** is the EBU loudness range, the spread between the quiet and loud passages. It reads `--` on renders shorter than three seconds.
 

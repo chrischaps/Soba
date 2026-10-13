@@ -193,7 +193,7 @@ cargo check
 # Run with release optimizations (for audio performance testing)
 cargo run --release
 
-# Render a patch to WAV offline (no audio device) and print peak/RMS levels, plus
+# Render a patch to WAV offline (no audio device) and print peak, true peak (dBTP) and RMS levels, plus
 # integrated loudness (LUFS, BS.1770-4) and loudness range (LU) of the mix, and the
 # peak going into the Audio Output's limiter (and how much it limited)
 cargo run --release --bin render -- patch.json out.wav --seconds 5

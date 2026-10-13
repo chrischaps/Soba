@@ -56,7 +56,7 @@ Nineteen example patches are in [`patches/`](patches) and in the app's **Example
 
 ### Render a patch offline
 
-The `render` binary plays a patch to a WAV file without an audio device, and prints its peak and RMS levels, its loudness in LUFS, and the peak going into the output limiter (`--compare before.wav` shows how far they moved):
+The `render` binary plays a patch to a WAV file without an audio device, and prints its peak, true peak and RMS levels, its loudness in LUFS, and the peak going into the output limiter (`--compare before.wav` shows how far they moved):
 
 ```bash
 cargo run --release --bin render -- patches/fm-synthesis.json out.wav --seconds 5

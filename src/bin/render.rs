@@ -4,9 +4,10 @@
 //! cargo run --release --bin render -- <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--audition] [--input in.wav] [--cue cues.txt] [--compare before.wav]
 //! ```
 //!
-//! Prints the peak and RMS level of each channel, and the integrated loudness
-//! (ITU-R BS.1770-4) and loudness range (EBU Tech 3342) of the mix, so renders
-//! can be compared before and after a change. Then how hard the patch drove
+//! Prints the peak, true peak (ITU-R BS.1770-4) and RMS level of each
+//! channel, and the integrated loudness (BS.1770-4) and loudness range (EBU
+//! Tech 3342) of the mix, so renders can be compared before and after a
+//! change. Then how hard the patch drove
 //! the Audio Output's limiter: the peak going in, the most it turned the
 //! output down, and for how much of the render. `--compare` reads an earlier
 //! render and prints how far each of those has moved since.
@@ -30,7 +31,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use soba::dsp::analysis::{amp_to_db, peak, rms};
-use soba::dsp::loudness::{loudness, Loudness};
+use soba::dsp::loudness::{loudness, true_peak, Loudness};
 use soba::engine::{create_module_registry, read_wav, EngineCommand, LimiterReport, OfflineRenderer};
 use soba::persistence::sample_files::SampleBase;
 use soba::persistence::{load_from_file, CompiledPatch, Patch};
@@ -177,8 +178,9 @@ fn run(args: Args) -> Result<(), String> {
 
 /// What a render's levels are measured as.
 struct Levels {
-    /// Peak and RMS in dBFS, left then right.
+    /// Peak and RMS in dBFS and true peak in dBTP, left then right.
     peak: [f32; 2],
+    true_peak: [f32; 2],
     rms: [f32; 2],
     loudness: Loudness,
 }
@@ -187,6 +189,7 @@ impl Levels {
     fn of(left: &[f32], right: &[f32], sample_rate: u32) -> Self {
         Self {
             peak: [left, right].map(|c| amp_to_db(peak(c))),
+            true_peak: [left, right].map(|c| amp_to_db(true_peak(c, sample_rate as f32))),
             rms: [left, right].map(|c| amp_to_db(rms(c))),
             loudness: loudness(left, right, sample_rate as f32),
         }
@@ -194,7 +197,10 @@ impl Levels {
 
     fn print(&self) {
         for (i, name) in ["L", "R"].iter().enumerate() {
-            println!("  {}: peak {:6.1} dBFS   rms {:6.1} dBFS", name, self.peak[i], self.rms[i]);
+            println!(
+                "  {}: peak {:6.1} dBFS   true {:6.1} dBTP   rms {:6.1} dBFS",
+                name, self.peak[i], self.true_peak[i], self.rms[i]
+            );
         }
         println!(
             "  loudness {:>5} LUFS   range {:>4} LU",
@@ -208,9 +214,10 @@ impl Levels {
         let change = |now: f32, then: f32| format!("{:+6.1}", now - then);
         for (i, name) in ["L", "R"].iter().enumerate() {
             println!(
-                "  {}: peak {} dB     rms {} dB",
+                "  {}: peak {} dB     true {} dB     rms {} dB",
                 name,
                 change(self.peak[i], before.peak[i]),
+                change(self.true_peak[i], before.true_peak[i]),
                 change(self.rms[i], before.rms[i])
             );
         }
