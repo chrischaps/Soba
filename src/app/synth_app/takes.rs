@@ -100,6 +100,7 @@ impl SynthApp {
             std::fs::write(&partial, sample_files::encode_wav(&sample)).map_err(|e| format!("{}: {e}", path.display()))?;
             std::fs::rename(&partial, &path).map_err(|e| format!("{}: {e}", path.display()))?;
             let key = path.to_string_lossy().into_owned();
+            self.take_files.wrote(&key);
             self.user_state.samples.insert(&key, Decoded { sample, truncated: false });
             Ok(key)
         }

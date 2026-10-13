@@ -321,6 +321,7 @@ impl SynthApp {
         let mut changed = false;
         for (from, to) in &moved {
             self.user_state.samples.rename(from, to);
+            self.take_files.copied(from, to);
             for (_, node) in self.graph_state.graph.nodes.iter_mut() {
                 if node.user_data.file.as_deref() == Some(from.as_str()) {
                     node.user_data.file = Some(to.clone());

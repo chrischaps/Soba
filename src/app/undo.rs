@@ -16,7 +16,7 @@
 //! A step remembers the level it was made on (the top of the patch, or
 //! inside a group), so undoing it can show it happening.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::time::Duration;
 use web_time::Instant;
 
@@ -925,6 +925,16 @@ impl History {
         }
     }
 
+    /// Every file a module plays, as of the last step or at any step undo
+    /// or redo could bring back, by sample key.
+    pub fn files(&self) -> HashSet<&str> {
+        let mut files: HashSet<&str> = self.baseline.nodes.values().filter_map(file).collect();
+        for diff in self.undo.iter().chain(&self.redo).flat_map(|step| &step.nodes) {
+            files.extend([&diff.before, &diff.after].into_iter().flatten().filter_map(file));
+        }
+        files
+    }
+
     /// Undoes the last step, if there is one.
     pub fn undo(&mut self, editor: &mut SynthGraphEditorState, user_state: &mut SynthGraphState) -> Option<Applied> {
         // A gesture still in progress is finished first, so it's what gets undone
@@ -1444,6 +1454,25 @@ mod tests {
         round_trip(&mut rig, |rig| rig.delete(sampler));
         rig.undo();
         assert_eq!(rig.editor.graph[rig.node(key)].user_data.file.as_deref(), Some("C:/kit/kick.wav"));
+    }
+
+    #[test]
+    fn test_history_names_every_file_undo_or_redo_could_bring_back() {
+        let mut rig = Rig::new();
+        let sampler = rig.add("source.sampler", pos2(0.0, 0.0));
+        for take in ["Take 1.wav", "Take 2.wav", "Take 3.wav"] {
+            rig.editor.graph[sampler].user_data.file = Some(take.into());
+            rig.record();
+        }
+        rig.undo();
+        let files = rig.history.files();
+        assert!(["Take 1.wav", "Take 2.wav", "Take 3.wav"].iter().all(|take| files.contains(take)), "{files:?}");
+        // A new edit drops the redo, and the take only it could bring back
+        rig.editor.graph[sampler].user_data.file = Some("Take 4.wav".into());
+        rig.record();
+        let files = rig.history.files();
+        assert!(!files.contains("Take 3.wav"));
+        assert!(["Take 1.wav", "Take 2.wav", "Take 4.wav"].iter().all(|take| files.contains(take)), "{files:?}");
     }
 
     #[test]

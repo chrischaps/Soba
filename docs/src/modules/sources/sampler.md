@@ -56,6 +56,8 @@ When a take ends it's written as a WAV beside the patch, as `<patch name> sample
 
 A patch that hasn't been saved yet, a new one or an example, keeps its takes in a temporary folder until you save it. **Save As** then copies them beside the patch with its other samples. In the browser there's no folder beside the patch, so a take lives only in the session, as a dropped file does.
 
+Takes nobody keeps don't pile up. Saving removes the takes this session wrote that the patch no longer plays and undo can't bring back. Closing the patch (New, Open or Quit) removes those no saved patch names, the temporary folder among them. That covers the files Trim and Normalize write too. A file Soba didn't write is never touched.
+
 Room for a take is set aside, a minute of stereo (about 23 MB at 48 kHz), when something is patched into **In**, so recording never has to find memory mid-take. Unpatch **In** and it's given back.
 
 ## Trim and Normalize

@@ -56,6 +56,8 @@ mod record_into;
 mod samples;
 mod slicing;
 mod takes;
+#[cfg(not(target_arch = "wasm32"))]
+mod take_files;
 mod tidy;
 #[cfg(not(target_arch = "wasm32"))]
 mod updates;
@@ -260,6 +262,10 @@ pub struct SynthApp {
     /// Loop files the patch opened or wrote, which a save may remove once
     /// no Looper names them.
     loop_files: std::collections::HashSet<String>,
+    /// Takes and tidied files the session wrote, removed once no patch
+    /// names them.
+    #[cfg(not(target_arch = "wasm32"))]
+    take_files: take_files::TakeFiles,
     /// When each Sampler was last handed room to record into.
     rooms_given: HashMap<crate::engine::NodeId, web_time::Instant>,
     /// New Samplers whose Rec is to be pressed, once they can record.
@@ -477,6 +483,8 @@ impl SynthApp {
             record_toast: None,
             kept_loops: HashMap::new(),
             loop_files: std::collections::HashSet::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            take_files: take_files::TakeFiles::default(),
             rooms_given: HashMap::new(),
             arming: Vec::new(),
             revealing: None,
@@ -2869,6 +2877,10 @@ impl SynthApp {
 
     /// Clear the entire graph.
     fn clear_graph(&mut self) {
+        // The patch is let go, and with it any take it alone had
+        #[cfg(not(target_arch = "wasm32"))]
+        self.tidy_takes_on_leave();
+
         // Send clear command to audio engine
         self.send_command(EngineCommand::ClearGraph);
 
@@ -3231,6 +3243,8 @@ impl SynthApp {
         self.sync_history();
         self.mark_saved();
         self.recent_files.push(path);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.tidy_takes_on_save(path);
     }
 
     /// Notes that the patch as it stands is what was last opened or saved.
@@ -3286,6 +3300,8 @@ impl SynthApp {
             Discard::OpenExample(example) => self.open_example(example),
             Discard::Quit => {
                 self.finish_recording_now();
+                #[cfg(not(target_arch = "wasm32"))]
+                self.tidy_takes_on_leave();
                 self.allow_close = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
@@ -4398,6 +4414,9 @@ impl eframe::App for SynthApp {
             capture.draw_cursor(ctx);
             capture.end_frame(ctx);
             if capture.finish() {
+                // A take the script recorded isn't the patch's to keep
+                #[cfg(not(target_arch = "wasm32"))]
+                self.tidy_takes_on_leave();
                 self.allow_close = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
