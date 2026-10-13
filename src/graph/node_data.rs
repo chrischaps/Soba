@@ -125,10 +125,6 @@ pub struct KnobParam {
     pub label: String,
     /// How this knob interacts with its CV input port.
     pub input_mode: KnobInputMode,
-    /// A modulatable knob whose CV simply adds to it, clamped to its range
-    /// (a Mixer's Level or Send): the knob can then show where the CV has
-    /// carried it.
-    pub cv_adds: bool,
 }
 
 impl KnobParam {
@@ -150,7 +146,6 @@ impl KnobParam {
             param_name: param_name.into(),
             label: label.into(),
             input_mode,
-            cv_adds: false,
         }
     }
 
@@ -885,7 +880,18 @@ impl SynthNodeData {
 
                         // Visual indicator for MIDI mapping or learn mode
                         let show_midi_indicator = midi_config.has_midi_mapping || midi_config.is_learn_target;
-                        let show_connection_indicator = is_connected && !show_midi_indicator;
+                        // Where the CV has carried a knob it modulates: the
+                        // knob draws its way there, which says it's patched
+                        // better than the dot does, so the dot gives way
+                        let modulated = match (&input.value, signal_value) {
+                            (SynthValueType::Number { value, .. }, Some(cv))
+                                if knob_param.input_mode == KnobInputMode::Modulatable && takeover.is_none() =>
+                            {
+                                super::knob_cv::effective(self.module_id, &knob_param.param_name, *value, cv, node_id, graph, user_state)
+                            }
+                            _ => None,
+                        };
+                        let show_connection_indicator = is_connected && !show_midi_indicator && modulated.is_none();
 
                         if show_midi_indicator {
                             // MIDI CC badge - purple for mapped, blinking for learn mode
@@ -951,11 +957,6 @@ impl SynthNodeData {
                             signal_value
                         } else {
                             None // Modulatable: show base knob value, not CV signal
-                        };
-                        // ...and, where the CV adds to it, where it has carried the knob
-                        let modulated = match (&input.value, signal_value) {
-                            (SynthValueType::Number { value, .. }, Some(cv)) if knob_param.cv_adds && takeover.is_none() => Some(value + cv),
-                            _ => None,
                         };
                         Self::render_knob_for_value(
                             ui,

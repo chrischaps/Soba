@@ -12,7 +12,8 @@
 //! dimmed, reading what's actually in charge: an LFO's Rate shows its
 //! division while it's synced, and the Clock's Tempo shows the master's
 //! tempo while it follows MIDI. A Clock's Tempo with a cable in its jack
-//! stays in hand, but reads the tempo the cable bends it to.
+//! stays in hand, and shows the tempo the cable bends it to (see
+//! [`super::knob_cv`]).
 
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Stroke, Vec2};
 use egui_node_graph2::NodeId;
@@ -38,7 +39,7 @@ fn selected(graph: &SynthGraph, node_id: NodeId, name: &str) -> Option<usize> {
 }
 
 /// The value of the Number parameter `name` on a node, if it has one.
-fn number(graph: &SynthGraph, node_id: NodeId, name: &str) -> Option<f32> {
+pub(super) fn number(graph: &SynthGraph, node_id: NodeId, name: &str) -> Option<f32> {
     let node = graph.nodes.get(node_id)?;
     let (_, input) = node.inputs.iter().find(|(input, _)| input == name)?;
     match graph.get_input(*input).value {
@@ -63,13 +64,6 @@ fn pulses_in_bar(division: f32, swing: f32) -> impl Iterator<Item = (f32, bool)>
 /// Whether a Clock node follows MIDI.
 fn follows_midi(graph: &SynthGraph, node_id: NodeId) -> bool {
     selected(graph, node_id, "Source") == Some(1)
-}
-
-/// Whether a cable plays into a Clock node's Tempo jack.
-fn tempo_cv_patched(graph: &SynthGraph, node_id: NodeId) -> bool {
-    let Some(node) = graph.nodes.get(node_id) else { return false };
-    let Some(&(_, tempo)) = node.inputs.iter().find(|(name, _)| name == "Tempo") else { return false };
-    graph.iter_connections().any(|(input, _)| input == tempo)
 }
 
 /// The latest readout from a node's module.
@@ -121,15 +115,7 @@ pub fn knob_takeover(
                 locked: true,
             })
         }
-        // Tempo CV bends the knob's tempo: the knob still sets it, and reads
-        // what the Clock is playing
-        ("util.clock", "Tempo") if tempo_cv_patched(graph, node_id) => Some(KnobTakeover {
-            value: None,
-            text: format!("{:.1} BPM", readout?.values[Clock::READOUT_TEMPO]),
-            locked: false,
-        }),
         ("seq.arranger", "Steps") => super::arranger_follow::steps_takeover(graph, user_state, node_id),
-        (super::envelope_cv::MODULE, _) => super::envelope_cv::stage_takeover(graph, user_state, node_id, param),
         _ => None,
     }
 }

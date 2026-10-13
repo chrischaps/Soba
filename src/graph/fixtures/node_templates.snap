@@ -492,23 +492,23 @@ out  Out R              Audio
 out  Send L             Audio
 out  Send R             Audio
 out  Chain Out          Bus
-knob Level 1            "Lv 1" Modulatable adds
-knob Pan 1              "Pan 1" Modulatable adds
+knob Level 1            "Lv 1" Modulatable
+knob Pan 1              "Pan 1" Modulatable
 knob Width 1            "Wid 1" KnobOnly
-knob Send 1             "Snd 1" Modulatable adds
-knob Level 2            "Lv 2" Modulatable adds
-knob Pan 2              "Pan 2" Modulatable adds
+knob Send 1             "Snd 1" Modulatable
+knob Level 2            "Lv 2" Modulatable
+knob Pan 2              "Pan 2" Modulatable
 knob Width 2            "Wid 2" KnobOnly
-knob Send 2             "Snd 2" Modulatable adds
-knob Level 3            "Lv 3" Modulatable adds
-knob Pan 3              "Pan 3" Modulatable adds
+knob Send 2             "Snd 2" Modulatable
+knob Level 3            "Lv 3" Modulatable
+knob Pan 3              "Pan 3" Modulatable
 knob Width 3            "Wid 3" KnobOnly
-knob Send 3             "Snd 3" Modulatable adds
-knob Level 4            "Lv 4" Modulatable adds
-knob Pan 4              "Pan 4" Modulatable adds
+knob Send 3             "Snd 3" Modulatable
+knob Level 4            "Lv 4" Modulatable
+knob Pan 4              "Pan 4" Modulatable
 knob Width 4            "Wid 4" KnobOnly
-knob Send 4             "Snd 4" Modulatable adds
-knob Return             "Ret" Modulatable adds
+knob Send 4             "Snd 4" Modulatable
+knob Return             "Ret" Modulatable
 knob Master             "Master" KnobOnly
 display MixerStrips
 

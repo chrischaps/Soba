@@ -19,30 +19,22 @@ pub struct KnobHint {
     /// When the parameter has a CV input: true if CV modulates around the
     /// knob, false if CV replaces it. Ignored for parameters without a CV input.
     pub modulatable: bool,
-    /// A modulatable knob whose CV simply adds to it, so the knob can show
-    /// where the CV has carried it.
-    pub adds: bool,
 }
 
 /// A knob labeled with the parameter's own name.
 const fn knob(param: &'static str) -> KnobHint {
-    KnobHint { param, label: param, modulatable: false, adds: false }
+    KnobHint { param, label: param, modulatable: false }
 }
 
 /// A knob with a short label.
 const fn knob_as(param: &'static str, label: &'static str) -> KnobHint {
-    KnobHint { param, label, modulatable: false, adds: false }
+    KnobHint { param, label, modulatable: false }
 }
 
-/// A knob whose CV input modulates around the knob's value instead of replacing it.
+/// A knob whose CV input modulates around the knob's value instead of
+/// replacing it. Its law, in [`super::knob_cv`], says where CV carries it.
 const fn modulatable(param: &'static str, label: &'static str) -> KnobHint {
-    KnobHint { param, label, modulatable: true, adds: false }
-}
-
-/// A modulatable knob whose CV adds to its value, clamped to its range: the
-/// knob shows where the CV has carried it.
-const fn added(param: &'static str, label: &'static str) -> KnobHint {
-    KnobHint { param, label, modulatable: true, adds: true }
+    KnobHint { param, label, modulatable: true }
 }
 
 /// Presentation hints for one module.
@@ -289,23 +281,23 @@ static MODULE_UI: &[ModuleUi] = &[
         // short labels are what a group's face shows when one is pinned.
         // Every CV adds to its knob, which shows where the CV has carried it
         knobs: &[
-            added("Level 1", "Lv 1"),
-            added("Pan 1", "Pan 1"),
+            modulatable("Level 1", "Lv 1"),
+            modulatable("Pan 1", "Pan 1"),
             knob_as("Width 1", "Wid 1"),
-            added("Send 1", "Snd 1"),
-            added("Level 2", "Lv 2"),
-            added("Pan 2", "Pan 2"),
+            modulatable("Send 1", "Snd 1"),
+            modulatable("Level 2", "Lv 2"),
+            modulatable("Pan 2", "Pan 2"),
             knob_as("Width 2", "Wid 2"),
-            added("Send 2", "Snd 2"),
-            added("Level 3", "Lv 3"),
-            added("Pan 3", "Pan 3"),
+            modulatable("Send 2", "Snd 2"),
+            modulatable("Level 3", "Lv 3"),
+            modulatable("Pan 3", "Pan 3"),
             knob_as("Width 3", "Wid 3"),
-            added("Send 3", "Snd 3"),
-            added("Level 4", "Lv 4"),
-            added("Pan 4", "Pan 4"),
+            modulatable("Send 3", "Snd 3"),
+            modulatable("Level 4", "Lv 4"),
+            modulatable("Pan 4", "Pan 4"),
             knob_as("Width 4", "Wid 4"),
-            added("Send 4", "Snd 4"),
-            added("Return", "Ret"),
+            modulatable("Send 4", "Snd 4"),
+            modulatable("Return", "Ret"),
             knob("Master"),
         ],
         // Each strip's mute and solo are buttons at the end of its row

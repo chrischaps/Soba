@@ -78,7 +78,7 @@ Each adds to its knob. A **Level** CV can take a channel from silence to full, b
 
 **Send** and **Return** CV work the way **Level**'s does, from 0 to 100%. With a **Send** knob at 0, a lane at 1 is a full send: one part steps into the reverb alone while the rest stay dry. With the **Return** knob at 0, a lane into **Return** is the whole room's fader, so a song can open dry and close and bring the hall in for its second verse without spending two channels on the reverb.
 
-A patched knob shows an orange dot at its top right and keeps its own setting. While the patch plays, a thin orange arc runs round its edge from where the knob is set to a bead where the CV has carried it, so you can see a lane open the room.
+A patched knob keeps its own setting. While the patch plays, a thin orange arc runs round its edge from where the knob is set to a bead where the CV has carried it, and the number under the knob reads that value in orange, so you can see a lane open the room.
 
 None of them smooths its CV. A jump from an [Arranger](./arranger.md) lane under a ringing note or a reverb tail clicks. Give the lane a **Glide** (40 ms saves a tail, a second suits a fade) or write the change as a **Ramp**, and the move is as smooth as a hand on a fader.
 

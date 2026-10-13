@@ -144,8 +144,9 @@ pub struct KnobConfig {
     /// How the knob is drawn.
     pub style: KnobStyle,
     /// Where CV has carried a knob that keeps its own setting while the CV
-    /// adds to it: drawn as a Control-coloured arc from the knob's value to
-    /// here, with a bead at its end, so a patched knob shows what it's doing.
+    /// modulates it: drawn as a Control-coloured arc from the knob's value to
+    /// here, with a bead at its end, over a faint swath of where the CV has
+    /// been lately, and read under the dial while the knob isn't in hand.
     pub modulated: Option<f32>,
 }
 
@@ -357,6 +358,22 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
         }
     }
 
+    // Where the CV has been lately, kept between frames
+    let swath_id = response.id.with("cv_swath");
+    let swath = match config.modulated {
+        Some(to) => {
+            let (now, time) = (config.travel(to).clamp(0.0, 1.0), ui.input(|i| i.time));
+            let swath = ui.data(|d| d.get_temp::<Swath>(swath_id)).map_or(Swath::at(now, time), |swath| swath.follow(now, time));
+            ui.data_mut(|d| d.insert_temp(swath_id, swath));
+            Some(swath)
+        }
+        None => {
+            ui.data_mut(|d| d.remove::<Swath>(swath_id));
+            None
+        }
+    };
+    let hot = response.hovered() || response.dragged();
+
     // Draw the knob
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
@@ -388,7 +405,7 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
                 value: normalized.clamp(0.0, 1.0),
                 zero,
                 accent: config.accent,
-                hot: response.hovered() || response.dragged(),
+                hot,
                 dragged: response.dragged(),
             };
             match style {
@@ -398,8 +415,8 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
                 KnobStyle::Hybrid => paint_hybrid(painter, &face),
                 KnobStyle::Classic => unreachable!(),
             }
-            paint_modulation(painter, center, config, normalized);
-            paint_readout(painter, knob_rect, face.s, config, *value);
+            paint_modulation(painter, center, config, normalized, swath);
+            paint_readout(painter, knob_rect, face.s, config, *value, hot);
             return response;
         }
 
@@ -468,7 +485,7 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
         // Draw center dot
         painter.circle_filled(center, 3.0 * scale, theme::text::SECONDARY);
 
-        paint_modulation(painter, center, config, normalized);
+        paint_modulation(painter, center, config, normalized, swath);
 
         // Draw outer ring border
         painter.circle_stroke(
@@ -487,13 +504,13 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
         // Draw value text
         let mut text_y = knob_rect.bottom() + 2.0 * scale;
         if config.show_value {
-            let value_text = config.value_text.clone().unwrap_or_else(|| config.format.format(*value));
+            let (value_text, color) = readout_text(config, *value, hot);
             painter.text(
                 Pos2::new(center.x, text_y + 6.0 * scale),
                 egui::Align2::CENTER_CENTER,
                 value_text,
                 egui::FontId::proportional(11.0 * scale),
-                theme::text::PRIMARY,
+                color,
             );
             text_y += 14.0 * scale;
         }
@@ -740,8 +757,9 @@ fn paint_hybrid(painter: &egui::Painter, f: &Face) {
 
 /// Where CV has carried the knob: a thin Control-coloured arc just outside
 /// every style's face, from the knob's own value to the bead where the CV
-/// takes it. The knob itself stays where it was set
-fn paint_modulation(painter: &egui::Painter, center: Pos2, config: &KnobConfig, from: f32) {
+/// takes it, over a faint swath of where it's been lately. The knob itself
+/// stays where it was set
+fn paint_modulation(painter: &egui::Painter, center: Pos2, config: &KnobConfig, from: f32, swath: Option<Swath>) {
     let Some(to) = config.modulated else {
         return;
     };
@@ -750,6 +768,9 @@ fn paint_modulation(painter: &egui::Painter, center: Pos2, config: &KnobConfig, 
     let radius = config.size / 2.0 - 0.6 * s;
     let angle = |t: f32| Face::START + t * Face::SWEEP;
     let color = theme::signal::CONTROL;
+    if let Some(swath) = swath.filter(|swath| swath.hi - swath.lo > 1e-3) {
+        stroke_arc(painter, center, radius, angle(swath.lo), angle(swath.hi), 2.8 * s, color.gamma_multiply(0.2));
+    }
     if (to - from).abs() > 1e-3 {
         stroke_arc(painter, center, radius, angle(from.min(to)), angle(from.max(to)), 1.2 * s, color.gamma_multiply(0.7));
     }
@@ -758,18 +779,58 @@ fn paint_modulation(painter: &egui::Painter, center: Pos2, config: &KnobConfig, 
     painter.circle_filled(bead, 1.5 * s, color);
 }
 
+/// How long the swath takes to let go of where the CV has been: each end
+/// falls about two thirds of the way back to the bead in this many seconds
+const SWATH_FADE: f32 = 0.8;
+
+/// The stretch of a knob's travel (0 to 1) its CV has covered lately: it
+/// reaches out at once to wherever the bead goes, and draws back to it
+/// slowly, so an LFO too quick for the bead to follow still shows its depth
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Swath {
+    lo: f32,
+    hi: f32,
+    /// When it was last brought up to date, in seconds
+    time: f64,
+}
+
+impl Swath {
+    fn at(now: f32, time: f64) -> Self {
+        Swath { lo: now, hi: now, time }
+    }
+
+    /// The swath at `time`, with the bead at `now`
+    fn follow(self, now: f32, time: f64) -> Self {
+        let keep = (-((time - self.time).max(0.0) as f32) / SWATH_FADE).exp();
+        let back = |end: f32| now + (end - now) * keep;
+        Swath { lo: back(self.lo).min(now), hi: back(self.hi).max(now), time }
+    }
+}
+
+/// What a knob reads under its dial, and in what colour: what's in charge of
+/// it if something is, where its CV has carried it (in the CV's orange), or,
+/// while it's in hand, its own setting, which is what the hand is moving
+fn readout_text(config: &KnobConfig, value: f32, hot: bool) -> (String, Color32) {
+    match (&config.value_text, config.modulated) {
+        (Some(text), _) => (text.clone(), theme::text::PRIMARY),
+        (None, Some(to)) if !hot => (config.format.format(to), theme::signal::CONTROL),
+        _ => (config.format.format(value), theme::text::PRIMARY),
+    }
+}
+
 /// Value and label under the refreshed knobs: the value in the title face so
 /// numbers read at a glance, the name quieter beneath it
-fn paint_readout(painter: &egui::Painter, knob_rect: Rect, s: f32, config: &KnobConfig, value: f32) {
+fn paint_readout(painter: &egui::Painter, knob_rect: Rect, s: f32, config: &KnobConfig, value: f32, hot: bool) {
     let x = knob_rect.center().x;
     let mut y = knob_rect.bottom() + 1.0 * s;
     if config.show_value {
+        let (text, color) = readout_text(config, value, hot);
         painter.text(
             Pos2::new(x, y + 6.5 * s),
             egui::Align2::CENTER_CENTER,
-            config.value_text.clone().unwrap_or_else(|| config.format.format(value)),
+            text,
             egui::FontId::new(10.0 * s, egui::FontFamily::Name(theme::TITLE_FAMILY.into())),
-            theme::text::PRIMARY,
+            color,
         );
         y += 14.5 * s;
     }
@@ -902,6 +963,25 @@ mod tests {
             assert!((config.value_at(config.travel(value)) - value).abs() < 1e-5);
         }
         assert_eq!(config.value_at(0.0), 0.0, "all the way down is exactly zero");
+    }
+
+    #[test]
+    fn test_swath_reaches_out_at_once_and_lets_go_slowly() {
+        let swath = Swath::at(0.5, 0.0).follow(0.8, 0.02);
+        assert_eq!(swath.hi, 0.8, "out to the bead in a frame");
+        assert!(swath.lo < 0.51, "and only just letting go of where it was: {swath:?}");
+        let swath = swath.follow(0.3, 0.04);
+        assert!((swath.lo - 0.3).abs() < 1e-6 && swath.hi > 0.78, "both ends held: {swath:?}");
+        let swath = swath.follow(0.3, 0.04 + SWATH_FADE as f64 * 3.0);
+        assert!(swath.hi - swath.lo < 0.03, "three fades on, back to the bead: {swath:?}");
+    }
+
+    #[test]
+    fn test_readout_reads_the_cv_until_the_knob_is_in_hand() {
+        let config = KnobConfig { modulated: Some(0.75), ..KnobConfig::percent(0.5) };
+        assert_eq!(readout_text(&config, 0.5, false), ("75%".to_string(), theme::signal::CONTROL));
+        assert_eq!(readout_text(&config, 0.5, true), ("50%".to_string(), theme::text::PRIMARY));
+        assert_eq!(readout_text(&KnobConfig::percent(0.5), 0.5, false).0, "50%");
     }
 
     #[test]

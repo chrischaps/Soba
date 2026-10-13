@@ -100,7 +100,7 @@ impl SynthNodeTemplate {
             .iter()
             .enumerate()
             .filter(|(i, p)| *i >= ui.live_params && is_continuous(p) && !ui.is_hidden(p.name))
-            .map(|(_, p)| KnobHint { param: p.name, label: p.name, modulatable: false, adds: false })
+            .map(|(_, p)| KnobHint { param: p.name, label: p.name, modulatable: false })
             .collect()
     }
 
@@ -119,8 +119,7 @@ impl SynthNodeTemplate {
                     (true, false) => KnobInputMode::Exposed,
                     (true, true) => KnobInputMode::Modulatable,
                 };
-                let cv_adds = hint.adds && mode == KnobInputMode::Modulatable;
-                KnobParam { cv_adds, ..KnobParam::with_mode(hint.param, hint.label, mode) }
+                KnobParam::with_mode(hint.param, hint.label, mode)
             })
             .collect()
     }
@@ -363,8 +362,7 @@ mod tests {
             writeln!(out, "out  {:<18} {}", name, graph.get_output(*id).typ.signal_type().name()).unwrap();
         }
         for kp in &data.knob_params {
-            let adds = if kp.cv_adds { " adds" } else { "" };
-            writeln!(out, "knob {:<18} \"{}\" {:?}{adds}", kp.param_name, kp.label, kp.input_mode).unwrap();
+            writeln!(out, "knob {:<18} \"{}\" {:?}", kp.param_name, kp.label, kp.input_mode).unwrap();
         }
         if !data.monitored_outputs.is_empty() {
             writeln!(out, "monitor {:?}", data.monitored_outputs).unwrap();

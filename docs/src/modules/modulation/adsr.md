@@ -82,7 +82,7 @@ Each stage has a jack beside its knob. CV there moves the stage around where the
 
 The envelope reads CV on every sample, not just at each note. A cue that lands while a release is already falling stretches what's left of it, and the curve bends there without a step.
 
-While a stage's jack is patched, an orange dot sits by its knob, and the display draws that stage the way the envelope is running it, with its letter lit. When a lane ramps the release out, you can watch the tail widen.
+While a stage's jack is patched, its knob shows where the CV has taken it: an orange arc out to a bead on its rim, and the number under the knob in orange. The display draws that stage the way the envelope is running it, with its letter lit. When a lane ramps the release out, you can watch the tail widen.
 
 ## Patch examples
 

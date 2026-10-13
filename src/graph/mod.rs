@@ -15,6 +15,7 @@ pub mod input_display;
 mod divider_display;
 mod drum_display;
 mod envelope_cv;
+mod knob_cv;
 mod logic_display;
 mod looper_display;
 mod slope_display;

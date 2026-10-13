@@ -85,7 +85,7 @@ Real instruments are brightest at the start of a note. You can do the same by le
 1. Patch the envelope's **Out** into the filter's **Cutoff** input. One output can feed any number of inputs, so the envelope keeps driving the VCA too.
 2. Turn the **Cutoff** knob down to about 400 Hz.
 
-Each note now opens the filter and closes it again as the envelope decays. The **Cutoff** knob stays live and sets where the sweep starts. **CV Amt** sets how far the envelope carries it: one octave at first. Turn **CV Amt** up to 3 and each note opens with a squelch. A small dot above the **Cutoff** knob shows that a cable is moving it.
+Each note now opens the filter and closes it again as the envelope decays. The **Cutoff** knob stays live and sets where the sweep starts. **CV Amt** sets how far the envelope carries it: one octave at first. Turn **CV Amt** up to 3 and each note opens with a squelch. An orange arc on the **Cutoff** knob's rim shows each sweep, and the number under the knob turns orange to read where the envelope has taken the cutoff.
 
 For a plucky, percussive bass, set **Atk** to its minimum, **Dec** to about 200 ms and **Sus** low. For a slow, brightening pad, lengthen **Atk**.
 
