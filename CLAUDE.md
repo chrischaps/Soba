@@ -228,6 +228,9 @@ python tools/showcase/check_layout.py
 # the capture's `fit` cue, cropped and paletted. --check lists the stale ones instead
 python tools/showcase/recipe_images.py [name ...]
 python tools/showcase/recipe_images.py --check
+# The same for the interface pictures and the tutorial's finished patch (interface-*.png,
+# tutorial-complete-patch.png), each posed by a short cue script
+python tools/showcase/manual_images.py [name ...]   # --check lists the stale ones
 # Never stop a capture with taskkill /IM: it closes every open copy of Soba. Kill by PID
 
 # Open a patch at launch (otherwise the First Sound example opens)

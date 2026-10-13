@@ -1,0 +1,172 @@
+{
+  "name": "First Patch",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "input.keyboard",
+      "position": [
+        40.0,
+        94.0
+      ],
+      "parameters": []
+    },
+    {
+      "id": 2,
+      "module_id": "osc.sine",
+      "position": [
+        272.0,
+        74.0
+      ],
+      "parameters": [
+        {
+          "name": "Waveform",
+          "type": "Select",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "module_id": "filter.svf",
+      "position": [
+        564.0,
+        74.0
+      ],
+      "parameters": [
+        {
+          "name": "Cutoff",
+          "type": "Number",
+          "value": 400.0
+        },
+        {
+          "name": "Resonance",
+          "type": "Number",
+          "value": 0.5
+        },
+        {
+          "name": "Cutoff CV",
+          "type": "Number",
+          "value": 2.0
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "module_id": "util.vca",
+      "position": [
+        856.0,
+        114.0
+      ],
+      "parameters": [
+        {
+          "name": "Level",
+          "type": "Number",
+          "value": 0.5
+        },
+        {
+          "name": "CV Amount",
+          "type": "Number",
+          "value": 1.0
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "module_id": "mod.adsr",
+      "position": [
+        564.0,
+        420.0
+      ],
+      "parameters": [
+        {
+          "name": "Attack",
+          "type": "Number",
+          "value": 0.01
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.3
+        },
+        {
+          "name": "Sustain",
+          "type": "Number",
+          "value": 0.3
+        },
+        {
+          "name": "Release",
+          "type": "Number",
+          "value": 0.4
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "module_id": "output.audio",
+      "position": [
+        1090.0,
+        114.0
+      ],
+      "parameters": [
+        {
+          "name": "Volume",
+          "type": "Number",
+          "value": 0.8
+        },
+        {
+          "name": "Limiter",
+          "type": "Toggle",
+          "value": true
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from_node": 1,
+      "from_port": "Pitch",
+      "to_node": 2,
+      "to_port": "V/Oct"
+    },
+    {
+      "from_node": 1,
+      "from_port": "Gate",
+      "to_node": 5,
+      "to_port": "Gate"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Out",
+      "to_node": 3,
+      "to_port": "In"
+    },
+    {
+      "from_node": 3,
+      "from_port": "LowPass",
+      "to_node": 4,
+      "to_port": "In"
+    },
+    {
+      "from_node": 5,
+      "from_port": "Out",
+      "to_node": 4,
+      "to_port": "CV"
+    },
+    {
+      "from_node": 5,
+      "from_port": "Out",
+      "to_node": 3,
+      "to_port": "Cutoff"
+    },
+    {
+      "from_node": 4,
+      "from_port": "Out",
+      "to_node": 6,
+      "to_port": "Mono"
+    }
+  ],
+  "midi_mappings": [],
+  "frames": [],
+  "notes": []
+}
