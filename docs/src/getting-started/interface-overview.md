@@ -16,7 +16,7 @@ From left to right:
 | **Edit** | **↩ Undo** and **↪ Redo**. Hover either to see which edit it will undo or redo. |
 | **〰 Cables** | How signal flow is drawn along cables: **Chevrons**, **Dots** or **Comets**. **Under modules and labels** sets how much of a cable shows through a module, frame title or note it passes behind (15% at first) |
 | **◉ Knobs** | How knobs are drawn: **LED ring**, **Hybrid**, **Arc**, **Machined** or **Classic** |
-| **❓ Help** | **📖 Manual** opens this manual. **Check for Updates…**, **Check for Updates Automatically**, and **Roll Back** after an update: see [Updates](installation.md#updates) |
+| **❓ Help** | **📖 Manual** opens this manual, and **⌨ Keyboard Shortcuts** (`F1`) lists the [shortcuts](#keyboard-shortcuts). **Check for Updates…**, **Check for Updates Automatically**, and **Roll Back** after an update: see [Updates](installation.md#updates) |
 | **Output** | The audio device to play through |
 | **Input** | The microphone, guitar or line input that [Audio Input](../modules/sources/audio-input.md) modules hear. It starts at **None**: nothing is opened until you choose a device. A filled dot (●) means it's open. |
 | **MIDI In** | The MIDI controller to listen to. A filled dot (●) means it's connected. |
@@ -284,27 +284,60 @@ Recent files, the autosave, your cable style and the window's size and position 
 
 ## Keyboard shortcuts
 
+**Help ▸ Keyboard Shortcuts**, or `F1`, shows these in the app too, with the letter keys drawn as the piano they play.
+
+### Canvas
+
 | Shortcut | Action |
 |----------|--------|
 | `Space` or `Tab` | Quick add a module at the cursor |
-| `Tab` | Open the selected group |
-| `Ctrl + G` | Group the selected modules |
-| `Ctrl + Alt + G` | Ungroup the selected group |
-| `F2` | Rename the selected group |
+| `F` | Zoom to the selection, or with nothing selected, to fit the whole patch |
+| `Shift + F` | Zoom to fit the whole patch |
+| `F1` | Show or hide the Keyboard Shortcuts window |
+| `Escape` | Close the add menu, quick-add box or Keyboard Shortcuts window, cancel MIDI Learn, finish typing a frame's name or a note, or go back out of a group |
+
+### Editing
+
+| Shortcut | Action |
+|----------|--------|
 | `Delete` or `Backspace` | Delete the selected modules, frames and notes |
 | `Ctrl + D` | Duplicate the selected modules, frames and notes |
 | `Ctrl + C` / `Ctrl + X` | Copy / cut the selected modules, frames and notes |
 | `Ctrl + V` | Paste at the cursor |
-| `F` | Zoom to the selection, or with nothing selected, to fit the whole patch |
-| `Shift + F` | Zoom to fit the whole patch |
 | `Ctrl + Shift + F` | Frame the selected modules |
 | `Ctrl + B` | Bypass or switch on the selected filters and effects |
 | `Ctrl + Z` | Undo |
 | `Ctrl + Shift + Z` or `Ctrl + Y` | Redo |
+
+### Knobs
+
+| Shortcut | Action |
+|----------|--------|
+| `Shift` + drag | Fine knob adjustment |
+| Double-click a knob | Reset it to its default |
+
+### Groups
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl + G` | Group the selected modules |
+| `Ctrl + Alt + G` | Ungroup the selected group |
+| `Tab` | Open the selected group |
+| `F2` | Rename the selected group |
+
+### File
+
+| Shortcut | Action |
+|----------|--------|
 | `Ctrl + N` | New patch |
 | `Ctrl + O` | Open a patch |
 | `Ctrl + S` | Save |
 | `Ctrl + Shift + S` | Save as |
-| `Escape` | Close the add menu or quick-add box, cancel MIDI Learn, finish typing a frame's name or a note, or go back out of a group |
-| `Shift` + drag | Fine knob adjustment |
-| Double-click a knob | Reset it to its default |
+
+### Playing
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl + R` | Record, or end the take |
+
+The letter keys play notes: see [The computer keyboard](#the-computer-keyboard).

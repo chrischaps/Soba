@@ -1,0 +1,491 @@
+//! Help ▸ Keyboard Shortcuts (or F1): every shortcut on one sheet, grouped
+//! as the manual groups them.
+//!
+//! The sheet is one table, written in the manual's own markdown, that the
+//! window draws and a test holds against the manual's Keyboard shortcuts
+//! section, so the app and the manual can't drift apart. Backticked keys
+//! are drawn as keycaps. The Playing group adds a little piano of the
+//! letter keys, drawn from `key_to_note`, that lights up as they're held.
+
+use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, RichText, Sense, Stroke};
+
+use super::theme;
+use crate::modules::keyboard::key_to_note;
+
+/// One group of shortcuts, under its heading.
+pub struct Group {
+    pub name: &'static str,
+    /// The heading's mark
+    pub color: Color32,
+    /// Shortcut and action, as the manual's table writes them
+    pub rows: &'static [(&'static str, &'static str)],
+}
+
+/// Every shortcut, in the order of the manual's Keyboard shortcuts section.
+pub const SHEET: &[Group] = &[
+    Group {
+        name: "Canvas",
+        color: theme::accent::PRIMARY,
+        rows: &[
+            ("`Space` or `Tab`", "Quick add a module at the cursor"),
+            ("`F`", "Zoom to the selection, or with nothing selected, to fit the whole patch"),
+            ("`Shift + F`", "Zoom to fit the whole patch"),
+            ("`F1`", "Show or hide the Keyboard Shortcuts window"),
+            ("`Escape`", "Close the add menu, quick-add box or Keyboard Shortcuts window, cancel MIDI Learn, finish typing a frame's name or a note, or go back out of a group"),
+        ],
+    },
+    Group {
+        name: "Editing",
+        color: theme::accent::SUCCESS,
+        rows: &[
+            ("`Delete` or `Backspace`", "Delete the selected modules, frames and notes"),
+            ("`Ctrl + D`", "Duplicate the selected modules, frames and notes"),
+            ("`Ctrl + C` / `Ctrl + X`", "Copy / cut the selected modules, frames and notes"),
+            ("`Ctrl + V`", "Paste at the cursor"),
+            ("`Ctrl + Shift + F`", "Frame the selected modules"),
+            ("`Ctrl + B`", "Bypass or switch on the selected filters and effects"),
+            ("`Ctrl + Z`", "Undo"),
+            ("`Ctrl + Shift + Z` or `Ctrl + Y`", "Redo"),
+        ],
+    },
+    Group {
+        name: "Knobs",
+        color: theme::signal::CONTROL,
+        rows: &[
+            ("`Shift` + drag", "Fine knob adjustment"),
+            ("Double-click a knob", "Reset it to its default"),
+        ],
+    },
+    Group {
+        name: "Groups",
+        color: theme::module::GROUP,
+        rows: &[
+            ("`Ctrl + G`", "Group the selected modules"),
+            ("`Ctrl + Alt + G`", "Ungroup the selected group"),
+            ("`Tab`", "Open the selected group"),
+            ("`F2`", "Rename the selected group"),
+        ],
+    },
+    Group {
+        name: "File",
+        color: theme::text::SECONDARY,
+        rows: &[
+            ("`Ctrl + N`", "New patch"),
+            ("`Ctrl + O`", "Open a patch"),
+            ("`Ctrl + S`", "Save"),
+            ("`Ctrl + Shift + S`", "Save as"),
+        ],
+    },
+    Group {
+        name: "Playing",
+        color: theme::signal::MIDI,
+        rows: &[
+            ("`Ctrl + R`", "Record, or end the take"),
+        ],
+    },
+];
+
+/// The letter keys that play notes, as the manual names them: the bottom
+/// row for white keys, the row above for black. (`key_to_note` also takes
+/// the top row, as aliases the manual leaves out.)
+pub const PIANO_KEYS: &[(egui::Key, &str)] = &[
+    (egui::Key::Z, "Z"), (egui::Key::S, "S"), (egui::Key::X, "X"), (egui::Key::D, "D"),
+    (egui::Key::C, "C"), (egui::Key::V, "V"), (egui::Key::G, "G"), (egui::Key::B, "B"),
+    (egui::Key::H, "H"), (egui::Key::N, "N"), (egui::Key::J, "J"), (egui::Key::M, "M"),
+    (egui::Key::Comma, ","), (egui::Key::L, "L"), (egui::Key::Period, "."),
+    (egui::Key::Semicolon, ";"), (egui::Key::Slash, "/"),
+];
+
+/// The actions' column, and the gap between the sheet's two columns
+const ACTION_WIDTH: f32 = 300.0;
+const COLUMN_GAP: f32 = 36.0;
+/// Past the widest run of keycaps in a column, before its actions
+const KEYS_GAP: f32 = 16.0;
+const KEYCAP_HEIGHT: f32 = 20.0;
+
+/// The sheet's window: whether it's open, and the keys that open and close it.
+#[derive(Default)]
+pub struct ShortcutsSheet {
+    pub open: bool,
+}
+
+impl ShortcutsSheet {
+    pub fn toggle(&mut self) {
+        self.open = !self.open;
+    }
+
+    /// F1 shows or hides the sheet. While it's up, Escape puts it away, when
+    /// nothing else that Escape closes (a text field, the palette) has the
+    /// keys: `free` says so.
+    pub fn handle_keys(&mut self, ctx: &egui::Context, free: bool) {
+        use egui::{Key, Modifiers};
+        ctx.input_mut(|i| {
+            if i.consume_key(Modifiers::NONE, Key::F1) {
+                self.toggle();
+            } else if self.open && free && i.consume_key(Modifiers::NONE, Key::Escape) {
+                self.open = false;
+            }
+        });
+    }
+
+    /// Draws the sheet. `held` are the notes the letter keys (or a pointer
+    /// on a piano) are holding, relative to C4.
+    pub fn show(&mut self, ctx: &egui::Context, held: &[i32]) {
+        // Between the toolbar and the status bar
+        let screen = ctx.available_rect();
+        // Canvas, Editing and Knobs on the left; the rest, and the piano,
+        // on the right. Each column's actions start past its widest keys
+        let (left, right) = SHEET.split_at(3);
+        let (left_keys, right_keys) = (keys_width(ctx, left), keys_width(ctx, right));
+        let two_columns = screen.width() >= left_keys + right_keys + 2.0 * ACTION_WIDTH + COLUMN_GAP + 64.0;
+        let mut open = true;
+        egui::Window::new("Keyboard Shortcuts")
+            .id(egui::Id::new("keyboard_shortcuts"))
+            .open(&mut open)
+            .collapsible(false)
+            .auto_sized()
+            .pivot(Align2::CENTER_CENTER)
+            .default_pos(screen.center())
+            .show(ctx, |ui| {
+                // Scrolling only in a window too short for it
+                let room = screen.height() - 56.0;
+                egui::ScrollArea::vertical().max_height(room).show(ui, |ui| {
+                    if two_columns {
+                        ui.horizontal_top(|ui| {
+                            ui.vertical(|ui| column(ui, left, left_keys, held));
+                            ui.add_space(COLUMN_GAP);
+                            ui.vertical(|ui| column(ui, right, right_keys, held));
+                        });
+                    } else {
+                        column(ui, SHEET, left_keys.max(right_keys), held);
+                    }
+                });
+            });
+        self.open &= open;
+    }
+}
+
+/// Some groups, one under another, their actions `keys` in from the left.
+fn column(ui: &mut egui::Ui, groups: &[Group], keys: f32, held: &[i32]) {
+    ui.set_width(keys + ACTION_WIDTH);
+    ui.spacing_mut().item_spacing.y = 4.0;
+    for (i, group) in groups.iter().enumerate() {
+        if i > 0 {
+            ui.add_space(12.0);
+        }
+        heading(ui, group);
+        for (shortcut, action) in group.rows {
+            ui.horizontal_top(|ui| {
+                let (rect, _) = ui.allocate_exact_size(vec2(keys, KEYCAP_HEIGHT), Sense::hover());
+                draw_keys(ui, rect, shortcut);
+                // Level with the keycaps' text, wrapping under itself
+                ui.vertical(|ui| {
+                    ui.add_space(1.0);
+                    ui.add(egui::Label::new(RichText::new(*action).color(theme::text::SECONDARY)).wrap());
+                });
+            });
+        }
+        if group.name == "Playing" {
+            ui.add_space(8.0);
+            piano(ui, held);
+        }
+    }
+}
+
+/// A group's name in the title face, after a short bar of its color.
+fn heading(ui: &mut egui::Ui, group: &Group) {
+    ui.horizontal(|ui| {
+        let (bar, _) = ui.allocate_exact_size(vec2(3.0, 15.0), Sense::hover());
+        ui.painter().rect_filled(bar, 1.5, group.color);
+        let family = egui::FontFamily::Name(theme::TITLE_FAMILY.into());
+        ui.label(RichText::new(group.name).font(FontId::new(16.0, family)).color(theme::text::PRIMARY));
+    });
+    ui.add_space(4.0);
+}
+
+/// A piece of a shortcut, as the manual writes it.
+enum Piece<'a> {
+    /// A key, from a backticked chord: `Ctrl + Shift + Z` is three
+    Cap(&'a str),
+    /// `or` or `/`, between the choices
+    Joiner(&'a str),
+    /// A gesture: `+ drag`, `Double-click a knob`
+    Words(&'a str),
+}
+
+impl Piece<'_> {
+    fn text(&self) -> &str {
+        let (Piece::Cap(text) | Piece::Joiner(text) | Piece::Words(text)) = self;
+        text
+    }
+
+    fn color(&self) -> Color32 {
+        match self {
+            Piece::Joiner(_) => theme::text::DISABLED,
+            _ => theme::text::PRIMARY,
+        }
+    }
+
+    fn galley(&self, fonts: &egui::text::Fonts) -> std::sync::Arc<egui::Galley> {
+        let size = match self {
+            Piece::Cap(_) => 12.0,
+            Piece::Joiner(_) => 11.0,
+            Piece::Words(_) => 13.0,
+        };
+        fonts.layout_no_wrap(self.text().to_owned(), FontId::proportional(size), self.color())
+    }
+
+    /// How much room it takes, its text being `text` wide: a cap is padded,
+    /// and a joiner has room either side
+    fn width(&self, text: f32) -> f32 {
+        match self {
+            Piece::Cap(_) => (text + 12.0).max(KEYCAP_HEIGHT),
+            Piece::Joiner(_) => text + 2.0 * JOINER_GAP,
+            Piece::Words(_) => text,
+        }
+    }
+}
+
+/// Between one piece of a shortcut and the next
+const PIECE_GAP: f32 = 3.0;
+/// Either side of an `or` or `/`
+const JOINER_GAP: f32 = 2.0;
+
+/// The pieces of a shortcut: each backticked chord's keys, and the words
+/// between and after them.
+fn pieces(shortcut: &str) -> Vec<Piece<'_>> {
+    let mut pieces = Vec::new();
+    for (i, part) in shortcut.split('`').enumerate() {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        if i % 2 == 1 {
+            pieces.extend(part.split(" + ").map(Piece::Cap));
+        } else if part == "or" || part == "/" {
+            pieces.push(Piece::Joiner(part));
+        } else {
+            pieces.push(Piece::Words(part));
+        }
+    }
+    pieces
+}
+
+/// How far in a column's actions start: past its widest shortcut.
+fn keys_width(ctx: &egui::Context, groups: &[Group]) -> f32 {
+    let widest = ctx.fonts(|fonts| {
+        groups
+            .iter()
+            .flat_map(|group| group.rows.iter())
+            .map(|(shortcut, _)| {
+                pieces(shortcut).iter().map(|piece| piece.width(piece.galley(fonts).size().x) + PIECE_GAP).sum::<f32>()
+            })
+            .fold(0.0, f32::max)
+    });
+    widest + KEYS_GAP
+}
+
+/// A shortcut, left to right in `rect`: keys as small raised caps, the
+/// words as they are.
+fn draw_keys(ui: &egui::Ui, rect: Rect, shortcut: &str) {
+    let painter = ui.painter();
+    let mut x = rect.left();
+    for piece in pieces(shortcut) {
+        let galley = ui.fonts(|fonts| piece.galley(fonts));
+        let text = galley.size();
+        let cell = Rect::from_min_size(pos2(x, rect.top()), vec2(piece.width(text.x), KEYCAP_HEIGHT));
+        if let Piece::Cap(_) = piece {
+            // The cap's lip below, and its face above
+            painter.rect_filled(cell, 4.0, theme::background::MAIN);
+            let face = Rect::from_min_max(cell.min, cell.max - vec2(0.0, 2.0));
+            painter.rect(face, 4.0, theme::background::WIDGET_HOVERED, Stroke::new(1.0, theme::background::WIDGET_ACTIVE));
+            painter.galley(face.center() - text / 2.0, galley, piece.color());
+        } else {
+            // On the caps' text line, which sits a point above the middle
+            painter.galley(pos2(cell.center().x - text.x / 2.0, cell.center().y - 1.0 - text.y / 2.0), galley, piece.color());
+        }
+        x = cell.right() + PIECE_GAP;
+    }
+}
+
+/// The letter keys as the piano they play, from C4 (middle C) up to E5.
+/// Each key is labeled with the letter that plays it, by `key_to_note`, and
+/// lights up while it's held.
+fn piano(ui: &mut egui::Ui, held: &[i32]) {
+    const WHITE: [i32; 10] = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16];
+    const WHITE_W: f32 = 28.0;
+    const WHITE_H: f32 = 74.0;
+    const BLACK_W: f32 = 17.0;
+    const BLACK_H: f32 = 44.0;
+    let lit = theme::signal::MIDI;
+    let letter = |note: i32| PIANO_KEYS.iter().find(|(key, _)| key_to_note(*key) == Some(note)).map(|(_, name)| *name);
+
+    let (rect, _) = ui.allocate_exact_size(vec2(WHITE.len() as f32 * WHITE_W, WHITE_H + 16.0), Sense::hover());
+    let painter = ui.painter();
+    let font = FontId::proportional(11.0);
+    for (i, &note) in WHITE.iter().enumerate() {
+        let key = Rect::from_min_size(pos2(rect.left() + i as f32 * WHITE_W, rect.top()), vec2(WHITE_W, WHITE_H)).shrink2(vec2(1.0, 0.0));
+        let fill = if held.contains(&note) { lit } else { Color32::from_rgb(226, 226, 234) };
+        painter.rect_filled(key, egui::Rounding { nw: 0.0, ne: 0.0, sw: 4.0, se: 4.0 }, fill);
+        if let Some(name) = letter(note) {
+            painter.text(key.center_bottom() - vec2(0.0, 6.0), Align2::CENTER_BOTTOM, name, font.clone(), theme::background::MAIN);
+        }
+    }
+    for (i, pair) in WHITE.windows(2).enumerate() {
+        // A black key wherever two white keys are a whole tone apart
+        if pair[1] - pair[0] != 2 {
+            continue;
+        }
+        let note = pair[0] + 1;
+        let x = rect.left() + (i + 1) as f32 * WHITE_W;
+        let key = Rect::from_min_size(pos2(x - BLACK_W / 2.0, rect.top()), vec2(BLACK_W, BLACK_H));
+        let fill = if held.contains(&note) { lit } else { theme::background::MAIN };
+        painter.rect(key, egui::Rounding { nw: 0.0, ne: 0.0, sw: 3.0, se: 3.0 }, fill, Stroke::new(1.0, theme::background::WIDGET_ACTIVE));
+        if let Some(name) = letter(note) {
+            painter.text(key.center_bottom() - vec2(0.0, 5.0), Align2::CENTER_BOTTOM, name, font.clone(), theme::text::PRIMARY);
+        }
+    }
+    // Middle C, named under its key
+    painter.text(
+        pos2(rect.left() + WHITE_W / 2.0, rect.bottom()),
+        Align2::CENTER_BOTTOM,
+        "C4",
+        FontId::proportional(10.0),
+        theme::text::DISABLED,
+    );
+    ui.add_space(4.0);
+    ui.add(
+        egui::Label::new(
+            RichText::new("The bottom two rows of letters play every Keyboard module, and Poly MIDI too")
+                .small()
+                .color(theme::text::DISABLED),
+        )
+        .wrap(),
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MANUAL: &str = include_str!("../../docs/src/getting-started/interface-overview.md");
+
+    /// The lines of a `## ` section of the manual, up to the next one.
+    fn section(title: &str) -> Vec<&'static str> {
+        MANUAL
+            .lines()
+            .skip_while(|line| line.trim() != title)
+            .skip(1)
+            .take_while(|line| !line.starts_with("## "))
+            .collect()
+    }
+
+    /// A table row's cells, or None for anything that isn't a row (or is
+    /// the header's rule).
+    fn cells(line: &str) -> Option<Vec<&str>> {
+        let row = line.trim().strip_prefix('|')?.strip_suffix('|')?;
+        let cells: Vec<&str> = row.split('|').map(str::trim).collect();
+        (!cells.iter().all(|cell| cell.chars().all(|c| c == '-'))).then_some(cells)
+    }
+
+    /// The manual's Keyboard shortcuts section, as (group, rows), without
+    /// each table's header row.
+    fn manual_sheet() -> Vec<(String, Vec<(String, String)>)> {
+        let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
+        let mut header = false;
+        for line in section("## Keyboard shortcuts") {
+            if let Some(name) = line.strip_prefix("### ") {
+                groups.push((name.trim().to_owned(), Vec::new()));
+                header = true;
+            } else if let Some(cells) = cells(line) {
+                if std::mem::take(&mut header) {
+                    continue;
+                }
+                let (_, rows) = groups.last_mut().expect("a table before the first ### group");
+                assert_eq!(cells.len(), 2, "a shortcut row with other than two cells: {line}");
+                rows.push((cells[0].to_owned(), cells[1].to_owned()));
+            }
+        }
+        groups
+    }
+
+    #[test]
+    fn sheet_matches_the_manual() {
+        let app: Vec<(String, Vec<(String, String)>)> = SHEET
+            .iter()
+            .map(|group| {
+                let rows = group.rows.iter().map(|(keys, action)| (keys.to_string(), action.to_string())).collect();
+                (group.name.to_owned(), rows)
+            })
+            .collect();
+        let manual = manual_sheet();
+        assert!(!manual.is_empty(), "no ### groups under the manual's ## Keyboard shortcuts");
+        // Group by group, so a difference is easy to find
+        for (ours, theirs) in app.iter().zip(&manual) {
+            assert_eq!(ours, theirs, "the app's Keyboard Shortcuts sheet and the manual's table disagree");
+        }
+        assert_eq!(
+            app.iter().map(|(name, _)| name).collect::<Vec<_>>(),
+            manual.iter().map(|(name, _)| name).collect::<Vec<_>>(),
+            "the app's sheet and the manual have different groups",
+        );
+    }
+
+    /// A note name like `C` or `F♯`, as semitones above C.
+    fn semitone(name: &str) -> i32 {
+        let mut chars = name.chars();
+        let base = match chars.next() {
+            Some('C') => 0,
+            Some('D') => 2,
+            Some('E') => 4,
+            Some('F') => 5,
+            Some('G') => 7,
+            Some('A') => 9,
+            Some('B') => 11,
+            _ => panic!("not a note: {name}"),
+        };
+        match chars.as_str() {
+            "" => base,
+            "♯" => base + 1,
+            rest => panic!("not a note: {name} ({rest})"),
+        }
+    }
+
+    #[test]
+    fn piano_matches_the_manual_and_the_keys() {
+        // The manual's table under "The computer keyboard"
+        let table: Vec<&str> = MANUAL
+            .lines()
+            .skip_while(|line| line.trim() != "### The computer keyboard")
+            .take_while(|line| !line.starts_with("### MIDI"))
+            .collect();
+        let mut named = Vec::new();
+        for cells in table.iter().filter_map(|line| cells(line)).skip(1) {
+            let keys: Vec<&str> = cells[0].split('`').map(str::trim).filter(|k| !k.is_empty()).collect();
+            let (notes, octave) = match cells[1].split_once(", an octave up") {
+                Some((notes, _)) => (notes, 12),
+                None => (cells[1], 0),
+            };
+            let notes: Vec<&str> = notes.split_whitespace().collect();
+            assert_eq!(keys.len(), notes.len(), "keys and notes don't pair up: {cells:?}");
+            for (name, note) in keys.into_iter().zip(notes) {
+                let &(key, _) = PIANO_KEYS
+                    .iter()
+                    .find(|(_, n)| *n == name)
+                    .unwrap_or_else(|| panic!("the manual's `{name}` isn't on the sheet's piano"));
+                assert_eq!(key_to_note(key), Some(semitone(note) + octave), "`{name}` should play {note}");
+                named.push(name);
+            }
+        }
+        // Every key on the piano is in the manual, once
+        named.sort_unstable();
+        let mut ours: Vec<&str> = PIANO_KEYS.iter().map(|(_, name)| *name).collect();
+        ours.sort_unstable();
+        assert_eq!(named, ours, "the sheet's piano and the manual's keys differ");
+
+        // And they're a piano: one key each for C4 up to E5
+        let mut notes: Vec<i32> = PIANO_KEYS.iter().filter_map(|(key, _)| key_to_note(*key)).collect();
+        notes.sort_unstable();
+        assert_eq!(notes, (0..=16).collect::<Vec<_>>());
+    }
+}

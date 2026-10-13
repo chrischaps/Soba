@@ -38,6 +38,7 @@ use super::library::{self, SavedModule};
 use super::palette::{PaletteAction, QuickAdd};
 use super::recording::{self, RecState, Toast, ToastAction};
 use super::session::{self, Answer, Autosave, Discard, RecentFiles};
+use super::shortcuts::ShortcutsSheet;
 use super::theme;
 use super::undo::{Applied, History};
 #[cfg(not(target_arch = "wasm32"))]
@@ -169,6 +170,9 @@ pub struct SynthApp {
     /// The engine node a chord popover is auditioning a chord on, so it
     /// can be stopped if the popover goes without lifting it.
     auditioning: Option<u64>,
+
+    /// Help ▸ Keyboard Shortcuts (F1)
+    shortcuts: ShortcutsSheet,
 
     /// Current CPU load percentage from the audio engine (0-100).
     cpu_load: f32,
@@ -435,6 +439,7 @@ impl SynthApp {
             last_gate_on: None,
             gate_held_high: false,
             auditioning: None,
+            shortcuts: ShortcutsSheet::default(),
             cpu_load: 0.0,
             toolbar_full_width: None,
             audio_heartbeat: (0, Instant::now()),
@@ -1438,6 +1443,10 @@ impl SynthApp {
             ui.menu_button("❓ Help", |ui| {
                 if ui.button("📖 Manual").on_hover_text("docs.chaps.dev/soba, in your browser").clicked() {
                     ui.ctx().open_url(egui::OpenUrl::new_tab(MANUAL_URL));
+                    ui.close_menu();
+                }
+                if ui.add(egui::Button::new("⌨ Keyboard Shortcuts").shortcut_text("F1")).clicked() {
+                    self.shortcuts.open = true;
                     ui.close_menu();
                 }
                 #[cfg(not(target_arch = "wasm32"))]
@@ -4075,9 +4084,16 @@ impl eframe::App for SynthApp {
             self.request(ctx, Discard::Quit);
         }
 
+        let prompt_open = self.prompt_open();
+        // F1 shows the shortcuts. Escape puts them away before it does
+        // anything else, unless a text field or the palette has it
+        if !prompt_open {
+            let free = !ctx.wants_keyboard_input() && self.quick_add.is_none();
+            self.shortcuts.handle_keys(ctx, free);
+        }
+
         // Undo and redo, unless a text field has the keys (it has its own undo).
         // Redo is checked first: Ctrl+Z alone would also match Ctrl+Shift+Z.
-        let prompt_open = self.prompt_open();
         if !ctx.wants_keyboard_input() && !prompt_open {
             use egui::{Key, KeyboardShortcut, Modifiers};
             let (redo, undo) = ctx.input_mut(|i| {
@@ -4292,6 +4308,12 @@ impl eframe::App for SynthApp {
         #[cfg(not(target_arch = "wasm32"))]
         self.run_updates(ctx, toolbar_actions.check_updates, toolbar_actions.roll_back, corner);
         let _ = corner;
+
+        // Help ▸ Keyboard Shortcuts, its piano lit by the keys held
+        if self.shortcuts.open {
+            let held: Vec<i32> = self.pressed_keys.iter().map(|(note, _)| *note).collect();
+            self.shortcuts.show(ctx, &held);
+        }
 
         // "Save changes?" and crash recovery, over everything else
         self.show_prompts(ctx);

@@ -13,6 +13,7 @@ mod notice;
 mod palette;
 mod recording;
 mod session;
+mod shortcuts;
 pub mod synth_app;
 pub mod theme;
 pub mod undo;
