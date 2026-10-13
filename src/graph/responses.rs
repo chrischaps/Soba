@@ -126,6 +126,13 @@ pub enum SynthResponse {
     SaveGroup(egui_node_graph2::NodeId),
     /// Ask for a file for a Sampler to play.
     OpenSample(egui_node_graph2::NodeId),
+    /// A Sampler's slice markers, moved, added or taken away by hand: the
+    /// whole list, kept on the node. Undo takes it back as a step named `label`.
+    SetSliceMarkers {
+        node_id: egui_node_graph2::NodeId,
+        label: String,
+        markers: crate::dsp::onsets::HandMarkers,
+    },
     /// Trim or normalize a Sampler's file, into a new file beside the
     /// patch: a step undo takes back.
     TidySample {

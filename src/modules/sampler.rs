@@ -12,9 +12,11 @@
 //! envelope, so nothing clicks: a gate, a release, a voice stolen by a new
 //! note, the end of the recording, even a new file loaded mid-note.
 //!
-//! Sliced, Start–End is cut into equal parts and each note plays one of
-//! them: Root plays slice 1, a semitone up slice 2, as a chopped break is
-//! laid across the keys. The note then picks the slice instead of the pitch.
+//! Sliced, Start–End is cut into equal parts, or at markers where its hits
+//! begin, and each note plays one of them: Root plays slice 1, a semitone
+//! up slice 2, as a chopped break is laid across the keys. The note then
+//! picks the slice instead of the pitch. The markers are found (or moved
+//! by hand) in the editor, and handed over with [`DspModule::set_markers`].
 //!
 //! With something patched into In, Rec records a take straight into it,
 //! which it plays from then on (see [`recorder`]).
@@ -29,11 +31,12 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::{Slices, MAX_SLICES},
+    primitives::{Markers, Slices, ONSETS},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     ParameterDisplay, SampleData, SignalType, MAX_CHANNELS, MAX_READOUT,
 };
+use crate::dsp::onsets::DEFAULT_SENSITIVITY;
 use recorder::{Controls, Recorder};
 pub use recorder::{RecState, LATE_TAP_SECONDS, NO_THRESHOLD_DB, PRE_ROLL_SECONDS, TAKE_COLUMNS, TAKE_LENGTHS, TAKE_ROOM_SECONDS};
 
@@ -183,14 +186,14 @@ impl Region {
 
     /// Slice `index` of this region, cut into `slices`: it plays from the
     /// slice's start to its end, and a loop goes round the whole slice.
-    fn slice(&self, params: &[f32], slices: Slices, index: usize) -> Self {
+    fn slice(&self, params: &[f32], slices: &Slices, index: usize) -> Self {
         let (start, end) = slices.span(index, self.start, self.end);
         let loop_mode = if end - start < 2.0 { LoopMode::Off } else { LoopMode::from_param(params[Sampler::PARAM_LOOP]) };
         Self { start, end, loop_mode, loop_start: start, loop_end: end }
     }
 
     /// The region a voice plays: its slice, while the recording is sliced.
-    fn for_voice(&self, params: &[f32], slices: Option<Slices>, voice: &Voice) -> Self {
+    fn for_voice(&self, params: &[f32], slices: Option<&Slices>, voice: &Voice) -> Self {
         match (slices, voice.slice) {
             (Some(slices), Some(index)) => self.slice(params, slices, index),
             _ => *self,
@@ -230,15 +233,20 @@ impl Region {
 ///   backwards, from End to Start.
 /// - **Attack**, **Release** (s): the amplitude envelope.
 /// - **Level** (0–1).
-/// - **Slices** (Off, 2–64): cuts Start–End into equal slices, played by note.
+/// - **Slices** (Off, 2–64, Onsets): cuts Start–End into equal slices, or
+///   at the markers, played by note.
 /// - **Take** (Free, 1–16 bars): with a Clock running, a take starts on the
 ///   next bar and lasts that long.
 /// - **Rec Threshold** (-∞ to 0 dB): above -∞, a take waits for the input
 ///   to be this loud.
 /// - **Rec Button**: the face's Rec, pressed to start a take and again to stop.
+/// - **Sensitivity** (0–1): how strong a hit must be to get a marker, when
+///   sliced by Onsets. The editor finds them; here it's only kept.
 pub struct Sampler {
     /// The recording voices start on.
     sample: Option<Arc<SampleData>>,
+    /// Where the recording is cut when sliced by Onsets.
+    markers: Markers,
     /// The recording it replaced, kept while voices still fade out of it.
     outgoing: Option<Arc<SampleData>>,
     /// Recordings finished with, waiting to be handed back.
@@ -262,6 +270,7 @@ impl Sampler {
         let sample_rate = 44100.0;
         Self {
             sample: None,
+            markers: Markers::default(),
             outgoing: None,
             retired: Default::default(),
             sample_rate,
@@ -321,12 +330,14 @@ impl Sampler {
                     .describe("How long a note takes to fade out once let go"),
                 ParameterDefinition::new("level", "Level", 0.0, 1.0, 0.8, ParameterDisplay::linear(""))
                     .describe("Output level"),
-                ParameterDefinition::new("slices", "Slices", 1.0, MAX_SLICES as f32, 1.0, ParameterDisplay::stepped("slices"))
-                    .describe("Cuts Start–End into equal slices, each played by its own note from Root up, and only to its own end. Off plays the recording across the keyboard"),
+                ParameterDefinition::new("slices", "Slices", 1.0, ONSETS, 1.0, ParameterDisplay::stepped("slices"))
+                    .describe("Cuts Start–End into equal slices, or past 64 at Onsets, a marker where each hit begins; each slice is played by its own note from Root up, and only to its own end. Off plays the recording across the keyboard"),
                 ParameterDefinition::new("rec_threshold", "Rec Threshold", NO_THRESHOLD_DB, 0.0, NO_THRESHOLD_DB, ParameterDisplay::linear("dB"))
                     .describe("At -∞ a take starts as soon as Rec is pressed. Turned up, it waits until In is this loud, keeping a moment before, so it starts on the first word"),
                 ParameterDefinition::new("rec_button", "Rec Button", 0.0, 1.0, 0.0, ParameterDisplay::on_off())
                     .describe("The Rec button on the face: pressed to start a take, and again to stop it"),
+                ParameterDefinition::new("sensitivity", "Sensitivity", 0.0, 1.0, DEFAULT_SENSITIVITY, ParameterDisplay::linear("%"))
+                    .describe("Sliced by Onsets, how strong a hit must be to get a marker: turn it up for ghost notes and syllables, down for only the loudest hits. Turning it finds them afresh, letting go of markers moved by hand"),
             ],
         }
     }
@@ -361,6 +372,7 @@ impl Sampler {
     pub const PARAM_SLICES: usize = 14;
     pub const PARAM_REC_THRESHOLD: usize = 15;
     pub const PARAM_REC_BUTTON: usize = 16;
+    pub const PARAM_SENSITIVITY: usize = 17;
 
     /// Where the readout holds the slice each channel's voice plays, from 1
     /// (0 for none), after the playheads.
@@ -589,13 +601,12 @@ impl DspModule for Sampler {
         // Pitch from the knobs, in semitones, before V/Oct. Sliced, the
         // note picks the slice instead, from Root up, and only Tune and Fine
         // move the pitch
-        let slices = Slices::from_param(params[Self::PARAM_SLICES]);
         let root = params[Self::PARAM_ROOT].round();
         let transpose = params[Self::PARAM_TUNE].round() + params[Self::PARAM_FINE] / 100.0;
         let tuning = transpose + (60.0 - root);
         let speed_knob = params[Self::PARAM_SPEED];
 
-        let Self { sample, outgoing, channels: voices, level, .. } = self;
+        let Self { sample, outgoing, channels: voices, level, markers, .. } = self;
         let current = sample.as_deref();
         let previous = outgoing.as_deref();
         // Each recording's rate against the engine's, so either plays in tune
@@ -604,6 +615,10 @@ impl DspModule for Sampler {
         let start_offset = |c: usize, i: usize| start_cv.map_or(0.0, |cv| cv.voice(c).samples.get(i).copied().unwrap_or(0.0));
         let unmoved = Region::new(params, 0.0, current.map_or(0, SampleData::frames));
         let previous_region = Region::new(params, 0.0, previous.map_or(0, SampleData::frames));
+        // Markers are fractions of the recording, as Start and End are
+        let frames = current.map_or(1, SampleData::frames).max(1) as f64;
+        let slices = Slices::from_param(params[Self::PARAM_SLICES], markers.as_slice(), (unmoved.start / frames) as f32, (unmoved.end / frames) as f32);
+        let slices = slices.as_ref();
 
         for i in 0..context.block_size {
             let gain = level.next();
@@ -770,6 +785,11 @@ impl DspModule for Sampler {
         self.retired.iter_mut().find_map(Option::take)
     }
 
+    fn set_markers(&mut self, markers: Markers) {
+        // A note already playing finishes the slice it started
+        self.markers = markers;
+    }
+
     fn give_room(&mut self, room: Arc<SampleData>) -> Option<Arc<SampleData>> {
         self.recorder.give_room(room)
     }
@@ -934,12 +954,17 @@ mod tests {
         assert_eq!(sampler.info().category, ModuleCategory::Source);
         let names: Vec<&str> = sampler.ports().iter().map(|p| p.name).collect();
         assert_eq!(names, ["Gate", "V/Oct", "Velocity", "Start", "Speed", "Slice", "In L", "In R", "Rec", "L", "R"]);
-        assert_eq!(sampler.parameters().len(), 17);
-        for (index, name) in [(Sampler::PARAM_TAKE, "Take"), (Sampler::PARAM_SLICES, "Slices"), (Sampler::PARAM_REC_BUTTON, "Rec Button")] {
+        assert_eq!(sampler.parameters().len(), 18);
+        for (index, name) in [
+            (Sampler::PARAM_TAKE, "Take"),
+            (Sampler::PARAM_SLICES, "Slices"),
+            (Sampler::PARAM_REC_BUTTON, "Rec Button"),
+            (Sampler::PARAM_SENSITIVITY, "Sensitivity"),
+        ] {
             assert_eq!(sampler.parameters()[index].name, name);
         }
         // Old patches, saved without Slices, play the whole recording
-        assert_eq!(Slices::from_param(sampler.parameters()[Sampler::PARAM_SLICES].default), None);
+        assert_eq!(Slices::from_param(sampler.parameters()[Sampler::PARAM_SLICES].default, &[], 0.0, 1.0), None);
         assert!(sampler.polyphonic());
     }
 
@@ -1308,6 +1333,73 @@ mod tests {
         let n = ms(5.0);
         assert!((out[n] - (600 + n) as f32 / 4800.0).abs() < 0.002, "{}", out[n]);
         assert_eq!(peak(&out[ms(12.5)..]), 0.0);
+    }
+
+    /// A Sampler sliced by Onsets, cut at `places` (fractions of the recording).
+    fn marked(sample: Arc<SampleData>, places: &[f32]) -> Sampler {
+        let mut s = sampler(sample);
+        s.set_markers(Markers::between(places, 0.0, 1.0));
+        s
+    }
+
+    #[test]
+    fn test_sliced_by_onsets_each_note_plays_from_its_marker_to_the_next() {
+        // Eight 100 ms steps cut after the second and the fifth: three slices
+        // of two, three and three steps
+        let params = with(&[(Sampler::PARAM_SLICES, ONSETS)]);
+        let places = [0.25, 0.625];
+        let out = note(&mut marked(staircase(8), &places), &params, 0.5, semitone(1.0));
+        for (step, at) in [(3, 50.0), (4, 150.0), (5, 250.0)] {
+            assert!((out[ms(at)] - step as f32 / 10.0).abs() < 1e-4, "step {step}: {}", out[ms(at)]);
+        }
+        assert_eq!(peak(&out[ms(300.0)..]), 0.0, "stops at the next marker");
+        // The last runs to End; past it, nothing
+        let last = note(&mut marked(staircase(8), &places), &params, 0.5, semitone(2.0));
+        assert!((last[ms(50.0)] - 0.6).abs() < 1e-4 && (last[ms(250.0)] - 0.8).abs() < 1e-4);
+        assert_eq!(peak(&note(&mut marked(staircase(8), &places), &params, 0.5, semitone(3.0))), 0.0);
+        // The Slice input spreads over the three
+        let lane = Lane { slice: Some(0.99), ..semitone(0.0) };
+        assert!((note(&mut marked(staircase(8), &places), &params, 0.2, lane)[ms(50.0)] - 0.6).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_sliced_by_onsets_markers_outside_start_to_end_cut_nothing() {
+        // Start halfway: the marker at 25% is outside, the one at 62.5% cuts
+        let params = with(&[(Sampler::PARAM_SLICES, ONSETS), (Sampler::PARAM_START, 0.5)]);
+        let s = |places: &[f32]| marked(staircase(8), places);
+        let first = note(&mut s(&[0.25, 0.625]), &params, 0.3, semitone(0.0));
+        assert!((first[ms(50.0)] - 0.5).abs() < 1e-4);
+        assert_eq!(peak(&first[ms(100.0)..]), 0.0);
+        // No markers at all: Start to End is one slice
+        let whole = note(&mut s(&[]), &params, 0.5, semitone(0.0));
+        assert!((whole[ms(350.0)] - 0.8).abs() < 1e-4);
+        assert_eq!(peak(&note(&mut s(&[]), &params, 0.5, semitone(1.0))), 0.0);
+    }
+
+    #[test]
+    fn test_markers_change_nothing_unless_sliced_by_onsets() {
+        let equal = with(&[(Sampler::PARAM_SLICES, 8.0)]);
+        let plain = note(&mut sampler(staircase(8)), &equal, 0.2, semitone(3.0));
+        let with_markers = note(&mut marked(staircase(8), &[0.1, 0.3, 0.77]), &equal, 0.2, semitone(3.0));
+        assert_eq!(plain, with_markers);
+    }
+
+    #[test]
+    fn test_every_slice_of_a_break_found_by_onsets_starts_on_its_hit() {
+        let (sample, times) = crate::dsp::onsets::tests::test_break();
+        let sample = Arc::new(sample);
+        let places = crate::dsp::onsets::Onsets::detect(&sample).places(crate::dsp::onsets::DEFAULT_SENSITIVITY);
+        let params = with(&[(Sampler::PARAM_SLICES, ONSETS), (Sampler::PARAM_ATTACK, 0.001)]);
+        // Slice 1 is the first hit, from Start; each slice after it, its own hit
+        for (k, at) in times.iter().enumerate() {
+            let out = note(&mut marked(Arc::clone(&sample), &places), &params, 0.06, semitone(k as f32));
+            let from = (at * SAMPLE_RATE) as usize;
+            let source = &sample.left()[from..from + ms(50.0)];
+            // It plays the hit itself, from its first few milliseconds
+            let heard = peak(&out[..ms(5.0)]);
+            assert!(heard > 0.5 * peak(&source[..ms(5.0)]), "slice {} at {at} s: {heard}", k + 1);
+            assert!(peak(&out) <= peak(source) * 1.01 + 0.01, "slice {} plays no other hit", k + 1);
+        }
     }
 
     #[test]

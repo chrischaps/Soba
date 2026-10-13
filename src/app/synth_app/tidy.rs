@@ -3,8 +3,8 @@
 //!
 //! The original is left as it was. The Sampler is pointed at the new file
 //! as one undo step, so undo brings back the untouched recording. A trim
-//! moves Start, End and the loop's markers with the sound, so they still
-//! mark the same moments in it. Either way the result plays once from the
+//! moves Start, End, the loop's markers and any slice markers placed by
+//! hand with the sound, so they still mark the same moments in it. Either way the result plays once from the
 //! face, as a file just opened does.
 
 use std::sync::Arc;
@@ -47,6 +47,7 @@ impl SynthApp {
                     sound.start as f32 / rate,
                     (source.frames() - sound.end) as f32 / rate
                 );
+                self.move_slice_markers_with(node_id, source.frames(), sound.clone());
                 self.move_markers_with(node_id, source.frames(), sound);
                 (trimmed, "trimmed", done)
             }

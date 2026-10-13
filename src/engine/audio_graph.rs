@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use crate::dsp::bypass::{bypass_routes, can_bypass};
 use crate::dsp::{DspModule, ModuleRegistry, PortDefinition, SampleData, SignalBuffer, SignalType};
+use crate::dsp::primitives::Markers;
 use crate::engine::commands::{AudioMessage, EngineCommand, NodeId, PortIndex};
 use crate::engine::graph_plan::{
     GraphPlan, InputSource, InputTap, LateLine, MonitorSource, OutputTap, PlanNode, MAX_INPUTS,
@@ -68,6 +69,8 @@ struct NodeSpec {
     fresh: Option<Box<dyn DspModule>>,
     /// The recording last given to the module (a Sampler's file).
     sample: Option<Arc<SampleData>>,
+    /// The markers last given to it (a Sampler's, sliced by Onsets).
+    markers: Markers,
 }
 
 impl NodeSpec {
@@ -88,6 +91,7 @@ impl NodeSpec {
             live_input: module.is_live_input(),
             fresh: Some(module),
             sample: None,
+            markers: Markers::default(),
         }
     }
 
@@ -483,6 +487,28 @@ impl AudioGraph {
         self.nodes.get(&node_id).and_then(|spec| spec.sample.as_ref())
     }
 
+    /// Gives a module the markers its recording is cut at. A module not yet
+    /// handed to a plan gets them at once; one already on the audio thread
+    /// gets them through [`take_take_handoffs`](Self::take_take_handoffs).
+    ///
+    /// Returns false if there is no such module.
+    pub fn set_markers(&mut self, node_id: NodeId, markers: Markers) -> bool {
+        let Some(spec) = self.nodes.get_mut(&node_id) else {
+            return false;
+        };
+        spec.markers = markers;
+        match spec.fresh.as_mut() {
+            Some(module) => module.set_markers(markers),
+            None => self.take_handoffs.push(AudioMessage::SetMarkers { node_id, markers }),
+        }
+        true
+    }
+
+    /// The markers a module was last given.
+    pub fn markers(&self, node_id: NodeId) -> Option<&Markers> {
+        self.nodes.get(&node_id).map(|spec| &spec.markers)
+    }
+
     /// Gives a module room to record a take into. A module not yet handed
     /// to a plan gets it at once; one already on the audio thread gets it
     /// through [`take_take_handoffs`](Self::take_take_handoffs).
@@ -515,8 +541,8 @@ impl AudioGraph {
         true
     }
 
-    /// Room and settled takes for modules already on the audio thread, in
-    /// order, for the caller to deliver after the plan that holds them.
+    /// Room, settled takes and markers for modules already on the audio
+    /// thread, in order, for the caller to deliver after the plan that holds them.
     pub fn take_take_handoffs(&mut self) -> Vec<AudioMessage> {
         std::mem::take(&mut self.take_handoffs)
     }
@@ -706,6 +732,7 @@ impl AudioGraph {
             EngineCommand::LoadSample { node_id, sample } => self.load_sample(node_id, sample),
             EngineCommand::GiveRoom { node_id, room } => self.give_room(node_id, room),
             EngineCommand::SettleTake { node_id, take, sample } => self.settle_take(node_id, take, sample),
+            EngineCommand::SetMarkers { node_id, markers } => self.set_markers(node_id, markers),
             // Played on the running module, not kept in the graph
             EngineCommand::Audition { node_id, .. } => self.nodes.contains_key(&node_id),
         }
@@ -899,7 +926,9 @@ impl Default for AudioGraph {
 /// The module a take's handoff is for.
 fn handoff_node(handoff: &AudioMessage) -> Option<NodeId> {
     match handoff {
-        AudioMessage::GiveRoom { node_id, .. } | AudioMessage::SettleTake { node_id, .. } => Some(*node_id),
+        AudioMessage::GiveRoom { node_id, .. } | AudioMessage::SettleTake { node_id, .. } | AudioMessage::SetMarkers { node_id, .. } => {
+            Some(*node_id)
+        }
         _ => None,
     }
 }

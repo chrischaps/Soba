@@ -13,7 +13,9 @@
 //!
 //! Sliced, Start–End is ruled into its slices, numbered while they're wide
 //! enough to read, and each slice glows while a voice plays it. A loop then
-//! goes round each slice, so the loop's markers step aside. Under the waveform: the file's
+//! goes round each slice, so the loop's markers step aside. Sliced by
+//! Onsets, the rules are markers where its hits begin, which drag (see
+//! [`super::sampler_slices`]). Under the waveform: the file's
 //! name, and a button to open another. With no file, the panel asks for
 //! one, and a file dragged over the node lights it up to take it.
 //!
@@ -33,13 +35,15 @@ use eframe::egui::{self, Color32, CursorIcon, Pos2, Rect, Sense, Shape, Stroke, 
 use egui_node_graph2::NodeId;
 
 use crate::app::theme;
-use crate::dsp::primitives::{Slices, MAX_SLICES};
+use crate::dsp::onsets::DEFAULT_SENSITIVITY;
+use crate::dsp::primitives::{Markers, Slices, MAX_SLICES};
 use crate::dsp::MAX_CHANNELS;
 use crate::modules::sampler::{LoopMode, RecState, Sampler, NO_THRESHOLD_DB};
 use crate::modules::sequencer::note_to_name;
 use crate::persistence::sample_files;
 
 use super::sample_shelf::ShelvedSample;
+use super::sampler_slices::SliceMarkers;
 use super::sampler_take::{self, RecBlock, RecView, REC_BUTTON};
 use super::sampler_tidy;
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
@@ -70,10 +74,10 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let loop_start = value_of("Loop Start").unwrap_or(0.0).clamp(lo, hi);
     let loop_end = value_of("Loop End").unwrap_or(1.0).clamp(lo, hi);
     let (loop_lo, loop_hi) = if loop_end < loop_start { (loop_end, loop_start) } else { (loop_start, loop_end) };
-    let slices = Slices::from_param(value_of("Slices").unwrap_or(1.0));
+    let slices_value = value_of("Slices").unwrap_or(1.0);
     let root = value_of("Root").unwrap_or(60.0).round();
     // Sliced, each slice is its own loop: the loop's markers have nothing to say
-    let looping = loop_mode != LoopMode::Off && loop_hi > loop_lo && slices.is_none();
+    let looping = loop_mode != LoopMode::Off && loop_hi > loop_lo && slices_value.round() < 2.0;
 
     let key = node.user_data.file.as_deref();
     let shelved = key.and_then(|key| user_state.samples.get(key));
@@ -81,6 +85,15 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let problem: Option<&str> = shelved.and_then(|entry| entry.as_ref().err()).map(String::as_str);
     let drop_here = user_state.file_drop_target == Some(Some(node_id));
     let cue = user_state.cue.as_ref().filter(|cue| cue.node_id == node_id && loaded.is_some());
+
+    // Sliced by Onsets, it's cut where its hits begin, or where markers were moved to
+    let sensitivity = value_of("Sensitivity").unwrap_or(DEFAULT_SENSITIVITY);
+    let places = match loaded {
+        Some(sample) if Slices::is_marked_param(slices_value) => sample.onsets().markers(node.user_data.slice_markers.as_ref(), sensitivity),
+        _ => Vec::new(),
+    };
+    let slices = Slices::from_param(slices_value, &places, lo, hi);
+    let slice_markers = slices.filter(Slices::is_marked).map(|_| SliceMarkers { node_id, places: &places, cutting: Markers::between(&places, lo, hi), sensitivity });
 
     // As wide as the knob rows below: four 44-pt columns
     let gap = ui.spacing().item_spacing.x;
@@ -198,20 +211,24 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                 painter.rect_filled(Rect::from_x_y_ranges(x_at(hi)..=plot.right(), plot.y_range()), 0.0, outside);
             }
 
-            // The slices: a rule between each, and its number while there's room
+            // The slices: a rule between each (or a marker, drawn with the
+            // others), and its number while there's room
             if let Some(slices) = slices {
                 let width = (x_at(hi) - x_at(lo)) / slices.count() as f32;
                 // Rules close together fade, so 64 slices are a texture rather than a fence
                 let rule = Color32::WHITE.gamma_multiply(0.08 + 0.17 * (width / (16.0 * z)).min(1.0));
+                // Clear of a marker's tab
+                let inset = if slices.is_marked() { 4.0 * z } else { 2.0 * z };
                 for index in 0..slices.count() {
-                    let (from, _) = span_of(slices, index);
-                    if index > 0 {
+                    let (from, to) = span_of(slices, index);
+                    if index > 0 && !slices.is_marked() {
                         painter.vline(x_at(from), plot.y_range(), Stroke::new(1.0 * z, rule));
                     }
-                    if width >= 11.0 * z {
+                    // Markers cut slices of their own widths
+                    if x_at(to) - x_at(from) >= 11.0 * z {
                         let color = if lit[index] > 0.0 { Color32::WHITE } else { theme::text::SECONDARY.gamma_multiply(0.8) };
                         painter.text(
-                            Pos2::new(x_at(from) + 2.0 * z, plot.top() + 1.0 * z),
+                            Pos2::new(x_at(from) + inset, plot.top() + 1.0 * z),
                             egui::Align2::LEFT_TOP,
                             (index + 1).to_string(),
                             egui::FontId::proportional(7.0 * z),
@@ -310,13 +327,27 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             .min_by(|a, b| a.1.total_cmp(&b.1))
             .map(|(m, _)| m)
     };
-    let hot = dragging.or_else(|| if shown.is_some() { pointer.and_then(|p| nearest(p.x)) } else { None });
+    // A slice marker is the one the pointer is on if it's nearer than those
+    let slice_dragging = slice_markers.as_ref().is_some_and(|markers| markers.dragging(ui));
+    let slice_near = |x: f32| {
+        let markers = slice_markers.as_ref()?;
+        let (m, distance) = markers.nearest(x, x_at, GRAB * z)?;
+        nearest(x).is_none_or(|region| (x_at(marker_places[region]) - x).abs() > distance).then_some(m)
+    };
+    let slice_hot = match (dragging, slice_dragging, shown, pointer) {
+        (None, false, Some(_), Some(p)) => slice_near(p.x),
+        _ => None,
+    };
+    let hot = dragging.or_else(|| if shown.is_some() && slice_hot.is_none() && !slice_dragging { pointer.and_then(|p| nearest(p.x)) } else { None });
     // With Alt down, a click plays from the pointer: a faint line shows where
     let alt = ui.input(|i| i.modifiers.alt);
     if let (true, Some(_), Some(p), None) = (alt, shown, response.hover_pos(), dragging) {
         let x = x_at(place_at(p.x));
         let line = [Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())];
         painter.extend(Shape::dashed_line(&line, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.6)), 2.0 * z, 2.0 * z));
+    }
+    if let (Some(markers), Some(_)) = (&slice_markers, shown) {
+        markers.draw(ui, &painter, rect, plot, x_at, slice_hot, z);
     }
     if shown.is_some() {
         for (m, &place) in marker_places.iter().enumerate() {
@@ -346,9 +377,17 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             // Where the button went down: by the time a drag counts as one,
             // a quick hand is already a few points away
             let pressed = ui.input(|i| i.pointer.press_origin()).or(response.interact_pointer_pos());
-            if let Some(m) = pressed.and_then(|p| nearest(p.x)) {
-                ui.ctx().data_mut(|d| d.insert_temp(drag_id, m));
+            match (pressed.and_then(|p| slice_near(p.x)), &slice_markers) {
+                (Some(m), Some(markers)) => markers.pick_up(ui, m),
+                _ => {
+                    if let Some(m) = pressed.and_then(|p| nearest(p.x)) {
+                        ui.ctx().data_mut(|d| d.insert_temp(drag_id, m));
+                    }
+                }
             }
+        }
+        if let (Some(markers), Some(p), true) = (&slice_markers, response.interact_pointer_pos(), response.dragged()) {
+            responses.extend(markers.drag(ui, rect, p, place_at(p.x), z));
         }
         if let (Some(m), Some(p)) = (dragging, response.interact_pointer_pos()) {
             if response.dragged() {
@@ -360,6 +399,15 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         }
         if response.drag_stopped() {
             ui.ctx().data_mut(|d| d.remove::<usize>(drag_id));
+            if let Some(markers) = &slice_markers {
+                markers.put_down(ui);
+            }
+        }
+        // Double-click between the markers to add one
+        if let (Some(markers), Some(p), true) = (&slice_markers, response.interact_pointer_pos(), response.double_clicked()) {
+            if !alt && hot.is_none() && slice_hot.is_none() {
+                responses.push(markers.add(place_at(p.x)));
+            }
         }
         if response.clicked() && alt {
             // From there to End, or to the end of the file past End
@@ -369,7 +417,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         }
         if alt && hot.is_none() {
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-        } else if hot.is_some() {
+        } else if hot.is_some() || slice_hot.is_some() || slice_dragging {
             ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
         }
     } else if response.clicked() && !live {
@@ -379,11 +427,21 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         let tip = match (hot, shown, key) {
             _ if live => "Recording what's patched into In: press Rec to stop".to_string(),
             (_, Some(_), _) if alt => "Click to hear it from here".to_string(),
-        (Some(m), _, _) => format!("{}: drag to move it", MARKERS[m].1),
+            (Some(m), _, _) => format!("{}: drag to move it", MARKERS[m].1),
+            (None, Some(_), _) if slice_hot.is_some() => {
+                let begins = slice_hot.and_then(|m| slice_markers.as_ref()?.slice_of(m));
+                let what = begins.map_or("A marker outside Start–End, cutting nothing".to_string(), |slice| format!("Slice {slice} begins here"));
+                format!("{what}\nDrag to move it, or off the panel to take it away")
+            }
             (None, Some(sample), Some(key)) => match (slices, pointer.and_then(|p| slice_at(place_at(p.x)))) {
                 (Some(slices), Some(index)) => {
                     let key = note_to_name((root + index as f32).clamp(0.0, 127.0) as u8);
-                    format!("Slice {} of {}, played by {key}", index + 1, slices.count())
+                    let tip = format!("Slice {} of {}, played by {key}", index + 1, slices.count());
+                    if slices.is_marked() {
+                        format!("{tip}\nDouble-click to add a marker")
+                    } else {
+                        tip
+                    }
                 }
                 _ => describe(key, sample),
             },

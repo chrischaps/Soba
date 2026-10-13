@@ -144,8 +144,10 @@ static MODULE_UI: &[ModuleUi] = &[
             knob_as("Attack", "Atk"),
             knob_as("Release", "Rel"),
             knob("Level"),
-            // Recording: how loud In must be before a take starts
+            // Recording: how loud In must be before a take starts; and
+            // slicing by Onsets: how strong a hit must be to get a marker
             knob_as("Rec Threshold", "Thresh"),
+            knob_as("Sensitivity", "Sens"),
         ],
         hidden: &["Rec Button"],
         display: NodeDisplay::SamplerWave,

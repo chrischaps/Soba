@@ -107,6 +107,7 @@ impl SynthApp {
     /// from its face, so you hear what you chose.
     fn set_sample(&mut self, node_id: NodeId, key: String) {
         let name = sample_files::file_name(&key).to_string();
+        self.forget_slice_markers(node_id);
         if let Some(node) = self.graph_state.graph.nodes.get_mut(node_id) {
             node.user_data.file = Some(key);
             self.history.name_next(format!("Load {name}"));
@@ -180,6 +181,8 @@ impl SynthApp {
         let in_use: HashSet<String> =
             samplers.into_iter().filter_map(|(_, key)| key).chain(loopers.into_iter().map(|(_, key)| key)).collect();
         self.user_state.samples.retain(|key| in_use.contains(key));
+        // ...and where those sliced by Onsets are cut
+        self.sync_markers();
     }
 
     /// Turns the file paths of a just-opened patch's Samplers into keys,

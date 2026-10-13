@@ -7,7 +7,7 @@
 
 Sampler plays a WAV file. Patch a gate in and it plays one-shots: a kick under a sequencer, a vocal chop, a door slam. Patch in V/Oct as well and a polyphonic gate, and it becomes an instrument: one recorded note spread across the keyboard, each key playing it at its own pitch.
 
-Set **Slices** and it becomes a chopped break: the recording is cut into equal slices, and each key plays one of them.
+Set **Slices** and it becomes a chopped break: the recording is cut into equal slices, or at each hit it finds, and each key plays one of them.
 
 Every other sound in Soba is synthesized. The Sampler brings in sound you've recorded, or one Soba rendered itself, and keeps it with the patch. It can make the recording itself, too: patch something into **In** and press **Rec** (see [Recording into it](#recording-into-it)).
 
@@ -118,15 +118,16 @@ Both outputs carry a channel per voice when the gate is polyphonic.
 | **Lp End** (Loop End) | 0 – 100% | 100% | Where the loop turns back. Kept between Start and End |
 | **Tune** | ±24 st | 0 st | Transpose in semitones |
 | **Fine** | ±100 cents | 0 | Fine tuning |
-| **Slices** | Off, 2 – 64 | Off | Cuts **Start**–**End** into equal slices, each played by its own key. See [Slices](#slices) |
+| **Slices** | Off, 2 – 64, Onsets | Off | Cuts **Start**–**End** into equal slices, or at **Onsets**, a marker where each hit begins. Each slice is played by its own key. See [Slices](#slices) |
 | **Root** | C-1 – G9 | C4 | The note the recording was made at. Playing it plays the recording unchanged. When sliced, the key that plays slice 1 |
 | **Speed** | −2 – 2× | 1× | Tape speed. 2 is twice as fast and an octave up, 0.5 half as fast and an octave down, and below 0 plays backwards |
 | **Atk** (Attack) | 1 ms – 2 s | 2 ms | How long each note takes to fade in |
 | **Rel** (Release) | 1 ms – 5 s | 10 ms | How long a note takes to fade out once let go |
 | **Level** | 0 – 100% | 80% | Output level |
 | **Thresh** (Rec Threshold) | −∞ – 0 dB | −∞ dB | At −∞ a take starts as soon as Rec is pressed. Turned up, it waits until **In** is this loud |
+| **Sens** (Sensitivity) | 0 – 100% | 50% | Sliced by **Onsets**, how strong a hit must be to get a marker. See [Slicing at the hits](#slicing-at-the-hits) |
 
-The four region knobs sit in the top row, under the waveform where their markers are. You can drag the markers instead of the knobs. **Slices** and **Root** start the second row, since together they say which key plays which slice. **Thresh** sits on its own at the foot, since it's for recording.
+The four region knobs sit in the top row, under the waveform where their markers are. You can drag the markers instead of the knobs. **Slices** and **Root** start the second row, since together they say which key plays which slice. **Thresh** and **Sens** sit at the foot. Each says how loud something must be to count: **In**, to start a take, and a hit, to get a slice marker.
 
 ## Playing it
 
@@ -165,7 +166,25 @@ Set **Slices** to cut the recording into equal parts, and each key plays one par
 
 Patch an [Arranger](../utilities/arranger.md) lane, a [Sample & Hold](../utilities/sample-hold.md) or an LFO into **Slice** to pick slices without a keyboard. Its value spreads evenly across them, 0 for the first and 1 for the last, and adds to whatever the note picked. With **V/Oct** unpatched, **Slice** alone chooses.
 
-On the display, rules divide the waveform into its slices, numbered while they're wide enough to read. The slice a voice is playing glows. Hover a slice to see which key plays it.
+On the display, rules divide the waveform into its slices, numbered while they're wide enough to read. The slice a voice is playing glows. Hover a slice to see which key plays it. Sliced by **Onsets**, the rules are markers you can drag (see [Slicing at the hits](#slicing-at-the-hits)).
+
+### Slicing at the hits
+
+Equal slices suit a file laid out in slots, a line or a note to each. A drum break or a spoken phrase isn't equal. Its hits and words land where they land, and a hit pushed a little early or dragged a little late is the feel that makes a break worth sampling. Equal sixteenths would cut through those hits.
+
+Turn **Slices** past 64 to **Onsets** and the Sampler puts a marker where each hit begins: each drum, each syllable, each plucked note. Slice 1 runs from **Start** to the first marker, and each marker after that starts a slice of its own, up to **End**. As before, **Root** plays slice 1 and each key up plays the next.
+
+![Onset markers on a swung break](../../images/sampler-onsets.png)
+*Two bars of a swung break, sliced by **Onsets** at 50%: a marker at every kick, snare and hat, wherever the swing put it. The pointer is on the marker that starts slice 9.*
+
+- **Sens** sets how many hits count. Turned down, only the loudest hits get a marker: the kick and the snare. Turned up, ghost notes, hi-hats and quieter syllables get one too. The markers move as you turn it.
+- **The markers are where the sound rises.** The recording is split into four bands, from the bass up. A hit is a moment when several of them suddenly get louder together: a quiet hi-hat over a ringing kick still counts, in the top band. A marker goes a millisecond before its hit, so the slice keeps the whole attack.
+- **Drag a marker** (the white tabs along the top) to move it. **Drag it off the panel**, up or down, to take it away, and **double-click** between markers to add one. Each change is a step you can undo.
+- **Markers you've moved are kept with the patch.** Turning **Sens** finds them afresh, letting go of what you moved. Undo brings them back.
+- **A new file finds them afresh** too, as does a new take. **Trim to the sound** moves them with the sound.
+- **Up to 64 slices.** Markers outside **Start**–**End** cut nothing and are drawn faint. So are markers past the 63rd, and the last slice runs on to **End**.
+
+The hits are found once, when the file loads. Turning **Sens** only chooses among them, so the markers move as soon as it turns. They're found on the file as it was recorded, so they're the same whatever your device's rate, and the [`render`](../../getting-started/installation.md#command-line) tool hears the same slices.
 
 ## Voices
 
@@ -196,7 +215,7 @@ A patch saves each Sampler's file as a path:
 
 A patch whose sample is missing still opens. The Sampler keeps the path but plays nothing, and the status bar lists the missing file with the other load warnings. Open the file again to fix it.
 
-In the patch file, the path is the module's `file` field. Modules without a file leave it out, so patches from before the Sampler read and save as they always did:
+In the patch file, the path is the module's `file` field. Slice markers you've moved are its `slice_markers`, with the **Sens** they were placed at, as fractions of the recording. Modules without either leave them out, so patches from before the Sampler read and save as they always did:
 
 ```json
 {
@@ -237,7 +256,7 @@ Load a long recording (rain, a room, a held note) and set **Speed** to 0.5, **Lo
 
 ### A chopped break
 
-Load a one-bar drum loop and set **Slices** to 8 or 16, so each slice is an eighth or a sixteenth note. Patch a [Step Sequencer](../utilities/sequencer.md)'s **Pitch** into **V/Oct** and its **Gate** into **Gate**, clocked at the same division. Steps on C4, C#4, D4… play the break as recorded. Change a step's note and that step plays another hit. Patch a [Sample & Hold](../utilities/sample-hold.md) of noise into **Slice** instead of **V/Oct** and the break rearranges itself on every hit.
+Load a one-bar drum loop and set **Slices** to 8 or 16, so each slice is an eighth or a sixteenth note. Or set it to **Onsets**, so each hit is a slice however it was played, and move any marker that landed somewhere you don't want it. Patch a [Step Sequencer](../utilities/sequencer.md)'s **Pitch** into **V/Oct** and its **Gate** into **Gate**, clocked at the same division. Steps on C4, C#4, D4… play the break as recorded. Change a step's note and that step plays another hit. Patch a [Sample & Hold](../utilities/sample-hold.md) of noise into **Slice** instead of **V/Oct** and the break rearranges itself on every hit.
 
 ### Many lines in one file
 

@@ -31,7 +31,8 @@ pub enum ParamFormat {
     Pan,
     /// A MIDI note number, by name: "C4", "F#2".
     Note,
-    /// How many slices a recording is cut into: "Off" below 2.
+    /// How many slices a recording is cut into: "Off" below 2, and
+    /// "Onsets" past 64.
     Slices,
 }
 
@@ -82,6 +83,7 @@ impl ParamFormat {
             ParamFormat::Note => crate::modules::sequencer::note_to_name(value.round().clamp(0.0, 127.0) as u8),
             ParamFormat::Slices => match value.round() {
                 count if count < 2.0 => "Off".to_string(),
+                count if count >= crate::dsp::primitives::ONSETS => "Onsets".to_string(),
                 count => format!("{count:.0}"),
             },
             ParamFormat::Pan => {
@@ -804,6 +806,8 @@ mod tests {
         assert_eq!(ParamFormat::Slices.format(1.0), "Off");
         assert_eq!(ParamFormat::Slices.format(2.0), "2");
         assert_eq!(ParamFormat::Slices.format(11.6), "12");
+        assert_eq!(ParamFormat::Slices.format(64.0), "64");
+        assert_eq!(ParamFormat::Slices.format(65.0), "Onsets");
     }
 
     #[test]

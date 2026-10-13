@@ -12,7 +12,7 @@ use std::sync::Arc;
 use crate::persistence::sample_files::{self, SampleBase};
 use crate::persistence::{compile_patch, CompiledPatch, Patch, PatchError};
 
-use super::{create_module_registry, AudioGraph, EngineCommand, GraphPlan};
+use super::{create_module_registry, AudioGraph, AudioMessage, EngineCommand, GraphPlan};
 
 /// Rendered stereo audio.
 #[derive(Debug, Default, Clone)]
@@ -123,6 +123,10 @@ impl OfflineRenderer {
                     if decoded.truncated {
                         warnings.push(format!("{file} is longer than the 5 minutes a Sampler keeps, and was cut"));
                     }
+                    // Sliced by Onsets: found on the file as it was recorded, as the editor finds them
+                    if let Some((_, slicing)) = compiled.slicing.iter().find(|(id, _)| id == node_id) {
+                        self.apply(EngineCommand::SetMarkers { node_id: *node_id, markers: slicing.markers(&decoded.sample) });
+                    }
                     let sample = Arc::new(decoded.sample.resampled(self.context.sample_rate));
                     self.apply(EngineCommand::LoadSample { node_id: *node_id, sample: Some(sample) });
                 }
@@ -166,6 +170,14 @@ impl OfflineRenderer {
         // Recordings for modules already running, after the plan that has them
         for (node_id, sample) in self.graph.take_sample_loads() {
             drop(self.plan.load_sample(node_id, sample));
+        }
+        for handoff in self.graph.take_take_handoffs() {
+            match handoff {
+                AudioMessage::SetMarkers { node_id, markers } => self.plan.set_markers(node_id, markers),
+                AudioMessage::GiveRoom { node_id, room } => drop(self.plan.give_room(node_id, room)),
+                AudioMessage::SettleTake { node_id, take, sample } => drop(self.plan.settle_take(node_id, take, sample)),
+                _ => {}
+            }
         }
         // Nothing here is real time, so loops loaded are copied in at once
         self.plan.background(&mut { usize::MAX });
@@ -548,6 +560,40 @@ mod tests {
         assert_eq!(out.left, out.right, "a mono file plays on both sides");
         let hz = Spectrum::of(&out.left[4800..], 48000.0).dominant_frequency();
         assert!((hz - 440.0).abs() < 3.0, "{hz}");
+        std::fs::remove_dir_all(&folder).ok();
+    }
+
+    #[test]
+    fn test_a_sampler_sliced_by_onsets_is_cut_where_the_editor_would() {
+        use crate::dsp::onsets::{HandMarkers, DEFAULT_SENSITIVITY};
+        use crate::dsp::primitives::ONSETS;
+        use crate::dsp::SampleData;
+        let folder = std::env::temp_dir().join(format!("soba-onsets-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        // Half a second of silence, then a tone that starts at once: one hit
+        let file: Vec<f32> = (0..48000)
+            .map(|n| if n < 24000 { 0.0 } else { (std::f32::consts::TAU * 440.0 * n as f32 / 48000.0).sin() * 0.5 })
+            .collect();
+        std::fs::write(folder.join("hit.wav"), crate::persistence::sample_files::encode_wav(&SampleData::mono(file, 48000.0))).unwrap();
+
+        // The Clock strikes Root, slice 1, every half second
+        let render = |slices: f32, hand: Option<HandMarkers>| {
+            let mut patch = sampler_patch("hit.wav");
+            let sampler = &mut patch.nodes[1];
+            sampler.parameters.push(NamedParameter::new("Slices", ParameterValue::Number(slices)));
+            sampler.slice_markers = hand;
+            let (mut r, compiled) = OfflineRenderer::from_patch(&patch, 48000.0, 256).unwrap();
+            assert!(r.load_samples(&compiled, SampleBase::Folder(&folder)).is_empty());
+            peak(&r.render_seconds(1.0).left)
+        };
+        assert!(render(1.0, None) > 0.2, "unsliced, it reaches the tone");
+        // The hit is found: slice 1 is the silence before it
+        let found = render(ONSETS, None);
+        assert!(found < 1e-3, "{found}");
+        // A marker moved by hand to 75% puts half the tone in slice 1...
+        assert!(render(ONSETS, Some(HandMarkers::new(DEFAULT_SENSITIVITY, vec![0.75]))) > 0.2);
+        // ...unless Sensitivity has moved on since, when they're found afresh
+        assert!(render(ONSETS, Some(HandMarkers::new(0.9, vec![0.75]))) < 1e-3);
         std::fs::remove_dir_all(&folder).ok();
     }
 

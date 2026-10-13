@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use crate::dsp::primitives::Markers;
 use crate::dsp::{Audition, MeterLevels, OutputLevels, Readout, SampleData, SignalBuffer, Snapshot, MAX_CHANNELS};
 use crate::modules::oscilloscope::SCOPE_BUFFER_SIZE;
 
@@ -129,6 +130,14 @@ pub enum EngineCommand {
         sample: Option<Arc<SampleData>>,
     },
 
+    /// Give a module the markers its recording is cut at (a Sampler's,
+    /// sliced by Onsets). Ignored by modules that don't slice.
+    SetMarkers {
+        /// Target node.
+        node_id: NodeId,
+        markers: Markers,
+    },
+
     /// Give a module room to record a take into (a Sampler's Rec): an
     /// empty recording with room set aside, at the engine's sample rate,
     /// that nothing else holds. Ignored by modules that don't record.
@@ -190,6 +199,8 @@ pub enum AudioMessage {
     /// Give a running module a recording to play, or take its away. The
     /// recording it had goes back to the UI to be dropped.
     LoadSample { node_id: NodeId, sample: Option<Arc<SampleData>> },
+    /// Give a running module the markers its recording is cut at.
+    SetMarkers { node_id: NodeId, markers: Markers },
     /// Copy a module's recording (a Looper's loop) into room the UI set
     /// aside, a piece each callback, and hand it back when it's done.
     SnapshotLoop { node_id: NodeId, snapshot: Box<Snapshot> },

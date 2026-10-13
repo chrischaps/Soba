@@ -734,6 +734,10 @@ mod tests {
                     }
                     seen.push("settle");
                 }
+                AudioMessage::SetMarkers { node_id, markers } => {
+                    current.set_markers(node_id, markers);
+                    seen.push("markers");
+                }
             }
         }
         seen

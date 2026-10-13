@@ -23,6 +23,7 @@ use web_time::Instant;
 use egui::{Pos2, Vec2};
 use egui_node_graph2::{NodeId, PanZoom};
 
+use crate::dsp::onsets::HandMarkers;
 use crate::engine::{EngineCommand, NodeId as EngineNodeId};
 use crate::graph::annotations::{self, Annotation, AnnotationId};
 use crate::graph::groups::{self, GroupId, Jack, NodeKind, Side};
@@ -77,6 +78,8 @@ enum Body {
         file: Option<String>,
         /// Names given to its sections and lanes.
         labels: BTreeMap<String, String>,
+        /// Slice markers placed by hand.
+        slice_markers: Option<HandMarkers>,
     },
     /// A group's own node.
     Group { name: String, inputs: Vec<Jack>, outputs: Vec<Jack> },
@@ -107,9 +110,9 @@ impl NodeState {
         self.parent == other.parent
             && match (&self.body, &other.body) {
                 (
-                    Body::Module { template: t1, bypassed: b1, pins: p1, face_labels: n1, file: f1, labels: l1, .. },
-                    Body::Module { template: t2, bypassed: b2, pins: p2, face_labels: n2, file: f2, labels: l2, .. },
-                ) => t1 == t2 && b1 == b2 && p1 == p2 && n1 == n2 && f1 == f2 && l1 == l2,
+                    Body::Module { template: t1, bypassed: b1, pins: p1, face_labels: n1, file: f1, labels: l1, slice_markers: m1, .. },
+                    Body::Module { template: t2, bypassed: b2, pins: p2, face_labels: n2, file: f2, labels: l2, slice_markers: m2, .. },
+                ) => t1 == t2 && b1 == b2 && p1 == p2 && n1 == n2 && f1 == f2 && l1 == l2 && m1 == m2,
                 (a, b) => a == b,
             }
     }
@@ -205,6 +208,7 @@ impl Snapshot {
                         face_labels: data.face_labels.clone(),
                         file: data.file.clone(),
                         labels: data.labels.clone(),
+                        slice_markers: data.slice_markers.clone(),
                     }
                 }
                 NodeKind::Group(_) => Body::Group {
@@ -444,13 +448,14 @@ impl Step {
             let Some(state) = &diff.after else { continue };
             let position = anchor.zoomed(state.position, zoom);
             let node_id = match (&state.body, diff.key) {
-                (Body::Module { template, bypassed, pins, face_labels, file, labels, .. }, NodeKey::Module(engine_id)) => {
+                (Body::Module { template, bypassed, pins, face_labels, file, labels, slice_markers, .. }, NodeKey::Module(engine_id)) => {
                     let node_id = editing::place_node(editor, user_state, *template, position);
                     let data = &mut editor.graph[node_id].user_data;
                     data.bypassed = *bypassed;
                     data.pins = pins.clone();
                     data.face_labels = face_labels.clone();
                     data.labels = labels.clone();
+                    data.slice_markers = slice_markers.clone();
                     // Its recording follows from the file, as the app syncs samples
                     data.file = file.clone();
                     user_state.assign_engine_node_id(node_id, engine_id);
@@ -490,12 +495,13 @@ impl Step {
                 }
             }
             match &after.body {
-                Body::Module { pins, face_labels, file, labels, .. } => {
+                Body::Module { pins, face_labels, file, labels, slice_markers, .. } => {
                     let data = &mut editor.graph[node_id].user_data;
                     data.pins = pins.clone();
                     data.face_labels = face_labels.clone();
                     data.file = file.clone();
                     data.labels = labels.clone();
+                    data.slice_markers = slice_markers.clone();
                 }
                 Body::Group { name, inputs, outputs } => {
                     groups::rename(&mut editor.graph, node_id, name);
@@ -651,7 +657,7 @@ fn describe(nodes: &[NodeDiff], cables: &[CableDiff], before: &Snapshot, after: 
             many => format!("Load samples into {}", modules(many.len())),
         };
     }
-    if only(|a, b| a.parent == b.parent && pins(a) == pins(b) && file(a) == file(b)) {
+    if only(|a, b| a.parent == b.parent && pins(a) == pins(b) && file(a) == file(b) && slice_markers(a) == slice_markers(b)) {
         return match (changed.as_slice(), pairs().next()) {
             ([one], Some((_, _, b))) if b.bypassed() => format!("Bypass {}", one.name()),
             ([one], Some(_)) => format!("Switch on {}", one.name()),
@@ -705,6 +711,14 @@ fn face_labels(state: &NodeState) -> Option<&BTreeMap<String, String>> {
 fn labels(state: &NodeState) -> Option<&BTreeMap<String, String>> {
     match &state.body {
         Body::Module { labels, .. } => Some(labels),
+        _ => None,
+    }
+}
+
+/// A module's slice markers placed by hand.
+fn slice_markers(state: &NodeState) -> Option<&HandMarkers> {
+    match &state.body {
+        Body::Module { slice_markers, .. } => slice_markers.as_ref(),
         _ => None,
     }
 }
@@ -1322,6 +1336,30 @@ mod tests {
         assert!(undone.commands.is_empty());
         rig.undo();
         assert_eq!(rig.editor.graph[sampler].user_data.file, None);
+    }
+
+    #[test]
+    fn test_moving_slice_markers_round_trips_and_a_deleted_sampler_keeps_them() {
+        let mut rig = Rig::new();
+        let sampler = rig.add("source.sampler", pos2(0.0, 0.0));
+        rig.record();
+        let moved = HandMarkers::new(0.5, vec![0.2, 0.45]);
+        let (undone, _) = round_trip(&mut rig, |rig| {
+            rig.editor.graph[sampler].user_data.slice_markers = Some(moved.clone());
+            rig.history.name_next("Move slice marker");
+        });
+        assert_eq!(undone.label, "Move slice marker");
+        // The app sends the markers when it sees them change
+        assert!(undone.commands.is_empty());
+        rig.undo();
+        assert_eq!(rig.editor.graph[sampler].user_data.slice_markers, None);
+        rig.redo();
+        assert_eq!(rig.editor.graph[sampler].user_data.slice_markers.as_ref(), Some(&moved));
+
+        let key = rig.engine_id(sampler);
+        round_trip(&mut rig, |rig| rig.delete(sampler));
+        rig.undo();
+        assert_eq!(rig.editor.graph[rig.node(key)].user_data.slice_markers.as_ref(), Some(&moved));
     }
 
     #[test]

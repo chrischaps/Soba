@@ -10,8 +10,12 @@ use std::collections::HashMap;
 
 use egui_node_graph2::NodeId;
 
+use crate::dsp::onsets::{HandMarkers, Onsets, DEFAULT_SENSITIVITY};
+use crate::dsp::primitives::{Markers, Slices};
+use crate::dsp::SampleData;
 use crate::engine::{EngineCommand, NodeId as EngineNodeId};
-use crate::graph::{groups, port_mapping};
+use crate::graph::{groups, port_mapping, SynthGraph};
+use crate::modules::sampler::SAMPLER_ID;
 
 use super::{stage_patch, Patch, PatchError};
 
@@ -28,6 +32,32 @@ pub struct CompiledPatch {
     /// The file each module plays (a Sampler's), as the patch saved it:
     /// relative paths still need resolving against where the patch is.
     pub files: Vec<(EngineNodeId, String)>,
+    /// How each Sampler sliced by Onsets is cut, for the markers to be
+    /// found once its file is read.
+    pub slicing: Vec<(EngineNodeId, Slicing)>,
+}
+
+/// How a Sampler sliced by Onsets is cut, as the patch saved it.
+#[derive(Clone, Debug, Default)]
+pub struct Slicing {
+    pub sensitivity: f32,
+    /// Start and End, in order, as fractions of the recording.
+    pub start: f32,
+    pub end: f32,
+    /// Markers placed by hand, if they were.
+    pub hand: Option<HandMarkers>,
+}
+
+impl Slicing {
+    /// The markers that cut `sample`: those placed by hand while they
+    /// stand, or else where its onsets are, found now.
+    pub fn markers(&self, sample: &SampleData) -> Markers {
+        let places = match self.hand.as_ref().filter(|hand| hand.stand_at(self.sensitivity)) {
+            Some(hand) => hand.places.clone(),
+            None => Onsets::detect(sample).places(self.sensitivity),
+        };
+        Markers::between(&places, self.start, self.end)
+    }
 }
 
 /// Compiles a patch into engine commands.
@@ -74,6 +104,9 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
         if let Some(file) = &graph[node.graph_id].user_data.file {
             compiled.files.push((engine_node_id, file.clone()));
         }
+        if let Some(slicing) = slicing(graph, node.graph_id) {
+            compiled.slicing.push((engine_node_id, slicing));
+        }
 
         if graph[node.graph_id].user_data.bypassed {
             compiled.commands.push(EngineCommand::SetBypass { node_id: engine_node_id, bypassed: true });
@@ -119,6 +152,26 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
 /// The name of the port with the given ID.
 fn port_name<Id: PartialEq>(ports: &[(String, Id)], id: Id) -> Option<String> {
     ports.iter().find(|(_, p)| *p == id).map(|(name, _)| name.clone())
+}
+
+/// How a Sampler is cut, if it's sliced by Onsets.
+fn slicing(graph: &SynthGraph, node_id: NodeId) -> Option<Slicing> {
+    let node = &graph[node_id];
+    if node.user_data.module_id != SAMPLER_ID {
+        return None;
+    }
+    let value = |name: &str| node.inputs.iter().find(|(input, _)| input == name).map(|(_, id)| graph.get_input(*id).value.actual_value());
+    if !value("Slices").is_some_and(Slices::is_marked_param) {
+        return None;
+    }
+    let start = value("Start").unwrap_or(0.0).clamp(0.0, 1.0);
+    let end = value("End").unwrap_or(1.0).clamp(0.0, 1.0);
+    Some(Slicing {
+        sensitivity: value("Sensitivity").unwrap_or(DEFAULT_SENSITIVITY),
+        start: start.min(end),
+        end: start.max(end),
+        hand: node.user_data.slice_markers.clone(),
+    })
 }
 
 #[cfg(test)]

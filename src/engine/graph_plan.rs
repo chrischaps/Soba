@@ -31,6 +31,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use crate::dsp::{Audition, DspModule, MeterLevels, OutputLevels, ProcessContext, Readout, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
+use crate::dsp::primitives::Markers;
 use crate::engine::commands::{ChannelPeaks, NodeId, PortIndex};
 
 pub use crate::dsp::module_trait::MAX_INPUTS;
@@ -244,6 +245,15 @@ impl GraphPlan {
         match self.nodes.iter_mut().find(|node| node.node_id == node_id).and_then(|node| node.module.as_mut()) {
             Some(module) => module.load_sample(sample),
             None => sample,
+        }
+    }
+
+    /// Gives a module the markers its recording is cut at.
+    ///
+    /// REAL-TIME SAFE: the markers come by value.
+    pub fn set_markers(&mut self, node_id: NodeId, markers: Markers) {
+        if let Some(module) = self.nodes.iter_mut().find(|node| node.node_id == node_id).and_then(|node| node.module.as_mut()) {
+            module.set_markers(markers);
         }
     }
 

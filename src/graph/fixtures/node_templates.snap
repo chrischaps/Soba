@@ -80,9 +80,10 @@ in   Root               Control  ConstantOnly         inline=false num 60 [0..12
 in   Attack             Control  ConstantOnly         inline=false num 0.002 [0.001..2] s log
 in   Release            Control  ConstantOnly         inline=false num 0.01 [0.001..5] s log
 in   Level              Control  ConstantOnly         inline=false num 0.8 [0..1]
-in   Slices             Control  ConstantOnly         inline=false num 1 [1..64] slices stepped
+in   Slices             Control  ConstantOnly         inline=false num 1 [1..65] slices stepped
 in   Rec Threshold      Control  ConstantOnly         inline=false num -60 [-60..0] dB
 in   Rec Button         Control  ConstantOnly         inline=false toggle false ""
+in   Sensitivity        Control  ConstantOnly         inline=false num 0.5 [0..1] %
 out  L                  Audio
 out  R                  Audio
 knob Start              "Start" Modulatable
@@ -98,6 +99,7 @@ knob Attack             "Atk" KnobOnly
 knob Release            "Rel" KnobOnly
 knob Level              "Level" KnobOnly
 knob Rec Threshold      "Thresh" KnobOnly
+knob Sensitivity        "Sens" KnobOnly
 display SamplerWave
 
 == source.audio_input "Audio Input" finder="Audio Input" Source

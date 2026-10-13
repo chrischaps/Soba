@@ -275,6 +275,7 @@ impl Builder<'_> {
             user_data.face_labels = node_data.face_labels.clone();
             user_data.file = node_data.file.clone();
             user_data.labels = node_data.labels.clone();
+            user_data.slice_markers = node_data.slice_markers.clone();
 
             here.insert(node_data.id, graph_id);
             self.modules.insert(node_data.id, graph_id);
@@ -507,6 +508,7 @@ pub fn capture_level(
                 node_data.face_labels = data.face_labels.clone();
                 node_data.file = data.file.clone();
                 node_data.labels = data.labels.clone();
+                node_data.slice_markers = data.slice_markers.clone();
                 node_data.parameters = node
                     .inputs
                     .iter()
@@ -635,6 +637,26 @@ mod tests {
         // Only modules with names mention them
         let json = serde_json::to_string(&saved).unwrap();
         assert_eq!(json.matches("\"labels\"").count(), 1);
+        assert_eq!(patch_from_json(&json).unwrap(), saved);
+    }
+
+    #[test]
+    fn test_slice_markers_placed_by_hand_survive_a_round_trip() {
+        use crate::dsp::onsets::HandMarkers;
+
+        let mut patch = Patch::new("chopped");
+        let mut sampler = NodeData::new(1, "source.sampler", (0.0, 0.0));
+        sampler.slice_markers = Some(HandMarkers::new(0.65, vec![0.5, 0.125, 0.3125]));
+        patch.nodes.extend([sampler, NodeData::new(2, "source.sampler", (0.0, 0.0))]);
+
+        let (saved, warnings) = reload(&patch, 0);
+        assert!(warnings.is_empty(), "{:?}", warnings);
+        let markers = saved.nodes.iter().find_map(|n| n.slice_markers.clone()).expect("kept");
+        assert_eq!(markers.places, [0.125, 0.3125, 0.5]);
+        assert_eq!(markers.sensitivity, 0.65);
+        // Only a Sampler with markers moved mentions them
+        let json = serde_json::to_string(&saved).unwrap();
+        assert_eq!(json.matches("\"slice_markers\"").count(), 1);
         assert_eq!(patch_from_json(&json).unwrap(), saved);
     }
 

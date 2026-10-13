@@ -23,7 +23,7 @@ pub use noise::NoiseFloor;
 pub use adaa::{Adaa1, BiasedTanh, Curve, HardClip, RoundedFolder, Tanh};
 pub use oversample::{Downsampler2x, Downsampler4x, Upsampler2x, Upsampler4x};
 pub use saturation::{fast_tanh, SoftSaturator};
-pub use slices::{Slices, MAX_SLICES};
+pub use slices::{Markers, Slices, MAX_MARKERS, MAX_SLICES, ONSETS};
 pub use tape::{RecordHead, TapeTransport};
 pub use tape_stop::{StopHeads, TapeStop};
 pub use tpt::{prewarp, TptIntegrator};

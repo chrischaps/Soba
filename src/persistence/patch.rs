@@ -197,6 +197,10 @@ pub struct NodeData {
     /// some.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub labels: BTreeMap<String, String>,
+    /// Slice markers placed by hand (a Sampler's, sliced by Onsets), with
+    /// the Sensitivity they were placed at. Only written when there are.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slice_markers: Option<crate::dsp::onsets::HandMarkers>,
 }
 
 impl NodeData {
@@ -212,6 +216,7 @@ impl NodeData {
             face_labels: BTreeMap::new(),
             file: None,
             labels: BTreeMap::new(),
+            slice_markers: None,
         }
     }
 }
@@ -466,6 +471,7 @@ pub fn migrate_v2_to_v3(old: PatchV2) -> Patch {
                 face_labels: BTreeMap::new(),
                 file: None,
                 labels: BTreeMap::new(),
+                slice_markers: None,
             }
         })
         .collect();
@@ -722,6 +728,7 @@ mod tests {
             face_labels: BTreeMap::new(),
             file: None,
             labels: BTreeMap::new(),
+            slice_markers: None,
         });
         patch.connections.push(ConnectionData::new(1, "Out", 2, "In"));
 

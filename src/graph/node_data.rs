@@ -357,6 +357,9 @@ pub struct SynthNodeData {
     /// Names given to things that aren't parameters (an Arranger's sections
     /// and lanes), by key.
     pub labels: BTreeMap<String, String>,
+    /// Slice markers placed by hand (a Sampler's, sliced by Onsets), if
+    /// they've been moved from where they were found.
+    pub slice_markers: Option<crate::dsp::onsets::HandMarkers>,
 }
 
 /// How much of the node body shows through while it's bypassed.
@@ -400,6 +403,7 @@ impl SynthNodeData {
             face_labels: BTreeMap::new(),
             file: None,
             labels: BTreeMap::new(),
+            slice_markers: None,
         }
     }
 

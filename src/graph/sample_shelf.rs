@@ -11,6 +11,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
+use crate::dsp::onsets::Onsets;
 use crate::dsp::tidy::Survey;
 use crate::dsp::SampleData;
 use crate::persistence::sample_files::{self, Decoded};
@@ -36,6 +37,8 @@ pub struct ShelvedSample {
     /// Where its sound is and how loud, for Trim and Normalize, measured
     /// when first wanted.
     survey: OnceLock<Survey>,
+    /// Where its hits begin, for slicing by Onsets, found when first wanted.
+    onsets: OnceLock<Onsets>,
 }
 
 impl ShelvedSample {
@@ -46,12 +49,18 @@ impl ShelvedSample {
             truncated: decoded.truncated,
             playing: None,
             survey: OnceLock::new(),
+            onsets: OnceLock::new(),
         }
     }
 
     /// Where its sound is and how loud, measured the first time it's asked.
     pub fn survey(&self) -> &Survey {
         self.survey.get_or_init(|| Survey::of(&self.source))
+    }
+
+    /// Where its hits begin, found the first time it's asked.
+    pub fn onsets(&self) -> &Onsets {
+        self.onsets.get_or_init(|| Onsets::detect(&self.source))
     }
 
     /// The recording at `sample_rate`, resampled the first time it's asked

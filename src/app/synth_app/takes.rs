@@ -59,6 +59,7 @@ impl SynthApp {
             match self.keep_take(measured) {
                 Ok(key) => {
                     let name = sample_files::file_name(&key).to_string();
+                    self.forget_slice_markers(node_id);
                     if let Some(node) = self.graph_state.graph.nodes.get_mut(node_id) {
                         node.user_data.file = Some(key.clone());
                     }

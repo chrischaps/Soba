@@ -491,6 +491,9 @@ impl AudioProcessor {
                         self.engine_handle.retire_sample(old);
                     }
                 }
+                AudioMessage::SetMarkers { node_id, markers } => {
+                    self.plan.set_markers(node_id, markers);
+                }
                 AudioMessage::SnapshotLoop { node_id, mut snapshot } => {
                     if self.snapshots.len() < self.snapshots.capacity() {
                         self.snapshots.push((node_id, snapshot));

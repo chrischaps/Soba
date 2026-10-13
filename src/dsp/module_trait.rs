@@ -6,6 +6,7 @@
 use super::context::{ProcessContext, TransportState};
 use super::parameter::ParameterDefinition;
 use super::port::PortDefinition;
+use super::primitives::Markers;
 use super::sample::{SampleData, Snapshot, SnapshotOutcome};
 use super::{SignalBuffer, MAX_CHANNELS};
 use egui::Color32;
@@ -426,6 +427,14 @@ pub trait DspModule: Send + 'static {
     fn take_retired_sample(&mut self) -> Option<Arc<SampleData>> {
         None
     }
+
+    /// Gives the module the markers its recording is cut at, when sliced by
+    /// Onsets (a Sampler's), as fractions of the recording. Called on the
+    /// audio thread, or on the UI side before the module has been handed to
+    /// it. Modules that don't slice ignore it.
+    ///
+    /// REAL-TIME SAFE: the markers come by value.
+    fn set_markers(&mut self, _markers: Markers) {}
 
     /// Work a module does a piece at a time between blocks, whether or not
     /// the transport runs: a Looper copying in a loop it was given. Uses up

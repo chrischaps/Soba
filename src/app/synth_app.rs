@@ -51,6 +51,7 @@ mod framing;
 mod grouping;
 mod loops;
 mod samples;
+mod slicing;
 mod takes;
 mod tidy;
 #[cfg(not(target_arch = "wasm32"))]
@@ -1885,6 +1886,9 @@ impl SynthApp {
                         }
                         NodeResponse::User(crate::graph::SynthResponse::TidySample { node_id: response_node_id, tidy }) => {
                             self.tidy_sample(response_node_id, tidy);
+                        }
+                        NodeResponse::User(crate::graph::SynthResponse::SetSliceMarkers { node_id: response_node_id, label, markers }) => {
+                            self.set_slice_markers(response_node_id, label, markers);
                         }
                         NodeResponse::User(crate::graph::SynthResponse::EditParameters {
                             node_id: response_node_id,
