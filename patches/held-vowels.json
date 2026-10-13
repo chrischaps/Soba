@@ -178,7 +178,7 @@
       "module_id": "seq.chord",
       "position": [
         40.0,
-        974.0
+        1104.0
       ],
       "parameters": [
         {
@@ -888,7 +888,7 @@
       "module_id": "osc.sine",
       "position": [
         419.0,
-        974.0
+        1104.0
       ],
       "parameters": [
         {
@@ -1148,7 +1148,7 @@
       "module_id": "fx.chorus",
       "position": [
         691.0,
-        974.0
+        1104.0
       ],
       "parameters": [
         {
@@ -1193,7 +1193,7 @@
       "module_id": "fx.reverb",
       "position": [
         1013.0,
-        974.0
+        1104.0
       ],
       "parameters": [
         {
@@ -1238,7 +1238,7 @@
       "module_id": "output.audio",
       "position": [
         1283.0,
-        974.0
+        1104.0
       ],
       "parameters": [
         {
@@ -1391,7 +1391,7 @@
       ],
       "size": [
         446.0,
-        880.0
+        1010.0
       ],
       "color": "amber"
     },
@@ -1403,7 +1403,7 @@
       ],
       "size": [
         278.0,
-        880.0
+        1010.0
       ],
       "color": "rose"
     },
@@ -1415,7 +1415,7 @@
       ],
       "size": [
         716.0,
-        880.0
+        1010.0
       ],
       "color": "cyan"
     },
@@ -1423,7 +1423,7 @@
       "title": "The pad",
       "position": [
         16.0,
-        916.0
+        1046.0
       ],
       "size": [
         613.0,
@@ -1435,7 +1435,7 @@
       "title": "The room",
       "position": [
         667.0,
-        916.0
+        1046.0
       ],
       "size": [
         865.0,
@@ -1457,7 +1457,7 @@
       "text": "The lower Divider starts the singer on beat 4. It sings one vowel a bar, on the last beat, on a note the chord it leaves and the chord it's sung for share. Every other beat is a held vowel.",
       "position": [
         524.0,
-        700.0
+        871.0
       ],
       "width": 230.0
     },
