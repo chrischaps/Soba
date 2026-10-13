@@ -37,7 +37,7 @@
       "module_id": "util.divider",
       "position": [
         40.0,
-        470.0
+        542.0
       ],
       "parameters": [
         {
@@ -143,7 +143,7 @@
       "module_id": "source.sampler",
       "position": [
         270.0,
-        880.0
+        952.0
       ],
       "parameters": [
         {
@@ -219,7 +219,7 @@
       "module_id": "source.audio_input",
       "position": [
         270.0,
-        1690.0
+        1762.0
       ],
       "parameters": []
     },
@@ -368,7 +368,7 @@
       "module_id": "seq.chord",
       "position": [
         40.0,
-        2299.0
+        2371.0
       ],
       "parameters": [
         {
@@ -898,7 +898,7 @@
       "module_id": "osc.sine",
       "position": [
         420.0,
-        2299.0
+        2371.0
       ],
       "parameters": [
         {
@@ -958,7 +958,7 @@
       "module_id": "filter.svf",
       "position": [
         680.0,
-        2539.0
+        2611.0
       ],
       "parameters": [
         {
@@ -983,7 +983,7 @@
       "module_id": "util.vca",
       "position": [
         960.0,
-        2539.0
+        2611.0
       ],
       "parameters": [
         {
@@ -1003,7 +1003,7 @@
       "module_id": "mod.adsr",
       "position": [
         960.0,
-        2759.0
+        2831.0
       ],
       "parameters": [
         {
@@ -1527,7 +1527,7 @@
       ],
       "size": [
         1140.0,
-        2199.0
+        2271.0
       ],
       "color": "blue"
     },
@@ -1535,7 +1535,7 @@
       "title": "The chords",
       "position": [
         16.0,
-        2241.0
+        2313.0
       ],
       "size": [
         1200.0,
@@ -1551,7 +1551,7 @@
       ],
       "size": [
         1640.0,
-        700.0
+        772.0
       ],
       "color": "cyan"
     }
@@ -1561,7 +1561,7 @@
       "text": "Two Samplers say one line every two bars: \"Hello. I am Soba. I sing in sines.\" The first voice is Chris, who made Soba. The second was made by a formant synthesizer, from pulses and noise. This Mixer's mutes pick which one the Vocoder hears: unmute **2** and mute **1** to hear a robot say it.",
       "position": [
         580.0,
-        470.0
+        542.0
       ],
       "width": 300.0
     },
@@ -1569,7 +1569,7 @@
       "text": "**Your own voice:** pick your mic under **Input**. Press **Rec** on the top Sampler, then say the line: the take starts on your first word, and the Sampler says it every two bars from then on (**Ctrl+Z** brings Chris back). Or mute **1** and unmute **3** on the voice Mixer to be heard live. Use headphones, so the mic doesn't hear the speakers.",
       "position": [
         270.0,
-        2010.0
+        2082.0
       ],
       "width": 290.0
     },
@@ -1577,7 +1577,7 @@
       "text": "The same pad plays twice: bright and raw into the Vocoder's **Carrier**, and filtered dark underneath, so the chords carry on between the words.",
       "position": [
         40.0,
-        2905.0
+        2977.0
       ],
       "width": 380.0
     }

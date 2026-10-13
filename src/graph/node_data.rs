@@ -125,6 +125,10 @@ pub struct KnobParam {
     pub label: String,
     /// How this knob interacts with its CV input port.
     pub input_mode: KnobInputMode,
+    /// A modulatable knob whose CV simply adds to it, clamped to its range
+    /// (a Mixer's Level or Send): the knob can then show where the CV has
+    /// carried it.
+    pub cv_adds: bool,
 }
 
 impl KnobParam {
@@ -146,6 +150,7 @@ impl KnobParam {
             param_name: param_name.into(),
             label: label.into(),
             input_mode,
+            cv_adds: false,
         }
     }
 
@@ -694,6 +699,7 @@ impl SynthNodeData {
         param_name: &str,
         responses: &mut Vec<NodeResponse<SynthResponse, Self>>,
         signal_value: Option<f32>,
+        modulated: Option<f32>,
         value_text: Option<String>,
         _midi_config: &KnobMidiConfig,
         accent: Color32,
@@ -719,6 +725,7 @@ impl SynthNodeData {
                     value_text,
                     accent,
                     style,
+                    modulated: modulated.map(|m| m.clamp(spec.min, spec.max)),
                     ..Default::default()
                 };
                 let original_val = *val;
@@ -945,6 +952,11 @@ impl SynthNodeData {
                         } else {
                             None // Modulatable: show base knob value, not CV signal
                         };
+                        // ...and, where the CV adds to it, where it has carried the knob
+                        let modulated = match (&input.value, signal_value) {
+                            (SynthValueType::Number { value, .. }, Some(cv)) if knob_param.cv_adds && takeover.is_none() => Some(value + cv),
+                            _ => None,
+                        };
                         Self::render_knob_for_value(
                             ui,
                             &input.value,
@@ -955,6 +967,7 @@ impl SynthNodeData {
                             &knob_param.param_name,
                             responses,
                             display_signal,
+                            modulated,
                             takeover.map(|takeover| takeover.text),
                             &midi_config,
                             self.category.color(),

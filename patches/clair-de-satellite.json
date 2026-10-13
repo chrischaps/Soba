@@ -9798,7 +9798,7 @@
       "module_id": "util.mixer",
       "position": [
         2628.0,
-        437.0
+        509.0
       ],
       "parameters": [
         {
@@ -10078,7 +10078,7 @@
       "module_id": "util.mixer",
       "position": [
         3050.0,
-        437.0
+        509.0
       ],
       "parameters": [
         {
@@ -10886,7 +10886,7 @@
       ],
       "size": [
         1432.0,
-        830.0
+        974.0
       ],
       "color": "green"
     },
@@ -10918,7 +10918,7 @@
       "title": "The voice",
       "position": [
         2386.0,
-        900.0
+        1044.0
       ],
       "size": [
         532.0,
@@ -10948,7 +10948,7 @@
       "text": "**The voice is Chris's**, cloned with ElevenLabs, saying a few short lines once each. Inside **Voice**, a **Sampler** plays them into a **Vocoder** that sings them on the strings' held chord, low and spread, where its harmonics are close enough to draw every vowel. At the end of the Build the robot asks *can you hear me…*, the band falls away, and the plain voice answers: *still?*",
       "position": [
         2410.0,
-        940.0
+        1084.0
       ],
       "width": 250.0
     }
@@ -26589,7 +26589,7 @@
       "name": "Voice",
       "position": [
         2688.0,
-        940.0
+        1084.0
       ],
       "inputs": [
         {

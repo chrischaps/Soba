@@ -1962,7 +1962,7 @@
       "module_id": "util.attenuverter",
       "position": [
         2720.0,
-        1580.0
+        1652.0
       ],
       "parameters": [
         {
@@ -2202,7 +2202,7 @@
       "module_id": "util.mixer",
       "position": [
         2980.0,
-        1100.0
+        1172.0
       ],
       "parameters": [
         {
@@ -2342,7 +2342,7 @@
       "module_id": "fx.reverb",
       "position": [
         3656.0,
-        1396.0
+        1468.0
       ],
       "parameters": [
         {
@@ -2387,7 +2387,7 @@
       "module_id": "fx.tape",
       "position": [
         3398.0,
-        1100.0
+        1172.0
       ],
       "parameters": [
         {
@@ -2442,7 +2442,7 @@
       "module_id": "output.audio",
       "position": [
         3656.0,
-        1100.0
+        1172.0
       ],
       "parameters": [
         {
@@ -2961,7 +2961,7 @@
       ],
       "size": [
         1132.0,
-        467.0
+        539.0
       ],
       "color": "cyan"
     },
@@ -2969,11 +2969,11 @@
       "title": "Mix and room",
       "position": [
         2696.0,
-        1042.0
+        1114.0
       ],
       "size": [
         1214.0,
-        735.0
+        807.0
       ],
       "color": "cyan"
     }

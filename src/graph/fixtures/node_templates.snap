@@ -466,6 +466,11 @@ in   Pan 1              Control  ConnectionOrConstant inline=true  num 0 [-1..1]
 in   Pan 2              Control  ConnectionOrConstant inline=true  num 0 [-1..1] pan
 in   Pan 3              Control  ConnectionOrConstant inline=true  num 0 [-1..1] pan
 in   Pan 4              Control  ConnectionOrConstant inline=true  num 0 [-1..1] pan
+in   Send 1             Control  ConnectionOrConstant inline=true  num 0 [0..1]
+in   Send 2             Control  ConnectionOrConstant inline=true  num 0 [0..1]
+in   Send 3             Control  ConnectionOrConstant inline=true  num 0 [0..1]
+in   Send 4             Control  ConnectionOrConstant inline=true  num 0 [0..1]
+in   Return             Control  ConnectionOrConstant inline=true  num 1 [0..1]
 in   Chain In           Bus      ConnectionOnly       inline=true  port
 in   Return L           Audio    ConnectionOnly       inline=true  port
 in   Return R           Audio    ConnectionOnly       inline=true  port
@@ -473,10 +478,6 @@ in   Width 1            Control  ConstantOnly         inline=false num 0 [0..1]
 in   Width 2            Control  ConstantOnly         inline=false num 0 [0..1]
 in   Width 3            Control  ConstantOnly         inline=false num 0 [0..1]
 in   Width 4            Control  ConstantOnly         inline=false num 0 [0..1]
-in   Send 1             Control  ConstantOnly         inline=false num 0 [0..1]
-in   Send 2             Control  ConstantOnly         inline=false num 0 [0..1]
-in   Send 3             Control  ConstantOnly         inline=false num 0 [0..1]
-in   Send 4             Control  ConstantOnly         inline=false num 0 [0..1]
 in   Mute 1             Control  ConstantOnly         inline=false toggle false ""
 in   Mute 2             Control  ConstantOnly         inline=false toggle false ""
 in   Mute 3             Control  ConstantOnly         inline=false toggle false ""
@@ -485,30 +486,29 @@ in   Solo 1             Control  ConstantOnly         inline=false toggle false 
 in   Solo 2             Control  ConstantOnly         inline=false toggle false ""
 in   Solo 3             Control  ConstantOnly         inline=false toggle false ""
 in   Solo 4             Control  ConstantOnly         inline=false toggle false ""
-in   Return             Control  ConstantOnly         inline=false num 1 [0..1]
 in   Master             Control  ConstantOnly         inline=false num 0 [-60..6] dB
 out  Out L              Audio
 out  Out R              Audio
 out  Send L             Audio
 out  Send R             Audio
 out  Chain Out          Bus
-knob Level 1            "Lv 1" Modulatable
-knob Pan 1              "Pan 1" Modulatable
+knob Level 1            "Lv 1" Modulatable adds
+knob Pan 1              "Pan 1" Modulatable adds
 knob Width 1            "Wid 1" KnobOnly
-knob Send 1             "Snd 1" KnobOnly
-knob Level 2            "Lv 2" Modulatable
-knob Pan 2              "Pan 2" Modulatable
+knob Send 1             "Snd 1" Modulatable adds
+knob Level 2            "Lv 2" Modulatable adds
+knob Pan 2              "Pan 2" Modulatable adds
 knob Width 2            "Wid 2" KnobOnly
-knob Send 2             "Snd 2" KnobOnly
-knob Level 3            "Lv 3" Modulatable
-knob Pan 3              "Pan 3" Modulatable
+knob Send 2             "Snd 2" Modulatable adds
+knob Level 3            "Lv 3" Modulatable adds
+knob Pan 3              "Pan 3" Modulatable adds
 knob Width 3            "Wid 3" KnobOnly
-knob Send 3             "Snd 3" KnobOnly
-knob Level 4            "Lv 4" Modulatable
-knob Pan 4              "Pan 4" Modulatable
+knob Send 3             "Snd 3" Modulatable adds
+knob Level 4            "Lv 4" Modulatable adds
+knob Pan 4              "Pan 4" Modulatable adds
 knob Width 4            "Wid 4" KnobOnly
-knob Send 4             "Snd 4" KnobOnly
-knob Return             "Ret" KnobOnly
+knob Send 4             "Snd 4" Modulatable adds
+knob Return             "Ret" Modulatable adds
 knob Master             "Master" KnobOnly
 display MixerStrips
 

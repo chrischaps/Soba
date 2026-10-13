@@ -143,6 +143,10 @@ pub struct KnobConfig {
     pub accent: Color32,
     /// How the knob is drawn.
     pub style: KnobStyle,
+    /// Where CV has carried a knob that keeps its own setting while the CV
+    /// adds to it: drawn as a Control-coloured arc from the knob's value to
+    /// here, with a bead at its end, so a patched knob shows what it's doing.
+    pub modulated: Option<f32>,
 }
 
 impl Default for KnobConfig {
@@ -161,6 +165,7 @@ impl Default for KnobConfig {
             stepped: false,
             accent: theme::accent::PRIMARY,
             style: KnobStyle::default(),
+            modulated: None,
         }
     }
 }
@@ -393,6 +398,7 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
                 KnobStyle::Hybrid => paint_hybrid(painter, &face),
                 KnobStyle::Classic => unreachable!(),
             }
+            paint_modulation(painter, center, config, normalized);
             paint_readout(painter, knob_rect, face.s, config, *value);
             return response;
         }
@@ -461,6 +467,8 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
 
         // Draw center dot
         painter.circle_filled(center, 3.0 * scale, theme::text::SECONDARY);
+
+        paint_modulation(painter, center, config, normalized);
 
         // Draw outer ring border
         painter.circle_stroke(
@@ -728,6 +736,26 @@ fn paint_hybrid(painter: &egui::Painter, f: &Face) {
     shaded_disc(painter, f.center, cap_r, top, Color32::from_rgb(44, 47, 61));
     painter.circle_stroke(f.center, cap_r, Stroke::new(0.8 * s, Color32::from_white_alpha(20)));
     f.paint_pointer(painter, cap_r * 0.25, cap_r - 1.6 * s, 2.2 * s, theme::text::PRIMARY);
+}
+
+/// Where CV has carried the knob: a thin Control-coloured arc just outside
+/// every style's face, from the knob's own value to the bead where the CV
+/// takes it. The knob itself stays where it was set
+fn paint_modulation(painter: &egui::Painter, center: Pos2, config: &KnobConfig, from: f32) {
+    let Some(to) = config.modulated else {
+        return;
+    };
+    let s = config.size / 36.0;
+    let (from, to) = (from.clamp(0.0, 1.0), config.travel(to).clamp(0.0, 1.0));
+    let radius = config.size / 2.0 - 0.6 * s;
+    let angle = |t: f32| Face::START + t * Face::SWEEP;
+    let color = theme::signal::CONTROL;
+    if (to - from).abs() > 1e-3 {
+        stroke_arc(painter, center, radius, angle(from.min(to)), angle(from.max(to)), 1.2 * s, color.gamma_multiply(0.7));
+    }
+    let bead = polar(center, angle(to), radius);
+    painter.circle_filled(bead, 2.6 * s, color.gamma_multiply(0.25));
+    painter.circle_filled(bead, 1.5 * s, color);
 }
 
 /// Value and label under the refreshed knobs: the value in the title face so

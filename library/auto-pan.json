@@ -150,26 +150,6 @@
               "value": 0.0
             },
             {
-              "name": "Width 1",
-              "type": "Number",
-              "value": 0.0
-            },
-            {
-              "name": "Width 2",
-              "type": "Number",
-              "value": 0.0
-            },
-            {
-              "name": "Width 3",
-              "type": "Number",
-              "value": 0.0
-            },
-            {
-              "name": "Width 4",
-              "type": "Number",
-              "value": 0.0
-            },
-            {
               "name": "Send 1",
               "type": "Number",
               "value": 0.0
@@ -186,6 +166,31 @@
             },
             {
               "name": "Send 4",
+              "type": "Number",
+              "value": 0.0
+            },
+            {
+              "name": "Return",
+              "type": "Number",
+              "value": 1.0
+            },
+            {
+              "name": "Width 1",
+              "type": "Number",
+              "value": 0.0
+            },
+            {
+              "name": "Width 2",
+              "type": "Number",
+              "value": 0.0
+            },
+            {
+              "name": "Width 3",
+              "type": "Number",
+              "value": 0.0
+            },
+            {
+              "name": "Width 4",
               "type": "Number",
               "value": 0.0
             },
@@ -228,11 +233,6 @@
               "name": "Solo 4",
               "type": "Toggle",
               "value": false
-            },
-            {
-              "name": "Return",
-              "type": "Number",
-              "value": 1.0
             },
             {
               "name": "Master",

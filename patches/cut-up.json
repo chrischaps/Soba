@@ -123,7 +123,7 @@
       "module_id": "seq.step",
       "position": [
         300.0,
-        580.0
+        652.0
       ],
       "parameters": [
         {
@@ -388,7 +388,7 @@
       "module_id": "osc.sine",
       "position": [
         640.0,
-        580.0
+        652.0
       ],
       "parameters": [
         {
@@ -418,7 +418,7 @@
       "module_id": "filter.ladder",
       "position": [
         850.0,
-        580.0
+        652.0
       ],
       "parameters": [
         {
@@ -443,7 +443,7 @@
       "module_id": "util.vca",
       "position": [
         1100.0,
-        580.0
+        652.0
       ],
       "parameters": [
         {
@@ -463,7 +463,7 @@
       "module_id": "mod.adsr",
       "position": [
         850.0,
-        890.0
+        962.0
       ],
       "parameters": [
         {
@@ -498,7 +498,7 @@
       "module_id": "mod.adsr",
       "position": [
         1100.0,
-        890.0
+        962.0
       ],
       "parameters": [
         {
@@ -845,7 +845,7 @@
       ],
       "size": [
         694.0,
-        478.0
+        550.0
       ],
       "color": "blue"
     },
@@ -857,7 +857,7 @@
       ],
       "size": [
         952.0,
-        451.0
+        523.0
       ],
       "color": "cyan"
     },
@@ -865,7 +865,7 @@
       "title": "Bass",
       "position": [
         276.0,
-        522.0
+        594.0
       ],
       "size": [
         1078.0,
@@ -895,7 +895,7 @@
       "text": "A bass line in D minor, in the gaps the break leaves. Its own envelope opens the Ladder on every note.",
       "position": [
         16.0,
-        640.0
+        712.0
       ],
       "width": 226.0
     }

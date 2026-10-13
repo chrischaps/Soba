@@ -1753,7 +1753,7 @@
       ],
       "size": [
         1336.0,
-        507.0
+        579.0
       ],
       "color": "cyan"
     },
@@ -1775,7 +1775,7 @@
       "text": "The Chord Sequencer steps once a bar, on the Step Sequencer's **EOC**. Its **Root** moves the whole arpeggio: F, C, G, A. Its chords, Fmaj9, Cadd9, G6 and Am9, play on the pad, with each root underneath as the bass.",
       "position": [
         1392.0,
-        1120.0
+        1192.0
       ],
       "width": 300.0
     },
@@ -1791,7 +1791,7 @@
       "text": "The delay is a dotted eighth, so each echo falls between the arpeggio's notes and answers from the other speaker.",
       "position": [
         1386.0,
-        779.0
+        851.0
       ],
       "width": 320.0
     }

@@ -1,12 +1,13 @@
 //! The Mixer's face: a console turned on its side, one row per channel.
 //!
 //! Each row is a whole channel strip, read left to right the way its signal
-//! travels: its three jacks (the channel in, then CV for its level and pan)
-//! on the node's edge, its number, a lane of the stereo field with a light
-//! wherever it sounds, its meter, its four knobs (level, pan, width, send)
-//! and its mute and solo. Below the strips, the bus row: the chain and the
-//! effect return coming in on the left, the Return and Master knobs and the
-//! stereo meter, and every output leaving on the right.
+//! travels: its four jacks (the channel in, then CV for its level, pan and
+//! send) on the node's edge, its number, a lane of the stereo field with a
+//! light wherever it sounds, its meter, its four knobs (level, pan, width,
+//! send) and its mute and solo. Below the strips, the bus row: the chain,
+//! the effect return and the Return's CV coming in on the left, the Return
+//! and Master knobs and the stereo meter, and every output leaving on the
+//! right.
 //!
 //! The lights are drawn from the same pan law and fan the audio uses, so
 //! what you see is where you hear it: one light for a mono cable, one per
@@ -45,8 +46,10 @@ mod geometry {
     pub const JACK_PITCH: f32 = 18.0;
     /// The column titles above the strips.
     pub const HEADER: f32 = 14.0;
-    /// One channel strip: its three jacks, one knob without a title.
-    pub const ROW: f32 = 3.0 * JACK_PITCH;
+    /// One channel strip: its four jacks, beside one knob without a title.
+    pub const ROW: f32 = 4.0 * JACK_PITCH;
+    /// A knob's cell, centred in its row.
+    pub const KNOB_CELL: f32 = 3.0 * JACK_PITCH;
     /// The gap above the bus row, where its hairline runs.
     pub const BUS_GAP: f32 = 8.0;
     /// The bus row: its five outputs down the right edge.
@@ -105,11 +108,15 @@ fn jack_slot(name: &str) -> Option<(Edge, f32)> {
     if let Some(s) = strip("Pan ") {
         return Some((Edge::Left, slot(row_top(s), 2)));
     }
+    if let Some(s) = strip("Send ") {
+        return Some((Edge::Left, slot(row_top(s), 3)));
+    }
     let bus = |edge, k| Some((edge, slot(bus_top(), k)));
     match name {
         "Chain In" => bus(Edge::Left, 0),
         "Return L" => bus(Edge::Left, 1),
         "Return R" => bus(Edge::Left, 2),
+        "Return" => bus(Edge::Left, 3),
         "Out L" => bus(Edge::Right, 0),
         "Out R" => bus(Edge::Right, 1),
         "Send L" => bus(Edge::Right, 2),
@@ -130,10 +137,12 @@ fn jack_label(name: &str) -> &'static str {
         Some("Ch") => "in",
         Some("Level") => "lvl",
         Some("Pan") => "pan",
+        Some("Send") => "snd",
         _ => match name {
             "Chain In" => "chain",
             "Return L" => "ret L",
-            _ => "ret R",
+            "Return R" => "ret R",
+            _ => "return",
         },
     }
 }
@@ -146,7 +155,7 @@ struct StripView {
     /// Pan with any CV added, from -1 to 1.
     pan: f32,
     width: f32,
-    /// The Send knob, from 0 to 1.
+    /// Send with any CV added, from 0 to 1.
     send: f32,
     /// Each voice's last peak, or `None` before any reading.
     voices: Vec<Option<f32>>,
@@ -210,17 +219,19 @@ pub fn mixer_strips(
                     Some((0..peaks.count()).map(|v| Some(peaks.peak(v))).collect())
                 })
                 .unwrap_or_else(|| vec![None]);
-            let pan_cv = match (feeding(&format!("Pan {n}")), engine_node_id) {
-                (Some(_), Some(eid)) => user_state.get_input_value(eid, Mixer::PORT_PAN_CV + s).unwrap_or(0.0),
+            let cv = |name: String, port: usize| match (feeding(&name), engine_node_id) {
+                (Some(_), Some(eid)) => user_state.get_input_value(eid, port).unwrap_or(0.0),
                 _ => 0.0,
             };
+            let pan_cv = cv(format!("Pan {n}"), Mixer::PORT_PAN_CV + s);
+            let send_cv = cv(format!("Send {n}"), Mixer::PORT_SEND_CV + s);
             StripView {
                 patched: source.is_some(),
                 muted: value_of(&format!("Mute {n}")) >= 0.5,
                 soloed: value_of(&format!("Solo {n}")) >= 0.5,
                 pan: (value_of(&format!("Pan {n}")) + pan_cv).clamp(-1.0, 1.0),
                 width: value_of(&format!("Width {n}")),
-                send: value_of(&format!("Send {n}")),
+                send: (value_of(&format!("Send {n}")) + send_cv).clamp(0.0, 1.0),
                 voices,
             }
         })
@@ -261,7 +272,7 @@ pub fn mixer_strips(
         }
 
         // The jacks' labels, lit when patched
-        for (k, name) in [format!("Ch {n}"), format!("Level {n}"), format!("Pan {n}")].iter().enumerate() {
+        for (k, name) in [format!("Ch {n}"), format!("Level {n}"), format!("Pan {n}"), format!("Send {n}")].iter().enumerate() {
             let signal = if k == 0 { SignalType::Audio } else { SignalType::Control };
             jack_caption(ui, &painter, data, node_id, name, at(2.0, top + (k as f32 + 0.5) * JACK_PITCH), &tiny, signal, feeding(name).is_some(), 0.0);
         }
@@ -285,14 +296,15 @@ pub fn mixer_strips(
         ));
 
         // The meter, after the fader
-        let bar = Rect::from_center_size(Pos2::new(at(METER_X, 0.0).x, mid), Vec2::new(6.0, 40.0) * z);
+        let bar = Rect::from_center_size(Pos2::new(at(METER_X, 0.0).x, mid), Vec2::new(6.0, ROW - 18.0) * z);
         column_meter(&painter, bar, meter(s), !is_heard);
         ui.interact(bar.expand2(Vec2::new(4.0 * z, 0.0)), ui.id().with(("mixer_meter", node_id, s)), Sense::hover())
             .on_hover_text(format!("Channel {n}: {} after its fader", format_db(meter(s).level_db())));
 
         // The knobs, one per column, untitled: the header names them
+        let knob_top = top + (ROW - KNOB_CELL) * 0.5 + 1.0;
         for (k, (param, _)) in STRIP_KNOBS.iter().enumerate() {
-            let cell = Rect::from_min_size(at(KNOBS_X + k as f32 * KNOB_COLUMN, top + 1.0), Vec2::new(KNOB_COLUMN, ROW - 1.0) * z);
+            let cell = Rect::from_min_size(at(KNOBS_X + k as f32 * KNOB_COLUMN, knob_top), Vec2::new(KNOB_COLUMN, KNOB_CELL - 1.0) * z);
             knob(data, ui, cell, node_id, graph, user_state, z, &mut responses, &format!("{param} {n}"), "");
         }
 
@@ -324,11 +336,13 @@ pub fn mixer_strips(
     let hairline = rect.top() + (top - BUS_GAP * 0.5) * z;
     painter.hline(rect.left()..=rect.right(), hairline, Stroke::new(1.0 * z, accent.gamma_multiply(0.25)));
 
-    // What comes in: the chain and the return, their labels lit by their level
+    // What comes in: the chain and the return, their labels lit by their
+    // level, and the CV that rides the Return
     for (k, (name, signal, level)) in [
         ("Chain In", SignalType::Bus, meter(Mixer::METER_CHAIN).fraction()),
         ("Return L", SignalType::Audio, meter(Mixer::METER_RETURN).fraction()),
         ("Return R", SignalType::Audio, meter(Mixer::METER_RETURN).fraction()),
+        ("Return", SignalType::Control, 0.0),
     ]
     .into_iter()
     .enumerate()
@@ -563,7 +577,7 @@ mod tests {
         for s in 0..STRIPS {
             let n = s + 1;
             let (top, bottom) = (geometry::row_top(s), geometry::row_top(s + 1));
-            for name in [format!("Ch {n}"), format!("Level {n}"), format!("Pan {n}")] {
+            for name in [format!("Ch {n}"), format!("Level {n}"), format!("Pan {n}"), format!("Send {n}")] {
                 let (_, y) = jack_slot(&name).unwrap();
                 assert!(y > top && y < bottom, "{name} at {y} is outside its row {top}..{bottom}");
             }
@@ -575,7 +589,9 @@ mod tests {
         assert_eq!(jack_label("Ch 3"), "in");
         assert_eq!(jack_label("Level 2"), "lvl");
         assert_eq!(jack_label("Pan 4"), "pan");
+        assert_eq!(jack_label("Send 1"), "snd");
         assert_eq!(jack_label("Chain In"), "chain");
         assert_eq!(jack_label("Return R"), "ret R");
+        assert_eq!(jack_label("Return"), "return");
     }
 }

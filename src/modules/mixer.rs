@@ -7,7 +7,9 @@
 //!
 //! Each channel's Send feeds Send L/R after its fader and pan; the effect
 //! comes back on Return L/R, which may close the loop through this same
-//! mixer (it's then heard a block late).
+//! mixer (it's then heard a block late). Send and Return take CV as Level
+//! and Pan do, added to their knobs, so a score can ride the room: one part
+//! stepping into the reverb alone, or the whole room opening for a verse.
 //!
 //! Mixers cascade, as console sidecars do, over one cable. Chain Out carries
 //! the whole mix on a Bus cable, four strands: the stereo pair and the send
@@ -92,6 +94,7 @@ struct Strip {
     /// 1 while heard, 0 while muted or soloed out, smoothed so neither clicks.
     heard: SmoothedValue,
     /// The Send knob, smoothed per sample: how much goes to the send bus.
+    /// Send CV adds on unsmoothed.
     send: SmoothedValue,
     /// Each voice's (left, right) pan gains, as they stand now.
     gains: [[f32; 2]; MAX_CHANNELS],
@@ -141,6 +144,8 @@ impl Strip {
 ///   its voices apart, so Width can place them.
 /// - **Level 1** to **Level 4** (Control): CV added to each channel's level.
 /// - **Pan 1** to **Pan 4** (Control): CV added to each channel's pan.
+/// - **Send 1** to **Send 4** (Control): CV added to each channel's send.
+/// - **Return** (Control): CV added to the Return knob.
 /// - **Chain In** (Bus): Another Mixer's Chain Out. Its mix joins this one
 ///   after the faders, and its sends join this one's send bus.
 /// - **Return L**, **Return R** (Audio, late): An effect's output, added at
@@ -172,7 +177,7 @@ pub struct Mixer {
     strips: [Strip; STRIPS],
     /// 1 while Chain In is heard, 0 while a channel here is soloed.
     chain_heard: SmoothedValue,
-    /// The Return knob, smoothed per sample.
+    /// The Return knob, smoothed per sample. Return CV adds on unsmoothed.
     return_level: SmoothedValue,
     /// The Master knob, smoothed per sample.
     master: SmoothedValue,
@@ -210,6 +215,11 @@ impl Mixer {
                 cv("pan2_cv", "Pan 2", "CV added to channel 2's Pan knob. An LFO here pans it to and fro"),
                 cv("pan3_cv", "Pan 3", "CV added to channel 3's Pan knob. An LFO here pans it to and fro"),
                 cv("pan4_cv", "Pan 4", "CV added to channel 4's Pan knob. An LFO here pans it to and fro"),
+                cv("send1_cv", "Send 1", "CV added to channel 1's Send knob, so a score can step it into the room alone"),
+                cv("send2_cv", "Send 2", "CV added to channel 2's Send knob, so a score can step it into the room alone"),
+                cv("send3_cv", "Send 3", "CV added to channel 3's Send knob, so a score can step it into the room alone"),
+                cv("send4_cv", "Send 4", "CV added to channel 4's Send knob, so a score can step it into the room alone"),
+                cv("return_cv", "Return", "CV added to the Return knob: an Arranger lane here is the whole room's fader"),
                 PortDefinition::input_with_default("chain_in", "Chain In", SignalType::Bus, 0.0)
                     .describe("Another Mixer's Chain Out: its mix joins this one after the faders, and its sends join this one's send bus"),
                 PortDefinition::input_with_default("return_l", "Return L", SignalType::Audio, 0.0).late().describe(
@@ -235,14 +245,16 @@ impl Mixer {
                 pan("pan2", "Pan 2", "Where channel 2 sits, from hard left to hard right. Each side is at -3 dB in the centre"),
                 pan("pan3", "Pan 3", "Where channel 3 sits, from hard left to hard right. Each side is at -3 dB in the centre"),
                 pan("pan4", "Pan 4", "Where channel 4 sits, from hard left to hard right. Each side is at -3 dB in the centre"),
-                unit("width1", "Width 1", 0.0, "Fans a polyphonic channel 1's voices out across the field, around its pan"),
-                unit("width2", "Width 2", 0.0, "Fans a polyphonic channel 2's voices out across the field, around its pan"),
-                unit("width3", "Width 3", 0.0, "Fans a polyphonic channel 3's voices out across the field, around its pan"),
-                unit("width4", "Width 4", 0.0, "Fans a polyphonic channel 4's voices out across the field, around its pan"),
+                // The knobs that take CV come first, in the order of their jacks
                 unit("send1", "Send 1", 0.0, "How much of channel 1 goes to Send L/R, after its fader and pan"),
                 unit("send2", "Send 2", 0.0, "How much of channel 2 goes to Send L/R, after its fader and pan"),
                 unit("send3", "Send 3", 0.0, "How much of channel 3 goes to Send L/R, after its fader and pan"),
                 unit("send4", "Send 4", 0.0, "How much of channel 4 goes to Send L/R, after its fader and pan"),
+                unit("return", "Return", 1.0, "Level of Return L/R in the mix, before the Master"),
+                unit("width1", "Width 1", 0.0, "Fans a polyphonic channel 1's voices out across the field, around its pan"),
+                unit("width2", "Width 2", 0.0, "Fans a polyphonic channel 2's voices out across the field, around its pan"),
+                unit("width3", "Width 3", 0.0, "Fans a polyphonic channel 3's voices out across the field, around its pan"),
+                unit("width4", "Width 4", 0.0, "Fans a polyphonic channel 4's voices out across the field, around its pan"),
                 toggle("mute1", "Mute 1", "Silences channel 1"),
                 toggle("mute2", "Mute 2", "Silences channel 2"),
                 toggle("mute3", "Mute 3", "Silences channel 3"),
@@ -251,7 +263,6 @@ impl Mixer {
                 toggle("solo2", "Solo 2", "Hears channel 2 alone, with any other soloed channels and the return"),
                 toggle("solo3", "Solo 3", "Hears channel 3 alone, with any other soloed channels and the return"),
                 toggle("solo4", "Solo 4", "Hears channel 4 alone, with any other soloed channels and the return"),
-                unit("return", "Return", 1.0, "Level of Return L/R in the mix, before the Master"),
                 ParameterDefinition::new("master", "Master", MASTER_FLOOR_DB, 6.0, 0.0, ParameterDisplay::linear("dB"))
                     .describe("Volume of the mix. Up to +6 dB, to win back the 3 dB a centred channel gives up on each side"),
             ],
@@ -265,15 +276,17 @@ impl Mixer {
         }
     }
 
-    /// Input port indices: the channels, the Level CVs, the Pan CVs, then
-    /// the chain and the return.
+    /// Input port indices: the channels, the Level, Pan and Send CVs, the
+    /// Return CV, then the chain and the return.
     pub const PORT_CH: usize = 0;
     pub const PORT_LEVEL_CV: usize = 4;
     pub const PORT_PAN_CV: usize = 8;
-    pub const PORT_CHAIN_IN: usize = 12;
-    pub const PORT_RETURN: usize = 13;
+    pub const PORT_SEND_CV: usize = 12;
+    pub const PORT_RETURN_CV: usize = 16;
+    pub const PORT_CHAIN_IN: usize = 17;
+    pub const PORT_RETURN: usize = 18;
     /// The number of inputs; the outputs follow them.
-    pub const INPUTS: usize = 15;
+    pub const INPUTS: usize = 20;
 
     /// Output indices, counted among the outputs.
     pub const OUT_L: usize = 0;
@@ -282,14 +295,15 @@ impl Mixer {
     pub const SEND_R: usize = 3;
     pub const CHAIN_OUT: usize = 4;
 
-    /// Parameter indices: four of each per-channel kind, then the bus.
+    /// Parameter indices: those that take CV, in the order of their jacks
+    /// (four of each per-channel kind, then the Return), then the rest.
     pub const PARAM_LEVEL: usize = 0;
     pub const PARAM_PAN: usize = 4;
-    pub const PARAM_WIDTH: usize = 8;
-    pub const PARAM_SEND: usize = 12;
-    pub const PARAM_MUTE: usize = 16;
-    pub const PARAM_SOLO: usize = 20;
-    pub const PARAM_RETURN: usize = 24;
+    pub const PARAM_SEND: usize = 8;
+    pub const PARAM_RETURN: usize = 12;
+    pub const PARAM_WIDTH: usize = 13;
+    pub const PARAM_MUTE: usize = 17;
+    pub const PARAM_SOLO: usize = 21;
     pub const PARAM_MASTER: usize = 25;
     pub const PARAMS: usize = 26;
 
@@ -374,6 +388,7 @@ impl DspModule for Mixer {
             let cv = |port: usize| connected_input(inputs, port).map(|buf| &buf.samples[..]).filter(|cv| cv.len() >= n);
             let level_cv = cv(Self::PORT_LEVEL_CV + s);
             let pan_cv = cv(Self::PORT_PAN_CV + s);
+            let send_cv = cv(Self::PORT_SEND_CV + s);
 
             let voices = input.channels().min(MAX_CHANNELS);
             let mut channels: [&[f32]; MAX_CHANNELS] = [&[]; MAX_CHANNELS];
@@ -419,7 +434,7 @@ impl DspModule for Mixer {
                     let (left, right) = (left * gain, right * gain);
                     out_l[i] += left;
                     out_r[i] += right;
-                    let send = strip.send.next();
+                    let send = (strip.send.next() + send_cv.map_or(0.0, |cv| cv[i])).clamp(0.0, 1.0);
                     send_l[i] += left * send;
                     send_r[i] += right * send;
                     strip.peak = strip.peak.max((mono * gain).abs());
@@ -453,8 +468,9 @@ impl DspModule for Mixer {
 
         // The effect comes back at the Return knob, whatever is soloed
         if let Some([l, r]) = stereo_in(inputs, Self::PORT_RETURN, n) {
+            let return_cv = connected_input(inputs, Self::PORT_RETURN_CV).map(|buf| &buf.samples[..]).filter(|cv| cv.len() >= n);
             for i in 0..n {
-                let level = self.return_level.next();
+                let level = (self.return_level.next() + return_cv.map_or(0.0, |cv| cv[i])).clamp(0.0, 1.0);
                 let (l, r) = (summed(l, i) * level, summed(r, i) * level);
                 out_l[i] += l;
                 out_r[i] += r;
@@ -683,9 +699,11 @@ mod tests {
         assert_eq!(inputs[Mixer::PORT_CH + 2].name, "Ch 3");
         assert_eq!(inputs[Mixer::PORT_LEVEL_CV + 1].name, "Level 2");
         assert_eq!(inputs[Mixer::PORT_PAN_CV + 3].name, "Pan 4");
+        assert_eq!(inputs[Mixer::PORT_SEND_CV + 2].name, "Send 3");
+        assert_eq!(inputs[Mixer::PORT_RETURN_CV].name, "Return");
         assert_eq!((inputs[Mixer::PORT_CHAIN_IN].name, inputs[Mixer::PORT_CHAIN_IN].signal_type), ("Chain In", SignalType::Bus));
         assert_eq!(inputs[Mixer::PORT_RETURN].name, "Return L");
-        assert!(inputs.iter().all(|p| p.late == p.name.starts_with("Return")), "only the return closes loops");
+        assert!(inputs.iter().all(|p| p.late == p.name.starts_with("Return ")), "only the return closes loops");
         assert_eq!(outputs.iter().map(|p| p.name).collect::<Vec<_>>(), ["Out L", "Out R", "Send L", "Send R", "Chain Out"]);
         assert_eq!(outputs[Mixer::CHAIN_OUT].signal_type, SignalType::Bus);
 
@@ -1067,6 +1085,73 @@ mod tests {
         p[Mixer::PARAM_MUTE] = 1.0;
         let out = run(&mut mixer, &[(0, &x)], &p, 40);
         assert!(sends(&out)[0].abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_send_cv_adds_to_the_knob() {
+        let mut mixer = prepared();
+        let x = constant(0.8);
+        let mut p = params();
+        p[Mixer::PARAM_PAN] = -1.0;
+        p[Mixer::PARAM_SEND] = 0.25;
+        let cv = constant(0.5);
+        let out = run(&mut mixer, &[(0, &x), (Mixer::PORT_SEND_CV, &cv)], &p, 40);
+        assert!((sends(&out)[0] - 0.8 * 0.75).abs() < 1e-4, "knob and CV add: {}", sends(&out)[0]);
+        assert!((lr(&out)[0] - 0.8).abs() < 1e-4, "the dry mix is untouched");
+
+        // A lane at 1 is a full send from a knob at 0, and never more
+        p[Mixer::PARAM_SEND] = 0.0;
+        let cv = constant(1.0);
+        let out = run(&mut mixer, &[(0, &x), (Mixer::PORT_SEND_CV, &cv)], &p, 40);
+        assert!((sends(&out)[0] - 0.8).abs() < 1e-4);
+        let cv = constant(3.0);
+        let out = run(&mut mixer, &[(0, &x), (Mixer::PORT_SEND_CV, &cv)], &p, 2);
+        assert!((sends(&out)[0] - 0.8).abs() < 1e-4);
+
+        // Each channel's CV is its own: channel 2 stays dry
+        let out = run(&mut mixer, &[(1, &x), (Mixer::PORT_SEND_CV, &cv)], &p, 40);
+        assert!(sends(&out)[0].abs() < 1e-6, "Send 1 CV moved channel 2: {}", sends(&out)[0]);
+        let out = run(&mut mixer, &[(1, &x), (Mixer::PORT_SEND_CV + 1, &cv)], &p, 40);
+        assert!(sends(&out)[0] > 0.5);
+    }
+
+    #[test]
+    fn test_return_cv_adds_to_the_knob() {
+        let mut mixer = prepared();
+        let wet = constant(0.4);
+        let mut p = params();
+        p[Mixer::PARAM_RETURN] = 0.0;
+        let cv = constant(0.5);
+        let out = run(&mut mixer, &[(Mixer::PORT_RETURN, &wet), (Mixer::PORT_RETURN_CV, &cv)], &p, 40);
+        assert!((lr(&out)[0] - 0.2).abs() < 1e-4, "{}", lr(&out)[0]);
+
+        // Clamped both ways: never past full, never below silence
+        p[Mixer::PARAM_RETURN] = 1.0;
+        let out = run(&mut mixer, &[(Mixer::PORT_RETURN, &wet), (Mixer::PORT_RETURN_CV, &constant(2.0))], &p, 40);
+        assert!((lr(&out)[0] - 0.4).abs() < 1e-4);
+        let out = run(&mut mixer, &[(Mixer::PORT_RETURN, &wet), (Mixer::PORT_RETURN_CV, &constant(-2.0))], &p, 40);
+        assert_eq!(lr(&out), [0.0, 0.0]);
+    }
+
+    #[test]
+    fn test_a_lane_into_return_cv_fades_the_room_without_a_click() {
+        // A steady room, a knob at 0, and a lane ramping 0 to 1 over a block
+        // (as an Arranger's Ramp or Glide hands it over): the return comes in
+        // sample by sample, never in a step
+        let mut mixer = prepared();
+        let wet = constant(0.5);
+        let mut p = params();
+        p[Mixer::PARAM_RETURN] = 0.0;
+        let mut ramp = SignalBuffer::control(BLOCK);
+        for (i, sample) in ramp.samples.iter_mut().enumerate() {
+            *sample = i as f32 / (BLOCK - 1) as f32;
+        }
+        let out = run(&mut mixer, &[(Mixer::PORT_RETURN, &wet), (Mixer::PORT_RETURN_CV, &ramp)], &p, 1);
+        let left = &out[Mixer::OUT_L].samples;
+        assert_eq!(left[0], 0.0);
+        assert!((left[BLOCK - 1] - 0.5).abs() < 1e-4);
+        let biggest_step = left.windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f32::max);
+        assert!(biggest_step < 0.5 / (BLOCK - 1) as f32 + 1e-5, "steps by {biggest_step}");
     }
 
     #[test]

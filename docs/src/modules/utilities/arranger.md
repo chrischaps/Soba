@@ -188,11 +188,12 @@ The sections' lengths are `Length 01` to `Length 32`, their repeats `Repeat 01` 
 4. **Pedals.** Hit a Looper's **Rec** at the start of a section to record it, and its **Clear** at the top of the song so each pass starts fresh.
 5. **A brightness lane.** Ramp a lane over a build and patch it through an [Attenuverter](./attenuverter.md) into filter cutoffs or drive amounts: the whole build opens up together.
 6. **A shorter song.** Set **Loop to** a later section, and the intro plays only once.
+7. **Ride the room.** Patch a lane into a [Mixer](./mixer.md)'s **Return** with its knob at 0, and the lane is the reverb's fader: dry and close for the opening, the hall for the second verse. A lane into one channel's **Send** steps just that part into the room.
 
 ## Related
 
 - [From One Sine](../../recipes/from-one-sine.md) – a whole song on three Arrangers: eight faders; the drums, crash, riser, brightness, Looper pedals and the melody's patterns; and a lane that warps the master tape
 - [Trigger Sequencer](./trigger-sequencer.md) – patterns for an Arranger lane to pick
-- [Mixer](./mixer.md) – the faders a lane rides
+- [Mixer](./mixer.md) – the faders, sends and return a lane rides
 - [Clock](../modulation/clock.md) – tempo and swing
 - [Clock Divider](./divider.md) – phrases without a timeline

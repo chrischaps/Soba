@@ -3,9 +3,9 @@
 **Module ID** `util.mixer` · **Category** Utility
 
 ![Mixer Module](../../images/module-mixer.png)
-*Four channel strips, a row each, over the bus row: the return, the master and the outputs.*
+*Four channel strips, a row each, over the bus row: the return, the master and the outputs. An LFO rides channel 2's Send and a slower one the Return: the orange arc on each knob runs from where it's set to where the CV has taken it.*
 
-The Mixer is a small stereo console. It brings up to four channels together into a stereo pair, and each one has its own level, pan, width, send, mute and solo. Use it to place sounds left and right, to pan one to and fro with an LFO, to open a polyphonic pad across the stereo field, or to share one reverb among every channel. For more than four channels, chain Mixers: one cable carries a Mixer's whole mix and its sends into the next.
+The Mixer is a small stereo console. It brings up to four channels together into a stereo pair, and each one has its own level, pan, width, send, mute and solo. Use it to place sounds left and right, to pan one to and fro with an LFO, to open a polyphonic pad across the stereo field, or to share one reverb among every channel and let a score ride how much of the room each part gets. For more than four channels, chain Mixers: one cable carries a Mixer's whole mix and its sends into the next.
 
 Audio and control signals both patch into a channel. To add up CVs or mono signals, without placing them in the stereo field, use the smaller [Mix](./mix.md).
 
@@ -13,14 +13,14 @@ Audio and control signals both patch into a channel. To add up CVs or mono signa
 
 The Mixer is a console turned on its side. Each channel is one row, read left to right the way its signal travels:
 
-- **Its jacks**, on the left edge: **in** for the channel, then **lvl** and **pan**, CV for its level and its pan. A jack's label lights up when it's patched.
+- **Its jacks**, on the left edge: **in** for the channel, then **lvl**, **pan** and **snd**, CV for its level, its pan and its send. A jack's label lights up when it's patched.
 - **Its number**, in the channel's colour.
-- **Its lane** of the stereo field, from **L** to **R**. A light shows where the channel sits. A polyphonic channel has a light per voice, fanned out by its **Width**. The lights brighten with the channel's level. A channel with its **Send** up blooms sideways along its lane, wider the more it sends, the way a sound spreads into a room. A hollow ring is a voice with nothing to play, and a grey ring is a channel you can't hear, because it's muted or another channel is soloed.
+- **Its lane** of the stereo field, from **L** to **R**. A light shows where the channel sits. A polyphonic channel has a light per voice, fanned out by its **Width**. The lights brighten with the channel's level. A channel with its **Send** up, by its knob or its CV, blooms sideways along its lane, wider the more it sends, the way a sound spreads into a room. A hollow ring is a voice with nothing to play, and a grey ring is a channel you can't hear, because it's muted or another channel is soloed.
 - **Its meter**: the level after its fader. It dims while the channel can't be heard.
 - **Its knobs**: **Level**, **Pan**, **Width** and **Send**, under the titles at the top.
 - **M** mutes the channel and turns red. **S** solos it and turns amber.
 
-Below the strips is the bus row. On the left come in the **chain** from another Mixer and the effect **return**. Their labels brighten with the level they bring. Then come the **Return** and **Master** knobs and the stereo output meter, and on the right, every output.
+Below the strips is the bus row. On the left come in the **chain** from another Mixer and the effect return (**ret L** and **ret R**). Their labels brighten with the level they bring. Under them, **return** takes CV for the **Return** knob. Then come the **Return** and **Master** knobs and the stereo output meter, and on the right, every output.
 
 ## Inputs
 
@@ -29,6 +29,8 @@ Below the strips is the bus row. On the left come in the **chain** from another 
 | **Ch 1** – **Ch 4** (in) | Audio (Blue) | The channels. A polyphonic cable keeps its voices apart, for **Width** |
 | **Level 1** – **Level 4** (lvl) | Control (Orange) | CV added to each channel's level |
 | **Pan 1** – **Pan 4** (pan) | Control (Orange) | CV added to each channel's pan. An LFO here pans it to and fro |
+| **Send 1** – **Send 4** (snd) | Control (Orange) | CV added to each channel's send, so a score can step one part into the room alone |
+| **Return** (return) | Control (Orange) | CV added to the **Return** knob. An [Arranger](./arranger.md) lane here is the whole room's fader |
 | **Chain In** | Bus (Steel) | Another Mixer's **Chain Out**: its mix joins this one after the faders, and its sends join this one's send bus |
 | **Return L**, **Return R** | Audio (Blue) | An effect's output, added to the mix at the **Return** knob. It may come from an effect fed by this same Mixer. **Return R** copies **Return L** when only the left is patched, so a mono source comes in centred |
 
@@ -53,7 +55,7 @@ Below the strips is the bus row. On the left come in the **chain** from another 
 | **Return** | 0 – 100% | 100% | Level of **Return L** and **Return R** in the mix |
 | **Master** | −60 – +6 dB | 0 dB | Volume of the mix. At −60 dB it's silent. The sends don't follow it |
 
-Levels, pans, widths, sends, **Return** and **Master** are smoothed, so you can ride them while the patch plays without clicks. Mute and solo fade over 10 ms, so they don't click either. A **Pan** knob's arc grows outward from the centre, so you can read which side a channel leans to at a glance. The readout says the same: **C**, or **L** or **R** and how far, out of 100.
+Levels, pans, widths, sends, **Return** and **Master** are smoothed, so you can ride their knobs while the patch plays without clicks. CV isn't smoothed: it's heard as it comes, so an envelope can open a channel sharply (see [riding them from a score](#level-pan-send-and-return-cv)). Mute and solo fade over 10 ms, so they don't click either. A **Pan** knob's arc grows outward from the centre, so you can read which side a channel leans to at a glance. The readout says the same: **C**, or **L** or **R** and how far, out of 100.
 
 ## How it works
 
@@ -70,11 +72,15 @@ Panning is **equal power**: as a channel moves from left to right, one side fade
 
 So a channel panned centre is 3 dB quieter on each side than it went in. To win that back, set **Master** to +3 dB.
 
-### Level and Pan CV
+### Level, Pan, Send and Return CV
 
-Both add to their knob. A **Level** CV can take a channel from silence to full, but never past 100% or below silence. A **Pan** CV of +1 moves a centred channel hard right, and a bipolar LFO swinging ±1 sweeps it from side to side. Set the **Pan** knob off centre and the LFO swings around that point instead, stopping at the edge.
+Each adds to its knob. A **Level** CV can take a channel from silence to full, but never past 100% or below silence. A **Pan** CV of +1 moves a centred channel hard right, and a bipolar LFO swinging ±1 sweeps it from side to side. Set the **Pan** knob off centre and the LFO swings around that point instead, stopping at the edge.
 
-A patched knob shows an orange dot at its top right and keeps its own setting. The CV moves the sound around it.
+**Send** and **Return** CV work the way **Level**'s does, from 0 to 100%. With a **Send** knob at 0, a lane at 1 is a full send: one part steps into the reverb alone while the rest stay dry. With the **Return** knob at 0, a lane into **Return** is the whole room's fader, so a song can open dry and close and bring the hall in for its second verse without spending two channels on the reverb.
+
+A patched knob shows an orange dot at its top right and keeps its own setting. While the patch plays, a thin orange arc runs round its edge from where the knob is set to a bead where the CV has carried it, so you can see a lane open the room.
+
+None of them smooths its CV. A jump from an [Arranger](./arranger.md) lane under a ringing note or a reverb tail clicks. Give the lane a **Glide** (40 ms saves a tail, a second suits a fade) or write the change as a **Ramp**, and the move is as smooth as a hand on a fader.
 
 ### Mute and solo
 
@@ -169,6 +175,17 @@ Send each channel as much reverb as it needs, through one reverb:
 ```
 
 Turn **Send** up on the channels that should sit further back. A vocal-like lead might send 20%, a pad 50%, and a bass nothing at all.
+
+### Riding the room from a score
+
+Two [Arranger](./arranger.md) lanes: one opens the hall for the second verse, the other lets the lead alone into it for the bridge:
+
+```text
+[Arranger Lane 1] ──> [Mixer Return]   (Return knob at 0; lane ramps 0 → 1 over two bars)
+[Arranger Lane 2] ──> [Mixer Send 2]   (Send 2 at 0; lane jumps to 0.6, Glide 1 s)
+```
+
+Every other channel keeps its own **Send**, so the room it opens is the one the mix already shares.
 
 ### More than four channels
 
