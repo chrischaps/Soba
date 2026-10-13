@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, HashMap};
 use egui_node_graph2::{InputId, NodeId};
 
 use crate::engine::{EngineCommand, NodeId as EngineNodeId};
-use crate::graph::{groups, port_mapping, SynthGraph, SynthGraphState};
+use crate::graph::{groups, knob_cv, port_mapping, SynthGraph, SynthGraphState};
 
 /// Commands that create a node's module and start monitoring the outputs it
 /// shows (LEDs, lit ports, displays). Parameter values follow with the next
@@ -87,7 +87,8 @@ pub fn leaf_cables(graph: &SynthGraph, user_state: &SynthGraphState) -> LeafCabl
         .collect()
 }
 
-/// Whether an input is an exposed parameter (both a jack and a knob).
+/// Whether a knob follows an input: an exposed parameter (both a jack and a
+/// knob), or a jack another knob takes its CV through (a VCA's CV moves Level).
 fn is_exposed(graph: &SynthGraph, input: InputId) -> bool {
     let Some(node) = graph.inputs.get(input).and_then(|i| graph.nodes.get(i.node)) else {
         return false;
@@ -95,7 +96,11 @@ fn is_exposed(graph: &SynthGraph, input: InputId) -> bool {
     let Some((name, _)) = node.inputs.iter().find(|(_, id)| *id == input) else {
         return false;
     };
-    node.user_data.knob_params.iter().any(|kp| kp.param_name == *name && kp.has_input_port())
+    let data = &node.user_data;
+    data.knob_params.iter().any(|kp| {
+        (kp.param_name == *name && kp.has_input_port())
+            || knob_cv::jack(data.module_id, &kp.param_name) == Some(name.as_str())
+    })
 }
 
 /// Brings the engine's cables in line with the graph's, and returns the

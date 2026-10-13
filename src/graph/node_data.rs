@@ -855,6 +855,14 @@ impl SynthNodeData {
                     None
                 };
 
+                // CV that reaches the knob through a jack of another name: a
+                // VCA's CV moving its Level. The knob stays the hand's to turn
+                let through_cv = super::knob_cv::jack(self.module_id, &knob_param.param_name)
+                    .and_then(|jack| node.inputs.iter().find(|(name, _)| name == jack))
+                    .filter(|(_, jack)| graph.iter_connections().any(|(input, _)| input == *jack))
+                    .and_then(|(_, jack)| super::port_mapping::input_port_index(graph, node_id, *jack))
+                    .and_then(|port| user_state.get_input_value(engine_node_id?, port));
+
                 // Get MIDI mapping info for this parameter
                 let midi_mapping = engine_node_id.and_then(|eid|
                     user_state.get_midi_mapping(eid, current_param_index));
@@ -891,10 +899,12 @@ impl SynthNodeData {
                         // Where the CV has carried a knob it modulates: the
                         // knob draws its way there, which says it's patched
                         // better than the dot does, so the dot gives way
-                        let modulated = match (&input.value, signal_value) {
-                            (SynthValueType::Number { value, .. }, Some(cv))
-                                if knob_param.input_mode == KnobInputMode::Modulatable && takeover.is_none() =>
-                            {
+                        let cv = match knob_param.input_mode {
+                            KnobInputMode::Modulatable => signal_value,
+                            _ => through_cv,
+                        };
+                        let modulated = match (&input.value, cv) {
+                            (SynthValueType::Number { value, .. }, Some(cv)) if takeover.is_none() => {
                                 super::knob_cv::effective(self.module_id, &knob_param.param_name, *value, cv, node_id, graph, user_state)
                             }
                             _ => None,

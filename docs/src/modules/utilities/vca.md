@@ -3,7 +3,7 @@
 **Module ID** `util.vca` · **Category** Utility
 
 ![VCA Module](../../images/module-vca.png)
-*Level sets the ceiling; whatever arrives at CV opens the gate up to it.*
+*Level sets the ceiling; whatever arrives at CV opens the gate up to it. Here Level is at 80% and an envelope holds a note at 44%: the orange arc runs from the one down to the other.*
 
 A VCA (voltage-controlled amplifier) sets how loud a signal is, moment to moment, from a control signal. Patch an envelope into **CV** and a droning oscillator becomes a note that starts when you press a key and fades when you let go. Patch an LFO in instead and you have tremolo.
 
@@ -41,6 +41,8 @@ Out  = In × gain
 ```
 
 With **CV Amt** at 100% (the default), the gain is **Level** times the CV: silent at CV 0, full Level at CV 1. Lower **CV Amt** and the VCA never closes completely. At 50%, a CV of 0 leaves the signal at half Level, so the envelope or LFO only takes away half the volume. That's a quick way to get a gentle tremolo, or a note that dips rather than stops.
+
+While **CV** is patched, the **Level** knob shows the gain the VCA is running. An orange arc runs from where you set it down to a bead at the gain, and the number under the knob reads it in orange. Under an envelope, the bead falls back with each note, and a faint swath shows how far the notes have opened.
 
 The response is linear: a CV of 0.5 gives half the amplitude. Envelopes with curved stages (see [ADSR Envelope](../modulation/adsr.md)) give the fade its shape.
 

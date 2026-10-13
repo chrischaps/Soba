@@ -60,7 +60,7 @@ The hats' six squares run all the time, as the 808's do. They are never caught a
 
 ## Accent
 
-**Accent** scales the hit's level, so at 0.4 it plays 8 to 10 dB quieter, and at 0 not at all. A softer hit is also darker and less snappy, as on a real drum: Tone drops by up to a quarter and Snap by up to half, and a soft kick falls a little less far in pitch. A ghost note on a snare is a different sound from a backbeat, not just a quieter one.
+**Accent** scales the hit's level, so at 0.4 it plays 8 to 10 dB quieter, and at 0 not at all. A softer hit is also darker and less snappy, as on a real drum: Tone drops by up to a quarter and Snap by up to half, and a soft kick falls a little less far in pitch. A ghost note on a snare is a different sound from a backbeat, not just a quieter one. While **Accent** is patched, the **Tone** and **Snap** knobs show this. An orange arc on each runs out to a bead at what the Accent makes of it, and the number under the knob reads that value in orange.
 
 ## Choke
 

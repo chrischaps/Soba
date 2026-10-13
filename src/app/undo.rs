@@ -1236,6 +1236,16 @@ mod tests {
         let (undone, redone) = round_trip(&mut rig, |rig| rig.connect(osc, "Out", filter, "Cutoff"));
         assert_eq!(count(&undone.commands, |c| matches!(c, EngineCommand::UnmonitorInput { .. })), 1);
         assert_eq!(count(&redone.commands, |c| matches!(c, EngineCommand::MonitorInput { .. })), 1);
+
+        // So does one into a jack a knob of another name follows: PWM moves Pulse Width
+        let lfo = rig.add("mod.lfo", pos2(100.0, 400.0));
+        rig.record();
+        let (undone, redone) = round_trip(&mut rig, |rig| rig.connect(lfo, "Out", osc, "PWM"));
+        assert_eq!(count(&undone.commands, |c| matches!(c, EngineCommand::UnmonitorInput { .. })), 1);
+        assert_eq!(count(&redone.commands, |c| matches!(c, EngineCommand::MonitorInput { .. })), 1);
+        // But not into one no knob follows
+        let (_, redone) = round_trip(&mut rig, |rig| rig.connect(lfo, "Out", osc, "FM"));
+        assert_eq!(count(&redone.commands, |c| matches!(c, EngineCommand::MonitorInput { .. })), 0);
     }
 
     #[test]

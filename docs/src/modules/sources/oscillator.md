@@ -141,6 +141,8 @@ With the square wave selected, modulate the pulse width with an LFO:
 
 Slow rates give a chorus-like shimmer; fast rates, a more dramatic wobble in the tone.
 
+The **PW** knob stays where you set it, as the centre of the sweep. An orange arc on its rim runs out to a bead at the width the oscillator is playing, and the number under it reads that width in orange.
+
 ## Patch examples
 
 ### Sync lead
