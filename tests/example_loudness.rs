@@ -49,7 +49,11 @@ const HEARINGS: usize = 8;
 const PLAYED_SECONDS: f32 = 6.0;
 
 /// The arranged songs, heard once through: (file, bars, BPM).
-const SONGS: &[(&str, f32, f32)] = &[("from-one-sine.json", 128.0, 112.0), ("clair-de-satellite.json", 93.0, 88.0)];
+const SONGS: &[(&str, f32, f32)] = &[
+    ("from-one-sine.json", 128.0, 112.0),
+    ("clair-de-satellite.json", 93.0, 88.0),
+    ("canopy.json", 124.0, 116.0),
+];
 
 /// Examples that sit below the house level, and why.
 const QUIETER: &[(&str, &str)] = &[

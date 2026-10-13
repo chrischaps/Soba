@@ -80,3 +80,4 @@
 - [Cut-Up](./recipes/cut-up.md)
 - [From One Sine](./recipes/from-one-sine.md)
 - [Clair de Satellite](./recipes/clair-de-satellite.md)
+- [Canopy](./recipes/canopy.md)

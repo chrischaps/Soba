@@ -64,6 +64,9 @@ pub const EXAMPLE_SAMPLES: &[(&str, &[u8])] = &[
     // Cut-Up's break: two bars of Soba's own Drums, swung, from
     // tools/breaks/make_break.py
     shipped!("samples/soba-break.wav"),
+    // Canopy's vocal chops: twelve sung syllables on C5, a slot each, from
+    // tools/voice/chops.py
+    shipped!("samples/canopy-chops.wav"),
 ];
 
 /// Every example, in menu order: from a first note to self-playing patches.
@@ -187,6 +190,12 @@ pub const EXAMPLES: &[Example] = &[
         file_name: "clair-de-satellite.json",
         description: "Plays itself: a song in the manner of Air, scored by three Arrangers. Rhodes, string machine and a vocoder singing on the chords, each part a group, and a satellite at either end",
         json: include_str!("../../patches/clair-de-satellite.json"),
+    },
+    Example {
+        name: "Canopy",
+        file_name: "canopy.json",
+        description: "Plays itself: a song in the manner of Bonobo, scored by three Arrangers. Pentatonic loops of twelve and ten steps drift against the bar over a broken beat, a chopped break, pitched vocal chops and a breathy flute",
+        json: include_str!("../../patches/canopy.json"),
     },
 ];
 
