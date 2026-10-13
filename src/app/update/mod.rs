@@ -541,7 +541,9 @@ impl Updater {
             .open(&mut open)
             .collapsible(false)
             .resizable(true)
-            .default_width(540.0)
+            // Never wider than the app, with a margin either side
+            .default_width(540.0_f32.min(screen.width() - 48.0))
+            .max_width(screen.width() - 48.0)
             .pivot(egui::Align2::CENTER_CENTER)
             .default_pos(screen.center())
             .show(ctx, |ui| {
@@ -661,6 +663,29 @@ fn now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn whats_new_fits_a_narrow_app() {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let width = 480.0;
+        let input = || egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width, 700.0))),
+            ..Default::default()
+        };
+        let mut updater = Updater::new();
+        updater.newer = release::parse_releases(include_str!("testdata/releases.json")).unwrap();
+        updater.state = State::Available;
+        // A few frames: fonts load, then the window settles on its size
+        for _ in 0..4 {
+            let _ = ctx.run(input(), |ctx| {
+                updater.show_whats_new(ctx, false);
+            });
+        }
+        let rect = ctx.memory(|m| m.area_rect(egui::Id::new("update_whats_new"))).expect("the window was shown");
+        assert!(rect.width() <= width, "a {} px window in a {width} px app", rect.width());
+        assert!(rect.left() >= 0.0 && rect.right() <= width, "{rect:?} spills off a {width} px app");
+    }
 
     #[test]
     fn errors_read_as_sentences() {

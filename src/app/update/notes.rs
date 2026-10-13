@@ -214,7 +214,9 @@ pub fn show(ui: &mut egui::Ui, blocks: &[Block]) {
                         [marker_width, body + 2.0],
                         egui::Label::new(egui::RichText::new(marker).color(theme::accent::PRIMARY)),
                     );
-                    ui.label(job(ui, spans, body, theme::text::SECONDARY, false));
+                    // A row doesn't wrap its labels unless told to, and an
+                    // unwrapped bullet would hold the window open to its length
+                    ui.add(egui::Label::new(job(ui, spans, body, theme::text::SECONDARY, false)).wrap());
                 });
                 ui.add_space(2.0);
             }
@@ -319,5 +321,30 @@ mod tests {
             assert!(!all.contains("**"), "{}: {all}", release.version);
             assert!(!all.contains("<img"), "{}", release.version);
         }
+    }
+
+    #[test]
+    fn the_notes_wrap_to_a_narrow_window() {
+        let releases = super::super::release::parse_releases(include_str!("testdata/releases.json")).unwrap();
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let input = || egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(800.0, 600.0))),
+            ..Default::default()
+        };
+        // The first frame loads the fonts
+        let _ = ctx.run(input(), |_| {});
+        let column = 300.0;
+        let mut widest = 0.0_f32;
+        let _ = ctx.run(input(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                for release in &releases {
+                    // A column of its own: the panel's rect starts out full width
+                    let used = ui.allocate_ui(egui::vec2(column, f32::INFINITY), |ui| show(ui, &parse(&release.notes)));
+                    widest = widest.max(used.response.rect.width());
+                }
+            });
+        });
+        assert!(widest <= column + 1.0, "the notes reach {widest} px in a {column} px column");
     }
 }
