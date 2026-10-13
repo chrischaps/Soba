@@ -28,7 +28,7 @@ Screenshots for the manual. This file isn't part of the book; it's a note for wh
 
 `python tools/showcase/recipe_images.py` films every example that has a `recipe-<page>.png` and writes it again (name examples to do only those, or a new one). It plays the patch for two seconds, frames it with the capture's `fit` cue, crops to its modules, frames and notes with a little grid around, and saves it 1594 px wide in a 256-colour palette. `--check` writes nothing and lists the pictures that no longer match the build. Build into `target/capture` first (see `tools/showcase/shots.py`).
 
-`recipe-from-one-sine-harmony.png` and `recipe-from-one-sine-line.png` show the song mid-performance, so they're shot by hand.
+`recipe-from-one-sine-harmony.png` and `recipe-from-one-sine-line.png` show the song mid-performance. They're listed in the script's `MOMENTS` table, and it re-shoots and checks them with the rest. Each one plays the song up to its moment, aims the view at one frame at the scale the picture has always had, and crops to that frame without resizing it. Playing three minutes of song frame by frame takes a few minutes.
 
 ## Re-shooting the interface pictures
 

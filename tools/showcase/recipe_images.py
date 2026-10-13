@@ -26,6 +26,13 @@ images no longer match the current build. A capture plays out the same way
 every time, so a picture that differs by more than a few stray pixels shows
 something that has changed.
 
+A few pictures show a moment in a song rather than a whole patch: they're
+listed in MOMENTS, each by its image name, and filmed the same way except
+that the song plays up to that moment, the view is aimed at one frame at
+the scale the picture has always had, and the still is cropped to that
+frame (or the part of it that's wanted) without resizing. Playing three
+minutes of song frame by frame takes a few minutes.
+
 Build into target/capture first, as for shots.py. --check exits 1 if any
 image is stale or missing.
 """
@@ -34,6 +41,7 @@ import json
 import subprocess
 import sys
 import tempfile
+from collections import namedtuple
 from pathlib import Path
 
 from PIL import Image, ImageChops
@@ -57,6 +65,24 @@ SCRIPT = "-{played} play\n-1.0 fit\n0.0 layout shot\n0.0 still shot\n0.1 end\n"
 # enough to show what it does: Held Vowels, frozen on its "ee"
 PLAYED = {"held-vowels": 13.0}
 
+# A picture of one moment in a song: `recipe-<image>.png` shows `frame`
+# (by title) of patches/<patch>.json once it has played `at` seconds, drawn
+# at `zoom` in a window at 1 pixel per point. `part` keeps only the frame's
+# top-left (width, height) in patch points, where all of it would be too
+# big to read; `clicks` are made a second or so before the still, at points
+# from the frame's top-left, for the face to show what's playing
+Moment = namedtuple("Moment", "patch at frame zoom part clicks")
+# From One Sine's 4-bar unit at 112 BPM: unit n starts at (n - 1) * UNIT
+UNIT = 16 * 60 / 112
+MOMENTS = {
+    # The Chord Sequencer playing Everything's chords
+    "from-one-sine-harmony": Moment("from-one-sine", 22 * UNIT, "Harmony: a chord a bar", 1.5, None, []),
+    # The motif's Step Sequencer at the Lift, two bars into the line's third
+    # pass: a click on its Edit tab C shows the pattern that's playing
+    "from-one-sine-line": Moment("from-one-sine", 14.5 * UNIT, "Motif, lead and memory", 1.75, (826, 568),
+                                 [(407, 424)]),
+}
+
 # How far apart two pictures may be before one is stale: a pixel counts as
 # changed past this much in any channel, and a picture as stale past this
 # fraction of changed pixels
@@ -64,14 +90,16 @@ CHANNEL_TOLERANCE = 24
 STALE_FRACTION = 0.002
 
 
-def film(patch, out, size, ppp):
-    """Films one still of the patch, fitted, and returns its layout."""
+def film(patch, out, size, ppp, script=None):
+    """Films one still of the patch, fitted unless a script says otherwise,
+    and returns its layout."""
+    text = script or SCRIPT.format(played=PLAYED.get(patch.stem, 2.0))
     script = out / "recipe.txt"
-    script.write_text(SCRIPT.format(played=PLAYED.get(patch.stem, 2.0)))
+    script.write_text(text)
     subprocess.run([str(EXE), str(patch), "--capture", str(script), "--out", str(out), "--fps", "10",
                     "--size", f"{size[0]}x{size[1]}", "--ppp", str(ppp)],
                    check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if not (out / "shot.ppm").exists():
+    if "still" in text and not (out / "shot.ppm").exists():
         raise RuntimeError(f"no still at {size[0]}x{size[1]}: is the window too big for the screen?")
     return json.loads((out / "shot.json").read_text())
 
@@ -121,6 +149,58 @@ def shoot(name, tmp):
     return image.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
 
 
+def moment_rect(lay, name):
+    """The part of a moment's frame its picture shows, in patch points."""
+    moment = MOMENTS[name]
+    rect = next((f["rect"] for f in lay["frames"] if f["title"] == moment.frame), None)
+    if rect is None:
+        raise RuntimeError(f"{name}: no frame titled {moment.frame!r} in {moment.patch}")
+    x0, y0, x1, y1 = rect
+    if moment.part:
+        x1, y1 = min(x1, x0 + moment.part[0]), min(y1, y0 + moment.part[1])
+    return x0, y0, x1, y1
+
+
+def shoot_moment(name, tmp):
+    """Films a moment of a song and returns its picture."""
+    moment = MOMENTS[name]
+    patch = ROOT / "patches" / f"{moment.patch}.json"
+    # A window with room for the frame at its zoom, toolbar and all
+    saved = next(f for f in json.loads(patch.read_text())["frames"] if f["title"] == moment.frame)
+    w, h = moment.part or saved["size"]
+    size = (max(1920, round(w * moment.zoom) + 200), max(1080, round(h * moment.zoom) + 200))
+    # Where the view opens, to aim the camera from
+    out = Path(tmp) / f"{name}-probe"
+    out.mkdir()
+    lay = film(patch, out, size, 1.0, "0.0 layout shot\n0.1 end\n")
+    x0, y0, x1, y1 = moment_rect(lay, name)
+    view = lay["view"]
+    # The camera scales the view about the editor's centre, then shifts it:
+    # this puts the frame's centre there, at the moment's zoom
+    centre = [(view["editor"][i] + view["editor"][i + 2]) / 2 for i in range(2)]
+    scale = moment.zoom / view["zoom"]
+    aim = [(x0 + x1) / 2, (y0 + y1) / 2]
+    origin = [centre[i] - aim[i] * moment.zoom for i in range(2)]
+    offset = [origin[i] - centre[i] - (view["origin"][i] - centre[i]) * scale for i in range(2)]
+    cues = [f"-{moment.at:.4f} play", f"-{moment.at:.4f} camera {offset[0]:.2f} {offset[1]:.2f} {scale:.5f} 0.05"]
+    for i, (cx, cy) in enumerate(moment.clicks):
+        t = -1.5 + 0.3 * i
+        x, y = origin[0] + (x0 + cx) * moment.zoom, origin[1] + (y0 + cy) * moment.zoom
+        cues += [f"{t - 0.3:.2f} move {x:.1f} {y:.1f} 0.2", f"{t:.2f} press", f"{t + 0.08:.2f} release"]
+    # Then the pointer off every face, so nothing shows a hover
+    cues += [f"-0.6 move {size[0] - 4} {size[1] - 4} 0.2", "0.0 layout shot", "0.0 still shot", "0.1 end"]
+    out = Path(tmp) / name
+    out.mkdir()
+    lay = film(patch, out, size, 1.0, "\n".join(cues) + "\n")
+    x0, y0, x1, y1 = moment_rect(lay, name)
+    view = lay["view"]
+    zoom, ppp, (ox, oy) = view["zoom"], view["ppp"], view["origin"]
+    box = [(ox + x0 * zoom - MARGIN) * ppp, (oy + y0 * zoom - MARGIN) * ppp,
+           (ox + x1 * zoom + MARGIN) * ppp, (oy + y1 * zoom + MARGIN) * ppp]
+    image = Image.open(out / "shot.ppm").convert("RGB").crop([round(v) for v in box])
+    return image.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+
+
 def changed(new, path):
     """The fraction of pixels that differ from the picture at `path`, or 1
     if it's missing or a different size."""
@@ -137,21 +217,21 @@ def changed(new, path):
 def main(args):
     check = "--check" in args
     names = [a for a in args if not a.startswith("--")]
-    names = names or sorted(p.stem for p in (ROOT / "patches").glob("*.json") if (IMAGES / f"recipe-{p.stem}.png").exists())
+    names = names or sorted(p.stem for p in (ROOT / "patches").glob("*.json") if (IMAGES / f"recipe-{p.stem}.png").exists()) + list(MOMENTS)
     stale = []
     with tempfile.TemporaryDirectory() as tmp:
         for name in names:
             path = IMAGES / f"recipe-{name}.png"
-            image = shoot(name, tmp)
+            image = shoot_moment(name, tmp) if name in MOMENTS else shoot(name, tmp)
             if check:
                 fraction = changed(image, path)
                 verdict = "ok" if fraction <= STALE_FRACTION else ("missing" if not path.exists() else f"stale ({fraction:.1%} changed)")
-                print(f"{name:20} {verdict}")
+                print(f"{name:22} {verdict}")
                 if fraction > STALE_FRACTION:
                     stale.append(name)
             else:
                 image.save(path, optimize=True)
-                print(f"{name:20} {image.width}x{image.height}, {path.stat().st_size // 1024} KB")
+                print(f"{name:22} {image.width}x{image.height}, {path.stat().st_size // 1024} KB")
     if check and stale:
         print(f"\nRe-shoot with: python tools/showcase/recipe_images.py {' '.join(stale)}")
     return 1 if stale else 0
