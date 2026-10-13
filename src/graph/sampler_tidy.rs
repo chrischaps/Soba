@@ -7,6 +7,9 @@
 //! the waveform shows it too. A trim veils what it would cut, hatched, and
 //! sets crop marks at the corners of what it keeps. A level shows its change
 //! across the panel, since the waveform is always drawn to fill it.
+//!
+//! A file kept only in the browser's tab (a take recorded there, or a file
+//! tidied there) can be downloaded from the same menu, to keep it.
 
 use eframe::egui::{self, Color32, PopupCloseBehavior, Pos2, Rect, Sense, Shape, Stroke, Vec2};
 use egui_node_graph2::NodeId;
@@ -35,6 +38,7 @@ pub fn previewing(ui: &egui::Ui, node_id: NodeId) -> Option<Tidy> {
 
 /// The file's name and length on the row under the waveform, as a button
 /// that opens the menu. The name is cut short to leave room for the rest.
+/// A file `in_tab`, kept only in the browser's tab, can be downloaded too.
 #[allow(clippy::too_many_arguments)]
 pub fn name_button(
     ui: &mut egui::Ui,
@@ -44,6 +48,7 @@ pub fn name_button(
     length: &str,
     color: Color32,
     sample: &ShelvedSample,
+    in_tab: bool,
     z: f32,
 ) -> Vec<SynthResponse> {
     let mut responses = Vec::new();
@@ -76,7 +81,11 @@ pub fn name_button(
         caret,
         Stroke::NONE,
     ));
-    let response = response.on_hover_text("Trim it to its sound, or normalize its level");
+    let response = response.on_hover_text(if in_tab {
+        "Trim it to its sound, normalize its level, or download it to keep it"
+    } else {
+        "Trim it to its sound, or normalize its level"
+    });
     if response.clicked() {
         ui.memory_mut(|m| m.toggle_popup(id));
     }
@@ -86,6 +95,10 @@ pub fn name_button(
         ui.set_min_width(250.0);
         if let Some(tidy) = menu(ui, sample, &mut hovered) {
             responses.push(SynthResponse::TidySample { node_id, tidy });
+            ui.memory_mut(|m| m.close_popup());
+        }
+        if in_tab && download_item(ui, sample) {
+            responses.push(SynthResponse::DownloadSample(node_id));
             ui.memory_mut(|m| m.close_popup());
         }
     });
@@ -142,6 +155,20 @@ fn menu(ui: &mut egui::Ui, sample: &ShelvedSample, hovered: &mut Option<Tidy>) -
     }
     ui.add_space(2.0);
     ui.label(egui::RichText::new("Each makes a new file: undo brings this one back").small().weak());
+    chosen
+}
+
+/// Download, under the rest, for a file kept only in the browser's tab.
+/// Returns whether it was chosen.
+fn download_item(ui: &mut egui::Ui, sample: &ShelvedSample) -> bool {
+    ui.separator();
+    let source = &sample.source;
+    // Written as 32-bit float, as a take is on the desktop
+    let bytes = source.frames() * if source.is_stereo() { 2 } else { 1 } * 4;
+    let size = format!("WAV, {:.1} MB", bytes as f32 / (1024.0 * 1024.0));
+    let chosen = ui.add(egui::Button::new("Download").shortcut_text(size)).clicked();
+    ui.add_space(2.0);
+    ui.label(egui::RichText::new("It's kept only in this tab until it's downloaded").small().weak());
     chosen
 }
 

@@ -144,6 +144,9 @@ pub enum SynthResponse {
         node_id: egui_node_graph2::NodeId,
         tidy: Tidy,
     },
+    /// Save a copy of a Sampler's file kept only in the browser's tab (a
+    /// take recorded there), as a download.
+    DownloadSample(egui_node_graph2::NodeId),
 }
 
 /// What a Sampler's face can do to its file.

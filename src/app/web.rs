@@ -32,11 +32,17 @@ pub fn pick_patch(ctx: &egui::Context, sender: Sender<Upload>) {
 
 /// Hands `text` to the browser to save as `file_name`, as a download.
 pub fn download(file_name: &str, text: &str) -> Result<(), String> {
+    download_bytes(file_name, text.as_bytes(), "application/json")
+}
+
+/// Hands `bytes` to the browser to save as `file_name`, as a download of
+/// the media type `kind` (`audio/wav`).
+pub fn download_bytes(file_name: &str, bytes: &[u8], kind: &str) -> Result<(), String> {
     let fail = |e: wasm_bindgen::JsValue| format!("{:?}", e);
-    let parts = js_sys::Array::of1(&wasm_bindgen::JsValue::from_str(text));
+    let parts = js_sys::Array::of1(&js_sys::Uint8Array::from(bytes));
     let options = web_sys::BlobPropertyBag::new();
-    options.set_type("application/json");
-    let blob = web_sys::Blob::new_with_str_sequence_and_options(&parts, &options).map_err(fail)?;
+    options.set_type(kind);
+    let blob = web_sys::Blob::new_with_u8_array_sequence_and_options(&parts, &options).map_err(fail)?;
     let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(fail)?;
 
     let document = web_sys::window().and_then(|w| w.document()).ok_or("no document")?;

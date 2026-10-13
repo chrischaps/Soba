@@ -55,6 +55,7 @@ mod loops;
 mod record_into;
 mod samples;
 mod slicing;
+mod tab_files;
 mod takes;
 #[cfg(not(target_arch = "wasm32"))]
 mod take_files;
@@ -1917,6 +1918,9 @@ impl SynthApp {
                         NodeResponse::User(crate::graph::SynthResponse::TidySample { node_id: response_node_id, tidy }) => {
                             self.tidy_sample(response_node_id, tidy);
                         }
+                        NodeResponse::User(crate::graph::SynthResponse::DownloadSample(response_node_id)) => {
+                            self.download_sample(response_node_id);
+                        }
                         NodeResponse::User(crate::graph::SynthResponse::SetSliceMarkers { node_id: response_node_id, label, markers }) => {
                             self.set_slice_markers(response_node_id, label, markers);
                         }
@@ -2972,10 +2976,12 @@ impl SynthApp {
     #[cfg(target_arch = "wasm32")]
     fn download_patch(&mut self, file_name: &str) -> bool {
         let name = file_name.strip_suffix(".json").unwrap_or(file_name);
-        let patch = self.create_patch(name);
+        let mut patch = self.create_patch(name);
+        // Files kept only in the tab are named as beside it, to download there too
+        let in_tab = crate::persistence::sample_files::name_tab_files_beside(&mut patch);
         match patch_to_json(&patch).map_err(|e| e.to_string()).and_then(|json| web::download(file_name, &json)) {
             Ok(()) => {
-                self.status_message = Some(format!("Downloaded {}", file_name));
+                self.status_message = Some(tab_files::downloaded(file_name, &in_tab));
                 self.sync_history();
                 self.mark_saved();
                 true

@@ -54,7 +54,7 @@ While a take comes in, the panel draws it in red, across a span that doubles whe
 
 When a take ends it's written as a WAV beside the patch, as `<patch name> samples/Take 1.wav`, `Take 2.wav` and so on, and the Sampler's file names it. That's a step you can undo: undo gives the Sampler back the file it had before. Saving the patch saves the take with it, and opening the patch plays it again.
 
-A patch that hasn't been saved yet, a new one or an example, keeps its takes in a temporary folder until you save it. **Save As** then copies them beside the patch with its other samples. In the browser there's no folder beside the patch, so a take lives only in the session, as a dropped file does.
+A patch that hasn't been saved yet, a new one or an example, keeps its takes in a temporary folder until you save it. **Save As** then copies them beside the patch with its other samples. In the browser there's no folder beside the patch, so a take lives only in the tab, as a dropped file does. To keep one, click its name under the waveform and choose **Download**, which saves it as a WAV. A patch you download names each such file as though it sat beside it, and the status bar lists the ones to fetch. Download them into the same folder as the patch and it opens whole in Soba on the desktop.
 
 Takes nobody keeps don't pile up. Saving removes the takes this session wrote that the patch no longer plays and undo can't bring back. Closing the patch (New, Open or Quit) removes those no saved patch names, the temporary folder among them. That covers the files Trim and Normalize write too. A file Soba didn't write is never touched.
 

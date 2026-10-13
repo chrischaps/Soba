@@ -22,6 +22,10 @@ use super::examples::EXAMPLE_SAMPLES;
 /// What keys for the samples that ship with the examples start with.
 pub const EXAMPLE_PREFIX: &str = "example:";
 
+/// What keys for files kept only in the browser's tab start with: a file
+/// dropped there, or a take recorded or tidied there.
+pub const DROPPED_PREFIX: &str = "dropped:";
+
 /// Why [`load`] has no recording yet for a shipped sample the browser is
 /// still fetching: ask again later, rather than report it.
 pub const LOADING: &str = "loading";
@@ -159,8 +163,27 @@ pub fn is_outside(key: &str, folder: &Path) -> bool {
 
 /// The file name a key ends in, for showing on a node.
 pub fn file_name(key: &str) -> &str {
-    let name = key.strip_prefix(EXAMPLE_PREFIX).unwrap_or(key);
+    let name = key.strip_prefix(EXAMPLE_PREFIX).or_else(|| key.strip_prefix(DROPPED_PREFIX)).unwrap_or(key);
     name.rsplit(['/', '\\']).next().unwrap_or(name)
+}
+
+/// Names each file the patch plays that's kept only in the browser's tab
+/// by its file name alone, as one beside the patch, so a patch downloaded
+/// into the folder its takes are downloaded to opens whole on the desktop.
+/// Returns those names.
+pub fn name_tab_files_beside(patch: &mut super::Patch) -> Vec<String> {
+    let mut names: Vec<String> = patch
+        .all_nodes_mut()
+        .into_iter()
+        .filter_map(|node| {
+            let name = node.file.as_deref()?.strip_prefix(DROPPED_PREFIX)?.to_string();
+            node.file = Some(name.clone());
+            Some(name)
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    names
 }
 
 /// The folder a patch saved as `patch` keeps its copied samples in:
@@ -283,5 +306,44 @@ mod tests {
         assert_eq!(folder, Path::new("songs").join("Night Drive samples"));
         let loops = loops_folder(Path::new("songs").join("Night Drive.json").as_path());
         assert_eq!(loops, Path::new("songs").join("Night Drive loops"));
+    }
+
+    #[test]
+    fn a_file_kept_in_the_tab_shows_its_name_alone() {
+        assert_eq!(file_name("dropped:Take 1.wav"), "Take 1.wav");
+        assert_eq!(file_name("example:samples/break.wav"), "break.wav");
+        assert_eq!(file_name("songs/voice.wav"), "voice.wav");
+    }
+
+    #[test]
+    fn a_downloaded_patch_names_its_tab_files_as_beside_it() {
+        use crate::persistence::{GroupData, NodeData, Patch};
+        let sampler = |id, file: &str| {
+            let mut node = NodeData::new(id, "sampler", (0.0, 0.0));
+            node.file = Some(file.to_string());
+            node
+        };
+        let mut patch = Patch::new("Song");
+        patch.nodes.push(sampler(1, "dropped:Take 1.wav"));
+        patch.nodes.push(sampler(2, "example:samples/break.wav"));
+        patch.nodes.push(sampler(3, "dropped:Take 1.wav"));
+        patch.groups.push(GroupData {
+            id: 1,
+            name: "Voices".into(),
+            position: (0.0, 0.0),
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            inputs_position: (0.0, 0.0),
+            outputs_position: (0.0, 0.0),
+            nodes: vec![sampler(4, "dropped:voice trimmed.wav")],
+            connections: Vec::new(),
+            groups: Vec::new(),
+        });
+
+        assert_eq!(name_tab_files_beside(&mut patch), ["Take 1.wav", "voice trimmed.wav"]);
+        let files: Vec<_> = patch.all_nodes().iter().map(|n| n.file.clone().unwrap()).collect();
+        assert_eq!(files, ["Take 1.wav", "example:samples/break.wav", "Take 1.wav", "voice trimmed.wav"]);
+        // Opened from a folder on the desktop, they're found beside it
+        assert_eq!(resolve(&files[0], SampleBase::Folder(Path::new("Downloads"))), Path::new("Downloads").join("Take 1.wav").to_string_lossy());
     }
 }

@@ -502,7 +502,8 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         Some(sample) => {
             let length = duration(sample.source.seconds());
             let menu = Rect::from_x_y_ranges(name_left - 2.0 * z..=row.right() - button_width - 26.0 * z, row.top() + 1.0 * z..=row.bottom() - 1.0 * z);
-            responses.extend(sampler_tidy::name_button(ui, menu, node_id, name, &length, name_color, sample, z));
+            let in_tab = key.is_some_and(|key| key.starts_with(sample_files::DROPPED_PREFIX));
+            responses.extend(sampler_tidy::name_button(ui, menu, node_id, name, &length, name_color, sample, in_tab, z));
         }
         None => {
             let label = match loaded {

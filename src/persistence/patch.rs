@@ -151,6 +151,19 @@ impl Patch {
         collect(&self.nodes, &self.groups, &mut out);
         out
     }
+
+    /// Every module in the patch, in groups or not, to change.
+    pub fn all_nodes_mut(&mut self) -> Vec<&mut NodeData> {
+        fn collect<'a>(nodes: &'a mut [NodeData], groups: &'a mut [GroupData], out: &mut Vec<&'a mut NodeData>) {
+            out.extend(nodes);
+            for group in groups {
+                collect(&mut group.nodes, &mut group.groups, out);
+            }
+        }
+        let mut out = Vec::new();
+        collect(&mut self.nodes, &mut self.groups, &mut out);
+        out
+    }
 }
 
 impl Default for Patch {

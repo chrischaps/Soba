@@ -21,7 +21,7 @@ use crate::persistence::sample_files::{self, Decoded};
 pub const OVERVIEW_COLUMNS: usize = 1024;
 
 /// Keys for files dropped into the browser, which exist only in memory.
-pub const DROPPED_PREFIX: &str = "dropped:";
+pub use crate::persistence::sample_files::DROPPED_PREFIX;
 
 /// One decoded file.
 #[derive(Debug)]
