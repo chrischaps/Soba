@@ -10,7 +10,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    signal::{MidiMessage, SignalBuffer},
+    signal::{connected_input, MidiMessage, SignalBuffer},
     ParameterDisplay, SignalType,
 };
 
@@ -277,6 +277,9 @@ impl MidiClockFollower {
 ///
 /// - **Sync** (Gate, Input): External clock sync input (resets the beat on
 ///   rising edge).
+/// - **Tempo** (Control, Input): Bends the tempo around the Tempo knob, by
+///   octaves: +1 doubles it, −1 halves it. A late input, so a lane of an
+///   Arranger the Clock drives can slow the song that drives it.
 /// - **Gate** (Gate, Output): Periodic gate output (0.0 or 1.0).
 /// - **Run** (Gate, Output): High while the clock runs.
 /// - **Reset** (Gate, Output): A short pulse when the clock starts from the
@@ -285,7 +288,8 @@ impl MidiClockFollower {
 /// # Parameters
 ///
 /// - **Tempo** (20-300 BPM): Speed of the clock. Also sets the patch tempo
-///   that tempo-synced modules, such as the Delay, follow.
+///   that tempo-synced modules, such as the Delay, follow. Tempo CV bends it
+///   within the same range.
 /// - **Gate Length** (1-99%): Duration of the gate high as percentage of beat.
 /// - **Division** (0-4): Note division (whole, half, quarter, eighth, sixteenth).
 /// - **Run** (toggle): Whether the clock is running.
@@ -302,6 +306,9 @@ pub struct Clock {
     running: bool,
     /// Previous sync state for edge detection.
     prev_sync: bool,
+    /// What Tempo CV multiplied the Tempo knob by at the last sample, so the
+    /// transport and the readout carry the tempo the Clock is playing.
+    tempo_scale: f64,
     /// Run as the last block saw it, to notice it switching on. `None`
     /// before the first block, so loading a running clock isn't a start.
     prev_run: Option<bool>,
@@ -324,6 +331,7 @@ impl Clock {
             beats: 0.0,
             running: false,
             prev_sync: false,
+            tempo_scale: 1.0,
             prev_run: None,
             reset_left: 0,
             midi: MidiClockFollower::new(),
@@ -331,6 +339,11 @@ impl Clock {
             ports: vec![
                 // Input port
                 PortDefinition::input_with_default("sync", "Sync", SignalType::Gate, 0.0).describe("A rising edge restarts the beat; patch another clock or trigger"),
+                // Late, so a lane of the Arranger this Clock drives can close
+                // the loop: a block behind is nothing to a tempo
+                PortDefinition::input_with_default("tempo_cv", "Tempo", SignalType::Control, 0.0)
+                    .late()
+                    .describe("CV that bends the tempo around the BPM knob: +1 doubles it, -1 halves it. An Arranger lane here slows the song into its last chord"),
                 // Output ports
                 PortDefinition::output("gate", "Gate", SignalType::Gate).describe("Pulse on every beat division; patch into a sequencer or envelope"),
                 PortDefinition::output("run", "Run", SignalType::Gate).describe("High while the clock runs; patch into a sequencer's Run"),
@@ -341,8 +354,8 @@ impl Clock {
                 ParameterDefinition::new(
                     "tempo",
                     "Tempo",
-                    20.0,
-                    300.0,
+                    Self::MIN_TEMPO as f32,
+                    Self::MAX_TEMPO as f32,
                     120.0,
                     ParameterDisplay::linear("BPM"),
                 ).describe("Speed in beats per minute"),
@@ -386,6 +399,7 @@ impl Clock {
 
     /// Port index constants.
     const PORT_SYNC: usize = 0;
+    const PORT_TEMPO: usize = 1;
     const PORT_GATE: usize = 0;
     const PORT_RUN: usize = 1;
     const PORT_RESET: usize = 2;
@@ -397,6 +411,10 @@ impl Clock {
     const PARAM_RUN: usize = 3;
     const PARAM_SOURCE: usize = 4;
     const PARAM_SWING: usize = 5;
+
+    /// The tempo range, the Tempo knob's, which Tempo CV stays within too.
+    const MIN_TEMPO: f64 = 20.0;
+    const MAX_TEMPO: f64 = 300.0;
 
     /// Sync threshold for detecting high/low states.
     const SYNC_THRESHOLD: f32 = 0.5;
@@ -412,13 +430,20 @@ impl Clock {
     pub const READOUT_RECEIVING: usize = 3;
 
     /// The tempo this clock keeps: the master's, when following MIDI and
-    /// it has been heard, otherwise the Tempo knob's.
+    /// it has been heard, otherwise the Tempo knob's as Tempo CV bends it.
     fn tempo(&self, params: &[f32]) -> f32 {
         let knob = params.get(Self::PARAM_TEMPO).copied().unwrap_or(120.0);
         match Self::source(params) {
             ClockSource::Midi => self.midi.tempo_bpm(self.sample_rate).unwrap_or(knob),
-            ClockSource::Internal => knob,
+            ClockSource::Internal => Self::bent_tempo(knob as f64, self.tempo_scale) as f32,
         }
+    }
+
+    /// The Tempo knob's `knob` BPM bent by Tempo CV's `scale`, kept within
+    /// the knob's own range.
+    #[inline]
+    fn bent_tempo(knob: f64, scale: f64) -> f64 {
+        (knob * scale).clamp(Self::MIN_TEMPO, Self::MAX_TEMPO)
     }
 
     fn source(params: &[f32]) -> ClockSource {
@@ -505,7 +530,12 @@ impl DspModule for Clock {
         self.prev_run = Some(run);
 
         let sync_in = inputs.get(Self::PORT_SYNC);
-        let beats_per_sample = tempo / 60.0 / self.sample_rate as f64;
+        let tempo_cv = connected_input(inputs, Self::PORT_TEMPO);
+        if tempo_cv.is_none() {
+            self.tempo_scale = 1.0;
+        }
+        let minutes_per_sample = 1.0 / 60.0 / self.sample_rate as f64;
+        let mut beats_per_sample = Self::bent_tempo(tempo, self.tempo_scale) * minutes_per_sample;
         let mut midi = context.midi.iter().peekable();
 
         for i in 0..context.block_size {
@@ -548,7 +578,13 @@ impl DspModule for Clock {
             }
             self.reset_left = self.reset_left.saturating_sub(1);
 
-            // Advance the beat
+            // Advance the beat, at the tempo Tempo CV bends it to: by octaves,
+            // so a ramp in the CV is an even slowing in the ear
+            if let Some(cv) = tempo_cv {
+                let octaves = cv.samples.get(i).copied().unwrap_or(0.0) as f64;
+                self.tempo_scale = octaves.exp2();
+                beats_per_sample = Self::bent_tempo(tempo, self.tempo_scale) * minutes_per_sample;
+            }
             if self.running {
                 match source {
                     ClockSource::Internal => self.beats += beats_per_sample,
@@ -570,6 +606,7 @@ impl DspModule for Clock {
         self.beats = 0.0;
         self.running = false;
         self.prev_sync = false;
+        self.tempo_scale = 1.0;
         self.prev_run = None;
         self.reset_left = 0;
         self.midi = MidiClockFollower::new();
@@ -624,17 +661,24 @@ mod tests {
         let clock = Clock::new();
         let ports = clock.ports();
 
-        assert_eq!(ports.len(), 4);
+        assert_eq!(ports.len(), 5);
 
         // Sync input
         assert!(ports[0].is_input());
         assert_eq!(ports[0].id, "sync");
         assert_eq!(ports[0].signal_type, SignalType::Gate);
 
+        // Tempo CV, late so an Arranger the Clock drives can patch back
+        // into it
+        assert!(ports[1].is_input());
+        assert_eq!(ports[1].id, "tempo_cv");
+        assert_eq!(ports[1].name, "Tempo");
+        assert!(ports[1].late);
+
         // Gate output
-        assert!(ports[1].is_output());
-        assert_eq!(ports[1].id, "gate");
-        assert_eq!(ports[1].signal_type, SignalType::Gate);
+        assert!(ports[2].is_output());
+        assert_eq!(ports[2].id, "gate");
+        assert_eq!(ports[2].signal_type, SignalType::Gate);
     }
 
     #[test]
@@ -904,7 +948,7 @@ mod tests {
         let module = module.unwrap();
         assert_eq!(module.info().id, "util.clock");
         assert_eq!(module.info().name, "Clock");
-        assert_eq!(module.ports().len(), 4);
+        assert_eq!(module.ports().len(), 5);
         assert_eq!(module.parameters().len(), 6);
     }
 
@@ -1099,6 +1143,134 @@ mod tests {
         let straight = eoc(50.0);
         assert_eq!(straight.len(), 4, "a bar every 2 s at 120 BPM: {straight:?}");
         assert_eq!(straight, eoc(66.0));
+    }
+
+    // --- Tempo CV (#180) ---
+
+    /// Renders `frames` in 512-sample blocks with Tempo CV following
+    /// `cv(frame)`, and returns the Gate and the Clock.
+    fn bent(params: &[f32], frames: usize, cv: impl Fn(usize) -> f32) -> (Vec<f32>, Clock) {
+        const BLOCK: usize = 512;
+        let mut clock = Clock::new();
+        clock.prepare(48000.0, BLOCK);
+        let mut outs = outputs(BLOCK);
+        let ctx = ProcessContext::new(48000.0, BLOCK);
+        let sync = SignalBuffer::control(BLOCK);
+        let mut tempo = SignalBuffer::control(BLOCK);
+        let mut gate = Vec::new();
+        for start in (0..frames).step_by(BLOCK) {
+            for (i, sample) in tempo.samples.iter_mut().enumerate() {
+                *sample = cv(start + i);
+            }
+            clock.process(&[&sync, &tempo], &mut outs, params, &ctx);
+            gate.extend_from_slice(&outs[0].samples);
+        }
+        (gate, clock)
+    }
+
+    #[test]
+    fn test_tempo_cv_bends_the_tempo_by_octaves() {
+        // 60 BPM quarters at 48 kHz: a pulse every 48000 samples, every
+        // 24000 at +1, every 96000 at -1, and every 48000 / 2^0.5 at +0.5
+        let params = [60.0, 50.0, 2.0, 1.0, 0.0];
+        for (cv, period) in [(0.0, 48000.0), (1.0, 24000.0), (-1.0, 96000.0), (0.5, 48000.0 / 2f64.sqrt())] {
+            let (gate, clock) = bent(&params, 48000 * 8, |_| cv);
+            let edges = rises(&gate);
+            // The first pulse opens on sample 0, before any edge to count
+            assert!(edges.len() >= 2, "CV {cv}: {edges:?}");
+            for (n, &edge) in edges.iter().enumerate() {
+                let ideal = (n + 1) as f64 * period;
+                assert!((edge as f64 - ideal).abs() <= 1.0, "CV {cv}: edge {n} at {edge}, ideal {ideal}");
+            }
+            // The transport and the readout carry the tempo it's playing at
+            let bpm = 60.0 * 2f32.powf(cv);
+            assert!((clock.transport(&params).unwrap().tempo_bpm.unwrap() - bpm).abs() < 0.01, "CV {cv}");
+            assert!((clock.readout(&params).unwrap().values[Clock::READOUT_TEMPO] - bpm).abs() < 0.01, "CV {cv}");
+        }
+    }
+
+    #[test]
+    fn test_tempo_cv_stays_within_the_knobs_range() {
+        let tempo = |knob: f32, cv: f32| {
+            let params = [knob, 50.0, 2.0, 1.0, 0.0];
+            let (_, clock) = bent(&params, 512, |_| cv);
+            clock.transport(&params).unwrap().tempo_bpm.unwrap()
+        };
+        assert_eq!(tempo(200.0, 1.0), 300.0);
+        assert_eq!(tempo(30.0, -1.0), 20.0);
+        // A CV that's been unpatched leaves the knob alone again
+        let params = [90.0, 50.0, 2.0, 1.0, 0.0];
+        let (_, mut clock) = bent(&params, 512, |_| 1.0);
+        clock.process(&[], &mut outputs(512), &params, &ProcessContext::new(48000.0, 512));
+        assert_eq!(clock.transport(&params).unwrap().tempo_bpm, Some(90.0));
+    }
+
+    #[test]
+    fn test_tempo_cv_is_ignored_while_following_midi() {
+        let (_, clock) = bent(&MIDI, 512, |_| 1.0);
+        // No ticks yet: the knob, unbent
+        assert_eq!(clock.transport(&MIDI).unwrap().tempo_bpm, Some(120.0));
+    }
+
+    #[test]
+    fn test_a_ritardando_slows_a_sequence_with_its_gates_in_proportion() {
+        use crate::modules::StepSequencer;
+        // 120 BPM sixteenths into a Step Sequencer. Two bars in time, then a
+        // two-bar lane from 0 down to log2(0.85): the last bars broaden to
+        // 102 BPM, as a pianist slows into the last chord
+        const BLOCK: usize = 512;
+        let sr = 48000.0;
+        let bar = 4.0 * 60.0 / 120.0 * sr as f64;
+        let rit = 0.85f64.log2();
+        let cv = |frame: usize| {
+            let through = ((frame as f64 - 2.0 * bar) / (2.0 * bar)).clamp(0.0, 1.0);
+            (through * rit) as f32
+        };
+        let mut clock = Clock::new();
+        let mut seq = StepSequencer::new();
+        clock.prepare(sr, BLOCK);
+        seq.prepare(sr, BLOCK);
+        let clock_params = [120.0, 50.0, 4.0, 1.0, 0.0];
+        let mut seq_params: Vec<f32> = seq.parameters().iter().map(|p| p.default).collect();
+        seq_params[0] = 16.0; // Steps
+        let mut clock_outs = outputs(BLOCK);
+        let mut seq_outs = vec![SignalBuffer::control(BLOCK); 5];
+        let ctx = ProcessContext::new(sr, BLOCK);
+        let sync = SignalBuffer::control(BLOCK);
+        let mut tempo = SignalBuffer::control(BLOCK);
+        let (mut clock_gate, mut seq_gate) = (Vec::new(), Vec::new());
+        for start in (0..(5.0 * bar) as usize).step_by(BLOCK) {
+            for (i, sample) in tempo.samples.iter_mut().enumerate() {
+                *sample = cv(start + i);
+            }
+            clock.process(&[&sync, &tempo], &mut clock_outs, &clock_params, &ctx);
+            seq.process(&[&clock_outs[0]], &mut seq_outs, &seq_params, &ctx);
+            clock_gate.extend_from_slice(&clock_outs[0].samples);
+            seq_gate.extend_from_slice(&seq_outs[1].samples);
+        }
+
+        // The steps never shorten, and broaden smoothly: 15% over 32 steps
+        // is half a percent a step, and none is more than 1% longer than
+        // the one before it
+        let edges = rises(&clock_gate);
+        let steps: Vec<f64> = edges.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
+        for pair in steps.windows(2) {
+            assert!(pair[1] >= pair[0] - 1.0, "a step shortened: {pair:?}");
+            assert!(pair[1] <= pair[0] * 1.01 + 1.0, "a step jumped: {pair:?}");
+        }
+        assert!((steps[0] - 6000.0).abs() <= 1.0, "in time first: {}", steps[0]);
+        let last = *steps.last().unwrap();
+        assert!((last - 6000.0 / 0.85).abs() < 10.0, "102 BPM at the end: {last}");
+        assert!((clock.transport(&clock_params).unwrap().tempo_bpm.unwrap() - 102.0).abs() < 0.01);
+
+        // The sequencer plays a note on every step, each half its step long
+        let notes = rises(&seq_gate);
+        assert_eq!(notes, edges, "a note on every clock pulse");
+        for (n, pair) in notes.windows(2).enumerate().skip(1) {
+            let step = (pair[1] - pair[0]) as f64;
+            let held = seq_gate[pair[0]..pair[1]].iter().filter(|&&g| g > 0.5).count() as f64;
+            assert!((held / step - 0.5).abs() < 0.01, "note {n} held {held} of a {step}-sample step");
+        }
     }
 
     // --- Run and Reset ---

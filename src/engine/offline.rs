@@ -667,7 +667,7 @@ mod tests {
             EngineCommand::AddModule { node_id: CLOCK, module_id: "util.clock" },
             EngineCommand::AddModule { node_id: DELAY, module_id: "fx.delay" },
             EngineCommand::AddModule { node_id: OUT, module_id: "output.audio" },
-            EngineCommand::Connect { from_node: CLOCK, from_port: 1, to_node: DELAY, to_port: 0 },
+            EngineCommand::Connect { from_node: CLOCK, from_port: 2, to_node: DELAY, to_port: 0 },
             EngineCommand::Connect { from_node: DELAY, from_port: 4, to_node: OUT, to_port: 2 },
             EngineCommand::SetParameter { node_id: CLOCK, param_index: 0, value: 120.0 },
             EngineCommand::SetParameter { node_id: CLOCK, param_index: 1, value: 2.0 }, // gate %
@@ -733,6 +733,58 @@ mod tests {
             let beat = n as f32 * 0.5;
             assert!((edge - latency - beat).abs() * sr <= 1.0, "beat {n} at {edge} s");
         }
+    }
+
+    #[test]
+    fn test_an_arranger_lane_slows_the_clock_that_drives_it() {
+        // A ritardando, as the Clock manual's recipe has it: the Clock steps
+        // an Arranger, whose lane (through an Attenuverter at log2 0.85)
+        // plays back into the Clock's Tempo. Two bars in time, then two
+        // ramping on Log to 85% of the tempo. An LFO synced to 1/4 marks
+        // each beat of the patch's transport
+        let num = |name: &str, value: f32| NamedParameter::new(name, ParameterValue::Number(value));
+        let mut patch = Patch::new("rit");
+        let mut clock = NodeData::new(1, "util.clock", (0.0, 0.0));
+        clock.parameters = vec![num("Tempo", 120.0), NamedParameter::new("Division", ParameterValue::Select(4))];
+        let mut arranger = NodeData::new(2, "seq.arranger", (0.0, 0.0));
+        arranger.parameters = vec![
+            num("Sections", 2.0),
+            NamedParameter::new("Loop", ParameterValue::Select(0)),
+            num("Length 01", 2.0),
+            num("Length 02", 2.0),
+            num("Section 01 Lane 1", 1_000_000.0), // Jump to 0
+            num("Section 02 Lane 1", 6_001_000.0), // Ramp on Log to 100%
+        ];
+        let mut rit = NodeData::new(3, "util.attenuverter", (0.0, 0.0));
+        rit.parameters = vec![num("Amount", 0.85f32.log2())];
+        let mut lfo = NodeData::new(4, "mod.lfo", (0.0, 0.0));
+        lfo.parameters = vec![
+            NamedParameter::new("Waveform", ParameterValue::Select(2)), // square
+            NamedParameter::new("Tempo Sync", ParameterValue::Select(7)), // 1/4
+        ];
+        patch.nodes.extend([clock, arranger, rit, lfo, NodeData::new(5, "output.audio", (0.0, 0.0))]);
+        patch.connections.extend([
+            ConnectionData::new(1, "Gate", 2, "Clock"),
+            ConnectionData::new(2, "Lane 1", 3, "In"),
+            ConnectionData::new(3, "Out", 1, "Tempo"),
+            ConnectionData::new(4, "Out", 5, "Mono"),
+        ]);
+        let sr = 48000.0;
+        let (mut r, compiled) = OfflineRenderer::from_patch(&patch, sr, 256).unwrap();
+        assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+
+        // A beat every half second for two bars, then each a little longer,
+        // never shorter, to 0.5 / 0.85 s by the end of the fourth bar
+        let edges = onsets(&r.render_seconds(9.5).left, 0.5, sr);
+        let beats: Vec<f32> = edges.windows(2).map(|w| w[1] - w[0]).collect();
+        assert!(beats.len() >= 16, "{edges:?}");
+        for (n, &beat) in beats[..7].iter().enumerate() {
+            assert!((beat - 0.5).abs() * sr <= 1.0, "beat {n} in time: {beat} s");
+        }
+        for pair in beats[7..16].windows(2) {
+            assert!(pair[1] >= pair[0] - 1.0 / sr, "a beat hurried: {pair:?}");
+        }
+        assert!((beats[15] - 0.5 / 0.85).abs() < 0.005, "the last beat of the rit.: {} s", beats[15]);
     }
 
     #[test]

@@ -11,7 +11,8 @@
 //! Knobs whose job another control has taken over are drawn still and
 //! dimmed, reading what's actually in charge: an LFO's Rate shows its
 //! division while it's synced, and the Clock's Tempo shows the master's
-//! tempo while it follows MIDI.
+//! tempo while it follows MIDI. A Clock's Tempo with a cable in its jack
+//! stays in hand, but reads the tempo the cable bends it to.
 
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Stroke, Vec2};
 use egui_node_graph2::NodeId;
@@ -64,17 +65,28 @@ fn follows_midi(graph: &SynthGraph, node_id: NodeId) -> bool {
     selected(graph, node_id, "Source") == Some(1)
 }
 
+/// Whether a cable plays into a Clock node's Tempo jack.
+fn tempo_cv_patched(graph: &SynthGraph, node_id: NodeId) -> bool {
+    let Some(node) = graph.nodes.get(node_id) else { return false };
+    let Some(&(_, tempo)) = node.inputs.iter().find(|(name, _)| name == "Tempo") else { return false };
+    graph.iter_connections().any(|(input, _)| input == tempo)
+}
+
 /// The latest readout from a node's module.
 fn readout(user_state: &SynthGraphState, node_id: NodeId) -> Option<&Readout> {
     user_state.get_engine_node_id(node_id).and_then(|id| user_state.readouts.get(&id))
 }
 
-/// A knob another control has taken over.
+/// A knob another control has taken over, or whose reading something else
+/// is moving.
 pub struct KnobTakeover {
     /// Where the knob points, or `None` to leave it at its own value.
     pub value: Option<f32>,
     /// What it reads instead of its own value.
     pub text: String,
+    /// Whether the knob is out of the player's hands: dimmed and still. A
+    /// knob that's only reading something else can still be turned.
+    pub locked: bool,
 }
 
 /// The takeover of a node's knob for `param`, if something else is in charge
@@ -94,6 +106,7 @@ pub fn knob_takeover(
             Some(KnobTakeover {
                 value: readout.map(|r| r.values[Lfo::READOUT_RATE]).filter(|&hz| hz > 0.0),
                 text: label.to_string(),
+                locked: true,
             })
         }
         ("util.clock", "Tempo") if follows_midi(graph, node_id) => {
@@ -105,8 +118,16 @@ pub fn knob_takeover(
                     Some(bpm) if receiving => format!("{bpm:.1} BPM"),
                     _ => "No clock".to_string(),
                 },
+                locked: true,
             })
         }
+        // Tempo CV bends the knob's tempo: the knob still sets it, and reads
+        // what the Clock is playing
+        ("util.clock", "Tempo") if tempo_cv_patched(graph, node_id) => Some(KnobTakeover {
+            value: None,
+            text: format!("{:.1} BPM", readout?.values[Clock::READOUT_TEMPO]),
+            locked: false,
+        }),
         ("seq.arranger", "Steps") => super::arranger_follow::steps_takeover(graph, user_state, node_id),
         _ => None,
     }
@@ -212,7 +233,7 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
         (true, true, _) => "Following MIDI clock".to_string(),
         (true, false, true) => "The MIDI clock master is stopped".to_string(),
         (true, false, false) => "Waiting for MIDI clock on the MIDI input".to_string(),
-        (false, true, _) => "Keeping its own time at Tempo".to_string(),
+        (false, true, _) => format!("Keeping its own time at {:.1} BPM", readout.values[Clock::READOUT_TEMPO]),
         (false, false, _) => "Stopped".to_string(),
     };
     let swing_text = if swing > 0.5005 { format!("\nSwing {:.0}%", swing * 100.0) } else { String::new() };

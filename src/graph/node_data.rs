@@ -813,13 +813,14 @@ impl SynthNodeData {
                     graph.iter_connections().any(|(input, _output)| input == *input_id);
 
                 // Something else in charge of it: a synced LFO's division,
-                // a MIDI clock's tempo
+                // a MIDI clock's tempo. Or reading what something else
+                // makes of it: a Clock's tempo as its CV bends it
                 let takeover = super::clock_display::knob_takeover(
                     self.module_id, &knob_param.param_name, node_id, graph, user_state,
                 );
 
                 // Should the knob be disabled? Only for Exposed mode, not for Modulatable
-                let should_disable = takeover.is_some() || (is_connected && knob_param.disable_when_connected());
+                let should_disable = takeover.as_ref().is_some_and(|takeover| takeover.locked) || (is_connected && knob_param.disable_when_connected());
 
                 // Get input port index for this parameter (for looking up signal value)
                 let input_port_index = if knob_param.has_input_port() {

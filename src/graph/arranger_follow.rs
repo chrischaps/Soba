@@ -155,7 +155,7 @@ pub fn head(leaders: &HashMap<NodeId, NodeId>, node: NodeId) -> NodeId {
 pub fn steps_takeover(graph: &SynthGraph, user_state: &SynthGraphState, node: NodeId) -> Option<super::clock_display::KnobTakeover> {
     let leader = leader(user_state, node)?;
     let steps = param_inputs(graph, node).map(|inputs| graph.get_input(inputs[Arranger::PARAM_STEPS]).value.actual_value())?;
-    Some(super::clock_display::KnobTakeover { value: None, text: format!("{steps:.0} · {}", name(graph, leader)) })
+    Some(super::clock_display::KnobTakeover { value: None, text: format!("{steps:.0} · {}", name(graph, leader)), locked: true })
 }
 
 /// Whether a control on a node's face is its leader's, so it can't be
