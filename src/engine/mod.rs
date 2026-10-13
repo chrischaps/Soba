@@ -31,7 +31,7 @@ pub use cue::{Cue, CUE_LEVEL};
 pub use graph_plan::GraphPlan;
 pub use latency::{LatencyGauge, RoundTrip};
 pub use recorder::{RecordTap, Recording, RecordingSummary};
-pub use offline::{read_wav, LimiterReport, OfflineRenderer, StereoBuffer, AUDITION};
+pub use offline::{read_wav, read_wav_at, LimiterReport, OfflineRenderer, StereoBuffer, AUDITION};
 pub use midi_engine::{
     MidiDeviceInfo, MidiEngine, MidiError, MidiEvent, MidiReceivers, TimestampedMidiEvent,
 };

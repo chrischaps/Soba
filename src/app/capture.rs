@@ -60,7 +60,8 @@
 //!                                   # note is drawn, in patch space, and
 //!                                   # where the view is, as voice.json
 //! 5.0  input voice.wav              # Audio Input modules hear this WAV
-//!                                   # from now on, in place of a device
+//!                                   # from now on, in place of a device,
+//!                                   # resampled to the capture's rate
 //! 6.0  hover take.wav               # drag a file over the window, from
 //! 7.0  drop                         # the desktop, and drop it at the pointer
 //! 7.0  hover off                    # ...or give the drag up
@@ -76,7 +77,7 @@ use eframe::egui;
 use egui::{Pos2, Vec2};
 
 use crate::dsp::InputAudio;
-use crate::engine::{read_wav, MidiEvent, StereoBuffer};
+use crate::engine::{read_wav_at, MidiEvent, StereoBuffer};
 
 /// The fewest frames drawn before recording starts, so the window size,
 /// theme and patch have settled. Cues at negative times lengthen the warmup
@@ -572,14 +573,16 @@ impl Capture {
                 Cue::Layout(name) => {
                     self.actions.push(CaptureAction::Layout(self.config.out_dir.join(format!("{name}.json"))));
                 }
-                Cue::Input(path) => match read_wav(&path) {
-                    Ok((audio, rate)) if rate == self.config.sample_rate => {
+                Cue::Input(path) => match read_wav_at(&path, self.config.sample_rate) {
+                    Ok((audio, rate)) => {
+                        if rate != self.config.sample_rate {
+                            eprintln!("capture: {} is {} Hz, resampled to {} Hz", path.display(), rate, self.config.sample_rate);
+                        }
                         let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
                         self.actions.push(CaptureAction::InputFile(name));
                         // From this frame's start: a cue's offset isn't kept
                         self.input = Some((audio, 0));
                     }
-                    Ok((_, rate)) => eprintln!("capture: {} is {} Hz, the capture {} Hz", path.display(), rate, self.config.sample_rate),
                     Err(e) => eprintln!("capture: {}: {}", path.display(), e),
                 },
                 Cue::Hover(path) => {

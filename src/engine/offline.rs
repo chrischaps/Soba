@@ -405,6 +405,18 @@ pub fn read_wav(path: &std::path::Path) -> Result<(StereoBuffer, u32), String> {
     Ok((input, sample.sample_rate() as u32))
 }
 
+/// Reads a WAV as [`read_wav`] does, resampled to `sample_rate` if it was
+/// recorded at another, returning it with the rate it was recorded at.
+pub fn read_wav_at(path: &std::path::Path, sample_rate: u32) -> Result<(StereoBuffer, u32), String> {
+    let mut sample = crate::persistence::sample_files::read_wav_file(path)?.sample;
+    let recorded = sample.sample_rate() as u32;
+    if recorded != sample_rate {
+        sample = sample.resampled(sample_rate as f32);
+    }
+    let input = StereoBuffer { left: sample.left().to_vec(), right: sample.right().to_vec() };
+    Ok((input, recorded))
+}
+
 impl StereoBuffer {
     /// Adds `other` to the end of this buffer.
     pub fn append(&mut self, other: StereoBuffer) {
@@ -561,6 +573,26 @@ mod tests {
         let hz = Spectrum::of(&out.left[4800..], 48000.0).dominant_frequency();
         assert!((hz - 440.0).abs() < 3.0, "{hz}");
         std::fs::remove_dir_all(&folder).ok();
+    }
+
+    #[test]
+    fn test_an_input_wav_at_another_rate_is_resampled() {
+        use crate::dsp::SampleData;
+        let path = std::env::temp_dir().join(format!("soba-input-{}.wav", std::process::id()));
+        // One second of a 44.1 kHz tone, heard at 48 kHz: still one second of 440 Hz
+        let tone: Vec<f32> = (0..44100).map(|n| (std::f32::consts::TAU * 440.0 * n as f32 / 44100.0).sin() * 0.5).collect();
+        std::fs::write(&path, crate::persistence::sample_files::encode_wav(&SampleData::mono(tone, 44100.0))).unwrap();
+
+        let (audio, recorded) = read_wav_at(&path, 48000).unwrap();
+        assert_eq!(recorded, 44100);
+        assert!((audio.left.len() as i64 - 48000).abs() <= 1, "{} frames", audio.left.len());
+        assert_eq!(audio.left, audio.right, "a mono file is heard on both sides");
+        let hz = Spectrum::of(&audio.left, 48000.0).dominant_frequency();
+        assert!((hz - 440.0).abs() < 3.0, "{hz}");
+        // At its own rate it's read as it is
+        let (same, _) = read_wav_at(&path, 44100).unwrap();
+        assert_eq!(same.left, read_wav(&path).unwrap().0.left);
+        std::fs::remove_file(&path).ok();
     }
 
     #[test]

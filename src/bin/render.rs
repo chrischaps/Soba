@@ -16,7 +16,8 @@
 //! silence unless something in the patch triggers them, such as a Clock or
 //! Sequencer, or `--audition` is given to play a short phrase into them.
 //! Audio Input modules are silent too, unless `--input` gives them a WAV file
-//! to hear in place of the input device.
+//! to hear in place of the input device (resampled, if it was recorded at
+//! another rate than the render's).
 //!
 //! `--cue` plays a script of parameter changes into the patch, in the
 //! capture kit's `param` form, one per line (`#` starts a comment):
@@ -32,7 +33,7 @@ use std::process::ExitCode;
 
 use soba::dsp::analysis::{amp_to_db, peak, rms};
 use soba::dsp::loudness::{loudness, true_peak, Loudness};
-use soba::engine::{create_module_registry, read_wav, EngineCommand, LimiterReport, OfflineRenderer};
+use soba::engine::{create_module_registry, read_wav, read_wav_at, EngineCommand, LimiterReport, OfflineRenderer};
 use soba::persistence::sample_files::SampleBase;
 use soba::persistence::{load_from_file, CompiledPatch, Patch};
 
@@ -115,15 +116,9 @@ fn run(args: Args) -> Result<(), String> {
         eprintln!("warning: {}", warning);
     }
     if let Some(path) = &args.input {
-        let (input, rate) = read_wav(path).map_err(|e| format!("{}: {}", path.display(), e))?;
+        let (input, rate) = read_wav_at(path, args.sample_rate).map_err(|e| format!("{}: {}", path.display(), e))?;
         if rate != args.sample_rate {
-            return Err(format!(
-                "{} is {} Hz but the render is {} Hz: render with --sample-rate {}",
-                path.display(),
-                rate,
-                args.sample_rate,
-                rate
-            ));
+            eprintln!("note: {} is {} Hz, resampled to {} Hz", path.display(), rate, args.sample_rate);
         }
         renderer.set_audio_input(input);
     }
