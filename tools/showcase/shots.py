@@ -14,7 +14,9 @@ PNG. encode.py turns those into web clips.
 
 Coordinates are in points at the shot's ppp (1.55 by default, which shows
 the toolbar up to the Edit section in a 1920x1080 frame). Find them from a
-still: pixel / ppp.
+still: pixel / ppp. Aim from a still at the shot's own ppp: the layout
+shifts a few points from one ppp to another, enough to miss a small button.
+A press that just misses a control warns as the shot films.
 
 The shots film copies of the examples in tools/showcase/patches/, laid out
 as they were when the shots were aimed. The examples in patches/ have since

@@ -26,7 +26,12 @@
 //! # Script
 //!
 //! One cue per line, `<seconds> <cue> <args...>`; `#` starts a comment.
-//! Coordinates are in points (the window is `size / ppp` points across).
+//! Coordinates are in points (the window is `size / ppp` points across),
+//! aimed at the `--ppp` the script is filmed at. The layout shifts a little
+//! from one ppp to another, since text rows snap to whole pixels: by the
+//! foot of a tall module, a button can sit 7 points lower at ppp 2 than at
+//! ppp 1. So aim from a still filmed at the shot's own ppp (pixel / ppp). A
+//! press or right-click that just misses a control says so on stderr.
 //!
 //! ```text
 //! 0.0  play                         # start the transport
@@ -74,7 +79,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use eframe::egui;
-use egui::{Pos2, Vec2};
+use egui::{Pos2, Rect, Vec2};
 
 use crate::dsp::InputAudio;
 use crate::engine::{read_wav_at, MidiEvent, StereoBuffer};
@@ -84,6 +89,10 @@ use crate::engine::{read_wav_at, MidiEvent, StereoBuffer};
 /// to reach them: a shot can start the transport, set its view and let a
 /// reverb fill before the first recorded frame.
 const WARMUP_FRAMES: i64 = 45;
+
+/// How near a press can come to a control without landing on it before the
+/// capture says so, in points.
+const NEAR_MISS: f32 = 6.0;
 
 /// How the capture is set up, from the command line.
 #[derive(Debug, Clone)]
@@ -310,6 +319,9 @@ pub struct Capture {
     input: Option<(StereoBuffer, usize)>,
     /// A file dragged over the window, as from the desktop.
     hovering: Option<PathBuf>,
+    /// Where this frame's presses and right-clicks landed, and their cue
+    /// times, to check against what egui found under them.
+    presses: Vec<(f64, &'static str, Pos2)>,
     /// This frame's share of `input`, interleaved stereo.
     input_frame: StereoBuffer,
 }
@@ -377,6 +389,7 @@ impl Capture {
             input: None,
             input_frame: StereoBuffer::default(),
             hovering: None,
+            presses: Vec::new(),
         })
     }
 
@@ -527,6 +540,9 @@ impl Capture {
                 }
                 Cue::Button(down) => {
                     self.button_down = down;
+                    if let (true, Some(p)) = (down, self.pointer) {
+                        self.presses.push((at, "press", p));
+                    }
                     raw.events.push(egui::Event::PointerButton {
                         pos: self.pointer.unwrap_or_default(),
                         button: egui::PointerButton::Primary,
@@ -535,6 +551,9 @@ impl Capture {
                     });
                 }
                 Cue::SecondaryButton(down) => {
+                    if let (true, Some(p)) = (down, self.pointer) {
+                        self.presses.push((at, "rclick", p));
+                    }
                     raw.events.push(egui::Event::PointerButton {
                         pos: self.pointer.unwrap_or_default(),
                         button: egui::PointerButton::Secondary,
@@ -763,11 +782,50 @@ impl Capture {
 
     /// Asks for this frame's screenshot, after the app has drawn it.
     pub fn end_frame(&mut self, ctx: &egui::Context) {
+        self.check_aim(ctx);
         if self.fresh {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
             self.awaiting_shot = true;
         }
         ctx.request_repaint();
+    }
+
+    /// Warns about a press that just missed a control: a script aimed at
+    /// one `--ppp` and filmed at another, say, since the layout shifts a
+    /// little with the scale as text rows snap to whole pixels. Otherwise the
+    /// press quietly lands on the module or canvas behind.
+    fn check_aim(&mut self, ctx: &egui::Context) {
+        for (at, cue, p) in std::mem::take(&mut self.presses) {
+            let Some(layer) = ctx.layer_id_at(p) else { continue };
+            let (hit, nearby): (Vec<Rect>, Vec<Rect>) = ctx.viewport(|v| {
+                let clickable = |w: &&egui::WidgetRect| w.enabled && (w.sense.click || w.sense.drag);
+                let hovered = &v.interact_widgets.hovered;
+                let widgets = || v.prev_pass.widgets.get_layer(layer).filter(clickable);
+                (
+                    widgets().filter(|w| hovered.contains(&w.id)).map(|w| w.interact_rect).collect(),
+                    widgets().filter(|w| !hovered.contains(&w.id)).map(|w| w.interact_rect).collect(),
+                )
+            });
+            if let Some(missed) = near_miss(p, &hit, &nearby) {
+                let gap = missed.clamp(p) - p;
+                let side = match (gap.x.abs() > gap.y.abs(), gap.x > 0.0, gap.y > 0.0) {
+                    (true, true, _) => "right of",
+                    (true, false, _) => "left of",
+                    (false, _, true) => "below",
+                    (false, _, false) => "above",
+                };
+                eprintln!(
+                    "capture: the {cue} at {at:.2} s, ({:.0}, {:.0}), misses a {:.0}x{:.0} control {:.1} pt {side} it. \
+                     The layout shifts a little with --ppp: aim from a still filmed at this one ({})",
+                    p.x,
+                    p.y,
+                    missed.width(),
+                    missed.height(),
+                    gap.length(),
+                    self.config.ppp
+                );
+            }
+        }
     }
 
     /// Writes a finished frame to the video (and as a still if one was cued).
@@ -824,6 +882,22 @@ impl Capture {
         }
         true
     }
+}
+
+/// The control a press at `at` just misses, if it missed one: something
+/// clickable within `NEAR_MISS` of it that egui didn't find under the
+/// pointer, and much smaller than anything it did (the module or canvas a
+/// near miss lands on instead). `hit` and `nearby` are the clickable
+/// widgets under the pointer and the rest of its layer's.
+fn near_miss(at: Pos2, hit: &[Rect], nearby: &[Rect]) -> Option<Rect> {
+    let landed = hit.iter().map(|r| r.area()).fold(f32::INFINITY, f32::min);
+    nearby
+        .iter()
+        .filter(|r| !r.contains(at) && r.area() * 4.0 < landed)
+        .map(|r| (r.distance_to_pos(at), *r))
+        .filter(|(d, _)| *d <= NEAR_MISS)
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, r)| r)
 }
 
 /// Saves an image as a binary PPM, which any image tool can read.
@@ -1090,5 +1164,28 @@ mod tests {
             last = x;
         }
         assert!((g.at(0.5).0 - (1.4f32 * 0.2).sqrt()).abs() < 1e-4, "zoom eases in log space");
+    }
+
+    #[test]
+    fn a_press_just_off_a_button_is_a_near_miss() {
+        // #190: Soba Speaks at ppp 2, where the Sampler's file button sits
+        // 7 pt lower than at ppp 1, so a press aimed at ppp 1 lands on the
+        // module around it
+        let rect = |x0, y0, x1, y1| Rect::from_min_max(Pos2::new(x0, y0), Pos2::new(x1, y1));
+        let module = rect(270.0, 150.9, 500.0, 874.0);
+        let canvas = rect(0.0, 76.9, 1200.0, 874.0);
+        let button = rect(305.0, 601.9, 417.0, 613.9);
+        let knob = rect(285.0, 630.0, 320.0, 665.0);
+        let at = Pos2::new(345.0, 600.0);
+        assert_eq!(near_miss(at, &[module, canvas], &[button, knob]), Some(button));
+        // On the button, nothing to say
+        assert_eq!(near_miss(Pos2::new(345.0, 607.0), &[module, canvas, button], &[knob]), None);
+        // Nowhere near a control: a press on the module is meant
+        assert_eq!(near_miss(Pos2::new(345.0, 400.0), &[module, canvas], &[button, knob]), None);
+        // A press on a small control beside a bigger one is meant too
+        assert_eq!(near_miss(Pos2::new(300.0, 621.0), &[module, rect(290.0, 616.0, 310.0, 626.0)], &[button]), None);
+        // Bare canvas, with a module's port just off the pointer
+        let port = rect(265.0, 300.0, 275.0, 310.0);
+        assert_eq!(near_miss(Pos2::new(262.0, 305.0), &[canvas], &[port]), Some(port));
     }
 }
