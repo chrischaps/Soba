@@ -4,7 +4,7 @@ A node-based modular synthesizer, written in Rust. Patch oscillators, filters, e
 
 *Why Soba:* Blender calls the wires between nodes *noodles*, and soba are long, fine ones. In Japanese, *soba* (傍) also means "beside": an instrument whose patches sit by you and explain themselves.
 
-![Soba: a two-oscillator voice through a filter, delay and output, with an oscilloscope](Screenshot.png)
+![Soba playing Shoreline, one of its examples: a wind chime and surf from a single Noise module, mixed down to tape, laid out in frames with notes that explain the patch](Screenshot.png)
 
 It doesn't imitate hardware panels. Every module is a node with jacks on its sides and knobs along its bottom, and every cable is coloured by what it carries. Knobs that are being modulated turn on their own, so you can watch the patch move.
 
