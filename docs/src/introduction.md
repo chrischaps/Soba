@@ -27,7 +27,7 @@ A cable can also carry up to eight voices at once, which is how Soba plays chord
 
 ## Modules
 
-There are 39 modules in six categories. A module's header takes its category's color:
+There are 40 modules in six categories. A module's header takes its category's color:
 
 | Category | Header | Modules |
 |----------|--------|---------|
@@ -35,7 +35,7 @@ There are 39 modules in six categories. A module's header takes its category's c
 | Filter | <span class="swatch bar filter"></span>Teal | SVF Filter, Ladder Filter |
 | Modulation | <span class="swatch bar modulation"></span>Orange | ADSR Envelope, LFO, Slope |
 | Effect | <span class="swatch bar effect"></span>Cyan | Stereo Delay, Reverb, 3-Band EQ, Distortion, Chorus, Tape, Compressor, Vocoder |
-| Utility | <span class="swatch bar utility"></span>Gray | Clock, VCA, Attenuverter, Mix, Mixer, Sample & Hold, Quantizer, Clock Divider, Logic, Looper, Oscilloscope, Step Sequencer, Chord Sequencer, Trigger Sequencer, Arranger, MIDI Monitor |
+| Utility | <span class="swatch bar utility"></span>Gray | Clock, VCA, Attenuverter, Mix, Mixer, Sample & Hold, Quantizer, Clock Divider, Logic, Looper, Oscilloscope, Dancer, Step Sequencer, Chord Sequencer, Trigger Sequencer, Arranger, MIDI Monitor |
 | Output | <span class="swatch bar output"></span>Purple | Audio Output |
 
 The [Module Overview](./modules/index.md) introduces each one.

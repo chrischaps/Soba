@@ -602,6 +602,14 @@ in   Trigger Level      Control  ConstantOnly         inline=false num 0 [-1..1]
 knob Trigger Level      "Trig" KnobOnly
 display Scope
 
+== util.dancer "Dancer" finder="Dancer" Utility
+in   Clock              Gate     ConnectionOnly       inline=true  port
+in   Audio              Audio    ConnectionOnly       inline=true  port
+in   Accent             Gate     ConnectionOnly       inline=true  port
+in   Style              Control  ConstantOnly         inline=true  select 0 ["Bounce", "Disco", "Robot", "Headbang"] "Style"
+in   Size               Control  ConstantOnly         inline=false num 1 [1..3] ×
+display Dancer
+
 == seq.step "Step Sequencer" finder="Step Sequencer" Utility
 in   Clock              Gate     ConnectionOnly       inline=true  port
 in   Reset              Gate     ConnectionOnly       inline=true  port

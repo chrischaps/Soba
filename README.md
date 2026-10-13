@@ -17,7 +17,7 @@ It doesn't imitate hardware panels. Every module is a node with jacks on its sid
 - **Colour-coded signals.** Blue cables carry audio, orange carry control voltage, green carry gates, and purple carry MIDI. Connections that can't work are refused as you make them.
 - **Inputs vs. knobs.** Most parameters have a knob and a jack. Patch a cable into the jack and it takes over: the knob dims and follows the incoming signal, as on an analog modular.
 - **Polyphony on a single cable.** Poly MIDI and the Chord Sequencer send up to 8 voices down one cable, and every module after it plays each voice on its own. Poly cables are drawn as a bundle of strands, one per voice.
-- **39 modules:**
+- **40 modules:**
 
   | Category | Modules |
   |---|---|
@@ -26,7 +26,7 @@ It doesn't imitate hardware panels. Every module is a node with jacks on its sid
   | Modulation | ADSR Envelope, LFO, Slope (slew, trigger envelopes, cycling with skew, EOR/EOC), Clock |
   | Effects | Stereo Delay (with tape mode), Reverb (8-line FDN), Chorus, Distortion (oversampled, wavefolder), Tape (wow, flutter, saturation, age and hiss for a bus), Compressor, Parametric EQ, Vocoder (8 to 24 bands, formant shift) |
   | Utilities | VCA, Mix, Mixer (4 stereo channels, pan, mute, poly spread), Attenuverter, Sample & Hold, Quantizer (scales, custom scale from a clickable piano), Clock Divider, Logic (AND/OR/XOR/NOT, comparator), Looper (record, overdub and undo live layers, clock-synced), Step Sequencer, Chord Sequencer (16 chords with slash basses, voice-led, on poly cables), Trigger Sequencer (8 drum lanes, chained patterns, probability, ratchets), Arranger (song sections and automation lanes) |
-  | Output | Audio Output (with metering and limiter), Oscilloscope, MIDI Monitor |
+  | Output | Audio Output (with metering and limiter), Oscilloscope, Dancer, MIDI Monitor |
 
 - **Visual feedback.** Waveform, envelope and filter-response displays sit on their modules, LEDs light on active outputs, and the scope shows what's actually there. Hover any jack or knob to see what it does.
 - **Fast editing.** Space opens a fuzzy quick-add palette at the cursor. Undo and redo cover every edit. Copy, paste and duplicate work across windows, because the clipboard holds patch JSON.

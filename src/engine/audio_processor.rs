@@ -10,7 +10,7 @@ use rtrb::Consumer;
 
 use crate::dsp::denormal::DenormalGuard;
 use crate::dsp::{InputAudio, MidiEvent, ModuleRegistry, Poly, ProcessContext, Snapshot, SnapshotOutcome};
-use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Chorus, Clock, ClockDivider, Compressor, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, Logic, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Oscillator, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
+use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Chorus, Clock, ClockDivider, Compressor, Dancer, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, Logic, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Oscillator, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
 
 use super::audio_input::InputFeed;
 use super::channels::{EngineHandle, MAX_SNAPSHOTS};
@@ -56,6 +56,7 @@ pub fn create_module_registry() -> ModuleRegistry {
     registry.register::<Logic>();
     registry.register::<Looper>();
     registry.register::<Oscilloscope>();
+    registry.register::<Dancer>();
     registry.register::<StepSequencer>();
     registry.register::<ChordSequencer>();
     registry.register::<TriggerSequencer>();
@@ -605,6 +606,7 @@ mod tests {
         assert!(registry.contains("input.poly_midi"));
         assert!(registry.contains("util.sample_hold"));
         assert!(registry.contains("util.oscilloscope"));
+        assert!(registry.contains("util.dancer"));
         assert!(registry.contains("seq.step"));
         assert!(registry.contains("fx.delay"));
         assert!(registry.contains("fx.reverb"));
@@ -629,7 +631,7 @@ mod tests {
         assert!(registry.contains("seq.chord"));
         assert!(registry.contains("fx.vocoder"));
         assert!(registry.contains("source.chopper"));
-        assert_eq!(registry.len(), 39);
+        assert_eq!(registry.len(), 40);
     }
 
     #[test]

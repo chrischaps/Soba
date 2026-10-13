@@ -346,6 +346,13 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
+        module_id: "util.dancer",
+        // The stage's corner sets its Size
+        hidden: &["Size"],
+        display: NodeDisplay::Dancer,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
         module_id: "seq.step",
         knobs: &[knob("Steps"), knob_as("Gate Length", "Gate"), knob("Glide")],
         labels: &[("Direction", "Dir"), ("Gate Mode", "Gate of")],

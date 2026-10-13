@@ -294,6 +294,8 @@ pub enum NodeDisplay {
     LooperRing,
     /// Slope: the rise and fall to proportion, with a dot riding them.
     SlopeShape,
+    /// Dancer: a stick figure dancing on a stage, as big as its Size.
+    Dancer,
     /// Tape: two reels turning, and the tape trembling across a glowing head.
     TapeReels,
     /// Vocoder: a bar per band, the voice's level there, on a frequency
@@ -2024,6 +2026,12 @@ impl NodeDataTrait for SynthNodeData {
 
         if self.display == NodeDisplay::DividerRing {
             super::divider_display::divider_display(ui, node_id, graph, user_state, zoom);
+        }
+
+        if self.display == NodeDisplay::Dancer {
+            if let Some((param_name, value)) = super::dancer_display::dancer_display(ui, node_id, graph, user_state, zoom) {
+                responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
+            }
         }
 
         if self.display == NodeDisplay::SlopeShape {

@@ -52,6 +52,7 @@
   - [Logic](./modules/utilities/logic.md)
   - [Looper](./modules/utilities/looper.md)
   - [Oscilloscope](./modules/visualization/oscilloscope.md)
+  - [Dancer](./modules/visualization/dancer.md)
   - [Step Sequencer](./modules/utilities/sequencer.md)
   - [Chord Sequencer](./modules/utilities/chord-sequencer.md)
   - [Trigger Sequencer](./modules/utilities/trigger-sequencer.md)
