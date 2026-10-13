@@ -149,7 +149,7 @@ pub const EXAMPLES: &[Example] = &[
     Example {
         name: "Front Porch",
         file_name: "front-porch.json",
-        description: "Plays itself: rhythm guitar on the Electric Piano. A Chord Sequencer strums G, D/F#, Em7 and Cadd9 down and up in eighths, rolling each chord across its strings and brushing the last ones lightly",
+        description: "Plays itself: rhythm guitar on the Electric Piano. A Chord Sequencer strums G, D/F#, Em7 and Cadd9 down and up in eighths, rolling each chord across its strings and brushing the last ones lightly, over a heel stomping on 1 and 3 and a shaker in sixteenths",
         json: include_str!("../../patches/front-porch.json"),
     },
     Example {
