@@ -52,6 +52,7 @@ mod grouping;
 mod loops;
 mod samples;
 mod takes;
+mod tidy;
 #[cfg(not(target_arch = "wasm32"))]
 mod updates;
 
@@ -1881,6 +1882,9 @@ impl SynthApp {
                         }
                         NodeResponse::User(crate::graph::SynthResponse::StopCue(_)) => {
                             self.stop_cue();
+                        }
+                        NodeResponse::User(crate::graph::SynthResponse::TidySample { node_id: response_node_id, tidy }) => {
+                            self.tidy_sample(response_node_id, tidy);
                         }
                         NodeResponse::User(crate::graph::SynthResponse::EditParameters {
                             node_id: response_node_id,

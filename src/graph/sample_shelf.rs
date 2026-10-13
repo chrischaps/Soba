@@ -9,8 +9,9 @@
 //! browser is still fetching isn't: it's asked for again until it comes.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
+use crate::dsp::tidy::Survey;
 use crate::dsp::SampleData;
 use crate::persistence::sample_files::{self, Decoded};
 
@@ -32,6 +33,9 @@ pub struct ShelvedSample {
     pub truncated: bool,
     /// `source` at the engine's rate, made when first wanted.
     playing: Option<(f32, Arc<SampleData>)>,
+    /// Where its sound is and how loud, for Trim and Normalize, measured
+    /// when first wanted.
+    survey: OnceLock<Survey>,
 }
 
 impl ShelvedSample {
@@ -41,7 +45,13 @@ impl ShelvedSample {
             source: Arc::new(decoded.sample),
             truncated: decoded.truncated,
             playing: None,
+            survey: OnceLock::new(),
         }
+    }
+
+    /// Where its sound is and how loud, measured the first time it's asked.
+    pub fn survey(&self) -> &Survey {
+        self.survey.get_or_init(|| Survey::of(&self.source))
     }
 
     /// The recording at `sample_rate`, resampled the first time it's asked

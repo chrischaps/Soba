@@ -96,7 +96,7 @@ A five-note chord is loud, so the vocoder's strips sit at 28%. The ping-pong ech
 
 ## Try this
 
-- **Record your own line.** Pick your microphone under **Input** in the toolbar and press **Rec** on the top Sampler. It waits for a sound: say the line, *"Hello. I am Soba. I sing in sines,"* or any line of your own, then press **Rec** again. The Sampler plays your take from the next two bars on, in Chris's place, and keeps it beside the patch. **Ctrl+Z** brings Chris back. Wear headphones, or the take hears the speakers.
+- **Record your own line.** Pick your microphone under **Input** in the toolbar and press **Rec** on the top Sampler. It waits for a sound: say the line, *"Hello. I am Soba. I sing in sines,"* or any line of your own, then press **Rec** again. The Sampler plays your take from the next two bars on, in Chris's place, and keeps it beside the patch. **Ctrl+Z** brings Chris back. Wear headphones, or the take hears the speakers. Then click the take's name under the waveform and choose **Trim to the sound** and **Normalize RMS to −16 dBFS**: the same trim and level `record.py` gave Chris's take, so yours sits in the vocoder as his does.
 - **Speak into it.** On the voice Mixer, mute **Ch 1** and unmute **Ch 3**, pick your microphone under **Input** in the toolbar, and talk or sing. Wear headphones, or the mic hears the speakers. Sustained vowels make the chords bloom. A whisper comes through as hiss.
 - **Two voices at once.** Unmute **Ch 2** as well as **Ch 1**. The person and the synthesizer start together and drift apart word by word, and the vocoder wears both at once.
 - **Robot.** Set **Bands** to 8 and **Release** to 20 ms.

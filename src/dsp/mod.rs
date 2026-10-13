@@ -18,6 +18,7 @@ pub mod registry;
 pub mod sample;
 pub mod signal;
 pub mod smoothed_value;
+pub mod tidy;
 
 // Re-export commonly used types
 pub use context::{InputAudio, ProcessContext, TransportState};

@@ -24,6 +24,11 @@ line, so the patch hears both at one level:
   limiter (up to 6 dB of it; a louder pop lowers the whole take instead).
 
 Recording needs `pip install sounddevice`; cleaning up a file doesn't.
+
+Inside Soba, a take recorded straight into a Sampler (or any file it plays)
+can be trimmed and normalized by the same rules from the Sampler's face:
+click the file's name, under the waveform. That doesn't high-pass the take
+or turn its room down, which this does for the Vocoder.
 """
 
 import argparse
@@ -118,12 +123,15 @@ def words(levels, loudest, room):
     doesn't count. The take then starts where the sound leading into the
     first word began: walking back from the word while the level keeps
     falling, it keeps the breath and the rising "h", and stops in the dip
-    before anything earlier, such as a thump."""
+    before anything earlier, such as a thump, or where it reaches the room.
+
+    Soba's Sampler trims by the same rule (src/dsp/tidy.rs): keep the two alike."""
     spoken = runs(levels > max(loudest - 30, room + VOICE_ABOVE_ROOM_DB), 3)
     sustained = [(a, b) for a, b in spoken if b - a >= WORD_FRAMES] or spoken
     first, last = sustained[0][0], sustained[-1][1] - 1
     quietest = i = first
-    while i > max(0, first - LEAD_IN_FRAMES) and levels[i - 1] < levels[quietest] + 3:
+    while (i > max(0, first - LEAD_IN_FRAMES) and levels[quietest] > room + 3
+           and levels[i - 1] < levels[quietest] + 3):
         i -= 1
         if levels[i] < levels[quietest]:
             quietest = i

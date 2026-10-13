@@ -77,6 +77,13 @@ impl SynthApp {
     /// Keeps a take on the shelf, and on disk beside the patch where there
     /// is one, under a name of its own. Returns its key.
     fn keep_take(&mut self, sample: SampleData) -> Result<String, String> {
+        self.keep_beside_patch(sample, |n| format!("Take {n}.wav"))
+    }
+
+    /// Keeps a recording made in the editor (a take, or a file trimmed) on
+    /// the shelf, and on disk beside the patch where there is one, under the
+    /// first name `name(1)`, `name(2)`… that's free. Returns its key.
+    pub(super) fn keep_beside_patch(&mut self, sample: SampleData, name: impl Fn(usize) -> String) -> Result<String, String> {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let folder = match &self.current_patch_path {
@@ -84,7 +91,7 @@ impl SynthApp {
                 None => std::env::temp_dir().join(format!("Soba takes {}", std::process::id())),
             };
             std::fs::create_dir_all(&folder).map_err(|e| format!("couldn't make {}: {e}", folder.display()))?;
-            let path = (1..).map(|n| folder.join(format!("Take {n}.wav"))).find(|path| !path.exists()).expect("some name is free");
+            let path = (1..).map(|n| folder.join(name(n))).find(|path| !path.exists()).expect("some name is free");
             // Written whole beside it first, so a failed write leaves nothing half done
             let partial = path.with_extension("wav.partial");
             std::fs::write(&partial, sample_files::encode_wav(&sample)).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -97,7 +104,7 @@ impl SynthApp {
         {
             use crate::graph::sample_shelf::DROPPED_PREFIX;
             let key = (1..)
-                .map(|n| format!("{DROPPED_PREFIX}Take {n}.wav"))
+                .map(|n| format!("{DROPPED_PREFIX}{}", name(n)))
                 .find(|key| self.user_state.samples.get(key).is_none())
                 .expect("some name is free");
             self.user_state.samples.insert(&key, Decoded { sample, truncated: false });

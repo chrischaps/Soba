@@ -126,6 +126,21 @@ pub enum SynthResponse {
     SaveGroup(egui_node_graph2::NodeId),
     /// Ask for a file for a Sampler to play.
     OpenSample(egui_node_graph2::NodeId),
+    /// Trim or normalize a Sampler's file, into a new file beside the
+    /// patch: a step undo takes back.
+    TidySample {
+        node_id: egui_node_graph2::NodeId,
+        tidy: Tidy,
+    },
+}
+
+/// What a Sampler's face can do to its file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tidy {
+    /// Cut it to its sound.
+    Trim,
+    /// Set its level.
+    Normalize(crate::dsp::tidy::Level),
 }
 
 impl SynthResponse {

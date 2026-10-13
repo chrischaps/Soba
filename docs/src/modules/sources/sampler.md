@@ -57,6 +57,31 @@ A patch that hasn't been saved yet, a new one or an example, keeps its takes in 
 
 Room for a take is set aside, a minute of stereo (about 23 MB at 48 kHz), when something is patched into **In**, so recording never has to find memory mid-take. Unpatch **In** and it's given back.
 
+## Trim and Normalize
+
+A take comes in raw: silence at each end, whatever level the mic gave it, perhaps a bump before the first word. Click the file's name, under the waveform, for two fixes. They work on any file the Sampler plays, not only takes.
+
+- **Trim to the sound** cuts the recording from where its sound begins to 300 ms after it ends.
+- **Normalize peak to −1 dBFS** turns the whole recording up (or down) until its loudest sample is at −1 dBFS. Its shape is unchanged.
+- **Normalize RMS to −16 dBFS** sets the level of the sound itself, so recordings sit at one level: a quiet take and a loud one come out alike. Up to 6 dB of peaks over −1 dBFS are taken down by a gentle look-ahead limiter. A peak louder than that, such as a popped "p", lowers the whole recording instead, and the status bar says by how much it fell short.
+
+![Trim, previewed on the Sampler's face](../../images/sampler-trim.png)
+*A spoken line with room at both ends, and **Trim to the sound** under the pointer. The hatched parts would go: 1.12 s from the start, up to the breath before the first word, and 1.42 s from the end. The crop marks frame what stays.*
+
+Each item says what it would do before you choose it: how much each end loses, or how many dB the level moves. While the pointer is on an item, the waveform shows it too. A trim veils the parts it would cut and sets crop marks round what it keeps. A level writes its change across the panel, since the waveform is always drawn to fill it.
+
+Neither touches the original. Each writes a new WAV beside the patch, in `<patch name> samples`, named for what was done (`Take 1 trimmed.wav`, then `Take 1 trimmed normalized.wav`), and the Sampler plays it once, as it does a file just opened. It's a step you can undo: undo brings back the untouched file. A trim moves **Start**, **End** and the loop's markers with the sound, so they mark the same moments in it. A marker in a part that was cut goes to that end. Sliced, the slices are cut from what's left.
+
+### Where the sound begins
+
+The rule is the one the [Soba Speaks](../../recipes/soba-speaks.md) example's voice was made with (`tools/voice/record.py`). The recording is measured in 10 ms steps, with any rumble under 70 Hz left out of the measurement. The room's level is that of its quietest tenth.
+
+- The sound begins at the first **sustained** sound: one that lasts at least 80 ms, within 30 dB of the loudest and at least 10 dB over the room. A lone thump or lip smack is too short to count.
+- From there the start walks back while the level keeps falling, to keep the breath before a word or a note's attack. It stops in the dip before anything earlier, such as a bumped stand, or where the level reaches the room, and never walks back more than 300 ms.
+- The sound ends 300 ms after the last sustained sound, so a word can breathe out and a note ring.
+
+A cut start fades in over 5 ms, and a cut end fades out over 80 ms. A recording with no quiet room to cut, a drone or a pad, has nothing to trim. Neither does one that's already been trimmed.
+
 ## Inputs
 
 | Port | Signal Type | Description |
@@ -154,7 +179,7 @@ The waveform shows the whole recording, scaled to fill the panel. What plays is 
 
 Every voice draws a white playhead where it is in the recording, as bright as it is loud. A chord is several lines moving at their own speeds, and a released note fades where it stands.
 
-Under the waveform are **▶** (see [Hearing it](#hearing-it)), the file's name and length, and **Rec** (see [Recording into it](#recording-into-it)), dim until something is patched into **In** and the patch is playing. A file that can't be found shows its name in orange. An empty Sampler asks for a file.
+Under the waveform are **▶** (see [Hearing it](#hearing-it)), the file's name and length, which open [Trim and Normalize](#trim-and-normalize), and **Rec** (see [Recording into it](#recording-into-it)), dim until something is patched into **In** and the patch is playing. A file that can't be found shows its name in orange. An empty Sampler asks for a file.
 
 ## Files and patches
 

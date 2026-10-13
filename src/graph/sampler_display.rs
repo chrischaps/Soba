@@ -24,6 +24,10 @@
 //!
 //! Rec, beside Open…, records what's patched into In; while it does, the
 //! panel shows the take coming in (see [`super::sampler_take`]).
+//!
+//! The file's name opens a menu to trim the file to its sound or normalize
+//! its level, and the waveform shows what each would do while it's hovered
+//! (see [`super::sampler_tidy`]).
 
 use eframe::egui::{self, Color32, CursorIcon, Pos2, Rect, Sense, Shape, Stroke, Vec2};
 use egui_node_graph2::NodeId;
@@ -37,6 +41,7 @@ use crate::persistence::sample_files;
 
 use super::sample_shelf::ShelvedSample;
 use super::sampler_take::{self, RecBlock, RecView, REC_BUTTON};
+use super::sampler_tidy;
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
 /// The four markers, as (parameter, short name).
@@ -242,6 +247,11 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                     ));
                 }
             }
+
+            // A trim or a level, hovered in the file's menu
+            if let Some(tidy) = sampler_tidy::previewing(ui, node_id) {
+                sampler_tidy::draw_preview(&painter, plot, sample, tidy, z);
+            }
         }
         None if live => {
             let scope = engine_id.and_then(|id| user_state.get_scope_data(id));
@@ -418,11 +428,21 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         }
         name_left = play.right() + 4.0 * z;
     }
-    let label = match loaded {
-        Some(sample) => format!("{}  {}", truncate(name, 18), duration(sample.source.seconds())),
-        None => truncate(name, 28),
-    };
-    ui.painter().text(Pos2::new(name_left, row.center().y), egui::Align2::LEFT_CENTER, label, small.clone(), name_color);
+    // Its name opens the menu to trim or normalize it, between ▶ and Rec
+    match loaded.filter(|_| !live) {
+        Some(sample) => {
+            let length = duration(sample.source.seconds());
+            let menu = Rect::from_x_y_ranges(name_left - 2.0 * z..=row.right() - button_width - 26.0 * z, row.top() + 1.0 * z..=row.bottom() - 1.0 * z);
+            responses.extend(sampler_tidy::name_button(ui, menu, node_id, name, &length, name_color, sample, z));
+        }
+        None => {
+            let label = match loaded {
+                Some(sample) => format!("{}  {}", truncate(name, 18), duration(sample.source.seconds())),
+                None => truncate(name, 28),
+            };
+            ui.painter().text(Pos2::new(name_left, row.center().y), egui::Align2::LEFT_CENTER, label, small.clone(), name_color);
+        }
+    }
     let button = Rect::from_min_size(Pos2::new(row.right() - button_width, row.top() + 1.0 * z), Vec2::new(button_width, row_height - 2.0 * z));
     let open = ui.interact(button, ui.id().with(("sampler_open", node_id)), Sense::click());
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
