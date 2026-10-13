@@ -5,7 +5,7 @@
 
 use crate::dsp::{
     context::ProcessContext,
-    module_trait::{DspModule, ModuleCategory, ModuleInfo},
+    module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
     primitives::{prewarp, Downsampler2x, NoiseFloor, SoftSaturator, TptIntegrator, Upsampler2x},
@@ -160,6 +160,8 @@ pub struct LadderFilter {
     drive_smooth: SmoothedValue,
     /// Smoothed Cutoff CV depth, in octaves per unit of CV.
     cv_depth_smooth: SmoothedValue,
+    /// The cutoff and resonance it ran at, after CV, at the last sample.
+    running: (f32, f32),
 }
 
 impl LadderFilter {
@@ -192,6 +194,7 @@ impl LadderFilter {
             resonance_smooth: SmoothedValue::with_default_smoothing(0.5, sample_rate),
             drive_smooth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             cv_depth_smooth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
+            running: (1000.0, 0.5),
         }
     }
 
@@ -231,6 +234,17 @@ impl LadderFilter {
     /// from the analog prototype the filter is modelled on. Used to draw the
     /// response curve on the node, so the picture matches the sound.
     pub fn lowpass_response_db(cutoff_hz: f32, resonance: f32, freq: f32) -> f32 {
+        Self::tap_response_db(cutoff_hz, resonance, freq, 4)
+    }
+
+    /// Small-signal LP12 gain in dB, as [`Self::lowpass_response_db`]: the
+    /// same loop, tapped after its second stage.
+    pub fn lp12_response_db(cutoff_hz: f32, resonance: f32, freq: f32) -> f32 {
+        Self::tap_response_db(cutoff_hz, resonance, freq, 2)
+    }
+
+    /// The gain at the output of stage `tap` (1-4) of the loop.
+    fn tap_response_db(cutoff_hz: f32, resonance: f32, freq: f32, tap: i32) -> f32 {
         let w = (freq / cutoff_hz.max(1.0)) as f64;
         let k = Self::feedback(resonance) as f64;
         // One stage is 1/(1 + jw); four in a row is 1/(1 + jw)^4
@@ -241,10 +255,19 @@ impl LadderFilter {
             }
             (re, im)
         };
-        // H = (1 + c·k) / ((1 + jw)^4 + k)
-        let gain = (1.0 + Self::BASS_COMPENSATION as f64 * k) / (re + k).hypot(im);
+        // At stage n: H = (1 + c·k)(1 + jw)^(4-n) / ((1 + jw)^4 + k)
+        let skipped = (1.0 + w * w).sqrt().powi(4 - tap);
+        let gain = (1.0 + Self::BASS_COMPENSATION as f64 * k) * skipped / (re + k).hypot(im);
         (20.0 * gain.max(1e-9).log10()) as f32
     }
+
+    /// Readout indices: the cutoff (Hz) and resonance it's running at,
+    /// after CV, as of the end of the last block.
+    pub const READOUT_CUTOFF: usize = 0;
+    pub const READOUT_RESONANCE: usize = 1;
+
+    /// The resonance past which the ladder rings on its own (k = 4).
+    pub const SELF_OSCILLATION: f32 = 4.0 / Self::MAX_FEEDBACK;
 
     /// The cutoff the filter is currently running at, in Hz, before CV.
     #[cfg(test)]
@@ -325,6 +348,7 @@ impl DspModule for LadderFilter {
                 .exp2()
                 .clamp(Self::MIN_CUTOFF_HZ, max_cutoff);
             let resonance = (base_resonance + sample(res_cv, i) * 0.5).clamp(0.0, 1.0);
+            self.running = (cutoff, resonance);
 
             let g = prewarp(cutoff, oversampled_rate);
             let k = Self::feedback(resonance);
@@ -351,6 +375,14 @@ impl DspModule for LadderFilter {
         self.resonance_smooth.reset(self.resonance_smooth.target());
         self.drive_smooth.reset(self.drive_smooth.target());
         self.cv_depth_smooth.reset(self.cv_depth_smooth.target());
+    }
+
+    /// The cutoff and resonance after CV, for the display.
+    fn readout(&self, _params: &[f32]) -> Option<Readout> {
+        let mut readout = Readout::default();
+        readout.values[Self::READOUT_CUTOFF] = self.running.0;
+        readout.values[Self::READOUT_RESONANCE] = self.running.1;
+        Some(readout)
     }
 }
 
@@ -499,6 +531,15 @@ mod tests {
             let drawn = LadderFilter::lowpass_response_db(fc, res, f);
             let measured = amp_to_db(gain(0, fc, res, f));
             assert!((drawn - measured).abs() < 0.75, "fc {} res {} at {} Hz: drawn {:.2} dB, measured {:.2} dB", fc, res, f, drawn, measured);
+        }
+    }
+
+    #[test]
+    fn test_lp12_curve_matches_the_filter() {
+        for &(fc, res, f) in &[(1000.0, 0.0, 1000.0), (1000.0, 0.5, 1000.0), (500.0, 0.7, 1500.0), (2000.0, 0.3, 700.0), (300.0, 0.7, 300.0)] {
+            let drawn = LadderFilter::lp12_response_db(fc, res, f);
+            let measured = amp_to_db(gain(1, fc, res, f));
+            assert!((drawn - measured).abs() < 0.75, "fc {fc} res {res} at {f} Hz: drawn {drawn:.2} dB, measured {measured:.2} dB");
         }
     }
 

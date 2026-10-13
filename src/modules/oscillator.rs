@@ -43,7 +43,7 @@ impl OscWaveform {
     /// Naive value at phase `p` in 0..=1. Phase 1.0 means "just before the
     /// wrap" and 0.0 "just after it", so both sides of the wrap are expressible.
     #[inline]
-    fn value(self, p: f32, pulse_width: f32) -> f32 {
+    pub(crate) fn value(self, p: f32, pulse_width: f32) -> f32 {
         match self {
             OscWaveform::Sine => (p * TAU).sin(),
             OscWaveform::Saw => 2.0 * p - 1.0,
@@ -415,17 +415,21 @@ impl Oscillator {
         }
     }
 
+    /// How far voice `i` of `n` is detuned, in cents, at a Detune of `detune`.
+    pub(crate) fn unison_cents(i: usize, n: usize, detune: f32) -> f32 {
+        let x = Self::voice_position(i, n);
+        x.signum() * x.abs().powf(1.5) * MAX_DETUNE_CENTS * detune * detune
+    }
+
     /// Lays out the unison voices: pitch ratios and stereo gains.
     ///
     /// Voices sit evenly across the stereo field, but their detune bends
     /// toward the centre (|x|^1.5), close to the JP-8000 supersaw's offsets.
     /// Uneven spacing also keeps the voices from beating in lockstep.
     fn layout_voices(&mut self, n: usize, detune: f32, spread: f32) {
-        let outer_cents = MAX_DETUNE_CENTS * detune * detune;
         for i in 0..n {
             let x = Self::voice_position(i, n);
-            let cents = x.signum() * x.abs().powf(1.5) * outer_cents;
-            self.ratios[i] = (cents / 1200.0).exp2();
+            self.ratios[i] = (Self::unison_cents(i, n, detune) / 1200.0).exp2();
             let pan = x * spread;
             self.gains_left[i] = (1.0 - pan).min(1.0);
             self.gains_right[i] = (1.0 + pan).min(1.0);

@@ -15,6 +15,8 @@ Beyond the four classic waveforms, it has the features that make an oscillator a
 - a **sub-oscillator** one octave down;
 - **unison** of up to seven voices, with stereo spread. Seven detuned saws is the classic *supersaw*.
 
+The display draws a cycle of the wave at the Pulse Width, and reads the pitch the tune section sets. With more than one unison voice, the others are drawn faintly over it, sliding along the cycle at the rate each beats against the pitch: a gentle Detune drifts, a wide one shimmers. With **Sub** patched, two cycles show, with the sub's square under them.
+
 Every waveform is band-limited. Each voice runs at twice the sample rate with polyBLEP corrections on its edges and polyBLAMP corrections on its corners, then a halfband filter brings it back down. A 5 kHz saw's aliasing sits around -80 dB, so high notes and sync sweeps stay clean.
 
 ## Inputs

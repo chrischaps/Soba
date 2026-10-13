@@ -12,6 +12,8 @@ What gives it its character:
 - **A steep 24 dB/octave slope** that darkens a sound decisively, plus a gentler 12 dB/octave tap from the middle of the ladder.
 - **Saturation at every stage.** Push it with **Drive** and it rounds off and thickens rather than clipping. The output never goes past full scale, however hard you drive it.
 - **Bass compensation.** The original ladder loses low end as resonance rises. This one adds the lost bass back, so turning up the resonance adds a peak without thinning the sound.
+
+The display draws LP24 and LP12, the patched ones lit, at the cutoff and resonance CV has taken them to, as on the [SVF Filter](./svf-filter.md). Past the top fifth of **Resonance**, where the ladder rings on its own, the peak glows and the display says *sings*.
 - **Self-oscillation** over the top fifth of the resonance knob: a sine at the cutoff frequency, in tune to within a cent or two.
 - **2x oversampling.** The saturators run at twice the sample rate, so a high note driven hard stays clean instead of picking up inharmonic aliasing.
 

@@ -7,7 +7,7 @@
 
 The LFO (low-frequency oscillator) makes slow, repeating shapes for moving other modules: a filter that breathes, a vibrato, a tremolo, a pulse width that drifts. It runs from one cycle every 100 seconds up to 100 Hz, so it can also be pushed into the audio range for rough, buzzy modulation.
 
-The display on the node draws one cycle of the selected waveform, with a dot that travels along it at the LFO's actual phase. What you see is where the modulation is right now.
+The display on the node draws one cycle of the selected waveform, with a dot that travels along it at the LFO's actual phase, trailing a brighter stretch of the curve behind it. What you see is where the modulation is right now. Bipolar swings about a centre line; with Bipolar off, the wave stands on the floor, since it never goes below 0. A tick on the floor marks where the **Phase** knob starts the cycle. Across the top it reads the rate, after any Rate CV, or the division and the rate it comes to.
 
 ## Inputs
 

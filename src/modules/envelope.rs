@@ -54,6 +54,15 @@ pub fn stage_shape(steepness: f64, u: f64) -> f64 {
     (-steepness * u).exp_m1() / (-steepness).exp_m1()
 }
 
+/// How far through a stage, as normalized time, the envelope is when it
+/// has gone `progress` of the way to its target: the inverse of
+/// [`stage_shape`].
+#[inline]
+pub fn stage_time(steepness: f64, progress: f64) -> f64 {
+    let progress = progress.clamp(0.0, 1.0);
+    (-(progress * (-steepness).exp_m1()).ln_1p() / steepness).clamp(0.0, 1.0)
+}
+
 /// Envelope stages.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnvelopeStage {
@@ -320,6 +329,13 @@ impl AdsrEnvelope {
     pub const READOUT_DECAY: usize = 1;
     pub const READOUT_SUSTAIN: usize = 2;
     pub const READOUT_RELEASE: usize = 3;
+    /// Readout indices: the stage it's in (0 idle, 1 attack, 2 decay,
+    /// 3 sustain, 4 release), how far it has gone to the stage's target
+    /// (0-1), its level, and the peak of the note it's playing.
+    pub const READOUT_STAGE: usize = 4;
+    pub const READOUT_PROGRESS: usize = 5;
+    pub const READOUT_LEVEL: usize = 6;
+    pub const READOUT_PEAK: usize = 7;
 
     /// Gate threshold for detecting high/low states.
     const GATE_THRESHOLD: f32 = 0.5;
@@ -535,13 +551,24 @@ impl DspModule for AdsrEnvelope {
         self.prev_retrigger = false;
     }
 
-    /// The stage times and sustain CV has moved them to, for the display.
+    /// The stage times and sustain CV has moved them to, and where the
+    /// envelope is, for the display.
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
         let mut readout = Readout::default();
         readout.values[Self::READOUT_ATTACK] = self.attack_seconds;
         readout.values[Self::READOUT_DECAY] = self.decay_seconds;
         readout.values[Self::READOUT_SUSTAIN] = self.sustain_target;
         readout.values[Self::READOUT_RELEASE] = self.release_seconds;
+        readout.values[Self::READOUT_STAGE] = match self.stage {
+            EnvelopeStage::Idle => 0.0,
+            EnvelopeStage::Attack => 1.0,
+            EnvelopeStage::Decay => 2.0,
+            EnvelopeStage::Sustain => 3.0,
+            EnvelopeStage::Release => 4.0,
+        };
+        readout.values[Self::READOUT_PROGRESS] = self.progress as f32;
+        readout.values[Self::READOUT_LEVEL] = self.level as f32;
+        readout.values[Self::READOUT_PEAK] = self.peak as f32;
         Some(readout)
     }
 }
@@ -1052,6 +1079,35 @@ mod tests {
         assert!((decay - 0.5).abs() < 1e-6, "decay {decay}");
         assert!((sustain - 0.75).abs() < 1e-6, "sustain {sustain}");
         assert!((release - 0.25).abs() < 1e-6, "release {release}");
+    }
+
+    #[test]
+    fn test_readout_reports_where_the_envelope_is() {
+        // 100 ms into a held note: 10 ms of attack, then 90 ms of a 250 ms decay
+        let total = 4800;
+        let p = params(0.01, 0.25, 0.5, 0.5);
+        let (out, env) = render_cv(&p, total, total, &[]);
+        let values = env.readout(&[]).unwrap().values;
+        assert_eq!(values[AdsrEnvelope::READOUT_STAGE], 2.0);
+        assert_eq!(values[AdsrEnvelope::READOUT_PEAK], 1.0);
+        let level = values[AdsrEnvelope::READOUT_LEVEL];
+        assert!((level - out[total - 1]).abs() < 0.01, "level {level} vs out {}", out[total - 1]);
+        // The progress turns back into the time through the stage
+        let progress = values[AdsrEnvelope::READOUT_PROGRESS] as f64;
+        let through = stage_time(curve_steepness(0.5), progress);
+        assert!((through - 0.09 / 0.25).abs() < 0.01, "{through} of the way through the decay");
+    }
+
+    #[test]
+    fn test_stage_time_undoes_stage_shape() {
+        for curve in [0.0, 0.3, 1.0] {
+            let steepness = curve_steepness(curve);
+            for step in 0..=10 {
+                let u = step as f64 / 10.0;
+                let back = stage_time(steepness, stage_shape(steepness, u));
+                assert!((back - u).abs() < 1e-6, "curve {curve} at {u}: {back}");
+            }
+        }
     }
 
     #[test]

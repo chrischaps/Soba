@@ -9,6 +9,8 @@ The ADSR Envelope gives each note a shape in time. When a gate goes high (a key 
 
 Every stage takes exactly the time on its knob: a 100 ms release is silent 100 ms after you let go. Each stage's curve knob sets its shape, from a straight line to a deep analog curve.
 
+While a note plays, the display follows it: the stage it's in lights its letter, a dot rides the curve at the envelope's level, and the glow under the curve swells with it. A soft note's dot rides lower, at the peak its velocity gave it.
+
 ## Inputs
 
 | Port | Signal Type | Description |
@@ -82,7 +84,7 @@ Each stage has a jack beside its knob. CV there moves the stage around where the
 
 The envelope reads CV on every sample, not just at each note. A cue that lands while a release is already falling stretches what's left of it, and the curve bends there without a step.
 
-While a stage's jack is patched, its knob shows where the CV has taken it: an orange arc out to a bead on its rim, and the number under the knob in orange. The display draws that stage the way the envelope is running it, with its letter lit. When a lane ramps the release out, you can watch the tail widen.
+While a stage's jack is patched, its knob shows where the CV has taken it: an orange arc out to a bead on its rim, and the number under the knob in orange. The display draws that stage the way the envelope is running it, with its letter tinted. When a lane ramps the release out, you can watch the tail widen.
 
 ## Patch examples
 

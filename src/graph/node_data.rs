@@ -17,8 +17,7 @@ use egui_node_graph2::{ConnectionSignalTrait, NodeDataTrait, NodeResponse, UserR
 
 use crate::dsp::ModuleCategory;
 use crate::engine::midi_engine::MidiEvent;
-use crate::modules::{LadderFilter, SvfFilter};
-use crate::widgets::{knob, led, KnobStyle, waveform_display, generate_waveform_cycle, KnobConfig, LedConfig, WaveformConfig, WaveformType, adsr_display, AdsrConfig, AdsrParams, spectrum_display, FrequencyPoint, SpectrumConfig, SpectrumStyle, piano, piano_keys, PianoConfig, PianoData, noise_display, NoiseDisplayConfig};
+use crate::widgets::{knob, led, KnobStyle, KnobConfig, LedConfig, piano, piano_keys, PianoConfig, PianoData, noise_display, NoiseDisplayConfig};
 use super::groups::{GroupId, NodeKind, Side};
 use super::hints::{self, Hint};
 use super::step_grid::step_sequencer_display;
@@ -1663,73 +1662,9 @@ impl NodeDataTrait for SynthNodeData {
             responses.extend(edits.into_iter().map(NodeResponse::User));
         }
 
-        // Special rendering for Oscillator module - waveform preview
+        // Oscillator: the wave it plays, and its unison voices
         if self.display == NodeDisplay::OscillatorWave {
-            // Add separator with zoom-scaled margins
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(4.0 * zoom);
-
-            // Get waveform type and pulse width from node parameters
-            let (waveform_idx, pulse_width) = if let Some(node) = graph.nodes.get(node_id) {
-                let mut wave_idx = 0usize;
-                let mut pw = 0.5f32;
-
-                for (name, input_id) in &node.inputs {
-                    let input = graph.get_input(*input_id);
-                    match name.as_str() {
-                        "Waveform" => {
-                            if let SynthValueType::Select { value, .. } = &input.value {
-                                wave_idx = *value;
-                            }
-                        }
-                        "Pulse Width" => {
-                            if let SynthValueType::Number { value, .. } = &input.value {
-                                pw = *value;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                (wave_idx, pw)
-            } else {
-                (0, 0.5)
-            };
-
-            // Convert waveform index to WaveformType
-            let waveform_type = match waveform_idx {
-                0 => WaveformType::Sine,
-                1 => WaveformType::Saw,
-                2 => WaveformType::Pulse { width: pulse_width }, // Square with PWM
-                3 => WaveformType::Triangle,
-                _ => WaveformType::Sine,
-            };
-
-            // Generate single cycle of the waveform
-            let num_samples = 128;
-            let samples = generate_waveform_cycle(waveform_type, num_samples);
-
-            // Display waveform with oscillator preset config
-            let config = WaveformConfig::oscillator()
-                .with_size(140.0 * zoom, 50.0 * zoom);
-
-            ui.horizontal(|ui| {
-                ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0); // Center the display
-                waveform_display(ui, &samples, &config);
-            });
+            super::oscillator_display::oscillator_display(ui, node_id, graph, user_state, zoom);
         }
 
         // Noise: the three slopes, with the patched ones lit
@@ -1785,302 +1720,24 @@ impl NodeDataTrait for SynthNodeData {
             });
         }
 
-        // Special rendering for ADSR Envelope module - envelope shape display
+        // ADSR: the envelope's shape, and where a note is in it
         if self.display == NodeDisplay::Envelope {
-            // Add separator with zoom-scaled margins
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(4.0 * zoom);
-
-            // Get ADSR parameters from node inputs
-            let adsr_params = if let Some(node) = graph.nodes.get(node_id) {
-                let defaults = AdsrParams::default();
-                let number = |name: &str, default: f32| {
-                    node.inputs
-                        .iter()
-                        .find(|(input_name, _)| input_name == name)
-                        .and_then(|(_, id)| match graph.get_input(*id).value {
-                            SynthValueType::Number { value, .. } => Some(value),
-                            _ => None,
-                        })
-                        .unwrap_or(default)
-                };
-                let patched = |jack: &str| {
-                    node.inputs
-                        .iter()
-                        .find(|(name, _)| name == jack)
-                        .is_some_and(|(_, id)| graph.iter_connections().any(|(input, _)| input == *id))
-                };
-                // The softest note only differs when velocity is patched in
-                let softest_peak = if patched("Velocity") {
-                    1.0 - number("Velocity Amount", 0.0)
-                } else {
-                    1.0
-                };
-
-                AdsrParams::new(
-                    number("Attack", defaults.attack),
-                    number("Decay", defaults.decay),
-                    number("Sustain", defaults.sustain),
-                    number("Release", defaults.release),
-                )
-                .with_curves(
-                    number("Attack Curve", defaults.attack_curve),
-                    number("Decay Curve", defaults.decay_curve),
-                    number("Release Curve", defaults.release_curve),
-                )
-                .with_softest_peak(softest_peak)
-                .with_cv(
-                    super::envelope_cv::patched_stages(graph, node_id),
-                    super::envelope_cv::readout(user_state, node_id),
-                )
-            } else {
-                AdsrParams::default()
-            };
-
-            // Display ADSR envelope visualization
-            let config = AdsrConfig::default()
-                .with_size(140.0 * zoom, 50.0 * zoom);
-
-            ui.horizontal(|ui| {
-                ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0); // Center the display
-                adsr_display(ui, &adsr_params, &config);
-            });
+            super::envelope_display::envelope_display(ui, node_id, graph, user_state, zoom);
         }
 
-        // Filter modules - frequency response display, computed from each
-        // filter's own transfer function so the curve matches the sound
-        let response_db: Option<fn(f32, f32, f32) -> f32> = match self.display {
-            NodeDisplay::FilterResponse => Some(SvfFilter::lowpass_response_db),
-            NodeDisplay::LadderResponse => Some(LadderFilter::lowpass_response_db),
+        // Filters: what each output passes, at the cutoff CV has taken it to
+        let filter = match self.display {
+            NodeDisplay::FilterResponse => Some(super::filter_display::Filter::Svf),
+            NodeDisplay::LadderResponse => Some(super::filter_display::Filter::Ladder),
             _ => None,
         };
-        if let Some(response_db) = response_db {
-            // Add separator with zoom-scaled margins
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(4.0 * zoom);
-
-            // Get cutoff and resonance parameters from node inputs
-            let (cutoff_hz, resonance) = if let Some(node) = graph.nodes.get(node_id) {
-                let mut cutoff = 1000.0f32;
-                let mut res = 0.5f32;
-
-                for (name, input_id) in &node.inputs {
-                    let input = graph.get_input(*input_id);
-                    match name.as_str() {
-                        "Cutoff" => {
-                            if let SynthValueType::Number { value, .. } = &input.value {
-                                cutoff = *value;
-                            }
-                        }
-                        "Resonance" => {
-                            if let SynthValueType::Number { value, .. } = &input.value {
-                                res = *value;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                (cutoff, res)
-            } else {
-                (1000.0, 0.5)
-            };
-
-            // Lowpass response (the primary output)
-            let (log_min, log_max) = (20.0f32.ln(), 20000.0f32.ln());
-            let response_points: Vec<FrequencyPoint> = (0..128)
-                .map(|i| {
-                    let freq = (log_min + (log_max - log_min) * i as f32 / 127.0).exp();
-                    let db = response_db(cutoff_hz, resonance, freq);
-                    FrequencyPoint::new(freq, db.clamp(-60.0, 24.0))
-                })
-                .collect();
-
-            // Display filter response with custom config optimized for seeing resonance
-            // Range: -24dB to +12dB shows both rolloff and resonance peak clearly
-            let config = SpectrumConfig::default()
-                .with_size(140.0 * zoom, 50.0 * zoom)
-                .with_db_range(-24.0, 12.0)
-                .with_style(SpectrumStyle::Line)
-                .with_glow(true);
-
-            ui.horizontal(|ui| {
-                ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0); // Center the display
-                spectrum_display(ui, &response_points, &config);
-            });
+        if let Some(filter) = filter {
+            super::filter_display::filter_display(ui, filter, node_id, graph, user_state, zoom);
         }
 
-        // Special rendering for LFO module - waveform preview with phase marker
+        // LFO: its cycle, with a dot where it is
         if self.display == NodeDisplay::LfoWave {
-            // Add separator with zoom-scaled margins
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(4.0 * zoom);
-
-            // Get waveform type and parameters from node inputs
-            let (waveform_idx, is_bipolar, rate_hz) = if let Some(node) = graph.nodes.get(node_id) {
-                let mut wave_idx = 0usize;
-                let mut bipolar = true;
-                let mut rate = 1.0f32;
-
-                for (name, input_id) in &node.inputs {
-                    let input = graph.get_input(*input_id);
-                    match name.as_str() {
-                        "Waveform" => {
-                            if let SynthValueType::Select { value, .. } = &input.value {
-                                wave_idx = *value;
-                            }
-                        }
-                        "Bipolar" => {
-                            if let SynthValueType::Toggle { value, .. } = &input.value {
-                                bipolar = *value;
-                            }
-                        }
-                        "Rate" => {
-                            if let SynthValueType::Number { value, .. } = &input.value {
-                                rate = *value;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                (wave_idx, bipolar, rate)
-            } else {
-                (0, true, 1.0)
-            };
-
-            // Convert waveform index to WaveformType
-            // LFO waveforms: 0=Sine, 1=Triangle, 2=Square, 3=Saw
-            let waveform_type = match waveform_idx {
-                0 => WaveformType::Sine,
-                1 => WaveformType::Triangle,
-                2 => WaveformType::Square,
-                3 => WaveformType::Saw,
-                _ => WaveformType::Sine,
-            };
-
-            // Generate single cycle of the waveform
-            let num_samples = 128;
-            let mut samples = generate_waveform_cycle(waveform_type, num_samples);
-
-            // Convert to unipolar if needed (0 to 1 range)
-            if !is_bipolar {
-                for sample in &mut samples {
-                    *sample = (*sample + 1.0) * 0.5;
-                }
-            }
-
-            // Display waveform with LFO preset config (orange for control signals)
-            let config = WaveformConfig::lfo()
-                .with_size(140.0 * zoom, 50.0 * zoom);
-
-            // Get real phase from audio engine feedback (output port 1)
-            // Falls back to UI-time estimation if not yet available
-            let phase = engine_node_id
-                .and_then(|eid| user_state.get_output_value(eid, 1)) // Phase is output index 1
-                .unwrap_or_else(|| {
-                    // Fallback: estimate phase from UI time when engine feedback not available
-                    let time = ui.ctx().input(|i| i.time);
-                    ((time * rate_hz as f64) % 1.0) as f32
-                });
-
-            ui.horizontal(|ui| {
-                ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0); // Center the display
-
-                // Draw the waveform first
-                let response = waveform_display(ui, &samples, &config);
-                let rect = response.rect;
-
-                if ui.is_rect_visible(rect) {
-                    let painter = ui.painter();
-
-                    // Calculate dot position on the waveform
-                    let marker_x = rect.left() + phase * rect.width();
-
-                    // Get sample value at current phase by interpolating
-                    let sample_index_f = phase * (samples.len() - 1) as f32;
-                    let sample_index = sample_index_f as usize;
-                    let frac = sample_index_f - sample_index as f32;
-                    let sample_value = if sample_index + 1 < samples.len() {
-                        samples[sample_index] * (1.0 - frac) + samples[sample_index + 1] * frac
-                    } else {
-                        samples[sample_index]
-                    };
-
-                    // Convert sample value to Y position
-                    // Waveform display uses center as 0, with amplitude scaled to half height
-                    let amplitude = rect.height() * 0.5 * 0.9; // 0.9 is the default scale in waveform_display
-                    let center_y = rect.center().y;
-                    let marker_y = center_y - sample_value * amplitude;
-
-                    // Draw glow effect (larger, semi-transparent circle)
-                    let glow_color = Color32::from_rgba_unmultiplied(255, 200, 100, 80);
-                    painter.circle_filled(
-                        egui::Pos2::new(marker_x, marker_y),
-                        8.0 * zoom,
-                        glow_color,
-                    );
-
-                    // Draw main dot (white with orange tint)
-                    let dot_color = Color32::from_rgb(255, 220, 180);
-                    painter.circle_filled(
-                        egui::Pos2::new(marker_x, marker_y),
-                        4.0 * zoom,
-                        dot_color,
-                    );
-
-                    // Draw bright center
-                    let center_color = Color32::WHITE;
-                    painter.circle_filled(
-                        egui::Pos2::new(marker_x, marker_y),
-                        2.0 * zoom,
-                        center_color,
-                    );
-                }
-
-                // Request continuous repaint for animation
-                ui.ctx().request_repaint();
-            });
+            super::lfo_display::lfo_display(ui, node_id, graph, user_state, zoom);
         }
 
         // Special rendering for Keyboard module - piano keyboard display

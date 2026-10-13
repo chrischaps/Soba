@@ -114,6 +114,8 @@ pub struct Lfo {
     /// The cycle length while synced, in beats, and the tempo, as of the
     /// last block: what the Rate knob shows.
     synced: Option<(f64, f32)>,
+    /// The rate it ran at, after Rate CV, at the end of the last block.
+    running_rate: f32,
     /// Previous sync state for edge detection.
     prev_sync: bool,
     /// Sample rate from last prepare() call.
@@ -138,6 +140,7 @@ impl Lfo {
             last_beat: 0.0,
             free_beats: 0.0,
             synced: None,
+            running_rate: 0.0,
             prev_sync: false,
             sample_rate,
             ports: vec![
@@ -211,12 +214,16 @@ impl Lfo {
     /// overshooting a tick that came late, not a restart.
     const RESTART_BEATS: f64 = 1.0 / 24.0;
 
-    /// Readout value index of the synced rate: see [`DspModule::readout`].
+    /// Readout value index of the synced rate, 0 while it runs free: see
+    /// [`DspModule::readout`].
     pub const READOUT_RATE: usize = 0;
+    /// Readout value index of the rate it's running at, synced or free,
+    /// after Rate CV, in Hz.
+    pub const READOUT_RUNNING_RATE: usize = 1;
 
     /// Generate a sample for the given phase (0.0-1.0) and waveform.
     /// Returns value in bipolar form (-1 to +1).
-    fn generate_sample(phase: f32, waveform: LfoWaveform) -> f32 {
+    pub(crate) fn generate_sample(phase: f32, waveform: LfoWaveform) -> f32 {
         match waveform {
             LfoWaveform::Sine => (phase * TAU).sin(),
             LfoWaveform::Triangle => {
@@ -241,7 +248,7 @@ impl Lfo {
 
     /// Convert bipolar signal (-1 to +1) to unipolar (0 to +1).
     #[inline]
-    fn to_unipolar(value: f32) -> f32 {
+    pub(crate) fn to_unipolar(value: f32) -> f32 {
         (value + 1.0) * 0.5
     }
 }
@@ -369,6 +376,7 @@ impl DspModule for Lfo {
             // CV of 0 = base rate, CV of +1 = double rate, CV of -1 = half rate
             let rate_multiplier = 2.0_f32.powf(rate_cv_value);
             let final_rate = (base_rate * rate_multiplier).clamp(0.001, 1000.0);
+            self.running_rate = final_rate;
 
             // Advance phase
             let phase_increment = final_rate / self.sample_rate;
@@ -394,11 +402,13 @@ impl DspModule for Lfo {
     }
 
     /// While synced, the rate the division comes to at the patch tempo, in
-    /// Hz, for the Rate knob to show.
+    /// Hz, for the Rate knob to show; and the rate it's running at, for the
+    /// display.
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
-        let (beats, tempo) = self.synced?;
         let mut readout = Readout::default();
-        readout.values[Self::READOUT_RATE] = (tempo as f64 / 60.0 / beats) as f32;
+        let synced = self.synced.map(|(beats, tempo)| (tempo as f64 / 60.0 / beats) as f32);
+        readout.values[Self::READOUT_RATE] = synced.unwrap_or(0.0);
+        readout.values[Self::READOUT_RUNNING_RATE] = synced.unwrap_or(self.running_rate);
         Some(readout)
     }
 }
@@ -944,12 +954,17 @@ mod tests {
         let ctx = ProcessContext::with_transport(48000.0, 256, TransportState::playing_at(90.0));
 
         lfo.process(&[], &mut out, &[1.0, 0.0, 0.0, 1.0, 0.0], &ctx);
-        assert!(lfo.readout(&[]).is_none(), "free-running needs no readout");
+        // Free-running, there's no synced rate, but the running rate is the knob's
+        let free = lfo.readout(&[]).unwrap().values;
+        assert_eq!(free[Lfo::READOUT_RATE], 0.0);
+        assert!((free[Lfo::READOUT_RUNNING_RATE] - 1.0).abs() < 1e-3, "{} Hz", free[Lfo::READOUT_RUNNING_RATE]);
 
         // A dotted quarter at 90 BPM: 1.5 beats of 2/3 s, one cycle a second
         lfo.process(&[], &mut out, &[1.0, 0.0, 0.0, 1.0, division("1/4D")], &ctx);
-        let rate = lfo.readout(&[]).unwrap().values[Lfo::READOUT_RATE];
+        let synced = lfo.readout(&[]).unwrap().values;
+        let rate = synced[Lfo::READOUT_RATE];
         assert!((rate - 1.0).abs() < 1e-6, "{rate} Hz");
+        assert_eq!(synced[Lfo::READOUT_RUNNING_RATE], rate);
     }
 
     #[test]

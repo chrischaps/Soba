@@ -4,7 +4,7 @@
 //! bandpass and notch outputs from a single algorithm.
 
 use crate::dsp::{
-    module_trait::{DspModule, ModuleCategory, ModuleInfo},
+    module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     context::ProcessContext,
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -81,6 +81,8 @@ pub struct SvfFilter {
     drive_smooth: SmoothedValue,
     /// Smoothed Cutoff CV depth, in octaves per unit of CV.
     cv_depth_smooth: SmoothedValue,
+    /// The cutoff and resonance it ran at, after CV, at the last sample.
+    running: (f32, f32),
 }
 
 impl SvfFilter {
@@ -137,6 +139,7 @@ impl SvfFilter {
             resonance_smooth: SmoothedValue::with_default_smoothing(0.5, sample_rate),
             drive_smooth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             cv_depth_smooth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
+            running: (1000.0, 0.5),
         }
     }
 
@@ -173,11 +176,39 @@ impl SvfFilter {
     /// from the analog prototype the filter is modelled on. Used to draw the
     /// response curve on the node, so the picture matches the sound.
     pub fn lowpass_response_db(cutoff_hz: f32, resonance: f32, freq: f32) -> f32 {
+        Self::response_db(cutoff_hz, resonance, freq, |_| 1.0)
+    }
+
+    /// Small-signal highpass gain in dB, as [`Self::lowpass_response_db`].
+    pub fn highpass_response_db(cutoff_hz: f32, resonance: f32, freq: f32) -> f32 {
+        Self::response_db(cutoff_hz, resonance, freq, |w| w * w)
+    }
+
+    /// Small-signal bandpass gain in dB, as [`Self::lowpass_response_db`].
+    /// Its peak, at the cutoff, is 1/k: -6 dB with no resonance.
+    pub fn bandpass_response_db(cutoff_hz: f32, resonance: f32, freq: f32) -> f32 {
+        Self::response_db(cutoff_hz, resonance, freq, |w| w)
+    }
+
+    /// Small-signal notch gain in dB, as [`Self::lowpass_response_db`].
+    pub fn notch_response_db(cutoff_hz: f32, resonance: f32, freq: f32) -> f32 {
+        Self::response_db(cutoff_hz, resonance, freq, |w| (1.0 - w * w).abs())
+    }
+
+    /// The gain of an output whose numerator has magnitude `numerator(w)`
+    /// at `w` (the frequency over the cutoff), over the denominator all
+    /// four share, s^2 + ks + 1.
+    fn response_db(cutoff_hz: f32, resonance: f32, freq: f32, numerator: impl Fn(f32) -> f32) -> f32 {
         let w = freq / cutoff_hz.max(1.0);
         let k = Self::small_signal_damping(resonance);
         let denom = (1.0 - w * w).powi(2) + (k * w).powi(2);
-        -10.0 * denom.max(1e-12).log10()
+        20.0 * numerator(w).max(1e-6).log10() - 10.0 * denom.max(1e-12).log10()
     }
+
+    /// Readout indices: the cutoff (Hz) and resonance it's running at,
+    /// after CV, as of the end of the last block.
+    pub const READOUT_CUTOFF: usize = 0;
+    pub const READOUT_RESONANCE: usize = 1;
 
     /// The cutoff the filter is currently running at, in Hz, before CV.
     #[cfg(test)]
@@ -275,6 +306,7 @@ impl DspModule for SvfFilter {
                 .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
                 .unwrap_or(0.0);
             let resonance = (base_resonance + res_mod * 0.5).clamp(0.0, 1.0);
+            self.running = (cutoff, resonance);
 
             let g = prewarp(cutoff, self.sample_rate);
             let s1 = self.band_int.state();
@@ -317,6 +349,14 @@ impl DspModule for SvfFilter {
         self.resonance_smooth.reset(self.resonance_smooth.target());
         self.drive_smooth.reset(self.drive_smooth.target());
         self.cv_depth_smooth.reset(self.cv_depth_smooth.target());
+    }
+
+    /// The cutoff and resonance after CV, for the display.
+    fn readout(&self, _params: &[f32]) -> Option<Readout> {
+        let mut readout = Readout::default();
+        readout.values[Self::READOUT_CUTOFF] = self.running.0;
+        readout.values[Self::READOUT_RESONANCE] = self.running.1;
+        Some(readout)
     }
 }
 
@@ -833,6 +873,42 @@ mod tests {
             let measured = amp_to_db(gain(0, fc, res, f, 0.0));
             assert!((drawn - measured).abs() < 0.75, "fc {} res {} at {} Hz: drawn {:.2} dB, measured {:.2} dB", fc, res, f, drawn, measured);
         }
+    }
+
+    #[test]
+    fn test_every_outputs_curve_matches_the_filter() {
+        // HP, BP and Notch, drawn as the filter plays them. The notch's
+        // floor, right at the cutoff, is left out: only its walls are checked
+        let curves: [(usize, fn(f32, f32, f32) -> f32); 3] = [
+            (1, SvfFilter::highpass_response_db),
+            (2, SvfFilter::bandpass_response_db),
+            (3, SvfFilter::notch_response_db),
+        ];
+        for (port, curve) in curves {
+            for &(fc, res, f) in &[(1000.0, 0.0, 1000.0), (1000.0, 0.5, 1000.0), (500.0, 0.7, 2000.0), (2000.0, 0.3, 700.0), (1000.0, 0.3, 300.0)] {
+                if port == 3 && (f / fc - 1.0f32).abs() < 0.2 {
+                    continue;
+                }
+                let drawn = curve(fc, res, f);
+                let measured = amp_to_db(gain(port, fc, res, f, 0.0));
+                assert!((drawn - measured).abs() < 0.75, "port {port}, fc {fc} res {res} at {f} Hz: drawn {drawn:.2} dB, measured {measured:.2} dB");
+            }
+        }
+    }
+
+    #[test]
+    fn test_readout_reports_the_cutoff_after_cv() {
+        let n = 512;
+        let mut filter = settled_filter(44100.0, n, [500.0, 0.2, 1.0]);
+        let input = SignalBuffer::audio(n);
+        let mut cv = SignalBuffer::control(n);
+        cv.fill(1.0);
+        let res_cv = SignalBuffer::control(n);
+        let mut outs = outputs(n);
+        filter.process(&[&input, &cv, &res_cv], &mut outs, &[500.0, 0.2, 1.0, 1.0], &ProcessContext::new(44100.0, n));
+        let values = filter.readout(&[]).unwrap().values;
+        assert!((values[SvfFilter::READOUT_CUTOFF] - 1000.0).abs() < 1.0, "{} Hz", values[SvfFilter::READOUT_CUTOFF]);
+        assert!((values[SvfFilter::READOUT_RESONANCE] - 0.2).abs() < 1e-4);
     }
 
     #[test]

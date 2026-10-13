@@ -1377,7 +1377,7 @@
       "module_id": "source.noise",
       "position": [
         1300.0,
-        2344.0
+        2368.0
       ],
       "parameters": [
         {
@@ -1422,7 +1422,7 @@
       "module_id": "filter.svf",
       "position": [
         1530.0,
-        2344.0
+        2368.0
       ],
       "parameters": [
         {

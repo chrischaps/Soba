@@ -9,6 +9,8 @@ The SVF (state variable filter) is the all-purpose filter: one input, four outpu
 
 It is a 12 dB/octave filter with an analog-style resonance. Turn the resonance up and the peak grows and saturates rather than getting louder without limit; turn it all the way and the filter sings on its own as a clean sine at the cutoff. Cutoff moves in octaves, so a sweep sounds even from bass to treble, and it stays stable right up to 20 kHz.
 
+The display draws each output's response, the patched ones lit and the rest faint (with nothing patched, LowPass is lit). With CV in **Cutoff** or **Resonance**, the curves follow where the CV has taken the filter, a faint copy stays where the knobs put it, and the cutoff's tick on the floor turns orange: an envelope into Cutoff opens and closes the curve with each note. When the resonance is high enough to ring on its own, the peak glows and the display says *sings*.
+
 For a thicker, steeper lowpass, see the [Ladder Filter](./ladder-filter.md).
 
 ## Inputs
