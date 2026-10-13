@@ -66,6 +66,10 @@ Short **Attack** times catch the front of a drum hit. Longer ones, 20–50 ms, s
 
 **Gate** opens when Follow rises above the **Threshold**, and closes again only once Follow falls 6 dB below it. That gap stops the gate chattering open and shut when the level hovers right at the threshold. Because the gate follows Follow, a longer **Release** also holds the gate open longer.
 
+## Recording yourself
+
+Right-click the module and choose **Record into a new Sampler**. A [Sampler](./sampler.md) appears beside it, patched from **L** and **R**, listening at −40 dB with **Rec** already pressed. The take starts on your first word. Press the Sampler's **Rec** to stop it, and play the take from a key or a gate.
+
 ## Latency and devices
 
 Live input passes through two devices, each with its own clock and buffer: the input and the output. To keep the sound smooth, Soba holds a little audio between them, about one buffer of each. While an input is open, the status bar shows **In** and the round trip: how long a sound takes from the input jack to the speakers, often around 60 ms on Windows. Hover it for the parts that add up to it, then the device and any dropouts so far. It turns amber for a few seconds after a dropout, or after a glitch the device itself reports (a lone one when the input first opens is common, and harmless).

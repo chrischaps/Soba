@@ -121,6 +121,7 @@ Right-click a module's header or body (anywhere but a knob) to open its menu. **
 | **Bypass** / **Switch on** | `Ctrl + B` | Takes a filter or effect out of the signal path, or puts it back |
 | **Reset to defaults** | | Returns every knob to its default |
 | **Group** | `Ctrl + G` | Collapses the module, or the selection, into a [group](#groups) |
+| **Record into a new Sampler** / **Resample into a new Sampler** | | On a module with audio outputs: a [Sampler](../modules/sources/sampler.md#recording-into-it) beside it, patched from it and recording from the next sound. An Audio Input records; the rest resample. Right-clicking an audio output's name does the same for that output |
 | **Delete** | `Delete` | Removes the module and its cables |
 
 If the module is part of a selection, the item applies to the whole selection.

@@ -106,10 +106,23 @@ pub fn port_menu(
     port: &str,
     user_state: &mut SynthGraphState,
 ) -> Option<SynthResponse> {
-    let actions = user_state.jack_actions(node_id, side, port).to_vec();
-    if actions.is_empty() {
+    if user_state.jack_actions(node_id, side, port).is_empty() {
         return None;
     }
+    port_menu_with(response, node_id, side, port, user_state, None)
+}
+
+/// A port's right-click menu: what it can do with groups' jacks, if
+/// anything, and then whatever `more` adds below them.
+pub fn port_menu_with(
+    response: &egui::Response,
+    node_id: NodeId,
+    side: Side,
+    port: &str,
+    user_state: &mut SynthGraphState,
+    more: Option<&dyn Fn(&mut egui::Ui) -> Option<SynthResponse>>,
+) -> Option<SynthResponse> {
+    let actions = user_state.jack_actions(node_id, side, port).to_vec();
     // Each time the menu opens, its name field starts from the jack's name
     if response.secondary_clicked() {
         reset_name_field(&response.ctx, jack_name_id(node_id, side, port));
@@ -117,7 +130,16 @@ pub fn port_menu(
     let mut chosen = None;
     let menu = response.context_menu(|ui| {
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-        chosen = jack_items(ui, &actions, node_id, side, port);
+        if !actions.is_empty() {
+            chosen = jack_items(ui, &actions, node_id, side, port);
+        }
+        if let Some(more) = more {
+            if !actions.is_empty() {
+                ui.separator();
+            }
+            let extra = more(ui);
+            chosen = chosen.take().or(extra);
+        }
     });
     if menu.is_some() {
         user_state.widget_context_menu_open = true;

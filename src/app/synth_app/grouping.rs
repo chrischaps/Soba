@@ -118,10 +118,18 @@ impl SynthApp {
 
     /// Notes how big each node on show was drawn, unzoomed, for framing
     /// levels and drawing groups' miniatures true to shape.
+    ///
+    /// A node's rect is sensed before it's drawn, at the size it was last
+    /// frame. While the zoom moves that size is at the last frame's zoom,
+    /// so only nodes never measured are measured then: measuring the rest
+    /// would swell them as the view zooms out, and a glide framing them
+    /// would chase them further out.
     pub(super) fn remember_node_sizes(&mut self, ctx: &egui::Context) {
         let zoom = self.graph_state.pan_zoom.zoom;
+        let steady = zoom == self.sized_at_zoom;
+        self.sized_at_zoom = zoom;
         for &node in &self.graph_state.node_order {
-            if self.user_state.hidden.contains(&node) {
+            if self.user_state.hidden.contains(&node) || (!steady && self.node_sizes.contains_key(&node)) {
                 continue;
             }
             if let Some(rect) = annotation_ui::module_rect(ctx, node) {

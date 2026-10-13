@@ -52,6 +52,7 @@ mod file_hover;
 mod framing;
 mod grouping;
 mod loops;
+mod record_into;
 mod samples;
 mod slicing;
 mod takes;
@@ -261,6 +262,10 @@ pub struct SynthApp {
     loop_files: std::collections::HashSet<String>,
     /// When each Sampler was last handed room to record into.
     rooms_given: HashMap<crate::engine::NodeId, web_time::Instant>,
+    /// New Samplers whose Rec is to be pressed, once they can record.
+    arming: Vec<record_into::Arming>,
+    /// A new Sampler and the node it records, to bring into view once it's measured.
+    revealing: Option<(egui_node_graph2::NodeId, egui_node_graph2::NodeId)>,
 
     // --- Updates ---
     /// The check for new versions, and installing them.
@@ -299,6 +304,8 @@ pub struct SynthApp {
     library_modules: Vec<SavedModule>,
     /// How big each node was last drawn, unzoomed.
     node_sizes: HashMap<egui_node_graph2::NodeId, egui::Vec2>,
+    /// The zoom node sizes were last noted at.
+    sized_at_zoom: f32,
     /// The level was framed before some of its nodes had been drawn.
     reframe_level: bool,
 
@@ -352,6 +359,7 @@ enum NodeMenuAction {
     Jack(egui_node_graph2::NodeId, crate::graph::groups::Side, String, crate::graph::groups::JackEdit),
     SaveToLibrary(egui_node_graph2::NodeId),
     OpenSample(egui_node_graph2::NodeId),
+    RecordInto(egui_node_graph2::NodeId, crate::graph::resample::Source),
 }
 
 impl SynthApp {
@@ -470,6 +478,8 @@ impl SynthApp {
             kept_loops: HashMap::new(),
             loop_files: std::collections::HashSet::new(),
             rooms_given: HashMap::new(),
+            arming: Vec::new(),
+            revealing: None,
             #[cfg(not(target_arch = "wasm32"))]
             updater: Updater::new(),
             resuming: false,
@@ -485,6 +495,7 @@ impl SynthApp {
             my_modules: Vec::new(),
             library_modules: library::library(),
             node_sizes: HashMap::new(),
+            sized_at_zoom: 0.0,
             reframe_level: false,
             embedded: false,
             fit_pending: 0,
@@ -1818,6 +1829,7 @@ impl SynthApp {
                 self.history.follow_zoom(zoom_before, pan_before, &self.graph_state.pan_zoom);
                 self.follow_touch_pan(ctx);
                 self.remember_node_sizes(ctx);
+                self.reveal_new_sampler(ctx);
                 self.user_state.view_origin = self.history.view_origin();
 
                 // A selection box takes in the frames and notes wholly inside it
@@ -2007,6 +2019,9 @@ impl SynthApp {
                         }
                         NodeResponse::User(crate::graph::SynthResponse::OpenSample(node_id)) => {
                             node_menu_actions.push(NodeMenuAction::OpenSample(node_id));
+                        }
+                        NodeResponse::User(crate::graph::SynthResponse::RecordInto { node_id, source }) => {
+                            node_menu_actions.push(NodeMenuAction::RecordInto(node_id, source));
                         }
                         _ => {
                             // Other responses not yet handled
@@ -2544,6 +2559,7 @@ impl SynthApp {
             NodeMenuAction::Jack(node_id, side, port, edit) => self.edit_jack(node_id, side, &port, edit),
             NodeMenuAction::SaveToLibrary(node_id) => self.save_to_library(node_id),
             NodeMenuAction::OpenSample(node_id) => self.open_sample_dialog(node_id),
+            NodeMenuAction::RecordInto(node_id, source) => self.record_into_new_sampler(node_id, &source),
         }
     }
 
@@ -4068,7 +4084,7 @@ impl eframe::App for SynthApp {
         // Request continuous repaints when playing (for LED indicators and other visualizations)
         // Also repaint continuously when there are keyboard or MIDI Note modules, so
         // their pianos follow the keys
-        if self.is_playing || self.has_keyboard_modules() || self.has_midi_note_modules() {
+        if self.is_playing || self.has_keyboard_modules() || self.has_midi_note_modules() || !self.arming.is_empty() {
             ctx.request_repaint();
         }
 

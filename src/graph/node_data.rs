@@ -1174,6 +1174,7 @@ impl SynthNodeData {
         &self,
         ui: &mut egui::Ui,
         node_id: egui_node_graph2::NodeId,
+        graph: &super::SynthGraph,
         responses: &mut Vec<NodeResponse<SynthResponse, Self>>,
     ) {
         ui.set_min_width(170.0);
@@ -1191,8 +1192,14 @@ impl SynthNodeData {
         }
         item(ui, "Reset to defaults", "", SynthResponse::ResetNode(node_id));
         item(ui, "Group", "Ctrl+G", SynthResponse::GroupNode(node_id));
+        let mut recorded = None;
+        if !super::resample::sources(graph, node_id).is_empty() {
+            ui.separator();
+            recorded = super::resample::module_items(ui, graph, node_id);
+        }
         ui.separator();
         item(ui, "Delete", "Del", SynthResponse::DeleteNode(node_id));
+        responses.extend(recorded.map(NodeResponse::User));
     }
 }
 
@@ -1244,32 +1251,40 @@ pub(super) fn defer_output_label(
 }
 
 /// An output's right-click menu, over its label at `rect`: shown on the
-/// group around it, or not, or the jack it is taken away.
+/// group around it, or not, or the jack it is taken away; and an audio
+/// output resampled into a new Sampler.
 fn output_menu(
     ui: &mut egui::Ui,
     rect: egui::Rect,
     node_id: egui_node_graph2::NodeId,
+    graph: &super::SynthGraph,
     param_name: &str,
     user_state: &mut super::SynthGraphState,
 ) -> Vec<NodeResponse<SynthResponse, SynthNodeData>> {
-    if user_state.jack_actions(node_id, Side::Output, param_name).is_empty() {
+    let source = super::resample::source_of(graph, node_id, param_name);
+    if user_state.jack_actions(node_id, Side::Output, param_name).is_empty() && source.is_none() {
         return Vec::new();
     }
     let response = ui.interact(rect, egui::Id::new((node_id, param_name, "output menu")), egui::Sense::click());
-    super::group_face::port_menu(&response, node_id, Side::Output, param_name, user_state)
+    let more = |ui: &mut egui::Ui| source.as_ref().and_then(|source| super::resample::port_item(ui, graph, node_id, source));
+    let more: Option<&dyn Fn(&mut egui::Ui) -> Option<SynthResponse>> = if source.is_some() { Some(&more) } else { None };
+    super::group_face::port_menu_with(&response, node_id, Side::Output, param_name, user_state, more)
         .map(NodeResponse::User)
         .into_iter()
         .collect()
 }
 
 /// Slides each deferred output label flush with the node's right edge,
-/// beside its port, and gives it its hover hint there
+/// beside its port, and gives it its hover hint and right-click menu there
 fn place_output_labels(
     ui: &mut egui::Ui,
     painter: &egui::Painter,
     node_id: egui_node_graph2::NodeId,
     module_id: &str,
-) {
+    graph: &super::SynthGraph,
+    user_state: &mut super::SynthGraphState,
+) -> Vec<NodeResponse<SynthResponse, SynthNodeData>> {
+    let mut responses = Vec::new();
     let labels = ui
         .ctx()
         .data_mut(|data| data.remove_temp::<Vec<DeferredOutputLabel>>(deferred_labels_id(node_id)))
@@ -1287,10 +1302,13 @@ fn place_output_labels(
             .collect::<Vec<_>>();
         painter.set(label.slot, egui::Shape::Vec(shapes));
 
+        let rect = label.rect.translate(offset);
+        responses.extend(output_menu(ui, rect, node_id, graph, &label.name, user_state));
         let id = ui.id().with((node_id, "output_label", &label.name));
-        let response = ui.interact(label.rect.translate(offset), id, egui::Sense::hover());
+        let response = ui.interact(rect, id, egui::Sense::hover());
         hints::attach(response, Hint::output(module_id, &label.name));
     }
+    responses
 }
 
 impl NodeDataTrait for SynthNodeData {
@@ -1321,7 +1339,7 @@ impl NodeDataTrait for SynthNodeData {
             if window.secondary_clicked() {
                 responses.push(NodeResponse::User(SynthResponse::NodeSelected(node_id)));
             }
-            let menu = window.context_menu(|ui| self.node_menu(ui, node_id, &mut responses));
+            let menu = window.context_menu(|ui| self.node_menu(ui, node_id, graph, &mut responses));
             if menu.is_some() {
                 user_state.widget_context_menu_open = true;
             }
@@ -1395,8 +1413,8 @@ impl NodeDataTrait for SynthNodeData {
         // Output labels keep the full opacity they had before the fade below
         let label_painter = ui.painter().clone();
         if !self.is_module() {
-            let responses = super::group_face::body(self, ui, node_id, graph, user_state, zoom);
-            place_output_labels(ui, &label_painter, node_id, self.module_id);
+            let mut responses = super::group_face::body(self, ui, node_id, graph, user_state, zoom);
+            responses.extend(place_output_labels(ui, &label_painter, node_id, self.module_id, graph, user_state));
             return responses;
         }
         let mut responses = Vec::new();
@@ -2101,7 +2119,7 @@ impl NodeDataTrait for SynthNodeData {
         }
 
         // Everything that sets the node's width has been laid out now
-        place_output_labels(ui, &label_painter, node_id, self.module_id);
+        responses.extend(place_output_labels(ui, &label_painter, node_id, self.module_id, graph, user_state));
 
         responses
     }
@@ -2148,7 +2166,7 @@ impl NodeDataTrait for SynthNodeData {
             let (_, rect) = ui.allocate_space(text_size);
             let shapes = vec![egui::Shape::galley(rect.min, galley, text_color)];
             defer_output_label(ui, node_id, param_name, rect, shapes);
-            return output_menu(ui, rect, node_id, param_name, user_state);
+            return Vec::new();
         };
 
         // The count sits in a pill of the cable's color, between the label
@@ -2173,7 +2191,7 @@ impl NodeDataTrait for SynthNodeData {
             egui::Shape::galley(badge.min + pad, badge_galley, badge_text),
         ];
         defer_output_label(ui, node_id, param_name, rect, shapes);
-        output_menu(ui, rect, node_id, param_name, user_state)
+        Vec::new()
     }
 
     fn titlebar_color(

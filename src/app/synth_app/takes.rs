@@ -33,12 +33,14 @@ use super::SynthApp;
 const ROOM_PATIENCE: Duration = Duration::from_secs(1);
 
 impl SynthApp {
-    /// Keeps the takes Samplers have just recorded, and hands room to
-    /// those that can record and have none. Call once a frame, before
+    /// Keeps the takes Samplers have just recorded, hands room to those
+    /// that can record and have none, and presses Rec on those made to
+    /// record from a menu (see `record_into`). Call once a frame, before
     /// [`SynthApp::sync_samples`].
     pub(super) fn tend_takes(&mut self) {
         self.keep_takes();
         self.give_rooms();
+        self.tend_arming();
     }
 
     /// Writes each take just recorded, points its Sampler at it, and

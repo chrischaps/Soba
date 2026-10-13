@@ -22,7 +22,7 @@ use super::{SynthGraphState, SynthResponse};
 
 /// How long a press from the face holds Rec down, at least: long enough
 /// for the audio thread to see it.
-const MIN_PRESS_SECONDS: f64 = 0.06;
+pub const MIN_PRESS_SECONDS: f64 = 0.06;
 
 /// The face's Rec button parameter.
 pub const REC_BUTTON: &str = "Rec Button";
