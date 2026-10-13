@@ -38,7 +38,8 @@ A patch that plays itself. A slow pentatonic melody repeats every twelve seconds
 | [LFO](../modules/modulation/lfo.md) 2 | **Rate** 0.03 Hz, **Wave** Sine, **Bipolar** on |
 | [Stereo Delay](../modules/effects/delay.md) | **Time** 600 ms, **FB** 50%, **Mix** 40%, **HiCut** 4 kHz, **LoCut** 200 Hz, **P-P** on |
 | [Reverb](../modules/effects/reverb.md) | **Size** 90%, **Decay** 8 s, **PreD** 100 ms, **Mix** 60% |
-| [Audio Output](../modules/output/audio-output.md) | **Vol** 100% |
+| [Mixer](../modules/utilities/mixer.md) | **Pan 1** L 100, **Pan 2** R 100, **Master** +6 dB |
+| [Audio Output](../modules/output/audio-output.md) | Defaults |
 
 ## How it's built
 
@@ -102,11 +103,15 @@ LFO 2 takes over half a minute per cycle. On Oscillator 1's **Exp FM** input, wi
 [VCA Out] ──> [Stereo Delay In L]
 [Stereo Delay Out L] ──> [Reverb In L]
 [Stereo Delay Out R] ──> [Reverb In R]
-[Reverb Out L] ──> [Audio Output Left]
-[Reverb Out R] ──> [Audio Output Right]
+[Reverb Out L] ──> [Mixer Ch 1]        (Pan L 100)
+[Reverb Out R] ──> [Mixer Ch 2]        (Pan R 100)
+[Mixer Out L] ──> [Audio Output Left]
+[Mixer Out R] ──> [Audio Output Right]
 ```
 
 The envelope's 300 ms attack takes the edge off each note and its 2-second release lets it ring into the next one. The Stereo Delay repeats every 600 ms with **Ping-Pong** on, so echoes bounce between the speakers. Its **HiCut** and **LoCut** darken and thin each repeat, so the echoes recede instead of building up. The Reverb's large room and 8-second tail turn it all into a wash.
+
+A wash that wide is quiet. Most of each note goes into the reverb's tail, and a soft triangle through a filter doesn't start out loud. Every stage up to the Reverb is already at full, and turning up the filter's **Drive** would add grit, not just level. So the Mixer is the patch's gain stage. The Reverb's two sides come in on two channels panned hard left and right, which keeps the stereo picture as it was, and **Master** at +6 dB brings the whole wash up to sit with the other examples. Its two spare channels are room for another voice.
 
 ## Variations
 

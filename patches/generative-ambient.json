@@ -581,14 +581,14 @@
       "id": 10,
       "module_id": "output.audio",
       "position": [
-        2391.0,
+        2810.0,
         114.0
       ],
       "parameters": [
         {
           "name": "Volume",
           "type": "Number",
-          "value": 1.0
+          "value": 0.8
         },
         {
           "name": "Limiter",
@@ -801,6 +801,146 @@
           "value": 1.0
         }
       ]
+    },
+    {
+      "id": 18,
+      "module_id": "util.mixer",
+      "position": [
+        2391.0,
+        74.0
+      ],
+      "parameters": [
+        {
+          "name": "Level 1",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Level 2",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Level 3",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Level 4",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Pan 1",
+          "type": "Number",
+          "value": -1.0
+        },
+        {
+          "name": "Pan 2",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Pan 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Pan 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Width 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 1",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 2",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 3",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Send 4",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Mute 1",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Mute 2",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Mute 3",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Mute 4",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 1",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 2",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 3",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Solo 4",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Return",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Master",
+          "type": "Number",
+          "value": 6.0
+        }
+      ]
     }
   ],
   "connections": [
@@ -871,18 +1011,6 @@
       "to_port": "In R"
     },
     {
-      "from_node": 9,
-      "from_port": "Out L",
-      "to_node": 10,
-      "to_port": "Left"
-    },
-    {
-      "from_node": 9,
-      "from_port": "Out R",
-      "to_node": 10,
-      "to_port": "Right"
-    },
-    {
       "from_node": 11,
       "from_port": "Out",
       "to_node": 12,
@@ -929,6 +1057,30 @@
       "from_port": "Trig",
       "to_node": 12,
       "to_port": "Trig"
+    },
+    {
+      "from_node": 9,
+      "from_port": "Out L",
+      "to_node": 18,
+      "to_port": "Ch 1"
+    },
+    {
+      "from_node": 9,
+      "from_port": "Out R",
+      "to_node": 18,
+      "to_port": "Ch 2"
+    },
+    {
+      "from_node": 18,
+      "from_port": "Out L",
+      "to_node": 10,
+      "to_port": "Left"
+    },
+    {
+      "from_node": 18,
+      "from_port": "Out R",
+      "to_node": 10,
+      "to_port": "Right"
     }
   ],
   "midi_mappings": [],

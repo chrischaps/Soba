@@ -59,10 +59,6 @@ const QUIETER: &[(&str, &str)] = &[
     ),
     ("drum-machine.json", "raw drums: brought up until their peaks reach the ceiling, and no further"),
     ("roll-call.json", "raw drums: brought up until their peaks reach the ceiling, and no further"),
-    (
-        "generative-ambient.json",
-        "every gain stage from its oscillators to the Output is already at full; it needs a gain stage it doesn't have",
-    ),
     ("live-looper.json", "it plays what you play into it, as loud as you play it"),
 ];
 
