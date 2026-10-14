@@ -6,6 +6,8 @@ and films it with `soba --capture`.
     python tools/showcase/shots.py <shot> --script-only   just write the script
     python tools/showcase/shots.py <shot> --preview       film frame 0 only, to aim from
     python tools/showcase/shots.py <shot> --framings      a still of every camera move, on one sheet
+    python tools/showcase/shots.py <shot> --dry           a touring shot's moves packed tight: a still of
+                                                          each, and where each dive lands (see tour.py)
 
 Each shot is a function that builds a cue script (see src/app/capture.rs for
 the cue language). Output goes to target/showcase/<shot>/: video.mkv
@@ -29,6 +31,8 @@ top-left, below the toolbar.
 import subprocess
 import sys
 from pathlib import Path
+
+from tour import Tour
 
 ROOT = Path(__file__).resolve().parents[2]
 EXE = ROOT / "target" / "capture" / "release" / "soba.exe"
@@ -55,6 +59,9 @@ EDITOR = (0.0, 74.7, 1238.7, 670.8)
 class Script:
     def __init__(self):
         self.cues = []
+        # A touring shot (tour.py) films its moves packed tight on a dry run
+        self.dry = False
+        self.tour = None
         # The patch point at the editor's centre, and the zoom: as opened
         x0, y0, x1, y1 = EDITOR
         self.centre = ((x1 - x0) / 2, (y1 - y0) / 2)
@@ -423,6 +430,210 @@ def from_one_sine_harmony(s):
     s.at(0.1, "end")
 
 
+# Canopy is 116 BPM in 4/4, 124 bars of 2.069 s; bar n (from 1) starts at
+# bar(n). Its sections start at bars 1 Dawn, 9 Canopy, 17 Groove, 33 Groove
+# II, 49 Clearing, 57 Rise, 65 Peak, 81 Peak II, 97 Dusk, 113 Night and 121
+# Ring, with a one-bar Fill before each Groove and Peak after the first
+CANOPY_BAR = 240 / 116
+
+
+def bar(n):
+    return (n - 1) * CANOPY_BAR
+
+
+def canopy_tour(s, editor, bases):
+    """A Tour of Canopy, every group opened once before recording starts."""
+    tour = Tour(s, ROOT / "patches/canopy.json", editor=editor, bases=OUT / bases, dry=s.dry)
+    end = tour.previsit(-46.0)
+    assert end < -1.0, f"the previsit runs to {end:.1f} s: start it earlier"
+    return tour
+
+
+def inside(tour, t, until, focus=None, zoom=1.3, note="", subject=None, widest=1.0):
+    """In a group: settle on the whole level, then drift in on one module
+    (an id, or the first of a kind) until `until`."""
+    t = tour.look(t, tour.middle(), tour.fit_zoom(most=widest), 0.9, f"{note}: the whole group", subject)
+    if focus is not None:
+        key = tour.find(focus) if isinstance(focus, str) else focus
+        t = tour.look(t + 0.3, tour.centre_of(key), zoom, max(1.0, until - t - 0.3), f"{note}: in on {focus}", subject)
+    return t
+
+
+def inside_tall(tour, t, until, start, focus, zoom=1.5, note="", subject=None):
+    """In a group, in a portrait frame, where a whole level is a thin strip:
+    open on one module, then drift along to another."""
+    first = tour.find(start) if isinstance(start, str) else start
+    t = tour.look(t, tour.centre_of(first), zoom * 0.85, 0.9, f"{note}: {start}", subject)
+    key = tour.find(focus) if isinstance(focus, str) else focus
+    return tour.look(t + 0.3, tour.centre_of(key), zoom, max(1.0, until - t - 0.3), f"{note}: along to {focus}", subject)
+
+
+@shot("patches/canopy.json", ppp=1.25, fps=30, crf=12, preset="fast")
+def canopy(s):
+    """Canopy, the whole song (4:24): the camera goes where the music is,
+    into each group as it plays and back out, with the Dancer by the desk."""
+    tour = canopy_tour(s, (0.0, 74.72, 1536.0, 838.0), "canopy-bases.json")
+    face = 1.5
+    whole = (2095, 994)
+    score = (1388, 400)
+    s.at(0.0, "play")
+
+    # Dawn: the kalimba fades in under wind and birds
+    tour.look(-0.5, (2660, 1330), 0.62, 0.05, "Dawn: the loops and the forest", ["kalimba", "wind"])
+    tour.look(0.6, tour.centre_of("Kalimba"), face, 5.0, "the Kalimba", "kalimba")
+    tour.enter(6.2, "Kalimba")
+    inside(tour, 7.0, 14.0, "seq.step", 1.5, "Kalimba", "kalimba")
+    tour.leave(14.3)
+    tour.look(14.9, tour.centre_of("Bells"), face, 1.6, "the Bells", "kalimba")
+
+    # Canopy: bells, strings and a shaker
+    tour.enter(bar(9) + 0.6, "Bells")
+    inside(tour, bar(9) + 1.4, bar(9) + 4.6, None, note="Bells", subject="bells")
+    tour.enter(bar(9) + 5.0, "FM Bell")
+    inside(tour, bar(9) + 5.8, bar(9) + 10.5, "osc.sine", 1.4, "FM Bell", "bells")
+    tour.leave(bar(9) + 10.9)
+    tour.leave(bar(9) + 11.5)
+    tour.look(bar(9) + 12.1, (3240, 700), 0.6, 3.6, "the band and the desk, as the beat comes in", None)
+
+    # Groove: the beat, the bass and the Rhodes
+    tour.look(bar(17) + 4.0, tour.centre_of("Drums"), face, 2.0, "the Drums", "kit")
+    tour.enter(bar(17) + 6.4, "Drums")
+    inside(tour, bar(17) + 7.2, bar(17) + 14.5, "source.drum", 1.6, "Drums", "kit")
+    tour.leave(bar(17) + 14.8)
+    tour.look(bar(17) + 15.4, tour.centre_of("Bass"), face, 1.5, "the Bass", "bass")
+    tour.enter(bar(17) + 17.3, "Bass")
+    inside(tour, bar(17) + 18.1, bar(17) + 23.6, "filter.ladder", 1.5, "Bass", "bass")
+    tour.leave(bar(17) + 23.9)
+    tour.hop(bar(17) + 24.5, tour.centre_of("Rhodes"), face, 2.4, "the Rhodes", "ep")
+    tour.enter(bar(17) + 27.2, "Rhodes")
+    tour.look(bar(17) + 28.0, tour.middle(), tour.fit_zoom(), 0.8, "Rhodes: its sequencer", "ep")
+    # Through the Fill and into Groove II, inside the Electric Piano
+    tour.enter(bar(17) + 29.4, "Electric Piano")
+    inside(tour, bar(17) + 30.2, bar(33) + 0.2, "mod.adsr", 1.2, "Electric Piano", "ep")
+
+    # Groove II: the harp and the break join
+    tour.leave(bar(33) + 0.4)
+    tour.leave(bar(33) + 1.0)
+    tour.look(bar(33) + 1.6, tour.centre_of("Harp"), face, 1.4, "the Harp", "harp")
+    tour.enter(bar(33) + 3.3, "Harp")
+    tour.look(bar(33) + 4.1, tour.middle(), tour.fit_zoom(), 0.8, "Harp", "harp")
+    tour.enter(bar(33) + 5.6, "Mallet")
+    inside(tour, bar(33) + 6.4, bar(33) + 11.6, "filter.svf", 1.4, "Mallet", "harp")
+    tour.leave(bar(33) + 11.9)
+    tour.leave(bar(33) + 12.5)
+    tour.hop(bar(33) + 13.1, tour.centre_of("Break"), face, 2.4, "the Break", "break")
+    tour.enter(bar(33) + 15.8, "Break")
+    inside(tour, bar(33) + 16.6, bar(33) + 22.6, "source.chopper", 1.5, "Break", "break")
+    tour.leave(bar(33) + 22.9)
+    tour.look(bar(33) + 23.5, tour.centre_of("Vocal Chops"), face, 1.4, "the Vocal Chops", "chops")
+    tour.enter(bar(33) + 25.2, "Vocal Chops")
+    inside(tour, bar(33) + 26.0, bar(48) - 1.6, "source.sampler", 1.4, "Vocal Chops", "chops")
+    tour.leave(bar(48) - 1.3)
+    # The Fill: the score turns its page
+    tour.hop(bar(48) - 0.7, score, 0.8, 1.9, "the three Arrangers turn the page", None)
+
+    # Clearing: the drums drop out and the flute comes in
+    tour.hop(bar(49) + 0.2, tour.centre_of("Flute"), face, 2.6, "the Flute", "flute")
+    tour.enter(bar(49) + 3.2, "Flute")
+    inside(tour, bar(49) + 4.0, bar(57) - 2.6, "source.noise", 1.3, "Flute: its breath", "flute")
+    tour.leave(bar(57) - 2.3)
+
+    # Rise: the drums swell back in under the loops; the riser, once it
+    # roars; then out to the whole patch, landing on the Peak's downbeat
+    tour.look(bar(57) - 1.7, (2270, 1450), 0.75, 3.0, "the loops and the band, the drums coming back", ["kalimba", "kit"])
+    tour.look(bar(57) + 6.0, tour.centre_of("Riser"), 1.7, 1.8, "the Riser", "riser")
+    tour.enter(bar(57) + 7.9, "Riser")
+    inside(tour, bar(57) + 8.7, bar(57) + 11.6, "filter.svf", 1.6, "Riser", "riser")
+    tour.leave(bar(57) + 11.9)
+    tour.look(bar(57) + 12.5, whole, 0.35, bar(65) - bar(57) - 12.5, "the build pulls back to the whole patch, landing on the Peak", None)
+
+    # Peak: everything; the Dancer; the strings pumping; the desk
+    tour.look(bar(65) + 3.0, tour.centre_of(150), 1.75, 2.6, "the Dancer", None)
+    tour.hop(bar(65) + 9.4, tour.centre_of("Strings"), face, 2.8, "the Strings", "strings")
+    tour.enter(bar(65) + 12.6, "Strings")
+    tour.look(bar(65) + 13.4, tour.middle(), tour.fit_zoom(), 0.8, "Strings: the String Machine and two Pumps", "strings")
+    tour.enter(bar(65) + 15.2, "String Machine")
+    inside(tour, bar(65) + 16.0, bar(65) + 21.4, "fx.chorus", 1.3, "String Machine", "strings")
+    tour.leave(bar(65) + 21.7)
+    tour.leave(bar(65) + 22.3)
+    tour.hop(bar(65) + 22.9, (2808, 480), 0.85, 2.6, "the desk: four mixers, delay, reverb, tape", None)
+    tour.hop(bar(80) - 2.4, score, 0.8, 2.2, "the Arrangers turn the page", None)
+
+    # Peak II: the flute an octave up, the break, the chops
+    tour.hop(bar(81) - 0.2, tour.centre_of("Flute"), face, 2.4, "the Flute, an octave up", "flute")
+    tour.enter(bar(81) + 2.6, "Flute")
+    inside(tour, bar(81) + 3.4, bar(81) + 10.6, "osc.sine", 1.5, "Flute: the tone", "flute")
+    tour.leave(bar(81) + 10.9)
+    tour.hop(bar(81) + 11.5, tour.centre_of("Break"), face, 1.8, "the Break", "break")
+    tour.enter(bar(81) + 13.6, "Break")
+    inside(tour, bar(81) + 14.4, bar(81) + 19.6, "filter.ladder", 1.4, "Break", "break")
+    tour.leave(bar(81) + 19.9)
+    tour.look(bar(81) + 20.5, tour.centre_of("Vocal Chops"), face, 1.4, "the Vocal Chops", "chops")
+    tour.enter(bar(81) + 22.2, "Vocal Chops")
+    inside(tour, bar(81) + 23.0, bar(96) - 3.0, "seq.step", 1.3, "Vocal Chops: the hook", "chops")
+    tour.leave(bar(96) - 2.7)
+    tour.hop(bar(96) - 2.1, score, 0.8, 2.0, "the Arrangers turn to Dusk", None)
+
+    # Dusk: slowly, the bass fading, then the harmony
+    tour.hop(bar(97) + 0.4, tour.centre_of("Bass"), face, 2.8, "the Bass, fading", "bass")
+    tour.enter(bar(97) + 3.6, "Bass")
+    inside(tour, bar(97) + 4.4, bar(97) + 15.6, "seq.step", 1.4, "Bass", "bass")
+    tour.leave(bar(97) + 15.9)
+    tour.hop(bar(97) + 16.5, (850, 1500), 0.75, 3.6, "the harmony: one progression, voiced three ways", ["strings", "ep", "harp"])
+    tour.look(bar(97) + 20.4, (1300, 1500), 0.95, bar(113) - bar(97) - 23.4, "along to the Rhodes, Strings and Harp", ["strings", "ep", "harp"])
+
+    # Night: the band fades; the birds come back
+    tour.hop(bar(113) - 2.4, tour.centre_of("Birds"), face, 3.0, "the Birds", ["birds", "kalimba"])
+    tour.enter(bar(113) + 1.0, "Birds")
+    inside(tour, bar(113) + 1.8, bar(113) + 10.4, "mod.slope", 1.5, "Birds", ["birds", "kalimba"])
+    tour.leave(bar(113) + 10.7)
+    tour.hop(bar(113) + 11.3, tour.centre_of("Kalimba"), face, 4.4, "the Kalimba, as at Dawn", "kalimba")
+
+    # Ring: the loops stop and ring out; the camera pulls back to the whole
+    # patch, the Dancer coming to rest as the Clock stops
+    t = tour.look(bar(121) + 0.4, whole, 0.35, 11.0, "the whole patch rings out", None)
+    if not s.dry:
+        s.at(bar(125) - 0.02, "param util.clock Run 0")
+    s.at(tour.end(t + 4.0), "end")
+
+
+@shot("patches/canopy.json", ppp=1.5, fps=30, crf=12, preset="fast", size="1080x2124")
+def canopy_vertical(s):
+    """Canopy's minute from the Rise into Peak II (1:56-2:56), for a phone:
+    a portrait window, cropped to 1080x1920 below the toolbar (y 165)."""
+    tour = canopy_tour(s, (0.0, 109.64, 720.0, 1390.0), "canopy-vertical-bases.json")
+    s.at(0.0, "play")
+    t0 = bar(57)
+    # Until the minute starts: the loops and the band
+    tour.look(-0.5, (2330, 1330), 0.8, 0.05, "the loops and the band", None)
+    tour.look(t0, (2430, 1300), 1.0, 5.4, "the drums coming back", ["kalimba", "kit"])
+    tour.hop(t0 + 5.6, tour.centre_of("Riser"), 2.0, 2.2, "the Riser", "riser")
+    tour.enter(t0 + 8.0, "Riser")
+    inside_tall(tour, t0 + 8.8, t0 + 11.5, "source.noise", "filter.svf", 1.6, "Riser", "riser")
+    tour.leave(t0 + 11.8)
+    tour.hop(t0 + 12.4, tour.centre_of("Drums"), 1.5, bar(65) - 0.3 - t0 - 12.4, "the Drums, as the Peak lands", "kit")
+    # Into the Drums on the downbeat
+    tour.enter(bar(65) - 0.14, "Drums")
+    tour.look(bar(65) + 0.7, tour.centre_of(tour.find("seq.trigger")), 1.0, 1.0, "Drums: the pattern", "kit")
+    tour.look(bar(65) + 2.0, tour.centre_of(tour.find("source.drum", 3)), 1.0, 6.4, "Drums: along the kit", "kit")
+    tour.leave(bar(65) + 8.7)
+    tour.hop(bar(65) + 9.3, tour.centre_of(150), 1.85, 3.0, "the Dancer", None)
+    tour.hop(bar(65) + 17.2, tour.centre_of("Strings"), 2.0, 3.0, "the Strings", "strings")
+    tour.enter(bar(65) + 20.6, "Strings")
+    tour.look(bar(65) + 21.4, tour.centre_of("String Machine", dx=130), 1.25, 0.8, "Strings: the String Machine and a Pump", "strings")
+    tour.enter(bar(65) + 22.6, "String Machine")
+    inside_tall(tour, bar(65) + 23.4, bar(80) - 4.6, "osc.sine", "fx.chorus", 1.4, "String Machine", "strings")
+    tour.leave(bar(80) - 4.3)
+    tour.leave(bar(80) - 3.7)
+    tour.hop(bar(80) - 3.1, (792, 401), 1.15, 2.9, "the Faders turn the page", None)
+    tour.hop(bar(81) - 0.2, tour.centre_of("Flute"), 2.0, 2.6, "the Flute, an octave up", "flute")
+    tour.enter(bar(81) + 2.8, "Flute")
+    inside_tall(tour, bar(81) + 3.6, bar(81) + 7.6, "seq.step", "osc.sine", 1.5, "Flute", "flute")
+    tour.leave(bar(81) + 7.9)
+    t = tour.look(bar(81) + 8.5, (2700, 900), 0.4, 4.0, "out to the band and the desk", None)
+    s.at(tour.end(max(t, bar(81) + 11.0)), "end")
+
+
 def framings(cues):
     """Every camera move of a shot, landed one a second with a still of
     each: a contact sheet to check the aim before a long take. The patch
@@ -438,10 +649,10 @@ def framings(cues):
     return out, labels
 
 
-def contact_sheet(out, labels, columns=4, width=480):
+def contact_sheet(out, labels, columns=4, width=480, pattern="shot*.png"):
     """Tiles the framing stills into sheet.png, each captioned with its move."""
     from PIL import Image, ImageDraw
-    stills = sorted(out.glob("shot*.png"))
+    stills = sorted(out.glob(pattern))
     if not stills:
         return
     first = Image.open(stills[0])
@@ -457,9 +668,10 @@ def contact_sheet(out, labels, columns=4, width=480):
     print(out / "sheet.png")
 
 
-def run(name, script_only=False, preview=False, framing=False):
+def run(name, script_only=False, preview=False, framing=False, dry=False):
     fn, patch, ppp, fps, crf, preset, size = SHOTS[name]
     s = Script()
+    s.dry = dry
     fn(s)
     labels = []
     if preview:
@@ -470,16 +682,19 @@ def run(name, script_only=False, preview=False, framing=False):
         s.cues, labels = framings(s.cues)
         crf, preset = 30, "ultrafast"
         name += "-framings"
+    elif dry:
+        crf, preset = 30, "ultrafast"
+        name += "-dry"
     SCRIPTS.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
-    script = (OUT if preview or framing else SCRIPTS) / f"{name}.txt"
+    script = (OUT if preview or framing or dry else SCRIPTS) / f"{name}.txt"
     script.write_text(s.text())
     if script_only:
         print(script)
         return
     out = OUT / name
     out.mkdir(parents=True, exist_ok=True)
-    for old in out.glob("*.ppm"):
+    for old in [*out.glob("*.ppm"), *(out.glob("[ma]*[0-9].*") if dry else [])]:
         old.unlink()
     print(f"filming {name} ...", flush=True)
     subprocess.run([str(EXE), str(ROOT / patch), "--capture", str(script), "--out", str(out), "--ppp", str(ppp),
@@ -491,6 +706,9 @@ def run(name, script_only=False, preview=False, framing=False):
         ppm.unlink()
     if framing:
         contact_sheet(out, labels)
+    if dry and s.tour:
+        s.tour.learn(out)
+        contact_sheet(out, s.tour.labels, pattern="m*.png")
 
 
 if __name__ == "__main__":
@@ -501,4 +719,4 @@ if __name__ == "__main__":
         sys.exit(0)
     only = "--script-only" in args
     for name in [a for a in args if not a.startswith("--")]:
-        run(name, only, preview="--preview" in args, framing="--framings" in args)
+        run(name, only, preview="--preview" in args, framing="--framings" in args, dry="--dry" in args)

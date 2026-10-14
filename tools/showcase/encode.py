@@ -3,10 +3,18 @@ web clip with sound, plus a poster frame.
 
     python tools/showcase/encode.py <shot> <out.mp4> [--from S] [--to S]
         [--poster S] [--loop S] [--fps N] [--crf N] [--lufs L]
+        [--crop WxH+X+Y] [--fade-in S] [--fade-out S]
 
---loop S   crossfades the last S seconds under the first S (picture and
-           sound), so the clip loops without a seam; the result is S shorter.
---poster S writes <out>-poster.jpg from that time (in the output clip).
+--loop S     crossfades the last S seconds under the first S (picture and
+             sound), so the clip loops without a seam; the result is S shorter.
+--poster S   writes <out>-poster.jpg from that time (in the output clip).
+--crop       keeps a W x H window of the picture from (X, Y), in pixels: a
+             portrait capture loses its toolbar to make a 1080x1920 cut.
+--fade-in S, --fade-out S
+             fade the picture from and to black, and the sound with it.
+
+An <out.mov> is a master for a video site: the same picture, with the sound
+kept as 24-bit PCM rather than AAC.
 
 Audio is brought to a common loudness (two-pass EBU R128, linear, so the
 dynamics are untouched) so every clip on the page plays at the same level.
@@ -45,6 +53,9 @@ def main():
     ap.add_argument("--fps", type=int, default=60)
     ap.add_argument("--crf", type=int, default=22)
     ap.add_argument("--lufs", type=float, default=-18.0)
+    ap.add_argument("--crop")
+    ap.add_argument("--fade-in", type=float)
+    ap.add_argument("--fade-out", type=float)
     a = ap.parse_args()
 
     src = SHOWCASE / a.shot
@@ -84,12 +95,29 @@ def main():
             f"measured_I={m['input_i']}:measured_TP={m['input_tp']}:"
             f"measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}:offset={m['target_offset']}")
 
+    vf, af = [], [norm]
+    if a.crop:
+        w, h, x, y = re.fullmatch(r"(\d+)x(\d+)\+(\d+)\+(\d+)", a.crop).groups()
+        vf.append(f"crop={w}:{h}:{x}:{y}")
+    vf.append(f"fps={a.fps}")
+    if a.fade_in:
+        vf.append(f"fade=t=in:d={a.fade_in}")
+        af.append(f"afade=t=in:d={a.fade_in}:curve=qsin")
+    if a.fade_out:
+        length = (a.to - a.start) if a.to else float(subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", ain[0]],
+            capture_output=True, text=True, check=True).stdout) - a.start
+        vf.append(f"fade=t=out:st={length - a.fade_out:.3f}:d={a.fade_out}")
+        af.append(f"afade=t=out:st={length - a.fade_out:.3f}:d={a.fade_out}:curve=qsin")
+    vf.append("format=yuv420p")
+    af.append("aresample=48000")
+    sound = ["-c:a", "pcm_s24le"] if out.suffix == ".mov" else ["-c:a", "aac", "-b:a", "160k"]
     ffmpeg(*trim, "-i", vin[0], *trim, "-i", ain[0],
            "-map", "0:v", "-map", "1:a",
-           "-vf", f"fps={a.fps},format=yuv420p",
-           "-af", f"{norm},aresample=48000",
+           "-vf", ",".join(vf),
+           "-af", ",".join(af),
            "-c:v", "libx264", "-profile:v", "high", "-preset", "slow", "-crf", str(a.crf),
-           "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out))
+           *sound, "-movflags", "+faststart", str(out))
     if mid:
         mid.unlink()
 

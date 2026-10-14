@@ -9,7 +9,7 @@ The patch plays the whole song itself. Three [Arrangers](../modules/utilities/ar
 
 <iframe class="patch-embed" src="../play/?patch=canopy" title="Canopy, playable in the browser" loading="lazy"></iframe>
 
-*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The score's three Arrangers and the mixing desk run along the top. Below them, left to right: the harmony (three Chord Sequencers and the Rhodes, Strings and Harp they play), the two loops, the band, and the forest.*
+*Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The score's three Arrangers and the mixing desk run along the top, with a Dancer at the end of the desk. Below them, left to right: the harmony (three Chord Sequencers and the Rhodes, Strings and Harp they play), the two loops, the band, and the forest.*
 
 ## The song
 
@@ -58,6 +58,7 @@ Left running, the song starts again at dawn.
 | [Mixer](../modules/utilities/mixer.md) ×4 | Top (with the echo), Drums, Band and Room (with the reverb), on one chain. An LFO pans the bells slowly across |
 | [Tape](../modules/effects/tape.md) | 15 ips, a little saturation, wow and age |
 | [Audio Output](../modules/output/audio-output.md) | **Vol** 75%, **Limiter** and **Character** on |
+| [Dancer](../modules/visualization/dancer.md) | **Style** Disco, at Size 2.4. It hears the finished mix from the Tape, so it barely moves at dawn and goes all out at the Peak, and the Faders' **Section Trig** gives it a big move at every change of section |
 
 The rest are the voices' own envelopes, VCAs, filters, LFOs and Mixes.
 
