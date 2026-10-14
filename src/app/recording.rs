@@ -28,7 +28,8 @@ const PULSE_PERIOD: f64 = 1.6;
 pub fn default_folder() -> PathBuf {
     dirs::audio_dir()
         .or_else(|| dirs::home_dir().map(|home| home.join("Music")))
-        .unwrap_or_else(std::env::temp_dir)
+        // Not std::env::temp_dir in the browser, where it panics
+        .unwrap_or_else(|| if super::WEB { PathBuf::new() } else { std::env::temp_dir() })
         .join("Soba")
 }
 

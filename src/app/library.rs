@@ -15,7 +15,9 @@ use crate::persistence::{load_from_file, save_to_file, GroupData, LibraryGroup, 
 pub fn folder() -> PathBuf {
     dirs::document_dir()
         .or_else(|| dirs::home_dir().map(|home| home.join("Documents")))
-        .unwrap_or_else(std::env::temp_dir)
+        // The browser has neither, and its temp_dir panics: a path there
+        // reads as no modules, and saving to it fails with a message
+        .unwrap_or_else(|| if super::WEB { PathBuf::new() } else { std::env::temp_dir() })
         .join("Soba")
         .join("My Modules")
 }
