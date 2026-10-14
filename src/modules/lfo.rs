@@ -100,8 +100,9 @@ pub fn sync_beats(value: f32) -> Option<f64> {
 ///   every synced LFO keeps in step with the Clock and restarts on its
 ///   downbeat.
 pub struct Lfo {
-    /// Current phase (0.0 to 1.0).
-    phase: f32,
+    /// Current phase (0.0 to 1.0). In f64: at a hundredth of a hertz the
+    /// step per sample is finer than f32 can add to a phase near 1 (#256).
+    phase: f64,
     /// While synced: the beat a cycle starts on. 0, the downbeat, until the
     /// Sync input moves it.
     origin: f64,
@@ -337,14 +338,14 @@ impl DspModule for Lfo {
                     self.origin = beat;
                 }
                 self.last_beat = beat;
-                self.phase = ((beat - self.origin) / cycle_beats).rem_euclid(1.0) as f32;
+                self.phase = ((beat - self.origin) / cycle_beats).rem_euclid(1.0);
             } else if sync_rising {
                 // Reset phase on sync rising edge
                 self.phase = 0.0;
             }
 
             // Calculate effective phase with offset
-            let effective_phase = (self.phase + phase_offset).fract();
+            let effective_phase = (self.phase as f32 + phase_offset).fract();
 
             // Generate the waveform sample
             let sample = Self::generate_sample(effective_phase, waveform);
@@ -379,7 +380,7 @@ impl DspModule for Lfo {
             self.running_rate = final_rate;
 
             // Advance phase
-            let phase_increment = final_rate / self.sample_rate;
+            let phase_increment = f64::from(final_rate) / f64::from(self.sample_rate);
             self.phase += phase_increment;
 
             // Wrap phase to [0, 1)
@@ -933,6 +934,26 @@ mod tests {
         transport.beat_position = Some(0.5);
         lfo.process(&[], &mut out, &[1.0, 0.0, 0.0, 1.0, division("1/2")], &ProcessContext::with_transport(48000.0, 256, transport));
         assert!(out[1].samples.iter().all(|&phase| (phase - 0.25).abs() < 1e-6));
+    }
+
+    #[test]
+    fn test_very_slow_lfo_keeps_its_rate() {
+        // 0.003 Hz: the step per sample is finer than f32 can add to a phase
+        // past 0.5, which ran a 160-bar orbit half again too fast (#256)
+        const BLOCK: usize = 4800;
+        let mut lfo = Lfo::new();
+        lfo.prepare(48000.0, BLOCK);
+        let mut rate_cv = SignalBuffer::control(BLOCK);
+        rate_cv.fill((0.3f32).log2());
+        let sync = SignalBuffer::control(BLOCK);
+        let mut out = vec![SignalBuffer::control(BLOCK); 2];
+        let ctx = ProcessContext::new(48000.0, BLOCK);
+        // 250 s: three quarters of a cycle, through the phases where f32 rounds worst
+        for _ in 0..2500 {
+            lfo.process(&[&rate_cv, &sync], &mut out, &[0.01, 0.0, 0.0, 1.0, 0.0], &ctx);
+        }
+        let last = *out[1].samples.last().unwrap();
+        assert!((last - 0.75).abs() < 0.75e-3, "phase {last}, not 0.75");
     }
 
     #[test]

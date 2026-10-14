@@ -138,7 +138,7 @@ pub struct Noise {
     /// along it is (0 to 1).
     random_from: f32,
     random_to: f32,
-    random_phase: f32,
+    random_phase: f64,
     /// The Level knob, smoothed. Level CV is added after, unsmoothed.
     level: SmoothedValue,
     sample_rate: f32,
@@ -206,13 +206,14 @@ impl Noise {
     /// The next value of Random, `step` cycles further on.
     #[inline]
     fn next_random(&mut self, step: f32) -> f32 {
-        self.random_phase += step;
+        // In f64, so a glide that takes minutes still moves every sample (#256)
+        self.random_phase += f64::from(step);
         if self.random_phase >= 1.0 {
             self.random_phase = (self.random_phase - 1.0).min(1.0);
             self.random_from = self.random_to;
             self.random_to = self.rng.bipolar();
         }
-        let shape = 0.5 - 0.5 * (PI * self.random_phase).cos();
+        let shape = 0.5 - 0.5 * (PI * self.random_phase as f32).cos();
         self.random_from + (self.random_to - self.random_from) * shape
     }
 }
@@ -563,6 +564,17 @@ mod tests {
         let max_step = random.windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f32::max);
         assert!(max_step <= PI * 2.0 / SAMPLE_RATE * 1.01, "random jumped {max_step}");
         assert!(rms(&random) > 0.2, "random barely moved");
+    }
+
+    #[test]
+    fn test_very_slow_random_keeps_its_rate() {
+        // A glide taking 200 s moves every sample, at the speed it should (#256)
+        let mut noise = Noise::new();
+        let step = 0.005 / SAMPLE_RATE;
+        for _ in 0..(150.0 * SAMPLE_RATE) as usize {
+            noise.next_random(step);
+        }
+        assert!((noise.random_phase - 0.75).abs() < 0.75e-3, "phase {}", noise.random_phase);
     }
 
     #[test]
