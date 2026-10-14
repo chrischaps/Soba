@@ -1,4 +1,4 @@
-//! Hearing a WAV file dragged over a Sampler before it's dropped, so files
+//! Hearing a sound file dragged over a Sampler before it's dropped, so files
 //! can be auditioned straight from the file manager. The file is read as
 //! soon as it's over the window (see [`crate::graph::hovered_file`]), plays
 //! once from Start to End each time it comes over a Sampler or Chopper, and
@@ -10,7 +10,7 @@ use eframe::egui;
 
 use crate::graph::hovered_file::HoveredFile;
 use crate::graph::sample_shelf::ShelvedSample;
-use super::samples::is_wav;
+use crate::persistence::sample_files;
 use super::SynthApp;
 
 impl SynthApp {
@@ -22,7 +22,7 @@ impl SynthApp {
                 .hovered_files
                 .iter()
                 .filter_map(|file| file.path.as_ref())
-                .find(|path| path.file_name().is_some_and(|name| is_wav(&name.to_string_lossy())))
+                .find(|path| path.file_name().is_some_and(|name| sample_files::is_sound_file(&name.to_string_lossy())))
                 .map(|path| path.to_string_lossy().into_owned())
         });
         // Another file, or none: the last one is let go

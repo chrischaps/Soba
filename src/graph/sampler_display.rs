@@ -301,8 +301,8 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                     (format!("Loading {}…", sample_files::file_name(key)), theme::text::SECONDARY)
                 }
                 (Some(key), Some(problem)) => (format!("{}: {problem}", sample_files::file_name(key)), theme::accent::WARNING),
-                _ if in_patched => ("Press Rec to record, or drop a WAV".to_string(), if drop_here { blue } else { theme::text::SECONDARY }),
-                _ => ("Drop a WAV here".to_string(), if drop_here { blue } else { theme::text::SECONDARY }),
+                _ if in_patched => ("Press Rec to record, or drop a sample".to_string(), if drop_here { blue } else { theme::text::SECONDARY }),
+                _ => ("Drop a sample here".to_string(), if drop_here { blue } else { theme::text::SECONDARY }),
             };
             painter.text(outline.center() - Vec2::new(0.0, 5.0 * z), egui::Align2::CENTER_CENTER, truncate(&hint, 34), egui::FontId::proportional(9.0 * z), hint_color);
             painter.text(
@@ -462,8 +462,8 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                 }
                 _ => describe(key, sample),
             },
-            (None, None, Some(key)) => format!("{key}\n{}\nClick to open another WAV", problem.filter(|p| !sample_files::is_loading(p)).unwrap_or("Loading…")),
-            _ => "Click to open a WAV, or drag one from your files onto the node".to_string(),
+            (None, None, Some(key)) => format!("{key}\n{}\nClick to open another sound file", problem.filter(|p| !sample_files::is_loading(p)).unwrap_or("Loading…")),
+            _ => "Click to open a WAV, MP3 or Ogg file, or drag one from your files onto the node".to_string(),
         };
         response.on_hover_text(tip);
     }
@@ -524,7 +524,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
     ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
     ui.painter().text(button.center(), egui::Align2::CENTER_CENTER, "Open…", small, theme::text::PRIMARY);
-    if open.on_hover_text("Open a WAV file for this Sampler").clicked() {
+    if open.on_hover_text("Open a WAV, MP3 or Ogg file for this Sampler").clicked() {
         responses.push(SynthResponse::OpenSample(node_id));
     }
 

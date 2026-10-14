@@ -266,7 +266,7 @@ mod tests {
         // Beside the patch, named by the Sampler, which plays it, and room for the next
         let key = file(&app).expect("the Sampler names its take");
         assert_eq!(Path::new(&key), folder.join("Song samples").join("Take 1.wav"));
-        let take = sample_files::read_wav_file(Path::new(&key)).unwrap().sample;
+        let take = sample_files::read_file(Path::new(&key)).unwrap().sample;
         assert!((0.4..0.8).contains(&take.seconds()), "{}", take.seconds());
         assert!(!take.is_stereo(), "one side patched: mono");
         assert!(take.left().iter().any(|&s| s.abs() > 0.5), "the sine");
@@ -341,7 +341,7 @@ mod tests {
 
         let key = file(&app).expect("the Sampler names its take");
         assert_eq!(Path::new(&key), folder.join("Song samples").join("Take 1 tidied.wav"));
-        let tidied = sample_files::read_wav_file(Path::new(&key)).unwrap().sample;
+        let tidied = sample_files::read_file(Path::new(&key)).unwrap().sample;
         let rms = 20.0 * crate::dsp::tidy::Survey::of(&tidied).rms.log10();
         assert!((rms - crate::dsp::tidy::TARGET_RMS_DB).abs() < 0.1, "{rms}");
         let (node_id, engine_id) = the_sampler(&app);
@@ -355,7 +355,7 @@ mod tests {
         pump(&mut app, 0.1);
         let raw = file(&app).expect("the take");
         assert_eq!(sample_files::file_name(&raw), "Take 1.wav");
-        let take = sample_files::read_wav_file(Path::new(&raw)).unwrap().sample;
+        let take = sample_files::read_file(Path::new(&raw)).unwrap().sample;
         assert_eq!(take.frames(), tidied.frames(), "a sine is all sound: nothing trimmed");
         assert!(take.left().iter().any(|&s| s.abs() > 0.5), "the sine as it came in");
         app.undo();

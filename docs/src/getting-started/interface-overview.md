@@ -253,7 +253,7 @@ The **📚 Examples** menu holds nineteen ready-made patches: **First Sound**, w
 
 ### Samples
 
-A [Sampler](../modules/sources/sampler.md) keeps the path to its WAV file in the patch. A file beside or below the patch is saved by a path relative to it, so the patch's folder can be moved or shared whole. **Save As** copies samples from anywhere else into a `<patch name> samples` folder beside the patch, asking first if they come to more than 50 MB. A patch whose sample has gone missing still opens, with the missing file among the load warnings.
+A [Sampler](../modules/sources/sampler.md) keeps the path to its sound file in the patch. A file beside or below the patch is saved by a path relative to it, so the patch's folder can be moved or shared whole. **Save As** copies samples from anywhere else into a `<patch name> samples` folder beside the patch, asking first if they come to more than 50 MB. A patch whose sample has gone missing still opens, with the missing file among the load warnings.
 
 A [Looper](../modules/utilities/looper.md)'s loop is kept the same way. Saving the patch writes each loop that changed as a WAV into a `<patch name> loops` folder beside it, asking first if they come to more than 50 MB, and opening the patch brings each loop back, stopped and ready to play. A loop whose file has gone missing is a load warning, and its Looper opens empty. See [Keeping the loop](../modules/utilities/looper.md#keeping-the-loop).
 

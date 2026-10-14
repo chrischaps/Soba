@@ -485,7 +485,7 @@ mod tests {
     /// first 0.22 s are kept as a fixture, the rest is the example's sample.
     fn chris_take() -> SampleData {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let read = |path: &str| crate::persistence::sample_files::read_wav_file(&root.join(path)).unwrap().sample;
+        let read = |path: &str| crate::persistence::sample_files::read_file(&root.join(path)).unwrap().sample;
         let head = read("tests/fixtures/soba-speaks-chris-head.wav");
         let rest = read("patches/samples/soba-speaks-chris.wav");
         // The example's first 10 ms were faded in when it was cut

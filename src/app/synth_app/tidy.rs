@@ -244,7 +244,7 @@ mod round {
         app.sync_history();
         let trimmed_key = file(&app);
         assert_eq!(Path::new(&trimmed_key), folder.join("Song samples").join("padded trimmed.wav"));
-        let trimmed = sample_files::read_wav_file(Path::new(&trimmed_key)).unwrap().sample;
+        let trimmed = sample_files::read_file(Path::new(&trimmed_key)).unwrap().sample;
         // From the tone at 1 s to 300 ms after it ends at 2 s
         assert!((trimmed.seconds() - 1.3).abs() <= 0.03, "{}", trimmed.seconds());
         // End was 2.5 s in, past what's kept: it goes to the end
@@ -257,7 +257,7 @@ mod round {
         app.sync_history();
         let normalized_key = file(&app);
         assert_eq!(sample_files::file_name(&normalized_key), "padded trimmed normalized.wav");
-        let normalized = sample_files::read_wav_file(Path::new(&normalized_key)).unwrap().sample;
+        let normalized = sample_files::read_file(Path::new(&normalized_key)).unwrap().sample;
         let rms = 20.0 * tidy::Survey::of(&trimmed).rms_of(&normalized).log10();
         assert!((rms - tidy::TARGET_RMS_DB).abs() < 0.1, "{rms}");
 
@@ -294,7 +294,7 @@ mod round {
         let take = file(&app);
         let node_id = the_sampler(&app);
         let level = |key: &str| {
-            let sample = sample_files::read_wav_file(Path::new(key)).unwrap().sample;
+            let sample = sample_files::read_file(Path::new(key)).unwrap().sample;
             (sample.seconds(), 20.0 * tidy::Survey::of(&sample).rms.log10())
         };
 

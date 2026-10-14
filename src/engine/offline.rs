@@ -397,10 +397,10 @@ pub const AUDITION: &[(u8, f32, f32)] = &[
     (67, 2.5, 1.5),
 ];
 
-/// Reads a mono or stereo WAV (a bigger one gives its first two channels),
-/// returning it with its sample rate.
+/// Reads a mono or stereo WAV, MP3 or Ogg Vorbis file (a bigger one gives
+/// its first two channels), returning it with its sample rate.
 pub fn read_wav(path: &std::path::Path) -> Result<(StereoBuffer, u32), String> {
-    let sample = crate::persistence::sample_files::read_wav_file(path)?.sample;
+    let sample = crate::persistence::sample_files::read_file(path)?.sample;
     let input = StereoBuffer { left: sample.left().to_vec(), right: sample.right().to_vec() };
     Ok((input, sample.sample_rate() as u32))
 }
@@ -408,7 +408,7 @@ pub fn read_wav(path: &std::path::Path) -> Result<(StereoBuffer, u32), String> {
 /// Reads a WAV as [`read_wav`] does, resampled to `sample_rate` if it was
 /// recorded at another, returning it with the rate it was recorded at.
 pub fn read_wav_at(path: &std::path::Path, sample_rate: u32) -> Result<(StereoBuffer, u32), String> {
-    let mut sample = crate::persistence::sample_files::read_wav_file(path)?.sample;
+    let mut sample = crate::persistence::sample_files::read_file(path)?.sample;
     let recorded = sample.sample_rate() as u32;
     if recorded != sample_rate {
         sample = sample.resampled(sample_rate as f32);

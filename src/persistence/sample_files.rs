@@ -1,5 +1,5 @@
-//! Sample files: reading WAVs into [`SampleData`], and where a patch's
-//! samples are.
+//! Sample files: reading WAV, MP3 and Ogg Vorbis files into [`SampleData`],
+//! and where a patch's samples are.
 //!
 //! In the editor, a Sampler names its file by a *key*: an absolute path, or
 //! `example:samples/name.wav` for a sample that ships inside the app with
@@ -12,8 +12,10 @@
 //! fetched from beside the page the first time it's loaded, and reads as
 //! [`LOADING`] until it arrives.
 
-use std::io::Read;
+use std::io::{Read, SeekFrom};
 use std::path::{Path, PathBuf};
+
+use symphonia::core::io::MediaSource;
 
 use crate::dsp::{SampleData, MAX_SAMPLE_SECONDS};
 
@@ -35,7 +37,15 @@ pub fn is_loading(problem: &str) -> bool {
     problem == LOADING
 }
 
-/// A decoded WAV file.
+/// The extensions of the files a Sampler plays.
+pub const EXTENSIONS: &[&str] = &["wav", "wave", "mp3", "ogg", "oga"];
+
+/// Whether a file's name says it's one a Sampler plays.
+pub fn is_sound_file(name: &str) -> bool {
+    Path::new(name).extension().is_some_and(|e| EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
+/// A decoded sound file.
 #[derive(Debug)]
 pub struct Decoded {
     pub sample: SampleData,
@@ -79,10 +89,106 @@ pub fn decode_wav(reader: impl Read) -> Result<Decoded, String> {
     Ok(Decoded { sample, truncated: keep < total })
 }
 
-/// Reads a WAV file from disk.
-pub fn read_wav_file(path: &Path) -> Result<Decoded, String> {
+/// Decodes a WAV, MP3 or Ogg Vorbis file, telling a WAV by its first bytes
+/// and the others by what they hold. `name` is a hint, for an MP3 without
+/// tags at its start.
+pub fn decode(mut source: impl MediaSource + 'static, name: &str) -> Result<Decoded, String> {
+    let mut magic = [0u8; 4];
+    let riff = source.read_exact(&mut magic).is_ok() && &magic == b"RIFF";
+    source.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
+    if riff {
+        decode_wav(std::io::BufReader::new(source))
+    } else {
+        decode_compressed(Box::new(source), name)
+    }
+}
+
+/// Decodes an MP3 or Ogg Vorbis file. Mono stays mono, and more than one
+/// channel keeps the first two. Anything past [`MAX_SAMPLE_SECONDS`] is
+/// left unread, and a damaged frame is skipped rather than failing the file.
+fn decode_compressed(source: Box<dyn MediaSource>, name: &str) -> Result<Decoded, String> {
+    use symphonia::core::audio::SampleBuffer;
+    use symphonia::core::codecs::DecoderOptions;
+    use symphonia::core::errors::Error;
+    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::probe::Hint;
+
+    let mut hint = Hint::new();
+    if let Some(extension) = Path::new(name).extension() {
+        hint.with_extension(&extension.to_string_lossy());
+    }
+    let stream = MediaSourceStream::new(source, Default::default());
+    // Gapless: an MP3's encoder delay and padding are cut, so a loop loops
+    let options = FormatOptions { enable_gapless: true, ..Default::default() };
+    let mut format = symphonia::default::get_probe()
+        .format(&hint, stream, &options, &MetadataOptions::default())
+        .map_err(|_| "not a WAV, MP3 or Ogg Vorbis file".to_string())?
+        .format;
+    let track = format.default_track().ok_or("no audio in the file")?;
+    let track_id = track.id;
+    // Where it says how long it is: an Ogg's last packet decodes past its end
+    let length = track.codec_params.n_frames.map(|n| n as usize);
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &DecoderOptions::default())
+        .map_err(|_| "its audio isn't MP3 or Vorbis".to_string())?;
+
+    let (mut left, mut right) = (Vec::new(), Vec::new());
+    let (mut rate, mut stereo, mut truncated) = (0, false, false);
+    let mut buffer: Option<SampleBuffer<f32>> = None;
+    loop {
+        let packet = match format.next_packet() {
+            Ok(packet) => packet,
+            Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(e) => return Err(e.to_string()),
+        };
+        if packet.track_id() != track_id {
+            continue;
+        }
+        let audio = match decoder.decode(&packet) {
+            Ok(audio) => audio,
+            Err(Error::DecodeError(_)) => continue,
+            Err(e) => return Err(e.to_string()),
+        };
+        let spec = *audio.spec();
+        let channels = spec.channels.count().max(1);
+        rate = spec.rate;
+        stereo = channels > 1;
+        let buffer = match &mut buffer {
+            Some(buffer) if buffer.capacity() >= audio.capacity() * channels => buffer,
+            _ => buffer.insert(SampleBuffer::new(audio.capacity() as u64, spec)),
+        };
+        buffer.copy_interleaved_ref(audio);
+        for frame in buffer.samples().chunks_exact(channels) {
+            left.push(frame[0]);
+            if stereo {
+                right.push(frame[1]);
+            }
+        }
+        let keep = (MAX_SAMPLE_SECONDS * rate.max(1) as f32) as usize;
+        if left.len() > keep {
+            left.truncate(keep);
+            right.truncate(keep);
+            truncated = true;
+            break;
+        }
+    }
+    if rate == 0 {
+        return Err("no audio in the file".to_string());
+    }
+    if let Some(length) = length {
+        left.truncate(length);
+        right.truncate(length);
+    }
+    let sample = if stereo { SampleData::stereo(left, right, rate as f32) } else { SampleData::mono(left, rate as f32) };
+    Ok(Decoded { sample, truncated })
+}
+
+/// Reads a WAV, MP3 or Ogg Vorbis file from disk.
+pub fn read_file(path: &Path) -> Result<Decoded, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    decode_wav(std::io::BufReader::new(file))
+    decode(file, &path.to_string_lossy())
 }
 
 /// The bytes of a sample that ships with the examples, by key. In the
@@ -105,13 +211,13 @@ pub fn example_bytes(key: &str) -> Option<&'static [u8]> {
 /// Loads the recording a key names: a shipped example's, or a file's.
 pub fn load(key: &str) -> Result<Decoded, String> {
     if key.starts_with(EXAMPLE_PREFIX) {
-        return decode_wav(std::io::Cursor::new(shipped(key)?));
+        return decode(std::io::Cursor::new(shipped(key)?), key);
     }
     let path = Path::new(key);
     if !path.exists() {
         return Err("file not found".to_string());
     }
-    read_wav_file(path)
+    read_file(path)
 }
 
 /// Where a patch's relative sample paths start from.
@@ -251,6 +357,46 @@ mod tests {
         }
         let decoded = decode_wav(std::io::Cursor::new(bytes.into_inner())).unwrap();
         assert_eq!(decoded.sample.left(), &[0.5, -1.0, 0.0]);
+    }
+
+    /// Peak level and frame count of a fixture, read as a Sampler reads it.
+    fn fixture(name: &str) -> SampleData {
+        read_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)).unwrap().sample
+    }
+
+    fn peak(samples: &[f32]) -> f32 {
+        samples.iter().fold(0.0, |peak, s| peak.max(s.abs()))
+    }
+
+    #[test]
+    fn decodes_mp3s_without_their_encoder_gap() {
+        // Half a second of 440 Hz at 44.1 kHz, stereo, from ffmpeg's LAME
+        let sample = fixture("sine-440-stereo.mp3");
+        assert!(sample.is_stereo());
+        assert_eq!(sample.sample_rate(), 44100.0);
+        assert_eq!(sample.frames(), 22050);
+        assert!((peak(sample.left()) - 0.084).abs() < 0.01, "{}", peak(sample.left()));
+        // It starts at once, as the sine did: no encoder delay before it
+        assert!(peak(&sample.left()[..64]) > 0.02);
+    }
+
+    #[test]
+    fn decodes_ogg_vorbis() {
+        // Half a second of 440 Hz at 48 kHz, mono
+        let sample = fixture("sine-440-mono.ogg");
+        assert!(!sample.is_stereo());
+        assert_eq!(sample.sample_rate(), 48000.0);
+        assert_eq!(sample.frames(), 24000);
+        assert!(peak(&sample.left()[..64]) > 0.02);
+        assert!((peak(sample.left()) - 0.125).abs() < 0.01, "{}", peak(sample.left()));
+    }
+
+    #[test]
+    fn says_what_it_plays() {
+        assert!(is_sound_file("kick.WAV") && is_sound_file("C:/loops/break.mp3") && is_sound_file("pad.ogg"));
+        assert!(!is_sound_file("notes.txt") && !is_sound_file("mp3"));
+        let problem = decode(std::io::Cursor::new(b"not audio at all".to_vec()), "notes.txt").unwrap_err();
+        assert_eq!(problem, "not a WAV, MP3 or Ogg Vorbis file");
     }
 
     #[test]

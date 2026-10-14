@@ -269,7 +269,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                 _ => ("Drop a break here".to_string(), if drop_here { blue } else { theme::text::SECONDARY }),
             };
             painter.text(outline.center() - Vec2::new(0.0, 5.0 * z), egui::Align2::CENTER_CENTER, hint, FontId::proportional(9.0 * z), hint_color);
-            painter.text(outline.center() + Vec2::new(0.0, 7.0 * z), egui::Align2::CENTER_CENTER, "a WAV loop, or click to open one", small.clone(), theme::text::DISABLED);
+            painter.text(outline.center() + Vec2::new(0.0, 7.0 * z), egui::Align2::CENTER_CENTER, "an audio loop, or click to open one", small.clone(), theme::text::DISABLED);
         }
     }
 
@@ -345,7 +345,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     } else if wave.clicked() {
         responses.push(SynthResponse::OpenSample(node_id));
     } else if !drop_here {
-        wave.clone().on_hover_text("Click to open a WAV loop, or drag one from your files onto the node");
+        wave.clone().on_hover_text("Click to open a loop (WAV, MP3 or Ogg), or drag one from your files onto the node");
     }
 
     // The fan: each slice to its step
@@ -495,7 +495,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
     ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
     ui.painter().text(button.center(), egui::Align2::CENTER_CENTER, "Open…", small, theme::text::PRIMARY);
-    if open.on_hover_text("Open a WAV loop for this Chopper").clicked() {
+    if open.on_hover_text("Open a loop (WAV, MP3 or Ogg) for this Chopper").clicked() {
         responses.push(SynthResponse::OpenSample(node_id));
     }
 

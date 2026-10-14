@@ -41,18 +41,12 @@ use super::SynthApp;
 #[cfg(not(target_arch = "wasm32"))]
 const ASK_BEFORE_COPYING_BYTES: u64 = 50 * 1024 * 1024;
 
-/// Whether a dropped file looks like a WAV.
-pub(super) fn is_wav(name: &str) -> bool {
-    let name = name.to_ascii_lowercase();
-    name.ends_with(".wav") || name.ends_with(".wave")
-}
-
 impl SynthApp {
-    /// Asks for a WAV file and loads it into a Sampler.
+    /// Asks for a sound file and loads it into a Sampler.
     pub(super) fn open_sample_dialog(&mut self, node_id: NodeId) {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let mut dialog = rfd::FileDialog::new().add_filter("WAV audio", &["wav", "wave"]);
+            let mut dialog = rfd::FileDialog::new().add_filter("Audio (WAV, MP3, Ogg)", sample_files::EXTENSIONS);
             // Start beside the file it has, or else beside the patch
             let current = self.graph_state.graph.nodes.get(node_id).and_then(|n| n.user_data.file.clone());
             let folder = current
@@ -69,7 +63,7 @@ impl SynthApp {
         #[cfg(target_arch = "wasm32")]
         {
             let _ = node_id;
-            self.status_message = Some("Drag a WAV file from your computer onto the Sampler".to_string());
+            self.status_message = Some("Drag a WAV, MP3 or Ogg file from your computer onto the Sampler".to_string());
         }
     }
 
@@ -358,8 +352,8 @@ impl SynthApp {
                 .and_then(|p| p.file_name())
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| file.name.clone());
-            if !is_wav(&name) {
-                self.status_message = Some(format!("{name} isn't a WAV file: a Sampler plays WAVs"));
+            if !sample_files::is_sound_file(&name) {
+                self.status_message = Some(format!("{name} isn't a sound file: a Sampler plays WAV, MP3 and Ogg files"));
                 continue;
             }
             // Read it first: a file that won't play doesn't make a Sampler
@@ -375,7 +369,7 @@ impl SynthApp {
                 }
                 (None, Some(bytes)) => {
                     let key = format!("{DROPPED_PREFIX}{name}");
-                    match sample_files::decode_wav(std::io::Cursor::new(bytes.to_vec())) {
+                    match sample_files::decode(std::io::Cursor::new(bytes.to_vec()), &name) {
                         Ok(decoded) => self.user_state.samples.insert(&key, decoded),
                         Err(e) => {
                             self.status_message = Some(format!("Couldn't load {name}: {e}"));

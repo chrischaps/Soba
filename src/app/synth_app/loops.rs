@@ -453,7 +453,7 @@ mod tests {
         let (_, _, key) = the_looper(&app);
         let key = key.expect("the Looper names its file");
         assert_eq!(Path::new(&key).parent(), Some(folder.join("Song loops").as_path()));
-        let first = sample_files::read_wav_file(Path::new(&key)).unwrap().sample;
+        let first = sample_files::read_file(Path::new(&key)).unwrap().sample;
         assert_eq!(Some(&first), held(&mut app).as_ref(), "the file is the loop");
         assert!(!app.has_unsaved_changes());
         let saved = load_from_file(&path).unwrap();
@@ -478,12 +478,12 @@ mod tests {
         pump(&mut app, 0.1);
         assert!(app.has_unsaved_changes());
         assert!(app.quick_save());
-        let layered = sample_files::read_wav_file(Path::new(&key)).unwrap().sample;
+        let layered = sample_files::read_file(Path::new(&key)).unwrap().sample;
         assert_ne!(layered, first);
         press(&mut app, engine_id, 2);
         assert!(app.has_unsaved_changes(), "an undo is a change");
         assert!(app.quick_save());
-        assert_eq!(sample_files::read_wav_file(Path::new(&key)).unwrap().sample, first, "the undone layer is left out");
+        assert_eq!(sample_files::read_file(Path::new(&key)).unwrap().sample, first, "the undone layer is left out");
 
         // Opened again, it waits, Stopped, holding the file, with nothing unsaved
         app.open_file(&path);
