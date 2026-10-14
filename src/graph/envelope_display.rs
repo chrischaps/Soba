@@ -84,6 +84,11 @@ pub fn envelope_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
             curve(&painter, points, orange.gamma_multiply(0.55), 1.2 * z, false);
             let span = spans[now.stage];
             let at = span.0 + (span.1 - span.0) * now.through;
+            // Off the shape, the rest of the stage is drawn faintly, so the
+            // dot rides a whole curve that bends back to meet the shape
+            if !on_shape(&params, &now) {
+                curve(&painter, stage_points(&params, plot, z, &now, span, at, span.1), orange.gamma_multiply(0.55), 1.2 * z, false);
+            }
             curve(&painter, lit_points(&params, plot, z, &now, span, at), orange, 1.8 * z, true);
             playhead(&painter, Pos2::new(x_at(at), y_at(now.level)), with_alpha(orange, (50.0 + 60.0 * swell) as u8), z);
             ui.ctx().request_repaint();
@@ -203,33 +208,45 @@ fn envelope_points(params: &AdsrParams, plot: Rect, z: f32, peak: f32, until: f3
     points
 }
 
-/// The lit line, from the start to `until` inside the note's stage, which
-/// spans `span`. The stage is drawn as the envelope is running it, from the
-/// level it began at, so it ends on the dot. When that's where the shape
-/// says the stage begins, the stages before it light up too; when the note
-/// left the shape early, only its own path lights.
-fn lit_points(params: &AdsrParams, plot: Rect, z: f32, now: &Now, span: (f32, f32), until: f32) -> Vec<Pos2> {
+/// Whether the note's stage began where the shape says it does. It doesn't
+/// when a note is let go mid-decay, or struck again mid-release.
+fn on_shape(params: &AdsrParams, now: &Now) -> bool {
+    (now.start - params.level_at(STAGES[now.stage].0, 0.0) * now.peak).abs() < 0.01
+}
+
+/// The note's stage as the envelope is running it, from the level it began
+/// at toward its target, between `from` and `to` inside its `span`.
+fn stage_points(params: &AdsrParams, plot: Rect, z: f32, now: &Now, span: (f32, f32), from: f32, to: f32) -> Vec<Pos2> {
     let (start, end) = span;
-    let (segment, _) = STAGES[now.stage];
-    let steepness = match segment {
+    let steepness = match STAGES[now.stage].0 {
         AdsrSegment::Attack => Some(curve_steepness(params.attack_curve)),
         AdsrSegment::Decay => Some(curve_steepness(params.decay_curve)),
         AdsrSegment::Sustain => None,
         AdsrSegment::Release => Some(curve_steepness(params.release_curve)),
     };
-    let steps = ((columns(plot, z) as f32 * (until - start)).ceil() as usize).max(1);
-    let stage = (0..=steps).map(|step| {
-        let share = start + (until - start) * step as f32 / steps as f32;
-        let u = if end > start { (share - start) / (end - start) } else { 1.0 };
-        let level = match steepness {
-            Some(steepness) => now.start + (now.target - now.start) * stage_shape(steepness, u as f64) as f32,
-            None => now.level,
-        };
-        Pos2::new(plot.left() + share * plot.width(), plot.bottom() - level.clamp(0.0, 1.0) * plot.height())
-    });
+    let steps = ((columns(plot, z) as f32 * (to - from)).ceil() as usize).max(1);
+    (0..=steps)
+        .map(|step| {
+            let share = from + (to - from) * step as f32 / steps as f32;
+            let u = if end > start { (share - start) / (end - start) } else { 1.0 };
+            let level = match steepness {
+                Some(steepness) => now.start + (now.target - now.start) * stage_shape(steepness, u as f64) as f32,
+                None => now.level,
+            };
+            Pos2::new(plot.left() + share * plot.width(), plot.bottom() - level.clamp(0.0, 1.0) * plot.height())
+        })
+        .collect()
+}
 
-    let on_shape = (now.start - params.level_at(segment, 0.0) * now.peak).abs() < 0.01;
-    let mut points = if on_shape && start > 0.0 {
+/// The lit line, from the start to `until` inside the note's stage, which
+/// spans `span`. The stage is drawn as the envelope is running it, so it
+/// ends on the dot. When the note followed the shape into the stage, the
+/// stages before it light up too; when it left the shape, only its own
+/// path lights.
+fn lit_points(params: &AdsrParams, plot: Rect, z: f32, now: &Now, span: (f32, f32), until: f32) -> Vec<Pos2> {
+    let start = span.0;
+    let stage = stage_points(params, plot, z, now, span, start, until);
+    let mut points = if on_shape(params, now) && start > 0.0 {
         let mut before = envelope_points(params, plot, z, now.peak, start);
         before.pop();
         before
@@ -286,16 +303,18 @@ mod tests {
         assert!((note.through - 0.25).abs() < 1e-4, "{}", note.through);
     }
 
-    /// Renders a note through the real envelope, gated for `gate` seconds,
-    /// and reads where it is after `at` seconds
-    fn note_at(module_params: [f32; 8], gate: f32, at: f32) -> Now {
+    /// Renders notes through the real envelope, gated over each `(from, to)`
+    /// in seconds, and reads where it is after `at` seconds
+    fn note_at(module_params: [f32; 8], gates: &[(f32, f32)], at: f32) -> Now {
         use crate::dsp::{DspModule, ProcessContext, SignalBuffer};
         let sr = 48000.0;
         let total = (at * sr) as usize;
         let mut env = AdsrEnvelope::new();
         env.prepare(sr, total);
         let mut gate_in = SignalBuffer::control(total);
-        gate_in.samples[..((gate * sr) as usize).min(total)].fill(1.0);
+        for &(from, to) in gates {
+            gate_in.samples[(from * sr) as usize..((to * sr) as usize).min(total)].fill(1.0);
+        }
         let mut out = vec![SignalBuffer::control(total)];
         env.process(&[&gate_in], &mut out, &module_params, &ProcessContext::new(sr, total));
         let [a, d, s, r, ac, dc, rc, _] = module_params;
@@ -313,7 +332,7 @@ mod tests {
         // Let go after reaching the sustain, mid-decay and mid-attack; then a
         // held note in each of its first three stages
         for (gate, at, stage) in [(0.5, 0.6, 3), (0.1, 0.2, 3), (0.02, 0.1, 3), (0.5, 0.03, 0), (0.5, 0.15, 1), (0.5, 0.45, 2)] {
-            let note = note_at(module_params, gate, at);
+            let note = note_at(module_params, &[(0.0, gate)], at);
             assert_eq!(note.stage, stage, "gate {gate}, at {at}");
             let span = spans[note.stage];
             let x = span.0 + (span.1 - span.0) * note.through;
@@ -325,5 +344,28 @@ mod tests {
             let from_start = points[0].x.abs() < 1e-4;
             assert_eq!(from_start, gate >= a + d || stage < 3, "gate {gate}, at {at}");
         }
+    }
+
+    #[test]
+    fn a_note_struck_mid_release_rises_from_where_it_was() {
+        // Let go after the sustain, struck again 30 ms into the release
+        let module_params = [0.7, 0.1, 1.0, 0.3, 0.2, 0.5, 0.5, 0.0];
+        let [a, d, s, r, ac, dc, rc, _] = module_params;
+        let params = AdsrParams::new(a, d, s, r).with_curves(ac, dc, rc);
+        let note = note_at(module_params, &[(0.0, 1.0), (1.03, 2.0)], 1.08);
+        assert_eq!(note.stage, 0);
+        assert!(note.start > 0.3 && !on_shape(&params, &note), "attacking from {}", note.start);
+
+        // The lit line runs from that level to the dot, and the faint rest
+        // of the stage from the dot up to the peak, where the shape resumes
+        let (attack_end, ..) = get_adsr_segment_boundaries(&params);
+        let span = (0.0, attack_end);
+        let x = attack_end * note.through;
+        let lit = lit_points(&params, plot(), 1.0, &note, span, x);
+        let ahead = stage_points(&params, plot(), 1.0, &note, span, x, attack_end);
+        let dot = Pos2::new(x * 200.0, 40.0 - note.level * 40.0);
+        assert!((lit[0].y - (40.0 - note.start * 40.0)).abs() < 1e-3);
+        assert!((*lit.last().unwrap() - dot).length() < 0.05 && (ahead[0] - dot).length() < 0.05);
+        assert!((*ahead.last().unwrap() - Pos2::new(attack_end * 200.0, 0.0)).length() < 1e-3);
     }
 }
