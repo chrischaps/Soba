@@ -336,6 +336,11 @@ impl AdsrEnvelope {
     pub const READOUT_PROGRESS: usize = 5;
     pub const READOUT_LEVEL: usize = 6;
     pub const READOUT_PEAK: usize = 7;
+    /// Readout indices: the level the stage began at and the level it's
+    /// heading for. A note let go mid-decay releases from above the sustain,
+    /// and one struck mid-release attacks from above zero.
+    pub const READOUT_STAGE_START: usize = 8;
+    pub const READOUT_STAGE_TARGET: usize = 9;
 
     /// Gate threshold for detecting high/low states.
     const GATE_THRESHOLD: f32 = 0.5;
@@ -569,6 +574,12 @@ impl DspModule for AdsrEnvelope {
         readout.values[Self::READOUT_PROGRESS] = self.progress as f32;
         readout.values[Self::READOUT_LEVEL] = self.level as f32;
         readout.values[Self::READOUT_PEAK] = self.peak as f32;
+        readout.values[Self::READOUT_STAGE_START] = self.stage_start as f32;
+        readout.values[Self::READOUT_STAGE_TARGET] = match self.stage {
+            EnvelopeStage::Attack => self.peak,
+            EnvelopeStage::Decay | EnvelopeStage::Sustain => self.sustain * self.peak,
+            EnvelopeStage::Idle | EnvelopeStage::Release => 0.0,
+        } as f32;
         Some(readout)
     }
 }
@@ -1096,6 +1107,24 @@ mod tests {
         let progress = values[AdsrEnvelope::READOUT_PROGRESS] as f64;
         let through = stage_time(curve_steepness(0.5), progress);
         assert!((through - 0.09 / 0.25).abs() < 0.01, "{through} of the way through the decay");
+    }
+
+    #[test]
+    fn test_readout_reports_where_a_stage_began() {
+        // Let go 30 ms into a 250 ms decay: the release starts well above the sustain
+        let gate = 1920;
+        let total = gate + 480;
+        let p = params(0.01, 0.25, 0.5, 0.5);
+        let (out, env) = render_cv(&p, gate, total, &[]);
+        let values = env.readout(&[]).unwrap().values;
+        assert_eq!(values[AdsrEnvelope::READOUT_STAGE], 4.0);
+        let start = values[AdsrEnvelope::READOUT_STAGE_START];
+        assert!((start - out[gate]).abs() < 1e-6 && start > 0.6, "released from {start}");
+        assert_eq!(values[AdsrEnvelope::READOUT_STAGE_TARGET], 0.0);
+        // The level is that far from where the stage began to where it's heading
+        let progress = values[AdsrEnvelope::READOUT_PROGRESS];
+        let level = values[AdsrEnvelope::READOUT_LEVEL];
+        assert!((level - start * (1.0 - progress)).abs() < 1e-5, "level {level}");
     }
 
     #[test]
