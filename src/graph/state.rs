@@ -276,6 +276,10 @@ pub struct SynthGraphState {
     /// Each Arranger that follows another, and the one it follows. Set by
     /// the app each frame: see [`super::arranger_follow`].
     pub arranger_leaders: HashMap<NodeId, NodeId>,
+
+    /// Samplers whose last take was tidied as it was kept: what tidying did
+    /// ("−0.42 s, +5.2 dB"), and when, for the face to say for a moment.
+    pub tidied_takes: HashMap<NodeId, (String, Instant)>,
 }
 
 impl Default for SynthGraphState {
@@ -331,6 +335,7 @@ impl Default for SynthGraphState {
             renaming: None,
             engine_cables: Default::default(),
             arranger_leaders: HashMap::new(),
+            tidied_takes: HashMap::new(),
         }
     }
 }

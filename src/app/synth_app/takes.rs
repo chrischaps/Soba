@@ -14,18 +14,23 @@
 //! Sampler is handed the same recording made to measure, which it swaps
 //! for the room without a break.
 //!
+//! With Tidy Takes on, the take is then trimmed and its level set, into a
+//! file of its own, as a second undo step (see `tidy_take`).
+//!
 //! The browser has no folder beside the patch: a take lives in the session,
 //! as a file dropped there does.
 
 use std::sync::Arc;
 use std::time::Duration;
 
+use egui_node_graph2::NodeId;
 use web_time::Instant;
 
 use crate::dsp::SampleData;
 use crate::engine::{EngineCommand, NodeId as EngineNodeId};
 use crate::modules::sampler::{Sampler, SAMPLER_ID, TAKE_ROOM_SECONDS};
 use crate::persistence::sample_files::{self, Decoded};
+use super::slicing::value_of;
 use super::SynthApp;
 
 /// How long room handed to a Sampler has to show in its readout before
@@ -71,10 +76,33 @@ impl SynthApp {
                         self.send_command(EngineCommand::SettleTake { node_id: engine_id, take: count, sample });
                     }
                     self.status_message = Some(format!("Recorded {name}, {seconds:.1} s"));
+                    self.tidy_kept_take(node_id, &name, seconds);
                 }
                 Err(e) => self.status_message = Some(format!("Couldn't keep the take: {e}. The Sampler plays it until it's given another file")),
             }
         }
+    }
+
+    /// Tidies a take just kept, if its Sampler has Tidy Takes on: the take
+    /// as it came in is its own undo step first, so undo brings it back.
+    /// The Sampler goes on from the take to the tidied file as it would to
+    /// any other, and its face says for a moment what tidying did.
+    fn tidy_kept_take(&mut self, node_id: NodeId, name: &str, seconds: f32) {
+        let graph = &self.graph_state.graph;
+        if value_of(graph, node_id, "Tidy Takes").is_none_or(|on| on < 0.5) {
+            return;
+        }
+        let in_bars = value_of(graph, node_id, "Take").is_some_and(|take| take >= 0.5);
+        self.sync_history();
+        self.status_message = Some(match self.tidy_take(node_id, in_bars) {
+            Ok(Some(done)) => {
+                let message = format!("Recorded {name}, {seconds:.1} s, and tidied it: {done}. Undo brings back the take as it came in");
+                self.user_state.tidied_takes.insert(node_id, (done, Instant::now()));
+                message
+            }
+            Ok(None) => format!("Recorded {name}, {seconds:.1} s: already tidy"),
+            Err(e) => format!("Recorded {name}, {seconds:.1} s, but couldn't tidy it: {e}"),
+        });
     }
 
     /// Keeps a take on the shelf, and on disk beside the patch where there
@@ -154,8 +182,7 @@ impl SynthApp {
 mod tests {
     use super::*;
     use crate::modules::sampler::RecState;
-    use crate::persistence::{load_from_file, save_to_file, ConnectionData, NodeData, Patch};
-    use egui_node_graph2::NodeId;
+    use crate::persistence::{load_from_file, save_to_file, ConnectionData, NamedParameter, NodeData, ParameterValue, Patch};
     use std::path::Path;
 
     /// Runs the app's per-frame engine work, without a window, for `seconds`.
@@ -274,6 +301,66 @@ mod tests {
         press_rec(&mut app);
         pump(&mut app, 0.2);
         assert_eq!(file(&app).map(|key| sample_files::file_name(&key).to_string()).as_deref(), Some("Take 2.wav"));
+
+        app.send_command(EngineCommand::SetPlaying(false));
+        pump(&mut app, 0.05);
+        std::fs::remove_dir_all(&folder).ok();
+    }
+
+    /// With Tidy Takes on, a take is levelled as it's kept, into a file of
+    /// its own that the Sampler goes on to play, and undo brings back the
+    /// take as it came in. A sine is all sound, so nothing is trimmed.
+    #[test]
+    #[ignore = "needs an audio device; run with --ignored"]
+    fn tidied_takes_are_kept_beside_the_take() {
+        let mut app = SynthApp::new(false);
+        if app.audio_engine.is_err() {
+            eprintln!("no audio device: skipped");
+            return;
+        }
+        let folder = std::env::temp_dir().join(format!("soba-tidied-takes-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let path = folder.join("Song.json");
+        let mut patch = Patch::new("Song");
+        patch.nodes.push(NodeData::new(1, "osc.sine", (0.0, 0.0)));
+        let mut sampler = NodeData::new(2, SAMPLER_ID, (200.0, 0.0));
+        sampler.parameters.push(NamedParameter::new("Tidy Takes", ParameterValue::Number(1.0)));
+        patch.nodes.push(sampler);
+        patch.connections.push(ConnectionData::new(1, "Out", 2, "In L"));
+        save_to_file(&patch, &path).unwrap();
+        app.open_file(&path);
+        app.is_playing = true;
+        app.user_state.is_playing = true;
+        app.send_command(EngineCommand::SetPlaying(true));
+        pump(&mut app, 0.3);
+
+        press_rec(&mut app);
+        pump(&mut app, 0.4);
+        press_rec(&mut app);
+        pump(&mut app, 0.2);
+
+        let key = file(&app).expect("the Sampler names its take");
+        assert_eq!(Path::new(&key), folder.join("Song samples").join("Take 1 tidied.wav"));
+        let tidied = sample_files::read_wav_file(Path::new(&key)).unwrap().sample;
+        let rms = 20.0 * crate::dsp::tidy::Survey::of(&tidied).rms.log10();
+        assert!((rms - crate::dsp::tidy::TARGET_RMS_DB).abs() < 0.1, "{rms}");
+        let (node_id, engine_id) = the_sampler(&app);
+        assert!(app.user_state.tidied_takes.contains_key(&node_id), "the face says so");
+        let held = app.ui_handle.as_ref().unwrap().graph().sample(engine_id).cloned().unwrap();
+        assert_eq!(held.as_ref(), &tidied, "plays the tidied take");
+
+        // Undo: the take as it came in, full scale
+        assert_eq!(app.history.undo_label(), Some("Tidy Take 1.wav"));
+        app.undo();
+        pump(&mut app, 0.1);
+        let raw = file(&app).expect("the take");
+        assert_eq!(sample_files::file_name(&raw), "Take 1.wav");
+        let take = sample_files::read_wav_file(Path::new(&raw)).unwrap().sample;
+        assert_eq!(take.frames(), tidied.frames(), "a sine is all sound: nothing trimmed");
+        assert!(take.left().iter().any(|&s| s.abs() > 0.5), "the sine as it came in");
+        app.undo();
+        pump(&mut app, 0.1);
+        assert_eq!(file(&app), None);
 
         app.send_command(EngineCommand::SetPlaying(false));
         pump(&mut app, 0.05);

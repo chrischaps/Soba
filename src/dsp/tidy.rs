@@ -51,6 +51,8 @@ const FADE_OUT_SECONDS: f32 = 0.08;
 pub const PEAK_CEILING_DB: f32 = -1.0;
 /// Where Normalize puts the sound's RMS, in its other mode.
 pub const TARGET_RMS_DB: f32 = -16.0;
+/// Changes of level smaller than this aren't worth a new file.
+pub const NO_CHANGE_DB: f32 = 0.05;
 /// How far over the ceiling peaks may be limited; beyond it the recording is lowered.
 const LIMIT_DB: f32 = 6.0;
 /// The limiter's look-ahead, and its recovery.

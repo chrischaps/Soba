@@ -242,6 +242,8 @@ impl Region {
 /// - **Rec Button**: the face's Rec, pressed to start a take and again to stop.
 /// - **Sensitivity** (0–1): how strong a hit must be to get a marker, when
 ///   sliced by Onsets. The editor finds them; here it's only kept.
+/// - **Tidy Takes** (off/on): the editor trims each take to its sound and
+///   sets its level as it's kept. Here it's only kept.
 pub struct Sampler {
     /// The recording voices start on.
     sample: Option<Arc<SampleData>>,
@@ -338,6 +340,8 @@ impl Sampler {
                     .describe("The Rec button on the face: pressed to start a take, and again to stop it"),
                 ParameterDefinition::new("sensitivity", "Sensitivity", 0.0, 1.0, DEFAULT_SENSITIVITY, ParameterDisplay::linear("%"))
                     .describe("Sliced by Onsets, how strong a hit must be to get a marker: turn it up for ghost notes and syllables, down for only the loudest hits. Turning it finds them afresh, letting go of markers moved by hand"),
+                ParameterDefinition::new("tidy_takes", "Tidy Takes", 0.0, 1.0, 0.0, ParameterDisplay::on_off())
+                    .describe("On, each take is trimmed to its sound and set to −16 dBFS RMS as it's kept (a take in bars keeps its length). Undo brings back the take as it came in"),
             ],
         }
     }
@@ -373,6 +377,7 @@ impl Sampler {
     pub const PARAM_REC_THRESHOLD: usize = 15;
     pub const PARAM_REC_BUTTON: usize = 16;
     pub const PARAM_SENSITIVITY: usize = 17;
+    pub const PARAM_TIDY_TAKES: usize = 18;
 
     /// Where the readout holds the slice each channel's voice plays, from 1
     /// (0 for none), after the playheads.
@@ -954,12 +959,13 @@ mod tests {
         assert_eq!(sampler.info().category, ModuleCategory::Source);
         let names: Vec<&str> = sampler.ports().iter().map(|p| p.name).collect();
         assert_eq!(names, ["Gate", "V/Oct", "Velocity", "Start", "Speed", "Slice", "In L", "In R", "Rec", "L", "R"]);
-        assert_eq!(sampler.parameters().len(), 18);
+        assert_eq!(sampler.parameters().len(), 19);
         for (index, name) in [
             (Sampler::PARAM_TAKE, "Take"),
             (Sampler::PARAM_SLICES, "Slices"),
             (Sampler::PARAM_REC_BUTTON, "Rec Button"),
             (Sampler::PARAM_SENSITIVITY, "Sensitivity"),
+            (Sampler::PARAM_TIDY_TAKES, "Tidy Takes"),
         ] {
             assert_eq!(sampler.parameters()[index].name, name);
         }

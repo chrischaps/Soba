@@ -15,13 +15,10 @@ use eframe::egui::{self, Color32, PopupCloseBehavior, Pos2, Rect, Sense, Shape, 
 use egui_node_graph2::NodeId;
 
 use crate::app::theme;
-use crate::dsp::tidy::{minus, signed_db, Level, Survey, PEAK_CEILING_DB, TARGET_RMS_DB};
+use crate::dsp::tidy::{minus, signed_db, Level, Survey, NO_CHANGE_DB, PEAK_CEILING_DB, TARGET_RMS_DB};
 
 use super::sample_shelf::ShelvedSample;
 use super::{SynthResponse, Tidy};
-
-/// Changes of level smaller than this aren't worth a new file.
-const NO_CHANGE_DB: f32 = 0.05;
 
 fn popup_id(node_id: NodeId) -> egui::Id {
     egui::Id::new(("sampler_tidy_menu", node_id))

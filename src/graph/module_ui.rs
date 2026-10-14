@@ -150,7 +150,7 @@ static MODULE_UI: &[ModuleUi] = &[
             knob_as("Rec Threshold", "Thresh"),
             knob_as("Sensitivity", "Sens"),
         ],
-        hidden: &["Rec Button"],
+        hidden: &["Rec Button", "Tidy Takes"],
         display: NodeDisplay::SamplerWave,
         knobs_per_row: 4,
         ..ModuleUi::DEFAULT

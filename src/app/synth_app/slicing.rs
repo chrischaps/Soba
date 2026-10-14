@@ -21,7 +21,7 @@ use crate::modules::plays_a_sample;
 use super::SynthApp;
 
 /// A parameter's value on a node, by name.
-fn value_of(graph: &SynthGraph, node_id: NodeId, name: &str) -> Option<f32> {
+pub(super) fn value_of(graph: &SynthGraph, node_id: NodeId, name: &str) -> Option<f32> {
     let node = graph.nodes.get(node_id)?;
     let (_, input) = node.inputs.iter().find(|(input, _)| input == name)?;
     Some(graph.get_input(*input).value.actual_value())

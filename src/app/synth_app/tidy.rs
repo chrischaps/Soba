@@ -6,14 +6,15 @@
 //! moves Start, End, the loop's markers and any slice markers placed by
 //! hand with the sound, so they still mark the same moments in it. Either way the result plays once from the
 //! face, as a file just opened does.
+//!
+//! A Sampler with Tidy Takes on does both to each take as it's kept, with
+//! no cue: the take has just been heard.
 
 use std::sync::Arc;
 
 use egui_node_graph2::NodeId;
 
-use crate::dsp::tidy::{self, signed_db};
-#[cfg(test)]
-use crate::dsp::tidy::Level;
+use crate::dsp::tidy::{self, signed_db, Level, NO_CHANGE_DB};
 use crate::graph::Tidy;
 use crate::persistence::sample_files;
 use super::SynthApp;
@@ -79,6 +80,51 @@ impl SynthApp {
             }
             Err(e) => self.status_message = Some(format!("Couldn't write the {word} file: {e}")),
         }
+    }
+
+    /// Tidies a take just kept, for a Sampler with Tidy Takes on: trimmed
+    /// to its sound, unless it's `in_bars` (its length is the loop), and
+    /// set to −16 dBFS RMS, into one new file, as a step of its own after
+    /// the take's, so undo brings back the take as it came in. Says what it
+    /// did ("−0.42 s, +5.2 dB"), or `None` if the take was tidy already.
+    pub(super) fn tidy_take(&mut self, node_id: NodeId, in_bars: bool) -> Result<Option<String>, String> {
+        let Some(key) = self.graph_state.graph.nodes.get(node_id).and_then(|node| node.user_data.file.clone()) else { return Ok(None) };
+        let name = sample_files::file_name(&key).to_string();
+        let shelved = self.user_state.samples.load(&key).map_err(|e| format!("couldn't read {name}: {e}"))?;
+        let (source, survey) = (Arc::clone(&shelved.source), shelved.survey().clone());
+        let rate = source.sample_rate();
+
+        let mut said = Vec::new();
+        let trimmed = if in_bars { None } else { tidy::trim(&source, &survey) };
+        let (made, survey) = match trimmed {
+            Some(trimmed) => {
+                let sound = survey.sound.clone().expect("a trim has a sound");
+                said.push(format!("−{:.2} s", (source.frames() - sound.len()) as f32 / rate));
+                self.move_slice_markers_with(node_id, source.frames(), sound.clone());
+                self.move_markers_with(node_id, source.frames(), sound);
+                let survey = tidy::Survey::of(&trimmed);
+                (trimmed, survey)
+            }
+            None => ((*source).clone(), survey),
+        };
+        let made = match tidy::normalize(&made, &survey, Level::Rms).filter(|n| n.gain_db.abs() >= NO_CHANGE_DB) {
+            Some(normalized) => {
+                said.push(signed_db(normalized.gain_db));
+                normalized.sample
+            }
+            None => made,
+        };
+        if said.is_empty() {
+            return Ok(None);
+        }
+
+        let stem = stem_without(&name, "tidied");
+        let new_key = self.keep_beside_patch(made, |n| if n == 1 { format!("{stem} tidied.wav") } else { format!("{stem} tidied {n}.wav") })?;
+        if let Some(node) = self.graph_state.graph.nodes.get_mut(node_id) {
+            node.user_data.file = Some(new_key);
+        }
+        self.history.name_next(format!("Tidy {name}"));
+        Ok(Some(said.join(", ")))
     }
 
     /// Moves a Sampler's markers to the same moments in the recording cut
@@ -223,6 +269,57 @@ mod round {
         assert_eq!(knob(&app, "End"), 0.625);
         app.redo();
         assert_eq!(file(&app), trimmed_key);
+
+        std::fs::remove_dir_all(&folder).ok();
+    }
+
+    /// A take tidied as it's kept: trimmed and levelled into one file, its
+    /// own undo step; in bars, levelled but its length kept; and a take
+    /// already tidy left as it is.
+    #[test]
+    #[ignore = "opens the audio device; run with --ignored"]
+    fn a_take_is_tidied_into_one_file() {
+        let mut app = SynthApp::new(false);
+        let folder = std::env::temp_dir().join(format!("soba-tidy-take-{}", std::process::id()));
+        std::fs::create_dir_all(folder.join("Song samples")).unwrap();
+        std::fs::write(folder.join("Song samples").join("Take 1.wav"), sample_files::encode_wav(&padded(48000.0))).unwrap();
+        let path = folder.join("Song.json");
+        let mut patch = Patch::new("Song");
+        let mut sampler = NodeData::new(1, SAMPLER_ID, (0.0, 0.0));
+        sampler.file = Some("Song samples/Take 1.wav".to_string());
+        patch.nodes.push(sampler);
+        save_to_file(&patch, &path).unwrap();
+        app.open_file(&path);
+        app.sync_samples();
+        let take = file(&app);
+        let node_id = the_sampler(&app);
+        let level = |key: &str| {
+            let sample = sample_files::read_wav_file(Path::new(key)).unwrap().sample;
+            (sample.seconds(), 20.0 * tidy::Survey::of(&sample).rms.log10())
+        };
+
+        // Free: trimmed to the tone and its tail, at −16 dBFS RMS, from −30
+        let done = app.tidy_take(node_id, false).unwrap().expect("tidied");
+        app.sync_history();
+        let tidied = file(&app);
+        assert_eq!(Path::new(&tidied), folder.join("Song samples").join("Take 1 tidied.wav"));
+        assert!(done.starts_with("−2.") && done.ends_with(", +14.0 dB"), "{done}");
+        let (seconds, rms) = level(&tidied);
+        assert!((seconds - 1.3).abs() <= 0.03, "{seconds}");
+        assert!((rms - tidy::TARGET_RMS_DB).abs() < 0.1, "{rms}");
+        assert_eq!(app.history.undo_label(), Some("Tidy Take 1.wav"));
+
+        // Tidy already: nothing new
+        assert_eq!(app.tidy_take(node_id, false), Ok(None));
+
+        // Undone, the take as it came in; in bars, it keeps its four seconds
+        app.undo();
+        assert_eq!(file(&app), take);
+        app.tidy_take(node_id, true).unwrap().expect("levelled");
+        app.sync_history();
+        let (seconds, rms) = level(&file(&app));
+        assert!((seconds - 4.0).abs() < 0.001, "{seconds}");
+        assert!((rms - tidy::TARGET_RMS_DB).abs() < 0.1, "{rms}");
 
         std::fs::remove_dir_all(&folder).ok();
     }

@@ -9,9 +9,14 @@
 //! Waiting for a sound, the panel dims and an input meter runs along its
 //! foot, with the threshold marked, so it's plain how loud to be. Armed
 //! for the next bar, it says so.
+//!
+//! With Tidy takes on (from Rec's right-click menu), Rec wears crop marks,
+//! as a trim previewed on the waveform does. A take tidied as it's kept
+//! shows them round the whole panel for a moment, with what tidying did.
 
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Stroke, Vec2};
 use egui_node_graph2::NodeId;
+use web_time::Instant;
 
 use crate::app::theme;
 use crate::dsp::Readout;
@@ -26,6 +31,13 @@ pub const MIN_PRESS_SECONDS: f64 = 0.06;
 
 /// The face's Rec button parameter.
 pub const REC_BUTTON: &str = "Rec Button";
+
+/// The parameter Rec's menu turns on to tidy each take as it's kept.
+pub const TIDY_TAKES: &str = "Tidy Takes";
+
+/// How long a take's face says it was tidied, the last part fading.
+const TIDIED_SECONDS: f32 = 3.5;
+const TIDIED_FADE_SECONDS: f32 = 1.0;
 
 /// What the recorder is doing, as the face shows it.
 #[derive(Clone, Copy, Debug)]
@@ -177,9 +189,55 @@ pub fn draw_waiting(painter: &egui::Painter, rect: Rect, plot: Rect, view: &RecV
     }
 }
 
+/// Crop marks at the corners of `rect`, each arm `arm` long.
+fn crop_marks(painter: &egui::Painter, rect: Rect, arm: f32, stroke: Stroke) {
+    for (x, inward) in [(rect.left(), 1.0), (rect.right(), -1.0)] {
+        for (y, down) in [(rect.top(), 1.0), (rect.bottom(), -1.0)] {
+            painter.line_segment([Pos2::new(x, y), Pos2::new(x + inward * arm, y)], stroke);
+            painter.line_segment([Pos2::new(x, y), Pos2::new(x, y + down * arm)], stroke);
+        }
+    }
+}
+
+/// Seconds since the face first showed the take tidied `at`, on the
+/// frame clock, so a capture shows it as long as the app does.
+pub fn tidied_age(ui: &egui::Ui, node_id: NodeId, at: Instant) -> f32 {
+    let id = egui::Id::new(("sampler_tidied", node_id));
+    let now = ui.input(|i| i.time);
+    let shown = ui.data_mut(|d| match d.get_temp::<(Instant, f64)>(id) {
+        Some((seen, shown)) if seen == at => shown,
+        _ => {
+            d.insert_temp(id, (at, now));
+            now
+        }
+    });
+    (now - shown) as f32
+}
+
+/// Says a take was just tidied as it was kept, `age` seconds ago: crop
+/// marks round the panel and what tidying did, on a tab at its corner,
+/// fading. Returns whether it's still showing.
+pub fn draw_tidied(painter: &egui::Painter, plot: Rect, said: &str, age: f32, z: f32) -> bool {
+    if age >= TIDIED_SECONDS {
+        return false;
+    }
+    let alpha = ((TIDIED_SECONDS - age) / TIDIED_FADE_SECONDS).min(1.0);
+    crop_marks(painter, plot.shrink(1.0 * z), 5.0 * z, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(alpha)));
+
+    let font = egui::FontId::proportional(8.0 * z);
+    let text = painter.layout_no_wrap(format!("Tidied  {said}"), font, Color32::WHITE.gamma_multiply(alpha));
+    let size = text.size() + Vec2::new(16.0 * z, 2.0 * z);
+    let tab = Rect::from_min_size(Pos2::new(plot.right() - size.x - 8.0 * z, plot.top() + 3.0 * z), size);
+    painter.rect_filled(tab, 3.0 * z, Color32::from_black_alpha((190.0 * alpha) as u8));
+    let mark = Rect::from_center_size(Pos2::new(tab.left() + 6.0 * z, tab.center().y), Vec2::new(5.0 * z, 5.0 * z));
+    crop_marks(painter, mark, 1.6 * z, Stroke::new(0.9 * z, Color32::WHITE.gamma_multiply(0.8 * alpha)));
+    painter.galley(Pos2::new(tab.left() + 12.0 * z, tab.top() + 1.0 * z), text, Color32::WHITE);
+    true
+}
+
 /// The Rec button, in `rect`: pressed from the face, it holds the Rec
-/// Button parameter down for a moment. Right-click learns a MIDI
-/// footswitch for it.
+/// Button parameter down for a moment. Right-click turns Tidy takes on or
+/// off (`tidies`), and learns a MIDI footswitch for it.
 #[allow(clippy::too_many_arguments)]
 pub fn rec_button(
     ui: &mut egui::Ui,
@@ -188,6 +246,7 @@ pub fn rec_button(
     user_state: &SynthGraphState,
     view: &RecView,
     down: bool,
+    tidies: bool,
     blocked: Option<RecBlock>,
     z: f32,
 ) -> Vec<SynthResponse> {
@@ -202,7 +261,9 @@ pub fn rec_button(
     // Down for at least MIN_PRESS_SECONDS
     let now = ui.input(|i| i.time);
     let pressed_at: Option<f64> = ui.ctx().data(|d| d.get_temp(id));
-    let holding = usable && (button.is_pointer_button_down_on() || button.clicked());
+    // The primary button only: a right-click opens the menu, not a take
+    let primary = button.is_pointer_button_down_on() && ui.input(|i| i.pointer.primary_down());
+    let holding = usable && (primary || button.clicked());
     match pressed_at {
         None if holding => {
             ui.ctx().data_mut(|d| d.insert_temp(id, now));
@@ -243,6 +304,10 @@ pub fn rec_button(
         RecState::Idle => red.gamma_multiply(0.3),
     };
     ui.painter().circle_filled(rect.center(), 3.2 * z, dot);
+    // Tidying takes, it wears crop marks
+    if tidies {
+        crop_marks(ui.painter(), rect.shrink(1.5 * z), 2.5 * z, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.75)));
+    }
 
     // A learned MIDI footswitch shows as a purple badge
     let param_index = Sampler::PARAM_REC_BUTTON;
@@ -263,14 +328,26 @@ pub fn rec_button(
         (RecState::Idle, Some(block)) => block.tip().to_string(),
         (RecState::Idle, None) => {
             let mut tip = "Record what's patched into In: press to start, and again to stop. The take plays at once, and is kept with the patch".to_string();
+            if tidies {
+                tip.push_str("\nTidy takes is on: each is trimmed to its sound and set to −16 dBFS RMS as it's kept");
+            }
             if let Some(m) = mapping {
                 tip.push_str(&format!("\nMIDI CC {} presses it", m.cc_number));
             }
             tip
         }
     };
-    let button = button.on_hover_text(format!("{tip}\nRight-click to learn a MIDI footswitch"));
+    let button = button.on_hover_text(format!("{tip}\nRight-click to tidy takes as they're kept, or learn a MIDI footswitch"));
     button.context_menu(|ui| {
+        let mut on = tidies;
+        let tidy = ui.checkbox(&mut on, "Tidy takes").on_hover_text(
+            "Trim each take to its sound and set it to −16 dBFS RMS as it's kept, into one file. A take in bars keeps its length. Undo brings back the take as it came in",
+        );
+        if tidy.changed() {
+            responses.push(SynthResponse::ParameterChanged { node_id, param_name: TIDY_TAKES.to_string(), value: if on { 1.0 } else { 0.0 } });
+            ui.close_menu();
+        }
+        ui.separator();
         let Some(eid) = engine_node_id else { return };
         if learning {
             if ui.button("Cancel MIDI Learn").clicked() {

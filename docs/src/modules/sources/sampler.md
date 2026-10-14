@@ -44,6 +44,7 @@ Patch something into **In L** (and **In R**, for stereo) and press the red **Rec
 - **Takes in bars.** Set **Take** to a number of bars with a [Clock](../modulation/clock.md) running. Rec then starts on the next bar line and stops after exactly that many bars, so the take is already a loop. A press up to 50 ms after a bar line counts as on it.
 - **Stopping.** Rec again, the **Rec** gate falling, the bars running out, or the room: a take lasts at most a minute. Stopping the transport ends a take there.
 - **The Rec jack** takes over from the button, as **Freeze** does on the Vocoder: the Sampler records while the gate is high. A sequencer's gate resamples a phrase on cue.
+- **Tidied as they're kept.** Right-click **Rec** and tick **Tidy takes**, and each take is trimmed to its sound and set to −16 dBFS RMS as it's kept (see [Tidy takes](#tidy-takes)).
 - **On a footswitch.** Right-click **Rec** to learn a MIDI CC for it.
 
 Live input reaches the patch a round trip after it was played, so the take is written that much earlier, as the [Looper](../utilities/looper.md)'s overdubs are. A take in bars begins with what you played on the bar line, within a few milliseconds at the latency your device reports. The patch's own sound has no round trip, and is taken as it comes.
@@ -74,6 +75,14 @@ A take comes in raw: silence at each end, whatever level the mic gave it, perhap
 Each item says what it would do before you choose it: how much each end loses, or how many dB the level moves. While the pointer is on an item, the waveform shows it too. A trim veils the parts it would cut and sets crop marks round what it keeps. A level writes its change across the panel, since the waveform is always drawn to fill it.
 
 Neither touches the original. Each writes a new WAV beside the patch, in `<patch name> samples`, named for what was done (`Take 1 trimmed.wav`, then `Take 1 trimmed normalized.wav`), and the Sampler plays it once, as it does a file just opened. It's a step you can undo: undo brings back the untouched file. A trim moves **Start**, **End** and the loop's markers with the sound, so they mark the same moments in it. A marker in a part that was cut goes to that end. Sliced, the slices are cut from what's left.
+
+### Tidy takes
+
+To have every take come in tidy, right-click **Rec** and tick **Tidy takes**. Each take is then trimmed to its sound and normalized to −16 dBFS RMS the moment it's kept, both in one go, into one file: `Take 1 tidied.wav`. The panel frames the waveform in crop marks for a moment and says what was done, such as *Tidied −0.42 s, +5.2 dB*, and so does the status bar. While it's on, **Rec** wears small crop marks of its own. The choice is saved with the patch, Sampler by Sampler.
+
+The take as it came in is still written first, as `Take 1.wav`, and tidying is its own step after it. One undo brings back the raw take, and a second gives the Sampler back the file it had before.
+
+A take in bars (**Take** set to a number of bars) is never trimmed, since its length is the loop. It's only normalized. With **Thresh** turned up, the trim still finds where the sound begins: the 30 ms Thresh keeps before it is there for the trim to walk back into, and it keeps what it finds. A take that's already tidy, its sound filling it and its level on −16 dBFS, is left as it is.
 
 ### Where the sound begins
 

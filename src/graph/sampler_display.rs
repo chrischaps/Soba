@@ -274,6 +274,12 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             if let Some(tidy) = sampler_tidy::previewing(ui, node_id) {
                 sampler_tidy::draw_preview(&painter, plot, sample, tidy, z);
             }
+            // A take just tidied as it was kept, and what that did
+            if let Some((said, at)) = user_state.tidied_takes.get(&node_id) {
+                if sampler_take::draw_tidied(&painter, plot, said, sampler_take::tidied_age(ui, node_id, *at), z) {
+                    ui.ctx().request_repaint();
+                }
+            }
         }
         None if live => {
             let scope = engine_id.and_then(|id| user_state.get_scope_data(id));
@@ -525,7 +531,8 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     // Rec, beside it
     let rec_rect = Rect::from_min_size(Pos2::new(button.left() - 22.0 * z, row.top() + 1.0 * z), Vec2::new(18.0 * z, row_height - 2.0 * z));
     let held = value_of(REC_BUTTON).is_some_and(|v| v >= 0.5);
-    responses.extend(sampler_take::rec_button(ui, rec_rect, node_id, user_state, &rec, held, blocked, z));
+    let tidies = node.get_input(sampler_take::TIDY_TAKES).is_ok_and(|input| graph.get_input(input).value.actual_value() >= 0.5);
+    responses.extend(sampler_take::rec_button(ui, rec_rect, node_id, user_state, &rec, held, tidies, blocked, z));
     responses
 }
 
