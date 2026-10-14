@@ -21,9 +21,10 @@ How the view moves:
   the level, which depends on what the app has measured of its modules:
   that's measured. A dry run (`shots.py <shot> --dry`) makes the same moves
   packed tight and dumps the view at every arrival; `learn` keeps each dive's
-  landing in bases.json, by level, zoom and first visit or not, for the next
-  run to aim from. A dive aimed from a guess can miss its group, so dry-run
-  until no arrival is left unmeasured: three or four runs for a long tour.
+  landing in the film's aims file (films/<film>/aims*.json), by level, zoom
+  and first visit or not, for the next run to aim from. A dive aimed from a
+  guess can miss its group, so dry-run until no arrival is left unmeasured
+  (`shots.py <shot> --converge`): one to four runs for a long tour.
 - A level's modules come from the patch, a group by `group("Bells")` or any
   node by its id; their sizes from the dry run's layouts, so `middle()`,
   `centre_of()` and `fit_zoom()` aim at what is really drawn.
@@ -41,6 +42,16 @@ NOMINAL = (206.0, 280.0)
 DIVE = 0.36
 # From the first press of a double-click to its last release
 CLICKS = 0.21
+
+# The node editor in points, below the toolbar and above the status bar, for
+# a capture's window size and ppp (read from a `layout` cue's view: run any
+# capture with `0.2 layout x` and look at view.editor). A portrait cut is
+# cropped to the editor: from y = editor top * ppp, in pixels
+EDITORS = {
+    ("1920x1080", 1.25): (0.0, 74.72, 1536.0, 838.0),
+    ("1920x1080", 1.55): (0.0, 74.7, 1238.7, 670.8),
+    ("1080x2124", 1.5): (0.0, 109.64, 720.0, 1390.0),
+}
 
 
 class PatchMap:
@@ -103,6 +114,8 @@ class Tour:
         self.visited = set()
         self.landed = []
         self.unmeasured = 0
+        # Whether the last dry run saw every arrival land (set by shots.py)
+        self.settled = False
         self.labels = []
         self.holds = []
 
@@ -191,7 +204,7 @@ class Tour:
         s, o = self.cam
         target = (self.c[0] - point[0] * zoom, self.c[1] - point[1] * zoom)
         o2 = tuple(target[i] - self.c[i] - (self.origin[i] - self.c[i]) * r + o[i] * r for i in range(2))
-        self.s.at(t, f"camera {o2[0]:.2f} {o2[1]:.2f} {s * r:.6f} {dur}" + (f"   # {note}" if note else ""))
+        self.s.at(t, f"camera {o2[0]:.2f} {o2[1]:.2f} {s * r:.6f} {round(dur, 4)}" + (f"   # {note}" if note else ""))
         self.cam = (s * r, o2)
         self.zoom, self.origin = zoom, target
         if not fast:
@@ -215,6 +228,23 @@ class Tour:
         mid = ((here[0] + point[0]) / 2, (here[1] + point[1]) / 2)
         t1 = self.look(t, mid, apex, dur / 2, f"{note} (over)" if note else "")
         return self.look(t1 if not self.dry else t, point, zoom, dur / 2, note, subject)
+
+    def inside(self, t, until, focus=None, zoom=1.3, note="", subject=None, widest=1.0):
+        """In a group: settle on the whole level, then drift in on one module
+        (an id, or the first of a kind) until `until`."""
+        t = self.look(t, self.middle(), self.fit_zoom(most=widest), 0.9, f"{note}: the whole group", subject)
+        if focus is not None:
+            key = self.find(focus) if isinstance(focus, str) else focus
+            t = self.look(t + 0.3, self.centre_of(key), zoom, max(1.0, until - t - 0.3), f"{note}: in on {focus}", subject)
+        return t
+
+    def inside_tall(self, t, until, start, focus, zoom=1.5, note="", subject=None):
+        """In a group, in a portrait frame, where a whole level is a thin strip:
+        open on one module, then drift along to another."""
+        first = self.find(start) if isinstance(start, str) else start
+        t = self.look(t, self.centre_of(first), zoom * 0.85, 0.9, f"{note}: {start}", subject)
+        key = self.find(focus) if isinstance(focus, str) else focus
+        return self.look(t + 0.3, self.centre_of(key), zoom, max(1.0, until - t - 0.3), f"{note}: along to {focus}", subject)
 
     def double_click(self, t, p):
         """Double-clicks a screen point. The pointer jumps there from where it
@@ -301,8 +331,8 @@ class Tour:
 
     def learn(self, out_dir):
         """Keeps where a dry run's dives landed, and the sizes its layouts
-        measured, in bases.json for the next run to aim from. Says how far
-        the worked-out arrivals were from where the view really went."""
+        measured, in the film's aims file for the next run to aim from. Says
+        how far the worked-out arrivals were from where the view really went."""
         out_dir = Path(out_dir)
         entries, sizes = dict(self.entries), dict(self.sizes)
         worst, lost = 0.0, []
@@ -324,7 +354,8 @@ class Tour:
                 lost.append(f"{k} {land['note']}")
                 continue
             sizes.setdefault(str(land["level"]), {}).update(found)
-            origin = d["view"]["origin"]
+            # Rounded, so a dry run that lands the same doesn't churn the file
+            origin = [round(v, 2) for v in d["view"]["origin"]]
             if land["key"]:
                 entries[land["key"]] = origin
             elif abs(d["view"]["zoom"] - land["zoom"]) < 1e-3:

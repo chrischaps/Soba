@@ -69,7 +69,7 @@
 -27.1700 press
 -27.1000 release
 -27.0200 move 60.0 1402.0 0
--26.4400 camera -2202.00 -673.51 1.000000 0.05
+-26.4400 camera -2202.00 -673.52 1.000000 0.05
 -26.2900 move 372.0 561.3 0
 -25.9900 press
 -25.9200 release
@@ -77,7 +77,7 @@
 -25.7800 release
 -25.7000 move 60.0 1402.0 0
 -25.1200 key Escape 0.05
--24.1600 camera -2448.00 -616.26 1.000000 0.05
+-24.1600 camera -2448.00 -616.27 1.000000 0.05
 -24.0100 move 372.0 618.5 0
 -23.7100 press
 -23.6400 release
@@ -85,7 +85,7 @@
 -23.5000 release
 -23.4200 move 60.0 1402.0 0
 -22.8400 key Escape 0.05
--21.8800 camera -2448.00 -930.26 1.000000 0.05
+-21.8800 camera -2448.00 -930.27 1.000000 0.05
 -21.7300 move 372.0 618.5 0
 -21.4300 press
 -21.3600 release
@@ -94,7 +94,7 @@
 -21.1400 move 60.0 1402.0 0
 -20.5600 key Escape 0.05
 -19.6000 key Escape 0.05
--18.6400 camera -3608.00 -680.46 1.000000 0.05
+-18.6400 camera -3608.00 -680.47 1.000000 0.05
 -18.4900 move 372.0 586.5 0
 -18.1900 press
 -18.1200 release
@@ -102,7 +102,7 @@
 -17.9800 release
 -17.9000 move 60.0 1402.0 0
 -17.3200 key Escape 0.05
--16.3600 camera -3842.00 -669.96 1.000000 0.05
+-16.3600 camera -3842.00 -669.97 1.000000 0.05
 -16.2100 move 372.0 597.0 0
 -15.9100 press
 -15.8400 release
@@ -110,7 +110,7 @@
 -15.7000 release
 -15.6200 move 60.0 1402.0 0
 -15.0400 key Escape 0.05
--14.0800 camera -3608.00 -989.46 1.000000 0.05
+-14.0800 camera -3608.00 -989.47 1.000000 0.05
 -13.9300 move 372.0 647.5 0
 -13.6300 press
 -13.5600 release
@@ -118,7 +118,7 @@
 -13.4200 release
 -13.3400 move 60.0 1402.0 0
 -12.7600 key Escape 0.05
--11.8000 camera -3374.00 -707.96 1.000000 0.05
+-11.8000 camera -3374.00 -707.97 1.000000 0.05
 -11.6500 move 372.0 559.0 0
 -11.3500 press
 -11.2800 release
@@ -126,7 +126,7 @@
 -11.1400 release
 -11.0600 move 60.0 1402.0 0
 -10.4800 key Escape 0.05
--9.5200 camera -3374.00 -1123.96 1.000000 0.05
+-9.5200 camera -3374.00 -1123.97 1.000000 0.05
 -9.3700 move 372.0 618.0 0
 -9.0700 press
 -9.0000 release
@@ -134,7 +134,7 @@
 -8.8600 release
 -8.7800 move 60.0 1402.0 0
 -8.2000 key Escape 0.05
--7.2400 camera -4166.00 -915.96 1.000000 0.05
+-7.2400 camera -4166.00 -915.97 1.000000 0.05
 -7.0900 move 372.0 618.0 0
 -6.7900 press
 -6.7200 release
@@ -142,7 +142,7 @@
 -6.5800 release
 -6.5000 move 60.0 1402.0 0
 -5.9200 key Escape 0.05
--4.9600 camera -4424.00 -598.46 1.000000 0.05
+-4.9600 camera -4424.00 -598.47 1.000000 0.05
 -4.8100 move 372.0 668.5 0
 -4.5100 press
 -4.4400 release
@@ -150,22 +150,22 @@
 -4.3000 release
 -4.2200 move 60.0 1402.0 0
 -3.6400 key Escape 0.05
--0.5000 camera -2617.60 -601.69 0.800000 0.05   # the loops and the band
+-0.5000 camera -2617.60 -601.70 0.800000 0.05   # the loops and the band
 0.0000 play
-115.8621 camera -3372.00 -722.11 1.000000 5.4   # the drums coming back
+115.8621 camera -3372.00 -722.12 1.000000 5.4   # the drums coming back
 121.4621 camera -2134.27 -361.53 0.547529 1.1   # the Riser (over)
-122.5621 camera -8848.00 -1196.93 2.000000 1.1   # the Riser
+122.5621 camera -8848.00 -1196.94 2.000000 1.1   # the Riser
 123.5621 move 384.0 587.1 0
 123.8621 press
 123.9321 release
 124.0021 press
 124.0721 release
 124.1521 move 60.0 1402.0 0
-124.6621 camera -6332.84 -654.11 1.360000 0.9   # Riser: source.noise
-125.8621 camera -7827.20 -791.14 1.600000 1.4999999999999971   # Riser: along to filter.svf
+124.6621 camera -6332.84 -654.12 1.360000 0.9   # Riser: source.noise
+125.8621 camera -7827.20 -791.15 1.600000 1.5   # Riser: along to filter.svf
 127.6621 key Escape 0.05
-128.2621 camera -2331.37 -287.89 0.535440 1.9258620689655102   # the Drums, as the Peak lands (over)
-130.1879 camera -5724.38 -871.31 1.500000 1.9258620689655102   # the Drums, as the Peak lands
+128.2621 camera -2331.37 -287.89 0.535440 1.9259   # the Drums, as the Peak lands (over)
+130.1879 camera -5724.38 -871.32 1.500000 1.9259   # the Drums, as the Peak lands
 131.9738 move 378.0 463.5 0
 132.2738 press
 132.3438 release
@@ -176,38 +176,38 @@
 134.4138 camera -5027.92 -394.23 1.000000 6.4   # Drums: along the kit
 141.1138 key Escape 0.05
 141.7138 camera -2219.36 66.79 0.384128 1.5   # the Dancer (over)
-143.2138 camera -12075.72 1372.70 1.850000 1.5   # the Dancer
+143.2138 camera -12075.72 1372.69 1.850000 1.5   # the Dancer
 149.6138 camera -1229.88 26.32 0.232539 1.5   # the Strings (over)
-151.1138 camera -8100.83 -1031.20 2.000000 1.5   # the Strings
+151.1138 camera -8100.83 -1031.22 2.000000 1.5   # the Strings
 152.7138 move 384.0 503.5 0
 153.0138 press
 153.0838 release
 153.1538 press
 153.2238 release
 153.3038 move 60.0 1402.0 0
-153.8138 camera -5544.27 -553.82 1.250000 0.8   # Strings: the String Machine and a Pump
+153.8138 camera -5544.27 -553.83 1.250000 0.8   # Strings: the String Machine and a Pump
 154.7138 move 212.5 514.1 0
 155.0138 press
 155.0838 release
 155.1538 press
 155.2238 release
 155.3038 move 60.0 1402.0 0
-155.8138 camera -5460.22 -337.62 1.190000 0.9   # String Machine: osc.sine
-157.0138 camera -8736.59 -224.02 1.400000 1.8344827586206918   # String Machine: along to fx.chorus
+155.8138 camera -5460.22 -337.63 1.190000 0.9   # String Machine: osc.sine
+157.0138 camera -8736.58 -224.03 1.400000 1.8345   # String Machine: along to fx.chorus
 159.1483 key Escape 0.05
 159.7483 key Escape 0.05
-160.3483 camera -4453.17 320.85 0.759751 1.45   # the Faders turn the page (over)
-161.7983 camera -6304.62 1155.32 1.150000 1.45   # the Faders turn the page
+160.3483 camera -4453.16 320.84 0.759751 1.45   # the Faders turn the page (over)
+161.7983 camera -6304.61 1155.31 1.150000 1.45   # the Faders turn the page
 165.3172 camera -1786.00 158.81 0.273245 1.3   # the Flute, an octave up (over)
-166.6172 camera -15180.55 315.56 2.000000 1.3   # the Flute, an octave up
+166.6172 camera -15180.55 315.54 2.000000 1.3   # the Flute, an octave up
 168.0172 move 384.0 444.1 0
 168.3172 press
 168.3872 release
 168.4572 press
 168.5272 release
 168.6072 move 60.0 1402.0 0
-169.1172 camera -10053.73 219.45 1.275000 0.9   # Flute: seq.step
-170.3172 camera -12235.92 230.43 1.500000 2.7999999999999945   # Flute: along to osc.sine
+169.1172 camera -10053.72 219.44 1.275000 0.9   # Flute: seq.step
+170.3172 camera -12235.91 230.41 1.500000 2.8   # Flute: along to osc.sine
 173.4172 key Escape 0.05
-174.0172 camera -3169.18 222.44 0.400000 4.0   # out to the band and the desk
+174.0172 camera -3169.18 222.43 0.400000 4.0   # out to the band and the desk
 178.0172 end

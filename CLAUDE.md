@@ -221,11 +221,14 @@ python tools/showcase/encode.py hero out.mp4 --loop 2 --fps 30 --crf 27 --poster
 # Captures are lossless by default (~20 MB/s at 1080p30). A long shot passes
 # `--crf 12 --preset fast` to soba --capture (a shot sets crf= in shots.py): ~4-5 MB/s
 python tools/showcase/shots.py from-one-sine     # the whole 4:41 song, ~10 min to film, 1.3 GB
-# A shot that dives in and out of groups (tools/showcase/tour.py; Canopy's two) is
-# aimed by dry runs: repeat until none says an arrival is unmeasured or didn't land.
-# activity.py measures each part's level from soloed stems, to check what a shot is of
-python tools/showcase/shots.py canopy --dry
-python tools/showcase/encode.py canopy-vertical out.mp4 --crop 1080x1920+0+165 --fade-out 2   # portrait cut
+# A film: a whole song, the camera diving into whichever group is playing (Canopy's
+# two cuts). tools/showcase/FILMS.md walks through re-shooting one and starting the next:
+# stems.py + activity.py (what plays when), --converge (aim the dives), film,
+# check_film.py (review), encode.py. What a film keeps is in tools/showcase/films/<film>/
+python tools/showcase/shots.py canopy --converge
+python tools/showcase/check_film.py canopy
+# Does everything scale smoothly as the view zooms? (#255: text-sized parts step)
+python tools/showcase/zoom_jitter.py patches/canopy.json
 # After a module grows: are every example's modules still inside their frames,
 # clear of notes and of each other? (Re-shoot any recipe image of an example it flags)
 python tools/showcase/check_layout.py
