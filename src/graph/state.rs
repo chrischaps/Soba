@@ -258,6 +258,10 @@ pub struct SynthGraphState {
     /// before drawing.
     pub group_faces: HashMap<GroupId, Face>,
 
+    /// Where each group's miniature was drawn this frame, on screen, so
+    /// stepping in can zoom through it. Filled as faces are drawn.
+    pub miniatures: HashMap<GroupId, egui::Rect>,
+
     /// What each port on the shown level can do with groups' jacks, by node
     /// and side, then port name. Set by the app before drawing.
     pub jack_actions: HashMap<(NodeId, Side), Vec<(String, Vec<JackAction>)>>,
@@ -322,6 +326,7 @@ impl Default for SynthGraphState {
             hidden: HashSet::new(),
             output_aliases: HashMap::new(),
             group_faces: HashMap::new(),
+            miniatures: HashMap::new(),
             jack_actions: HashMap::new(),
             renaming: None,
             engine_cables: Default::default(),
@@ -427,6 +432,7 @@ impl SynthGraphState {
         self.hidden.clear();
         self.output_aliases.clear();
         self.group_faces.clear();
+        self.miniatures.clear();
         self.jack_actions.clear();
         self.renaming = None;
         self.engine_cables.clear();

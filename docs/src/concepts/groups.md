@@ -22,6 +22,8 @@ To take a group apart, select it and press `Ctrl + Alt + G`, or right-click it a
 
 Double-click a group, select it and press `Tab`, or click the miniature on its face, to go inside. A trail at the top of the canvas shows where you are, such as *First Sound › Voice*. Click any name in the trail to go back out to it, or press `Escape` to go up one level.
 
+Going in, the view zooms into the group's miniature, and the inside grows out of it, each module coming from where the miniature showed it. Going back out with `Escape`, the inside shrinks back into the miniature on the group's face. Hold `Shift` as you go in or out to skip the zoom. Clicking the trail always takes you straight there.
+
 ![Inside the Voice group](../images/groups-inside.png)
 *Inside Voice. Inputs carries what's plugged into the group's jacks outside; Outputs sends its signals back out.*
 

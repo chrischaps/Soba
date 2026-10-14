@@ -58,6 +58,7 @@ mod value_types;
 
 pub use arranger_display::claim_wheel as claim_arranger_wheel;
 pub use chord_ear::{letter_keys_held, letter_keys_taken};
+pub use group_face::{miniature_transform, paint_miniature, paint_open_pill};
 pub use data_types::SynthDataType;
 pub use groups::{GroupId, NodeKind};
 pub use port_mapping::SynthGraph;

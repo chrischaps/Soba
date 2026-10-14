@@ -48,6 +48,7 @@ use super::WEB;
 use super::web;
 
 mod cue;
+mod dive;
 mod file_hover;
 mod framing;
 mod grouping;
@@ -315,6 +316,10 @@ pub struct SynthApp {
     sized_at_zoom: f32,
     /// The level was framed before some of its nodes had been drawn.
     reframe_level: bool,
+    /// The view zooming into a group through its miniature, or out of one.
+    dive: Option<dive::Dive>,
+    /// Where each group's miniature was last drawn on its node.
+    miniature_places: dive::MiniaturePlaces,
 
     // --- Browser ---
     /// Embedded in a page (`?patch=` in the address): just the canvas, with
@@ -506,6 +511,8 @@ impl SynthApp {
             node_sizes: HashMap::new(),
             sized_at_zoom: 0.0,
             reframe_level: false,
+            dive: None,
+            miniature_places: HashMap::new(),
             embedded: false,
             fit_pending: 0,
             glide: None,
@@ -1792,16 +1799,26 @@ impl SynthApp {
                 // Reset widget context menu flag before drawing
                 self.user_state.widget_context_menu_open = false;
 
-                // F's glide, first, so all of this frame is drawn where it's got to
+                // A step into or out of a group, then F's glide, first, so
+                // all of this frame is drawn where they've got to
+                let dive = self.step_dive(ctx);
                 self.step_glide(ui);
 
                 // Update zoom for widget scaling, and where frames and notes go
                 self.user_state.zoom = self.graph_state.pan_zoom.zoom;
                 self.user_state.view_origin = self.history.view_origin();
 
-                // The grid sits under the patch and moves with it
+                // The grid sits under the patch and moves with it, as a dive
+                // zooms it too
+                let layer = ui.layer_id();
+                let next_shape = || ctx.graphics_mut(|g| g.entry(layer).next_idx());
+                let grid_start = next_shape();
                 let grid_origin = editor_rect.min + self.graph_state.pan_zoom.pan + self.history.view_origin();
-                theme::draw_grid_background(ui.painter(), editor_rect, grid_origin, self.graph_state.pan_zoom.zoom);
+                let canvas = Self::dive_canvas(dive.as_ref(), editor_rect);
+                let mut grid_painter = ui.painter().clone();
+                grid_painter.set_clip_rect(canvas);
+                theme::draw_grid_background(&grid_painter, canvas, grid_origin, self.graph_state.pan_zoom.zoom);
+                let grid_end = next_shape();
                 self.draw_level_backdrop(ui.painter(), editor_rect);
 
                 // The view the copy before this one had, after an update
@@ -1828,12 +1845,24 @@ impl SynthApp {
                         self.graph_state.pan_zoom.pan = pan;
                     }
                 }
+                self.user_state.miniatures.clear();
+                let graph_start = next_shape();
+                // A dive draws all of what will be on screen once it's moved
+                let view_clip = ui.clip_rect();
+                if dive.is_some() {
+                    ui.set_clip_rect(canvas);
+                }
                 let graph_response = self.graph_state.draw_graph_editor(
                     ui,
                     AllNodeTemplates,
                     &mut self.user_state,
                     Vec::default(),
                 );
+                ui.set_clip_rect(view_clip);
+                self.note_miniatures();
+                if let Some(dive) = &dive {
+                    self.paint_dive(ui, layer, &[(grid_start, grid_end), (graph_start, next_shape())], dive);
+                }
                 // Zooming moves every node; undo keeps positions that don't
                 self.history.follow_zoom(zoom_before, pan_before, &self.graph_state.pan_zoom);
                 self.follow_touch_pan(ctx);
@@ -2563,7 +2592,7 @@ impl SynthApp {
             NodeMenuAction::Delete(node_id) => self.delete_selection(&self.menu_targets(node_id), "Delete", "Deleted"),
             NodeMenuAction::Group(node_id) => self.group_selection(ctx, &self.menu_targets(node_id).nodes),
             NodeMenuAction::Ungroup(node_id) => self.ungroup(&self.menu_targets(node_id).nodes),
-            NodeMenuAction::Enter(node_id) => self.enter_group(node_id),
+            NodeMenuAction::Enter(node_id) => self.dive_into(ctx, node_id),
             NodeMenuAction::StartRename(node_id) => self.start_rename(node_id),
             NodeMenuAction::Rename(node_id, name) => self.rename_group(node_id, &name),
             NodeMenuAction::Pin(node_id, param_name, levels) => self.pin_knob(node_id, &param_name, levels),

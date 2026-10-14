@@ -10,7 +10,7 @@
 use eframe::egui::{self, vec2, FontId, RichText};
 use egui_node_graph2::NodeId;
 
-use crate::graph::groups::{self, Face, GroupIndex, JackAction, JackEdit, Renaming, Side};
+use crate::graph::groups::{self, Face, GroupIndex, JackAction, JackEdit, Preview, Renaming, Side};
 use crate::graph::{annotation_ui, GroupId};
 use crate::persistence::{capture_level, Patch};
 use super::super::editing;
@@ -91,9 +91,8 @@ impl SynthApp {
             .filter(|(id, _)| !hidden.contains(id))
             .filter_map(|(_, node)| node.user_data.kind.group())
             .map(|id| {
-                let position = |n: NodeId| positions.get(n).map(|p| (p.to_vec2() / zoom * PREVIEW_ZOOM).to_pos2());
                 let face = Face {
-                    preview: groups::preview(graph, position, |n| sizes.get(&n).copied(), id, PREVIEW_ZOOM),
+                    preview: preview_of(graph, |n| positions.get(n).copied(), sizes, zoom, id),
                     controls: groups::face_controls(graph, |n| positions.get(n).copied(), &index, id),
                 };
                 (id, face)
@@ -317,7 +316,7 @@ impl SynthApp {
         self.status_message = Some(status);
     }
 
-    /// Shows the inside of a group.
+    /// Shows the inside of a group, straight away.
     pub(super) fn enter_group(&mut self, node_id: NodeId) {
         let Some(id) = self.graph_state.graph.nodes.get(node_id).and_then(|n| n.user_data.kind.group()) else {
             return;
@@ -332,24 +331,27 @@ impl SynthApp {
         self.status_message = Some(format!("Inside {name}: Esc to go back out"));
     }
 
-    /// Goes back out of the group being shown, with its node where it was
-    /// on screen. Returns whether there was a group to leave.
+    /// Goes back out of the group being shown, straight away, with its node
+    /// where it was on screen. Returns whether there was a group to leave.
     pub(super) fn leave_group(&mut self) -> bool {
+        self.land_dive();
+        self.step_out()
+    }
+
+    /// Steps out as [`Self::leave_group`] does, leaving any dive be.
+    pub(super) fn step_out(&mut self) -> bool {
         let Some(level) = self.user_state.level else { return false };
         let graph = &self.graph_state.graph;
         let index = GroupIndex::of(graph);
         let parent = index.parent_of(graph, level);
-        let anchor = match self.level_trail.last() {
-            Some(&(id, anchor)) if id == level => {
-                self.level_trail.pop();
-                Some(anchor)
-            }
-            _ => None,
-        };
+        let anchor = self.anchor_out_of(level);
+        if self.level_trail.last().is_some_and(|&(id, _)| id == level) {
+            self.level_trail.pop();
+        }
         self.show_level(parent);
-        match (anchor, index.node(level).and_then(|n| self.graph_state.node_positions.get(n))) {
-            (Some(anchor), Some(&at)) => self.graph_state.pan_zoom.pan = anchor - at.to_vec2(),
-            _ => self.frame_level(),
+        match anchor {
+            Some(pan) => self.graph_state.pan_zoom.pan = pan,
+            None => self.frame_level(),
         }
         if let Some(node) = index.node(level) {
             self.graph_state.selected_nodes = vec![node];
@@ -359,14 +361,32 @@ impl SynthApp {
         true
     }
 
+    /// The pan that puts the node of the group `level` back where it was on
+    /// screen when the view went into it, if it did.
+    fn anchor_out_of(&self, level: GroupId) -> Option<egui::Vec2> {
+        let node = GroupIndex::of(&self.graph_state.graph).node(level)?;
+        let at = self.graph_state.node_positions.get(node)?;
+        match self.level_trail.last() {
+            Some(&(id, anchor)) if id == level => Some(anchor - at.to_vec2()),
+            _ => None,
+        }
+    }
+
+    /// The pan stepping out of the group `level` will leave the view at.
+    pub(super) fn pan_out_of(&self, level: GroupId) -> Option<egui::Vec2> {
+        let graph = &self.graph_state.graph;
+        self.anchor_out_of(level).or_else(|| self.framed_pan(GroupIndex::of(graph).parent_of(graph, level)))
+    }
+
     /// Shows a level: back out to it if it's one the view is inside,
     /// otherwise straight there.
     pub(super) fn go_to_level(&mut self, target: Option<GroupId>) {
+        self.land_dive();
         let graph = &self.graph_state.graph;
         let index = GroupIndex::of(graph);
         let Some(path) = index.path(graph, self.user_state.level) else { return };
         if target.is_none() || target.is_some_and(|t| path.contains(&t)) {
-            while self.user_state.level != target && self.leave_group() {}
+            while self.user_state.level != target && self.step_out() {}
             return;
         }
         if index.path(graph, target).is_none() {
@@ -388,12 +408,12 @@ impl SynthApp {
         self.prepare_level();
     }
 
-    /// Where the current level's modules are, at the current zoom, relative
-    /// to the editor. Nodes never drawn yet are taken at a nominal size.
-    fn level_bounds(&self) -> Option<egui::Rect> {
+    /// Where a level's modules are, at the current zoom, relative to the
+    /// editor. Nodes never drawn yet are taken at a nominal size.
+    fn level_bounds(&self, level: Option<GroupId>) -> Option<egui::Rect> {
         let zoom = self.graph_state.pan_zoom.zoom;
         let graph = &self.graph_state.graph;
-        groups::level_nodes(graph, self.user_state.level)
+        groups::level_nodes(graph, level)
             .iter()
             .filter_map(|&n| {
                 let size = self.node_sizes.get(&n).copied().unwrap_or(groups::NOMINAL_NODE_SIZE);
@@ -409,7 +429,7 @@ impl SynthApp {
     pub(super) fn fit_level(&mut self, ui: &egui::Ui) {
         let to_nodes = self.editor_rect.min.to_vec2() + self.graph_state.pan_zoom.pan;
         let annotations = self.user_state.annotations.drawn.values().map(|r| r.translate(-to_nodes));
-        let bounds = self.level_bounds().into_iter().chain(annotations).reduce(|a, b| a.union(b));
+        let bounds = self.level_bounds(self.user_state.level).into_iter().chain(annotations).reduce(|a, b| a.union(b));
         let Some(bounds) = bounds.filter(|_| self.editor_rect.is_positive()) else { return };
         let view = self.editor_rect.size();
         let room = vec2(view.x - 2.0 * FRAME_MARGIN, view.y - TRAIL_HEIGHT - 2.0 * FRAME_MARGIN);
@@ -425,17 +445,30 @@ impl SynthApp {
         let nodes = groups::level_nodes(&self.graph_state.graph, self.user_state.level);
         // Nodes never drawn yet are taken at a nominal size, and framed again once they are
         self.reframe_level = nodes.iter().any(|n| !self.node_sizes.contains_key(n));
+        if let Some(pan) = self.framed_pan(self.user_state.level) {
+            self.graph_state.pan_zoom.pan = pan;
+        }
+    }
+
+    /// The pan that frames a level, shown or not.
+    pub(super) fn framed_pan(&self, level: Option<GroupId>) -> Option<egui::Vec2> {
         let view = self.editor_rect.size();
-        let Some(bounds) = self.level_bounds().filter(|_| self.editor_rect.is_positive()) else { return };
+        let bounds = self.level_bounds(level).filter(|_| self.editor_rect.is_positive())?;
         // In the middle if it fits, otherwise from its top left, clear of the
         // breadcrumb trail: where the signal comes in
         let fit = |extent: f32, room: f32, start: f32, middle: f32| {
             if extent + 2.0 * FRAME_MARGIN <= room { room / 2.0 - middle } else { FRAME_MARGIN - start }
         };
-        self.graph_state.pan_zoom.pan = egui::vec2(
+        Some(egui::vec2(
             fit(bounds.width(), view.x, bounds.left(), bounds.center().x),
             fit(bounds.height(), view.y - TRAIL_HEIGHT, bounds.top() - TRAIL_HEIGHT, bounds.center().y - TRAIL_HEIGHT / 2.0),
-        );
+        ))
+    }
+
+    /// The miniature of a group's insides, as its face shows it.
+    pub(super) fn preview_of(&self, id: GroupId) -> Preview {
+        let state = &self.graph_state;
+        preview_of(&state.graph, |n| state.node_positions.get(n).copied(), &self.node_sizes, state.pan_zoom.zoom, id)
     }
 
     /// Ctrl+G groups the selection, Ctrl+Alt+G takes groups apart, F2
@@ -472,13 +505,13 @@ impl SynthApp {
             self.start_rename(node);
         }
         if let (Some(node), true) = (selected_group, enter) {
-            self.enter_group(node);
+            self.dive_into(ctx, node);
             // egui also walks its keyboard focus on to a toolbar button with
             // Tab, before anything can stop it: let it go next frame
             self.release_tab_focus = true;
         }
         if leave {
-            self.leave_group();
+            self.dive_out(ctx);
         }
     }
 
@@ -622,4 +655,18 @@ impl SynthApp {
         );
         painter.rect_stroke(rect.shrink(1.0), 0.0, egui::Stroke::new(2.0, rose.gamma_multiply(0.35)));
     }
+}
+
+/// The miniature of a group's insides as its face shows it, from where its
+/// nodes are in the editor (`position`), how big they were last drawn, and
+/// the zoom.
+fn preview_of(
+    graph: &crate::graph::SynthGraph,
+    position: impl Fn(NodeId) -> Option<egui::Pos2>,
+    sizes: &std::collections::HashMap<NodeId, egui::Vec2>,
+    zoom: f32,
+    id: GroupId,
+) -> Preview {
+    let unzoomed = |n: NodeId| position(n).map(|p| (p.to_vec2() / zoom * PREVIEW_ZOOM).to_pos2());
+    groups::preview(graph, unzoomed, |n| sizes.get(&n).copied(), id, PREVIEW_ZOOM)
 }

@@ -9,11 +9,12 @@
 
 use egui::epaint::CubicBezierShape;
 use egui::text::{CCursor, CCursorRange};
+use egui::emath::TSTransform;
 use egui::{vec2, Align2, Color32, FontId, Pos2, Rect, RichText, Sense, Stroke};
 use egui_node_graph2::{NodeId, NodeResponse};
 
 use crate::app::theme;
-use super::groups::{Control, FaceControl, JackAction, JackEdit, NodeKind, Side};
+use super::groups::{Control, FaceControl, JackAction, JackEdit, NodeKind, Preview, Side};
 use super::hints;
 use super::node_data::KnobPlace;
 use super::{SynthGraph, SynthGraphState, SynthNodeData, SynthResponse, SynthValueType};
@@ -297,45 +298,11 @@ pub fn body(
     let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::click());
     let hovered = response.hovered();
     let painter = ui.painter_at(rect.expand(1.0));
-    let rounding = 6.0 * zoom;
-    let rose = theme::module::GROUP;
-    painter.rect(rect, rounding, PREVIEW_FILL, Stroke::new(1.0, rose.gamma_multiply(if hovered { 0.8 } else { 0.3 })));
-
-    let inner = rect.shrink2(vec2(8.0, 7.0) * zoom);
-    if preview.boxes.is_empty() {
-        painter.text(rect.center(), Align2::CENTER_CENTER, "Empty", FontId::proportional(11.0 * zoom), theme::text::DISABLED);
-    } else {
-        let bounds = preview.bounds;
-        let scale = (inner.width() / bounds.width()).min(inner.height() / bounds.height());
-        let map = |p: Pos2| inner.center() + (p - bounds.center()) * scale;
-        let line = (1.3 * zoom).max(0.8);
-        for ([a, b], color) in &preview.wires {
-            let (a, b) = (map(*a), map(*b));
-            let reach = ((b.x - a.x).abs() * 0.5).max(10.0 * zoom);
-            painter.add(CubicBezierShape::from_points_stroke(
-                [a, a + vec2(reach, 0.0), b - vec2(reach, 0.0), b],
-                false,
-                Color32::TRANSPARENT,
-                Stroke::new(line, color.gamma_multiply(0.8)),
-            ));
-        }
-        for (card, color) in &preview.boxes {
-            let card = Rect::from_min_max(map(card.min), map(card.max)).shrink(1.0 * zoom);
-            let corner = (2.5 * zoom).min(card.height() * 0.3);
-            painter.rect_filled(card, corner, CARD_FILL);
-            let band = Rect::from_min_max(card.min, Pos2::new(card.max.x, card.min.y + (card.height() * 0.3).max(2.0)));
-            painter.rect_filled(band, corner, *color);
-        }
-    }
+    paint_miniature(&painter, rect, preview, zoom, hovered);
     if hovered {
-        let label = "Open  ▸";
-        let font = FontId::proportional(12.0 * zoom);
-        let galley = painter.layout_no_wrap(label.to_string(), font, theme::text::PRIMARY);
-        let pill = Rect::from_center_size(rect.center(), galley.size() + vec2(18.0, 8.0) * zoom);
-        painter.rect_filled(pill, pill.height() / 2.0, Color32::from_black_alpha(190));
-        painter.rect_stroke(pill, pill.height() / 2.0, Stroke::new(1.0, rose.gamma_multiply(0.9)));
-        painter.galley(pill.center() - galley.size() / 2.0, galley, theme::text::PRIMARY);
+        paint_open_pill(&painter, rect, zoom);
     }
+    user_state.miniatures.insert(id, rect);
     if response.on_hover_text("Open the group (double-click it, or Tab)").clicked() {
         responses.push(NodeResponse::User(SynthResponse::EnterGroup(node_id)));
     }
@@ -370,6 +337,62 @@ pub fn body(
         }
     }
     responses
+}
+
+/// Where a miniature `rect` big, on a face at `zoom`, draws each point of
+/// its preview: what's inside fitted to it, a little in from its edge.
+pub fn miniature_transform(rect: Rect, preview: &Preview, zoom: f32) -> Option<TSTransform> {
+    let bounds = preview.bounds;
+    if preview.boxes.is_empty() || !bounds.is_positive() {
+        return None;
+    }
+    let inner = rect.shrink2(vec2(8.0, 7.0) * zoom);
+    let scale = (inner.width() / bounds.width()).min(inner.height() / bounds.height());
+    Some(TSTransform::new(inner.center().to_vec2() - bounds.center().to_vec2() * scale, scale))
+}
+
+/// The miniature on a group's face: each module inside as a small card in
+/// its header colour, wired as it is. `lit` while the pointer's over it.
+pub fn paint_miniature(painter: &egui::Painter, rect: Rect, preview: &Preview, zoom: f32, lit: bool) {
+    let rounding = 6.0 * zoom;
+    let rose = theme::module::GROUP;
+    painter.rect(rect, rounding, PREVIEW_FILL, Stroke::new(1.0, rose.gamma_multiply(if lit { 0.8 } else { 0.3 })));
+
+    let Some(to_face) = miniature_transform(rect, preview, zoom) else {
+        painter.text(rect.center(), Align2::CENTER_CENTER, "Empty", FontId::proportional(11.0 * zoom), theme::text::DISABLED);
+        return;
+    };
+    let map = |p: Pos2| to_face * p;
+    let line = (1.3 * zoom).max(0.8);
+    for ([a, b], color) in &preview.wires {
+        let (a, b) = (map(*a), map(*b));
+        let reach = ((b.x - a.x).abs() * 0.5).max(10.0 * zoom);
+        painter.add(CubicBezierShape::from_points_stroke(
+            [a, a + vec2(reach, 0.0), b - vec2(reach, 0.0), b],
+            false,
+            Color32::TRANSPARENT,
+            Stroke::new(line, color.gamma_multiply(0.8)),
+        ));
+    }
+    for (card, color) in &preview.boxes {
+        let card = Rect::from_min_max(map(card.min), map(card.max)).shrink(1.0 * zoom);
+        let corner = (2.5 * zoom).min(card.height() * 0.3);
+        painter.rect_filled(card, corner, CARD_FILL);
+        let band = Rect::from_min_max(card.min, Pos2::new(card.max.x, card.min.y + (card.height() * 0.3).max(2.0)));
+        painter.rect_filled(band, corner, *color);
+    }
+}
+
+/// "Open ▸", over a miniature the pointer is on.
+pub fn paint_open_pill(painter: &egui::Painter, rect: Rect, zoom: f32) {
+    let rose = theme::module::GROUP;
+    let label = "Open  ▸";
+    let font = FontId::proportional(12.0 * zoom);
+    let galley = painter.layout_no_wrap(label.to_string(), font, theme::text::PRIMARY);
+    let pill = Rect::from_center_size(rect.center(), galley.size() + vec2(18.0, 8.0) * zoom);
+    painter.rect_filled(pill, pill.height() / 2.0, Color32::from_black_alpha(190));
+    painter.rect_stroke(pill, pill.height() / 2.0, Stroke::new(1.0, rose.gamma_multiply(0.9)));
+    painter.galley(pill.center() - galley.size() / 2.0, galley, theme::text::PRIMARY);
 }
 
 /// The pinned dropdowns and toggles laid out in rows across the face, in
