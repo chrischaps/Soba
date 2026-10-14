@@ -200,8 +200,10 @@ fn key_at(keyboard: Rect, pos: Pos2) -> Option<u8> {
 /// stays with the piano as it slides from key to key, rather than moving
 /// the module it's on.
 pub fn piano_keys(ui: &mut Ui, data: &PianoData, config: &PianoConfig) -> (Response, Option<u8>) {
-    // Calculate total height including label
-    let label_height = if config.show_octave { 12.0 } else { 0.0 };
+    // Calculate total height including label, which grows with the keys,
+    // so it zooms with them
+    let unit = config.height / PianoConfig::default().height;
+    let label_height = if config.show_octave { 12.0 * unit } else { 0.0 };
     let total_height = config.height + label_height;
     let sense = if config.clickable { Sense::click_and_drag() } else { Sense::hover() };
 
@@ -340,13 +342,13 @@ pub fn piano_keys(ui: &mut Ui, data: &PianoData, config: &PianoConfig) -> (Respo
             let label = format!("C{}", octave_num);
             let label_pos = Pos2::new(
                 rect.center().x,
-                keyboard_rect.bottom() + 6.0,
+                keyboard_rect.bottom() + 6.0 * unit,
             );
             painter.text(
                 label_pos,
                 egui::Align2::CENTER_CENTER,
                 &label,
-                egui::FontId::proportional(9.0),
+                egui::FontId::proportional(9.0 * unit),
                 Color32::from_gray(160),
             );
         }

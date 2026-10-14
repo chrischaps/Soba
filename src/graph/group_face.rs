@@ -16,6 +16,7 @@ use egui_node_graph2::{NodeId, NodeResponse};
 use crate::app::theme;
 use super::groups::{Control, FaceControl, JackAction, JackEdit, NodeKind, Preview, Side};
 use super::hints;
+use super::steady_text;
 use super::node_data::KnobPlace;
 use super::{SynthGraph, SynthGraphState, SynthNodeData, SynthResponse, SynthValueType};
 
@@ -471,10 +472,10 @@ fn switch_chip(
             (None, SynthValueType::Select { label, .. } | SynthValueType::Toggle { label, .. }) if !label.is_empty() => label.as_str(),
             _ => control.param.as_str(),
         };
-        let name = ui.add(
-            egui::Label::new(RichText::new(label).small().color(accent.gamma_multiply(if patched { 0.5 } else { 0.9 })))
-                .sense(Sense::click())
-                .truncate(),
+        let name = steady_text::truncated_label(
+            ui,
+            RichText::new(label).small().color(accent.gamma_multiply(if patched { 0.5 } else { 0.9 })),
+            Sense::click(),
         );
         let name = hints::attach(name, hint());
 
@@ -489,6 +490,7 @@ fn switch_chip(
                 visuals.hovered.bg_stroke = Stroke::new(1.0, accent.gamma_multiply(0.8));
                 match &mut value {
                     SynthValueType::Select { value, options, .. } => {
+                        steady_text::steady_dropdowns(ui);
                         egui::ComboBox::from_id_salt((control.node, control.param.as_str(), "face"))
                             .width(width)
                             // A long choice ("Pentatonic Minor") is cut short to
@@ -508,6 +510,7 @@ fn switch_chip(
                         let selection = &mut ui.visuals_mut().selection;
                         selection.bg_fill = accent.gamma_multiply(0.4);
                         selection.stroke = Stroke::new(1.0, accent.lerp_to_gamma(Color32::WHITE, 0.55));
+                        steady_text::steady_buttons(ui);
                         let text = if *value { "On" } else { "Off" };
                         let button = ui.add(egui::Button::new(text).selected(*value).min_size(vec2(width, 0.0)));
                         if button.clicked() {
@@ -515,7 +518,7 @@ fn switch_chip(
                         }
                         button
                     }
-                    SynthValueType::Port | SynthValueType::Number { .. } => ui.label(""),
+                    SynthValueType::Port | SynthValueType::Number { .. } => steady_text::label(ui, "", Sense::hover()),
                 }
             })
             .inner;

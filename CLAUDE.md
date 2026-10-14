@@ -148,7 +148,9 @@ CARGO_TARGET_DIR=target/capture cargo build --release
 python tools/showcase/check_layout.py   # modules inside their frames, clear of notes and each other
 ```
 
-Fix any example it flags by growing the frame or moving its neighbours. Then re-shoot the recipe images: `python tools/showcase/recipe_images.py --check` lists the stale ones (a face change that keeps the size leaves them stale too), and `python tools/showcase/recipe_images.py <name...>` re-shoots them.
+Fix any example it flags by growing the frame or moving its neighbours. A face should also keep its size as the view zooms: `python tools/showcase/zoom_jitter.py patches/<an example with it>.json --max 0.5` fails if it doesn't. epaint draws fonts at whole pixels, so anything sized by its text steps as the view zooms (#255). Size rows with `steady_text` (`src/graph/steady_text.rs`) or in patch units (`ROW * zoom`), not from `galley.size()` or `ui.label`.
+
+Then re-shoot the recipe images: `python tools/showcase/recipe_images.py --check` lists the stale ones (a face change that keeps the size leaves them stale too), and `python tools/showcase/recipe_images.py <name...>` re-shoots them.
 
 ### 5. Commit the Changes
 

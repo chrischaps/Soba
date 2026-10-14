@@ -2179,7 +2179,13 @@ impl NodeDataTrait for SynthNodeData {
         let font_id = egui::TextStyle::Body.resolve(ui.style());
         let text_color = ui.visuals().widgets.noninteractive.fg_stroke.color;
         let galley = ui.painter().layout_no_wrap(param_name.to_string(), font_id.clone(), text_color);
-        let text_size = galley.size();
+        // As big as the text would be if fonts scaled smoothly (#255)
+        let text_size = egui::vec2(
+            super::steady_text::text_width(ui, param_name, &font_id),
+            super::steady_text::row_height(ui, &font_id),
+        );
+        let (drawn_width, drawn_height) = (galley.size().x, galley.size().y);
+        let text_top = |rect: egui::Rect| rect.center().y - drawn_height / 2.0;
 
         // A polyphonic output also shows how many channels it carries
         let outputs = &graph[node_id].outputs;
@@ -2190,7 +2196,8 @@ impl NodeDataTrait for SynthNodeData {
         let Some((channels, color)) = poly else {
             // Allocate exactly the text size, not the full available width
             let (_, rect) = ui.allocate_space(text_size);
-            let shapes = vec![egui::Shape::galley(rect.min, galley, text_color)];
+            // Flush right, against the jack, whatever the text gains or loses
+            let shapes = vec![egui::Shape::galley(egui::pos2(rect.max.x - drawn_width, text_top(rect)), galley, text_color)];
             defer_output_label(ui, node_id, param_name, rect, shapes);
             return Vec::new();
         };
@@ -2199,9 +2206,12 @@ impl NodeDataTrait for SynthNodeData {
         // and the port, sized from the label so it follows the zoom
         let badge_font = egui::FontId::monospace(font_id.size * 0.72);
         let badge_text = color.lerp_to_gamma(Color32::WHITE, 0.35);
-        let badge_galley = ui.painter().layout_no_wrap(format!("×{channels}"), badge_font, badge_text);
+        let badge_galley = ui.painter().layout_no_wrap(format!("×{channels}"), badge_font.clone(), badge_text);
         let pad = egui::vec2(font_id.size * 0.3, font_id.size * 0.08);
-        let badge_size = badge_galley.size() + 2.0 * pad;
+        let badge_size = egui::vec2(
+            super::steady_text::text_width(ui, &format!("×{channels}"), &badge_font),
+            super::steady_text::row_height(ui, &badge_font),
+        ) + 2.0 * pad;
         let gap = font_id.size * 0.3;
 
         let size = egui::vec2(text_size.x + gap + badge_size.x, text_size.y.max(badge_size.y));
@@ -2211,10 +2221,10 @@ impl NodeDataTrait for SynthNodeData {
             badge_size,
         );
         let shapes = vec![
-            egui::Shape::galley(egui::pos2(rect.min.x, rect.center().y - text_size.y / 2.0), galley, text_color),
+            egui::Shape::galley(egui::pos2(rect.min.x, text_top(rect)), galley, text_color),
             egui::Shape::rect_filled(badge, badge_size.y / 2.0, color.gamma_multiply(0.22)),
             egui::Shape::rect_stroke(badge, badge_size.y / 2.0, egui::Stroke::new(1.0, color.gamma_multiply(0.7))),
-            egui::Shape::galley(badge.min + pad, badge_galley, badge_text),
+            egui::Shape::galley(egui::pos2(badge.min.x + pad.x, badge.center().y - badge_galley.size().y / 2.0), badge_galley, badge_text),
         ];
         defer_output_label(ui, node_id, param_name, rect, shapes);
         Vec::new()

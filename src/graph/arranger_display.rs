@@ -36,6 +36,7 @@ use crate::app::theme;
 use crate::modules::arranger::{Arranger as Arr, Cue, Curve, Move, Position, FROM_WHERE_IT_IS, GATE_NAMES, LANES, LANE_NAMES, MAX_BARS, MAX_GLIDE, MAX_REPEATS, SECTIONS};
 
 use super::arranger_follow::{self, NAME_KEY};
+use super::steady_text;
 use super::{SynthGraph, SynthGraphState, SynthResponse};
 
 /// Height of one output row, in unzoomed points.
@@ -46,6 +47,14 @@ const LABEL: f32 = 52.0;
 const JACK_LABEL: f32 = 44.0;
 /// The least room the section bar keeps for the picked section's name.
 const NAME_ROOM: f32 = 96.0;
+/// How tall the controls in the bar under the timeline are.
+const BAR: f32 = 16.0;
+/// The most a section's length and repeats can say, which their fields in
+/// the bar have room for.
+const BARS_SAMPLE: &str = "64 bars";
+const TIMES_SAMPLE: &str = "×16";
+/// The words of the bar's buttons, and the "Move" between its two.
+const BAR_WORDS: [&str; 6] = ["+", "Copy", "◀", "Move", "▶", "Delete"];
 /// The narrowest a section is drawn, however short.
 const MIN_SECTION: f32 = 10.0;
 /// The overview strip's height, over the ruler.
@@ -1496,50 +1505,70 @@ pub fn section_bar(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_
     let mut edits = Vec::new();
     ui.add_space(4.0 * zoom);
     ui.horizontal(|ui| {
-        ui.style_mut().spacing.item_spacing.x = 4.0 * zoom;
-        name_field(ui, node_id, graph, LABEL * zoom - ui.spacing().item_spacing.x, zoom, &mut edits);
-        if ui.small_button("◀").on_hover_text("The section before").clicked() {
+        let gap = 4.0 * zoom;
+        ui.style_mut().spacing.item_spacing.x = gap;
+        name_field(ui, node_id, graph, LABEL * zoom - gap, zoom, &mut edits);
+        let back = bar_slot(ui, "◀", zoom);
+        if steady_text::slot(ui, back, egui::Button::new("◀").small()).on_hover_text("The section before").clicked() {
             select(ui.ctx(), node_id, section.saturating_sub(1));
         }
-        if ui.small_button("▶").on_hover_text("The section after").clicked() {
+        let on = bar_slot(ui, "▶", zoom);
+        if steady_text::slot(ui, on, egui::Button::new("▶").small()).on_hover_text("The section after").clicked() {
             select(ui.ctx(), node_id, (section + 1).min(song.count() - 1));
         }
         let name = section_name(graph, node_id, section);
         let playing = position(user_state, node_id).is_some_and(|p| p.started && !p.ended && p.section == section);
         let ink = if playing { theme::signal::GATE } else { theme::text::PRIMARY };
+        let leader = arranger_follow::leader(user_state, node_id);
+        let length = song.sections[section].1;
+        let repeats = song.repeats[section];
+        let times = if repeats > 1 { format!(" ×{repeats}") } else { String::new() };
+        let lasts = format!("{length} bar{}{times}", if length == 1 { "" } else { "s" });
+        let follows = leader.map(|leader| follows_text(graph, leader));
         // A long name is cut short, to a set room or to what the row leaves
-        // after the controls (as wide as they were last frame) on a wider
-        // timeline, so picking it doesn't widen the node
+        // after the controls, so picking it doesn't widen the node. All of
+        // it is measured as if fonts scaled smoothly, so the bar keeps its
+        // width as the view zooms (#255)
         let row = (LABEL + Arr::width(params.value(Arr::PARAM_WIDTH)) + JACK_LABEL) * zoom;
-        let controls_id = Id::new((node_id, "arranger-bar-controls"));
-        let controls: f32 = ui.ctx().data(|data| data.get_temp(controls_id)).unwrap_or(0.0);
-        let most = (row - ui.min_rect().width() - controls - ui.spacing().item_spacing.x).max(NAME_ROOM * zoom);
-        let text = egui::RichText::new(format!("{} · {name}", section + 1)).color(ink).strong();
-        let wide = egui::WidgetText::from(text.clone()).into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Body).size().x;
-        let room = wide.min(most);
-        ui.allocate_ui_with_layout(Vec2::new(room, 16.0 * zoom), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.set_width(room);
-            ui.add(egui::Label::new(text).truncate()).on_hover_text(&name);
-        });
-        let start = ui.min_rect().right();
-        match arranger_follow::leader(user_state, node_id) {
-            Some(leader) => {
-                let length = song.sections[section].1;
-                let repeats = song.repeats[section];
-                let times = if repeats > 1 { format!(" ×{repeats}") } else { String::new() };
-                ui.label(egui::RichText::new(format!("{length} bar{}{times}", if length == 1 { "" } else { "s" })).color(theme::text::SECONDARY));
+        let controls: f32 = match &follows {
+            Some(follows) => gap + bar_slot(ui, &lasts, zoom).x + 6.0 * zoom + gap + bar_slot(ui, follows.text(), zoom).x,
+            None => [BARS_SAMPLE, TIMES_SAMPLE].iter().chain(BAR_WORDS.iter()).map(|text| gap + bar_slot(ui, text, zoom).x).sum(),
+        };
+        let most = (row - ui.min_rect().width() - gap - controls).max(NAME_ROOM * zoom);
+        let label = format!("{} · {name}", section + 1);
+        let room = bar_slot(ui, &label, zoom).x.min(most);
+        let (rect, response) = ui.allocate_exact_size(Vec2::new(room, BAR * zoom), Sense::hover());
+        let font = egui::TextStyle::Body.resolve(ui.style());
+        let shown = fit(ui.painter(), &label, &font, room);
+        ui.painter().text(Pos2::new(rect.left(), rect.center().y), Align2::LEFT_CENTER, shown, font, ink);
+        response.on_hover_text(&name);
+        match leader.zip(follows) {
+            Some((leader, follows)) => {
+                bar_text(ui, egui::RichText::new(lasts).color(theme::text::SECONDARY), zoom);
                 ui.add_space(6.0 * zoom);
-                ui.label(follows_text(graph, leader)).on_hover_text(follows_hint(graph, leader));
+                bar_text(ui, follows, zoom).on_hover_text(follows_hint(graph, leader));
             }
             None => section_controls(ui, node_id, graph, user_state, &params, &song, section, &mut edits, false),
         }
-        let used = ui.min_rect().right() - start;
-        if (used - controls).abs() > 0.5 {
-            ui.ctx().data_mut(|data| data.insert_temp(controls_id, used));
-            ui.ctx().request_repaint();
-        }
     });
     edits
+}
+
+/// A control's slot in the bar under the timeline: as wide as `text` is
+/// if fonts scaled smoothly, with a little to spare for how it's drawn.
+fn bar_slot(ui: &egui::Ui, text: &str, z: f32) -> Vec2 {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    Vec2::new(steady_text::text_width(ui, text, &font) * 1.08 + 6.0 * z, BAR * z)
+}
+
+/// Words in the bar, in a slot of their own.
+fn bar_text(ui: &mut egui::Ui, text: egui::RichText, z: f32) -> egui::Response {
+    let size = bar_slot(ui, text.text(), z);
+    let galley = egui::WidgetText::from(text).into_galley(ui, Some(egui::TextWrapMode::Truncate), size.x, egui::TextStyle::Body);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
+    let at = Pos2::new(rect.left(), rect.center().y - galley.size().y / 2.0);
+    ui.painter().galley(at, galley, ui.visuals().text_color());
+    response
 }
 
 /// The Arranger's own name, at the left of the section bar under its
@@ -1587,25 +1616,37 @@ fn section_controls(
     let length = song.sections[section].1;
     let mut bars = length as u32;
     let suffix = if length == 1 { " bar" } else { " bars" };
+    let z = user_state.zoom;
     let drag = egui::DragValue::new(&mut bars).range(1..=MAX_BARS as u32).suffix(suffix).speed(0.1);
-    if ui.add(drag).on_hover_text("How many bars the section lasts").changed() {
+    let drag = if menu { ui.add(drag) } else { steady_text::slot(ui, bar_slot(ui, BARS_SAMPLE, z), drag) };
+    if drag.on_hover_text("How many bars the section lasts").changed() {
         edits.push(edit(node_id, format!("{name} lasts {bars} bars"), vec![(params.name(Arr::PARAM_LENGTH + section), bars as f32)]));
     }
     let repeats = song.repeats[section];
     let mut times = repeats as u32;
     let drag = egui::DragValue::new(&mut times).range(1..=MAX_REPEATS as u32).prefix("×").speed(0.05);
     // As narrow as "×16", not a whole field's width
-    let changed = ui.scope(|ui| {
-        ui.spacing_mut().interact_size.x = ui.spacing().interact_size.y;
-        ui.add(drag).on_hover_text("How many times the section plays before the next: ×4 plays just as four copies of it would").changed()
-    });
-    if changed.inner {
+    let drag = if menu {
+        ui.scope(|ui| {
+            ui.spacing_mut().interact_size.x = ui.spacing().interact_size.y;
+            ui.add(drag)
+        })
+        .inner
+    } else {
+        steady_text::slot(ui, bar_slot(ui, TIMES_SAMPLE, z), drag)
+    };
+    if drag.on_hover_text("How many times the section plays before the next: ×4 plays just as four copies of it would").changed() {
         edits.push(edit(node_id, format!("{name} plays ×{times}"), vec![(params.name(Arr::PARAM_REPEAT + section), times as f32)]));
     }
     let count = song.count();
     let full = count >= SECTIONS;
     let mut action = |ui: &mut egui::Ui, text: &str, hint: &str, enabled: bool, edit: &dyn Fn() -> Option<Vec<SynthResponse>>| {
-        let button = if menu { ui.add_enabled(enabled, egui::Button::new(text)) } else { ui.add_enabled(enabled, egui::Button::new(text).small()) };
+        let button = if menu {
+            ui.add_enabled(enabled, egui::Button::new(text))
+        } else {
+            let size = bar_slot(ui, text, z);
+            ui.add_enabled_ui(enabled, |ui| steady_text::slot(ui, size, egui::Button::new(text).small())).inner
+        };
         if button.on_hover_text(hint).on_disabled_hover_text(hint).clicked() {
             if let Some(more) = edit() {
                 edits.extend(more);
@@ -1633,7 +1674,7 @@ fn section_controls(
         chain(&|id, params, song| swap(id, graph, params, song, section - 1))
     });
     if !menu {
-        ui.label(egui::RichText::new("Move").color(theme::text::SECONDARY));
+        bar_text(ui, egui::RichText::new("Move").color(theme::text::SECONDARY), z);
     }
     action(ui, on, "Swap with the section after", section + 1 < count, &|| {
         select(&ctx, node_id, section + 1);

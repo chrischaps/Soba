@@ -15,6 +15,7 @@ use egui::{
     pos2, vec2, Color32, Mesh, CursorIcon, FontFamily, FontId, Id, PointerButton, Pos2, Rect, Rounding, Sense,
     Shape, Stroke, Ui, UiBuilder, Vec2,
 };
+use egui::emath::TSTransform;
 use egui_node_graph2::{Backdrop, NodeId};
 
 use crate::app::theme;
@@ -586,19 +587,66 @@ fn finish_frame_of_editing(ui: &Ui, annotations: &mut Annotations, id: Annotatio
 }
 
 /// A note's text as set: plain runs in the body face, bold ones in the
-/// title face and a brighter ink.
-fn note_job(text: &str, zoom: f32, wrap: f32) -> LayoutJob {
+/// title face and a brighter ink. It wraps at `wrap`, and breaks its lines
+/// at `breaks` too: offsets in characters into the text, without the
+/// marks for bold.
+fn note_job(text: &str, zoom: f32, wrap: f32, breaks: &[usize]) -> LayoutJob {
     let mut job = LayoutJob::default();
     job.wrap.max_width = wrap;
+    let mut breaks = breaks.iter().copied().peekable();
+    let mut at = 0;
     for (run, bold) in emphasis_runs(text) {
         let format = if bold {
             TextFormat { font_id: title_font(NOTE_TEXT_SIZE * zoom * 0.96), color: NOTE_EMPHASIS, ..Default::default() }
         } else {
             TextFormat { font_id: FontId::proportional(NOTE_TEXT_SIZE * zoom), color: NOTE_INK, ..Default::default() }
         };
-        job.append(run, 0.0, format);
+        let mut rest = run;
+        while let Some(split) = breaks.next_if(|b| *b < at + rest.chars().count()) {
+            let byte = rest.char_indices().nth(split - at).map_or(rest.len(), |(i, _)| i);
+            job.append(&rest[..byte], 0.0, format.clone());
+            job.append("
+", 0.0, format.clone());
+            rest = &rest[byte..];
+            at = split;
+        }
+        at += rest.chars().count();
+        job.append(rest, 0.0, format);
     }
     job
+}
+
+/// A note's text, ready to draw at `zoom`.
+struct NoteText {
+    galley: std::sync::Arc<egui::Galley>,
+    /// What to scale the galley by as it's drawn.
+    scale: f32,
+    /// Its size on screen.
+    size: Vec2,
+}
+
+/// A note's text `width` wide on the patch, at `zoom`. Fonts are drawn at a
+/// whole number of pixels, so text laid out at each zoom is a little wider
+/// or narrower than it would be if fonts scaled smoothly, and a word could
+/// jump between lines as the view zooms (#255). So the lines break where
+/// they do at zoom 1, and the text is drawn scaled to the size it has
+/// there: the card keeps its size and its lines as the view zooms.
+fn note_text(ui: &Ui, text: &str, width: f32, zoom: f32) -> NoteText {
+    let set = ui.painter().layout_job(note_job(text, 1.0, (width - 2.0 * NOTE_PADDING.x).max(1.0), &[]));
+    let mut breaks = Vec::new();
+    let mut at = 0;
+    for row in &set.rows {
+        at += row.char_count_including_newline();
+        if !row.ends_with_newline {
+            breaks.push(at);
+        }
+    }
+    // The last line ends where the text does
+    breaks.pop();
+    let galley = ui.painter().layout_job(note_job(text, zoom, f32::INFINITY, &breaks));
+    let size = set.size() * zoom;
+    let scale = if galley.size().x > 0.0 { size.x / galley.size().x } else { 1.0 };
+    NoteText { galley, scale, size }
 }
 
 fn note_ui(
@@ -615,12 +663,11 @@ fn note_ui(
     let selected = annotations.selected.contains(&id);
     let editing = annotations.editing.as_ref().is_some_and(|e| e.id == id);
     let padding = NOTE_PADDING * zoom;
-    let wrap = (note.width * zoom - 2.0 * padding.x).max(1.0);
     let text_height = if editing {
         // The field grows as lines are typed; it's measured as it was last drawn
         annotations.drawn.get(&id).map_or(NOTE_TEXT_SIZE * zoom * 1.4, |r| r.height() - 2.0 * padding.y)
     } else {
-        ui.painter().layout_job(note_job(&note.text, zoom, wrap)).size().y
+        note_text(ui, &note.text, note.width, zoom).size.y
     };
     let card = Rect::from_min_size(view.to_screen(note.position), vec2(note.width * zoom, text_height + 2.0 * padding.y));
     let card_slot = ui.painter().add(Shape::Noop);
@@ -710,8 +757,8 @@ fn note_ui(
         finish_frame_of_editing(ui, annotations, id, output);
         (rect, None)
     } else {
-        let galley = ui.painter().layout_job(note_job(&note.text, zoom, wrap));
-        (Rect::from_min_size(at + padding, galley.size()), Some(galley))
+        let text = note_text(ui, &note.text, note.width, zoom);
+        (Rect::from_min_size(at + padding, text.size), Some(text))
     };
     let card = Rect::from_min_max(at, pos2(at.x + note.width * zoom, text_rect.bottom() + padding.y));
 
@@ -727,11 +774,13 @@ fn note_ui(
     } else if body.hovered() || widen.hovered() {
         shapes.push(Shape::rect_stroke(card, rounding, Stroke::new(1.0, NOTE_INK.gamma_multiply(0.18))));
     }
-    if let Some(galley) = lettered {
+    if let Some(text) = lettered {
         // A note is lettered over the cables, as a frame's title is
         backdrop.labels.push(label_backing(text_rect, laid_over(theme::background::MAIN, NOTE_FILL), through, zoom));
         backdrop.labels.extend(shapes);
-        backdrop.labels.push(Shape::galley(text_rect.min, galley, NOTE_INK));
+        let mut letters = Shape::galley(text_rect.min, text.galley, NOTE_INK);
+        letters.transform(TSTransform::new(text_rect.min.to_vec2() * (1.0 - text.scale), text.scale));
+        backdrop.labels.push(letters);
     } else {
         // The text field is drawn under the cables, so the card is too
         ui.painter().set(card_slot, Shape::Vec(shapes));
@@ -753,5 +802,41 @@ mod tests {
         let washed = laid_over(canvas, Tint::ALL[0].color().gamma_multiply(0.07));
         assert_eq!(washed.a(), 255);
         assert_ne!(washed, canvas);
+    }
+
+    /// Each line of a galley, as text.
+    fn lines(galley: &egui::Galley) -> Vec<String> {
+        galley.rows.iter().map(|row| row.glyphs.iter().map(|g| g.chr).collect::<String>().trim().to_string()).collect()
+    }
+
+    #[test]
+    fn a_note_keeps_its_lines_and_size_as_the_view_zooms() {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let text = "The **harp** and the break come in at Groove II, under the kit: a long line to wrap, twice over at least.";
+        let mut seen = Vec::new();
+        for _ in 0..2 {
+            let input = egui::RawInput { viewport_id: egui::ViewportId::ROOT, ..Default::default() };
+            ctx.set_pixels_per_point(1.25);
+            let _ = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    seen.clear();
+                    for step in 0..60 {
+                        let zoom = 0.3 * (2.0f32 / 0.3).powf(step as f32 / 59.0);
+                        seen.push((zoom, note_text(ui, text, 250.0, zoom)));
+                    }
+                });
+            });
+        }
+        // The note as it's set, at zoom 1
+        let (one, at_one) = seen.iter().min_by(|a, b| (a.0 - 1.0).abs().total_cmp(&(b.0 - 1.0).abs())).unwrap();
+        let (set_lines, set_size) = (lines(&at_one.galley), at_one.size / *one);
+        assert!(set_lines.len() >= 3, "{set_lines:?}");
+        for (zoom, note) in &seen {
+            assert_eq!(lines(&note.galley), set_lines, "lines at zoom {zoom}");
+            assert!((note.size / *zoom - set_size).length() < 0.01, "size at zoom {zoom}: {:?}", note.size / *zoom);
+            // Drawn within a few percent of the size its font has
+            assert!((0.85..1.15).contains(&note.scale), "scale {} at zoom {zoom}", note.scale);
+        }
     }
 }

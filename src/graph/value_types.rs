@@ -11,6 +11,7 @@ use crate::widgets::ParamFormat;
 use super::hints::{self, Hint};
 use super::groups::Side;
 use super::group_face;
+use super::steady_text;
 use super::node_data::KnobPlace;
 use super::{SynthGraphState, SynthNodeData, SynthResponse};
 
@@ -214,19 +215,20 @@ impl WidgetValueTrait for SynthValueType {
         // right-click menu, which pins it to the face of the group it's in
         let name = |ui: &mut egui::Ui, label: &str| {
             let text = if label.is_empty() { param_name } else { label };
-            hints::attach(ui.add(egui::Label::new(text).sense(egui::Sense::click())), hint())
+            hints::attach(steady_text::label(ui, text, egui::Sense::click()), hint())
         };
         let (name, control) = match self {
             Self::Port | Self::Number { .. } => {
                 // A jack's name opens its menu: shown on the group around it, or not
-                let name = hints::attach(ui.add(egui::Label::new(param_name).sense(egui::Sense::click())), hint());
+                let name = hints::attach(steady_text::label(ui, param_name, egui::Sense::click()), hint());
                 return group_face::port_menu(&name, node_id, Side::Input, param_name, user_state).into_iter().collect();
             }
             Self::Toggle { value, label } => {
                 // Toggle gets an inline checkbox - not suitable for knob
+                let zoom = user_state.zoom;
                 ui.horizontal(|ui: &mut egui::Ui| {
                     let name = name(ui, label);
-                    ui.add_space(4.0);
+                    ui.add_space(4.0 * zoom);
                     (name, ui.checkbox(value, ""))
                 })
                 .inner
@@ -237,16 +239,26 @@ impl WidgetValueTrait for SynthValueType {
                 // A following Arranger's Loop is its leader's
                 let locked = super::arranger_follow::locks(node_data.module_id, param_name, node_id, user_state);
                 ui.horizontal(|ui: &mut egui::Ui| {
+                    steady_text::steady_dropdowns(ui);
                     let name = name(ui, label);
+                    // As wide as its choice would be if fonts scaled
+                    // smoothly, so it keeps its width as the view zooms (#255)
+                    let selected = options.get(*value).map(|s| s.as_str()).unwrap_or("");
+                    let width = steady_text::dropdown_width(ui, selected, 60.0 * zoom);
                     let combo = ui.add_enabled_ui(!locked, |ui| {
-                        egui::ComboBox::from_id_salt(param_name)
-                            .width(60.0 * zoom)
-                            .selected_text(options.get(*value).map(|s| s.as_str()).unwrap_or(""))
-                            .show_ui(ui, |ui: &mut egui::Ui| {
-                                for (i, option) in options.iter().enumerate() {
-                                    ui.selectable_value(value, i, option);
-                                }
-                            })
+                        ui.allocate_ui(egui::vec2(width, ui.spacing().interact_size.y), |ui| {
+                            egui::ComboBox::from_id_salt(param_name)
+                                .width(width)
+                                .truncate()
+                                .selected_text(selected)
+                                .show_ui(ui, |ui: &mut egui::Ui| {
+                                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                                    for (i, option) in options.iter().enumerate() {
+                                        ui.selectable_value(value, i, option);
+                                    }
+                                })
+                        })
+                        .inner
                     });
                     let response = combo.inner.response.on_disabled_hover_text("It follows another Arranger, and plays that one's Loop");
                     (name, response)
@@ -269,8 +281,8 @@ impl WidgetValueTrait for SynthValueType {
         user_state: &mut Self::UserState,
         node_data: &Self::NodeData,
     ) -> Vec<Self::Response> {
-        let label = egui::Label::new(param_name).sense(egui::Sense::click());
-        let name = hints::attach(ui.add(label), Hint::input(node_data.module_id, param_name));
+        let label = steady_text::label(ui, param_name, egui::Sense::click());
+        let name = hints::attach(label, Hint::input(node_data.module_id, param_name));
         group_face::port_menu(&name, node_id, Side::Input, param_name, user_state).into_iter().collect()
     }
 }

@@ -10,8 +10,10 @@ size at every zoom. One whose size depends on text laid out at the zoomed
 font saws: text steps a whole pixel at a time while the rest scales
 smoothly (#255). Notes that rewrap jump by whole lines.
 
---max N exits non-zero if anything moves by more than N patch units: a
-check to keep, once #255's fixes are in.
+--max N exits non-zero if anything moves by more than N patch units. Since
+#255 every example holds still to within a few hundredths of a unit, so --max
+0.5 is the check: a face whose size moves sizes something by its text.
+Size it with src/graph/steady_text.rs instead.
 
 Needs the capture build (CARGO_TARGET_DIR=target/capture cargo build
 --release). Output goes to target/showcase/zoom-jitter/<patch>/.
