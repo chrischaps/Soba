@@ -19,6 +19,8 @@ use std::sync::Arc;
 use crate::engine::spectrum_tap::{SpectrumTap, WINDOW};
 use crate::engine::NodeId as EngineNodeId;
 
+use super::filter_trail::Trail;
+
 /// The frequency axis, in Hz, shared with the display.
 pub const LOWEST_HZ: f32 = 20.0;
 pub const HIGHEST_HZ: f32 = 20_000.0;
@@ -54,6 +56,8 @@ pub struct FilterSpectrum {
     pub reference: f32,
     /// How much there is to see, 0 (silence) to 1.
     pub presence: f32,
+    /// The last two seconds of it, for the strip along the display's floor.
+    pub trail: Trail,
     /// How many samples the tap had written when last read.
     written: usize,
     /// Whether the display drew it since the last update.
@@ -67,6 +71,7 @@ impl FilterSpectrum {
             output: [SILENCE_DB; BANDS],
             reference: REFERENCE_FLOOR_DB,
             presence: 0.0,
+            trail: Trail::default(),
             written: 0,
             drawn: Cell::new(true),
         }
@@ -105,6 +110,8 @@ impl FilterSpectra {
             heard.push(node_id);
             let spectrum = self.spectra.entry(node_id).or_insert_with(FilterSpectrum::new);
             if !spectrum.drawn.replace(false) {
+                // Off screen: whatever it heard before won't follow on from now
+                spectrum.trail.clear();
                 continue;
             }
             let analyser = self.analyser.get_or_insert_with(Analyser::new);
@@ -119,6 +126,7 @@ impl FilterSpectra {
             let loudest = spectrum.input.iter().copied().fold(SILENCE_DB, f32::max);
             spectrum.reference = loudest.max(spectrum.reference - REFERENCE_FALL_DB * dt).max(REFERENCE_FLOOR_DB);
             spectrum.presence = ((loudest - FADE_IN_FROM_DB) / (FADE_IN_TO_DB - FADE_IN_FROM_DB)).clamp(0.0, 1.0);
+            spectrum.trail.advance(&input, &output, spectrum.reference, spectrum.presence, dt);
         }
         self.spectra.retain(|node_id, _| heard.contains(node_id));
     }

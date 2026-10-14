@@ -24,6 +24,7 @@ use crate::modules::{LadderFilter, SvfFilter};
 use super::display_frame::{self as face, columns, curve, guide, header, hertz, input_patched, output_patched, readout, value_of, with_alpha};
 use super::drum_display::fill_under;
 use super::filter_spectrum::{FilterSpectrum, BANDS, HIGHEST_HZ, LOWEST_HZ};
+use super::filter_trail;
 use super::{SynthGraph, SynthGraphState};
 
 /// The level axis, in dB: room above 0 for a resonant peak.
@@ -33,6 +34,10 @@ const BOTTOM_DB: f32 = -36.0;
 /// Where the loudest band coming in is drawn, in dB on the response's
 /// scale: just under unity, so the passband rests on the sound's peaks.
 const LANDSCAPE_TOP_DB: f32 = -4.0;
+
+/// How tall the trail along the floor is, and the gap above it, before zoom.
+const TRAIL_HEIGHT: f32 = 12.0;
+const TRAIL_GAP: f32 = 1.5;
 
 /// One of a filter's outputs: its port, and its response in dB at
 /// (cutoff, resonance, frequency).
@@ -103,7 +108,13 @@ pub fn filter_display(ui: &mut egui::Ui, filter: Filter, node_id: NodeId, graph:
     let green = crate::dsp::ModuleCategory::Filter.color();
     let width = face::knob_row_width(ui, 4, z);
     let Some((rect, response, painter)) = face::frame(ui, width, green, z) else { return };
-    let plot = face::plot(rect, z);
+    let mut plot = face::plot(rect, z);
+    // With CV moving the filter, a strip along the floor for the trail it leaves
+    let strip = modulated.then(|| {
+        let strip = egui::Rect::from_min_max(Pos2::new(plot.left(), plot.bottom() - TRAIL_HEIGHT * z), plot.max);
+        plot.max.y = strip.top() - TRAIL_GAP * z;
+        strip
+    });
     let x_at = |hz: f32| plot.left() + (hz / LOWEST_HZ).ln() / (HIGHEST_HZ / LOWEST_HZ).ln() * plot.width();
     let y_at = |db: f32| plot.top() + (TOP_DB - db.clamp(BOTTOM_DB, TOP_DB)) / (TOP_DB - BOTTOM_DB) * plot.height();
 
@@ -136,6 +147,16 @@ pub fn filter_display(ui: &mut egui::Ui, filter: Filter, node_id: NodeId, graph:
         fill_under(&painter, &going_out, plot.bottom(), with_alpha(green, fade(64.0)), with_alpha(green, fade(10.0)));
         curve(&painter, going_out, with_alpha(green, fade(110.0)), 0.7 * z, false);
         ui.ctx().request_repaint();
+    }
+
+    // The last two seconds of it along the floor, falling away from the plot
+    let trail = spectrum.map(|spectrum| &spectrum.trail).filter(|trail| !trail.is_dark());
+    if let Some(strip) = strip {
+        painter.rect_filled(strip, 1.0 * z, with_alpha(egui::Color32::BLACK, 70));
+        if let Some(trail) = trail {
+            trail.paint(&painter, strip, green, theme::signal::AUDIO);
+            ui.ctx().request_repaint();
+        }
     }
 
     let columns = columns(plot, z);
@@ -220,6 +241,9 @@ pub fn filter_display(ui: &mut egui::Ui, filter: Filter, node_id: NodeId, graph:
         }
         if presence > 0.0 {
             text.push_str(&format!("\nBeneath: the sound coming in (blue) and out of {} (green)", heard[0]));
+        }
+        if strip.is_some() {
+            text.push_str(&format!("\nAlong the floor: the last {:.0} seconds of it, newest at the top", filter_trail::SECONDS));
         }
         response.on_hover_text(text);
     }

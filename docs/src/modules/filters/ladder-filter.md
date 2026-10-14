@@ -19,6 +19,8 @@ The display draws LP24 and LP12, the patched ones lit, at the cutoff and resonan
 
 Beneath the curves lies the sound itself, as on the SVF: what comes in as a faint blue landscape, and what the lit output lets through in green over it. The green is measured rather than worked out from the curve, so the harmonics **Drive** adds show up too, as green rising where the blue was low.
 
+With CV in **Cutoff** or **Resonance**, the strip along the floor keeps the last two seconds of what comes out, as on the SVF, so an envelope or LFO on the cutoff leaves its trail through the sound.
+
 ## Inputs
 
 | Port | Signal Type | Description |

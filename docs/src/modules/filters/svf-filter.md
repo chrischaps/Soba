@@ -13,6 +13,8 @@ The display draws each output's response, the patched ones lit and the rest fain
 
 Beneath the curves lies the sound itself. What comes into **In** is a faint blue landscape, and what the lit output lets through is green over it, so the gap between them is what the filter is taking away, and a resonant peak shows where the green rises above the blue. It's scaled to the loudest part of what comes in, so a quiet sound fills the display as well as a loud one, and a polyphonic cable shows all its voices together. When the sound stops, the landscape sinks away and the curve's own glow fills in beneath it.
 
+With CV in **Cutoff** or **Resonance**, a thin strip along the floor keeps the last two seconds of what comes out, newest at the top and falling away beneath, brighter where it's louder. As an LFO sweeps the cutoff up and back, each harmonic's column lights as the cutoff passes over it and dims as it moves on, so the sweep leaves its trail through the sound.
+
 For a thicker, steeper lowpass, see the [Ladder Filter](./ladder-filter.md).
 
 ## Inputs

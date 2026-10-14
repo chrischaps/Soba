@@ -21,6 +21,7 @@ mod envelope_cv;
 mod envelope_display;
 mod filter_display;
 mod filter_spectrum;
+mod filter_trail;
 pub mod knob_cv;
 mod lfo_display;
 mod logic_display;
