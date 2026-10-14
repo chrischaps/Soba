@@ -40,6 +40,9 @@ ZOOM_MIN, ZOOM_MAX = 0.2, 2.0
 NOMINAL = (206.0, 280.0)
 # A dive takes 0.36 s
 DIVE = 0.36
+# How the app frames a level it dives into (framing.rs): clear of the
+# breadcrumb trail along the top, with a margin all round, never past 1:1
+FRAME_MARGIN, TRAIL_HEIGHT = 40.0, 56.0
 
 # The node editor in points, below the toolbar and above the status bar, for
 # a capture's window size and ppp (read from a `layout` cue's view: run any
@@ -178,6 +181,16 @@ class Tour:
         z = min((ex1 - ex0 - 2 * margin) / (x1 - x0), (ey1 - ey0 - 2 * margin) / (y1 - y0))
         return max(ZOOM_MIN, min(most, z))
 
+    def framed(self):
+        """Where the app frames the level on show as it dives in: the
+        editor-centre point and zoom, as `look` takes them. The whole level
+        sits in the middle of the room below the trail."""
+        x0, y0, x1, y1 = self.extent()
+        ex0, ey0, ex1, ey1 = self.ed
+        room = (ex1 - ex0 - 2 * FRAME_MARGIN, ey1 - ey0 - TRAIL_HEIGHT - 2 * FRAME_MARGIN)
+        zoom = max(ZOOM_MIN, min(1.0, room[0] / (x1 - x0), room[1] / (y1 - y0)))
+        return ((x0 + x1) / 2, (y0 + y1) / 2 - TRAIL_HEIGHT / 2 / zoom), zoom
+
     def screen(self, p):
         return (self.origin[0] + p[0] * self.zoom, self.origin[1] + p[1] * self.zoom)
 
@@ -241,10 +254,11 @@ class Tour:
         t1 = self.look(t, mid, apex, dur / 2, f"{note} (over)" if note else "")
         return self.look(t1 if not self.dry else t, point, zoom, dur / 2, note, subject)
 
-    def inside(self, t, until, focus=None, zoom=1.3, note="", subject=None, widest=1.0):
-        """In a group: settle on the whole level, then drift in on one module
-        (an id, or the first of a kind) until `until`."""
-        t = self.look(t, self.middle(), self.fit_zoom(most=widest), 0.9, f"{note}: the whole group", subject)
+    def inside(self, t, until, focus=None, zoom=1.3, note="", subject=None):
+        """In a group: hold on the whole level, where the dive framed it, then
+        drift in on one module (an id, or the first of a kind) until `until`."""
+        whole, fit = self.framed()
+        t = self.look(t, whole, fit, 0.9, f"{note}: the whole group", subject)
         if focus is not None:
             key = self.find(focus) if isinstance(focus, str) else focus
             t = self.look(t + 0.3, self.centre_of(key), zoom, max(1.0, until - t - 0.3), f"{note}: in on {focus}", subject)
@@ -266,9 +280,8 @@ class Tour:
         self.s.at(t, f"enter {self.map.path(gid)}")
         self.trail.append((gid, self.zoom, self.origin))
         self.level = gid
-        # The app frames all of the level, never closer than 1:1: about here
-        mx, my = self.middle()
-        self.zoom = self.fit_zoom(most=1.0)
+        # The app frames all of the level, never closer than 1:1
+        (mx, my), self.zoom = self.framed()
         self.origin = (self.c[0] - mx * self.zoom, self.c[1] - my * self.zoom)
         if not fast:
             self._close_hold(t)

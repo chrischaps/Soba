@@ -66,7 +66,7 @@ Use Canopy as the example: the shots are `canopy` (1920×1080, the whole song) a
    python tools/showcase/encode.py canopy "target/showcase/canopy-film/Canopy (YouTube master).mov" \
        --fps 30 --crf 16 --lufs -14 --fade-in 1 --fade-out 3 --poster 138.5
    python tools/showcase/encode.py canopy-vertical "target/showcase/canopy-film/Canopy (Instagram).mp4" \
-       --from 115.86 --to 175.86 --crop 1080x1920+0+165 --fade-out 2 --fps 30 --crf 18 --lufs -14 --poster 22
+       --from 115.86 --to 175.86 --crop 1080x1920+0+165 --fade-out 2 --fps 30 --crf 18 --lufs -14 --poster 30
    ```
    Check both with `ffprobe`: size, 30 fps, length, and about −14 LUFS with peaks under −1 dBTP:
    ```bash
@@ -102,7 +102,8 @@ These lessons are from the Canopy session, 2026-10-14. The vault note "Soba Film
 
 - **Every group is opened once before recording.** Since #245 the app measures the modules inside groups when a patch opens, so miniatures and the framing of a level no longer wait for a first visit. The tour still opens each group once, unseen, and dumps its layout: that's how it learns the sizes it aims from.
 - **Name the group; don't click it (#252).** The first Canopy films entered groups with a double-click on the title bar and steered the camera with relative `camera` cues. Every dive's landing had to be measured on dry runs, and a missed click left the tour on the wrong level, so every later aim was wrong. A gliding pointer also lit the Open pills of the faces it crossed. The `enter`, `leave` and `aim` cues need no aiming: the app finds the group by name and the point in patch space, from wherever the view is.
-- **In a portrait window, inside a wide group, frame a module, not the level.** A whole level fitted to 720 points wide is a thin strip.
+- **In a portrait window, inside a wide group, frame a module, not the level.** A whole level fitted to 720 points wide is a thin strip, and a dive lands on it. Start the first look inside at the time `enter` returns, so the dive flows straight into the push in on a module rather than stalling on the strip.
 - **A riser ramps up from silence.** Dive into it once it's audible, not when its section starts; the activity check catches this.
 - **A capture's noise isn't the render's (#253).** Sync is exact, but a byte compare against `render` fails for patches with noise.
 - **Text steps as the view zooms (#255).** Notes rewrap, and the Arranger's width and module heights saw. A film shows it more than anything, so check `zoom_jitter.py` before filming.
+- **A dive lands where the app frames it, so the tour must agree (#257).** Opening a group fits all of its inside, below the breadcrumb trail. `Tour.framed()` mirrors that fit (`FRAME_MARGIN` and `TRAIL_HEIGHT` in `tour.py` match `framing.rs`), and `inside` holds on it. When the two disagreed, every dive landed and then zoomed about 10% closer. If the app's margins change, change them in `tour.py` too. The previsit's `lvl###.json` dumps show where the app really landed.

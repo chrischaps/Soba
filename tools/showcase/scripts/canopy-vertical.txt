@@ -62,13 +62,13 @@
 121.4621 aim 2956.00 1238.10 0.547529 1.1   # the Riser (over)
 122.5621 aim 3482.00 1176.20 2.000000 1.1   # the Riser
 123.8621 enter Riser
-124.6621 aim 92.50 151.25 1.360000 0.9   # Riser: source.noise
-125.8621 aim 328.00 164.75 1.600000 1.5   # Riser: along to filter.svf
+124.4721 aim 92.50 151.25 1.360000 0.9   # Riser: source.noise
+125.6721 aim 328.00 164.75 1.600000 1.69   # Riser: along to filter.svf
 127.6621 leave
 128.2621 aim 2957.00 1230.60 0.548571 1.9259   # the Drums, as the Peak lands (over)
 130.1879 aim 2432.00 1285.00 1.500000 1.9259   # the Drums, as the Peak lands
 132.2738 enter Drums
-133.1138 aim 168.00 291.50 1.000000 1.0   # Drums: the pattern
+132.8838 aim 168.00 291.50 1.000000 1.0   # Drums: the pattern
 134.4138 aim 1125.00 170.75 1.000000 6.4   # Drums: along the kit
 141.1138 leave
 141.7138 aim 3207.50 767.70 0.371373 1.5   # the Dancer (over)
@@ -76,10 +76,10 @@
 149.6138 aim 2744.50 879.12 0.232539 1.5   # the Strings (over)
 151.1138 aim 1506.00 1507.85 2.000000 1.5   # the Strings
 153.0138 enter Strings
-153.8138 aim 245.00 200.35 1.250000 0.8   # Strings: the String Machine and a Pump
+153.6238 aim 245.00 200.35 1.250000 0.8   # Strings: the String Machine and a Pump
 155.0138 enter String Machine
-155.8138 aim 89.00 275.90 1.190000 0.9   # String Machine: osc.sine
-157.0138 aim 1741.00 152.25 1.400000 1.8345   # String Machine: along to fx.chorus
+155.6238 aim 89.00 275.90 1.190000 0.9   # String Machine: osc.sine
+156.8238 aim 1741.00 152.25 1.400000 2.0245   # String Machine: along to fx.chorus
 159.1483 leave
 159.7483 leave
 160.3483 aim 1149.00 954.42 0.806723 1.45   # the Faders turn the page (over)
@@ -87,8 +87,8 @@
 165.3172 aim 1846.00 824.35 0.273245 1.3   # the Flute, an octave up (over)
 166.6172 aim 2900.00 1247.70 2.000000 1.3   # the Flute, an octave up
 168.3172 enter Flute
-169.1172 aim 155.00 257.25 1.275000 0.9   # Flute: seq.step
-170.3172 aim 427.00 275.90 1.500000 2.8   # Flute: along to osc.sine
+168.9272 aim 155.00 257.25 1.275000 0.9   # Flute: seq.step
+170.1272 aim 427.00 275.90 1.500000 2.99   # Flute: along to osc.sine
 173.4172 leave
 174.0172 aim 2700.00 900.00 0.400000 4.0   # out to the band and the desk
 178.0172 end

@@ -60,26 +60,26 @@
 0.0000 play
 0.6000 aim 2108.00 1237.20 1.500000 5.0   # the Kalimba
 6.2000 enter Kalimba
-7.0000 aim 469.70 567.40 0.619739 0.9   # Kalimba: the whole group
+7.0000 aim 469.70 516.75 0.552767 0.9   # Kalimba: the whole group
 8.2000 aim 155.00 257.25 1.500000 5.8   # Kalimba: in on seq.step
 14.3000 leave
 14.9000 aim 2108.00 1575.35 1.500000 1.6   # the Bells
 17.1517 enter Bells
-17.9517 aim 327.70 369.70 0.951150 0.9   # Bells: the whole group
+17.9517 aim 327.70 336.70 0.848364 0.9   # Bells: the whole group
 21.5517 enter FM Bell
-22.3517 aim 543.70 403.20 0.854463 0.9   # FM Bell: the whole group
+22.3517 aim 543.70 367.20 0.777877 0.9   # FM Bell: the whole group
 23.5517 aim 89.00 275.90 1.400000 3.5   # FM Bell: in on osc.sine
 27.4517 leave
 28.0517 leave
 28.6517 aim 3240.00 700.00 0.600000 3.6   # the band and the desk, as the beat comes in
 37.1034 aim 2432.00 1285.00 1.500000 2.0   # the Drums
 39.5034 enter Drums
-40.3034 aim 1155.70 356.70 0.506973 0.9   # Drums: the whole group
+40.3034 aim 1155.70 300.71 0.500103 0.9   # Drums: the whole group
 41.5034 aim 505.00 170.75 1.600000 6.1   # Drums: in on source.drum
 47.9034 leave
 48.5034 aim 2666.00 1258.20 1.500000 1.5   # the Bass
 50.4034 enter Bass
-51.2034 aim 469.70 440.70 0.797912 0.9   # Bass: the whole group
+51.2034 aim 469.70 401.36 0.711686 0.9   # Bass: the whole group
 52.4034 aim 917.00 144.35 1.500000 4.3   # Bass: in on filter.ladder
 57.0034 leave
 57.6034 aim 2086.00 1238.20 1.059310 1.2   # the Rhodes (over)
@@ -87,7 +87,7 @@
 60.3034 enter Rhodes
 61.1034 aim 237.70 257.25 1.366919 0.8   # Rhodes: its sequencer
 62.5034 enter Electric Piano
-63.3034 aim 863.70 643.20 0.546704 0.9   # Electric Piano: the whole group
+63.3034 aim 863.70 585.78 0.487624 0.9   # Electric Piano: the whole group
 64.5034 aim 435.00 453.20 1.200000 1.9034   # Electric Piano: in on mod.adsr
 66.6069 leave
 67.2069 leave
@@ -95,31 +95,31 @@
 69.5069 enter Harp
 70.3069 aim 275.70 295.05 1.191798 0.8   # Harp
 71.8069 enter Mallet
-72.6069 aim 383.70 403.20 0.872123 0.9   # Mallet: the whole group
+72.6069 aim 383.70 367.20 0.777877 0.9   # Mallet: the whole group
 73.8069 aim 435.00 164.75 1.400000 4.0   # Mallet: in on filter.svf
 78.1069 leave
 78.7069 leave
 79.3069 aim 2432.00 1701.70 1.500000 2.4   # the Break
 82.0069 enter Break
-82.8069 aim 404.70 324.35 1.000000 0.9   # Break: the whole group
+82.8069 aim 404.70 295.39 0.966980 0.9   # Break: the whole group
 84.0069 aim 115.00 196.20 1.500000 4.8   # Break: in on source.chopper
 89.1069 leave
 89.7069 aim 2666.00 1567.20 1.500000 1.4   # the Vocal Chops
 91.4069 enter Vocal Chops
-92.2069 aim 406.70 565.25 0.622096 0.9   # Vocal Chops: the whole group
+92.2069 aim 406.70 514.79 0.554870 0.9   # Vocal Chops: the whole group
 93.4069 aim 791.00 384.90 1.400000 2.2345   # Vocal Chops: in on source.sampler
 95.9414 leave
 96.5414 aim 2027.00 983.60 0.523153 0.95   # the three Arrangers turn the page (over)
 97.4914 aim 1388.00 400.00 0.800000 0.95   # the three Arrangers turn the page
 99.5103 aim 2900.00 1247.70 1.500000 2.6   # the Flute
 102.5103 enter Flute
-103.3103 aim 856.70 567.40 0.619739 0.9   # Flute: its breath: the whole group
+103.3103 aim 856.70 516.75 0.552767 0.9   # Flute: its breath: the whole group
 104.5103 aim 1152.50 151.25 1.300000 8.7517   # Flute: its breath: in on source.noise
 113.5621 leave
 114.1621 aim 2270.00 1450.00 0.750000 3.0   # the loops and the band, the drums coming back
 121.8621 aim 3482.00 1176.20 1.700000 1.8   # the Riser
 123.7621 enter Riser
-124.5621 aim 175.20 268.70 1.000000 0.9   # Riser: the whole group
+124.5621 aim 175.20 240.70 1.000000 0.9   # Riser: the whole group
 125.7621 aim 328.00 164.70 1.600000 1.7   # Riser: in on filter.svf
 127.7621 leave
 128.3621 aim 2095.00 994.00 0.350000 4.0517   # the build pulls back to the whole patch, landing on the Peak
@@ -129,7 +129,7 @@
 145.0138 enter Strings
 145.8138 aim 185.70 299.70 1.173307 0.8   # Strings: the String Machine and two Pumps
 147.6138 enter String Machine
-148.4138 aim 903.70 585.90 0.600171 0.9   # String Machine: the whole group
+148.4138 aim 903.70 533.59 0.535313 0.9   # String Machine: the whole group
 149.6138 aim 1741.00 152.25 1.300000 4.2   # String Machine: in on fx.chorus
 154.1138 leave
 154.7138 leave
@@ -138,24 +138,24 @@
 161.0483 aim 1388.00 400.00 0.800000 2.2   # the Arrangers turn the page
 165.3172 aim 2900.00 1247.70 1.500000 2.4   # the Flute, an octave up
 168.1172 enter Flute
-168.9172 aim 856.70 567.40 0.619739 0.9   # Flute: the tone: the whole group
+168.9172 aim 856.70 516.75 0.552767 0.9   # Flute: the tone: the whole group
 170.1172 aim 427.00 275.90 1.500000 6.0   # Flute: the tone: in on osc.sine
 176.4172 leave
 177.0172 aim 2432.00 1701.70 1.500000 1.8   # the Break
 179.1172 enter Break
-179.9172 aim 404.70 324.35 1.000000 0.9   # Break: the whole group
+179.9172 aim 404.70 295.39 0.966980 0.9   # Break: the whole group
 181.1172 aim 373.00 504.35 1.400000 4.0   # Break: in on filter.ladder
 185.4172 leave
 186.0172 aim 2666.00 1567.20 1.500000 1.4   # the Vocal Chops
 187.7172 enter Vocal Chops
-188.5172 aim 406.70 565.25 0.622096 0.9   # Vocal Chops: the hook: the whole group
+188.5172 aim 406.70 514.79 0.554870 0.9   # Vocal Chops: the hook: the whole group
 189.7172 aim 155.00 257.25 1.300000 3.8345   # Vocal Chops: the hook: in on seq.step
 193.8517 leave
 194.4517 aim 2027.00 983.60 0.523153 1.0   # the Arrangers turn to Dusk (over)
 195.4517 aim 1388.00 400.00 0.800000 1.0   # the Arrangers turn to Dusk
 199.0207 aim 2666.00 1258.20 1.500000 2.8   # the Bass, fading
 202.2207 enter Bass
-203.0207 aim 469.70 440.70 0.797912 0.9   # Bass: the whole group
+203.0207 aim 469.70 401.36 0.711686 0.9   # Bass: the whole group
 204.2207 aim 155.00 257.25 1.400000 10.0   # Bass: in on seq.step
 214.5207 leave
 215.1207 aim 850.00 1500.00 0.750000 3.6   # the harmony: one progression, voiced three ways
@@ -163,7 +163,7 @@
 229.3241 aim 2262.00 1496.85 0.638669 1.5   # the Birds (over)
 230.8241 aim 3224.00 1493.70 1.500000 1.5   # the Birds
 232.7241 enter Birds
-233.5241 aim 381.20 380.20 0.924882 0.9   # Birds: the whole group
+233.5241 aim 381.20 346.26 0.824934 0.9   # Birds: the whole group
 234.7241 aim 302.00 178.05 1.500000 7.4   # Birds: in on mod.slope
 242.4241 leave
 243.0241 aim 2666.00 1365.45 1.101075 2.2   # the Kalimba, as at Dawn (over)

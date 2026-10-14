@@ -590,7 +590,9 @@ def canopy(s):
 @shot("patches/canopy.json", ppp=1.5, fps=30, crf=12, preset="fast", size="1080x2124")
 def canopy_vertical(s):
     """Canopy's minute from the Rise into Peak II (1:56-2:56), for a phone:
-    a portrait window, cropped to 1080x1920 below the toolbar (y 165)."""
+    a portrait window, cropped to 1080x1920 below the toolbar (y 165).
+    A wide group dives in as a thin strip, so each first look inside starts
+    as the dive ends: the dive and the push in on a module are one move."""
     tour = canopy_tour(s, "aims-vertical.json")
     s.at(0.0, "play")
     t0 = bar(57)
@@ -598,27 +600,27 @@ def canopy_vertical(s):
     tour.look(-0.5, (2330, 1330), 0.8, 0.05, "the loops and the band", None)
     tour.look(t0, (2430, 1300), 1.0, 5.4, "the drums coming back", ["kalimba", "drums-kit"])
     tour.hop(t0 + 5.6, tour.centre_of("Riser"), 2.0, 2.2, "the Riser", "riser")
-    tour.enter(t0 + 8.0, "Riser")
-    tour.inside_tall(t0 + 8.8, t0 + 11.5, "source.noise", "filter.svf", 1.6, "Riser", "riser")
+    t = tour.enter(t0 + 8.0, "Riser")
+    tour.inside_tall(t, t0 + 11.5, "source.noise", "filter.svf", 1.6, "Riser", "riser")
     tour.leave(t0 + 11.8)
     tour.hop(t0 + 12.4, tour.centre_of("Drums"), 1.5, bar(65) - 0.3 - t0 - 12.4, "the Drums, as the Peak lands", "drums-kit")
     # Into the Drums on the downbeat
-    tour.enter(bar(65) - 0.14, "Drums")
-    tour.look(bar(65) + 0.7, tour.centre_of(tour.find("seq.trigger")), 1.0, 1.0, "Drums: the pattern", "drums-kit")
+    t = tour.enter(bar(65) - 0.14, "Drums")
+    tour.look(t, tour.centre_of(tour.find("seq.trigger")), 1.0, 1.0, "Drums: the pattern", "drums-kit")
     tour.look(bar(65) + 2.0, tour.centre_of(tour.find("source.drum", 3)), 1.0, 6.4, "Drums: along the kit", "drums-kit")
     tour.leave(bar(65) + 8.7)
     tour.hop(bar(65) + 9.3, tour.centre_of(150), 1.85, 3.0, "the Dancer", None)
     tour.hop(bar(65) + 17.2, tour.centre_of("Strings"), 2.0, 3.0, "the Strings", "strings")
-    tour.enter(bar(65) + 20.6, "Strings")
-    tour.look(bar(65) + 21.4, tour.centre_of("String Machine", dx=130), 1.25, 0.8, "Strings: the String Machine and a Pump", "strings")
-    tour.enter(bar(65) + 22.6, "String Machine")
-    tour.inside_tall(bar(65) + 23.4, bar(80) - 4.6, "osc.sine", "fx.chorus", 1.4, "String Machine", "strings")
+    t = tour.enter(bar(65) + 20.6, "Strings")
+    tour.look(t, tour.centre_of("String Machine", dx=130), 1.25, 0.8, "Strings: the String Machine and a Pump", "strings")
+    t = tour.enter(bar(65) + 22.6, "String Machine")
+    tour.inside_tall(t, bar(80) - 4.6, "osc.sine", "fx.chorus", 1.4, "String Machine", "strings")
     tour.leave(bar(80) - 4.3)
     tour.leave(bar(80) - 3.7)
     tour.hop(bar(80) - 3.1, (792, 401), 1.15, 2.9, "the Faders turn the page", None)
     tour.hop(bar(81) - 0.2, tour.centre_of("Flute"), 2.0, 2.6, "the Flute, an octave up", "flute")
-    tour.enter(bar(81) + 2.8, "Flute")
-    tour.inside_tall(bar(81) + 3.6, bar(81) + 7.6, "seq.step", "osc.sine", 1.5, "Flute", "flute")
+    t = tour.enter(bar(81) + 2.8, "Flute")
+    tour.inside_tall(t, bar(81) + 7.6, "seq.step", "osc.sine", 1.5, "Flute", "flute")
     tour.leave(bar(81) + 7.9)
     t = tour.look(bar(81) + 8.5, (2700, 900), 0.4, 4.0, "out to the band and the desk", None)
     s.at(tour.end(max(t, bar(81) + 11.0)), "end")
