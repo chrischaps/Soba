@@ -17,6 +17,8 @@ Beyond the four classic waveforms, it has the features that make an oscillator a
 
 The display draws a cycle of the wave at the Pulse Width, and reads the pitch the tune section sets. With more than one unison voice, the others are drawn faintly over it, sliding along the cycle at the rate each beats against the pitch: a gentle Detune drifts, a wide one shimmers. With **Sub** patched, two cycles show, with the sub's square under them.
 
+While the patch plays, what **Out** really carries is drawn over that shape, lit, and the shape steps back to a faint guide. Each trace starts where the cycle does and keeps the time scale of the cycle the knobs set, so a note **V/Oct** takes an octave up fits two cycles in, and one an octave down shows half a cycle: a melody squeezes and stretches the wave. **PWM** sweeps the edge, **FM** wrinkles the wave, **Sync** cuts each cycle short, and unison voices beat in it as they sound. Older traces fade behind the newest, like a scope's phosphor, so a moving wave leaves a soft trail. With **V/Oct** or **Exp FM** patched, the top reads the note being played. When the sound stops, the shape comes back.
+
 Every waveform is band-limited. Each voice runs at twice the sample rate with polyBLEP corrections on its edges and polyBLAMP corrections on its corners, then a halfband filter brings it back down. A 5 kHz saw's aliasing sits around -80 dB, so high notes and sync sweeps stay clean.
 
 ## Inputs

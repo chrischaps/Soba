@@ -70,8 +70,10 @@ pub const MAX_SNAPSHOTS: usize = 64;
 /// between two UI frames.
 const TAKE_BUFFER_SIZE: usize = 16;
 
-/// Oscilloscope captures that can wait for the UI.
-const SCOPE_FRAME_BUFFER_SIZE: usize = 8;
+/// Oscilloscope captures that can wait for the UI: room for every
+/// oscillator's trace (each sends up to 30 a second) between two UI frames,
+/// with a Scope's alongside.
+const SCOPE_FRAME_BUFFER_SIZE: usize = 32;
 
 /// Sample rate and block size, shared so the UI prepares new modules for the
 /// settings the audio thread is actually running at.

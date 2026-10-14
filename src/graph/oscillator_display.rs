@@ -6,16 +6,24 @@
 //! along the cycle at the rate each one beats against the pitch: a narrow
 //! Detune drifts slowly, a wide one shimmers. With Sub patched, two cycles
 //! show, with the square an octave below under them.
+//!
+//! While it plays, what Out really carries is drawn over the shape, lit,
+//! and the shape steps back to a faint guide (see [`super::oscillator_trace`]).
+//! It's drawn to the same time scale, the cycle the knobs set, so a note
+//! V/Oct takes an octave up fits two cycles in and one an octave down half a
+//! cycle: a melody squeezes and stretches it. PWM moves the edge, FM
+//! wrinkles the wave, sync cuts it short, and unison voices beat in it.
 
-use eframe::egui::{Color32, Pos2, Rect};
+use eframe::egui::{self, Color32, Pos2, Rect};
 use egui_node_graph2::NodeId;
 
 use crate::app::theme;
 use crate::modules::oscillator::{OscWaveform, Oscillator};
 use crate::modules::quantizer::NOTE_NAMES;
 
-use super::display_frame::{self as face, columns, curve, guide, header, hertz, input_patched, output_patched, value_of, with_alpha};
+use super::display_frame::{self as face, columns, curve, guide, header, hertz, input_patched, output_patched, readout, value_of, with_alpha};
 use super::drum_display::fill_under;
+use super::oscillator_trace::{live, trace_points};
 use super::{SynthGraph, SynthGraphState};
 
 /// The fastest a voice is drawn sliding, in cycles per second. Wider beats
@@ -29,7 +37,7 @@ const GOLDEN: f32 = 0.618_034;
 const WAVES: [&str; 4] = ["Sine", "Saw", "Square", "Triangle"];
 
 /// Draws the display, as wide as the knob row below it.
-pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &SynthGraph, _user_state: &SynthGraphState, zoom: f32) {
+pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphState, zoom: f32) {
     let z = zoom;
     let value = |name: &str, default: f32| value_of(graph, node_id, name).unwrap_or(default);
     let wave_index = value("Waveform", 0.0);
@@ -40,6 +48,7 @@ pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &Sy
     let hz = Oscillator::C4_HZ * Oscillator::tune_octaves(value("Octave", 0.0), value("Semitone", 0.0), value("Fine", 0.0)).exp2();
     let sub = output_patched(graph, node_id, "Sub");
     let tracked = input_patched(graph, node_id, "V/Oct");
+    let bent = tracked || input_patched(graph, node_id, "Exp FM");
 
     let blue = theme::signal::AUDIO;
     let width = face::knob_row_width(ui, 3, z);
@@ -47,6 +56,17 @@ pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &Sy
     let plot = face::plot(rect, z);
     let cycles = if sub { 2.0 } else { 1.0 };
     let y_at = |v: f32| plot.center().y - v.clamp(-1.0, 1.0) * plot.height() * 0.5;
+    // A live trace may ring a little past the top and bottom at its edges
+    let y_live = |v: f32| plot.center().y - v.clamp(-1.15, 1.15) * plot.height() * 0.5;
+
+    let scope = user_state.get_engine_node_id(node_id).and_then(|id| user_state.get_scope_data(id));
+    let now = live(ui.ctx(), egui::Id::new(("oscillator trace", node_id)), scope);
+    let presence = now.presence;
+    let playing = readout(user_state, node_id).filter(|_| presence > 0.0);
+    // While it plays, the shape is drawn at the pulse width PWM has it at
+    let pulse_width = playing.map_or(pulse_width, |r| r.values[Oscillator::READOUT_PULSE_WIDTH].clamp(0.1, 0.9));
+    // The shape steps back while the trace is lit
+    let shade = |alpha: f32| (alpha * (1.0 - 0.7 * presence)) as u8;
 
     guide(&painter, Pos2::new(plot.left(), plot.center().y), Pos2::new(plot.right(), plot.center().y), 18, z);
     if sub {
@@ -79,7 +99,8 @@ pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &Sy
         for (i, beat) in beats.iter().enumerate() {
             let offset = (i as f32 * GOLDEN + time * beat * slow).rem_euclid(1.0);
             let points = wave_points(wave, pulse_width, plot, cycles, offset, z, y_at);
-            curve(&painter, points, with_alpha(blue, 44), 0.9 * z, false);
+            // The live trace shows them beating, so these all but go
+            curve(&painter, points, with_alpha(blue, (44.0 * (1.0 - 0.85 * presence)) as u8), 0.9 * z, false);
         }
         if fastest > 0.0 {
             ui.ctx().request_repaint();
@@ -88,12 +109,34 @@ pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &Sy
 
     // The wave itself
     let points = wave_points(wave, pulse_width, plot, cycles, 0.0, z, y_at);
-    fill_under(&painter, &points, plot.center().y, with_alpha(blue, 46), with_alpha(blue, 6));
-    curve(&painter, points, blue, 1.4 * z, true);
+    fill_under(&painter, &points, plot.center().y, with_alpha(blue, shade(46.0)), with_alpha(blue, shade(6.0)));
+    curve(&painter, points, with_alpha(blue, shade(255.0)), (1.4 - 0.4 * presence) * z, presence < 0.5);
 
-    let pitch = format!("{} · {}", note_name(hz), hertz(hz));
+    // What Out is playing: the last few captures fading behind the newest
+    if presence > 0.0 {
+        let lit = blue.lerp_to_gamma(Color32::WHITE, 0.3);
+        let newest = now.traces.len() - 1;
+        for (i, (brightness, trace)) in now.traces.iter().enumerate() {
+            let points = trace_points(trace, plot, cycles, y_live);
+            if i == newest {
+                fill_under(&painter, &points, plot.center().y, with_alpha(blue, (40.0 * presence) as u8), with_alpha(blue, (5.0 * presence) as u8));
+                curve(&painter, points, with_alpha(lit, (255.0 * presence) as u8), 1.4 * z, true);
+            } else {
+                curve(&painter, points, with_alpha(blue, (110.0 * brightness * presence) as u8), 1.0 * z, false);
+            }
+        }
+        ui.ctx().request_repaint();
+    }
+
+    // Moved by V/Oct or Exp FM, the note it's playing
+    let played = playing.map(|r| r.values[Oscillator::READOUT_HZ]).filter(|hz| bent && *hz > 0.0);
+    let pitch = |hz: f32| format!("{} · {}", note_name(hz), hertz(hz));
     let ink = theme::text::SECONDARY;
-    let left = if tracked { format!("{pitch} + V/Oct") } else { pitch };
+    let left = match played {
+        Some(hz) => pitch(hz),
+        None if tracked => format!("{} + V/Oct", pitch(hz)),
+        None => pitch(hz),
+    };
     let right = if voices > 1 { format!("{voices} voices") } else { WAVES[wave as usize].to_string() };
     header(&painter, rect, z, Some((left, blue.gamma_multiply(0.9))), Some((right, ink)));
 
@@ -103,7 +146,9 @@ pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &Sy
             _ => WAVES[wave as usize].to_string(),
         };
         let mut text = format!("{shape} at {} ({})", note_name(hz), hertz(hz));
-        if tracked {
+        if let Some(played) = played {
+            text.push_str(&format!(", playing {} ({})", note_name(played), hertz(played)));
+        } else if tracked {
             text.push_str(", moved by V/Oct");
         }
         if voices > 1 {
@@ -112,6 +157,9 @@ pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &Sy
         }
         if sub {
             text.push_str("\nSub: a square an octave below");
+        }
+        if presence > 0.0 {
+            text.push_str("\nLit: what Out is playing now");
         }
         response.on_hover_text(text);
     }

@@ -26,6 +26,7 @@ pub mod knob_cv;
 mod lfo_display;
 mod logic_display;
 mod oscillator_display;
+mod oscillator_trace;
 mod looper_display;
 mod slicer_display;
 mod slope_display;

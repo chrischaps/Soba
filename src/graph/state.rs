@@ -71,6 +71,9 @@ pub struct ScopeData {
     pub channel2: Vec<f32>,
     /// Whether this capture was triggered (vs free-running).
     pub triggered: bool,
+    /// Captures received from the node so far, this one included: a display
+    /// can tell a fresh one from the last it drew.
+    pub count: u64,
 }
 
 /// Info about a MIDI CC mapping for display in the UI.
@@ -622,12 +625,14 @@ impl SynthGraphState {
         channel2: Vec<f32>,
         triggered: bool,
     ) {
+        let count = self.scope_data.get(&engine_node_id).map_or(0, |data| data.count) + 1;
         self.scope_data.insert(
             engine_node_id,
             ScopeData {
                 channel1,
                 channel2,
                 triggered,
+                count,
             },
         );
     }

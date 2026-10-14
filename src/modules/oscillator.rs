@@ -5,6 +5,10 @@
 //! corners, then a halfband filter brings it back down. The corrections clean
 //! up aliases that fold back near DC; the oversampling removes the ones that
 //! would otherwise fold back near Nyquist, which two-point BLEPs barely touch.
+//!
+//! Its display draws short captures of Out as it plays (see [`trace`]).
+
+mod trace;
 
 use std::f32::consts::TAU;
 
@@ -16,8 +20,11 @@ use crate::dsp::{
     primitives::{BlepDelay, Downsampler2x},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
-    connected_input, ParameterDisplay, SignalType,
+    connected_input, ParameterDisplay, Readout, SignalType,
 };
+
+pub use trace::{CYCLES as TRACE_CYCLES, POINTS as TRACE_POINTS};
+use trace::Trace;
 
 /// Waveform shapes for the oscillator.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -207,11 +214,14 @@ struct SubOscillator {
     phase: f32,
     low: bool,
     blep: BlepDelay,
+    /// Where in the last sample it went high, starting a pair of cycles.
+    rose: Option<f32>,
 }
 
 impl SubOscillator {
     #[inline]
     fn tick(&mut self, dt: f32, sync: Option<f32>) -> f32 {
+        self.rose = None;
         match sync {
             Some(d) => {
                 self.advance(dt, 0.0, d);
@@ -244,6 +254,9 @@ impl SubOscillator {
         let before = self.level();
         self.low = !self.low;
         self.blep.step(d, self.level() - before);
+        if !self.low {
+            self.rose = Some(d);
+        }
     }
 
     #[inline]
@@ -313,6 +326,12 @@ pub struct Oscillator {
     down_sub: Downsampler2x,
     down_left: Downsampler2x,
     down_right: Downsampler2x,
+    /// Captures of Out for the display.
+    trace: Trace,
+    /// The pitch V/Oct and Exp FM have taken it to, and the pulse width
+    /// PWM has, at the end of the last block.
+    live_hz: f32,
+    live_pulse_width: f32,
 }
 
 impl Oscillator {
@@ -340,6 +359,11 @@ impl Oscillator {
     const PARAM_VOICES: usize = 7;
     const PARAM_DETUNE: usize = 8;
     const PARAM_SPREAD: usize = 9;
+
+    /// The readout: the pitch it's playing before linear FM, in Hz, and the
+    /// pulse width.
+    pub const READOUT_HZ: usize = 0;
+    pub const READOUT_PULSE_WIDTH: usize = 1;
 
     pub fn new() -> Self {
         let sample_rate = 44100.0;
@@ -383,6 +407,9 @@ impl Oscillator {
             down_sub: Downsampler2x::new(),
             down_left: Downsampler2x::new(),
             down_right: Downsampler2x::new(),
+            trace: Trace::new(),
+            live_hz: Self::C4_HZ,
+            live_pulse_width: 0.5,
         };
         osc.reset_phases();
         osc
@@ -508,6 +535,7 @@ impl DspModule for Oscillator {
         };
         let sync_in = connected_input(inputs, Self::PORT_SYNC);
         let inv_rate = 1.0 / (2.0 * self.sample_rate);
+        let tuned_hz = Self::C4_HZ * self.pitch_smooth.target().exp2();
 
         for i in 0..context.block_size {
             let pitch = self.pitch_smooth.next();
@@ -516,8 +544,10 @@ impl DspModule for Oscillator {
             let pulse_width = (self.pulse_width_smooth.next() + input(Self::PORT_PWM, i) * 0.4).clamp(0.1, 0.9);
 
             let octaves = pitch + input(Self::PORT_V_OCT, i) + input(Self::PORT_EXP_FM, i) * exp_depth;
+            self.live_hz = Self::C4_HZ * octaves.exp2();
+            self.live_pulse_width = pulse_width;
             // Through-zero: the frequency may go negative and the phase run backwards
-            let hz = Self::C4_HZ * octaves.exp2() * (1.0 + fm_depth * input(Self::PORT_FM, i));
+            let hz = self.live_hz * (1.0 + fm_depth * input(Self::PORT_FM, i));
             let dt = (hz * inv_rate).clamp(-MAX_DT, MAX_DT);
 
             // A rising zero crossing between the last input sample and this one
@@ -537,6 +567,8 @@ impl DspModule for Oscillator {
             let mut sub = [0.0; 2];
             // The reset lands in whichever oversampled step contains it
             let sync_step = sync.map(|d| if d < 0.5 { (0, 2.0 * d) } else { (1, 2.0 * d - 1.0) });
+            // How long before the end of this sample the Sub last went high
+            let mut rose = None;
             for (k, &step) in steps.iter().enumerate() {
                 let sync_here = sync_step.filter(|&(at, _)| at == k).map(|(_, d)| d);
                 for v in 0..n {
@@ -546,9 +578,17 @@ impl DspModule for Oscillator {
                     right[k] += s * self.gains_right[v];
                 }
                 sub[k] = self.sub.tick(step, sync_here);
+                if let Some(d) = self.sub.rose {
+                    rose = Some((2.0 - k as f32 - d) * 0.5);
+                }
             }
 
-            outputs[Self::OUT_MONO].samples[i] = self.down_mono.process(mono) * norm;
+            let out = self.down_mono.process(mono) * norm;
+            outputs[Self::OUT_MONO].samples[i] = out;
+            if let Some(ago) = rose {
+                self.trace.cycle(ago, tuned_hz, self.sample_rate);
+            }
+            self.trace.push(out);
             outputs[Self::OUT_SUB].samples[i] = self.down_sub.process(sub);
             outputs[Self::OUT_LEFT].samples[i] = self.down_left.process(left) * norm;
             outputs[Self::OUT_RIGHT].samples[i] = self.down_right.process(right) * norm;
@@ -563,10 +603,22 @@ impl DspModule for Oscillator {
         self.down_sub.reset();
         self.down_left.reset();
         self.down_right.reset();
+        self.trace.reset();
         self.pitch_smooth.reset(self.pitch_smooth.target());
         self.fm_depth_smooth.reset(self.fm_depth_smooth.target());
         self.exp_depth_smooth.reset(self.exp_depth_smooth.target());
         self.pulse_width_smooth.reset(self.pulse_width_smooth.target());
+    }
+
+    fn readout(&self, _params: &[f32]) -> Option<Readout> {
+        let mut readout = Readout::default();
+        readout.values[Self::READOUT_HZ] = self.live_hz;
+        readout.values[Self::READOUT_PULSE_WIDTH] = self.live_pulse_width;
+        Some(readout)
+    }
+
+    fn take_scope_data(&mut self) -> Option<(&[f32], &[f32], bool)> {
+        self.trace.take().map(|points| (points, &[][..], true))
     }
 }
 
@@ -987,5 +1039,121 @@ mod tests {
     fn test_oscillator_is_send() {
         fn assert_send<T: Send>() {}
         assert_send::<Oscillator>();
+    }
+
+    /// Runs `osc` for `len` samples, keeping every trace it captured.
+    fn traces(osc: &mut Oscillator, params: &[f32], inputs: &[SignalBuffer], len: usize) -> Vec<Vec<f32>> {
+        let mut traces = Vec::new();
+        let mut done = 0;
+        while done < len {
+            let block = 64.min(len - done);
+            let slices: Vec<SignalBuffer> = inputs
+                .iter()
+                .map(|buf| {
+                    let mut b = SignalBuffer::control(block);
+                    b.samples.copy_from_slice(&buf.samples[done..done + block]);
+                    b
+                })
+                .collect();
+            let refs: Vec<&SignalBuffer> = slices.iter().collect();
+            osc.process(&refs, &mut outputs(block), params, &ProcessContext::new(SR, block));
+            if let Some((points, _, _)) = osc.take_scope_data() {
+                traces.push(points.to_vec());
+            }
+            done += block;
+        }
+        traces
+    }
+
+    fn fresh() -> Oscillator {
+        let mut osc = Oscillator::new();
+        osc.prepare(SR, 64);
+        osc.reset();
+        osc
+    }
+
+    /// Where a trace's first `cycles` cycles put a sine's start, as a share
+    /// of a cycle late (negative: early).
+    fn sine_lag(trace: &[f32], cycles: f32) -> f32 {
+        let (mut sin, mut cos) = (0.0, 0.0);
+        for (j, v) in trace.iter().enumerate() {
+            let angle = std::f32::consts::TAU * cycles * j as f32 / trace.len() as f32;
+            sin += v * angle.sin();
+            cos += v * angle.cos();
+        }
+        -cos.atan2(sin) / std::f32::consts::TAU
+    }
+
+    #[test]
+    fn the_trace_lines_up_with_the_shape() {
+        // Two octaves down a sine is slow enough for the downsampler's
+        // delay to be flat; the trace should start on its rising zero
+        let params = with(with(defaults(), Oscillator::PARAM_OCTAVE, -2.0), Oscillator::PARAM_WAVEFORM, 0.0);
+        let traces = traces(&mut fresh(), &params, &[], SR as usize);
+        assert!(traces.len() >= 12, "{} traces in a second", traces.len());
+        for trace in &traces[1..] {
+            let lag = sine_lag(trace, TRACE_CYCLES);
+            assert!(lag.abs() < 0.0005, "starts {lag} of a cycle out");
+        }
+    }
+
+    #[test]
+    fn a_square_trace_rises_at_its_start_and_falls_at_the_pulse_width() {
+        let params = with(with(defaults(), Oscillator::PARAM_WAVEFORM, 2.0), Oscillator::PARAM_PULSE_WIDTH, 0.3);
+        let traces = traces(&mut fresh(), &params, &[], SR as usize / 4);
+        let trace = traces.last().unwrap();
+        let per_cycle = TRACE_POINTS as f32 / TRACE_CYCLES;
+        let falls: Vec<f32> = trace.windows(2).enumerate().filter(|(_, w)| w[0] > 0.0 && w[1] <= 0.0).map(|(j, _)| j as f32 / per_cycle).collect();
+        assert_eq!(falls.len(), 2, "{falls:?}");
+        assert!((falls[0] - 0.3).abs() < 0.02 && (falls[1] - 1.3).abs() < 0.02, "{falls:?}");
+        assert!(trace[per_cycle as usize / 10] > 0.9, "high from the start");
+    }
+
+    #[test]
+    fn a_note_up_an_octave_fits_twice_the_cycles() {
+        let params = with(with(defaults(), Oscillator::PARAM_OCTAVE, -1.0), Oscillator::PARAM_WAVEFORM, 0.0);
+        let traces = traces(&mut fresh(), &params, &patched(Oscillator::PORT_V_OCT, vec![1.0; SR as usize / 4]), SR as usize / 4);
+        let trace = traces.last().unwrap();
+        let rises = trace[2..].windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count();
+        assert_eq!(rises, 2 * TRACE_CYCLES as usize - 1, "rising zeros after the start");
+        assert!(sine_lag(trace, 2.0 * TRACE_CYCLES).abs() < 0.01);
+    }
+
+    #[test]
+    fn traces_follow_the_sync_master() {
+        // A master a fifth below resets the slave: each trace starts on a reset
+        let len = SR as usize / 2;
+        let master_hz = Oscillator::C4_HZ / 1.5;
+        let master: Vec<f32> = (0..len).map(|n| (std::f32::consts::TAU * master_hz * n as f32 / SR).sin()).collect();
+        let params = with(defaults(), Oscillator::PARAM_WAVEFORM, 1.0);
+        let traces = traces(&mut fresh(), &params, &patched(Oscillator::PORT_SYNC, master), len);
+        assert!(traces.len() >= 10);
+        for trace in &traces[1..] {
+            // A saw restarted from the bottom: it begins low, every time
+            assert!(trace[2] < -0.7, "starts at {}", trace[2]);
+        }
+    }
+
+    #[test]
+    fn traces_come_a_few_dozen_times_a_second_and_wait_to_be_taken() {
+        let mut osc = fresh();
+        let params = defaults();
+        // Each waits for the next pair of cycles to start
+        let count = traces(&mut osc, &params, &[], SR as usize).len();
+        assert!((24..=30).contains(&count), "{count} a second");
+        // Untaken, a finished trace is kept rather than written over
+        run(&mut osc, &params, &[], SR as usize / 10);
+        let kept = osc.take_scope_data().unwrap().0.to_vec();
+        assert!(osc.take_scope_data().is_none());
+        assert!(sine_lag(&kept, TRACE_CYCLES).abs() < 0.01);
+    }
+
+    #[test]
+    fn the_readout_is_the_pitch_played() {
+        let mut osc = fresh();
+        run(&mut osc, &defaults(), &patched(Oscillator::PORT_V_OCT, vec![-1.0; 512]), 512);
+        let readout = osc.readout(&defaults()).unwrap();
+        assert!((readout.values[Oscillator::READOUT_HZ] - Oscillator::C4_HZ / 2.0).abs() < 0.01);
+        assert!((readout.values[Oscillator::READOUT_PULSE_WIDTH] - 0.5).abs() < 1e-4);
     }
 }
