@@ -728,13 +728,13 @@ fn keyboard_strip(ui: &mut egui::Ui, node_id: NodeId, width: f32, low: i32, note
         painter.rect_filled(key, 1.0, colour);
     }
 
-    // A dot per voice above the keys, gliding to its key
+    // A dot per voice above the keys, gliding to its key. It eases in key
+    // widths, not on screen, so it stays on its key as the view pans or zooms
     for (i, &note) in notes.iter().enumerate() {
         let Some((x, _)) = key_position(note, low) else { continue };
-        let target = keys.left() + x * key_w;
-        let x = ui.ctx().animate_value_with_time(Id::new(("chord_voice", node_id, i)), target, 0.18);
+        let x = ui.ctx().animate_value_with_time(Id::new(("chord_voice", node_id, i)), x, 0.18);
         let colour = if is_bass(i) { bass_colour } else { accent };
-        let centre = egui::pos2(x, rect.top() + 4.5 * z);
+        let centre = egui::pos2(keys.left() + x * key_w, rect.top() + 4.5 * z);
         painter.circle_filled(centre, 4.5 * z, glow(colour, 60.0));
         painter.circle_filled(centre, 2.6 * z, glow(colour, 255.0));
     }
