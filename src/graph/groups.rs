@@ -235,6 +235,62 @@ pub fn name(graph: &SynthGraph, node_id: NodeId) -> &str {
     graph.nodes.get(node_id).map_or("", |n| n.user_data.display_name.as_str())
 }
 
+/// The group a capture's `enter` cue names: the group of that name on the
+/// level `level`, or else the only one of that name anywhere. A path of
+/// names from the top of the patch, `Bells/FM Bell`, picks one out where
+/// several share a name, and `Pump#2` the second of several side by side,
+/// counting as a page reads: down, then across. `position` is where a node
+/// sits.
+pub fn find_group(
+    graph: &SynthGraph,
+    position: impl Fn(NodeId) -> Option<Pos2>,
+    level: Option<GroupId>,
+    wanted: &str,
+) -> Result<GroupId, String> {
+    let index = GroupIndex::of(graph);
+    // The groups in `parent` (anywhere, for `None`) called `wanted`, as a page reads
+    let named = |wanted: &str, parent: Option<Option<GroupId>>| -> Vec<GroupId> {
+        let mut found: Vec<(GroupId, Pos2)> = index
+            .ids()
+            .filter(|&id| parent.is_none_or(|p| index.parent_of(graph, id) == p))
+            .filter_map(|id| {
+                let node = index.node(id)?;
+                (name(graph, node) == wanted).then(|| (id, position(node).unwrap_or_default()))
+            })
+            .collect();
+        found.sort_by(|a, b| a.1.y.total_cmp(&b.1.y).then(a.1.x.total_cmp(&b.1.x)));
+        found.into_iter().map(|(id, _)| id).collect()
+    };
+    // A name, or the nth of its name on one level: `Pump#2`
+    let called = |part: &str, parent: Option<Option<GroupId>>| -> Vec<GroupId> {
+        let part = part.trim();
+        let whole = named(part, parent);
+        match part.rsplit_once('#').map(|(name, n)| (name.trim(), n.parse::<usize>())) {
+            Some((name, Ok(n))) if whole.is_empty() && n >= 1 && parent.is_some() => {
+                named(name, parent).get(n - 1).copied().into_iter().collect()
+            }
+            _ => whole,
+        }
+    };
+    let one = |ids: Vec<GroupId>, what: &str| match ids.as_slice() {
+        [id] => Ok(*id),
+        [] => Err(format!("no group called {what}")),
+        _ => Err(format!("{} groups called {what}: give its path, as Outer/Inner, or which, as {what}#2", ids.len())),
+    };
+    let anywhere = called(wanted, None);
+    if anywhere.is_empty() && wanted.contains('/') {
+        let mut at = None;
+        for part in wanted.split('/') {
+            at = Some(one(called(part, Some(at)), wanted)?);
+        }
+        return at.ok_or_else(|| format!("no group called {wanted}"));
+    }
+    match called(wanted, Some(level)).as_slice() {
+        [id] => Ok(*id),
+        _ => one(anywhere, wanted.trim()),
+    }
+}
+
 /// Renames a group.
 pub fn rename(graph: &mut SynthGraph, node_id: NodeId, name: &str) {
     if let Some(node) = graph.nodes.get_mut(node_id) {
@@ -1363,6 +1419,45 @@ mod tests {
         assert_eq!(jack_actions(graph, &index, inner.node, Side::Input, "Cutoff"), [JackAction::Jack { slot: 1, count: 2 }, JackAction::Show]);
         assert_eq!(show_port(graph, inner.node, Side::Input, "Cutoff"), Some((GroupId(1001), "Cutoff".to_string())));
         assert!(graph[outer.node].get_input("Cutoff").is_ok());
+    }
+
+    #[test]
+    fn a_group_is_found_by_its_name_or_its_path() {
+        let mut rig = Rig::new();
+        let [keys, osc, filter, env, vca, out] = voice(&mut rig);
+        let inner = rig.group(&[osc, filter], "Tone");
+        rig.group(&[inner.node, env, vca], "Voice");
+        let (tone, voice) = (GroupId(1000), GroupId(1001));
+        let find = |rig: &Rig, level, wanted| {
+            find_group(&rig.editor.graph, |n| rig.editor.node_positions.get(n).copied(), level, wanted)
+        };
+        assert_eq!(find(&rig, None, "Voice"), Ok(voice));
+        // Not on the level on show, but the only one so called
+        assert_eq!(find(&rig, None, "Tone"), Ok(tone));
+        assert_eq!(find(&rig, None, "Voice/Tone"), Ok(tone));
+        assert_eq!(find(&rig, None, " Voice / Tone "), Ok(tone));
+        assert!(find(&rig, None, "Tone/Voice").is_err());
+        assert!(find(&rig, None, "Drums").is_err());
+
+        // Another called Tone: the one on show, or a path, picks
+        let left = rig.group(&[keys], "Tone");
+        let top_tone = GroupId(1002);
+        assert_eq!(find(&rig, None, "Tone"), Ok(top_tone));
+        assert_eq!(find(&rig, Some(voice), "Tone"), Ok(tone));
+        assert_eq!(find(&rig, None, "Voice/Tone"), Ok(tone));
+        let err = find(&rig, Some(tone), "Tone").unwrap_err();
+        assert!(err.contains("2 groups called Tone"), "{err}");
+
+        // Two side by side: counted down the page, then across
+        let right = rig.group(&[out], "Tone");
+        rig.editor.node_positions.insert(left.node, pos2(0.0, 300.0));
+        rig.editor.node_positions.insert(right.node, pos2(500.0, 0.0));
+        let top_right = GroupId(1003);
+        assert!(find(&rig, None, "Tone").unwrap_err().contains("Tone#2"));
+        assert_eq!(find(&rig, None, "Tone#1"), Ok(top_right));
+        assert_eq!(find(&rig, None, "Tone#2"), Ok(top_tone));
+        assert_eq!(find(&rig, None, "Voice/Tone#1"), Ok(tone));
+        assert!(find(&rig, None, "Tone#3").is_err());
     }
 
     #[test]

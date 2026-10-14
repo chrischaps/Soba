@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use eframe::egui::{self, emath::TSTransform, layers::ShapeIdx, LayerId, Rect};
 use egui_node_graph2::NodeId;
 
-use crate::graph::groups::{GroupIndex, Preview};
+use crate::graph::groups::{self, GroupIndex, Preview};
 use crate::graph::{miniature_transform, paint_miniature, paint_open_pill, GroupId};
 use super::super::theme;
 use super::framing::View;
@@ -124,6 +124,22 @@ impl SynthApp {
         let pointer = ctx.input(|i| i.pointer.hover_pos());
         let lit = pointer.is_some_and(|p| self.user_state.miniatures.get(&id).is_some_and(|r| r.contains(p)));
         self.start_dive(ctx, Dive { group: id, node, inward: true, started: 0.0, switched: false, other_view: view, lit });
+    }
+
+    /// A capture's `enter` cue: dives into the group a name or path stands
+    /// for (see [`groups::find_group`]) if it's on the level on show, or
+    /// goes straight there if it isn't.
+    pub(super) fn dive_into_named(&mut self, ctx: &egui::Context, name: &str) -> Result<(), String> {
+        let graph = &self.graph_state.graph;
+        let position = |n| self.graph_state.node_positions.get(n).copied();
+        let id = groups::find_group(graph, position, self.user_state.level, name)?;
+        let node = GroupIndex::of(graph).node(id).ok_or("it has no node")?;
+        if graph[node].user_data.parent == self.user_state.level {
+            self.dive_into(ctx, node);
+        } else {
+            self.go_to_level(Some(id));
+        }
+        Ok(())
     }
 
     /// Steps out of the group on show by shrinking it into its miniature,

@@ -7,8 +7,8 @@ and films it with `soba --capture`.
     python tools/showcase/shots.py <shot> --preview       film frame 0 only, to aim from
     python tools/showcase/shots.py <shot> --framings      a still of every camera move, on one sheet
     python tools/showcase/shots.py <shot> --dry           a touring shot's moves packed tight: a still of
-                                                          each, and where each dive lands (see tour.py)
-    python tools/showcase/shots.py <shot> --converge      dry runs until every dive is measured and lands
+                                                          each, and every module's size (see tour.py)
+    python tools/showcase/shots.py <shot> --converge      dry runs until the module sizes stop changing
     python tools/showcase/shots.py <shot> --subjects      is each hold's subject playing? (activity.py)
 
 Films (whole songs, toured through their groups) are walked through in FILMS.md.
@@ -681,10 +681,10 @@ def subjects(name):
 
 
 def converge(name, most=6):
-    """Dry-runs a touring shot until every dive is measured and lands."""
+    """Dry-runs a touring shot until it aims from the sizes it measures."""
     for k in range(1, most + 1):
         s = run(name, dry=True)
-        if s.tour.unmeasured == 0 and s.tour.settled:
+        if s.tour.settled:
             print(f"{name}: settled after {k} dry run{'s' if k > 1 else ''}")
             return
     sys.exit(f"{name}: still unsettled after {most} dry runs")
@@ -714,7 +714,7 @@ def run(name, script_only=False, preview=False, framing=False, dry=False):
         return
     out = OUT / name
     out.mkdir(parents=True, exist_ok=True)
-    for old in [*out.glob("*.ppm"), *(out.glob("[ma]*[0-9].*") if dry else [])]:
+    for old in [*out.glob("*.ppm"), *out.glob("lvl[0-9]*.json"), *(out.glob("m[0-9]*.png") if dry else [])]:
         old.unlink()
     print(f"filming {name} ...", flush=True)
     subprocess.run([str(EXE), str(ROOT / patch), "--capture", str(script), "--out", str(out), "--ppp", str(ppp),
@@ -726,8 +726,10 @@ def run(name, script_only=False, preview=False, framing=False, dry=False):
         ppm.unlink()
     if framing:
         contact_sheet(out, labels)
-    if dry and s.tour:
+    if s.tour and not (preview or framing):
+        # Every take's previsit measures the modules, a dry run's or not
         s.tour.settled = s.tour.learn(out)
+    if dry and s.tour:
         contact_sheet(out, s.tour.labels, pattern="m*.png")
     return s
 

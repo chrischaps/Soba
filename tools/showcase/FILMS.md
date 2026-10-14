@@ -11,7 +11,7 @@ Everything is in `tools/showcase/`. The tools work on any patch:
 | Tool | What it does |
 |------|--------------|
 | `shots.py` | The shot list. A film is a shot like any other, run with `--converge`, `--subjects` and `--dry` |
-| `tour.py` | The camera. Looks in patch space on whichever level is on show, dives into groups (a double-click, so the app's own dive plays) and back out (Escape), and measures where each dive lands |
+| `tour.py` | The camera. Aims in patch space on whichever level is on show (an `aim` cue), and dives into groups by name and back out (`enter` and `leave`, so the app's own dive plays) |
 | `stems.py` | One WAV per part: the patch rendered with every other mixer channel muted |
 | `activity.py` | Each part's level, per beat, from the stems: `activity.json` and a heat strip, `activity.png` |
 | `check_film.py` | Frames to review a take by: where each move lands, partway through long glides, and mid-dive. Compares two takes |
@@ -19,7 +19,7 @@ Everything is in `tools/showcase/`. The tools work on any patch:
 | `zoom_jitter.py` | Whether everything scales smoothly as the view zooms (#255). Worth running before a film, since a film zooms all the time |
 
 What a film keeps between takes is in `tools/showcase/films/<film>/`, in git:
-- `aims*.json`: where each dive lands, and each module's measured size. One file per shot, written by dry runs.
+- `aims*.json`: each module's measured size, which the camera aims from. One file per shot, written by each run's previsit.
 - `activity.json` and `activity.png`: what plays when.
 
 The stems themselves (about 100 MB a part) and the takes stay in `target/showcase/`.
@@ -38,7 +38,7 @@ Use Canopy as the example: the shots are `canopy` (1920×1080, the whole song) a
    python tools/showcase/stems.py patches/canopy.json target/showcase/canopy-stems --seconds 262 --jobs 3
    python tools/showcase/activity.py patches/canopy.json target/showcase/canopy-stems --out tools/showcase/films/canopy
    ```
-3. **Re-aim.** Dry runs replay the tour packed tight and measure where every dive lands. A module that changed size, or a new app version, moves the landings. `--converge` repeats dry runs until every dive is measured and lands, usually in one to four runs of about 2½ minutes each. It leaves a contact sheet of every landing in `target/showcase/<shot>-dry/sheet.png`.
+3. **Re-aim.** The camera aims at modules by their measured sizes, and a module that changed size, or a new app version, moves them. A dry run replays the tour packed tight, and its previsit measures every module again. `--converge` repeats dry runs until the sizes stop changing: one run of about 7 minutes, or two if a module grew. It leaves a contact sheet of every framing in `target/showcase/<shot>-dry/sheet.png`.
    ```bash
    python tools/showcase/shots.py canopy --converge
    python tools/showcase/shots.py canopy-vertical --converge
@@ -47,7 +47,7 @@ Use Canopy as the example: the shots are `canopy` (1920×1080, the whole song) a
    ```bash
    python tools/showcase/shots.py canopy canopy-vertical --subjects
    ```
-5. **Film.** The landscape take is about 8 minutes and 1 GB at crf 12; the portrait one is about 7 minutes. The shot scripts in `tools/showcase/scripts/` are rewritten as you film: commit them with the aims.
+5. **Film.** The landscape take is about 8 minutes and 1 GB at crf 12; the portrait one is about 7 minutes. The shot scripts in `tools/showcase/scripts/` are rewritten as you film: commit them with the aims. A take measures the sizes too, and says if any changed: then the take aimed from stale ones.
    ```bash
    python tools/showcase/shots.py canopy
    python tools/showcase/shots.py canopy-vertical
@@ -58,9 +58,8 @@ Use Canopy as the example: the shots are `canopy` (1920×1080, the whole song) a
    python tools/showcase/check_film.py canopy-vertical --from 114 --to 178
    ```
    Look for:
-   - a dive that didn't arrive, which shows as no breadcrumb trail;
    - empty canvas mid-glide;
-   - a pill or tooltip lit by the pointer;
+   - a pill or tooltip lit up;
    - modules cut off at the edge.
 7. **Encode.** The vertical cut is a minute of a capture of the whole song, so trim it with `--from` and `--to`. Crop it to the editor, which starts 165 px down at ppp 1.5.
    ```bash
@@ -90,7 +89,7 @@ Use Canopy as the example: the shots are `canopy` (1920×1080, the whole song) a
    ```
    The moves:
    - `look(t, point, zoom, dur, note, subject)` glides to centre a patch point. `hop` does the same for long ways, rising over the middle.
-   - `enter(t, "Group")` and `leave(t)` dive in and out.
+   - `enter(t, "Group")` and `leave(t)` dive in and out. The cue names the group, so nothing is clicked and nothing needs aiming.
    - `inside(...)` settles on a whole level, then drifts in on one module. `inside_tall(...)` is the portrait version, which drifts from one module to another.
    - A level's modules come from the patch, through `centre_of`, `middle`, `fit_zoom` and `find("module.kind")`.
 
@@ -101,10 +100,9 @@ Use Canopy as the example: the shots are `canopy` (1920×1080, the whole song) a
 
 These lessons are from the Canopy session, 2026-10-14. The vault note "Soba Films Canopy Diving Through Its Groups" has the full story.
 
-- **Every group is opened once before recording.** A module used to be measured only once it was drawn. Until then, its group's miniature and the view into it used nominal sizes, and the first dive would land somewhere else. Since #245, modules inside groups are measured off screen when a patch opens, so a new film can leave the previsit out. Canopy keeps it, so its converged aims stay as filmed.
-- **Dive landings are keyed by level, zoom and first visit, not by order.** Keyed by order, one missed double-click knocks every later aim off. Coming out is worked out exactly, because the group's node goes back where it was on screen, so it needs no measuring.
-- **The pointer jumps to a title bar and back; it never glides.** It isn't drawn, but gliding it across faces lights their miniatures' Open pills.
-- **In a portrait window, inside a wide group, frame a module, not the level.** A whole level fitted to 720 points wide is a thin strip. A nested group can also sit past the edge, so the previsit centres each one before clicking it.
+- **Every group is opened once before recording.** Since #245 the app measures the modules inside groups when a patch opens, so miniatures and the framing of a level no longer wait for a first visit. The tour still opens each group once, unseen, and dumps its layout: that's how it learns the sizes it aims from.
+- **Name the group; don't click it (#252).** The first Canopy films entered groups with a double-click on the title bar and steered the camera with relative `camera` cues. Every dive's landing had to be measured on dry runs, and a missed click left the tour on the wrong level, so every later aim was wrong. A gliding pointer also lit the Open pills of the faces it crossed. The `enter`, `leave` and `aim` cues need no aiming: the app finds the group by name and the point in patch space, from wherever the view is.
+- **In a portrait window, inside a wide group, frame a module, not the level.** A whole level fitted to 720 points wide is a thin strip.
 - **A riser ramps up from silence.** Dive into it once it's audible, not when its section starts; the activity check catches this.
 - **A capture's noise isn't the render's (#253).** Sync is exact, but a byte compare against `render` fails for patches with noise.
 - **Text steps as the view zooms (#255).** Notes rewrap, and the Arranger's width and module heights saw. A film shows it more than anything, so check `zoom_jitter.py` before filming.

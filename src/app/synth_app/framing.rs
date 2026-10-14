@@ -36,6 +36,9 @@ pub(super) enum Target {
     /// Everything on the current level, its frames and notes included.
     All,
     Selection { nodes: Vec<NodeId>, annotations: Vec<AnnotationId> },
+    /// A patch point, in the middle of the editor at a zoom: a capture's
+    /// `aim` cue, which moves as a camera does, easing in and out.
+    Point { at: Pos2, zoom: f32 },
 }
 
 /// The view on its way to framing something.
@@ -65,6 +68,12 @@ pub(super) struct View {
 /// Eases out: quick to leave, gentle to arrive.
 fn ease(t: f32) -> f32 {
     1.0 - (1.0 - t.clamp(0.0, 1.0)).powi(3)
+}
+
+/// Eases in and out, as a camera move starts and stops gently.
+fn ease_in_out(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
 
 /// The zoom that fits `size` (in patch points) into `room` (in screen
@@ -98,6 +107,15 @@ fn room(view: Vec2) -> Vec2 {
 /// of the view below the trail.
 fn middle(view: Vec2) -> Vec2 {
     vec2(view.x / 2.0, TRAIL_HEIGHT + (view.y - TRAIL_HEIGHT) / 2.0)
+}
+
+/// Where a glide to `target` centres it, relative to the editor's corner:
+/// a point aimed at goes in the middle of the editor, as a camera has it.
+fn centre(target: &Target, view: Vec2) -> Vec2 {
+    match target {
+        Target::Point { .. } => view / 2.0,
+        _ => middle(view),
+    }
 }
 
 impl SynthApp {
@@ -140,7 +158,7 @@ impl SynthApp {
         if !self.editor_rect.is_positive() {
             return;
         }
-        let at = self.editor_rect.min + middle(self.editor_rect.size());
+        let at = self.editor_rect.min + centre(&target, self.editor_rect.size());
         self.glide = Some(Glide {
             target,
             started: ctx.input(|i| i.time),
@@ -165,19 +183,17 @@ impl SynthApp {
             self.glide = None;
             return;
         }
-        let Some((bounds, measured)) = self.target_bounds(&glide.target) else {
+        let view = self.editor_rect.size();
+        let Some((to_zoom, to_middle, measured)) = self.destination(&glide.target, view) else {
             self.glide = None;
             return;
         };
-        let view = self.editor_rect.size();
-        let closest = if glide.target == Target::All { ALL_ZOOM } else { SELECTION_ZOOM };
-        let to_zoom = zoom_to_fit(bounds.size(), room(view), closest);
         let t = if glide.seconds > 0.0 { ((ui.input(|i| i.time) - glide.started) / glide.seconds) as f32 } else { 1.0 };
-        let e = ease(t);
+        let e = if matches!(glide.target, Target::Point { .. }) { ease_in_out(t) } else { ease(t) };
         // Zoom eases by ratio, so zooming far out doesn't rush its start
         let zoom = glide.from_zoom * (to_zoom / glide.from_zoom).powf(e);
-        let looking_at = glide.from_middle.lerp(aim(bounds, to_zoom, view), e);
-
+        // A point aimed at is in the middle of the editor; a view's is below the trail
+        let looking_at = glide.from_middle.lerp(to_middle, e) + (middle(view) - centre(&glide.target, view)) / zoom;
         self.set_view(ui, View { zoom, looking_at });
 
         let left = (self.graph_state.pan_zoom.zoom, self.graph_state.pan_zoom.pan);
@@ -248,6 +264,19 @@ impl SynthApp {
         self.bounds_of(&nodes, &notes)
     }
 
+    /// Where a glide to `target` ends: the zoom, the patch point in the
+    /// middle of the framing, and whether every module it frames has been
+    /// measured.
+    fn destination(&self, target: &Target, view: Vec2) -> Option<(f32, Pos2, bool)> {
+        if let Target::Point { at, zoom } = *target {
+            return Some((zoom.max(FURTHEST_ZOOM), at, true));
+        }
+        let (bounds, measured) = self.target_bounds(target)?;
+        let closest = if *target == Target::All { ALL_ZOOM } else { SELECTION_ZOOM };
+        let zoom = zoom_to_fit(bounds.size(), room(view), closest);
+        Some((zoom, aim(bounds, zoom, view), measured))
+    }
+
     /// The patch-space rectangle around what's framed, and whether every
     /// module in it has been measured.
     fn target_bounds(&self, target: &Target) -> Option<(Rect, bool)> {
@@ -258,6 +287,7 @@ impl SynthApp {
                 let nodes: Vec<NodeId> = nodes.iter().copied().filter(|n| level.contains(n)).collect();
                 self.bounds_of(&nodes, annotations)
             }
+            Target::Point { .. } => None,
         }
     }
 

@@ -580,6 +580,19 @@ impl SynthApp {
                 CaptureAction::InputFile(name) => self.user_state.audio_input_name = Some(name),
                 CaptureAction::Layout(path) => self.write_layout(ctx, &path),
                 CaptureAction::Fit(seconds) => self.start_glide_over(ctx, framing::Target::All, seconds),
+                CaptureAction::Aim { at, zoom, seconds } => {
+                    self.start_glide_over(ctx, framing::Target::Point { at, zoom }, seconds);
+                }
+                CaptureAction::Enter(name) => {
+                    if let Err(e) = self.dive_into_named(ctx, &name) {
+                        eprintln!("capture: can't enter {name}: {e}");
+                    }
+                }
+                CaptureAction::Leave => {
+                    if !self.dive_out(ctx) {
+                        eprintln!("capture: no group to leave");
+                    }
+                }
                 CaptureAction::SetParam { module, nth, input, value } => {
                     match find_input(&self.graph_state.graph, &module, nth, &input) {
                         Some(id) => self.graph_state.graph.inputs[id].value.set_actual_value(value),

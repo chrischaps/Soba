@@ -1,367 +1,173 @@
--46.0000 camera -2468.00 -822.61 1.000000 0.05
--45.8500 move 780.0 347.1 0
--45.5500 press
--45.4800 release
--45.4100 press
--45.3400 release
--45.2600 move 60.0 850.0 0
--44.6800 key Escape 0.05
--43.7200 camera -1340.00 -855.71 1.000000 0.05
--43.5700 move 780.0 314.0 0
--43.2700 press
--43.2000 release
--43.1300 press
--43.0600 release
--42.9800 move 60.0 850.0 0
--42.4000 key Escape 0.05
--41.4400 camera -1340.00 -1194.01 1.000000 0.05
--41.2900 move 780.0 303.7 0
--40.9900 press
--40.9200 release
--40.8500 press
--40.7800 release
--40.7000 move 60.0 850.0 0
--40.1200 camera -1429.00 -1093.01 1.000000 0.05
--39.9700 move 780.0 276.9 0
--39.6700 press
--39.6000 release
--39.5300 press
--39.4600 release
--39.3800 move 60.0 850.0 0
--38.8000 key Escape 0.05
--37.8400 key Escape 0.05
--36.8800 camera -827.00 -1334.71 1.000000 0.05
--36.7300 move 780.0 314.0 0
--36.4300 press
--36.3600 release
--36.2900 press
--36.2200 release
--36.1400 move 60.0 850.0 0
--35.5600 camera -630.00 -1208.21 1.000000 0.05
--35.4100 move 780.0 313.9 0
--35.1100 press
--35.0400 release
--34.9700 press
--34.9000 release
--34.8200 move 60.0 850.0 0
--34.2400 key Escape 0.05
--33.2800 key Escape 0.05
--32.3200 camera -630.00 -609.21 1.000000 0.05
--32.1700 move 780.0 333.0 0
--31.8700 press
--31.8000 release
--31.7300 press
--31.6600 release
--31.5800 move 60.0 850.0 0
--31.0000 camera -809.00 -699.86 1.000000 0.05
--30.8500 move 780.0 276.7 0
--30.5500 press
--30.4800 release
--30.4100 press
--30.3400 release
--30.2600 move 60.0 850.0 0
--29.6800 key Escape 0.05
--28.7200 key Escape 0.05
--27.7600 camera -809.00 -989.66 1.000000 0.05
--27.6100 move 780.0 333.2 0
--27.3100 press
--27.2400 release
--27.1700 press
--27.1000 release
--27.0200 move 60.0 850.0 0
--26.4400 camera -702.00 -932.51 1.000000 0.05
--26.2900 move 780.0 267.5 0
--25.9900 press
--25.9200 release
--25.8500 press
--25.7800 release
--25.7000 move 60.0 850.0 0
--25.1200 key Escape 0.05
--24.1600 camera -948.00 -875.06 1.000000 0.05
--24.0100 move 780.0 325.0 0
--23.7100 press
--23.6400 release
--23.5700 press
--23.5000 release
--23.4200 move 60.0 850.0 0
--22.8400 key Escape 0.05
--21.8800 camera -948.00 -1189.06 1.000000 0.05
--21.7300 move 780.0 325.0 0
--21.4300 press
--21.3600 release
--21.2900 press
--21.2200 release
--21.1400 move 60.0 850.0 0
--20.5600 key Escape 0.05
--19.6000 key Escape 0.05
--18.6400 camera -2108.00 -939.26 1.000000 0.05
--18.4900 move 780.0 293.0 0
--18.1900 press
--18.1200 release
--18.0500 press
--17.9800 release
--17.9000 move 60.0 850.0 0
--17.3200 key Escape 0.05
--16.3600 camera -2342.00 -928.76 1.000000 0.05
--16.2100 move 780.0 303.5 0
--15.9100 press
--15.8400 release
--15.7700 press
--15.7000 release
--15.6200 move 60.0 850.0 0
--15.0400 key Escape 0.05
--14.0800 camera -2108.00 -1248.26 1.000000 0.05
--13.9300 move 780.0 354.0 0
--13.6300 press
--13.5600 release
--13.4900 press
--13.4200 release
--13.3400 move 60.0 850.0 0
--12.7600 key Escape 0.05
--11.8000 camera -1874.00 -966.71 1.000000 0.05
--11.6500 move 780.0 265.6 0
--11.3500 press
--11.2800 release
--11.2100 press
--11.1400 release
--11.0600 move 60.0 850.0 0
--10.4800 key Escape 0.05
--9.5200 camera -1874.00 -1382.76 1.000000 0.05
--9.3700 move 780.0 324.5 0
--9.0700 press
--9.0000 release
--8.9300 press
--8.8600 release
--8.7800 move 60.0 850.0 0
--8.2000 key Escape 0.05
--7.2400 camera -2666.00 -1174.76 1.000000 0.05
--7.0900 move 780.0 324.5 0
--6.7900 press
--6.7200 release
--6.6500 press
--6.5800 release
--6.5000 move 60.0 850.0 0
--5.9200 key Escape 0.05
--4.9600 camera -2924.00 -857.26 1.000000 0.05
--4.8100 move 780.0 375.0 0
--4.5100 press
--4.4400 release
--4.3700 press
--4.3000 release
--4.2200 move 60.0 850.0 0
--3.6400 key Escape 0.05
--0.5000 camera -1303.24 -626.76 0.620000 0.05   # Dawn: the loops and the forest
+-46.0000 enter Wind
+-45.3900 layout lvl000
+-45.3400 leave
+-44.6800 enter Kalimba
+-44.0700 layout lvl001
+-44.0200 leave
+-43.3600 enter Bells
+-42.7500 layout lvl002
+-42.7000 enter FM Bell
+-42.0900 layout lvl003
+-42.0400 leave
+-41.3800 leave
+-40.7200 enter Harp
+-40.1100 layout lvl004
+-40.0600 enter Mallet
+-39.4500 layout lvl005
+-39.4000 leave
+-38.7400 leave
+-38.0800 enter Rhodes
+-37.4700 layout lvl006
+-37.4200 enter Electric Piano
+-36.8100 layout lvl007
+-36.7600 leave
+-36.1000 leave
+-35.4400 enter Strings
+-34.8300 layout lvl008
+-34.7800 enter String Machine
+-34.1700 layout lvl009
+-34.1200 leave
+-33.4600 enter Strings/Pump#1
+-32.8500 layout lvl010
+-32.8000 leave
+-32.1400 enter Strings/Pump#2
+-31.5300 layout lvl011
+-31.4800 leave
+-30.8200 leave
+-30.1600 enter Bass
+-29.5500 layout lvl012
+-29.5000 leave
+-28.8400 enter Flute
+-28.2300 layout lvl013
+-28.1800 leave
+-27.5200 enter Vocal Chops
+-26.9100 layout lvl014
+-26.8600 leave
+-26.2000 enter Drums
+-25.5900 layout lvl015
+-25.5400 leave
+-24.8800 enter Break
+-24.2700 layout lvl016
+-24.2200 leave
+-23.5600 enter Birds
+-22.9500 layout lvl017
+-22.9000 leave
+-22.2400 enter Riser
+-21.6300 layout lvl018
+-21.5800 leave
+-20.9200 layout lvl019
+-0.5000 aim 2660.00 1330.00 0.620000 0.05   # Dawn: the loops and the forest
 0.0000 play
-0.6000 camera -2325.00 -1377.39 1.500000 5.0   # the Kalimba
-5.9000 move 786.0 242.8 0
-6.2000 press
-6.2700 release
-6.3400 press
-6.4100 release
-6.4900 move 60.0 850.0 0
-7.0000 camera -1135.30 -802.12 0.618921 0.9   # Kalimba: the whole group
-8.2000 camera -2279.50 -1479.29 1.500000 5.8   # Kalimba: in on seq.step
-14.3000 key Escape 0.05
-14.9000 camera -2279.50 -1986.74 1.500000 1.6   # the Bells
-16.8517 move 786.0 227.4 0
-17.1517 press
-17.2217 release
-17.2917 press
-17.3617 release
-17.4417 move 60.0 850.0 0
-17.9517 camera -1575.11 -1426.53 0.947817 0.9   # Bells: the whole group
-21.2517 move 898.3 115.1 0
-21.5517 press
-21.6217 release
-21.6917 press
-21.7617 release
-21.8417 move 60.0 850.0 0
-22.3517 camera -1501.46 -1372.82 0.854216 0.9   # FM Bell: the whole group
-23.5517 camera -1823.85 -2072.93 1.400000 3.5   # FM Bell: in on osc.sine
-27.4517 key Escape 0.05
-28.0517 key Escape 0.05
-28.6517 camera -1456.44 -355.99 0.600000 3.6   # the band and the desk, as the beat comes in
-37.1034 camera -2429.09 -1768.69 1.500000 2.0   # the Drums
-39.2034 move 786.0 170.2 0
-39.5034 press
-39.5734 release
-39.6434 press
-39.7134 release
-39.7934 move 60.0 850.0 0
-40.3034 camera -1312.96 -682.44 0.506990 0.9   # Drums: the whole group
-41.5034 camera -3102.50 -1856.09 1.600000 6.1   # Drums: in on source.drum
-47.9034 key Escape 0.05
-48.5034 camera -3269.25 -1717.83 1.500000 1.5   # the Bass
-50.1034 move 786.0 211.3 0
-50.4034 press
-50.4734 release
-50.5434 press
-50.6134 release
-50.6934 move 60.0 850.0 0
-51.2034 camera -1965.24 -1113.23 0.797641 0.9   # Bass: the whole group
-52.4034 camera -4366.76 -1649.17 1.500000 4.3   # Bass: in on filter.ladder
-57.0034 key Escape 0.05
-57.6034 camera -2469.43 -1143.47 1.059310 1.2   # the Rhodes (over)
-58.8034 camera -2626.76 -1589.17 1.500000 1.2   # the Rhodes
-60.0034 move 786.0 271.3 0
-60.3034 press
-60.3734 release
-60.4434 press
-60.5134 release
-60.5934 move 60.0 850.0 0
-61.1034 camera -2443.38 -1528.55 1.354285 0.8   # Rhodes: its sequencer
-62.2034 move 1074.9 119.6 0
-62.5034 press
-62.5734 release
-62.6434 press
-62.7134 release
-62.7934 move 60.0 850.0 0
-63.3034 camera -1339.19 -853.23 0.546534 0.9   # Electric Piano: the whole group
-64.5034 camera -2425.96 -1645.40 1.200000 1.9034   # Electric Piano: in on mod.adsr
-66.6069 key Escape 0.05
-67.2069 key Escape 0.05
-67.8069 camera -2993.83 -2904.87 1.500000 1.4   # the Harp
-69.2069 move 786.0 242.8 0
-69.5069 press
-69.5769 release
-69.6469 press
-69.7169 release
-69.7969 move 60.0 850.0 0
-70.3069 camera -2478.17 -2426.03 1.187973 0.8   # Harp
-71.5069 move 591.6 117.8 0
-71.8069 press
-71.8769 release
-71.9469 press
-72.0169 release
-72.0969 move 60.0 850.0 0
-72.6069 camera -1893.94 -1918.50 0.869643 0.9   # Mallet: the whole group
-73.8069 camera -3119.54 -2755.94 1.400000 4.0   # Mallet: in on filter.svf
-78.1069 key Escape 0.05
-78.7069 key Escape 0.05
-79.3069 camera -4720.33 -2763.11 1.500000 2.4   # the Break
-81.7069 move 786.0 258.6 0
-82.0069 press
-82.0769 release
-82.1469 press
-82.2169 release
-82.2969 move 60.0 850.0 0
-82.8069 camera -3366.20 -1976.30 1.000000 0.9   # Break: the whole group
-84.0069 camera -4614.83 -2772.75 1.500000 4.8   # Break: in on source.chopper
-89.1069 key Escape 0.05
-89.7069 camera -4965.83 -2571.00 1.500000 1.4   # the Vocal Chops
-91.1069 move 786.0 302.8 0
-91.4069 press
-91.4769 release
-91.5469 press
-91.6169 release
-91.6969 move 60.0 850.0 0
-92.2069 camera -2194.83 -1298.45 0.621437 0.9   # Vocal Chops: the whole group
-93.4069 camera -5482.70 -2672.93 1.400000 2.2345   # Vocal Chops: in on source.sampler
-95.9414 key Escape 0.05
-96.5414 camera -1700.55 -686.50 0.519483 0.95   # the three Arrangers turn the page (over)
-97.4914 camera -2104.69 -587.03 0.800000 0.95   # the three Arrangers turn the page
-99.5103 camera -6214.29 -2372.46 1.500000 2.6   # the Flute
-102.2103 move 786.0 227.1 0
-102.5103 press
-102.5803 release
-102.6503 press
-102.7203 release
-102.8003 move 60.0 850.0 0
-103.3103 camera -2979.60 -1212.69 0.618921 0.9   # Flute: its breath: the whole group
-104.5103 camera -6643.03 -2005.99 1.300000 8.7517   # Flute: its breath: in on source.noise
-113.5621 key Escape 0.05
-114.1621 camera -3348.14 -1290.01 0.750000 3.0   # the loops and the band, the drums coming back
-121.8621 camera -9649.51 -2458.81 1.700000 1.8   # the Riser
-123.4621 move 788.4 318.1 0
-123.7621 press
-123.8321 release
-123.9021 press
-123.9721 release
-124.0521 move 60.0 850.0 0
-124.5621 camera -5723.40 -1547.19 1.000000 0.9   # Riser: the whole group
-125.7621 camera -9401.51 -2309.99 1.600000 1.7   # Riser: in on filter.svf
-127.7621 key Escape 0.05
-128.3621 camera -1568.88 -439.47 0.350000 4.0517   # the build pulls back to the whole patch, landing on the Peak
-135.4138 camera -11148.39 -896.30 1.750000 2.6   # the Dancer
-141.8138 camera -2491.83 -553.99 0.485547 1.4   # the Strings (over)
-143.2138 camera -5840.26 -2654.65 1.500000 1.4   # the Strings
-144.7138 move 786.0 271.6 0
-145.0138 press
-145.0838 release
-145.1538 press
-145.2238 release
-145.3038 move 60.0 850.0 0
-145.8138 camera -4573.29 -2206.56 1.174482 0.8   # Strings: the String Machine and two Pumps
-147.3138 move 699.1 117.6 0
-147.6138 press
-147.6838 release
-147.7538 press
-147.8238 release
-147.9038 move 60.0 850.0 0
-148.4138 camera -2684.48 -1327.84 0.596860 0.9   # String Machine: the whole group
-149.6138 camera -6935.53 -2327.46 1.300000 4.2   # String Machine: in on fx.chorus
-154.1138 key Escape 0.05
-154.7138 key Escape 0.05
-155.3138 camera -3480.56 -737.06 0.582218 1.3   # the desk: four mixers, delay, reverb, tape (over)
-156.6138 camera -5628.00 -630.33 0.850000 1.3   # the desk: four mixers, delay, reverb, tape
-161.0483 camera -4160.94 -529.25 0.800000 2.2   # the Arrangers turn the page
-165.3172 camera -10069.77 -2264.12 1.500000 2.4   # the Flute, an octave up
-167.8172 move 786.0 227.1 0
-168.1172 press
-168.1872 release
-168.2572 press
-168.3272 release
-168.4072 move 60.0 850.0 0
-168.9172 camera -4570.42 -1167.99 0.618921 0.9   # Flute: the tone: the whole group
-170.1172 camera -10432.27 -2393.47 1.500000 6.0   # Flute: the tone: in on osc.sine
-176.4172 key Escape 0.05
-177.0172 camera -9730.27 -3074.47 1.500000 1.8   # the Break
-178.8172 move 786.0 258.6 0
-179.1172 press
-179.1872 release
-179.2572 press
-179.3272 release
-179.4072 move 60.0 850.0 0
-179.9172 camera -6706.16 -2183.87 1.000000 0.9   # Break: the whole group
-181.1172 camera -9344.31 -3309.42 1.400000 4.0   # Break: in on filter.ladder
-185.4172 key Escape 0.05
-186.0172 camera -10351.73 -3328.76 1.500000 1.4   # the Vocal Chops
-187.4172 move 786.0 302.8 0
-187.7172 press
-187.7872 release
-187.8572 press
-187.9272 release
-188.0072 move 60.0 850.0 0
-188.5172 camera -4426.16 -1612.38 0.621437 0.9   # Vocal Chops: the hook: the whole group
-189.7172 camera -8932.07 -2973.23 1.300000 3.8345   # Vocal Chops: the hook: in on seq.step
-193.8517 key Escape 0.05
-194.4517 camera -3207.71 -873.43 0.515387 1.0   # the Arrangers turn to Dusk (over)
-195.4517 camera -4461.58 -881.85 0.800000 1.0   # the Arrangers turn to Dusk
-199.0207 camera -10282.46 -2940.99 1.500000 2.8   # the Bass, fading
-201.9207 move 786.0 211.3 0
-202.2207 press
-202.2907 release
-202.3607 press
-202.4307 release
-202.5107 move 60.0 850.0 0
-203.0207 camera -5694.60 -1763.66 0.797641 0.9   # Bass: the whole group
-204.2207 camera -9554.51 -2840.03 1.400000 10.0   # Bass: in on seq.step
-214.5207 key Escape 0.05
-215.1207 camera -3750.97 -1693.34 0.750000 3.6   # the harmony: one progression, voiced three ways
-219.0207 camera -5178.73 -2144.90 0.950000 9.7034   # along to the Rhodes, Strings and Harp
-229.3241 camera -4095.97 -1440.02 0.638669 1.5   # the Birds (over)
-230.8241 camera -11062.93 -3377.46 1.500000 1.5   # the Birds
-232.4241 move 786.0 258.6 0
-232.7241 press
-232.7941 release
-232.8641 press
-232.9341 release
-233.0141 move 60.0 850.0 0
-233.5241 camera -6999.62 -2257.27 0.924517 0.9   # Birds: the whole group
-234.7241 camera -11237.94 -3359.58 1.500000 7.4   # Birds: in on mod.slope
-242.4241 key Escape 0.05
-243.0241 camera -7634.82 -2324.89 1.101075 2.2   # the Kalimba, as at Dawn (over)
-245.2241 camera -9563.94 -2974.83 1.500000 2.2   # the Kalimba, as at Dawn
-248.6759 camera -2227.04 -608.95 0.350000 11.0   # the whole patch rings out
+0.6000 aim 2108.00 1237.20 1.500000 5.0   # the Kalimba
+6.2000 enter Kalimba
+7.0000 aim 469.70 567.40 0.619739 0.9   # Kalimba: the whole group
+8.2000 aim 155.00 257.25 1.500000 5.8   # Kalimba: in on seq.step
+14.3000 leave
+14.9000 aim 2108.00 1575.35 1.500000 1.6   # the Bells
+17.1517 enter Bells
+17.9517 aim 327.70 369.70 0.951150 0.9   # Bells: the whole group
+21.5517 enter FM Bell
+22.3517 aim 543.70 403.20 0.854463 0.9   # FM Bell: the whole group
+23.5517 aim 89.00 275.90 1.400000 3.5   # FM Bell: in on osc.sine
+27.4517 leave
+28.0517 leave
+28.6517 aim 3240.00 700.00 0.600000 3.6   # the band and the desk, as the beat comes in
+37.1034 aim 2432.00 1285.00 1.500000 2.0   # the Drums
+39.5034 enter Drums
+40.3034 aim 1155.70 356.70 0.506973 0.9   # Drums: the whole group
+41.5034 aim 505.00 170.75 1.600000 6.1   # Drums: in on source.drum
+47.9034 leave
+48.5034 aim 2666.00 1258.20 1.500000 1.5   # the Bass
+50.4034 enter Bass
+51.2034 aim 469.70 440.70 0.797912 0.9   # Bass: the whole group
+52.4034 aim 917.00 144.35 1.500000 4.3   # Bass: in on filter.ladder
+57.0034 leave
+57.6034 aim 2086.00 1238.20 1.059310 1.2   # the Rhodes (over)
+58.8034 aim 1506.00 1218.20 1.500000 1.2   # the Rhodes
+60.3034 enter Rhodes
+61.1034 aim 237.70 257.25 1.366919 0.8   # Rhodes: its sequencer
+62.5034 enter Electric Piano
+63.3034 aim 863.70 643.20 0.546704 0.9   # Electric Piano: the whole group
+64.5034 aim 435.00 453.20 1.200000 1.9034   # Electric Piano: in on mod.adsr
+66.6069 leave
+67.2069 leave
+67.8069 aim 1506.00 1817.20 1.500000 1.4   # the Harp
+69.5069 enter Harp
+70.3069 aim 275.70 295.05 1.191798 0.8   # Harp
+71.8069 enter Mallet
+72.6069 aim 383.70 403.20 0.872123 0.9   # Mallet: the whole group
+73.8069 aim 435.00 164.75 1.400000 4.0   # Mallet: in on filter.svf
+78.1069 leave
+78.7069 leave
+79.3069 aim 2432.00 1701.70 1.500000 2.4   # the Break
+82.0069 enter Break
+82.8069 aim 404.70 324.35 1.000000 0.9   # Break: the whole group
+84.0069 aim 115.00 196.20 1.500000 4.8   # Break: in on source.chopper
+89.1069 leave
+89.7069 aim 2666.00 1567.20 1.500000 1.4   # the Vocal Chops
+91.4069 enter Vocal Chops
+92.2069 aim 406.70 565.25 0.622096 0.9   # Vocal Chops: the whole group
+93.4069 aim 791.00 384.90 1.400000 2.2345   # Vocal Chops: in on source.sampler
+95.9414 leave
+96.5414 aim 2027.00 983.60 0.523153 0.95   # the three Arrangers turn the page (over)
+97.4914 aim 1388.00 400.00 0.800000 0.95   # the three Arrangers turn the page
+99.5103 aim 2900.00 1247.70 1.500000 2.6   # the Flute
+102.5103 enter Flute
+103.3103 aim 856.70 567.40 0.619739 0.9   # Flute: its breath: the whole group
+104.5103 aim 1152.50 151.25 1.300000 8.7517   # Flute: its breath: in on source.noise
+113.5621 leave
+114.1621 aim 2270.00 1450.00 0.750000 3.0   # the loops and the band, the drums coming back
+121.8621 aim 3482.00 1176.20 1.700000 1.8   # the Riser
+123.7621 enter Riser
+124.5621 aim 175.20 268.70 1.000000 0.9   # Riser: the whole group
+125.7621 aim 328.00 164.70 1.600000 1.7   # Riser: in on filter.svf
+127.7621 leave
+128.3621 aim 2095.00 994.00 0.350000 4.0517   # the build pulls back to the whole patch, landing on the Peak
+135.4138 aim 3983.00 250.40 1.750000 2.6   # the Dancer
+141.8138 aim 2744.50 879.12 0.485605 1.4   # the Strings (over)
+143.2138 aim 1506.00 1507.85 1.500000 1.4   # the Strings
+145.0138 enter Strings
+145.8138 aim 185.70 299.70 1.173307 0.8   # Strings: the String Machine and two Pumps
+147.6138 enter String Machine
+148.4138 aim 903.70 585.90 0.600171 0.9   # String Machine: the whole group
+149.6138 aim 1741.00 152.25 1.300000 4.2   # String Machine: in on fx.chorus
+154.1138 leave
+154.7138 leave
+155.3138 aim 2157.00 993.92 0.594079 1.3   # the desk: four mixers, delay, reverb, tape (over)
+156.6138 aim 2808.00 480.00 0.850000 1.3   # the desk: four mixers, delay, reverb, tape
+161.0483 aim 1388.00 400.00 0.800000 2.2   # the Arrangers turn the page
+165.3172 aim 2900.00 1247.70 1.500000 2.4   # the Flute, an octave up
+168.1172 enter Flute
+168.9172 aim 856.70 567.40 0.619739 0.9   # Flute: the tone: the whole group
+170.1172 aim 427.00 275.90 1.500000 6.0   # Flute: the tone: in on osc.sine
+176.4172 leave
+177.0172 aim 2432.00 1701.70 1.500000 1.8   # the Break
+179.1172 enter Break
+179.9172 aim 404.70 324.35 1.000000 0.9   # Break: the whole group
+181.1172 aim 373.00 504.35 1.400000 4.0   # Break: in on filter.ladder
+185.4172 leave
+186.0172 aim 2666.00 1567.20 1.500000 1.4   # the Vocal Chops
+187.7172 enter Vocal Chops
+188.5172 aim 406.70 565.25 0.622096 0.9   # Vocal Chops: the hook: the whole group
+189.7172 aim 155.00 257.25 1.300000 3.8345   # Vocal Chops: the hook: in on seq.step
+193.8517 leave
+194.4517 aim 2027.00 983.60 0.523153 1.0   # the Arrangers turn to Dusk (over)
+195.4517 aim 1388.00 400.00 0.800000 1.0   # the Arrangers turn to Dusk
+199.0207 aim 2666.00 1258.20 1.500000 2.8   # the Bass, fading
+202.2207 enter Bass
+203.0207 aim 469.70 440.70 0.797912 0.9   # Bass: the whole group
+204.2207 aim 155.00 257.25 1.400000 10.0   # Bass: in on seq.step
+214.5207 leave
+215.1207 aim 850.00 1500.00 0.750000 3.6   # the harmony: one progression, voiced three ways
+219.0207 aim 1300.00 1500.00 0.950000 9.7034   # along to the Rhodes, Strings and Harp
+229.3241 aim 2262.00 1496.85 0.638669 1.5   # the Birds (over)
+230.8241 aim 3224.00 1493.70 1.500000 1.5   # the Birds
+232.7241 enter Birds
+233.5241 aim 381.20 380.20 0.924882 0.9   # Birds: the whole group
+234.7241 aim 302.00 178.05 1.500000 7.4   # Birds: in on mod.slope
+242.4241 leave
+243.0241 aim 2666.00 1365.45 1.101075 2.2   # the Kalimba, as at Dawn (over)
+245.2241 aim 2108.00 1237.20 1.500000 2.2   # the Kalimba, as at Dawn
+248.6759 aim 2095.00 994.00 0.350000 11.0   # the whole patch rings out
 256.5317 param util.clock Run 0
 263.6759 end

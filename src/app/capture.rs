@@ -58,8 +58,19 @@
 //! 4.0  zoom 1.4 2.0                 # zoom the graph by a factor over 2 s
 //! 4.0  fit                          # frame the whole level, as F does
 //! 4.0  fit 1.5                      # ...gliding there over 1.5 s
+//! 4.0  aim 1200 640 1.5 2.0         # glide to centre patch point (1200,
+//!                                   # 640) at zoom 1.5 over 2 s, on the
+//!                                   # level on show (a layout's patch space)
+//! 4.0  enter Bells                  # dive into a group through its
+//!                                   # miniature, as a double-click does
+//! 4.0  enter Bells/FM Bell          # ...a path from the top, where several
+//!                                   # groups share a name
+//! 4.0  enter Strings/Pump#2         # ...the second of two side by side,
+//!                                   # counting down the page, then across
+//! 4.0  leave                        # dive back out, as Escape does
 //! 4.0  camera -300 0 0.5 3.0        # move a virtual camera: the view as
-//!                                   # first framed (or last fitted), scaled
+//!                                   # first framed (or last fitted, aimed
+//!                                   # or dived into), scaled
 //!                                   # 0.5 about the centre and shifted
 //!                                   # (-300, 0), over 3 s
 //! 5.0  still filter-opens           # save this frame as filter-opens.ppm
@@ -176,6 +187,11 @@ enum Cue {
     Camera { offset: Vec2, scale: f32, dur: f64 },
     /// Frame the whole level, over this many seconds.
     Fit(f64),
+    /// Centre a patch point at a zoom, over this many seconds.
+    Aim { at: Pos2, zoom: f32, dur: f64 },
+    /// Dive into the group of this name (or path), or back out of one.
+    Enter(String),
+    Leave,
     Still(String),
     /// Save where the modules are drawn, under this name.
     Layout(String),
@@ -202,6 +218,12 @@ pub enum CaptureAction {
     Layout(PathBuf),
     /// Frame the whole level, over this many seconds (0 cuts).
     Fit(f64),
+    /// Centre a patch point at a zoom, over this many seconds (0 cuts).
+    Aim { at: Pos2, zoom: f32, seconds: f64 },
+    /// Dive into the group of this name, or path from the top.
+    Enter(String),
+    /// Dive back out of the group on show.
+    Leave,
 }
 
 /// A value easing from one point to another over a span of time.
@@ -584,12 +606,20 @@ impl Capture {
                     });
                 }
                 Cue::Fit(dur) => {
-                    // Camera moves from here on are from the fitted view
-                    self.camera = (1.0, Vec2::ZERO);
-                    self.camera_glide = None;
-                    self.pending_pan_delta = Vec2::ZERO;
-                    self.pending_zoom = 1.0;
+                    self.reset_camera();
                     self.actions.push(CaptureAction::Fit(dur));
+                }
+                Cue::Aim { at, zoom, dur } => {
+                    self.reset_camera();
+                    self.actions.push(CaptureAction::Aim { at, zoom, seconds: dur });
+                }
+                Cue::Enter(name) => {
+                    self.reset_camera();
+                    self.actions.push(CaptureAction::Enter(name));
+                }
+                Cue::Leave => {
+                    self.reset_camera();
+                    self.actions.push(CaptureAction::Leave);
                 }
                 Cue::Zoom { factor, dur } => {
                     self.zoom_left = Some((factor.ln(), at, dur.max(self.dt())));
@@ -623,6 +653,15 @@ impl Capture {
                 Cue::End => self.finished = true,
             }
         }
+    }
+
+    /// Camera moves from here on are from the view the app is about to
+    /// move to (a fit, an aim, a dive), and one under way stops.
+    fn reset_camera(&mut self) {
+        self.camera = (1.0, Vec2::ZERO);
+        self.camera_glide = None;
+        self.pending_pan_delta = Vec2::ZERO;
+        self.pending_zoom = 1.0;
     }
 
     /// Advances the pointer, pan and zoom glides for this frame.
@@ -1062,6 +1101,16 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
                 dur: opt(5)?,
             })),
             "fit" => cues.push((t, Cue::Fit(opt(2)?))),
+            "aim" => cues.push((t, Cue::Aim { at: Pos2::new(num(2)? as f32, num(3)? as f32), zoom: num(4)? as f32, dur: opt(5)? })),
+            "enter" => {
+                // Names may have spaces: the rest of the line
+                let name = line.splitn(3, char::is_whitespace).nth(2).map(str::trim).unwrap_or_default();
+                if name.is_empty() {
+                    return Err(err("missing group"));
+                }
+                cues.push((t, Cue::Enter(name.to_string())));
+            }
+            "leave" => cues.push((t, Cue::Leave)),
             "still" => cues.push((t, Cue::Still(words.get(2).ok_or_else(|| err("missing name"))?.to_string()))),
             "layout" => cues.push((t, Cue::Layout(words.get(2).ok_or_else(|| err("missing name"))?.to_string()))),
             "input" => cues.push((t, Cue::Input(PathBuf::from(words.get(2).ok_or_else(|| err("missing file"))?)))),
@@ -1117,6 +1166,25 @@ mod tests {
         let cues = parse_script("0.0 fit\n1.0 fit 1.5\n2 end").unwrap();
         assert!(matches!(cues[0].1, Cue::Fit(d) if d == 0.0));
         assert!(matches!(cues[1].1, Cue::Fit(d) if d == 1.5));
+    }
+
+    #[test]
+    fn groups_are_entered_by_name_and_aimed_in_patch_space() {
+        let cues = parse_script("0 enter Bells
+1 enter Bells/FM Bell   # a path
+2 leave
+3 aim 1200 640.5 1.5 2
+4 aim 0 0 1
+5 end").unwrap();
+        assert!(matches!(&cues[0].1, Cue::Enter(name) if name == "Bells"));
+        assert!(matches!(&cues[1].1, Cue::Enter(name) if name == "Bells/FM Bell"));
+        assert!(matches!(cues[2].1, Cue::Leave));
+        assert!(matches!(cues[3].1, Cue::Aim { at, zoom, dur } if at == Pos2::new(1200.0, 640.5) && zoom == 1.5 && dur == 2.0));
+        assert!(matches!(cues[4].1, Cue::Aim { dur, .. } if dur == 0.0));
+        assert!(parse_script("0 enter
+1 end").is_err());
+        assert!(parse_script("0 aim 10 10
+1 end").is_err());
     }
 
     #[test]
