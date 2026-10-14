@@ -1,6 +1,5 @@
 -1.0000 play
--1.0000 view 170 30 0.05
--0.9000 camera 572.5 285 2.75 0.05
+-0.9000 camera 798.4 70.1 2.5 0.05   # Poly MIDI's lit keys and the bundles leaving it
 0.2000 note 48 90 5.5
 0.2120 note 55 85 5.5
 0.2240 note 59 80 5.5

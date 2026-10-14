@@ -12,16 +12,18 @@ the cue language). Output goes to target/showcase/<shot>/: video.mkv
 (lossless, unless the shot asks for a crf), audio.wav and any stills as
 PNG. encode.py turns those into web clips.
 
-Coordinates are in points at the shot's ppp (1.55 by default, which shows
-the toolbar up to the Edit section in a 1920x1080 frame). Find them from a
-still: pixel / ppp. Aim from a still at the shot's own ppp: the layout
-shifts a few points from one ppp to another, enough to miss a small button.
-A press that just misses a control warns as the shot films.
+Coordinates are in points at the shot's ppp (1.55 by default, where the
+toolbar takes two rows in a 1920x1080 frame). Find them from a still:
+pixel / ppp. Aim from a still at the shot's own ppp: the layout shifts a few
+points from one ppp to another, enough to miss a small button. A press that
+just misses a control warns as the shot films.
 
-The shots film copies of the examples in tools/showcase/patches/, laid out
-as they were when the shots were aimed. The examples in patches/ have since
-been laid out in frames, which moved their modules; a shot moved over to
-one has to be aimed again.
+The shots at ppp 1.55 aim in patch space instead: `s.look` moves the camera
+to centre a patch point at a zoom, and `s.on(point)` is where a patch point
+is drawn once it lands. So a knob is found once, at zoom 1 (patch point =
+pixel / ppp - the editor's top-left), and stays found however the shot is
+framed. Each example opens at zoom 1 with patch (0, 0) at the editor's
+top-left, below the toolbar.
 """
 
 import subprocess
@@ -45,9 +47,35 @@ def shot(patch, ppp=1.55, fps=60, crf=0, preset="ultrafast", size="1920x1080"):
     return register
 
 
+# The node editor at ppp 1.55 in a 1920x1080 window, in points: below the
+# toolbar's two rows, above the status bar (from a `layout` cue's view)
+EDITOR = (0.0, 74.7, 1238.7, 670.8)
+
+
 class Script:
     def __init__(self):
         self.cues = []
+        # The patch point at the editor's centre, and the zoom: as opened
+        x0, y0, x1, y1 = EDITOR
+        self.centre = ((x1 - x0) / 2, (y1 - y0) / 2)
+        self.zoom = 1.0
+
+    def look(self, t, point, zoom, dur, note=""):
+        """Moves the camera over `dur` seconds to centre a patch point at a
+        zoom. Later `on` calls aim at the view it lands on."""
+        x0, y0, x1, y1 = EDITOR
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        ox, oy = -(x0 + point[0] - cx) * zoom, -(y0 + point[1] - cy) * zoom
+        self.at(t, f"camera {ox:.1f} {oy:.1f} {zoom} {dur}" + (f"   # {note}" if note else ""))
+        self.centre, self.zoom = point, zoom
+        return self
+
+    def on(self, point):
+        """Where a patch point is drawn, in screen points, in the view the
+        last `look` lands on."""
+        x0, y0, x1, y1 = EDITOR
+        return (round((x0 + x1) / 2 + (point[0] - self.centre[0]) * self.zoom, 1),
+                round((y0 + y1) / 2 + (point[1] - self.centre[1]) * self.zoom, 1))
 
     def at(self, t, cue):
         self.cues.append((t, cue))
@@ -92,11 +120,12 @@ class Script:
 
 # --- Shots -----------------------------------------------------------------
 
-@shot("tools/showcase/patches/basic-subtractive.json")
+@shot("patches/basic-subtractive.json")
 def filter_sweep(s):
     """A bassline through the SVF while a hand opens the filter and adds
     resonance: the response curve and the sound move together."""
-    s.at(-0.8, "play").at(-0.8, "zoom 0.92 0.05")
+    cutoff, res = (597, 348), (648, 348)
+    s.at(-0.8, "play").look(-0.8, (698, 345), 0.9, 0.05, "Source, Tone and Volume")
     s.at(-0.8, "param input.keyboard Octave -1")
     # C minor, sixteenths: Z=C X=D D=Eb B=G J=Bb ,=C+ ;=Eb+
     bar = ["Z", "Z", "Comma", "Z", "D", "Z", "J", "Z", "B", "Z", "Comma", "Z", "Semicolon", "Z", "J", "B"]
@@ -106,19 +135,19 @@ def filter_sweep(s):
     s.at(0.0, "cursor on")
     s.at(1.5, "still filter-closed")
     # Cutoff is a log knob: 200 points span 20 Hz to 20 kHz
-    end = s.drag_knob(1.6, 534, 348, 60, 4.0)
-    end = s.drag_knob(end + 0.4, 582, 342, 80, 2.2)
+    end = s.drag_knob(1.6, *s.on(cutoff), 60, 4.0)
+    end = s.drag_knob(end + 0.4, *s.on(res), 80, 2.2)
     s.at(end + 0.5, "still filter-open")
-    end = s.drag_knob(end + 1.0, 534, 348, -90, 3.4)
-    s.at(end + 0.3, "move 100 650 1.0")
+    end = s.drag_knob(end + 1.0, *s.on(cutoff), -90, 3.4)
+    s.at(end + 0.3, "move %s %s 1.0" % s.on((150, 560)))
     s.at(t, "end")
 
 
-@shot("tools/showcase/patches/lush-pad.json")
+@shot("patches/lush-pad.json")
 def chords(s):
     """Held chords on Poly MIDI: each voice is its own strand in the cable
     bundles, lit only while its note sounds."""
-    s.at(-1.0, "play").at(-1.0, "view 170 30 0.05")
+    s.at(-1.0, "play").look(-1.0, (700, 410), 0.78, 0.05, "Every voice, and the Mixer")
     progression = [
         [48, 55, 59, 62, 64],   # Cmaj9
         [45, 52, 55, 59, 60],   # Am9
@@ -133,17 +162,19 @@ def chords(s):
         for k, note in enumerate(chord):
             s.at(t + k * 0.012, f"note {note} {84 - k * 4} {hold - 0.15}")
         t += 3.4
-    s.at(0.0, "zoom 1.28 19")
+    # A slow push in on the bundles, from Poly MIDI to the envelope
+    s.look(0.0, (500, 300), 1.3, 19, "in on the bundles")
     s.at(5.0, "still chord-bundles")
     s.at(13.0, "still chord-bundles-close")
     s.at(t + 2.5, "end")
 
 
-@shot("tools/showcase/patches/fm-synthesis.json")
+@shot("patches/fm-synthesis.json")
 def fm_bell(s):
     """One sine bending another's pitch: turning up the FM depth takes a
     pure tone to a bell to a clang."""
-    s.at(-1.0, "play").at(-1.0, "zoom 0.86 0.05").at(-1.0, "view -70 -10 0.05")
+    fm = (857, 494)   # the carrier's FM knob
+    s.at(-1.0, "play").look(-1.0, (790, 400), 0.8, 0.05, "Keyboard, Modulator, Carrier")
     # C major pentatonic, eighths at 84 bpm: Z=C X=D C=E B=G N=A ,=C+ .=D+ /=E+
     phrase = ["Comma", None, "N", None, "B", None, "C", "X",
               ("C", 2), "B", None, ("N", 4),
@@ -152,61 +183,71 @@ def fm_bell(s):
     t = s.keys(0.2, 84, phrase, gate=0.5, step=0.5)
     t = s.keys(t, 84, phrase, gate=0.5, step=0.5)
     s.at(0.0, "cursor on")
-    # The carrier's FM Depth: 0 to 5 over 200 points, starting at 2.5
-    end = s.drag_knob(3.6, 675, 461, 80, 4.5)
+    # FM Depth: 0 to 5 over 200 points, starting at 2.5
+    end = s.drag_knob(3.6, *s.on(fm), 80, 4.5)
+    # Into the gap between the frames, so no tooltip shows
+    s.at(end + 0.1, "move %s %s 0.4" % s.on((778, 600)))
     s.at(end + 0.6, "still fm-bright")
-    end = s.drag_knob(12.6, 675, 461, -150, 5.0)
-    s.at(end + 0.3, "move 100 620 1.2")
+    end = s.drag_knob(12.6, *s.on(fm), -150, 5.0)
+    s.at(end + 0.3, "move %s %s 1.2" % s.on((140, 560)))
     s.at(end + 1.6, "still fm-pure")
     s.at(t + 2.0, "end")
 
 
-@shot("tools/showcase/patches/rhythmic-sequence.json")
+# How far below the Sync selector its first item, Off, opens (screen points)
+SYNC_OFF = 33
+
+
+@shot("patches/rhythmic-sequence.json")
 def footswitch(s):
     """The sequence plays itself; a hand stomps the distortion out and back
     in, puts the delay on tape and feeds it back."""
-    s.at(-2.0, "play").at(-2.0, "view -745 10 0.05")
+    power, drive = (1508, 88), (1520, 228)
+    tape, sync = (1762, 257), (1784, 228)
+    time, feedback, mix = (1733, 338), (1784, 338), (1837, 338)
+    s.at(-2.0, "play").look(-2.0, (1560, 360), 0.88, 0.05, "Bass, Drive and echo")
     s.at(0.0, "cursor on")
     # Distortion's power switch: out, then back in
-    s.click(1.6, 456, 92, travel=0.7)
+    s.click(1.6, *s.on(power), travel=0.7)
     s.at(3.2, "still distortion-bypassed")
-    s.click(4.6, 456, 92, travel=0.2)
-    end = s.drag_knob(5.6, 468, 232, 60, 2.6)
+    s.click(4.6, *s.on(power), travel=0.2)
+    end = s.drag_knob(5.6, *s.on(drive), 60, 2.6)
     # The delay goes to tape
-    end = s.click(end + 0.5, 719, 261, travel=0.6)
-    end = s.drag_knob(end + 0.6, 742, 342, 80, 3.0)
-    end = s.drag_knob(end + 0.3, 794, 342, 40, 1.4)
+    end = s.click(end + 0.5, *s.on(tape), travel=0.6)
+    end = s.drag_knob(end + 0.6, *s.on(feedback), 80, 3.0)
+    end = s.drag_knob(end + 0.3, *s.on(mix), 40, 1.4)
     s.at(end + 1.0, "still tape-echoes")
-    # Unsync it, so the Time knob turns freely
-    end = s.click(end + 1.6, 739, 232, travel=0.5)
-    end = s.click(end + 0.5, 732, 265, travel=0.35)
+    # Unsync it, so the Time knob turns freely: Off heads Sync's list
+    end = s.click(end + 1.6, *s.on(sync), travel=0.5)
+    x, y = s.on(sync)
+    end = s.click(end + 0.5, x - 8, y + SYNC_OFF, travel=0.35)
     # On tape, changing the time bends the echoes' pitch
-    end = s.drag_knob(end + 0.4, 690, 342, -30, 1.1, settle=0.5)
-    end = s.drag_knob(end + 0.5, 690, 342, 45, 1.6, settle=0.2)
+    end = s.drag_knob(end + 0.4, *s.on(time), -30, 1.1, settle=0.5)
+    end = s.drag_knob(end + 0.5, *s.on(time), 45, 1.6, settle=0.2)
     # Off into empty canvas, so no tooltip lingers
-    s.at(end + 0.2, "move 1010 560 0.9")
+    s.at(end + 0.2, "move %s %s 0.9" % s.on((1500, 640)))
     s.at(end + 1.6, "still tape-time")
     s.at(end + 4.5, "end")
 
 
-@shot("tools/showcase/patches/generative-ambient.json")
+@shot("patches/generative-ambient.json")
 def hero(s):
     """Generative Ambient plays itself while the camera follows the signal
-    from the clock to the reverb, pulls back to the whole patch, and comes
+    from the clock to the speakers, pulls back to the whole patch, and comes
     home so the clip loops."""
-    s.at(-3.0, "play").at(-3.0, "zoom 0.9 0.05").at(-3.0, "view 0 -45 0.05")
+    home, zoom = (690, 360), 0.9
+    s.at(-3.0, "play").look(-3.0, home, zoom, 0.05, "the Melody: clock, divider, sequencer")
     s.at(0.5, "still clock-and-sequencer")
     # Along the signal path, clock to output
-    s.at(6.5, "camera -1075 0 1 21.5")
+    s.look(6.5, (2380, 300), zoom, 21.5, "along the signal to the mixer and output")
     s.at(17.0, "still oscillators-and-filter")
     s.at(27.6, "still delay-and-reverb")
-    # Back out to the whole patch (it spans 80..2232 points across from
-    # home, 155..710 down; the editor's centre is (620, 359))
-    s.at(28.0, "camera -268 -10 0.5 5")
+    # Back out to the whole patch: it spans 16..3017 across, 16..1587 down
+    s.look(28.0, (1516, 800), 0.36, 5, "the whole patch")
     s.at(34.0, "still whole-patch")
-    s.at(33.0, "camera -268 -10 0.53 7")
+    s.look(33.0, (1516, 800), 0.372, 7, "a breath closer")
     # And home, so the clip loops
-    s.at(40.0, "camera 0 0 1 4.5")
+    s.look(40.0, home, zoom, 4.5, "home")
     s.at(46.5, "end")
 
 
@@ -222,30 +263,35 @@ def add_module(s, t, x, y, query):
     return t + 0.3
 
 
+# The toolbar's Play button at ppp 1.55, in screen points
+PLAY = (158, 21)
+
+
 @shot("tools/showcase/patches/empty.json")
 def from_nothing(s):
     """An empty canvas to a playable voice: five modules from the quick-add
     palette, five cables, then a tune."""
     s.at(0.0, "cursor on")
-    # A module's top-left lands at the cursor; its jacks sit at fixed
-    # offsets from there (points, measured from a still)
-    kb, osc, env, vca, out = (40, 150), (270, 100), (530, 320), (800, 170), (990, 110)
-    t = add_module(s, 0.6, *kb, "keyboard")
-    t = add_module(s, t + 0.2, *osc, "osc")
-    t = add_module(s, t + 0.2, *env, "env")
-    t = add_module(s, t + 0.2, *vca, "vca")
-    t = add_module(s, t + 0.2, *out, "output")
+    # A module's top-left lands at the cursor (patch points; the canvas
+    # stays at zoom 1). Its jacks sit at fixed offsets from there
+    kb, osc, env, vca, out = (40, 70), (270, 25), (530, 150), (800, 60), (990, 40)
+    t = add_module(s, 0.6, *s.on(kb), "keyboard")
+    t = add_module(s, t + 0.2, *s.on(osc), "osc")
+    t = add_module(s, t + 0.2, *s.on(env), "env")
+    t = add_module(s, t + 0.2, *s.on(vca), "vca")
+    t = add_module(s, t + 0.2, *s.on(out), "output")
     s.at(t + 0.3, "still placed")
+    s.at(t + 0.3, "layout placed")
 
     def jack(node, dx, dy):
-        return node[0] + dx, node[1] + dy
+        return s.on((node[0] + dx, node[1] + dy))
 
     cables = [
-        (jack(kb, 185.2, 89.7), jack(osc, 0, 43.9)),        # Pitch -> V/Oct
-        (jack(kb, 185.2, 69.7), jack(env, 0, 44.2)),        # Gate -> Gate
-        (jack(osc, 184.5, 174.8), jack(vca, 0, 44.2)),      # Out -> In
-        (jack(env, 229.7, 104.2), jack(vca, 0, 64.8)),      # Out -> CV
-        (jack(vca, 125.8, 82.9), jack(out, 0, 86.0)),       # Out -> Mono
+        (jack(kb, 185.2, 121.6), jack(osc, 0.3, 41.0)),     # Pitch -> V/Oct
+        (jack(kb, 185.2, 101.6), jack(env, 0, 44.2)),       # Gate -> Gate
+        (jack(osc, 178.3, 174.5), jack(vca, 0, 44.8)),      # Out -> In
+        (jack(env, 229.5, 188.0), jack(vca, 0, 66.1)),      # Out -> CV
+        (jack(vca, 126.3, 82.9), jack(out, 0, 86.1)),       # Out -> Mono
     ]
     t += 0.6
     for (x0, y0), (x1, y1) in cables:
@@ -254,9 +300,9 @@ def from_nothing(s):
         s.at(t, f"drag {x1:.1f} {y1:.1f} 0.65")
         t += 0.65 + 0.1 + 0.25
     s.at(t, "still patched")
-    # Play
-    t = s.click(t + 0.2, 314, 21, travel=0.7) + 0.4
-    s.at(t, "move 1100 520 0.8")
+    # Play, on the toolbar
+    t = s.click(t + 0.2, *PLAY, travel=0.7) + 0.4
+    s.at(t, "move %s %s 0.8" % s.on((1100, 470)))
     # First notes: a C major pentatonic tune, Z=C X=D C=E B=G N=A ,=C+
     tune = ["Z", "C", "B", ("Comma", 2), "N", "B", None,
             "C", "B", "N", ("B", 2), "C", ("X", 2),
@@ -267,12 +313,11 @@ def from_nothing(s):
     s.at(t + 1.2, "end")
 
 
-@shot("tools/showcase/patches/lush-pad.json")
+@shot("patches/lush-pad.json")
 def cover(s):
     """A macro of the poly bundles leaving Poly MIDI while a chord rings:
     candidates for the page's cover."""
-    s.at(-1.0, "play").at(-1.0, "view 170 30 0.05")
-    s.at(-0.9, "camera 572.5 285 2.75 0.05")
+    s.at(-1.0, "play").look(-0.9, (300, 270), 2.5, 0.05, "Poly MIDI's lit keys and the bundles leaving it")
     for k, note in enumerate([48, 55, 59, 62, 64, 71]):
         s.at(0.2 + k * 0.012, f"note {note} {90 - k * 5} 5.5")
     for i, t in enumerate([1.2, 2.0, 3.0, 4.0, 5.0]):

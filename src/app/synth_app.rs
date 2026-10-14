@@ -1303,6 +1303,26 @@ impl SynthApp {
         let named = |icon: &str, name: &str| {
             if compact { icon.to_string() } else { format!("{icon} {name}") }
         };
+        // A selector doesn't wrap by itself: it sits wherever the row ends,
+        // running off the edge. So a wrapping row starts a new line when a
+        // selector and its label won't fit, in place of the break that would
+        // lead them. Says whether it did
+        let new_row_for = |ui: &mut egui::Ui, label: &str, width: f32| {
+            if !compact {
+                return false;
+            }
+            let font = egui::TextStyle::Body.resolve(ui.style());
+            let label_width = ui.fonts(|f| f.layout_no_wrap(label.to_string(), font, egui::Color32::WHITE).size().x);
+            let need = 2.0 * gap + label_width + 8.0 + width + 2.0 * ui.spacing().button_padding.x + ui.spacing().icon_width + 4.0 * ui.spacing().item_spacing.x;
+            if ui.available_size_before_wrap().x < need {
+                ui.end_row();
+                // At a button's height from the start, so the label centres
+                // on the selector beside it
+                ui.allocate_exact_size(egui::vec2(0.0, row_height), egui::Sense::hover());
+                return true;
+            }
+            false
+        };
 
         let row = |ui: &mut egui::Ui| {
             wordmark(ui);
@@ -1496,7 +1516,9 @@ impl SynthApp {
             match &self.audio_engine {
                 Ok(_) if WEB => {}
                 Ok(_) => {
-                    group_break(ui);
+                    if !new_row_for(ui, "Output", 200.0) {
+                        group_break(ui);
+                    }
 
                     // Device selector
                     ui.label(RichText::new("Output").color(theme::text::SECONDARY));
@@ -1584,7 +1606,9 @@ impl SynthApp {
                         });
 
                     // Audio input selector: None until chosen
-                    ui.add_space(12.0);
+                    if !new_row_for(ui, "Input", 180.0) {
+                        ui.add_space(12.0);
+                    }
                     ui.label(RichText::new("Input").color(theme::text::SECONDARY));
                     ui.add_space(8.0);
                     let (input_index, input_name) = match &self.audio_engine {
@@ -1635,7 +1659,9 @@ impl SynthApp {
                         .response
                         .on_hover_text("Audio Input modules hear this device: a microphone, guitar or line in");
 
-                    group_break(ui);
+                    if !new_row_for(ui, "MIDI In", 180.0) {
+                        group_break(ui);
+                    }
 
                     // MIDI input selector
                     ui.label(RichText::new("MIDI In").color(theme::text::SECONDARY));
