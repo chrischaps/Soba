@@ -4117,6 +4117,10 @@ impl eframe::App for SynthApp {
 
         // Advance meter ballistics; keep repainting until it has settled
         let dt = ctx.input(|i| i.stable_dt).min(0.1);
+        // What each filter on screen is fed and lets through
+        if let Some(handle) = self.ui_handle.as_ref() {
+            self.user_state.spectra.listen(handle.graph().spectrum_taps(), dt);
+        }
         self.user_state.output_meter.tick(dt);
         if !self.user_state.output_meter.is_idle() {
             ctx.request_repaint();

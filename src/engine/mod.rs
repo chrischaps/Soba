@@ -17,6 +17,7 @@ pub mod midi_scheduler;
 mod monitor_board;
 pub mod offline;
 pub mod recorder;
+pub mod spectrum_tap;
 
 pub use audio_engine::{AudioEngine, AudioError, AudioSystem, DeviceInfo, BUFFER_CHOICES};
 pub use audio_graph::{AudioGraph, Connection};
@@ -31,6 +32,7 @@ pub use cue::{Cue, CUE_LEVEL};
 pub use graph_plan::GraphPlan;
 pub use latency::{LatencyGauge, RoundTrip};
 pub use recorder::{RecordTap, Recording, RecordingSummary};
+pub use spectrum_tap::SpectrumTap;
 pub use offline::{read_wav, read_wav_at, LimiterReport, OfflineRenderer, StereoBuffer, AUDITION};
 pub use midi_engine::{
     MidiDeviceInfo, MidiEngine, MidiError, MidiEvent, MidiReceivers, TimestampedMidiEvent,

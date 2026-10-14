@@ -7,6 +7,13 @@
 //! engine reports, after CV, so an envelope into Cutoff visibly opens and
 //! closes the filter; the knobs' own curve stays behind as a ghost. Past the
 //! point where the filter rings on its own, its peak glows.
+//!
+//! Beneath the curves lies the sound itself (see [`super::filter_spectrum`]):
+//! what comes in, a faint blue landscape, and what the lit output lets
+//! through, green over it. The gap between them is what the filter takes
+//! away, and where green rises above blue, the resonance is adding. It's
+//! scaled to the loudest band coming in, so that band sits just under the
+//! curve's unity line. With no sound, the curve's own glow fills beneath it.
 
 use eframe::egui::{self, Pos2, Stroke};
 use egui_node_graph2::NodeId;
@@ -16,15 +23,16 @@ use crate::modules::{LadderFilter, SvfFilter};
 
 use super::display_frame::{self as face, columns, curve, guide, header, hertz, input_patched, output_patched, readout, value_of, with_alpha};
 use super::drum_display::fill_under;
+use super::filter_spectrum::{FilterSpectrum, BANDS, HIGHEST_HZ, LOWEST_HZ};
 use super::{SynthGraph, SynthGraphState};
-
-/// The frequency axis, in Hz.
-const LOWEST_HZ: f32 = 20.0;
-const HIGHEST_HZ: f32 = 20_000.0;
 
 /// The level axis, in dB: room above 0 for a resonant peak.
 const TOP_DB: f32 = 15.0;
 const BOTTOM_DB: f32 = -36.0;
+
+/// Where the loudest band coming in is drawn, in dB on the response's
+/// scale: just under unity, so the passband rests on the sound's peaks.
+const LANDSCAPE_TOP_DB: f32 = -4.0;
 
 /// One of a filter's outputs: its port, and its response in dB at
 /// (cutoff, resonance, frequency).
@@ -104,6 +112,32 @@ pub fn filter_display(ui: &mut egui::Ui, filter: Filter, node_id: NodeId, graph:
     }
     guide(&painter, Pos2::new(plot.left(), y_at(0.0)), Pos2::new(plot.right(), y_at(0.0)), 26, z);
 
+    // The sound coming in, and what the lit output lets through, behind it all
+    let spectrum = user_state.get_engine_node_id(node_id).and_then(|id| user_state.spectra.get(id));
+    let presence = spectrum.map_or(0.0, |spectrum| spectrum.presence);
+    if let Some(spectrum) = spectrum {
+        spectrum.mark_drawn();
+    }
+    if let Some(spectrum) = spectrum.filter(|_| presence > 0.0) {
+        let landscape = |bands: &[f32; BANDS]| -> Vec<Pos2> {
+            let level = |band: usize| y_at(bands[band] - spectrum.reference + LANDSCAPE_TOP_DB);
+            let mut points = Vec::with_capacity(BANDS + 2);
+            points.push(Pos2::new(plot.left(), level(0)));
+            points.extend((0..BANDS).map(|band| Pos2::new(x_at(FilterSpectrum::band_hz(band)), level(band))));
+            points.push(Pos2::new(plot.right(), level(BANDS - 1)));
+            points
+        };
+        let fade = |alpha: f32| (alpha * presence).round() as u8;
+        let blue = theme::signal::AUDIO;
+        let coming_in = landscape(&spectrum.input);
+        fill_under(&painter, &coming_in, plot.bottom(), with_alpha(blue, fade(46.0)), with_alpha(blue, fade(6.0)));
+        curve(&painter, coming_in, with_alpha(blue, fade(80.0)), 0.7 * z, false);
+        let going_out = landscape(&spectrum.output);
+        fill_under(&painter, &going_out, plot.bottom(), with_alpha(green, fade(64.0)), with_alpha(green, fade(10.0)));
+        curve(&painter, going_out, with_alpha(green, fade(110.0)), 0.7 * z, false);
+        ui.ctx().request_repaint();
+    }
+
     let columns = columns(plot, z);
     let response_points = |respond: fn(f32, f32, f32) -> f32, cutoff: f32, resonance: f32| -> Vec<Pos2> {
         (0..=columns)
@@ -141,10 +175,12 @@ pub fn filter_display(ui: &mut egui::Ui, filter: Filter, node_id: NodeId, graph:
     for (index, &(_, respond)) in outputs.iter().enumerate() {
         if lit(index) {
             let points = response_points(respond, cutoff, resonance);
-            if !filled {
-                fill_under(&painter, &points, plot.bottom(), with_alpha(green, 50), with_alpha(green, 6));
-                filled = true;
+            // With no sound beneath it, the curve's glow fills in
+            if !filled && presence < 1.0 {
+                let fade = |alpha: f32| (alpha * (1.0 - presence)).round() as u8;
+                fill_under(&painter, &points, plot.bottom(), with_alpha(green, fade(50.0)), with_alpha(green, fade(6.0)));
             }
+            filled = true;
             curve(&painter, points, green, 1.5 * z, true);
         }
     }
@@ -181,6 +217,9 @@ pub fn filter_display(ui: &mut egui::Ui, filter: Filter, node_id: NodeId, graph:
         text.push_str(&format!("\nShowing {}", heard.join(" and ")));
         if !any_patched {
             text.push_str(" (nothing is patched yet)");
+        }
+        if presence > 0.0 {
+            text.push_str(&format!("\nBeneath: the sound coming in (blue) and out of {} (green)", heard[0]));
         }
         response.on_hover_text(text);
     }

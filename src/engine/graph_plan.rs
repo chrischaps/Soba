@@ -34,6 +34,7 @@ use crate::dsp::{Audition, DspModule, OutputLevels, ProcessContext, SampleData, 
 use crate::dsp::primitives::Markers;
 use crate::engine::commands::{ChannelPeaks, NodeId, PortIndex};
 use crate::engine::monitor_board::MonitorWriter;
+use crate::engine::spectrum_tap::SpectrumTap;
 
 pub use crate::dsp::module_trait::MAX_INPUTS;
 
@@ -90,6 +91,18 @@ pub(crate) struct PlanNode {
     /// Whether live input reaches the module, through any chain of modules,
     /// so it's told how late (see [`ProcessContext::input_latency`]).
     pub(crate) hears_live: bool,
+    /// Where its display's spectra are kept, for a filter.
+    pub(crate) spectrum: Option<SpectrumWatch>,
+}
+
+/// A node whose input and output are copied to its display's spectrum tap
+/// after every block.
+pub(crate) struct SpectrumWatch {
+    /// The input heard (index into the node's `inputs`).
+    pub(crate) input: usize,
+    /// The output heard, counted among the node's outputs.
+    pub(crate) output: usize,
+    pub(crate) tap: Arc<SpectrumTap>,
 }
 
 /// A cable that closes a loop, heard a constant one block behind.
@@ -448,6 +461,7 @@ impl GraphPlan {
             if node.bypassed && node.wet == 0.0 {
                 // Fully bypassed: the module rests while its input passes by
                 pass_dry(own, &node.dry, inputs);
+                watch_spectrum(&node.spectrum, inputs, own, context.sample_rate);
                 continue;
             }
             if !node.bypassed && node.wet == 0.0 {
@@ -462,6 +476,7 @@ impl GraphPlan {
             if node.wet != target {
                 node.wet = crossfade(own, &node.dry, inputs, node.wet, target, fade_step);
             }
+            watch_spectrum(&node.spectrum, inputs, own, context.sample_rate);
         }
 
         // Every source has played: keep their blocks for next time
@@ -585,6 +600,17 @@ impl GraphPlan {
                     f(node.node_id, channel1, channel2, triggered);
                 }
             }
+        }
+    }
+}
+
+/// Copies a watched node's input and heard output to its spectrum tap.
+///
+/// REAL-TIME SAFE: stores into the tap's ring.
+fn watch_spectrum(watch: &Option<SpectrumWatch>, inputs: &[&SignalBuffer], outputs: &[SignalBuffer], sample_rate: f32) {
+    if let Some(watch) = watch {
+        if let (Some(input), Some(output)) = (inputs.get(watch.input), outputs.get(watch.output)) {
+            watch.tap.write(input, output, sample_rate);
         }
     }
 }

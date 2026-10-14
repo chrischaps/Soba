@@ -384,6 +384,11 @@ impl DspModule for LadderFilter {
         readout.values[Self::READOUT_RESONANCE] = self.running.1;
         Some(readout)
     }
+
+    /// The display draws what goes in and what the heard output lets out.
+    fn spectrum_ports(&self) -> Option<crate::dsp::SpectrumPorts> {
+        Some(crate::dsp::SpectrumPorts { input: "in", outputs: &["lp24", "lp12"] })
+    }
 }
 
 #[cfg(test)]

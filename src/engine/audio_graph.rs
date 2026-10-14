@@ -15,12 +15,13 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::dsp::bypass::{bypass_routes, can_bypass};
-use crate::dsp::{DspModule, ModuleRegistry, PortDefinition, SampleData, SignalBuffer, SignalType};
+use crate::dsp::{DspModule, ModuleRegistry, PortDefinition, SampleData, SignalBuffer, SignalType, SpectrumPorts};
 use crate::dsp::primitives::Markers;
 use crate::engine::commands::{AudioMessage, EngineCommand, NodeId, PortIndex};
 use crate::engine::graph_plan::{
-    GraphPlan, InputSource, InputTap, LateLine, MonitorSource, OutputTap, PlanNode, MAX_INPUTS,
+    GraphPlan, InputSource, InputTap, LateLine, MonitorSource, OutputTap, PlanNode, SpectrumWatch, MAX_INPUTS,
 };
+use crate::engine::spectrum_tap::SpectrumTap;
 
 /// A connection between two ports in the audio graph.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -71,6 +72,8 @@ struct NodeSpec {
     sample: Option<Arc<SampleData>>,
     /// The markers last given to it (a Sampler's, sliced by Onsets).
     markers: Markers,
+    /// Where its display's spectra come from, and the tap they go to.
+    spectrum: Option<(SpectrumPorts, Arc<SpectrumTap>)>,
 }
 
 impl NodeSpec {
@@ -89,10 +92,25 @@ impl NodeSpec {
             bypassed: false,
             polyphonic: module.polyphonic(),
             live_input: module.is_live_input(),
+            spectrum: module.spectrum_ports().map(|ports| (ports, Arc::new(SpectrumTap::new()))),
             fresh: Some(module),
             sample: None,
             markers: Markers::default(),
         }
+    }
+
+    /// Which of the node's inputs and outputs (each counted among its own
+    /// kind) its spectrum tap hears: the first of its spectrum outputs with
+    /// a cable from it, or the first if none has one.
+    fn spectrum_watch(&self, node_id: NodeId, connections: &[Connection]) -> Option<SpectrumWatch> {
+        let (ports, tap) = self.spectrum.as_ref()?;
+        let input = self.inputs().position(|(_, port)| port.id == ports.input)?;
+        let output_port = |id: &str| self.ports.iter().position(|port| port.is_output() && port.id == id);
+        let candidates = || ports.outputs.iter().filter_map(|id| output_port(id));
+        let port = candidates()
+            .find(|&port| connections.iter().any(|conn| conn.from_node == node_id && conn.from_port == port))
+            .or_else(|| candidates().next())?;
+        Some(SpectrumWatch { input, output: self.output_index(port)?, tap: Arc::clone(tap) })
     }
 
     /// Maps a port index to its index among the node's output ports, or
@@ -487,6 +505,12 @@ impl AudioGraph {
         self.nodes.get(&node_id).and_then(|spec| spec.sample.as_ref())
     }
 
+    /// Every module's spectrum tap: the recent sound in and out of each
+    /// filter, for its display.
+    pub fn spectrum_taps(&self) -> impl Iterator<Item = (NodeId, &Arc<SpectrumTap>)> {
+        self.nodes.iter().filter_map(|(&node_id, spec)| Some((node_id, &spec.spectrum.as_ref()?.1)))
+    }
+
     /// Gives a module the markers its recording is cut at. A module not yet
     /// handed to a plan gets them at once; one already on the audio thread
     /// gets them through [`take_take_handoffs`](Self::take_take_handoffs).
@@ -868,6 +892,7 @@ impl AudioGraph {
                 wet: if spec.bypassed { 0.0 } else { 1.0 },
                 dry,
                 hears_live: live,
+                spectrum: spec.spectrum_watch(node_id, &self.connections),
             });
         }
 
@@ -2201,5 +2226,48 @@ mod tests {
         let hears = |id: NodeId| plan.nodes.iter().find(|n| n.node_id == id).unwrap().hears_live;
         assert!(hears(1) && hears(2) && hears(3) && hears(4));
         assert!(!hears(5), "a Looper nothing live feeds");
+    }
+
+    /// A filter's spectrum tap hears what goes in and the output that's
+    /// heard: the first of its outputs with a cable, else the lowpass.
+    #[test]
+    fn test_filter_spectrum_taps_the_heard_output() {
+        use crate::engine::spectrum_tap::WINDOW;
+        let registry = crate::engine::create_module_registry();
+        let port = |module: &str, id: &str| registry.create(module).unwrap().ports().iter().position(|p| p.id == id).unwrap();
+        let (osc_out, svf_in, svf_lp, svf_hp, vca_in) =
+            (port("osc.sine", "out"), port("filter.svf", "in"), port("filter.svf", "lowpass"), port("filter.svf", "highpass"), port("util.vca", "in"));
+        let mut graph = AudioGraph::with_registry(48000.0, 256, crate::engine::create_module_registry());
+        for (node_id, module_id) in [(1, "osc.sine"), (2, "filter.svf"), (3, "util.vca")] {
+            assert!(graph.handle_command(EngineCommand::AddModule { node_id, module_id }));
+        }
+        graph.connect(1, osc_out, 2, svf_in);
+        assert_eq!(graph.spectrum_taps().map(|(node_id, _)| node_id).collect::<Vec<_>>(), [2], "only the filter has one");
+
+        // What the tap holds of the last block, against the plan's buffers
+        let check = |graph: &AudioGraph, plan: &GraphPlan, output_port: usize| {
+            let (_, tap) = graph.spectrum_taps().next().unwrap();
+            let (mut input, mut output) = ([0.0; WINDOW], [0.0; WINDOW]);
+            tap.read(&mut input, &mut output);
+            let node = plan.nodes.iter().find(|node| node.node_id == 2).unwrap();
+            let heard = &plan.outputs[node.outputs.start + graph.nodes[&2].output_index(output_port).unwrap()];
+            let fed = &plan.outputs[plan.nodes.iter().find(|node| node.node_id == 1).unwrap().outputs.start];
+            assert_eq!(&output[WINDOW - 256..], &heard.voice(0).samples[..]);
+            assert_eq!(&input[WINDOW - 256..], &fed.voice(0).samples[..]);
+            assert!(output[WINDOW - 256..].iter().any(|&s| s != 0.0), "sound got through");
+        };
+
+        // Nothing patched out: the lowpass
+        let mut plan = graph.compile();
+        for _ in 0..4 {
+            plan.process(&ProcessContext::new(48000.0, 256));
+        }
+        check(&graph, &plan, svf_lp);
+
+        // The highpass patched: the highpass, and the same tap carries on
+        graph.connect(2, svf_hp, 3, vca_in);
+        install(&mut graph, &mut plan);
+        plan.process(&ProcessContext::new(48000.0, 256));
+        check(&graph, &plan, svf_hp);
     }
 }

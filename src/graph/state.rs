@@ -224,6 +224,10 @@ pub struct SynthGraphState {
     /// events. Key: engine node ID.
     pub readouts: HashMap<EngineNodeId, Readout>,
 
+    /// What each filter is fed and lets through, band by band, for its
+    /// display. Fed from the engine's spectrum taps once a frame.
+    pub spectra: super::filter_spectrum::FilterSpectra,
+
     /// The input device Audio Input modules are listening to, if one is open.
     pub audio_input_name: Option<String>,
 
@@ -321,6 +325,7 @@ impl Default for SynthGraphState {
             output_meter: LevelMeter::default(),
             module_meters: HashMap::new(),
             readouts: HashMap::new(),
+            spectra: Default::default(),
             audio_input_name: None,
             samples: Default::default(),
             cue: None,
@@ -428,6 +433,7 @@ impl SynthGraphState {
         self.output_meter = LevelMeter::default();
         self.module_meters.clear();
         self.readouts.clear();
+        self.spectra.clear();
         self.samples.clear();
         self.file_drop_target = None;
         self.hovered_file = None;

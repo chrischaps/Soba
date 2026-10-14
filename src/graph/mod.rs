@@ -20,6 +20,7 @@ mod drum_display;
 mod envelope_cv;
 mod envelope_display;
 mod filter_display;
+mod filter_spectrum;
 pub mod knob_cv;
 mod lfo_display;
 mod logic_display;

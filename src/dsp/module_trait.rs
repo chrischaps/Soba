@@ -56,6 +56,15 @@ pub struct Readout {
     pub values: [f32; MAX_READOUT],
 }
 
+/// The ports whose sound a module's display shows as spectra: a filter's
+/// audio in, and its outputs. The first output with a cable from it is
+/// the one tapped, or the first output if none has one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SpectrumPorts {
+    pub input: &'static str,
+    pub outputs: &'static [&'static str],
+}
+
 /// A chord played on a module's own outputs from its face while a hand is
 /// down: a Chord Sequencer's popover lets it be heard as it's written.
 /// Fixed-size, so it reaches the audio thread without allocating.
@@ -374,6 +383,14 @@ pub trait DspModule: Send + 'static {
     ///
     /// Returns `None` for modules without any.
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
+        None
+    }
+
+    /// The sound the module's display analyses, by port id: what goes in,
+    /// and what comes out (see [`SpectrumPorts`]).
+    ///
+    /// Returns `None` for modules whose display doesn't show a spectrum.
+    fn spectrum_ports(&self) -> Option<SpectrumPorts> {
         None
     }
 

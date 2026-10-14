@@ -358,6 +358,11 @@ impl DspModule for SvfFilter {
         readout.values[Self::READOUT_RESONANCE] = self.running.1;
         Some(readout)
     }
+
+    /// The display draws what goes in and what the heard output lets out.
+    fn spectrum_ports(&self) -> Option<crate::dsp::SpectrumPorts> {
+        Some(crate::dsp::SpectrumPorts { input: "in", outputs: &["lowpass", "highpass", "bandpass", "notch"] })
+    }
 }
 
 #[cfg(test)]

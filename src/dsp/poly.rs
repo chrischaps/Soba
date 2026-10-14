@@ -12,7 +12,7 @@
 //! pointer swap, not a copy, so the audio thread never allocates.
 
 use super::context::{ProcessContext, TransportState};
-use super::module_trait::{DspModule, MeterLevels, ModuleInfo, OutputLevels, Readout, MAX_INPUTS};
+use super::module_trait::{DspModule, MeterLevels, ModuleInfo, OutputLevels, Readout, SpectrumPorts, MAX_INPUTS};
 use super::parameter::ParameterDefinition;
 use super::port::PortDefinition;
 use super::signal::{SignalBuffer, MAX_CHANNELS};
@@ -166,6 +166,10 @@ impl<M: DspModule> DspModule for Poly<M> {
 
     fn readout(&self, params: &[f32]) -> Option<Readout> {
         self.voices[0].readout(params)
+    }
+
+    fn spectrum_ports(&self) -> Option<SpectrumPorts> {
+        self.voices[0].spectrum_ports()
     }
 
     fn polyphonic(&self) -> bool {

@@ -11,6 +11,8 @@ It is a 12 dB/octave filter with an analog-style resonance. Turn the resonance u
 
 The display draws each output's response, the patched ones lit and the rest faint (with nothing patched, LowPass is lit). With CV in **Cutoff** or **Resonance**, the curves follow where the CV has taken the filter, a faint copy stays where the knobs put it, and the cutoff's tick on the floor turns orange: an envelope into Cutoff opens and closes the curve with each note. When the resonance is high enough to ring on its own, the peak glows and the display says *sings*.
 
+Beneath the curves lies the sound itself. What comes into **In** is a faint blue landscape, and what the lit output lets through is green over it, so the gap between them is what the filter is taking away, and a resonant peak shows where the green rises above the blue. It's scaled to the loudest part of what comes in, so a quiet sound fills the display as well as a loud one, and a polyphonic cable shows all its voices together. When the sound stops, the landscape sinks away and the curve's own glow fills in beneath it.
+
 For a thicker, steeper lowpass, see the [Ladder Filter](./ladder-filter.md).
 
 ## Inputs
