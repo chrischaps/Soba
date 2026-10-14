@@ -17,6 +17,7 @@ use super::super::editing;
 use super::super::library::{self, SavedModule};
 use super::super::recording;
 use super::super::theme;
+use super::framing::View;
 use super::SynthApp;
 
 /// The miniature on a group's face is laid out at this zoom, so it looks
@@ -310,23 +311,22 @@ impl SynthApp {
         self.status_message = Some(status);
     }
 
-    /// Shows the inside of a group, straight away.
+    /// Shows the inside of a group, straight away, all of it in view.
     pub(super) fn enter_group(&mut self, node_id: NodeId) {
         let Some(id) = self.graph_state.graph.nodes.get(node_id).and_then(|n| n.user_data.kind.group()) else {
             return;
         };
-        // Where the group's node sits on screen, to come back out to
-        let anchor = self.graph_state.node_positions.get(node_id).map_or(egui::Vec2::ZERO, |p| p.to_vec2())
-            + self.graph_state.pan_zoom.pan;
-        self.level_trail.push((id, anchor));
+        // The view outside, to come back out to
+        let outside = self.level_view.unwrap_or_else(|| self.view());
+        self.level_trail.push((id, outside));
         self.show_level(Some(id));
         self.frame_level();
         let name = groups::name(&self.graph_state.graph, node_id).to_string();
         self.status_message = Some(format!("Inside {name}: Esc to go back out"));
     }
 
-    /// Goes back out of the group being shown, straight away, with its node
-    /// where it was on screen. Returns whether there was a group to leave.
+    /// Goes back out of the group being shown, straight away, to the view
+    /// it was entered from. Returns whether there was a group to leave.
     pub(super) fn leave_group(&mut self) -> bool {
         self.land_dive();
         self.step_out()
@@ -338,13 +338,13 @@ impl SynthApp {
         let graph = &self.graph_state.graph;
         let index = GroupIndex::of(graph);
         let parent = index.parent_of(graph, level);
-        let anchor = self.anchor_out_of(level);
+        let outside = self.view_entered_from(level);
         if self.level_trail.last().is_some_and(|&(id, _)| id == level) {
             self.level_trail.pop();
         }
         self.show_level(parent);
-        match anchor {
-            Some(pan) => self.graph_state.pan_zoom.pan = pan,
+        match outside {
+            Some(view) => self.show_view(view),
             None => self.frame_level(),
         }
         if let Some(node) = index.node(level) {
@@ -355,21 +355,18 @@ impl SynthApp {
         true
     }
 
-    /// The pan that puts the node of the group `level` back where it was on
-    /// screen when the view went into it, if it did.
-    fn anchor_out_of(&self, level: GroupId) -> Option<egui::Vec2> {
-        let node = GroupIndex::of(&self.graph_state.graph).node(level)?;
-        let at = self.graph_state.node_positions.get(node)?;
+    /// The view the group `level` was entered from, if the view went into it.
+    fn view_entered_from(&self, level: GroupId) -> Option<View> {
         match self.level_trail.last() {
-            Some(&(id, anchor)) if id == level => Some(anchor - at.to_vec2()),
+            Some(&(id, view)) if id == level => Some(view),
             _ => None,
         }
     }
 
-    /// The pan stepping out of the group `level` will leave the view at.
-    pub(super) fn pan_out_of(&self, level: GroupId) -> Option<egui::Vec2> {
+    /// The view stepping out of the group `level` will leave.
+    pub(super) fn view_out_of(&self, level: GroupId) -> Option<View> {
         let graph = &self.graph_state.graph;
-        self.anchor_out_of(level).or_else(|| self.framed_pan(GroupIndex::of(graph).parent_of(graph, level)))
+        self.view_entered_from(level).or_else(|| self.framed_view(GroupIndex::of(graph).parent_of(graph, level)))
     }
 
     /// Shows a level: back out to it if it's one the view is inside,
@@ -386,7 +383,7 @@ impl SynthApp {
         if index.path(graph, target).is_none() {
             return;
         }
-        // Nowhere on screen to come back out to: the view frames each level
+        // No view to come back out to: the view frames each level
         self.level_trail.clear();
         self.show_level(target);
         self.frame_level();
@@ -402,61 +399,38 @@ impl SynthApp {
         self.prepare_level();
     }
 
-    /// Where a level's modules are, at the current zoom, relative to the
-    /// editor. Nodes never drawn yet are taken at a nominal size.
-    fn level_bounds(&self, level: Option<GroupId>) -> Option<egui::Rect> {
-        let zoom = self.graph_state.pan_zoom.zoom;
-        let graph = &self.graph_state.graph;
-        groups::level_nodes(graph, level)
-            .iter()
-            .filter_map(|&n| {
-                let size = self.node_sizes.get(&n).copied().unwrap_or(groups::NOMINAL_NODE_SIZE);
-                Some(egui::Rect::from_min_size(*self.graph_state.node_positions.get(n)?, size * zoom))
-            })
-            .reduce(|a, b| a.union(b))
-    }
-
-    /// Zooms out until the current level fits the view (never in past 1:1),
-    /// and frames it: for a patch opened on a small screen, where the
-    /// signal path would otherwise run off the edge. Its frames and notes,
-    /// as last drawn, count too.
+    /// Fits the current level to the view (never closer than 1:1), its
+    /// frames and notes as last drawn included: for a patch opened on a
+    /// small screen, where the signal path would otherwise run off the edge.
     pub(super) fn fit_level(&mut self, ui: &egui::Ui) {
-        let to_nodes = self.editor_rect.min.to_vec2() + self.graph_state.pan_zoom.pan;
-        let annotations = self.user_state.annotations.drawn.values().map(|r| r.translate(-to_nodes));
-        let bounds = self.level_bounds(self.user_state.level).into_iter().chain(annotations).reduce(|a, b| a.union(b));
-        let Some(bounds) = bounds.filter(|_| self.editor_rect.is_positive()) else { return };
-        let view = self.editor_rect.size();
-        let room = vec2(view.x - 2.0 * FRAME_MARGIN, view.y - TRAIL_HEIGHT - 2.0 * FRAME_MARGIN);
-        let scale = (room.x / bounds.width()).min(room.y / bounds.height()).min(1.0);
-        if scale < 1.0 {
-            self.graph_state.zoom(ui, scale);
-        }
         self.frame_level();
+        self.apply_level_view(ui);
     }
 
-    /// Pans the view to the middle of what's on the current level.
+    /// Frames everything on the current level, as F does with nothing
+    /// selected, once the frame is drawn.
     fn frame_level(&mut self) {
         let nodes = groups::level_nodes(&self.graph_state.graph, self.user_state.level);
         // Nodes never drawn yet are taken at a nominal size, and framed again once they are
         self.reframe_level = nodes.iter().any(|n| !self.node_sizes.contains_key(n));
-        if let Some(pan) = self.framed_pan(self.user_state.level) {
-            self.graph_state.pan_zoom.pan = pan;
+        if let Some(view) = self.framed_view(self.user_state.level) {
+            self.show_view(view);
         }
     }
 
-    /// The pan that frames a level, shown or not.
-    pub(super) fn framed_pan(&self, level: Option<GroupId>) -> Option<egui::Vec2> {
-        let view = self.editor_rect.size();
-        let bounds = self.level_bounds(level).filter(|_| self.editor_rect.is_positive())?;
-        // In the middle if it fits, otherwise from its top left, clear of the
-        // breadcrumb trail: where the signal comes in
-        let fit = |extent: f32, room: f32, start: f32, middle: f32| {
-            if extent + 2.0 * FRAME_MARGIN <= room { room / 2.0 - middle } else { FRAME_MARGIN - start }
-        };
-        Some(egui::vec2(
-            fit(bounds.width(), view.x, bounds.left(), bounds.center().x),
-            fit(bounds.height(), view.y - TRAIL_HEIGHT, bounds.top() - TRAIL_HEIGHT, bounds.center().y - TRAIL_HEIGHT / 2.0),
-        ))
+    /// Puts the view there as the next frame is drawn: zooming takes the
+    /// editor's [`egui::Ui`].
+    fn show_view(&mut self, view: View) {
+        self.level_view = Some(view);
+        // A glide would take the view somewhere else
+        self.glide = None;
+    }
+
+    /// Puts the view where stepping between levels left it to go.
+    pub(super) fn apply_level_view(&mut self, ui: &egui::Ui) {
+        if let Some(view) = self.level_view.take() {
+            self.set_view(ui, view);
+        }
     }
 
     /// The miniature of a group's insides, as its face shows it.

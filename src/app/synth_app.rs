@@ -301,9 +301,12 @@ pub struct SynthApp {
     notice: Option<(String, f64)>,
 
     // --- Groups ---
-    /// The groups the view went into, innermost last, each with where its
-    /// node was on screen (relative to the editor), to come back out to.
-    level_trail: Vec<(GroupId, egui::Vec2)>,
+    /// The groups the view went into, innermost last, each with the view
+    /// outside it, to come back out to.
+    level_trail: Vec<(GroupId, framing::View)>,
+    /// Where stepping between levels left the view to go, as the next frame
+    /// is drawn.
+    level_view: Option<framing::View>,
     /// A group just made, while it's being named: naming it names the step.
     naming_group: Option<GroupId>,
     /// Tab opened a group, and egui's focus moved on with it to a button.
@@ -509,6 +512,7 @@ impl SynthApp {
             feedback_warned: false,
             notice: None,
             level_trail: Vec::new(),
+            level_view: None,
             naming_group: None,
             release_tab_focus: false,
             my_modules: Vec::new(),
@@ -1848,7 +1852,8 @@ impl SynthApp {
 
                 // A step into or out of a group, then F's glide, first, so
                 // all of this frame is drawn where they've got to
-                let dive = self.step_dive(ctx);
+                self.apply_level_view(ui);
+                let dive = self.step_dive(ui);
                 self.step_glide(ui);
 
                 // Update zoom for widget scaling, and where frames and notes go

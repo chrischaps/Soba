@@ -5,12 +5,15 @@
 //! The glide is worked out afresh each frame in patch space, so modules
 //! measured for the first time on the way (they were never drawn, and were
 //! taken at a nominal size) only correct where it's headed.
+//!
+//! Going into a group, or to a level from the breadcrumb trail, frames it
+//! the same way, straight away: all of it in view.
 
-use eframe::egui::{self, vec2, Pos2, Rect, Vec2};
+use eframe::egui::{self, emath::TSTransform, vec2, Pos2, Rect, Vec2};
 use egui_node_graph2::NodeId;
 
 use crate::graph::annotations::AnnotationId;
-use crate::graph::groups;
+use crate::graph::{groups, GroupId};
 use super::grouping::{FRAME_MARGIN, TRAIL_HEIGHT};
 use super::SynthApp;
 
@@ -48,6 +51,15 @@ pub(super) struct Glide {
     /// moves the view (a scroll, a drag) takes over from it.
     left: Option<(f32, Vec2)>,
     settle: u8,
+}
+
+/// Where the view is, in patch space: how far it's zoomed, and the patch
+/// point in its middle (below the trail). Unlike the editor's pan, it
+/// holds still while the view zooms elsewhere and back.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct View {
+    pub zoom: f32,
+    pub looking_at: Pos2,
 }
 
 /// Eases out: quick to leave, gentle to arrive.
@@ -166,14 +178,7 @@ impl SynthApp {
         let zoom = glide.from_zoom * (to_zoom / glide.from_zoom).powf(e);
         let looking_at = glide.from_middle.lerp(aim(bounds, to_zoom, view), e);
 
-        let (zoom_before, pan_before) = (self.graph_state.pan_zoom.zoom, self.graph_state.pan_zoom.pan);
-        self.graph_state.zoom(ui, zoom / zoom_before);
-        // Followed now, at the pan it was made at, before the glide pans:
-        // the frame's own zooms (a scroll that interrupts) are followed from
-        // the new pan once the graph's drawn
-        self.history.follow_zoom(zoom_before, pan_before, &self.graph_state.pan_zoom);
-        let origin = self.history.view_origin();
-        self.graph_state.pan_zoom.pan = middle(view) - origin - looking_at.to_vec2() * self.graph_state.pan_zoom.zoom;
+        self.set_view(ui, View { zoom, looking_at });
 
         let left = (self.graph_state.pan_zoom.zoom, self.graph_state.pan_zoom.pan);
         let Some(glide) = self.glide.as_mut() else { return };
@@ -190,21 +195,73 @@ impl SynthApp {
         ui.ctx().request_repaint();
     }
 
+    /// Where the view is now.
+    pub(super) fn view(&self) -> View {
+        let at = self.editor_rect.min + middle(self.editor_rect.size());
+        View { zoom: self.graph_state.pan_zoom.zoom, looking_at: self.screen_to_patch(at) }
+    }
+
+    /// Puts the view there, straight away.
+    pub(super) fn set_view(&mut self, ui: &egui::Ui, view: View) {
+        let (zoom_before, pan_before) = (self.graph_state.pan_zoom.zoom, self.graph_state.pan_zoom.pan);
+        if view.zoom != zoom_before {
+            self.graph_state.zoom(ui, view.zoom / zoom_before);
+            // Followed now, at the pan it was made at, before the view pans:
+            // the frame's own zooms (a scroll) are followed from the new pan
+            // once the graph's drawn
+            self.history.follow_zoom(zoom_before, pan_before, &self.graph_state.pan_zoom);
+        }
+        let origin = self.history.view_origin();
+        let middle = middle(self.editor_rect.size());
+        self.graph_state.pan_zoom.pan = middle - origin - view.looking_at.to_vec2() * self.graph_state.pan_zoom.zoom;
+    }
+
+    /// Takes patch space to the screen, as `view` shows it.
+    pub(super) fn patch_to_screen(&self, view: View) -> TSTransform {
+        let middle = self.editor_rect.min.to_vec2() + middle(self.editor_rect.size());
+        TSTransform::new(middle - view.looking_at.to_vec2() * view.zoom, view.zoom)
+    }
+
+    /// The view that frames everything on a level, shown or not, as F does
+    /// with nothing selected.
+    pub(super) fn framed_view(&self, level: Option<GroupId>) -> Option<View> {
+        if !self.editor_rect.is_positive() {
+            return None;
+        }
+        let (bounds, _) = self.level_bounds(level)?;
+        let view = self.editor_rect.size();
+        let zoom = zoom_to_fit(bounds.size(), room(view), ALL_ZOOM);
+        Some(View { zoom, looking_at: aim(bounds, zoom, view) })
+    }
+
+    /// The patch-space rectangle around everything on a level, its frames
+    /// and notes included, and whether every module in it has been measured.
+    pub(super) fn level_bounds(&self, level: Option<GroupId>) -> Option<(Rect, bool)> {
+        let nodes = groups::level_nodes(&self.graph_state.graph, level);
+        // Frames and notes are only on the top level, and only where they
+        // were last drawn while it's on show
+        let notes = if level.is_none() && self.user_state.level.is_none() {
+            self.user_state.annotations.drawn.keys().copied().collect()
+        } else {
+            Vec::new()
+        };
+        self.bounds_of(&nodes, &notes)
+    }
+
     /// The patch-space rectangle around what's framed, and whether every
     /// module in it has been measured.
     fn target_bounds(&self, target: &Target) -> Option<(Rect, bool)> {
-        let graph = &self.graph_state.graph;
-        let level = groups::level_nodes(graph, self.user_state.level);
-        let (nodes, notes): (Vec<NodeId>, Vec<AnnotationId>) = match target {
-            // Frames and notes are only on the top level
-            Target::All => (
-                level.clone(),
-                if self.user_state.level.is_none() { self.user_state.annotations.drawn.keys().copied().collect() } else { Vec::new() },
-            ),
+        match target {
+            Target::All => self.level_bounds(self.user_state.level),
             Target::Selection { nodes, annotations } => {
-                (nodes.iter().copied().filter(|n| level.contains(n)).collect(), annotations.clone())
+                let level = groups::level_nodes(&self.graph_state.graph, self.user_state.level);
+                let nodes: Vec<NodeId> = nodes.iter().copied().filter(|n| level.contains(n)).collect();
+                self.bounds_of(&nodes, annotations)
             }
-        };
+        }
+    }
+
+    fn bounds_of(&self, nodes: &[NodeId], notes: &[AnnotationId]) -> Option<(Rect, bool)> {
         let zoom = self.graph_state.pan_zoom.zoom;
         let mut measured = true;
         let modules = nodes.iter().filter_map(|&n| {

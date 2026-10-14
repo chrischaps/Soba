@@ -13,16 +13,18 @@
 //! sit where the level is framed, as an instant step leaves them, and the
 //! shapes the canvas draws are scaled about the miniature once they're
 //! drawn. So the zoom can go past the editor's limits both ways, and when
-//! it ends, nothing is left to settle.
+//! it ends, nothing is left to settle. The inside is framed to fit, so it
+//! can be at a different zoom from the level outside.
 
 use std::collections::HashMap;
 
-use eframe::egui::{self, emath::TSTransform, layers::ShapeIdx, LayerId, Rect, Vec2};
+use eframe::egui::{self, emath::TSTransform, layers::ShapeIdx, LayerId, Rect};
 use egui_node_graph2::NodeId;
 
 use crate::graph::groups::{GroupIndex, Preview};
 use crate::graph::{miniature_transform, paint_miniature, paint_open_pill, GroupId};
 use super::super::theme;
+use super::framing::View;
 use super::SynthApp;
 
 /// How long the zoom takes, in seconds.
@@ -48,9 +50,9 @@ pub(super) struct Dive {
     started: f64,
     /// The level has changed over, at the cut.
     switched: bool,
-    /// The pan of the level not on show: the one being gone to until the
+    /// The view of the level not on show: the one being gone to until the
     /// cut, then the one left.
-    other_pan: Vec2,
+    other_view: View,
     /// Going in from under the pointer, where the miniature showed Open.
     lit: bool,
 }
@@ -114,14 +116,14 @@ impl SynthApp {
         let graph = &self.graph_state.graph;
         let Some(id) = graph.nodes.get(node).and_then(|n| n.user_data.kind.group()) else { return };
         let on_show = graph[node].user_data.parent == self.user_state.level;
-        let pan = self.framed_pan(Some(id)).filter(|_| on_show && self.can_dive(ctx, id));
-        let Some(pan) = pan else {
+        let view = self.framed_view(Some(id)).filter(|_| on_show && self.can_dive(ctx, id));
+        let Some(view) = view else {
             self.enter_group(node);
             return;
         };
         let pointer = ctx.input(|i| i.pointer.hover_pos());
         let lit = pointer.is_some_and(|p| self.user_state.miniatures.get(&id).is_some_and(|r| r.contains(p)));
-        self.start_dive(ctx, Dive { group: id, node, inward: true, started: 0.0, switched: false, other_pan: pan, lit });
+        self.start_dive(ctx, Dive { group: id, node, inward: true, started: 0.0, switched: false, other_view: view, lit });
     }
 
     /// Steps out of the group on show by shrinking it into its miniature,
@@ -131,9 +133,9 @@ impl SynthApp {
         self.land_dive();
         let Some(level) = self.user_state.level else { return false };
         let node = GroupIndex::of(&self.graph_state.graph).node(level);
-        let pan = self.pan_out_of(level).filter(|_| self.can_dive(ctx, level));
-        let (Some(node), Some(pan)) = (node, pan) else { return self.step_out() };
-        self.start_dive(ctx, Dive { group: level, node, inward: false, started: 0.0, switched: false, other_pan: pan, lit: false });
+        let view = self.view_out_of(level).filter(|_| self.can_dive(ctx, level));
+        let (Some(node), Some(view)) = (node, view) else { return self.step_out() };
+        self.start_dive(ctx, Dive { group: level, node, inward: false, started: 0.0, switched: false, other_view: view, lit: false });
         true
     }
 
@@ -181,7 +183,8 @@ impl SynthApp {
     /// Moves a dive on to this frame, changing the level over once it's
     /// halfway, and works out how the frame is drawn. Called before the
     /// canvas is drawn.
-    pub(super) fn step_dive(&mut self, ctx: &egui::Context) -> Option<DiveFrame> {
+    pub(super) fn step_dive(&mut self, ui: &egui::Ui) -> Option<DiveFrame> {
+        let ctx = ui.ctx();
         let dive = self.dive.as_ref()?;
         let t = ((ctx.input(|i| i.time) - dive.started) / DIVE_SECONDS) as f32;
         let u = if dive.inward { ease(t) } else { 1.0 - ease(t) };
@@ -198,10 +201,12 @@ impl SynthApp {
         if t >= 1.0 || (past_cut && !dive.switched) {
             let mut dive = self.dive.take()?;
             if !dive.switched {
-                let pan = self.graph_state.pan_zoom.pan;
+                let view = self.view();
                 self.switch_dive(&dive);
+                // The level changed over is drawn this frame, where it's framed
+                self.apply_level_view(ui);
                 dive.switched = true;
-                dive.other_pan = pan;
+                dive.other_view = view;
             }
             if t >= 1.0 {
                 return None;
@@ -216,19 +221,22 @@ impl SynthApp {
     fn dive_frame(&self, u: f32) -> Option<DiveFrame> {
         let dive = self.dive.as_ref()?;
         let shows_outer = dive.inward != dive.switched;
-        let pan = self.graph_state.pan_zoom.pan;
-        let (outer_pan, inner_pan) = if shows_outer { (pan, dive.other_pan) } else { (dive.other_pan, pan) };
+        let here = self.view();
+        let (outer, inner) = if shows_outer { (here, dive.other_view) } else { (dive.other_view, here) };
+        // Node positions, and the miniature's layout, are at the editor's zoom
         let zoom = self.graph_state.pan_zoom.zoom;
-        let editor = self.editor_rect.min.to_vec2();
+        let origin = self.history.view_origin();
 
-        // The miniature on the level outside, where that level's pan puts it
+        // The miniature on the level outside, where that level's view puts it
         let place = self.miniature_places.get(&dive.group)?;
-        let corner = editor + outer_pan + self.graph_state.node_positions.get(dive.node)?.to_vec2();
-        let miniature = Rect::from_min_size(corner.to_pos2() + place.min.to_vec2() * zoom, place.size() * zoom);
+        let node = self.history.to_patch(*self.graph_state.node_positions.get(dive.node)?, zoom);
+        let corner = self.patch_to_screen(outer) * node;
+        let miniature = Rect::from_min_size(corner + place.min.to_vec2() * outer.zoom, place.size() * outer.zoom);
         let preview = self.preview_of(dive.group);
-        let to_face = miniature_transform(miniature, &preview, zoom)?;
-        // The inside as it's framed, taken onto the miniature
-        let inside = TSTransform::new(editor + inner_pan, zoom);
+        let to_face = miniature_transform(miniature, &preview, outer.zoom)?;
+        // The inside as it's framed, from the miniature's layout (node
+        // positions, unzoomed), taken onto the miniature
+        let inside = self.patch_to_screen(inner) * TSTransform::from_translation(-origin / zoom);
         let to_miniature = to_face * inside.inverse();
 
         let camera = camera(to_miniature, u);
@@ -236,7 +244,7 @@ impl SynthApp {
         Some(DiveFrame {
             transform: if shows_outer { camera } else { camera * to_miniature },
             miniature: camera * miniature,
-            zoom: zoom * camera.scaling,
+            zoom: outer.zoom * camera.scaling,
             preview,
             lit: dive.lit,
             veil,
