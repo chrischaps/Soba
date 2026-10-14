@@ -34,7 +34,9 @@
 //! press or right-click that just misses a control says so on stderr.
 //!
 //! ```text
-//! 0.0  play                         # start the transport
+//! 0.0  play                         # start the transport: a capture
+//!                                   # starts stopped, and says so at the
+//!                                   # end if it never played
 //! 0.5  key Z 0.4                    # tap a QWERTY key, held 0.4 s
 //! 0.5  key Ctrl+Shift+F 0.1         # a shortcut, with its modifiers held
 //! 0.5  type osc 0.1                 # type text, a letter every 0.1 s
@@ -324,6 +326,9 @@ pub struct Capture {
     presses: Vec<(f64, &'static str, Pos2)>,
     /// This frame's share of `input`, interleaved stereo.
     input_frame: StereoBuffer,
+    /// Whether the transport ran during any recorded frame. A capture
+    /// starts stopped, so a script that never plays it films silence.
+    played: bool,
 }
 
 impl Capture {
@@ -390,6 +395,7 @@ impl Capture {
             input_frame: StereoBuffer::default(),
             hovering: None,
             presses: Vec::new(),
+            played: false,
         })
     }
 
@@ -781,6 +787,12 @@ impl Capture {
     }
 
     /// Asks for this frame's screenshot, after the app has drawn it.
+    /// Notes whether the transport runs during this frame's audio, however
+    /// it was started: a `play` cue, a click on Play, a key, a take.
+    pub fn note_transport(&mut self, playing: bool) {
+        self.played |= playing && self.recording();
+    }
+
     pub fn end_frame(&mut self, ctx: &egui::Context) {
         self.check_aim(ctx);
         if self.fresh {
@@ -879,6 +891,9 @@ impl Capture {
                 self.frame as f64 * self.dt(),
                 self.config.out_dir.display()
             );
+            if !self.played {
+                eprintln!("capture: the script never plays the transport, so the audio is silent (add `0.0 play`)");
+            }
         }
         true
     }

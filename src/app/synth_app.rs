@@ -584,6 +584,10 @@ impl SynthApp {
             }
         }
 
+        if let Some(capture) = self.capture.as_mut() {
+            capture.note_transport(self.is_playing);
+        }
+
         // Ship the frame's edits before rendering it
         self.sync_parameters();
         self.tend_takes();
