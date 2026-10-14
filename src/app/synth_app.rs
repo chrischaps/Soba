@@ -35,6 +35,7 @@ use super::editing::{self, Selection};
 use super::engine_sync;
 use super::input_device;
 use super::library::{self, SavedModule};
+use super::long_press::LongPress;
 use super::palette::{PaletteAction, QuickAdd};
 use super::recording::{self, RecState, Toast, ToastAction};
 use super::session::{self, Answer, Autosave, Discard, RecentFiles};
@@ -334,6 +335,9 @@ pub struct SynthApp {
     /// A finger is dragging the canvas: on a touch screen that pans, where a
     /// mouse would draw a selection box.
     touch_panning: bool,
+    /// A finger resting on the canvas, which opens the add menu as a
+    /// right-click would.
+    long_press: LongPress,
     /// Patch files the visitor picked, which the browser hands over later.
     #[cfg(target_arch = "wasm32")]
     uploads: (std::sync::mpsc::Sender<web::Upload>, std::sync::mpsc::Receiver<web::Upload>),
@@ -517,6 +521,7 @@ impl SynthApp {
             fit_pending: 0,
             glide: None,
             touch_panning: false,
+            long_press: LongPress::default(),
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
         };
@@ -1427,6 +1432,11 @@ impl SynthApp {
             // Edit history
             group_label(ui, "Edit");
 
+            // Space or Tab opens the palette. A phone has neither key, and
+            // a visitor may not know to press them
+            if WEB && ui.button(named("+", "Add")).on_hover_text("Add a module (Space or Tab)").clicked() {
+                actions.add_module = true;
+            }
             let undo_label = self.history.undo_label();
             let undo = ui.add_enabled(undo_label.is_some(), egui::Button::new(named("↩", "Undo")));
             if undo.on_hover_text(history_hint("Undo", undo_label, "Ctrl+Z")).clicked() {
@@ -2073,14 +2083,17 @@ impl SynthApp {
 
         // Detect right-click in editor to open context menu
         let mut menu_just_opened = false;
+        let right_click = ctx.input(|i| i.pointer.secondary_clicked().then(|| i.pointer.interact_pos()).flatten());
+        // A finger's right-click: held still on the canvas
+        let long_press = self.long_press.update(ctx);
         // Only show "add node" menu when clicking on empty canvas, not on nodes/widgets
-        if ctx.input(|i| i.pointer.secondary_clicked()) && cursor_in_editor {
+        if (right_click.is_some() || long_press.is_some()) && cursor_in_editor {
             // Only open if not already showing a menu and no widget context menu is open
             if self.user_state.context_menu_pos.is_none()
                 && !self.user_state.widget_context_menu_open
                 && !self.user_state.over_annotation
             {
-                let click_pos = ctx.input(|i| i.pointer.interact_pos());
+                let click_pos = right_click.or(long_press);
                 // A module has its own menu, and its knobs theirs. Neither says
                 // so on the frame of the click, so go by where the click was
                 if let Some(click_pos) = click_pos.filter(|pos| !self.is_over_module(ctx, *pos)) {
@@ -2221,15 +2234,24 @@ impl SynthApp {
 
             // Show submenu for open category
             let mut submenu_rect: Option<egui::Rect> = None;
+            // To the right of the menu, or to its left where the screen ends
+            // first, as it soon does on a phone
+            let submenu_area = |row: usize| {
+                let id = egui::Id::new("add_node_submenu");
+                let menu = menu_response.response.rect;
+                let screen = ctx.screen_rect();
+                let width = ctx.memory(|m| m.area_rect(id)).map_or(160.0, |r| r.width());
+                let top = menu.top() + row as f32 * 22.0;
+                let area = egui::Area::new(id).order(egui::Order::Foreground);
+                if menu.right() + 4.0 + width > screen.right() && menu.left() - 4.0 - width >= screen.left() {
+                    area.pivot(egui::Align2::RIGHT_TOP).fixed_pos(egui::pos2(menu.left() - 4.0, top))
+                } else {
+                    area.fixed_pos(egui::pos2(menu.right() + 4.0, top))
+                }
+            };
             if let Some(open_cat_index) = self.user_state.context_menu_open_category {
                 if let Some((_category, templates)) = categories.get(open_cat_index) {
-                    // Position submenu to the right of the main menu
-                    let submenu_pos = menu_response.response.rect.right_top() + egui::vec2(4.0, open_cat_index as f32 * 22.0);
-
-                    let submenu_id = egui::Id::new("add_node_submenu");
-                    let submenu_response = egui::Area::new(submenu_id)
-                        .fixed_pos(submenu_pos)
-                        .order(egui::Order::Foreground)
+                    let submenu_response = submenu_area(open_cat_index)
                         .show(ctx, |ui| {
                             egui::Frame::menu(ui.style()).show(ui, |ui| {
                                 ui.set_min_width(100.0);
@@ -2253,10 +2275,7 @@ impl SynthApp {
                     }
                 } else if open_cat_index == categories.len() && !self.my_modules.is_empty() {
                     // My Modules: the groups saved there
-                    let submenu_pos = menu_response.response.rect.right_top() + egui::vec2(4.0, open_cat_index as f32 * 22.0);
-                    let submenu_response = egui::Area::new(egui::Id::new("add_node_submenu"))
-                        .fixed_pos(submenu_pos)
-                        .order(egui::Order::Foreground)
+                    let submenu_response = submenu_area(open_cat_index)
                         .show(ctx, |ui| {
                             egui::Frame::menu(ui.style()).show(ui, |ui| {
                                 ui.set_min_width(120.0);
@@ -2280,10 +2299,7 @@ impl SynthApp {
                     }
                 } else if open_cat_index == categories.len() + usize::from(!self.my_modules.is_empty()) {
                     // The Library: ready-made groups, under their sections
-                    let submenu_pos = menu_response.response.rect.right_top() + egui::vec2(4.0, open_cat_index as f32 * 22.0);
-                    let submenu_response = egui::Area::new(egui::Id::new("add_node_submenu"))
-                        .fixed_pos(submenu_pos)
-                        .order(egui::Order::Foreground)
+                    let submenu_response = submenu_area(open_cat_index)
                         .constrain(true)
                         .show(ctx, |ui| {
                             egui::Frame::menu(ui.style()).show(ui, |ui| {
@@ -2314,7 +2330,7 @@ impl SynthApp {
             let menu_rect = menu_response.response.rect;
             // Near the bottom of the window the menu is moved up to fit, off the
             // click that opened it, which mustn't count as a click outside
-            if ctx.input(|i| i.pointer.any_click()) && !menu_just_opened {
+            if ctx.input(|i| i.pointer.any_click()) && !menu_just_opened && !self.long_press.lifted() {
                 if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
                     // Check if click was outside both main menu and submenu
                     let in_main_menu = menu_rect.contains(pos);
@@ -3151,7 +3167,7 @@ impl SynthApp {
         }
         if !held {
             self.touch_panning = false;
-        } else if self.touch_panning && !pinching {
+        } else if self.touch_panning && !pinching && !self.long_press.holding() {
             self.graph_state.pan_zoom.pan += delta;
         }
     }
@@ -4067,6 +4083,7 @@ struct ToolbarActions {
     new_patch: bool,
     undo: bool,
     redo: bool,
+    add_module: bool,
     // MIDI actions
     connect_midi_device: Option<usize>,
     disconnect_midi: bool,
@@ -4345,6 +4362,9 @@ impl eframe::App for SynthApp {
         }
         if toolbar_actions.redo {
             self.redo();
+        }
+        if toolbar_actions.add_module {
+            self.open_quick_add(ctx);
         }
 
         // Handle MIDI actions

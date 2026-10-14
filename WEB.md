@@ -42,6 +42,7 @@ One `wasm32` cfg gate keeps the desktop build exactly as it was; the
 | **Theme** | eframe follows the browser's light/dark preference, and a light browser started the theme from egui's light style | `apply_theme` pins egui to Dark first |
 | **Phones** | First Sound is played from computer keys | The Keyboard and Poly MIDI modules' pianos play when held with the mouse or a finger, sliding legato (on the desktop too) |
 | **Small screens** | The node graph zooms only with the wheel and pans only with the middle button, so a phone saw the left of a patch and no way past it | A patch opened in the browser zooms out to fit (`fit_level`). Pinch zooms about the fingers, two fingers pan, and one finger on empty canvas pans instead of drawing a selection box (`follow_gestures`, `follow_touch_pan`). A trackpad pinch or `Ctrl`+scroll zooms about the pointer, on the desktop too |
+| **Adding on a phone** | The add menu opened on a right-click and the palette on `Space` or `Tab`: a touch screen has neither | A finger held still on empty canvas for half a second opens the add menu there (`app/long_press.rs`), unless it moved first and became a pan. The menu's categories open on a tap, and their submenus open to the menu's left where the screen ends first. A **+** on the toolbar opens the palette in the middle of the view |
 
 ### cpal's WebAudio scheduling, and a fix in the page
 

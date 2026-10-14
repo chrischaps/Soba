@@ -35,7 +35,7 @@ If a patch loads with problems (a module this version doesn't know, a cable to a
 |----|---------|
 | Zoom | Scroll the mouse wheel. A trackpad pinch, or `Ctrl` and scroll, zooms about the pointer |
 | Pan | Drag with the middle mouse button, or hold `Ctrl` and drag empty canvas |
-| On a touch screen | Pinch to zoom; drag empty canvas with one finger, or two, to pan |
+| On a touch screen | Pinch to zoom; drag empty canvas with one finger, or two, to pan. Hold a finger still on empty canvas for the [add menu](#the-add-menu) |
 | Bring it all into view | Press `F` with nothing selected: the view glides to fit the whole patch, frames and notes too (inside a group, everything in it). It comes no closer than life size, and a patch too big to fit at the furthest zoom shows from its top left |
 | Zoom to the selection | Press `F`: the view glides to fit the selected modules, frames and notes, closing in a little past life size on a single module. `Shift + F` fits everything even with a selection. Both are in the canvas's right-click menu too |
 | Select a module | Click it |
@@ -50,12 +50,14 @@ The background grid moves and zooms with the patch, with a brighter line every f
 
 Right-click empty canvas to open the add menu. It lists the six categories in their header colors; hover or click one to see its modules, then click a module to place it where you right-clicked. Hover a module's name to read what it does. Groups you've saved are under **My Modules**, in rose (see [Groups](../concepts/groups.md#my-modules)). Below the categories, **Frame** and **Note** add a [frame or a note](#frames-and-notes).
 
+On a touch screen, hold a finger still on empty canvas for half a second instead. Tap a category to see its modules, then tap a module.
+
 ![The add menu, showing the Effect category](../images/interface-context-menu.png)
 *Right-click empty canvas, pick a category, then a module.*
 
 ### Quick add
 
-Press `Space` or `Tab` with the mouse over the canvas. A search box opens at the cursor, listing every module by category, with your saved groups first under **My Modules** and the ready-made groups of the [Library](../concepts/groups.md#the-library) last. Type a few letters to narrow the list, then press `Enter`, and the module appears where the box opened. (With a group selected, `Tab` opens the group instead.)
+Press `Space` or `Tab` with the mouse over the canvas. A search box opens at the cursor, listing every module by category, with your saved groups first under **My Modules** and the ready-made groups of the [Library](../concepts/groups.md#the-library) last. Type a few letters to narrow the list, then press `Enter`, and the module appears where the box opened. (With a group selected, `Tab` opens the group instead.) In the browser, the **+** button on the toolbar opens it too, in the middle of the view: the way in on a phone, which has neither key.
 
 ![The quick-add palette](../images/interface-quick-add.png)
 *Type a few letters of a module's name or category, then press Enter.*
