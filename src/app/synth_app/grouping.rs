@@ -90,13 +90,7 @@ impl SynthApp {
             .iter()
             .filter(|(id, _)| !hidden.contains(id))
             .filter_map(|(_, node)| node.user_data.kind.group())
-            .map(|id| {
-                let face = Face {
-                    preview: preview_of(graph, |n| positions.get(n).copied(), sizes, zoom, id),
-                    controls: groups::face_controls(graph, |n| positions.get(n).copied(), &index, id),
-                };
-                (id, face)
-            })
+            .map(|id| (id, face_of(graph, |n| positions.get(n).copied(), sizes, zoom, &index, id)))
             .collect();
 
         if self.user_state.renaming.as_ref().is_some_and(|r| index.node(r.group).is_none()) {
@@ -669,4 +663,20 @@ fn preview_of(
 ) -> Preview {
     let unzoomed = |n: NodeId| position(n).map(|p| (p.to_vec2() / zoom * PREVIEW_ZOOM).to_pos2());
     groups::preview(graph, unzoomed, |n| sizes.get(&n).copied(), id, PREVIEW_ZOOM)
+}
+
+/// What a group's node shows on its face: its miniature and the controls
+/// pinned to it.
+pub(super) fn face_of(
+    graph: &crate::graph::SynthGraph,
+    position: impl Fn(NodeId) -> Option<egui::Pos2> + Copy,
+    sizes: &std::collections::HashMap<NodeId, egui::Vec2>,
+    zoom: f32,
+    index: &GroupIndex,
+    id: GroupId,
+) -> Face {
+    Face {
+        preview: preview_of(graph, position, sizes, zoom, id),
+        controls: groups::face_controls(graph, position, index, id),
+    }
 }

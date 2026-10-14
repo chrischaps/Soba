@@ -101,7 +101,7 @@ Use Canopy as the example: the shots are `canopy` (1920×1080, the whole song) a
 
 These lessons are from the Canopy session, 2026-10-14. The vault note "Soba Films Canopy Diving Through Its Groups" has the full story.
 
-- **Every group is opened once before recording.** A module is measured only once it's drawn. Before that, its group's miniature and the view into it use nominal sizes, and the first dive would land somewhere else.
+- **Every group is opened once before recording.** A module used to be measured only once it was drawn. Until then, its group's miniature and the view into it used nominal sizes, and the first dive would land somewhere else. Since #245, modules inside groups are measured off screen when a patch opens, so a new film can leave the previsit out. Canopy keeps it, so its converged aims stay as filmed.
 - **Dive landings are keyed by level, zoom and first visit, not by order.** Keyed by order, one missed double-click knocks every later aim off. Coming out is worked out exactly, because the group's node goes back where it was on screen, so it needs no measuring.
 - **The pointer jumps to a title bar and back; it never glides.** It isn't drawn, but gliding it across faces lights their miniatures' Open pills.
 - **In a portrait window, inside a wide group, frame a module, not the level.** A whole level fitted to 720 points wide is a thin strip. A nested group can also sit past the edge, so the previsit centres each one before clicking it.

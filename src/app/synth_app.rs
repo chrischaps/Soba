@@ -62,6 +62,7 @@ mod takes;
 #[cfg(not(target_arch = "wasm32"))]
 mod take_files;
 mod tidy;
+mod unseen;
 #[cfg(not(target_arch = "wasm32"))]
 mod updates;
 
@@ -1838,6 +1839,12 @@ impl SynthApp {
 
                 // Reset widget context menu flag before drawing
                 self.user_state.widget_context_menu_open = false;
+
+                // Modules inside groups are measured before they're first
+                // shown, so faces, framing and dives are true to them
+                if unseen::measure(&mut self.graph_state, &mut self.user_state, &mut self.node_sizes, ui) {
+                    self.prepare_level();
+                }
 
                 // A step into or out of a group, then F's glide, first, so
                 // all of this frame is drawn where they've got to
