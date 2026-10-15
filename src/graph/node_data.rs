@@ -307,6 +307,9 @@ pub enum NodeDisplay {
     /// 3-Band EQ: the curve its bands add up to over the sound, with a
     /// dot per band to drag and wings on the mid band for its width.
     EqCurve,
+    /// Stereo Delay: the train of echoes, each as loud as the feedback
+    /// leaves it, lit as the sound coming in reaches it.
+    DelayTaps,
     /// Vocoder: a bar per band, the voice's level there, on a frequency
     /// axis with the carrier's bands shifted by Formant.
     VocoderBands,
@@ -2067,6 +2070,10 @@ impl NodeDataTrait for SynthNodeData {
 
         if self.display == NodeDisplay::CompressorCurve {
             super::compressor_display::compressor_display(ui, node_id, graph, user_state, zoom);
+        }
+
+        if self.display == NodeDisplay::DelayTaps {
+            super::delay_display::delay_display(ui, node_id, graph, user_state, zoom);
         }
 
         if self.display == NodeDisplay::EqCurve {

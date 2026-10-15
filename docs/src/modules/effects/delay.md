@@ -3,7 +3,7 @@
 **Module ID** `fx.delay` · **Category** Effect
 
 ![Stereo Delay module](../../images/module-delay.png)
-*Ping-pong, Sync and Tape switch the character; the knobs set the echoes*
+*A clap into the left side only, ping-ponged on worn tape: the first echo lights on the left, the second comes back on the right*
 
 The Stereo Delay plays back a copy of its input a moment later, then feeds that copy back in to make repeats. Filters in the feedback path darken or thin each repeat, **P-P** bounces the repeats between left and right, and **Sync** locks the time to the patch tempo.
 
@@ -15,6 +15,16 @@ Switch on **Tape** and it becomes a worn tape echo: the repeats waver in pitch, 
 2. A read head plays the line back **Time** later. Reads usually fall between two samples, and a cubic (Catmull-Rom) interpolator fills the gap, so time changes and modulation glide smoothly instead of clicking or dulling the highs.
 3. The playback runs through **HiCut** and **LoCut**, is scaled by **FB**, and goes back into the line with the input. Each repeat passes through the filters once more than the one before it.
 4. **Mix** blends the dry input with the playback.
+
+## The display
+
+The display draws the train of echoes. Time runs to the right from the moment a sound goes in. The first bar is the dry sound, and after it come the echoes, one delay time apart. Each echo is as loud as the feedback leaves it, on a decibel scale so a long tail stays readable. The left channel stands above the centre line and the right hangs below it.
+
+- **Filters.** Every repeat passes **HiCut** and **LoCut** once more, so each bar is a little warmer than the one before and a little thinner. Tape mode adds the tape's own darkening.
+- **The sound going through.** Each echo lights as the sound coming in reaches it, so a hit visibly walks down the train and fades. An echo lit to the top of its bar is as loud as the loudest thing that came in.
+- **Ping-Pong.** With **P-P** on, the echoes take turns: each side's second echo is the other side's first, come back across. It shows best with something only on one side, or a stereo source.
+- **Tape.** The bars blur and sway with the wow. Past unity, the feedback runs away and the header says so in orange.
+- **Words.** The top left gives the time, with the note length when **Sync** sets it, in orange while **Time** CV moves it. The top right gives the feedback and the switches that are on.
 
 ## Inputs
 

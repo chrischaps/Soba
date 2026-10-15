@@ -2379,6 +2379,7 @@ knob Feedback           "FB" Modulatable
 knob Mix                "Mix" KnobOnly
 knob High Cut           "HiCut" KnobOnly
 knob Low Cut            "LoCut" KnobOnly
+display DelayTaps
 
 == fx.reverb "Reverb" finder="Reverb" Effect
 in   In L               Audio    ConnectionOnly       inline=true  port

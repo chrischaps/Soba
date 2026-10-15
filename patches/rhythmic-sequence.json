@@ -881,7 +881,7 @@
       ],
       "size": [
         543.0,
-        401.0
+        465.0
       ],
       "color": "cyan"
     },
@@ -911,7 +911,7 @@
       "text": "The filter is the instrument here. Grab its **Cutoff** and **Res** while it plays, and play them like a 303.",
       "position": [
         1463.0,
-        433.0
+        497.0
       ],
       "width": 300.0
     },

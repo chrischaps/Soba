@@ -645,7 +645,7 @@
       ],
       "size": [
         590.0,
-        410.0
+        474.0
       ],
       "color": "cyan"
     },
@@ -679,7 +679,7 @@
       "text": "Tap **Rec** on the Looper and play. Recording starts on the next downbeat and closes itself after four **Bars**; tap Rec again to overdub over it, and again to just listen. **Undo** takes back the last layer, and a second Undo brings it back.",
       "position": [
         710.0,
-        450.0
+        514.0
       ],
       "width": 270.0
     },
@@ -687,7 +687,7 @@
       "text": "Your sound reaches the patch a round trip late, the **In** figure in the status bar. **Auto latency** writes each overdub that much earlier, so the layers sit where you played them, not where they arrived.",
       "position": [
         710.0,
-        590.0
+        654.0
       ],
       "width": 270.0
     },
@@ -695,7 +695,7 @@
       "text": "The click: a rim on every beat and a cowbell on each bar. Mute Mixer channels 1 and 2 once the loop is going. Right-click a footswitch to learn a MIDI pedal.",
       "position": [
         710.0,
-        735.0
+        799.0
       ],
       "width": 270.0
     }

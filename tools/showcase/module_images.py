@@ -75,6 +75,12 @@ MODULES = {
         -2.0 play
         -0.6 move face 234 135 0.3
     """, palette=False),
+    # A clap into the left side only, ping-ponged on worn tape: its echoes
+    # take turns down the train, left above the line and right below,
+    # warming as they go
+    "delay": Module("delay", "fx.delay", 1.0, 320, """
+        -2.6 play
+    """, palette=False),
 }
 
 

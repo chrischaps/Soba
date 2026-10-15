@@ -22,7 +22,7 @@ use crate::app::theme;
 use crate::dsp::ModuleCategory;
 use crate::modules::Compressor;
 
-use super::display_frame::{self as face, columns, curve, guide, header, input_patched, playhead, readout, value_of, with_alpha};
+use super::display_frame::{self as face, columns, curve, guide, header, incoming_trace, input_patched, playhead, readout, value_of, with_alpha};
 use super::drum_display::fill_under;
 use super::{SynthGraph, SynthGraphState};
 
@@ -100,15 +100,6 @@ fn to_db(level: f32) -> f32 {
     } else {
         FLOOR_DB
     }
-}
-
-/// The trace of whatever is patched into the input `name`, if anything.
-fn incoming_trace<'a>(graph: &SynthGraph, node_id: NodeId, user_state: &'a SynthGraphState, name: &str) -> Option<SignalTrace<'a>> {
-    let node = graph.nodes.get(node_id)?;
-    let (_, input) = node.inputs.iter().find(|(input, _)| input == name)?;
-    let output = graph.connection(*input)?;
-    let index = graph.get_output_index(output)?;
-    user_state.output_trace(graph.get_output(output).node, index, 0)
 }
 
 /// Draws the display, as wide as the knob row below it.

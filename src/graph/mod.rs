@@ -16,6 +16,7 @@ pub mod hints;
 pub mod input_display;
 mod dancer_display;
 mod dancer_moves;
+mod delay_display;
 mod divider_display;
 mod display_frame;
 mod drum_display;

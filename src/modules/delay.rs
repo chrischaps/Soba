@@ -6,7 +6,7 @@
 //! little darker than the one before.
 
 use crate::dsp::{
-    module_trait::{DspModule, ModuleCategory, ModuleInfo},
+    module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     context::ProcessContext,
     denormal::flush,
     parameter::ParameterDefinition,
@@ -120,6 +120,12 @@ pub struct StereoDelay {
     tape_right: TapeChannel,
     /// DC blocker pole for the tape path.
     dc_pole: f32,
+    /// Where the last sample of the last block stood, for the display: the
+    /// delay time after Sync and CV (ms), the gain each repeat passes the
+    /// loop with, and how far the tape's wow had pulled the read head (ms).
+    time_now_ms: f32,
+    loop_gain_now: f32,
+    wow_now_ms: f32,
     /// Port definitions.
     ports: Vec<PortDefinition>,
     /// Parameter definitions.
@@ -151,6 +157,9 @@ impl StereoDelay {
             tape_left: TapeChannel::default(),
             tape_right: TapeChannel::default(),
             dc_pole: Self::dc_pole(sample_rate),
+            time_now_ms: 500.0,
+            loop_gain_now: 0.5,
+            wow_now_ms: 0.0,
             ports: vec![
                 // Input ports
                 PortDefinition::input_with_default("in_l", "In L", SignalType::Audio, 0.0).describe("Left audio to echo"),
@@ -179,13 +188,24 @@ impl StereoDelay {
                 ParameterDefinition::choice(
                     "sync",
                     "Sync",
-                    &["Off", "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32", "1/4D", "1/8D"],
+                    &Self::SYNC_LABELS,
                     0,
                 ).describe("Locks the delay time to a note length of the tempo; Off uses Time"),
                 ParameterDefinition::toggle("tape", "Tape", false).describe("Adds tape-style wobble, saturation and dulling to repeats"),
             ],
         }
     }
+
+    /// The Sync choices, as the dropdown names them.
+    pub const SYNC_LABELS: [&'static str; 9] = ["Off", "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32", "1/4D", "1/8D"];
+
+    /// Readout slots: the delay time after Sync and CV (ms), the gain a
+    /// repeat keeps each time round the loop, how far into Tape mode it is
+    /// (0 to 1), and the wow's pull on the read head (ms).
+    pub const READOUT_TIME_MS: usize = 0;
+    pub const READOUT_LOOP_GAIN: usize = 1;
+    pub const READOUT_TAPE: usize = 2;
+    pub const READOUT_WOW_MS: usize = 3;
 
     /// Port index constants.
     const PORT_IN_L: usize = 0;
@@ -232,7 +252,7 @@ impl StereoDelay {
     }
 
     /// Tape loss cutoff for a delay time: slower tape for longer delays.
-    fn tape_loss_hz(time_ms: f32) -> f32 {
+    pub fn tape_loss_hz(time_ms: f32) -> f32 {
         (TAPE_LOSS_HZ * (250.0 / time_ms.max(1.0)).sqrt()).clamp(TAPE_LOSS_MIN_HZ, TAPE_LOSS_MAX_HZ)
     }
 
@@ -368,6 +388,7 @@ impl DspModule for StereoDelay {
         let out_right = &mut out_right_slice[0];
 
         let max_delay_samples = MAX_DELAY_SECONDS * self.sample_rate;
+        let (mut time_now_ms, mut loop_gain_now, mut wow_now) = (self.time_now_ms, self.loop_gain_now, 0.0);
 
         // Process each sample
         for i in 0..context.block_size {
@@ -397,7 +418,11 @@ impl DspModule for StereoDelay {
             // Convert time to samples, and let the tape transport wobble the read head
             let delay_samples = (modulated_time_ms * 0.001 * self.sample_rate)
                 .clamp(1.0, max_delay_samples);
-            let read_at = delay_samples - 1.0 + self.transport.next_offset() * tape_amount;
+            let wow = self.transport.next_offset() * tape_amount;
+            let read_at = delay_samples - 1.0 + wow;
+            time_now_ms = modulated_time_ms;
+            loop_gain_now = plain_feedback + tape_amount * (tape_feedback - plain_feedback);
+            wow_now = wow;
 
             // Get dry input samples
             let dry_left = in_left
@@ -469,6 +494,19 @@ impl DspModule for StereoDelay {
             out_left.samples[i] = out_l;
             out_right.samples[i] = out_r;
         }
+
+        self.time_now_ms = time_now_ms;
+        self.loop_gain_now = loop_gain_now;
+        self.wow_now_ms = wow_now / self.sample_rate * 1000.0;
+    }
+
+    fn readout(&self, _params: &[f32]) -> Option<Readout> {
+        let mut readout = Readout::default();
+        readout.values[Self::READOUT_TIME_MS] = self.time_now_ms;
+        readout.values[Self::READOUT_LOOP_GAIN] = self.loop_gain_now;
+        readout.values[Self::READOUT_TAPE] = self.tape_smooth.current();
+        readout.values[Self::READOUT_WOW_MS] = self.wow_now_ms;
+        Some(readout)
     }
 
     fn reset(&mut self) {
@@ -947,5 +985,28 @@ mod tests {
         );
 
         assert!(outputs[1].samples.iter().all(|&s| s == 0.0), "Out R should be silent");
+    }
+
+    #[test]
+    fn test_readout_shows_the_synced_time_and_the_loop_gain() {
+        let sr = 48000.0;
+        let ctx = ProcessContext::with_transport(sr, 480, TransportState::playing_at(100.0));
+        let mut p = params(500.0, 0.6, 0.5);
+        p[StereoDelay::PARAM_SYNC] = 8.0; // 1/8D: 0.75 beats, 450 ms at 100 BPM
+        let mut delay = StereoDelay::new();
+        delay.prepare(sr, 480);
+        run(&mut delay, &vec![0.0; 48000], &p, &ctx);
+        let readout = delay.readout(&p).unwrap();
+        assert!((readout.values[StereoDelay::READOUT_TIME_MS] - 450.0).abs() < 0.5);
+        assert!((readout.values[StereoDelay::READOUT_LOOP_GAIN] - 0.6).abs() < 1e-3);
+        assert_eq!(readout.values[StereoDelay::READOUT_TAPE], 0.0);
+
+        // Tape lets the loop pass unity at the top of the knob
+        p[StereoDelay::PARAM_FEEDBACK] = 1.0;
+        p[StereoDelay::PARAM_TAPE] = 1.0;
+        run(&mut delay, &vec![0.0; 48000], &p, &ctx);
+        let readout = delay.readout(&p).unwrap();
+        assert!(readout.values[StereoDelay::READOUT_LOOP_GAIN] > 1.0);
+        assert!(readout.values[StereoDelay::READOUT_TAPE] > 0.99);
     }
 }

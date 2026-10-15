@@ -409,6 +409,7 @@ static MODULE_UI: &[ModuleUi] = &[
             knob_as("Low Cut", "LoCut"),
         ],
         labels: &[("Ping-Pong", "P-P")],
+        display: NodeDisplay::DelayTaps,
         ..ModuleUi::DEFAULT
     },
     ModuleUi {

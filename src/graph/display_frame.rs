@@ -6,7 +6,7 @@
 //! a plot inset from the edges with a strip along the top for a word or two.
 
 use eframe::egui::{self, Color32, Painter, Pos2, Rect, Response, Sense, Shape, Stroke, Vec2};
-use egui_node_graph2::NodeId;
+use egui_node_graph2::{ConnectionSignalTrait, NodeId, SignalTrace};
 
 use super::{SynthGraph, SynthGraphState, SynthValueType};
 use crate::dsp::Readout;
@@ -120,6 +120,16 @@ pub fn output_patched(graph: &SynthGraph, node_id: NodeId, name: &str) -> bool {
         .iter()
         .find(|(output, _)| output == name)
         .is_some_and(|(_, id)| graph.iter_connections().any(|(_, output)| output == *id))
+}
+
+/// The recent past of whatever is patched into the node's input `name`
+/// (its first channel), if anything is.
+pub fn incoming_trace<'a>(graph: &SynthGraph, node_id: NodeId, user_state: &'a SynthGraphState, name: &str) -> Option<SignalTrace<'a>> {
+    let node = graph.nodes.get(node_id)?;
+    let (_, input) = node.inputs.iter().find(|(input, _)| input == name)?;
+    let output = graph.connection(*input)?;
+    let index = graph.get_output_index(output)?;
+    user_state.output_trace(graph.get_output(output).node, index, 0)
 }
 
 /// The node's latest readout from the engine, if it has sent one.
