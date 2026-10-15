@@ -450,6 +450,7 @@ static MODULE_UI: &[ModuleUi] = &[
             knob_as("High Gain", "HiGn"),
             knob_as("Output", "Out"),
         ],
+        display: NodeDisplay::EqCurve,
         ..ModuleUi::DEFAULT
     },
     ModuleUi {

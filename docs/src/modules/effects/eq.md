@@ -3,11 +3,25 @@
 **Module ID** `fx.eq` · **Category** Effect
 
 ![3-Band EQ module](../../images/module-eq.png)
-*Low shelf, mid band and high shelf, left to right, with the output level last*
+*Pink noise through a warm low shelf, a cut in the middle and an airy top, with the pointer on the mid band*
 
 The 3-Band EQ boosts or cuts three regions of the spectrum: a **low shelf** for the bass, a fully parametric **mid band**, and a **high shelf** for the treble. Use it to fit a sound into a patch, take the mud out of a pad, put an edge on a lead, or darken a reverb tail.
 
 Where a filter removes whole parts of the spectrum, an EQ leans on them, up to 15 dB either way. Every knob glides, so you can sweep the mid band while a note plays without zipper noise.
+
+## The display
+
+The display draws the curve the three bands add up to, from 20 Hz on the left to 20 kHz on the right, and ±18 dB around the 0 dB line. Each band's own share is a faint tinted fill: the low shelf amber, the mid band violet and the high shelf blue. The bright line is their sum, with **Out** added. Every curve comes from the band's own filter, so it bends exactly as the sound does.
+
+You can shape the EQ on the curve itself:
+
+- **Drag a dot** to move its band: across for frequency, up and down for gain. The knobs follow.
+- **Drag a wing** of the mid band (the short ticks either side of its dot, where its width ends) to set **MdQ**: out to widen it, in to narrow it.
+- **Double-click a dot** to flatten its band back to 0 dB.
+
+Pointing at a dot shows its band's settings at the top left. **Out** shows at the top right when it isn't 0 dB.
+
+Beneath the curves is the sound itself: what comes into **In** is a faint blue landscape, and what leaves through **Out** is a pale line over it. A boost lifts the line above the landscape, and a cut carves a dip into it.
 
 ## Inputs
 

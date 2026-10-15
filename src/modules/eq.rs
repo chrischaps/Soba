@@ -31,6 +31,20 @@ struct BiquadCoeffs {
     a2: f32,
 }
 
+impl BiquadCoeffs {
+    /// The filter's gain at `hz`, in dB: |H(e^jw)| from the coefficients.
+    /// Written in φ = 4·sin²(w/2) and in f64, which stay accurate at low
+    /// frequencies where the cosine form cancels itself away.
+    fn magnitude_db(&self, hz: f32, sample_rate: f32) -> f32 {
+        let (b0, b1, b2) = (self.b0 as f64, self.b1 as f64, self.b2 as f64);
+        let (a1, a2) = (self.a1 as f64, self.a2 as f64);
+        let phi = 4.0 * (std::f64::consts::PI * hz as f64 / sample_rate as f64).sin().powi(2);
+        let num = (b0 + b1 + b2).powi(2) - phi * (b0 * b1 + 4.0 * b0 * b2 + b1 * b2) + phi * phi * b0 * b2;
+        let den = (1.0 + a1 + a2).powi(2) - phi * (a1 + 4.0 * a2 + a1 * a2) + phi * phi * a2;
+        (10.0 * (num.max(1e-18) / den.max(1e-18)).log10()) as f32
+    }
+}
+
 /// Biquad filter state (delay line).
 #[derive(Clone, Copy, Default)]
 struct BiquadState {
@@ -255,7 +269,7 @@ impl ParametricEq {
     }
 
     /// Calculate low shelf biquad coefficients (RBJ Cookbook).
-    fn calc_low_shelf(&self, freq: f32, gain_db: f32) -> BiquadCoeffs {
+    fn low_shelf(sample_rate: f32, freq: f32, gain_db: f32) -> BiquadCoeffs {
         if gain_db.abs() < 0.01 {
             // Gain is essentially 0 dB, pass through
             return BiquadCoeffs {
@@ -268,7 +282,7 @@ impl ParametricEq {
         }
 
         let a = 10.0_f32.powf(gain_db / 40.0); // sqrt(10^(dB/20))
-        let w0 = 2.0 * PI * freq.clamp(20.0, self.sample_rate * 0.45) / self.sample_rate;
+        let w0 = 2.0 * PI * freq.clamp(20.0, sample_rate * 0.45) / sample_rate;
         let cos_w0 = w0.cos();
         let sin_w0 = w0.sin();
 
@@ -295,7 +309,7 @@ impl ParametricEq {
     }
 
     /// Calculate high shelf biquad coefficients (RBJ Cookbook).
-    fn calc_high_shelf(&self, freq: f32, gain_db: f32) -> BiquadCoeffs {
+    fn high_shelf(sample_rate: f32, freq: f32, gain_db: f32) -> BiquadCoeffs {
         if gain_db.abs() < 0.01 {
             // Gain is essentially 0 dB, pass through
             return BiquadCoeffs {
@@ -308,7 +322,7 @@ impl ParametricEq {
         }
 
         let a = 10.0_f32.powf(gain_db / 40.0);
-        let w0 = 2.0 * PI * freq.clamp(20.0, self.sample_rate * 0.45) / self.sample_rate;
+        let w0 = 2.0 * PI * freq.clamp(20.0, sample_rate * 0.45) / sample_rate;
         let cos_w0 = w0.cos();
         let sin_w0 = w0.sin();
 
@@ -333,7 +347,7 @@ impl ParametricEq {
     }
 
     /// Calculate peaking (parametric) biquad coefficients (RBJ Cookbook).
-    fn calc_peaking(&self, freq: f32, gain_db: f32, q: f32) -> BiquadCoeffs {
+    fn peaking(sample_rate: f32, freq: f32, gain_db: f32, q: f32) -> BiquadCoeffs {
         if gain_db.abs() < 0.01 {
             // Gain is essentially 0 dB, pass through
             return BiquadCoeffs {
@@ -346,7 +360,7 @@ impl ParametricEq {
         }
 
         let a = 10.0_f32.powf(gain_db / 40.0);
-        let w0 = 2.0 * PI * freq.clamp(20.0, self.sample_rate * 0.45) / self.sample_rate;
+        let w0 = 2.0 * PI * freq.clamp(20.0, sample_rate * 0.45) / sample_rate;
         let cos_w0 = w0.cos();
         let sin_w0 = w0.sin();
         let alpha = sin_w0 / (2.0 * q.max(0.1));
@@ -365,6 +379,40 @@ impl ParametricEq {
             a1: a1 / a0,
             a2: a2 / a0,
         }
+    }
+
+    /// The low shelf at this EQ's sample rate.
+    fn calc_low_shelf(&self, freq: f32, gain_db: f32) -> BiquadCoeffs {
+        Self::low_shelf(self.sample_rate, freq, gain_db)
+    }
+
+    /// The high shelf at this EQ's sample rate.
+    fn calc_high_shelf(&self, freq: f32, gain_db: f32) -> BiquadCoeffs {
+        Self::high_shelf(self.sample_rate, freq, gain_db)
+    }
+
+    /// The mid band at this EQ's sample rate.
+    fn calc_peaking(&self, freq: f32, gain_db: f32, q: f32) -> BiquadCoeffs {
+        Self::peaking(self.sample_rate, freq, gain_db, q)
+    }
+
+    /// What the low shelf does to each frequency, in dB, at `sample_rate`:
+    /// the band's own biquad, for drawing.
+    pub fn low_shelf_response(sample_rate: f32, freq: f32, gain_db: f32) -> impl Fn(f32) -> f32 {
+        let coeffs = Self::low_shelf(sample_rate, freq, gain_db);
+        move |hz| coeffs.magnitude_db(hz, sample_rate)
+    }
+
+    /// What the mid band does to each frequency, in dB, at `sample_rate`.
+    pub fn peaking_response(sample_rate: f32, freq: f32, gain_db: f32, q: f32) -> impl Fn(f32) -> f32 {
+        let coeffs = Self::peaking(sample_rate, freq, gain_db, q);
+        move |hz| coeffs.magnitude_db(hz, sample_rate)
+    }
+
+    /// What the high shelf does to each frequency, in dB, at `sample_rate`.
+    pub fn high_shelf_response(sample_rate: f32, freq: f32, gain_db: f32) -> impl Fn(f32) -> f32 {
+        let coeffs = Self::high_shelf(sample_rate, freq, gain_db);
+        move |hz| coeffs.magnitude_db(hz, sample_rate)
     }
 
     /// Recompute the coefficients of the bands whose knobs are gliding,
@@ -502,6 +550,11 @@ impl DspModule for ParametricEq {
 
             start = end;
         }
+    }
+
+    /// The display draws what goes in and what comes out.
+    fn spectrum_ports(&self) -> Option<crate::dsp::SpectrumPorts> {
+        Some(crate::dsp::SpectrumPorts { input: "in", outputs: &["out"] })
     }
 
     fn reset(&mut self) {
@@ -977,5 +1030,40 @@ mod tests {
         assert_eq!(module.info().name, "3-Band EQ");
         assert_eq!(module.ports().len(), 2);
         assert_eq!(module.parameters().len(), 8);
+    }
+
+    #[test]
+    fn test_responses_are_the_bands_own() {
+        let sr = 48000.0;
+        // A peak is its gain at its centre, and next to nothing far away
+        let mid = ParametricEq::peaking_response(sr, 1000.0, 6.0, 1.0);
+        assert!((mid(1000.0) - 6.0).abs() < 0.05, "{}", mid(1000.0));
+        assert!(mid(30.0).abs() < 0.1 && mid(15000.0).abs() < 0.3);
+        // Shelves reach their gain on their own side and leave the other alone
+        let low = ParametricEq::low_shelf_response(sr, 200.0, -9.0);
+        assert!((low(20.0) + 9.0).abs() < 0.3 && low(10_000.0).abs() < 0.1);
+        let high = ParametricEq::high_shelf_response(sr, 4000.0, 12.0);
+        assert!((high(18_000.0) - 12.0).abs() < 0.6 && high(100.0).abs() < 0.1);
+        // At 0 dB a band is flat
+        let flat = ParametricEq::peaking_response(sr, 1000.0, 0.0, 4.0);
+        assert!([20.0, 1000.0, 20_000.0].iter().all(|&hz| flat(hz).abs() < 1e-4));
+    }
+
+    #[test]
+    fn test_response_matches_what_the_filter_does() {
+        // A sine through the mid band comes out by the response at its frequency
+        let sr = 48000.0;
+        let coeffs = ParametricEq::peaking(sr, 800.0, 9.0, 2.0);
+        let mut state = BiquadState::default();
+        let hz = 1100.0;
+        let mut peak = 0.0f32;
+        for n in 0..48000 {
+            let y = state.process((2.0 * PI * hz * n as f32 / sr).sin(), &coeffs);
+            if n > 24000 {
+                peak = peak.max(y.abs());
+            }
+        }
+        let expected = ParametricEq::peaking_response(sr, 800.0, 9.0, 2.0)(hz);
+        assert!((20.0 * peak.log10() - expected).abs() < 0.1, "{} vs {expected}", 20.0 * peak.log10());
     }
 }

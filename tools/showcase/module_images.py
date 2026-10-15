@@ -69,6 +69,12 @@ MODULES = {
     "compressor": Module("compressor", "fx.compressor", 1.0, 420, """
         -2.8 play
     """, palette=False),
+    # Pink noise through a warm low shelf, a cut in the middle and an airy top,
+    # the pointer on the mid band's dot: its wings light, and the header reads it
+    "eq": Module("eq", "fx.eq", 1.0, 440, """
+        -2.0 play
+        -0.6 move face 234 135 0.3
+    """, palette=False),
 }
 
 

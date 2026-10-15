@@ -21,6 +21,7 @@ mod display_frame;
 mod drum_display;
 mod envelope_cv;
 mod envelope_display;
+mod eq_display;
 mod filter_display;
 mod filter_spectrum;
 mod filter_trail;

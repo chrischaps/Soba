@@ -304,6 +304,9 @@ pub enum NodeDisplay {
     /// Compressor: its transfer curve with a dot riding it, and the last
     /// two seconds of gain reduction hanging over the sound coming in.
     CompressorCurve,
+    /// 3-Band EQ: the curve its bands add up to over the sound, with a
+    /// dot per band to drag and wings on the mid band for its width.
+    EqCurve,
     /// Vocoder: a bar per band, the voice's level there, on a frequency
     /// axis with the carrier's bands shifted by Formant.
     VocoderBands,
@@ -2064,6 +2067,11 @@ impl NodeDataTrait for SynthNodeData {
 
         if self.display == NodeDisplay::CompressorCurve {
             super::compressor_display::compressor_display(ui, node_id, graph, user_state, zoom);
+        }
+
+        if self.display == NodeDisplay::EqCurve {
+            let changes = super::eq_display::eq_display(ui, node_id, graph, user_state, zoom);
+            responses.extend(changes.into_iter().map(NodeResponse::User));
         }
 
         if self.display == NodeDisplay::DrumHit {
