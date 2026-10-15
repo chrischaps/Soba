@@ -471,6 +471,7 @@ static MODULE_UI: &[ModuleUi] = &[
     ModuleUi {
         module_id: "fx.chorus",
         knobs: &[modulatable("Rate", "Rate"), modulatable("Depth", "Depth"), knob("Delay"), knob_as("Feedback", "FB"), knob("Mix")],
+        display: NodeDisplay::ChorusBraid,
         ..ModuleUi::DEFAULT
     },
     ModuleUi {

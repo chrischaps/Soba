@@ -3,7 +3,7 @@
 **Module ID** `fx.chorus` · **Category** Effect
 
 ![Chorus Module](../../images/module-chorus.png)
-*Voices and Shape are dropdowns; the knobs set the sweep*
+*Toms on every beat through three voices: the braid weaves slowly and lights where each hit passed*
 
 The Chorus thickens a sound by layering copies of it, each delayed by a few milliseconds that keep changing. The moving delays bend each copy's pitch slightly up and down, and the copies beat against each other and against the original, the way several players on the same part never quite line up.
 
@@ -23,6 +23,15 @@ A stereo source keeps its image: nothing patched into **In L** ever reaches **Ou
 With **In R** unpatched, In L feeds both sides and the chorus creates the width itself. Each right tap's LFO sits halfway between two left taps (180° away with one voice, 90° with two), so the two sides always bend in pitch in opposite directions.
 
 Changing **Voices** fades voices in or out and slides the rest to their new places on the cycle, so it never clicks.
+
+## The display
+
+The display draws the voices sweeping over the last two seconds, newest at the right edge. Up and down is how far each tap reads behind **Delay**: the centre line is the Delay itself, and the faint lines either side are as far as **Depth** lets the taps swing.
+
+- **Strands.** Each voice is a strand in its own colour. The solid strand is its left tap, and the fainter one beside it is its right tap, half a voice-spacing behind. One voice draws a single wave, and four weave a braid. **Rate** sets how many cycles cross the panel, and **Shape** bends them from sine to triangle. A dot at the right edge marks where each voice is now.
+- **Light.** The strands light up where sound came in, so the braid glows with whatever passes through it.
+- **Feedback.** Positive **FB** thickens the strands. Negative FB, the hollow flanger sound, turns them hollow and violet.
+- **Words.** The top left gives the rate and delay, with the rate in orange while **Rate** CV moves it. The top right gives the number of voices and the feedback.
 
 ## Inputs
 

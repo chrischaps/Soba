@@ -310,6 +310,9 @@ pub enum NodeDisplay {
     /// Stereo Delay: the train of echoes, each as loud as the feedback
     /// leaves it, lit as the sound coming in reaches it.
     DelayTaps,
+    /// Chorus: each voice a strand swept by the LFO over the last two
+    /// seconds, left and right taps braided, lit where sound passed.
+    ChorusBraid,
     /// Vocoder: a bar per band, the voice's level there, on a frequency
     /// axis with the carrier's bands shifted by Formant.
     VocoderBands,
@@ -2070,6 +2073,10 @@ impl NodeDataTrait for SynthNodeData {
 
         if self.display == NodeDisplay::CompressorCurve {
             super::compressor_display::compressor_display(ui, node_id, graph, user_state, zoom);
+        }
+
+        if self.display == NodeDisplay::ChorusBraid {
+            super::chorus_display::chorus_display(ui, node_id, graph, user_state, zoom);
         }
 
         if self.display == NodeDisplay::DelayTaps {

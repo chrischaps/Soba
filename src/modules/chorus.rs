@@ -6,7 +6,7 @@
 //! mono input comes out wide, while a stereo input keeps its image.
 
 use crate::dsp::{
-    module_trait::{DspModule, ModuleCategory, ModuleInfo},
+    module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     context::ProcessContext,
     denormal::flush,
     parameter::ParameterDefinition,
@@ -36,7 +36,7 @@ const SHAPE_GLIDE_MS: f32 = 20.0;
 /// triangle (`triangle` = 1). Both start at 0 rising and peak at 1/4, so
 /// the morph never jumps.
 #[inline]
-fn lfo(phase: f32, triangle: f32) -> f32 {
+pub fn lfo(phase: f32, triangle: f32) -> f32 {
     let tri = 1.0 - 4.0 * ((phase + 0.25).fract() - 0.5).abs();
     if triangle >= 1.0 {
         return tri;
@@ -51,7 +51,7 @@ fn lfo(phase: f32, triangle: f32) -> f32 {
 /// 90° for two. A smaller offset would leave the right channel sweeping
 /// the same set of phases as the left once there are four voices.
 #[inline]
-fn voice_phases(slot: usize, voices: usize) -> (f32, f32) {
+pub fn voice_phases(slot: usize, voices: usize) -> (f32, f32) {
     let spacing = 1.0 / voices as f32;
     let left = slot as f32 * spacing;
     (left, left + 0.5 * spacing)
@@ -174,6 +174,9 @@ pub struct Chorus {
     mix_smooth: SmoothedValue,
     /// LFO shape, 0 = sine to 1 = triangle, smoothed so switching morphs.
     shape_smooth: SmoothedValue,
+    /// The rate and depth after CV at the end of the last block, for the display.
+    rate_now: f32,
+    depth_now: f32,
     /// Port definitions.
     ports: Vec<PortDefinition>,
     /// Parameter definitions.
@@ -198,6 +201,8 @@ impl Chorus {
             feedback_smooth: SmoothedValue::with_default_smoothing(0.0, sample_rate),
             mix_smooth: SmoothedValue::with_default_smoothing(0.5, sample_rate),
             shape_smooth: SmoothedValue::new(0.0, SHAPE_GLIDE_MS, sample_rate),
+            rate_now: 1.0,
+            depth_now: 0.5,
             ports: vec![
                 // Input ports
                 PortDefinition::input_with_default("in_l", "In L", SignalType::Audio, 0.0).describe("Left audio to thicken"),
@@ -246,6 +251,19 @@ impl Chorus {
             ],
         }
     }
+
+    /// Readout slots: the master LFO phase (0 to 1), the rate (Hz) and
+    /// depth (0 to 1) after CV, the shape (0 sine to 1 triangle), then for
+    /// each voice slot its gain and its left and right taps' phase offsets.
+    pub const READOUT_PHASE: usize = 0;
+    pub const READOUT_RATE: usize = 1;
+    pub const READOUT_DEPTH: usize = 2;
+    pub const READOUT_SHAPE: usize = 3;
+    pub const READOUT_VOICES: usize = 4;
+    /// Readout values per voice slot: gain, left offset, right offset.
+    pub const READOUT_PER_VOICE: usize = 3;
+    /// How many voice slots the readout carries.
+    pub const SLOTS: usize = VOICE_SLOTS;
 
     /// Port index constants.
     const PORT_IN_L: usize = 0;
@@ -378,6 +396,9 @@ impl DspModule for Chorus {
                 .unwrap_or(0.0);
             let modulated_depth = (depth_smoothed + depth_mod * 0.5).clamp(0.0, 1.0);
 
+            self.rate_now = modulated_rate;
+            self.depth_now = modulated_depth;
+
             // Advance the master LFO
             self.lfo_phase += modulated_rate / self.sample_rate;
             if self.lfo_phase >= 1.0 {
@@ -452,6 +473,21 @@ impl DspModule for Chorus {
         for voice in &mut self.voices {
             voice.settle();
         }
+    }
+
+    fn readout(&self, _params: &[f32]) -> Option<Readout> {
+        let mut readout = Readout::default();
+        readout.values[Self::READOUT_PHASE] = self.lfo_phase;
+        readout.values[Self::READOUT_RATE] = self.rate_now;
+        readout.values[Self::READOUT_DEPTH] = self.depth_now;
+        readout.values[Self::READOUT_SHAPE] = self.shape_smooth.current();
+        for (slot, voice) in self.voices.iter().enumerate() {
+            let at = Self::READOUT_VOICES + slot * Self::READOUT_PER_VOICE;
+            readout.values[at] = voice.gain.current();
+            readout.values[at + 1] = voice.phase_left.current();
+            readout.values[at + 2] = voice.phase_right.current();
+        }
+        Some(readout)
     }
 }
 
@@ -803,5 +839,37 @@ mod tests {
         assert_eq!(module.info().name, "Chorus");
         assert_eq!(module.ports().len(), 6);
         assert_eq!(module.parameters().len(), 7);
+    }
+
+    #[test]
+    fn test_readout_shows_the_sweep_and_the_voices() {
+        let mut chorus = Chorus::new();
+        chorus.prepare(48000.0, 256);
+        let ctx = ProcessContext::new(48000.0, 256);
+        let input = SignalBuffer::audio(256);
+        let mut rate_cv = SignalBuffer::control(256);
+        rate_cv.fill(1.0); // +50%
+        let depth_cv = SignalBuffer::control(256);
+        let mut outputs = vec![SignalBuffer::audio(256), SignalBuffer::audio(256)];
+        // Rate 2 Hz, depth 0.4, 10 ms, no feedback, three voices, half mix, triangle
+        let params = [2.0, 0.4, 10.0, 0.0, 2.0, 0.5, 1.0];
+        for _ in 0..200 {
+            chorus.process(&[&input, &input, &rate_cv, &depth_cv], &mut outputs, &params, &ctx);
+        }
+        let r = chorus.readout(&params).unwrap().values;
+        assert!((r[Chorus::READOUT_RATE] - 3.0).abs() < 1e-3);
+        assert!((r[Chorus::READOUT_DEPTH] - 0.4).abs() < 1e-3);
+        assert!((r[Chorus::READOUT_SHAPE] - 1.0).abs() < 1e-3);
+        assert!((0.0..1.0).contains(&r[Chorus::READOUT_PHASE]));
+        for slot in 0..Chorus::SLOTS {
+            let at = Chorus::READOUT_VOICES + slot * Chorus::READOUT_PER_VOICE;
+            if slot < 3 {
+                let (left, right) = voice_phases(slot, 3);
+                assert!((r[at] - 1.0).abs() < 1e-3, "voice {slot} is on");
+                assert!((r[at + 1] - left).abs() < 1e-3 && (r[at + 2] - right).abs() < 1e-3);
+            } else {
+                assert!(r[at] < 1e-3, "voice {slot} is off");
+            }
+        }
     }
 }

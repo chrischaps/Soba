@@ -2456,6 +2456,7 @@ knob Depth              "Depth" Modulatable
 knob Delay              "Delay" KnobOnly
 knob Feedback           "FB" KnobOnly
 knob Mix                "Mix" KnobOnly
+display ChorusBraid
 
 == fx.tape "Tape" finder="Tape" Effect
 in   In L               Audio    ConnectionOnly       inline=true  port

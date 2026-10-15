@@ -1,0 +1,140 @@
+{
+  "name": "Chorus close-up",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "util.clock",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "parameters": [
+        {
+          "name": "Tempo",
+          "type": "Number",
+          "value": 132.0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "module_id": "source.drum",
+      "position": [
+        0.0,
+        190.0
+      ],
+      "parameters": [
+        {
+          "name": "Type",
+          "type": "Select",
+          "value": 2
+        },
+        {
+          "name": "Tune",
+          "type": "Number",
+          "value": 5.0
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.7
+        },
+        {
+          "name": "Level",
+          "type": "Number",
+          "value": 0.9
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "module_id": "fx.chorus",
+      "position": [
+        330.0,
+        150.0
+      ],
+      "parameters": [
+        {
+          "name": "Rate",
+          "type": "Number",
+          "value": 0.7
+        },
+        {
+          "name": "Depth",
+          "type": "Number",
+          "value": 0.65
+        },
+        {
+          "name": "Delay",
+          "type": "Number",
+          "value": 12.0
+        },
+        {
+          "name": "Feedback",
+          "type": "Number",
+          "value": 0.2
+        },
+        {
+          "name": "Voices",
+          "type": "Select",
+          "value": 2
+        },
+        {
+          "name": "Mix",
+          "type": "Number",
+          "value": 0.5
+        },
+        {
+          "name": "Shape",
+          "type": "Select",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "module_id": "output.audio",
+      "position": [
+        720.0,
+        170.0
+      ],
+      "parameters": [
+        {
+          "name": "Volume",
+          "type": "Number",
+          "value": 0.6
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from_node": 1,
+      "from_port": "Gate",
+      "to_node": 2,
+      "to_port": "Trig"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Out",
+      "to_node": 3,
+      "to_port": "In L"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Out L",
+      "to_node": 4,
+      "to_port": "Left"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Out R",
+      "to_node": 4,
+      "to_port": "Right"
+    }
+  ],
+  "midi_mappings": [],
+  "frames": [],
+  "notes": []
+}

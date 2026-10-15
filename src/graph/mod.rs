@@ -41,6 +41,7 @@ mod arranger_display;
 pub mod arranger_follow;
 mod chord_chime;
 mod chord_ear;
+mod chorus_display;
 mod chord_grid;
 mod step_ear;
 mod step_grid;

@@ -81,6 +81,11 @@ MODULES = {
     "delay": Module("delay", "fx.delay", 1.0, 320, """
         -2.6 play
     """, palette=False),
+    # Toms on every beat through three voices: the braid lights in bursts
+    # where each hit passed, and slowly weaves on between them
+    "chorus": Module("chorus", "fx.chorus", 1.0, 320, """
+        -2.4 play
+    """, palette=False),
 }
 
 
