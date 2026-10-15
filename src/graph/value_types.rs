@@ -246,19 +246,20 @@ impl WidgetValueTrait for SynthValueType {
                     let selected = options.get(*value).map(|s| s.as_str()).unwrap_or("");
                     let width = steady_text::dropdown_width(ui, selected, 60.0 * zoom);
                     let combo = ui.add_enabled_ui(!locked, |ui| {
-                        ui.allocate_ui(egui::vec2(width, ui.spacing().interact_size.y), |ui| {
-                            egui::ComboBox::from_id_salt(param_name)
-                                .width(width)
-                                .truncate()
-                                .selected_text(selected)
-                                .show_ui(ui, |ui: &mut egui::Ui| {
-                                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                                    for (i, option) in options.iter().enumerate() {
-                                        ui.selectable_value(value, i, option);
-                                    }
-                                })
-                        })
-                        .inner
+                        // The row takes exactly `width`: a choice cut short can
+                        // lay out a hair wider than its room at some zooms (#284)
+                        let (rect, _) = ui.allocate_exact_size(egui::vec2(width, steady_text::dropdown_height(ui)), egui::Sense::hover());
+                        let mut slot = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(*ui.layout()));
+                        egui::ComboBox::from_id_salt(param_name)
+                            .width(width)
+                            .truncate()
+                            .selected_text(selected)
+                            .show_ui(&mut slot, |ui: &mut egui::Ui| {
+                                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                                for (i, option) in options.iter().enumerate() {
+                                    ui.selectable_value(value, i, option);
+                                }
+                            })
                     });
                     let response = combo.inner.response.on_disabled_hover_text("It follows another Arranger, and plays that one's Loop");
                     (name, response)

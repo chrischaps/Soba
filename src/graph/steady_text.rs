@@ -103,3 +103,11 @@ pub fn dropdown_width(ui: &Ui, selected: &str, least: f32) -> f32 {
     let text = text_width(ui, selected, &font) * 1.08;
     (text + spacing.icon_spacing + spacing.icon_width + 2.0 * spacing.button_padding.x).max(least)
 }
+
+/// How tall a dropdown is in `ui`, once [`steady_dropdowns`] has given it
+/// its padding: as tall as its text or arrow, and that padding.
+pub fn dropdown_height(ui: &Ui) -> f32 {
+    let font = TextStyle::Button.resolve(ui.style());
+    let drawn = ui.painter().layout_no_wrap("Ag".into(), font, Color32::WHITE).size().y;
+    drawn.max(ui.spacing().icon_width) + 2.0 * ui.spacing().button_padding.y
+}
