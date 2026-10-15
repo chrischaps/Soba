@@ -1,5 +1,6 @@
-"""Re-shoots the manual's interface pictures: the window, its menus and the
-tutorial's finished patch, each played and posed by a capture script.
+"""Re-shoots the manual's interface pictures: the window, its menus, the
+tutorial's finished patch and a chord played into the Chord Sequencer's
+popover, each played and posed by a capture script.
 
     python tools/showcase/manual_images.py [name ...]
     python tools/showcase/manual_images.py --check [name ...]
@@ -108,6 +109,26 @@ PICTURES = {
             0.5 rclick
             1.0 move 981 262 0.4
             1.6 wait
+        """,
+    ),
+    # Afterglow's Chord Sequencer, its steps aimed to y 262 so the popover
+    # opens below them in full: step 2 (Cadd9) right-clicked open and
+    # G# A C E held into it on the letter keys (H N , /), heard as Am/G#
+    # with E on top. Stopped, so the step highlight stays still
+    "chord-sequencer-play": dict(
+        patch="patches/afterglow.json",
+        crop=(745, 274, 1142, 774),
+        width=588,
+        cues="""
+            -3.0 aim 450 1900 1.0 0.0
+            -2.0 move 767 262 0.3
+            -1.5 rclick
+            -1.2 move 1500 900 0.2
+            -1.0 key H 3.0
+            -1.0 key N 3.0
+            -1.0 key Comma 3.0
+            -1.0 key Slash 3.0
+            0.0 wait
         """,
     ),
     "tutorial-complete-patch": dict(
