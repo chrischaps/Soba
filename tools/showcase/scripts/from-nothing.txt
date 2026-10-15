@@ -26,16 +26,16 @@
 10.6700 key Enter 0.05
 11.2700 still placed
 11.2700 layout placed
-11.5700 move 225.2 266.3 0.45
-12.1200 drag 270.3 140.7 0.65
-13.1200 move 225.2 246.3 0.45
-13.6700 drag 530.0 268.9 0.65
-14.6700 move 448.3 274.2 0.45
-15.2200 drag 800.0 179.5 0.65
-16.2200 move 759.5 412.7 0.45
-16.7700 drag 800.0 200.8 0.65
-17.7700 move 926.3 217.6 0.45
-18.3200 drag 990.0 200.8 0.65
+11.5700 move input.keyboard out:Pitch 0.45
+12.1200 drag osc.sine in:V/Oct 0.65
+13.1200 move input.keyboard out:Gate 0.45
+13.6700 drag mod.adsr in:Gate 0.65
+14.6700 move osc.sine out:Out 0.45
+15.2200 drag util.vca in:In 0.65
+16.2200 move mod.adsr out:Out 0.45
+16.7700 drag util.vca in:CV 0.65
+17.7700 move util.vca out:Out 0.45
+18.3200 drag output.audio in:Mono 0.65
 19.3200 still patched
 19.5200 move 158 21 0.7
 20.3000 press

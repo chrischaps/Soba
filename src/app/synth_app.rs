@@ -4341,7 +4341,8 @@ impl eframe::App for SynthApp {
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         if let Some(capture) = self.capture.as_mut() {
             let (graph, zoom) = (&self.graph_state.graph, self.graph_state.pan_zoom.zoom);
-            capture.prepare_input(ctx, raw_input, |part| super::capture_aim::locate(ctx, graph, zoom, part));
+            let annotations = &self.user_state.annotations;
+            capture.prepare_input(ctx, raw_input, |part| super::capture_aim::locate(ctx, graph, annotations, zoom, part));
         }
         // The wheel over an Arranger's timeline zooms and pans it, not the canvas
         crate::graph::claim_arranger_wheel(ctx, raw_input);

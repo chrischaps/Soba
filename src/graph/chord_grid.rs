@@ -507,6 +507,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
                 ui.spacing_mut().item_spacing.x = gap;
                 for _ in row_start..(row_start + 8).min(pattern.steps) {
                     let (rect, response) = ui.allocate_exact_size(cell, Sense::click_and_drag());
+                    super::marks::mark(ui.ctx(), node_id, format_args!("step:{}", cells.len() + 1), rect);
                     cells.push((rect, response.on_hover_text(HINT)));
                 }
             });

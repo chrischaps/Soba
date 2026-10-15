@@ -1013,6 +1013,7 @@ fn sections(
             continue;
         }
 
+        super::marks::mark(ui.ctx(), node_id, format_args!("section:{}", section + 1), shown);
         let response = ui
             .interact(shown, Id::new((node_id, "arranger-section", section)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand);
@@ -1303,6 +1304,7 @@ fn lane_rows(
         }
         let cue = song.cue(section, lane);
         let what = format!("{} · {lane_label}", section_name(graph, node_id, section));
+        super::marks::mark(ui.ctx(), node_id, format_args!("cell:{}:{}", lane + 1, section + 1), cell);
         let response = ui
             .interact(cell, Id::new((node_id, "arranger-cell", lane, section)), Sense::click_and_drag())
             .on_hover_cursor(CursorIcon::ResizeVertical);

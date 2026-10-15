@@ -423,7 +423,9 @@ pub(super) fn step_grid(
                 for _ in row_start..(row_start + 8).min(pattern.steps) {
                     let (rect, response) = ui
                         .allocate_exact_size(egui::vec2(step_size, step_size + 12.0 * zoom), Sense::click_and_drag());
-                    cells.push((egui::Rect::from_min_size(rect.min, egui::vec2(step_size, step_size)), response.on_hover_text(HINT)));
+                    let pad = egui::Rect::from_min_size(rect.min, egui::vec2(step_size, step_size));
+                    super::marks::mark(ui.ctx(), node_id, format_args!("step:{}", cells.len() + 1), pad);
+                    cells.push((pad, response.on_hover_text(HINT)));
                     ui.add_space(step_spacing);
                 }
             });

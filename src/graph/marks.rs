@@ -3,10 +3,11 @@
 //! wherever the face has put it: at any `--ppp`, after a row is added above
 //! it, in whichever frame the module has moved to.
 //!
-//! Knobs mark themselves as `knob:<parameter>`. A face marks the buttons a
-//! script might press, under the names [`FACE`] lists, and a module with a
-//! bypass switch marks it as `bypass`. Ports aren't marked here: they're
-//! found where egui_node_graph2 last drew their jacks.
+//! Knobs mark themselves as `knob:<parameter>`, as do the toggles and
+//! dropdowns an input draws beside its name. A face marks the parts a script
+//! might press, under the names [`FACE`] lists, and a module with a bypass
+//! switch marks it as `bypass`. Ports aren't marked here: they're found
+//! where egui_node_graph2 last drew their jacks.
 //!
 //! Marking costs nothing until a capture asks for it with [`start`].
 
@@ -18,17 +19,39 @@ use egui_node_graph2::NodeId;
 static MARKING: AtomicBool = AtomicBool::new(false);
 
 /// The names faces mark, by module: what a script can aim at beyond knobs,
-/// ports and the bypass switch.
+/// ports and the bypass switch. A part in `<angle brackets>` is a number
+/// counted from 1, so `step:<n>` is `step:1`, `step:2` and on, as far as the
+/// pattern goes. Steps and cells are the ones on show: the pattern being
+/// edited, the sections in the Arranger's view.
 pub const FACE: &[(&str, &[&str])] = &[
     ("source.sampler", &["file", "cue", "rec"]),
     ("source.chopper", &["rec"]),
-    ("seq.step", &["pattern:A", "pattern:B", "pattern:C", "pattern:D"]),
-    ("seq.trigger", &["pattern:A", "pattern:B", "pattern:C", "pattern:D"]),
+    ("seq.step", &["pattern:A", "pattern:B", "pattern:C", "pattern:D", "step:<n>"]),
+    ("seq.trigger", &["pattern:A", "pattern:B", "pattern:C", "pattern:D", "cell:<lane>:<step>", "accent:<step>"]),
+    ("seq.chord", &["step:<n>"]),
+    ("util.looper", &["pedal:Rec", "pedal:Stop", "pedal:Undo", "pedal:Clear"]),
+    ("seq.arranger", &["section:<n>", "cell:<lane>:<section>"]),
 ];
 
 /// The names a module of this kind's face marks.
 pub fn face_names(module_id: &str) -> &'static [&'static str] {
     FACE.iter().find(|(id, _)| *id == module_id).map_or(&[], |(_, names)| names)
+}
+
+/// Whether a module of this kind's face marks a name: `step:12` is one of
+/// `step:<n>`. Without regard to case, as [`marked`] finds it.
+pub fn is_face_name(module_id: &str, name: &str) -> bool {
+    face_names(module_id).iter().any(|pattern| {
+        let (mut want, mut got) = (pattern.split(':'), name.split(':'));
+        loop {
+            match (want.next(), got.next()) {
+                (None, None) => return true,
+                (Some(w), Some(g)) if w.starts_with('<') && g.parse::<usize>().is_ok_and(|n| n >= 1) => {}
+                (Some(w), Some(g)) if !w.starts_with('<') && w.eq_ignore_ascii_case(g) => {}
+                _ => return false,
+            }
+        }
+    })
 }
 
 /// From now on, parts are marked as they're drawn.
@@ -105,5 +128,21 @@ mod tests {
         }
         assert_eq!(face_names("source.sampler"), ["file", "cue", "rec"]);
         assert!(face_names("osc.sine").is_empty());
+    }
+
+    #[test]
+    fn a_numbered_part_is_one_of_its_pattern() {
+        assert!(is_face_name("seq.chord", "step:2"));
+        assert!(is_face_name("seq.chord", "STEP:16"));
+        assert!(is_face_name("seq.trigger", "cell:3:9"));
+        assert!(is_face_name("util.looper", "pedal:rec"));
+        assert!(is_face_name("source.sampler", "File"));
+        assert!(!is_face_name("seq.chord", "step:0"), "steps count from 1");
+        assert!(!is_face_name("seq.chord", "step:two"));
+        assert!(!is_face_name("seq.chord", "step:<n>"));
+        assert!(!is_face_name("seq.chord", "step"));
+        assert!(!is_face_name("seq.trigger", "cell:3"));
+        assert!(!is_face_name("seq.trigger", "cell:3:9:1"));
+        assert!(!is_face_name("osc.sine", "step:1"));
     }
 }

@@ -30,6 +30,14 @@ is drawn once it lands. So a knob is found once, at zoom 1 (patch point =
 pixel / ppp - the editor's top-left), and stays found however the shot is
 framed. Each example opens at zoom 1 with patch (0, 0) at the editor's
 top-left, below the toolbar.
+
+Better still, a cue aims at a module's part by name: `s.drag_knob(t,
+"filter.svf knob:Cutoff", 60, 4.0)`, `s.click(t, "fx.delay bypass")` or a
+cable dragged from "input.keyboard out:Pitch" to "osc.sine in:V/Oct". The
+app finds the part wherever it was last drawn, so nothing needs measuring
+(see src/app/capture_aim.rs for the names). Points are left for what isn't
+a module's: empty canvas, the toolbar, a menu's items (`by dx dy` from where
+the menu opened).
 """
 
 import subprocess
@@ -111,21 +119,23 @@ class Script:
             t += step * beat * length
         return t
 
-    def drag_knob(self, t, x, y, dy, dur, settle=0.35):
-        """Moves to a knob, then drags it up by `dy` points (down if
-        negative) over `dur` seconds. Knobs take 200 points for their whole
-        range. Returns the time the drag ends."""
-        self.at(t, f"move {x} {y} {settle}")
+    def drag_knob(self, t, knob, dy, dur, settle=0.35):
+        """Moves to a knob (a part, see `spot`), then drags it up by `dy`
+        points (down if negative) over `dur` seconds. Knobs take 200 points
+        for their whole range. Returns the time the drag ends."""
+        self.at(t, f"move {spot(knob)} {settle}")
         t += settle + 0.1
         self.at(t, "press")
         # Past egui's drag threshold first, so the knob starts at once
-        self.at(t + 0.02, f"move {x} {y - 4 * (1 if dy > 0 else -1)} 0.04")
-        self.at(t + 0.08, f"move {x} {y - dy} {dur}")
+        nudge = 4 * (1 if dy > 0 else -1)
+        self.at(t + 0.02, f"move by 0 {-nudge} 0.04")
+        self.at(t + 0.08, f"move by 0 {nudge - dy} {dur}")
         self.at(t + 0.1 + dur, "release")
         return t + 0.1 + dur
 
-    def click(self, t, x, y, travel=0.4):
-        self.at(t, f"move {x} {y} {travel}")
+    def click(self, t, target, travel=0.4):
+        """Moves to a part or point (see `spot`) and clicks it."""
+        self.at(t, f"move {spot(target)} {travel}")
         self.at(t + travel + 0.08, "press")
         self.at(t + travel + 0.16, "release")
         return t + travel + 0.16
@@ -134,13 +144,21 @@ class Script:
         return "\n".join(f"{t:.4f} {cue}" for t, cue in sorted(self.cues, key=lambda c: c[0])) + "\n"
 
 
+def spot(target):
+    """Where a pointer cue aims: a part of a module, named as capture
+    scripts name it ("filter.svf knob:Cutoff", "fx.delay bypass",
+    "util.vca in:CV", "by 0 -40" from the pointer), or a point (x, y) in
+    screen points."""
+    return target if isinstance(target, str) else f"{target[0]} {target[1]}"
+
+
 # --- Shots -----------------------------------------------------------------
 
 @shot("patches/basic-subtractive.json")
 def filter_sweep(s):
     """A bassline through the SVF while a hand opens the filter and adds
     resonance: the response curve and the sound move together."""
-    cutoff, res = (597, 348), (648, 348)
+    cutoff, res = "filter.svf knob:Cutoff", "filter.svf knob:Resonance"
     s.at(-0.8, "play").look(-0.8, (698, 345), 0.9, 0.05, "Source, Tone and Volume")
     s.at(-0.8, "param input.keyboard Octave -1")
     # C minor, sixteenths: Z=C X=D D=Eb B=G J=Bb ,=C+ ;=Eb+
@@ -151,10 +169,10 @@ def filter_sweep(s):
     s.at(0.0, "cursor on")
     s.at(1.5, "still filter-closed")
     # Cutoff is a log knob: 200 points span 20 Hz to 20 kHz
-    end = s.drag_knob(1.6, *s.on(cutoff), 60, 4.0)
-    end = s.drag_knob(end + 0.4, *s.on(res), 80, 2.2)
+    end = s.drag_knob(1.6, cutoff, 60, 4.0)
+    end = s.drag_knob(end + 0.4, res, 80, 2.2)
     s.at(end + 0.5, "still filter-open")
-    end = s.drag_knob(end + 1.0, *s.on(cutoff), -90, 3.4)
+    end = s.drag_knob(end + 1.0, cutoff, -90, 3.4)
     s.at(end + 0.3, "move %s %s 1.0" % s.on((150, 560)))
     s.at(t, "end")
 
@@ -189,7 +207,7 @@ def chords(s):
 def fm_bell(s):
     """One sine bending another's pitch: turning up the FM depth takes a
     pure tone to a bell to a clang."""
-    fm = (857, 494)   # the carrier's FM knob
+    fm = "osc.sine#2 knob:FM Depth"   # the carrier's
     s.at(-1.0, "play").look(-1.0, (790, 400), 0.8, 0.05, "Keyboard, Modulator, Carrier")
     # C major pentatonic, eighths at 84 bpm: Z=C X=D C=E B=G N=A ,=C+ .=D+ /=E+
     phrase = ["Comma", None, "N", None, "B", None, "C", "X",
@@ -200,46 +218,46 @@ def fm_bell(s):
     t = s.keys(t, 84, phrase, gate=0.5, step=0.5)
     s.at(0.0, "cursor on")
     # FM Depth: 0 to 5 over 200 points, starting at 2.5
-    end = s.drag_knob(3.6, *s.on(fm), 80, 4.5)
+    end = s.drag_knob(3.6, fm, 80, 4.5)
     # Into the gap between the frames, so no tooltip shows
     s.at(end + 0.1, "move %s %s 0.4" % s.on((778, 600)))
     s.at(end + 0.6, "still fm-bright")
-    end = s.drag_knob(12.6, *s.on(fm), -150, 5.0)
+    end = s.drag_knob(12.6, fm, -150, 5.0)
     s.at(end + 0.3, "move %s %s 1.2" % s.on((140, 560)))
     s.at(end + 1.6, "still fm-pure")
     s.at(t + 2.0, "end")
 
 
-# How far below the Sync selector its first item, Off, opens (screen points)
-SYNC_OFF = 33
+# Where the Sync dropdown's first item, Off, opens from the middle of the
+# dropdown (screen points)
+SYNC_OFF = (-8, 33)
 
 
 @shot("patches/rhythmic-sequence.json")
 def footswitch(s):
     """The sequence plays itself; a hand stomps the distortion out and back
     in, puts the delay on tape and feeds it back."""
-    power, drive = (1508, 88), (1520, 228)
-    tape, sync = (1762, 257), (1784, 228)
-    time, feedback, mix = (1733, 338), (1784, 338), (1837, 338)
+    power, drive = "fx.distortion bypass", "fx.distortion knob:Drive"
+    tape, sync = "fx.delay knob:Tape", "fx.delay knob:Sync"
+    time, feedback, mix = "fx.delay knob:Time", "fx.delay knob:Feedback", "fx.delay knob:Mix"
     s.at(-2.0, "play").look(-2.0, (1560, 360), 0.88, 0.05, "Bass, Drive and echo")
     s.at(0.0, "cursor on")
     # Distortion's power switch: out, then back in
-    s.click(1.6, *s.on(power), travel=0.7)
+    s.click(1.6, power, travel=0.7)
     s.at(3.2, "still distortion-bypassed")
-    s.click(4.6, *s.on(power), travel=0.2)
-    end = s.drag_knob(5.6, *s.on(drive), 60, 2.6)
+    s.click(4.6, power, travel=0.2)
+    end = s.drag_knob(5.6, drive, 60, 2.6)
     # The delay goes to tape
-    end = s.click(end + 0.5, *s.on(tape), travel=0.6)
-    end = s.drag_knob(end + 0.6, *s.on(feedback), 80, 3.0)
-    end = s.drag_knob(end + 0.3, *s.on(mix), 40, 1.4)
+    end = s.click(end + 0.5, tape, travel=0.6)
+    end = s.drag_knob(end + 0.6, feedback, 80, 3.0)
+    end = s.drag_knob(end + 0.3, mix, 40, 1.4)
     s.at(end + 1.0, "still tape-echoes")
     # Unsync it, so the Time knob turns freely: Off heads Sync's list
-    end = s.click(end + 1.6, *s.on(sync), travel=0.5)
-    x, y = s.on(sync)
-    end = s.click(end + 0.5, x - 8, y + SYNC_OFF, travel=0.35)
+    end = s.click(end + 1.6, sync, travel=0.5)
+    end = s.click(end + 0.5, "by %s %s" % SYNC_OFF, travel=0.35)
     # On tape, changing the time bends the echoes' pitch
-    end = s.drag_knob(end + 0.4, *s.on(time), -30, 1.1, settle=0.5)
-    end = s.drag_knob(end + 0.5, *s.on(time), 45, 1.6, settle=0.2)
+    end = s.drag_knob(end + 0.4, time, -30, 1.1, settle=0.5)
+    end = s.drag_knob(end + 0.5, time, 45, 1.6, settle=0.2)
     # Off into empty canvas, so no tooltip lingers
     s.at(end + 0.2, "move %s %s 0.9" % s.on((1500, 640)))
     s.at(end + 1.6, "still tape-time")
@@ -299,25 +317,22 @@ def from_nothing(s):
     s.at(t + 0.3, "still placed")
     s.at(t + 0.3, "layout placed")
 
-    def jack(node, dx, dy):
-        return s.on((node[0] + dx, node[1] + dy))
-
     cables = [
-        (jack(kb, 185.2, 121.6), jack(osc, 0.3, 41.0)),     # Pitch -> V/Oct
-        (jack(kb, 185.2, 101.6), jack(env, 0, 44.2)),       # Gate -> Gate
-        (jack(osc, 178.3, 174.5), jack(vca, 0, 44.8)),      # Out -> In
-        (jack(env, 229.5, 188.0), jack(vca, 0, 66.1)),      # Out -> CV
-        (jack(vca, 126.3, 82.9), jack(out, 0, 86.1)),       # Out -> Mono
+        ("input.keyboard out:Pitch", "osc.sine in:V/Oct"),
+        ("input.keyboard out:Gate", "mod.adsr in:Gate"),
+        ("osc.sine out:Out", "util.vca in:In"),
+        ("mod.adsr out:Out", "util.vca in:CV"),
+        ("util.vca out:Out", "output.audio in:Mono"),
     ]
     t += 0.6
-    for (x0, y0), (x1, y1) in cables:
-        s.at(t, f"move {x0:.1f} {y0:.1f} 0.45")
+    for start, end in cables:
+        s.at(t, f"move {start} 0.45")
         t += 0.55
-        s.at(t, f"drag {x1:.1f} {y1:.1f} 0.65")
+        s.at(t, f"drag {end} 0.65")
         t += 0.65 + 0.1 + 0.25
     s.at(t, "still patched")
     # Play, on the toolbar
-    t = s.click(t + 0.2, *PLAY, travel=0.7) + 0.4
+    t = s.click(t + 0.2, PLAY, travel=0.7) + 0.4
     s.at(t, "move %s %s 0.8" % s.on((1100, 470)))
     # First notes: a C major pentatonic tune, Z=C X=D C=E B=G N=A ,=C+
     tune = ["Z", "C", "B", ("Comma", 2), "N", "B", None,

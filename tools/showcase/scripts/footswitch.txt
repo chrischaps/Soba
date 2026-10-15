@@ -1,47 +1,47 @@
 -2.0000 play
 -2.0000 camera -827.8 -54.5 0.88 0.05   # Bass, Drive and echo
 0.0000 cursor on
-1.6000 move 573.6 133.4 0.7
+1.6000 move fx.distortion bypass 0.7
 2.3800 press
 2.4600 release
 3.2000 still distortion-bypassed
-4.6000 move 573.6 133.4 0.2
+4.6000 move fx.distortion bypass 0.2
 4.8800 press
 4.9600 release
-5.6000 move 584.1 256.6 0.35
+5.6000 move fx.distortion knob:Drive 0.35
 6.0500 press
-6.0700 move 584.1 252.60000000000002 0.04
-6.1300 move 584.1 196.60000000000002 2.6
+6.0700 move by 0 -4 0.04
+6.1300 move by 0 -56 2.6
 8.7500 release
-9.2500 move 797.1 282.1 0.6
+9.2500 move fx.delay knob:Tape 0.6
 9.9300 press
 10.0100 release
-10.6100 move 816.5 353.4 0.35
+10.6100 move fx.delay knob:Feedback 0.35
 11.0600 press
-11.0800 move 816.5 349.4 0.04
-11.1400 move 816.5 273.4 3.0
+11.0800 move by 0 -4 0.04
+11.1400 move by 0 -76 3.0
 14.1600 release
-14.4600 move 863.1 353.4 0.35
+14.4600 move fx.delay knob:Mix 0.35
 14.9100 press
-14.9300 move 863.1 349.4 0.04
-14.9900 move 863.1 313.4 1.4
+14.9300 move by 0 -4 0.04
+14.9900 move by 0 -36 1.4
 16.4100 release
 17.4100 still tape-echoes
-18.0100 move 816.5 256.6 0.5
+18.0100 move fx.delay knob:Sync 0.5
 18.5900 press
 18.6700 release
-19.1700 move 808.5 289.6 0.35
+19.1700 move by -8 33 0.35
 19.6000 press
 19.6800 release
-20.0800 move 771.6 353.4 0.5
+20.0800 move fx.delay knob:Time 0.5
 20.6800 press
-20.7000 move 771.6 357.4 0.04
-20.7600 move 771.6 383.4 1.1
+20.7000 move by 0 4 0.04
+20.7600 move by 0 26 1.1
 21.8800 release
-22.3800 move 771.6 353.4 0.2
+22.3800 move fx.delay knob:Time 0.2
 22.6800 press
-22.7000 move 771.6 349.4 0.04
-22.7600 move 771.6 308.4 1.6
+22.7000 move by 0 -4 0.04
+22.7600 move by 0 -41 1.6
 24.3800 release
 24.5800 move 566.6 619.1 0.9
 25.9800 still tape-time

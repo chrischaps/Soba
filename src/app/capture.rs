@@ -55,6 +55,8 @@
 //!                                   # drawn: see capture_aim for the names
 //! 3.0  move osc.sine#2 knob:Detune  # a knob's dial; in:CV, out:Out a jack
 //! 3.0  move fx.eq 234 135 0.3       # patch points from a module's corner
+//! 3.0  move seq.chord step:2 0.3    # a step, cell, pedal or section
+//! 3.0  move frame:Shape 0.3         # a frame's title bar, or x y from its corner
 //! 3.0  move by 0 -60 2.0            # from where the pointer is
 //! 3.5  drag 500 340 0.8             # press, glide, release (to any of
 //!                                   # the same spots)

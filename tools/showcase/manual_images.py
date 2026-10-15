@@ -19,9 +19,13 @@ held, a menu opened, a key down) and what to keep of the window:
 Every picture is filmed at 2 pixels per point, scaled down with Lanczos to
 its width and saved as a 256-colour palette, as the recipe images are
 (unless it says palette=False).
-Pointer positions in the cues are in window points, worked out from a still
-(pixel / 2): fit always frames a patch the same way in the same window, so
-they land on the same spot every time.
+The cues aim at what they press by name where they can: a Chord Sequencer's
+`step:2`, a frame's title bar (see src/app/capture_aim.rs). A menu's items
+are aimed at from where it opened (`move by dx dy`). What's left in window
+points, worked out from a still (pixel / 2), is empty canvas where a menu is
+opened, since the crop around the menu is in window points too: fit always
+frames a patch the same way in the same window, so they land on the same
+spot every time.
 
 --check films each one the same way but writes nothing, and lists the
 pictures that no longer match the build. The overview shows the toolbar's
@@ -51,9 +55,10 @@ from recipe_images import EXE, IMAGES, ROOT, changed, crop_box
 PPP = 2.0
 SIZE = (3600, 2100)
 
-# First Sound fitted in the 3600x2100 window: its Shape frame's title bar
-# runs along y 221 from x 794 to 1243, and the canvas below the Audio Output
-# is empty from y 530. A menu opens with its top left at the pointer
+# First Sound fitted in the 3600x2100 window: the canvas below the Audio
+# Output is empty from y 530, and the Shape frame's floor is empty just below
+# its title bar, 44 patch points down from its corner. A menu opens with its
+# top left at the pointer
 PICTURES = {
     "interface-overview": dict(
         patch="patches/lush-pad.json",
@@ -82,8 +87,8 @@ PICTURES = {
             0.0 cursor on
             0.0 move 1350 560 0.3
             0.5 rclick
-            0.8 move 1385 646 0.4
-            1.2 move 1395 646 0.2
+            0.8 move by 35 86 0.4
+            1.2 move by 10 0 0.2
             1.8 wait
         """,
     ),
@@ -112,9 +117,9 @@ PICTURES = {
             -2.0 fit
             -1.5 key Z 4.0
             0.0 cursor on
-            0.0 move 880 221 0.3
+            0.0 move frame:Shape 85.82 44.2 0.3
             0.5 rclick
-            1.0 move 981 262 0.4
+            1.0 move by 101 41 0.4
             1.6 wait
         """,
     ),
@@ -127,8 +132,8 @@ PICTURES = {
         crop=(745, 274, 1142, 774),
         width=588,
         cues="""
-            -3.0 aim 450 1900 1.0 0.0
-            -2.0 move 767 262 0.3
+            -3.0 aim 451.4 1920.9 1.0 0.0
+            -2.0 move seq.chord step:2 0.3
             -1.5 rclick
             -1.2 move 1500 900 0.2
             -1.0 key H 3.0

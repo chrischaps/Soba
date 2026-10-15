@@ -8,20 +8,34 @@
 //! move by 0 -60 2.0                    # from where the pointer is
 //! move source.sampler file 0.3         # the middle of a face's button
 //! move osc.sine#2 knob:Detune 0.3      # a knob's dial
+//! move fx.delay knob:Sync 0.3          # an input's toggle or dropdown
+//! move seq.chord step:2 0.3            # a numbered part: steps, cells, sections
 //! move vca in:CV 0.3                   # a jack: in:, out:, or port: for either
 //! move fx.eq 234 135 0.3               # patch points from the module's corner
+//! move frame:Drive and echo 0.3        # the middle of a frame's title bar
+//! move frame:Shape 86 17 0.3           # patch points from a frame's corner
 //! ```
 //!
 //! A module is named as `param` names it: its registry id, `#n` for the nth
-//! of its kind. Knobs are `knob:<parameter>`, and a module with a bypass
-//! switch has `bypass`; the other names a face marks are listed in
-//! [`marks::FACE`]. A name the module can't have fails as the script loads.
+//! of its kind. Knobs (and toggles and dropdowns) are `knob:<parameter>`,
+//! and a module with a bypass switch has `bypass`; the other names a face
+//! marks are listed in [`marks::FACE`]. A name the module can't have fails
+//! as the script loads.
+//!
+//! A frame is named by its title, which runs to the numbers: given one (a
+//! glide's length) or none, the pointer goes to the middle of its title
+//! bar, where a right-click opens its menu; given an x y first, that far
+//! from its corner.
 
 use eframe::egui::{self, Pos2, Vec2};
 use egui_node_graph2::{drawn_port_rect, AnyParameterId, NodeId};
 
 use crate::dsp::bypass::can_bypass;
+use crate::graph::annotations::{Annotation, Annotations};
 use crate::graph::{annotation_ui, catalog, marks, SynthGraph};
+
+/// How a frame is named where a module would be: `frame:<title>`.
+const FRAME: &str = "frame:";
 
 /// Where a pointer cue goes.
 #[derive(Debug, Clone, PartialEq)]
@@ -34,7 +48,8 @@ pub enum Spot {
     Part(Part),
 }
 
-/// A part of the `nth` module of a kind.
+/// A part of the `nth` module of a kind, or of a frame when `module` is
+/// `frame:<title>`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Part {
     pub module: String,
@@ -44,7 +59,8 @@ pub struct Part {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PartAt {
-    /// A knob, jack or face button, by name.
+    /// A knob, jack or face button, by name. A frame's is `title`, its
+    /// title bar.
     Named(String),
     /// Patch points from the module's top-left corner.
     Offset(Vec2),
@@ -52,11 +68,21 @@ pub enum PartAt {
 
 impl std::fmt::Display for Part {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} #{}", self.module, self.nth + 1)?;
+        match self.frame() {
+            Some(_) => write!(f, "{}", self.module)?,
+            None => write!(f, "{} #{}", self.module, self.nth + 1)?,
+        }
         match &self.at {
             PartAt::Named(name) => write!(f, " {name}"),
             PartAt::Offset(v) => write!(f, " ({}, {})", v.x, v.y),
         }
+    }
+}
+
+impl Part {
+    /// The frame's title, if it's a frame's part.
+    pub fn frame(&self) -> Option<&str> {
+        self.module.strip_prefix(FRAME)
     }
 }
 
@@ -84,6 +110,20 @@ pub fn parse_spot(words: &[&str]) -> Result<(Spot, Vec<f64>), &'static str> {
         let [x, y, rest @ ..] = n.as_slice() else { return Err("missing value") };
         return Ok((Spot::By(Vec2::new(*x as f32, *y as f32)), rest.to_vec()));
     }
+    if let Some(title) = first.strip_prefix(FRAME) {
+        // Titles have spaces too, and colons: the words up to the numbers
+        let title_len = words[1..].iter().take_while(|w| number(w).is_none()).count();
+        let title = std::iter::once(title).chain(words[1..=title_len].iter().copied()).collect::<Vec<_>>().join(" ");
+        if title.is_empty() {
+            return Err("missing frame title");
+        }
+        let n = numbers(&words[1 + title_len..])?;
+        let (at, rest) = match n.as_slice() {
+            [x, y, rest @ ..] => (PartAt::Offset(Vec2::new(*x as f32, *y as f32)), rest.to_vec()),
+            _ => (PartAt::Named("title".into()), n),
+        };
+        return Ok((Spot::Part(Part { module: format!("{FRAME}{title}"), nth: 0, at }), rest));
+    }
     let (module, nth) = module_ref(first)?;
     // A part's name may have spaces, as an input's does: the words up to
     // the numbers
@@ -103,6 +143,10 @@ pub fn parse_spot(words: &[&str]) -> Result<(Spot, Vec<f64>), &'static str> {
 /// Checks a part against what a module of its kind has, so a misspelt
 /// script fails as it loads instead of partway through a long film.
 pub fn check(part: &Part) -> Result<(), String> {
+    // Which frames there are is the patch's to say, once it's open
+    if part.frame().is_some() {
+        return Ok(());
+    }
     let spec = catalog::module(&part.module).ok_or_else(|| format!("no module kind {}", part.module))?;
     let PartAt::Named(name) = &part.at else { return Ok(()) };
     let is = |a: &str, b: &str| a.eq_ignore_ascii_case(b);
@@ -114,7 +158,7 @@ pub fn check(part: &Part) -> Result<(), String> {
         Some(("port", jack)) => spec.ports.iter().any(|p| is(p.name, jack)) || spec.parameters.iter().any(|p| is(p.name, jack)),
         _ => {
             (is(name, "bypass") && can_bypass(spec.info.category, &spec.ports))
-                || marks::face_names(&part.module).iter().any(|n| is(n, name))
+                || marks::is_face_name(&part.module, name)
         }
     };
     if found {
@@ -131,7 +175,10 @@ pub fn check(part: &Part) -> Result<(), String> {
 }
 
 /// Where a part is on screen now: the middle of where it was last drawn.
-pub fn locate(ctx: &egui::Context, graph: &SynthGraph, zoom: f32, part: &Part) -> Result<Pos2, String> {
+pub fn locate(ctx: &egui::Context, graph: &SynthGraph, annotations: &Annotations, zoom: f32, part: &Part) -> Result<Pos2, String> {
+    if let Some(title) = part.frame() {
+        return locate_frame(annotations, zoom, title, &part.at);
+    }
     let node_id = graph
         .nodes
         .iter()
@@ -151,6 +198,25 @@ pub fn locate(ctx: &egui::Context, graph: &SynthGraph, zoom: f32, part: &Part) -
     };
     rect.map(|r| r.center()).ok_or_else(|| {
         format!("finds no {name} drawn on {} #{}: it shows {}", part.module, part.nth + 1, marks::names(ctx, node_id).join(", "))
+    })
+}
+
+/// Where a frame's part is: its title bar, or a point from its corner.
+fn locate_frame(annotations: &Annotations, zoom: f32, title: &str, at: &PartAt) -> Result<Pos2, String> {
+    let frames = || {
+        annotations.iter().filter_map(|(id, a)| match a {
+            Annotation::Frame(frame) => Some((id, frame)),
+            Annotation::Note(_) => None,
+        })
+    };
+    let (id, _) = frames().find(|(_, f)| f.title.eq_ignore_ascii_case(title)).ok_or_else(|| {
+        let titles: Vec<&str> = frames().map(|(_, f)| f.title.as_str()).collect();
+        format!("finds no frame titled {title}: the patch has {}", titles.join(", "))
+    })?;
+    let rect = annotations.drawn.get(&id).ok_or_else(|| format!("finds the frame {title} isn't on show"))?;
+    Ok(match at {
+        PartAt::Offset(v) => rect.min + *v * zoom,
+        PartAt::Named(_) => Pos2::new(rect.center().x, rect.top() + annotation_ui::FRAME_TITLE_BAND * zoom / 2.0),
     })
 }
 
@@ -194,6 +260,12 @@ mod tests {
         assert!(spot("fx.eq knob:Gain 0.3 high").is_err());
         assert!(spot("400").is_err());
         assert!(spot("by 3").is_err());
+        // A frame's title runs to the numbers
+        let frame = |title: &str, at| part(&format!("frame:{title}"), 0, at);
+        assert_eq!(spot("frame:Drive and echo 0.3"), Ok((frame("Drive and echo", named("title")), vec![0.3])));
+        assert_eq!(spot("frame:Shape"), Ok((frame("Shape", named("title")), vec![])));
+        assert_eq!(spot("frame:Score: three Arrangers 86 17 0.3"), Ok((frame("Score: three Arrangers", PartAt::Offset(Vec2::new(86.0, 17.0))), vec![0.3])));
+        assert!(spot("frame: 0.3").is_err());
     }
 
     #[test]
@@ -204,6 +276,11 @@ mod tests {
         assert!(check(&named("osc.sine", "knob:Detune")).is_ok());
         assert!(check(&named("filter.svf", "in:Cutoff")).is_ok(), "an input named for its parameter");
         assert!(check(&named("fx.delay", "bypass")).is_ok());
+        assert!(check(&named("fx.delay", "knob:Sync")).is_ok(), "a dropdown is aimed at as a knob");
+        assert!(check(&named("seq.chord", "step:2")).is_ok());
+        assert!(check(&named("seq.chord", "step:0")).is_err());
+        let err = check(&named("util.looper", "pedal:Play")).unwrap_err();
+        assert!(err.contains("pedal:Rec"), "{err}");
         let err = check(&named("source.sampler", "fil")).unwrap_err();
         assert!(err.contains("file") && err.contains("knob:"), "{err}");
         assert!(check(&named("osc.sine", "bypass")).is_err(), "an oscillator has no bypass switch");

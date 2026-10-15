@@ -294,6 +294,7 @@ fn accent_row(
             painter.circle_filled(c, 1.1 * z, theme::background::GRID_MAJOR.gamma_multiply(fade));
         }
 
+        super::marks::mark(ui.ctx(), node_id, format_args!("accent:{}", step + 1), cell);
         let response = ui
             .interact(cell, Id::new((node_id, "trigger-accent", step)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand)
@@ -397,6 +398,7 @@ fn lane_rows(
             painter.vline(x, block.y_range().shrink(1.0 * z), Stroke::new(1.2 * z, orange.gamma_multiply(0.8)));
         }
 
+        super::marks::mark(ui.ctx(), node_id, format_args!("cell:{}:{}", lane + 1, step + 1), cell);
         let response = ui
             .interact(cell, Id::new((node_id, "trigger-step", lane, step)), Sense::click_and_drag())
             .on_hover_cursor(CursorIcon::PointingHand);
