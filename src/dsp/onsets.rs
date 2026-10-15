@@ -315,7 +315,7 @@ pub(crate) mod tests {
     }
 
     /// Adds `hit` at `at` seconds into `out`, at `level`.
-    fn add_hit(out: &mut [f32], hit: Hit, at: f32, level: f32, noise: &mut Noise) {
+    pub(crate) fn add_hit(out: &mut [f32], hit: Hit, at: f32, level: f32, noise: &mut Noise) {
         let start = (at * RATE).round() as usize;
         let mut phase = 0.0f32;
         for (n, s) in out[start..].iter_mut().enumerate().take((0.6 * RATE) as usize) {

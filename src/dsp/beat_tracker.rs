@@ -25,6 +25,19 @@
 //! a little each frame, hurrying or dawdling but never stepping back, so a
 //! fill or a flam doesn't make the dance jerk.
 //!
+//! **On the beat, not the and.** A broken beat can hit harder between the
+//! beats than on them: Canopy's kick lands on one, the and of two and the
+//! and of three, and its bass with it. But the snare still lands on two and
+//! four, so the tracker listens for that too. A rise in the upper bands
+//! that the lowest doesn't share is a snare or a clap, not a kick. Taken in
+//! turns a beat apart, one beat added and the next taken away, a snare on
+//! two and four adds up while a hat on every beat cancels out. The clock
+//! leans toward whichever of its tooth and the one half a beat away has
+//! more of that, slowly, and more slowly the less there is to hear.
+//! Leaning hard enough, it turns to the beat there; leaning the other way,
+//! the comb needs more to pull it onto the and. Music without a backbeat
+//! leans neither way.
+//!
 //! **Only when there's one.** It claims a beat once the music has been
 //! hitting for a couple of seconds and one tempo stands clear of the rest,
 //! and lets go when it stops hitting. A drone, a pad or silence has none.
@@ -88,6 +101,27 @@ const COMB_MOST: usize = (LONGEST_FOLLOWED / FRAME_SECONDS) as usize + 2;
 /// the clock, unless a tooth elsewhere catches this many times as much.
 const STICK: f32 = 0.15;
 const HOLD: f32 = 1.3;
+/// The backbeat: how far the upper bands rose past this many times the
+/// lowest band's rise, a snare or a clap but not a kick...
+const BACKBEAT_LOW: f32 = 2.0;
+/// ...taken in turns over this many beats, each worth this much of the one
+/// after it.
+const BACKBEAT_BEATS: usize = 12;
+const BACKBEAT_FADE: f32 = 0.97;
+/// How much more backbeat there is half a beat from the clock's tooth than
+/// on it counts by its log, up to this many times either way...
+const BACKBEAT_MOST: f32 = 4.0;
+/// ...past this share of the tooth's catch, so a whisper of one isn't
+/// heard as a lot more than none.
+const BACKBEAT_FLOOR: f32 = 0.05;
+/// The clock leans toward it, settling over this long, in seconds, once
+/// the backbeat is [`BACKBEAT_CLEAR`] of the tooth's catch, and more slowly
+/// as it fades: a song's snare stays where it was through a breakdown.
+const LEAN_SECONDS: f32 = 4.0;
+const BACKBEAT_CLEAR: f32 = 0.25;
+/// Leaning past this (twice the backbeat, as a log), the clock turns to
+/// the beat half a beat away.
+const TURN: f32 = std::f32::consts::LN_2;
 /// A hit is measured in the frame it lands in, on average half a frame
 /// before that frame ends.
 const LATENCY_FRAMES: f32 = 0.5;
@@ -142,6 +176,8 @@ pub struct BeatTracker {
 struct Memory {
     /// The onset strength, and less its running mean.
     strength: [f32; HISTORY],
+    /// How much of each frame's rise sounds like a snare.
+    backbeat: [f32; HISTORY],
     centered: [f32; HISTORY],
     /// The centered strength correlated with itself, lag by lag.
     correlation: [f32; LAGS],
@@ -160,6 +196,12 @@ struct Beat {
     /// How far the last frame moved it, so a block between frames can be
     /// read part way.
     step: f64,
+    /// How much more backbeat lies half a beat from the clock's tooth than
+    /// on it, as a log, learned while the clock is on that tooth.
+    lean: f32,
+    /// While it turns half a beat to the backbeat, where in the beat it's
+    /// headed.
+    heading: Option<f64>,
 }
 
 impl Default for BeatTracker {
@@ -210,6 +252,7 @@ impl BeatTracker {
             beat: None,
             memory: Box::new(Memory {
                 strength: [0.0; HISTORY],
+                backbeat: [0.0; HISTORY],
                 centered: [0.0; HISTORY],
                 correlation: [0.0; LAGS],
                 scores: [0.0; CANDIDATES],
@@ -234,6 +277,7 @@ impl BeatTracker {
         if self.frames > 0 {
             let memory = &mut *self.memory;
             memory.strength.fill(0.0);
+            memory.backbeat.fill(0.0);
             memory.centered.fill(0.0);
             memory.correlation.fill(0.0);
             memory.scores.fill(0.0);
@@ -278,7 +322,7 @@ impl BeatTracker {
 
     /// Measures a frame's onset strength and moves the beat on.
     fn frame(&mut self) {
-        let strength = self.strength();
+        let (strength, backbeat) = self.strength();
         self.frames += 1;
         let now = self.frames % HISTORY;
 
@@ -294,6 +338,7 @@ impl BeatTracker {
         // passage doesn't look like every tempo at once
         let memory = &mut *self.memory;
         memory.strength[now] = strength;
+        memory.backbeat[now] = backbeat;
         // Smoothed over three frames, so hits pushed or swung a little
         // still line up
         let at = |back: usize| memory.strength[(now + HISTORY - back) % HISTORY];
@@ -316,15 +361,18 @@ impl BeatTracker {
         let sure = self.sure as f32 * FRAME_SECONDS >= SURE_SECONDS;
         let doubtful = self.doubt as f32 * FRAME_SECONDS >= SURE_SECONDS;
         self.beat = match (self.beat, chosen) {
-            (None, Some((frames, _))) if heard_enough && sure => Some(Beat { frames, trim: 0.0, position: self.phase(frames, None) as f64, step: 0.0 }),
+            (None, Some((frames, _))) if heard_enough && sure => {
+                let (phase, _) = self.phase(frames, None);
+                Some(Beat { frames, trim: 0.0, position: phase as f64, step: 0.0, lean: 0.0, heading: None })
+            }
             (Some(beat), Some((frames, _))) if !quiet && !doubtful => Some(self.follow(beat, frames)),
             _ => None,
         };
     }
 
     /// This frame's onset strength: how far the bands rose together, in dB,
-    /// since the last frame.
-    fn strength(&mut self) -> f32 {
+    /// since the last frame. And how much of that sounds like a snare.
+    fn strength(&mut self) -> (f32, f32) {
         let mut db = [0.0f32; 4];
         for (db, peak) in db.iter_mut().zip(&mut self.peaks) {
             *db = 20.0 * peak.max(1e-9).log10();
@@ -335,13 +383,14 @@ impl BeatTracker {
         let floor = (self.loudest - FLOOR_DB).max(SILENCE_DB);
         // A band's rise counts as much as the band is loud, so a quiet hat
         // on the offbeat isn't heard as a kick on the beat
-        let mut rise = 0.0;
-        for ((now, before), weight) in db.iter().zip(&mut self.levels).zip(BAND_WEIGHTS) {
+        let mut rises = [0.0; 4];
+        for (b, ((now, before), weight)) in db.iter().zip(&mut self.levels).zip(BAND_WEIGHTS).enumerate() {
             let loud = ((now - floor) / FLOOR_DB).clamp(0.0, 1.0);
-            rise += weight * loud * (now.max(floor) - before.max(floor)).max(0.0);
+            rises[b] = weight * loud * (now.max(floor) - before.max(floor)).max(0.0);
             *before = *now;
         }
-        rise
+        let [low, upper @ ..] = rises;
+        (rises.iter().sum(), (upper.iter().sum::<f32>() - BACKBEAT_LOW * low).max(0.0))
     }
 
     /// The correlation at a lag of `lag` frames, read between whole frames,
@@ -408,6 +457,11 @@ impl BeatTracker {
     /// with a tent two frames wide, so a hit a little early or late still
     /// counts.
     fn strength_back(&self, back: f32) -> f32 {
+        self.back(&self.memory.strength, back)
+    }
+
+    /// `signal` `back` frames before now, read as [`Self::strength_back`] reads it.
+    fn back(&self, signal: &[f32; HISTORY], back: f32) -> f32 {
         let centre = back.floor() as isize;
         let mut sum = 0.0;
         for k in centre - 1..=centre + 2 {
@@ -415,17 +469,24 @@ impl BeatTracker {
                 continue;
             }
             let weight = (1.0 - (k as f32 - back).abs() / 2.0).max(0.0);
-            sum += weight * self.memory.strength[(self.frames + HISTORY - k as usize) % HISTORY];
+            sum += weight * signal[(self.frames + HISTORY - k as usize) % HISTORY];
         }
         sum
     }
 
     /// How far through a beat of `frames` it is now, 0 to 1: where a comb
-    /// with a tooth each beat catches the most onset strength. With the
-    /// clock's phase `near`, the best tooth near it, unless one elsewhere
-    /// catches clearly more: music with as much on the offbeat as the beat
-    /// would otherwise have the dance hopping between them.
-    fn phase(&self, frames: f32, near: Option<f64>) -> f32 {
+    /// with a tooth each beat catches the most onset strength. And, from the
+    /// clock's tooth, how much more backbeat lies half a beat away (see
+    /// [`Beat::lean`]) and how clearly it's heard, 0 to 1.
+    ///
+    /// With the clock's phase and lean `near`, the best tooth near it,
+    /// unless one elsewhere catches clearly more: music with as much on the
+    /// offbeat as the beat would otherwise have the dance hopping between
+    /// them. But a broken beat can hit harder on the and than on the beat,
+    /// and its snare still lands on the beat, so the lean has its say: past
+    /// [`TURN`] it turns half a beat, and leaning the other way, a jump to
+    /// the and has to catch that much more.
+    fn phase(&self, frames: f32, near: Option<(f64, f32)>) -> (f32, (f32, f32)) {
         let teeth = (frames.ceil() as usize).min(COMB_MOST);
         let mut caught = [0.0f32; COMB_MOST];
         for (since, caught) in caught.iter_mut().enumerate().take(teeth) {
@@ -446,16 +507,61 @@ impl BeatTracker {
             })
         };
         let anywhere = most(&mut (0..teeth as isize)).unwrap_or(0);
-        let since = match near {
-            Some(near) => {
-                let expected = (near as f32 * frames - LATENCY_FRAMES).round() as isize;
-                let reach = (STICK * frames).round() as isize;
-                let nearby = most(&mut (expected - reach..=expected + reach)).unwrap_or(anywhere);
-                if caught[anywhere] > HOLD * caught[nearby] { anywhere } else { nearby }
-            }
-            None => anywhere,
+        let reach = (STICK * frames).round() as isize;
+        let opposite = |since: usize| {
+            let half = since as isize + (frames / 2.0).round() as isize;
+            most(&mut (half - reach..=half + reach)).unwrap_or(since)
         };
-        ((since as f32 + LATENCY_FRAMES) / frames).fract()
+        // How much more backbeat there is at `there` than at `here`, as a
+        // log, and how clearly it's heard, 0 to 1
+        let toward = |here: usize, there: usize| {
+            let catch = caught[here].max(caught[there]) + 1e-6;
+            let floor = BACKBEAT_FLOOR * catch;
+            let (here, there) = (self.backbeat(frames, here), self.backbeat(frames, there));
+            let log = ((there + floor) / (here + floor)).ln().clamp(-BACKBEAT_MOST.ln(), BACKBEAT_MOST.ln());
+            (log, (here.max(there) / (BACKBEAT_CLEAR * catch)).min(1.0))
+        };
+        let (since, heard) = match near {
+            Some((near, lean)) => {
+                let expected = (near as f32 * frames - LATENCY_FRAMES).round() as isize;
+                let nearby = most(&mut (expected - reach..=expected + reach)).unwrap_or(anywhere);
+                let opposite = opposite(nearby);
+                // Jumping to the and takes more the more backbeat is here,
+                // but never less than any other jump
+                let hold = if anywhere == opposite { HOLD * (-lean).max(0.0).exp() } else { HOLD };
+                let since = if lean > TURN {
+                    opposite
+                } else if caught[anywhere] > hold * caught[nearby] {
+                    anywhere
+                } else {
+                    nearby
+                };
+                (since, toward(nearby, opposite))
+            }
+            // Claiming a beat, the backbeat heard so far chooses at once
+            None => {
+                let opposite = opposite(anywhere);
+                (if toward(anywhere, opposite).0 > TURN { opposite } else { anywhere }, (0.0, 0.0))
+            }
+        };
+        (((since as f32 + LATENCY_FRAMES) / frames).fract(), heard)
+    }
+
+    /// How much backbeat there is `since` frames back, with beats of
+    /// `frames`: the snare-like rises taken in turns, one beat added and the
+    /// next taken away. A snare on two and four and none on one and three
+    /// adds up; a hat on every beat cancels out.
+    fn backbeat(&self, frames: f32, since: usize) -> f32 {
+        let (mut sum, mut weight) = (0.0f32, 1.0);
+        for n in 0..BACKBEAT_BEATS {
+            let back = since as f32 + n as f32 * frames;
+            if back + 2.0 >= HISTORY as f32 {
+                break;
+            }
+            sum += weight * self.back(&self.memory.backbeat, back);
+            weight *= -BACKBEAT_FADE;
+        }
+        sum.abs()
     }
 
     /// Moves `beat` on a frame, settling toward the tempo heard, `heard`
@@ -468,14 +574,27 @@ impl BeatTracker {
         // clock's: one a little long would find the beat a little late, and
         // lengthen the clock's further
         let predicted = beat.position + 1.0 / length as f64;
-        let target = self.phase(frames, Some(predicted.fract())) as f64;
+        // Turning to the backbeat, it follows the tooth it's headed for, not
+        // the one by the clock: that one moves as the clock does
+        let near = beat.heading.unwrap_or(predicted.fract());
+        let lean = if beat.heading.is_some() { f32::NEG_INFINITY } else { beat.lean };
+        let (target, (toward, clear)) = self.phase(frames, Some((near, lean)));
+        let target = target as f64;
         let error = (target - predicted.fract() + 0.5).rem_euclid(1.0) - 0.5;
         let step = (1.0 + (PULL * error).clamp(-MOST_PULL, MOST_PULL)) / length as f64;
         // Running late (a positive error) means the beat is shorter than
         // heard. Only near the beat, though: catching up with a beat found
         // afresh is the pull's job, and trimming through it would overshoot
         let trim = if error.abs() < LOCKED { (beat.trim + TRIM * error as f32).clamp(-MOST_TRIM, MOST_TRIM) } else { beat.trim };
-        Beat { frames, trim, position: beat.position + step, step }
+        let (lean, heading) = match beat.heading {
+            // Turning: on the beat there, what it leaned toward is under it
+            None if beat.lean > TURN => (-beat.lean, Some(target)),
+            Some(_) if error.abs() >= LOCKED => (beat.lean, Some(target)),
+            // Learned only on the beat, or catching up would teach it nonsense
+            _ if error.abs() < LOCKED => (beat.lean + (toward - beat.lean) * clear * (FRAME_SECONDS / LEAN_SECONDS), None),
+            _ => (beat.lean, None),
+        };
+        Beat { frames, trim, position: beat.position + step, step, lean, heading }
     }
 }
 
@@ -489,7 +608,7 @@ impl Beat {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::dsp::onsets::tests::{test_break, Noise};
+    use crate::dsp::onsets::tests::{add_hit, test_break, Hit, Noise};
 
     const RATE: f32 = 48000.0;
 
@@ -599,6 +718,43 @@ pub(crate) mod tests {
         // Its beats land on the quarter notes
         let quarters: Vec<f32> = (0..=6 * 8).map(|q| q as f32 * 0.625 + times[0]).collect();
         let misses = misses(&heard, &quarters, 4.0);
+        assert!(misses.iter().all(|miss| miss.abs() < 0.012), "{misses:?}");
+    }
+
+    /// A broken beat at 116 BPM for `seconds`, as Canopy's: the kick on one
+    /// and harder on the ands of two and three, the snare on two and four,
+    /// and a hat on every eighth. The music, and when each beat falls.
+    fn broken_beat(seconds: f32) -> (Vec<f32>, Vec<f32>) {
+        let sixteenth = 15.0 / 116.0;
+        let mut out = vec![0.0; (seconds * RATE) as usize];
+        let mut noise = Noise(7);
+        let mut bar = 0.0;
+        while bar + 16.0 * sixteenth < seconds {
+            for (step, hit, level) in [(0, Hit::Kick, 0.5), (6, Hit::Kick, 0.9), (10, Hit::Kick, 0.9), (4, Hit::Snare, 0.3), (12, Hit::Snare, 0.3)] {
+                add_hit(&mut out, hit, bar + step as f32 * sixteenth, level, &mut noise);
+            }
+            for step in (0..16).step_by(2) {
+                let start = ((bar + step as f32 * sixteenth) * RATE) as usize;
+                for (n, s) in out.iter_mut().skip(start).enumerate().take((0.05 * RATE) as usize) {
+                    *s += 0.1 * noise.next() * (-(n as f32) / (0.01 * RATE)).exp();
+                }
+            }
+            bar += 16.0 * sixteenth;
+        }
+        let beats = (0..).map(|beat| beat as f32 * 4.0 * sixteenth).take_while(|&at| at < seconds + 1.0).collect();
+        (out, beats)
+    }
+
+    #[test]
+    fn test_a_broken_beat_is_danced_on_its_snare_not_its_kicks() {
+        let (music, beats) = broken_beat(30.0);
+        let heard = listen(&music);
+        let (_, seconds) = heard.last().unwrap().expect("a beat");
+        assert!((seconds - 60.0 / 116.0).abs() < 0.01, "a {seconds} s beat");
+        // The kicks between the beats catch more than the one on it, but the
+        // last few seconds' beats land on the beats, not half a beat out
+        let misses = misses(&heard, &beats, 6.0);
+        assert!(misses.len() >= 10, "{misses:?}");
         assert!(misses.iter().all(|miss| miss.abs() < 0.012), "{misses:?}");
     }
 
