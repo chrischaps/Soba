@@ -76,7 +76,7 @@ So a channel panned centre is 3 dB quieter on each side than it went in. To win 
 
 Each adds to its knob. A **Level** CV can take a channel from silence to full, but never past 100% or below silence. A **Pan** CV of +1 moves a centred channel hard right, and a bipolar LFO swinging ±1 sweeps it from side to side. Set the **Pan** knob off centre and the LFO swings around that point instead, stopping at the edge.
 
-**Send** and **Return** CV work the way **Level**'s does, from 0 to 100%. With a **Send** knob at 0, a lane at 1 is a full send: one part steps into the reverb alone while the rest stay dry. With the **Return** knob at 0, a lane into **Return** is the whole room's fader, so a song can open dry and close and bring the hall in for its second verse without spending two channels on the reverb.
+**Send** and **Return** CV work the way **Level**'s does, from 0 to 100%. With a **Send** knob at 0, a lane at 1 is a full send: one part steps into the reverb alone while the rest stay dry. With the **Return** knob at 0, a lane into **Return** is the whole room's fader, so a song can open dry and close and bring the hall in for its second verse without spending two channels on the reverb. [Canopy](../../songs/canopy.md#the-room) rides its room this way, dry for the beat and the whole hall for the Clearing.
 
 A patched knob keeps its own setting. While the patch plays, a thin orange arc runs round its edge from where the knob is set to a bead where the CV has carried it, and the number under the knob reads that value in orange, so you can see a lane open the room.
 

@@ -6240,7 +6240,7 @@
         {
           "name": "Section 01 Lane 5",
           "type": "Number",
-          "value": 0.0
+          "value": 2040800.0
         },
         {
           "name": "Section 01 Lane 6",
@@ -6320,7 +6320,7 @@
         {
           "name": "Section 03 Lane 5",
           "type": "Number",
-          "value": 0.0
+          "value": 2020250.0
         },
         {
           "name": "Section 03 Lane 6",
@@ -6400,7 +6400,7 @@
         {
           "name": "Section 05 Lane 5",
           "type": "Number",
-          "value": 0.0
+          "value": 2020300.0
         },
         {
           "name": "Section 05 Lane 6",
@@ -6480,7 +6480,7 @@
         {
           "name": "Section 07 Lane 5",
           "type": "Number",
-          "value": 0.0
+          "value": 2021000.0
         },
         {
           "name": "Section 07 Lane 6",
@@ -6520,7 +6520,7 @@
         {
           "name": "Section 08 Lane 5",
           "type": "Number",
-          "value": 0.0
+          "value": 4000300.0
         },
         {
           "name": "Section 08 Lane 6",
@@ -6600,7 +6600,7 @@
         {
           "name": "Section 10 Lane 5",
           "type": "Number",
-          "value": 0.0
+          "value": 2010350.0
         },
         {
           "name": "Section 10 Lane 6",
@@ -6680,7 +6680,7 @@
         {
           "name": "Section 12 Lane 5",
           "type": "Number",
-          "value": 0.0
+          "value": 2020500.0
         },
         {
           "name": "Section 12 Lane 6",
@@ -6760,7 +6760,7 @@
         {
           "name": "Section 14 Lane 5",
           "type": "Number",
-          "value": 0.0
+          "value": 2000900.0
         },
         {
           "name": "Section 14 Lane 6",
@@ -6840,7 +6840,7 @@
         {
           "name": "Section 16 Lane 5",
           "type": "Number",
-          "value": 0.0
+          "value": 2001000.0
         },
         {
           "name": "Section 16 Lane 6",
@@ -8948,7 +8948,7 @@
         "Lane 2": "Flute",
         "Lane 3": "Wind",
         "Lane 4": "Birds",
-        "Lane 5": "",
+        "Lane 5": "Room",
         "Lane 6": "",
         "Lane 7": "",
         "Lane 8": "",
@@ -11666,7 +11666,7 @@
         {
           "name": "Return",
           "type": "Number",
-          "value": 0.6
+          "value": 0.0
         },
         {
           "name": "Width 1",
@@ -12231,6 +12231,12 @@
       "to_port": "Level 4"
     },
     {
+      "from_node": 4,
+      "from_port": "Lane 5",
+      "to_node": 127,
+      "to_port": "Return"
+    },
+    {
       "from_node": 5,
       "from_port": "Trig",
       "to_node": 133,
@@ -12590,7 +12596,7 @@
   ],
   "notes": [
     {
-      "text": "**This patch is its own score.** Three **Arrangers** count the song in bars, sixteen sections from Dawn to Ring. **Faders** rides eight mixer channels. **Cues** picks the drum, bass and comping patterns, strikes the crash, swells the riser, lifts the flute an octave and warps the tape, and in the Ring stops the sequencers so the last notes ring. **Voices** brings in the chops, the flute, the wind and the birds.",
+      "text": "**This patch is its own score.** Three **Arrangers** count the song in bars, sixteen sections from Dawn to Ring. **Faders** rides eight mixer channels. **Cues** picks the drum, bass and comping patterns, strikes the crash, swells the riser, lifts the flute an octave and warps the tape, and in the Ring stops the sequencers so the last notes ring. **Voices** brings in the chops, the flute, the wind and the birds, and rides the room: the reverb closes in for the beat and opens for the Clearing and the night.",
       "position": [
         24.0,
         40.0

@@ -17,14 +17,14 @@ The patch plays the whole song itself. Three [Arrangers](../modules/utilities/ar
 |------|------|---------|--------------|
 | 1–8 | 0:00 | Dawn | Wind, and birds calling. The kalimba fades in on its twelve-step loop. |
 | 9–16 | 0:17 | Canopy | The bells join on their ten-step loop, the strings swell, a shaker starts, and a first faint vocal chop echoes. |
-| 17–32 | 0:33 | Groove | A crash, and the beat: kick, rim and swung hats, the sub bass and the Rhodes. The vocal chops take the hook. A drum fill closes the phrase. |
+| 17–32 | 0:33 | Groove | A crash, and the beat: kick, rim and swung hats, the sub bass and the Rhodes. The room closes in round them. The vocal chops take the hook. A drum fill closes the phrase. |
 | 33–48 | 1:06 | Groove II | The snare comes in with its ghost notes, the hats go to sixteenths, the harp strums a chord each bar, and the chopped break slips in under the kit. |
-| 49–56 | 1:39 | Clearing | The drums fall away. Over held chords, whole-note bass and the strings, the flute plays its melody for the first time, and the birds come back. The tape sways. |
+| 49–56 | 1:39 | Clearing | The drums fall away and the hall opens. Over held chords, whole-note bass and the strings, the flute plays its melody for the first time, and the birds come back. The tape sways. |
 | 57–64 | 1:56 | Rise | The beat builds back over seven bars, under a rising wash of noise, into a fill. |
 | 65–80 | 2:12 | Peak | Everything at once: the full kit and break, the busier bass and comping, the chops and the flute. |
 | 81–96 | 2:46 | Peak II | The flute goes up an octave, and the chops and the break come forward. |
-| 97–112 | 3:19 | Dusk | The kit thins back to the groove and fades, the bass fades out over sixteen bars, and the wind rises. |
-| 113–124 | 3:52 | Night, Ring | The kalimba, wind and birds, as at dawn. Then the sequencers stop and the last notes ring out. |
+| 97–112 | 3:19 | Dusk | The kit thins back to the groove and fades, the bass fades out over sixteen bars, and the wind rises. The room opens with the evening. |
+| 113–124 | 3:52 | Night, Ring | The kalimba, wind and birds, as at dawn. Then the sequencers stop and the last notes ring out into the whole hall. |
 
 Left running, the song starts again at dawn.
 
@@ -43,7 +43,7 @@ Left running, the song starts again at dawn.
 | Module | Role |
 |--------|------|
 | [Clock](../modules/modulation/clock.md) | **BPM** 116, **Div** 1/16, **Swing** 56% |
-| [Arranger](../modules/utilities/arranger.md) ×3 | The score: 16 sections, 124 bars. **Faders** rides eight mixer channels. **Cues** picks the drum, bass and comping patterns, hits the crash, raises the riser, lifts the flute, stops the sequencers in the Ring and warps the tape. **Voices** rides the chops, flute, wind and birds |
+| [Arranger](../modules/utilities/arranger.md) ×3 | The score: 16 sections, 124 bars. **Faders** rides eight mixer channels. **Cues** picks the drum, bass and comping patterns, hits the crash, raises the riser, lifts the flute, stops the sequencers in the Ring and warps the tape. **Voices** rides the chops, flute, wind and birds, and the room |
 | [Chord Sequencer](../modules/utilities/chord-sequencer.md) ×3 | The progression, a chord a bar, for the Rhodes, the strings and the harp |
 | [Step Sequencer](../modules/utilities/sequencer.md) ×7 | The kalimba (12 steps), bells (10 eighths), Rhodes comping, bass, flute (eighths, four chained patterns), and the chops' notes and syllables (four chained one-bar patterns) |
 | [Trigger Sequencer](../modules/utilities/trigger-sequencer.md) | The drums and the birds: four patterns, picked by the Kit cue |
@@ -54,8 +54,8 @@ Left running, the song starts again at dawn.
 | [Drum](../modules/sources/drum.md) ×8 | Kick (F1), snare, rim, a high tom for a conga, closed and open hats, a shaker and the crash |
 | [Compressor](../modules/effects/compressor.md) ×4 | The kit's glue, the metals' level, the break and the harp |
 | [Stereo Delay](../modules/effects/delay.md) | **Sync** 1/8D, **P-P** and **Tape** on: the echo on the loops, chops and flute |
-| [Reverb](../modules/effects/reverb.md) | The room everyone shares |
-| [Mixer](../modules/utilities/mixer.md) ×4 | Top (with the echo), Drums, Band and Room (with the reverb), on one chain. An LFO pans the bells slowly across |
+| [Reverb](../modules/effects/reverb.md) | The room everyone shares, ridden by the score |
+| [Mixer](../modules/utilities/mixer.md) ×4 | Top (with the echo), Drums, Band and Room (with the reverb), on one chain. An LFO pans the bells slowly across, and the score rides the Room's **Return** |
 | [Tape](../modules/effects/tape.md) | 15 ips, a little saturation, wow and age |
 | [Audio Output](../modules/output/audio-output.md) | **Vol** 75%, **Limiter** and **Character** on |
 | [Dancer](../modules/visualization/dancer.md) | **Style** Disco, at Size 2.4. It hears the finished mix from the Tape, so it barely moves at dawn and goes all out at the Peak, and the Faders' **Section Trig** gives it a big move at every change of section |
@@ -66,9 +66,25 @@ The rest are the voices' own envelopes, VCAs, filters, LFOs and Mixes.
 
 ### The score
 
-Three Arrangers count the Clock's sixteenths through the same sixteen sections, from Dawn to Ring. Every mixer channel's **Level** knob is at zero, so an Arranger lane is the fader. **Faders** rides the Kalimba, Bells, Harp, Rhodes, Strings, Bass, Drums and Break. **Cues** picks the patterns: A to D for the drums, two bass lines and three kinds of comping. **Voices** rides the vocal chops, the flute, the wind and the birds.
+Three Arrangers count the Clock's sixteenths through the same sixteen sections, from Dawn to Ring. Every mixer channel's **Level** knob is at zero, so an Arranger lane is the fader. **Faders** rides the Kalimba, Bells, Harp, Rhodes, Strings, Bass, Drums and Break. **Cues** picks the patterns: A to D for the drums, two bass lines and three kinds of comping. **Voices** rides the vocal chops, the flute, the wind and the birds, and the room.
 
 A one-bar **Fill** closes each long section, playing the drums' D pattern: a snare roll that ratchets up to fours, over a run of congas.
+
+### The room
+
+The four Mixers are one chain, and every channel's send runs down it into the Room Mixer's reverb. So that Mixer's **Return** is the whole room's fader. Its knob is at 0, and the Voices Arranger's **Room** lane plays it, a cue a section, on two-bar S-curves:
+
+| Section | Room | |
+|---------|------|-|
+| Dawn | 80% | rising over four bars, out of nothing the first time and down from the Ring's full hall on a loop |
+| Groove, Groove II | 25%, 30% | close and dry, so the beat is tight |
+| Clearing | 100% | the drums go and the hall opens for the flute |
+| Rise | 30% | closing again in a straight line, under the riser |
+| Peak, Peak II | 35%, 50% | dry for the drop, then a little air for the high flute |
+| Dusk | 90% | opening over the whole sixteen bars |
+| Ring | 100% | the last notes ring into all of it |
+
+Listen at **1:39**: the beat stops, and the chords and the flute's first phrase bloom into a room that was barely there a bar before. Then at **2:12** the Peak lands close and dry again. On the canvas the Room Mixer's **Return** knob shows it, its orange arc opening and closing as the lane moves it.
 
 ### Harmony
 
@@ -88,4 +104,5 @@ The singer is nobody's recording. Like [Held Vowels](../recipes/held-vowels.md)'
 
 - **Line them up.** Open the Bells group and set its sequencer to 8 steps: a bar of eighths. The bells now repeat every bar, and they and the kalimba meet every three bars instead of fifteen. Put it back to 10 to hear the drift return.
 - **Your own chops.** Open the Vocal Chops group and load any short vocal phrase into the Sampler. Set **Root** to the note it was sung on and leave **Slices** off, and the Syllables sequencer picks twelve places in it.
+- **One part in the room.** Patch a free Voices lane into the Top Mixer's **Send 4**, turn that knob to 0, and cue the lane up for the Clearing only. With a **Glide** of 1 s on the lane, the flute steps into the echo and the hall alone while the rest stays where it was.
 - **Swing harder.** Turn the Clock's **Swing** to 62%. The kit, the loops and the chops all lean back with it. The break keeps its own swing, because it's sliced in eighths, which swing doesn't move.
