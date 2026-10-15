@@ -2,6 +2,9 @@
 //!
 //! Scales and optionally inverts control signals.
 //! Essential for adjusting modulation depth before sending to destinations.
+//! At Range ×4 it can also make a signal bigger, for inputs scaled in
+//! octaves (an ADSR's stage CV, a Clock's Tempo), where ±1 is only a
+//! doubling or a halving.
 
 use crate::dsp::{
     context::ProcessContext,
@@ -36,6 +39,8 @@ use crate::dsp::{
 ///   negative values invert the signal. 0 = silence.
 /// - **Offset** (-1 to +1): DC offset added after scaling. Useful for shifting
 ///   unipolar signals to bipolar or vice versa.
+/// - **Range** (×1 / ×4): multiplies Amount, and widens the output's limit to
+///   match. ×1 keeps fine control and the ±1 limit; ×4 reaches ±4.
 pub struct Attenuverter {
     /// Port definitions.
     ports: Vec<PortDefinition>,
@@ -43,7 +48,7 @@ pub struct Attenuverter {
     parameters: Vec<ParameterDefinition>,
     /// Sample rate from last prepare() call.
     sample_rate: f32,
-    /// Smoothed amount parameter.
+    /// Smoothed gain: Amount times Range, so switching Range doesn't click.
     amount_smooth: SmoothedValue,
     /// Smoothed offset parameter.
     offset_smooth: SmoothedValue,
@@ -79,6 +84,9 @@ impl Attenuverter {
                     0.0, // Default: no offset
                     ParameterDisplay::linear(""),
                 ).describe("Constant value added after scaling"),
+                // Range: what Amount is multiplied by, and how far Out may go
+                ParameterDefinition::choice("range", "Range", &RANGE_LABELS, 0)
+                    .describe("×4 lets Amount make a signal up to four times bigger, to sweep an input scaled in octaves far"),
             ],
             sample_rate,
             // Initialize smoothed parameters
@@ -94,7 +102,17 @@ impl Attenuverter {
     /// Parameter index constants.
     const PARAM_AMOUNT: usize = 0;
     const PARAM_OFFSET: usize = 1;
+    const PARAM_RANGE: usize = 2;
+
+    /// The gain Range multiplies Amount by, and the limit Out stays within.
+    pub fn range_scale(choice: f32) -> f32 {
+        RANGE_SCALES[(choice.round().max(0.0) as usize).min(RANGE_SCALES.len() - 1)]
+    }
 }
+
+/// The Range choices, and what each multiplies Amount by.
+const RANGE_LABELS: [&str; 2] = ["×1", "×4"];
+const RANGE_SCALES: [f32; 2] = [1.0, 4.0];
 
 impl Default for Attenuverter {
     fn default() -> Self {
@@ -135,8 +153,10 @@ impl DspModule for Attenuverter {
         params: &[f32],
         context: &ProcessContext,
     ) {
-        // Set smoothing targets from parameters
-        self.amount_smooth.set_target(params[Self::PARAM_AMOUNT]);
+        // Set smoothing targets from parameters. A patch saved before Range
+        // has none, and plays at ×1
+        let scale = Self::range_scale(params.get(Self::PARAM_RANGE).copied().unwrap_or(0.0));
+        self.amount_smooth.set_target(params[Self::PARAM_AMOUNT] * scale);
         self.offset_smooth.set_target(params[Self::PARAM_OFFSET]);
 
         // Get input buffer
@@ -155,8 +175,8 @@ impl DspModule for Attenuverter {
                 .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
                 .unwrap_or(0.0);
 
-            // Apply scaling and offset, clamp to valid control range
-            let out_value = (in_value * amount + offset).clamp(-1.0, 1.0);
+            // Apply scaling and offset, within ±1 (±4 at ×4)
+            let out_value = (in_value * amount + offset).clamp(-scale, scale);
             output.samples[i] = out_value;
         }
     }
@@ -203,7 +223,7 @@ mod tests {
         let att = Attenuverter::new();
         let params = att.parameters();
 
-        assert_eq!(params.len(), 2);
+        assert_eq!(params.len(), 3);
 
         // Amount parameter
         assert_eq!(params[0].id, "amount");
@@ -216,6 +236,10 @@ mod tests {
         assert!((params[1].min - (-1.0)).abs() < f32::EPSILON);
         assert!((params[1].max - 1.0).abs() < f32::EPSILON);
         assert!((params[1].default - 0.0).abs() < f32::EPSILON);
+
+        // Range parameter: ×1 by default, so older patches play as they did
+        assert_eq!(params[2].id, "range");
+        assert_eq!(params[2].default, 0.0);
     }
 
     #[test]
@@ -414,6 +438,47 @@ mod tests {
     }
 
     #[test]
+    fn test_attenuverter_range_x4_reaches_four() {
+        let mut att = Attenuverter::new();
+        att.prepare(44100.0, 256);
+
+        let mut input = SignalBuffer::control(256);
+        input.fill(-1.0);
+
+        let mut outputs = vec![SignalBuffer::control(256)];
+        let ctx = ProcessContext::new(44100.0, 256);
+
+        // Amount 1 at ×4: a full-scale input comes out four times as big
+        for _ in 0..20 {
+            att.process(&[&input], &mut outputs, &[1.0, 0.0, 1.0], &ctx);
+        }
+        assert!((outputs[0].samples[255] + 4.0).abs() < 0.01, "got {}", outputs[0].samples[255]);
+
+        // ...and the offset adds on top, within ±4
+        for _ in 0..20 {
+            att.process(&[&input], &mut outputs, &[0.5, 0.5, 1.0], &ctx);
+        }
+        assert!((outputs[0].samples[255] + 1.5).abs() < 0.01, "got {}", outputs[0].samples[255]);
+    }
+
+    #[test]
+    fn test_attenuverter_without_range_plays_at_x1() {
+        // A patch saved before Range passes two parameters, and still clamps at ±1
+        let mut att = Attenuverter::new();
+        att.prepare(44100.0, 256);
+
+        let mut input = SignalBuffer::control(256);
+        input.fill(1.0);
+
+        let mut outputs = vec![SignalBuffer::control(256)];
+        let ctx = ProcessContext::new(44100.0, 256);
+        for _ in 0..20 {
+            att.process(&[&input], &mut outputs, &[1.0, 0.5], &ctx);
+        }
+        assert!((outputs[0].samples[255] - 1.0).abs() < 0.01, "got {}", outputs[0].samples[255]);
+    }
+
+    #[test]
     fn test_attenuverter_no_input() {
         let mut att = Attenuverter::new();
         att.prepare(44100.0, 256);
@@ -464,6 +529,6 @@ mod tests {
         assert_eq!(module.info().id, "util.attenuverter");
         assert_eq!(module.info().name, "Attenuverter");
         assert_eq!(module.ports().len(), 2); // 1 input + 1 output
-        assert_eq!(module.parameters().len(), 2); // Amount, Offset
+        assert_eq!(module.parameters().len(), 3); // Amount, Offset, Range
     }
 }

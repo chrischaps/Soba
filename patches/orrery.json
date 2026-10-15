@@ -347,7 +347,7 @@
       "module_id": "util.quantizer",
       "position": [
         1926.0,
-        224.0
+        257.0
       ],
       "parameters": [
         {
@@ -377,7 +377,7 @@
       "module_id": "mod.lfo",
       "position": [
         1926.0,
-        597.0
+        630.0
       ],
       "parameters": [
         {
@@ -412,7 +412,7 @@
       "module_id": "util.logic",
       "position": [
         1926.0,
-        981.0
+        1014.0
       ],
       "parameters": [
         {
@@ -492,7 +492,7 @@
       "module_id": "mod.lfo",
       "position": [
         2352.0,
-        224.0
+        257.0
       ],
       "parameters": [
         {
@@ -627,7 +627,7 @@
       "module_id": "util.logic",
       "position": [
         24.0,
-        1463.0
+        1496.0
       ],
       "parameters": [
         {
@@ -642,7 +642,7 @@
       "module_id": "util.logic",
       "position": [
         24.0,
-        1839.0
+        1872.0
       ],
       "parameters": [
         {
@@ -657,7 +657,7 @@
       "module_id": "util.logic",
       "position": [
         218.0,
-        1463.0
+        1496.0
       ],
       "parameters": [
         {
@@ -672,7 +672,7 @@
       "module_id": "util.logic",
       "position": [
         218.0,
-        1839.0
+        1872.0
       ],
       "parameters": [
         {
@@ -687,7 +687,7 @@
       "module_id": "util.logic",
       "position": [
         412.0,
-        1839.0
+        1872.0
       ],
       "parameters": [
         {
@@ -702,7 +702,7 @@
       "module_id": "util.logic",
       "position": [
         412.0,
-        2215.0
+        2248.0
       ],
       "parameters": [
         {
@@ -717,7 +717,7 @@
       "module_id": "util.logic",
       "position": [
         24.0,
-        2215.0
+        2248.0
       ],
       "parameters": [
         {
@@ -732,7 +732,7 @@
       "module_id": "util.logic",
       "position": [
         218.0,
-        2215.0
+        2248.0
       ],
       "parameters": [
         {
@@ -747,7 +747,7 @@
       "module_id": "util.logic",
       "position": [
         412.0,
-        1463.0
+        1496.0
       ],
       "parameters": [
         {
@@ -762,7 +762,7 @@
       "module_id": "util.logic",
       "position": [
         606.0,
-        1463.0
+        1496.0
       ],
       "parameters": [
         {
@@ -777,7 +777,7 @@
       "module_id": "util.logic",
       "position": [
         606.0,
-        1839.0
+        1872.0
       ],
       "parameters": [
         {
@@ -792,7 +792,7 @@
       "module_id": "util.logic",
       "position": [
         800.0,
-        1463.0
+        1496.0
       ],
       "parameters": [
         {
@@ -807,7 +807,7 @@
       "module_id": "util.logic",
       "position": [
         606.0,
-        2215.0
+        2248.0
       ],
       "parameters": [
         {
@@ -822,7 +822,7 @@
       "module_id": "util.logic",
       "position": [
         800.0,
-        1839.0
+        1872.0
       ],
       "parameters": [
         {
@@ -837,7 +837,7 @@
       "module_id": "seq.chord",
       "position": [
         1124.0,
-        1745.0
+        1778.0
       ],
       "parameters": [
         {
@@ -1617,7 +1617,7 @@
       "module_id": "util.mixer",
       "position": [
         2283.0,
-        1463.0
+        1496.0
       ],
       "parameters": [
         {
@@ -1757,7 +1757,7 @@
       "module_id": "fx.delay",
       "position": [
         2283.0,
-        1932.0
+        1965.0
       ],
       "parameters": [
         {
@@ -1807,7 +1807,7 @@
       "module_id": "fx.reverb",
       "position": [
         2283.0,
-        2344.0
+        2377.0
       ],
       "parameters": [
         {
@@ -1852,7 +1852,7 @@
       "module_id": "util.mixer",
       "position": [
         2705.0,
-        1463.0
+        1496.0
       ],
       "parameters": [
         {
@@ -1992,7 +1992,7 @@
       "module_id": "util.mixer",
       "position": [
         2705.0,
-        1932.0
+        1965.0
       ],
       "parameters": [
         {
@@ -2132,7 +2132,7 @@
       "module_id": "util.mixer",
       "position": [
         3127.0,
-        1463.0
+        1496.0
       ],
       "parameters": [
         {
@@ -2272,7 +2272,7 @@
       "module_id": "util.mix",
       "position": [
         3127.0,
-        1932.0
+        1965.0
       ],
       "parameters": [
         {
@@ -2307,7 +2307,7 @@
       "module_id": "util.mix",
       "position": [
         3127.0,
-        2203.0
+        2236.0
       ],
       "parameters": [
         {
@@ -2342,7 +2342,7 @@
       "module_id": "fx.reverb",
       "position": [
         3549.0,
-        1463.0
+        1496.0
       ],
       "parameters": [
         {
@@ -2387,7 +2387,7 @@
       "module_id": "fx.tape",
       "position": [
         3549.0,
-        1827.0
+        1860.0
       ],
       "parameters": [
         {
@@ -2442,7 +2442,7 @@
       "module_id": "output.audio",
       "position": [
         3549.0,
-        2287.0
+        2320.0
       ],
       "parameters": [
         {
@@ -3285,7 +3285,7 @@
       ],
       "size": [
         1325.0,
-        1353.0
+        1386.0
       ],
       "color": "amber"
     },
@@ -3293,7 +3293,7 @@
       "title": "Who is up: the heights they wait for",
       "position": [
         0.0,
-        1423.0
+        1456.0
       ],
       "size": [
         1030.0,
@@ -3305,7 +3305,7 @@
       "title": "The voices",
       "position": [
         1100.0,
-        1423.0
+        1456.0
       ],
       "size": [
         1089.0,
@@ -3317,7 +3317,7 @@
       "title": "The desk",
       "position": [
         2259.0,
-        1423.0
+        1456.0
       ],
       "size": [
         1544.0,
@@ -3347,7 +3347,7 @@
       "text": "**The Twins** play one two-bar figure in sixteen and fifteen eighths: one keeps the bar, the other slips an eighth a pass. A heartbeat kick sets the bar before the cross-rhythms arrive. **The Moon** sings what the orbits say, as wide as the Day is high: two notes at dawn, a sweep at noon, and silence when its range closes. **The Comet** samples the same orbits slower, and only near noon. Open a group to see inside it.",
       "position": [
         1124.0,
-        1463.0
+        1496.0
       ],
       "width": 260.0
     }
@@ -3358,7 +3358,7 @@
       "name": "Twins",
       "position": [
         1491.0,
-        1818.0
+        1851.0
       ],
       "inputs": [
         {
@@ -7511,7 +7511,7 @@
       "name": "Moon",
       "position": [
         1491.0,
-        1463.0
+        1496.0
       ],
       "inputs": [
         {
@@ -8213,7 +8213,7 @@
       "name": "Comet",
       "position": [
         1491.0,
-        2072.0
+        2105.0
       ],
       "inputs": [
         {
@@ -8826,7 +8826,7 @@
       "name": "Sun",
       "position": [
         1725.0,
-        1463.0
+        1496.0
       ],
       "inputs": [
         {
@@ -9840,7 +9840,7 @@
       "name": "Earth",
       "position": [
         1725.0,
-        1860.0
+        1893.0
       ],
       "inputs": [
         {
@@ -10090,7 +10090,7 @@
       "name": "Bass",
       "position": [
         1959.0,
-        1463.0
+        1496.0
       ],
       "inputs": [
         {
@@ -13906,7 +13906,7 @@
       "name": "Drums",
       "position": [
         1959.0,
-        1839.0
+        1872.0
       ],
       "inputs": [
         {
@@ -17704,7 +17704,7 @@
       "name": "Eclipse",
       "position": [
         1959.0,
-        2235.0
+        2268.0
       ],
       "inputs": [
         {
@@ -18311,7 +18311,7 @@
       "name": "Surf",
       "position": [
         1725.0,
-        2152.0
+        2185.0
       ],
       "inputs": [
         {
@@ -18505,7 +18505,7 @@
       "name": "Faders",
       "position": [
         800.0,
-        2215.0
+        2248.0
       ],
       "inputs": [
         {

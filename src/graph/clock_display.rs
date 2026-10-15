@@ -13,13 +13,15 @@
 //! division while it's synced, and the Clock's Tempo shows the master's
 //! tempo while it follows MIDI. A Clock's Tempo with a cable in its jack
 //! stays in hand, and shows the tempo the cable bends it to (see
-//! [`super::knob_cv`]).
+//! [`super::knob_cv`]). An Attenuverter's Amount at Range ×4 stays in
+//! hand too, and reads the gain it gives.
 
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Stroke, Vec2};
 use egui_node_graph2::NodeId;
 
 use crate::app::theme;
 use crate::dsp::Readout;
+use crate::modules::attenuverter::Attenuverter;
 use crate::modules::clock::{Clock, ClockDivision};
 use crate::modules::lfo::{Lfo, SYNC_DIVISIONS};
 
@@ -116,6 +118,15 @@ pub fn knob_takeover(
             })
         }
         ("seq.arranger", "Steps") => super::arranger_follow::steps_takeover(graph, user_state, node_id),
+        // At ×4 the Amount knob reads the gain it gives, not its position
+        ("util.attenuverter", "Amount") => {
+            let scale = Attenuverter::range_scale(selected(graph, node_id, "Range")? as f32);
+            (scale != 1.0).then(|| KnobTakeover {
+                value: None,
+                text: format!("{:.1}", number(graph, node_id, "Amount").unwrap_or(1.0) * scale),
+                locked: false,
+            })
+        }
         _ => None,
     }
 }

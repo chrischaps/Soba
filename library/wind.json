@@ -171,6 +171,11 @@
               "name": "Offset",
               "type": "Number",
               "value": 0.6
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
             }
           ]
         }

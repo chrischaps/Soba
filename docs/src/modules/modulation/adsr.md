@@ -82,6 +82,8 @@ Each stage has a jack beside its knob. CV there moves the stage around where the
 - **Attack**, **Decay** and **Release** count in octaves of time. +1 doubles the knob's time, +2 quadruples it, and −1 halves it. A 500 ms release with +3 patched in rings for 4 s. The time stays within the knob's 1 ms – 10 s.
 - **Sustain** adds to the knob's level, so +0.3 lifts a 40% sustain to 70%.
 
+Most CV swings between −1 and +1, so an LFO patched straight into **Attack** only halves and doubles the attack. A 10 ms attack moves between 5 and 20 ms, which is hard to hear. To sweep it further, scale the LFO up first through an [Attenuverter](../utilities/attenuverter.md#sweep-an-octave-input-far) set to **Range** ×4. At ±4 octaves a 50 ms attack moves from about 3 ms to 0.8 s, from a snap to a swell.
+
 The envelope reads CV on every sample, not just at each note. A cue that lands while a release is already falling stretches what's left of it, and the curve bends there without a step.
 
 While a stage's jack is patched, its knob shows where the CV has taken it: an orange arc out to a bead on its rim, and the number under the knob in orange. The display draws that stage the way the envelope is running it, with its letter tinted. When a lane ramps the release out, you can watch the tail widen.

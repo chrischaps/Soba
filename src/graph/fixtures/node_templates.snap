@@ -440,6 +440,7 @@ knob CV Amount          "CV Amt" KnobOnly
 in   In                 Control  ConnectionOnly       inline=true  port
 in   Amount             Control  ConstantOnly         inline=false num 1 [-1..1]
 in   Offset             Control  ConstantOnly         inline=false num 0 [-1..1]
+in   Range              Control  ConstantOnly         inline=true  select 0 ["×1", "×4"] "Range"
 out  Out                Control
 knob Amount             "Amt" KnobOnly
 knob Offset             "Offset" KnobOnly

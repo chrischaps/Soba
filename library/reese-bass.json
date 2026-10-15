@@ -213,6 +213,11 @@
               "name": "Offset",
               "type": "Number",
               "value": 0.0
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
             }
           ],
           "pinned": {

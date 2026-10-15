@@ -266,6 +266,7 @@ static MODULE_UI: &[ModuleUi] = &[
     ModuleUi {
         module_id: "util.attenuverter",
         knobs: &[knob_as("Amount", "Amt"), knob("Offset")],
+        labels: &[("Range", "Range")],
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
