@@ -16,14 +16,14 @@ The patch plays the whole song itself. Three [Arrangers](../modules/utilities/ar
 | Bars | Time | Section | What happens |
 |------|------|---------|--------------|
 | 1–8 | 0:00 | Dawn | Wind, and birds calling. The kalimba fades in on its twelve-step loop. |
-| 9–16 | 0:17 | Canopy | The bells join on their ten-step loop, the strings swell, a shaker starts, and a first faint vocal chop echoes. |
-| 17–32 | 0:33 | Groove | A crash, and the beat: kick, rim and swung hats, the sub bass and the Rhodes. The room closes in round them. The vocal chops take the hook. A drum fill closes the phrase. |
+| 9–16 | 0:17 | Canopy | The bells join on their ten-step loop, the strings swell, a shaker starts, and two faint vocal chops answer from far off. |
+| 17–32 | 0:33 | Groove | A crash, and the beat: kick, rim and swung hats, the sub bass and the Rhodes. The room closes in round them. The vocal chops come in a bar at a time, with rests between, and fill in to the whole hook. A drum fill closes the phrase. |
 | 33–48 | 1:06 | Groove II | The snare comes in with its ghost notes, the hats go to sixteenths, the harp strums a chord each bar, and the chopped break slips in under the kit. |
 | 49–56 | 1:39 | Clearing | The drums fall away and the hall opens. Over held chords, whole-note bass and the strings, the flute plays its melody for the first time, and the birds come back. The tape sways. |
 | 57–64 | 1:56 | Rise | The beat builds back over seven bars, under a rising wash of noise, into a fill. |
 | 65–80 | 2:12 | Peak | Everything at once: the full kit and break, the busier bass and comping, the chops and the flute. |
-| 81–96 | 2:46 | Peak II | The flute goes up an octave, and the chops and the break come forward. |
-| 97–112 | 3:19 | Dusk | The kit thins back to the groove and fades, the bass fades out over sixteen bars, and the wind rises. The room opens with the evening. |
+| 81–96 | 2:46 | Peak II | The flute goes up an octave and the break comes forward. The chops sing only the calls, and the high flute fills the bars between. |
+| 97–112 | 3:19 | Dusk | The kit thins back to the groove and fades, the bass fades out over sixteen bars, and the wind rises. The chops thin out as they fade. The room opens with the evening. |
 | 113–124 | 3:52 | Night, Ring | The kalimba, wind and birds, as at dawn. Then the sequencers stop and the last notes ring out into the whole hall. |
 
 Left running, the song starts again at dawn.
@@ -43,9 +43,10 @@ Left running, the song starts again at dawn.
 | Module | Role |
 |--------|------|
 | [Clock](../modules/modulation/clock.md) | **BPM** 116, **Div** 1/16, **Swing** 56% |
-| [Arranger](../modules/utilities/arranger.md) ×3 | The score: 16 sections, 124 bars. **Faders** rides eight mixer channels. **Cues** picks the drum, bass and comping patterns, hits the crash, raises the riser, lifts the flute, stops the sequencers in the Ring and warps the tape. **Voices** rides the chops, flute, wind and birds, and the room |
+| [Arranger](../modules/utilities/arranger.md) ×3 | The score: 16 sections, 124 bars. **Faders** rides eight mixer channels. **Cues** picks the drum, bass and comping patterns, hits the crash, raises the riser, lifts the flute, stops the sequencers in the Ring and warps the tape. **Voices** rides the chops, flute, wind and birds, and the room, and picks the chops' phrase |
 | [Chord Sequencer](../modules/utilities/chord-sequencer.md) ×3 | The progression, a chord a bar, for the Rhodes, the strings and the harp |
-| [Step Sequencer](../modules/utilities/sequencer.md) ×7 | The kalimba (12 steps), bells (10 eighths), Rhodes comping, bass, flute (eighths, four chained patterns), and the chops' notes and syllables (four chained one-bar patterns) |
+| [Step Sequencer](../modules/utilities/sequencer.md) ×8 | The kalimba (12 steps), bells (10 eighths), Rhodes comping, bass, flute (eighths, four chained patterns), the chops' notes and syllables (four one-bar patterns), and the chops' **Phrase**, a step a bar, which picks those patterns |
+| [Logic](../modules/utilities/logic.md) | **AND** of the chops' gate and the Phrase's, so a rest in the Phrase rests a bar of chops |
 | [Trigger Sequencer](../modules/utilities/trigger-sequencer.md) | The drums and the birds: four patterns, picked by the Kit cue |
 | [Chopper](../modules/sources/chopper.md) | `samples/soba-break.wav`, **Beats** 8, **Slices** 16, chance on steps 6, 11 and 15 |
 | [Sampler](../modules/sources/sampler.md) | `samples/canopy-chops.wav`, **Mode** Gated, **Root** C5 |
@@ -66,7 +67,7 @@ The rest are the voices' own envelopes, VCAs, filters, LFOs and Mixes.
 
 ### The score
 
-Three Arrangers count the Clock's sixteenths through the same sixteen sections, from Dawn to Ring. Every mixer channel's **Level** knob is at zero, so an Arranger lane is the fader. **Faders** rides the Kalimba, Bells, Harp, Rhodes, Strings, Bass, Drums and Break. **Cues** picks the patterns: A to D for the drums, two bass lines and three kinds of comping. **Voices** rides the vocal chops, the flute, the wind and the birds, and the room.
+Three Arrangers count the Clock's sixteenths through the same sixteen sections, from Dawn to Ring. Every mixer channel's **Level** knob is at zero, so an Arranger lane is the fader. **Faders** rides the Kalimba, Bells, Harp, Rhodes, Strings, Bass, Drums and Break. **Cues** picks the patterns: A to D for the drums, two bass lines and three kinds of comping. **Voices** rides the vocal chops, the flute, the wind and the birds, and the room, and its **Phrase** lane picks which way the chops sing the hook.
 
 A one-bar **Fill** closes each long section, playing the drums' D pattern: a snare roll that ratchets up to fours, over a run of congas.
 
@@ -95,10 +96,28 @@ Fm9, D♭maj9, B♭m9 and E♭(add9), two bars each. On the second pass the last
 ```text
 [Chops Pitch]     ──> [Sampler V/Oct]     (the note: C5 plays the syllable as sung)
 [Syllables Pitch] ──> [Sampler Start]     (note 60 + k starts at k/12: syllable k)
-[Chops Gate]      ──> [Sampler Gate]      (Gated, so each chop is as long as its notes)
+[Chops Gate]      ──> [Logic A]
+[Phrase Gate]     ──> [Logic B]
+[Logic AND]       ──> [Sampler Gate]      (Gated, so each chop is as long as its notes)
+[Phrase Pitch]    ──> [Chops Pattern], [Syllables Pattern]
 ```
 
 The singer is nobody's recording. Like [Held Vowels](../recipes/held-vowels.md)' singer, it comes from the small formant synthesizer in `tools/voice/`, this time [`chops.py`](https://github.com/chrischaps/Soba/blob/master/tools/voice/chops.py), with the formants raised for a lighter voice. The hook is four bars: *oh · ah · ya · ah · oh*, then *mah · hey · ah-oh*, then the first bar again, rising to *hey · lah*, and an *ooh* to end. Every note is pentatonic, so it sits over all six chords. The chops go to the echo more than anything else, and their repeats fill the gaps between them.
+
+### The phrase
+
+The hook's four bars are the chop sequencers' patterns A to D. A third Step Sequencer in the group, the **Phrase**, steps once a bar on the Faders Arranger's **Bar** output and picks which of them plays. Its Pitch goes to both chop sequencers' **Pattern** input, where 0 to 1 is split into four zones, A to D, so a note picks a pattern: C♯4 (1/12 V) is A, E4 is B, G4 is C and A♯4 is D. A Phrase step with its gate off rests that bar: a [Logic](../modules/utilities/logic.md) module lets the chops' gate through only while the Phrase's is high. Its steps are tied, so its gate holds across the barline and each bar's first chop lands on the beat.
+
+The Phrase has four patterns of its own, sixteen bars each, and the Voices Arranger's **Phrase** lane picks one a section through the Phrase's own **Pattern** input. The Phrase's sixteen bars line up with the sections, so each pattern covers a section (Canopy is the second half of the line Dawn starts):
+
+| Phrase | Bars | Sections | |
+|--------|------|----------|-|
+| A, Far | `A B C D · A – – D · – – – B · – – – D` | Canopy, Dusk | Canopy hears its last eight bars, two answers far apart. Dusk hears its first eight as the chops fade: the hook once, then thinning |
+| B, Gathering | `A – – B · A – C D · A B C D · A B C D` | Groove | the hook comes in a bar at a time, and is whole by the ninth bar |
+| C, Hook | `A B C D` four times | Groove II, Peak | the whole hook, as it always was |
+| D, Call | `A – C – · A – C – · A – C – · A B C D` | Peak II | only the calls, the first and third bars, with the high flute in the bars between. The last four bars give the whole hook back before the fill |
+
+Change the Phrase lane's cue in a section, or a Phrase pattern's steps, to rearrange the chops without touching the hook itself.
 
 ## Variations
 

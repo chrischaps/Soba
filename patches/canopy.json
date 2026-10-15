@@ -6245,7 +6245,7 @@
         {
           "name": "Section 01 Lane 6",
           "type": "Number",
-          "value": 0.0
+          "value": 1000125.0
         },
         {
           "name": "Section 01 Lane 7",
@@ -6325,7 +6325,7 @@
         {
           "name": "Section 03 Lane 6",
           "type": "Number",
-          "value": 0.0
+          "value": 1000375.0
         },
         {
           "name": "Section 03 Lane 7",
@@ -6405,7 +6405,7 @@
         {
           "name": "Section 05 Lane 6",
           "type": "Number",
-          "value": 0.0
+          "value": 1000625.0
         },
         {
           "name": "Section 05 Lane 7",
@@ -6605,7 +6605,7 @@
         {
           "name": "Section 10 Lane 6",
           "type": "Number",
-          "value": 0.0
+          "value": 1000625.0
         },
         {
           "name": "Section 10 Lane 7",
@@ -6685,7 +6685,7 @@
         {
           "name": "Section 12 Lane 6",
           "type": "Number",
-          "value": 0.0
+          "value": 1000875.0
         },
         {
           "name": "Section 12 Lane 7",
@@ -6765,7 +6765,7 @@
         {
           "name": "Section 14 Lane 6",
           "type": "Number",
-          "value": 0.0
+          "value": 1000125.0
         },
         {
           "name": "Section 14 Lane 7",
@@ -8949,7 +8949,7 @@
         "Lane 3": "Wind",
         "Lane 4": "Birds",
         "Lane 5": "Room",
-        "Lane 6": "",
+        "Lane 6": "Phrase",
         "Lane 7": "",
         "Lane 8": "",
         "Section 1": "Dawn",
@@ -12517,6 +12517,18 @@
       "from_port": "Section Trig",
       "to_node": 150,
       "to_port": "Accent"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Bar",
+      "to_node": 145,
+      "to_port": "Bar"
+    },
+    {
+      "from_node": 4,
+      "from_port": "Lane 6",
+      "to_node": 145,
+      "to_port": "Phrase"
     }
   ],
   "midi_mappings": [],
@@ -12596,7 +12608,7 @@
   ],
   "notes": [
     {
-      "text": "**This patch is its own score.** Three **Arrangers** count the song in bars, sixteen sections from Dawn to Ring. **Faders** rides eight mixer channels. **Cues** picks the drum, bass and comping patterns, strikes the crash, swells the riser, lifts the flute an octave and warps the tape, and in the Ring stops the sequencers so the last notes ring. **Voices** brings in the chops, the flute, the wind and the birds, and rides the room: the reverb closes in for the beat and opens for the Clearing and the night.",
+      "text": "**This patch is its own score.** Three **Arrangers** count the song in bars, sixteen sections from Dawn to Ring. **Faders** rides eight mixer channels. **Cues** picks the drum, bass and comping patterns, strikes the crash, swells the riser, lifts the flute an octave and warps the tape, and in the Ring stops the sequencers so the last notes ring. **Voices** brings in the chops, the flute, the wind and the birds, picks the phrase the chops sing, and rides the room: the reverb closes in for the beat and opens for the Clearing and the night.",
       "position": [
         24.0,
         40.0
@@ -25308,6 +25320,14 @@
         {
           "name": "Run",
           "type": "Gate"
+        },
+        {
+          "name": "Bar",
+          "type": "Gate"
+        },
+        {
+          "name": "Phrase",
+          "type": "Control"
         }
       ],
       "outputs": [
@@ -28805,15 +28825,1699 @@
               "value": 1.0
             }
           ]
+        },
+        {
+          "id": 151,
+          "module_id": "seq.step",
+          "position": [
+            0.0,
+            560.0
+          ],
+          "parameters": [
+            {
+              "name": "Steps",
+              "type": "Number",
+              "value": 16.0
+            },
+            {
+              "name": "Direction",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Gate Length",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 1 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step 1 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 1 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 2 Pitch",
+              "type": "Number",
+              "value": 64.0
+            },
+            {
+              "name": "Step 2 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 2 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 3 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step 3 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 3 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 4 Pitch",
+              "type": "Number",
+              "value": 70.0
+            },
+            {
+              "name": "Step 4 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 4 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 5 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step 5 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 5 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 6 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step 6 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 6 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 7 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step 7 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 7 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 8 Pitch",
+              "type": "Number",
+              "value": 70.0
+            },
+            {
+              "name": "Step 8 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 8 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 9 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step 9 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 9 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 10 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step 10 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 10 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 11 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step 11 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 11 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 12 Pitch",
+              "type": "Number",
+              "value": 64.0
+            },
+            {
+              "name": "Step 12 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 12 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 13 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step 13 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 13 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 14 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step 14 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 14 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 15 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step 15 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 15 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 16 Pitch",
+              "type": "Number",
+              "value": 70.0
+            },
+            {
+              "name": "Step 16 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 16 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Gate Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Step 1 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 2 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 3 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 4 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 5 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 6 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 7 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 8 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 9 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 10 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 11 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 12 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step 13 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 14 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 15 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 16 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Chain 1",
+              "type": "Select",
+              "value": 1
+            },
+            {
+              "name": "Chain 2",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Chain 3",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Chain 4",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Chain 5",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Chain 6",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Chain 7",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Chain 8",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Step B1 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step B1 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B1 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B1 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B2 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step B2 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B2 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B2 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B3 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step B3 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B3 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B3 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B4 Pitch",
+              "type": "Number",
+              "value": 64.0
+            },
+            {
+              "name": "Step B4 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B4 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B4 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B5 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step B5 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B5 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B5 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B6 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step B6 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B6 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B6 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B7 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step B7 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B7 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B7 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B8 Pitch",
+              "type": "Number",
+              "value": 70.0
+            },
+            {
+              "name": "Step B8 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B8 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B8 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B9 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step B9 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B9 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B9 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B10 Pitch",
+              "type": "Number",
+              "value": 64.0
+            },
+            {
+              "name": "Step B10 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B10 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B10 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B11 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step B11 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B11 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B11 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B12 Pitch",
+              "type": "Number",
+              "value": 70.0
+            },
+            {
+              "name": "Step B12 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B12 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B12 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B13 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step B13 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B13 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B13 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B14 Pitch",
+              "type": "Number",
+              "value": 64.0
+            },
+            {
+              "name": "Step B14 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B14 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B14 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B15 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step B15 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B15 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B15 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B16 Pitch",
+              "type": "Number",
+              "value": 70.0
+            },
+            {
+              "name": "Step B16 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step B16 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B16 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C1 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step C1 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C1 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C1 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C2 Pitch",
+              "type": "Number",
+              "value": 64.0
+            },
+            {
+              "name": "Step C2 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C2 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C2 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C3 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step C3 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C3 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C3 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C4 Pitch",
+              "type": "Number",
+              "value": 70.0
+            },
+            {
+              "name": "Step C4 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C4 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C4 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C5 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step C5 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C5 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C5 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C6 Pitch",
+              "type": "Number",
+              "value": 64.0
+            },
+            {
+              "name": "Step C6 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C6 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C6 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C7 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step C7 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C7 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C7 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C8 Pitch",
+              "type": "Number",
+              "value": 70.0
+            },
+            {
+              "name": "Step C8 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C8 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C8 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C9 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step C9 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C9 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C9 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C10 Pitch",
+              "type": "Number",
+              "value": 64.0
+            },
+            {
+              "name": "Step C10 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C10 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C10 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C11 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step C11 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C11 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C11 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C12 Pitch",
+              "type": "Number",
+              "value": 70.0
+            },
+            {
+              "name": "Step C12 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C12 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C12 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C13 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step C13 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C13 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C13 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C14 Pitch",
+              "type": "Number",
+              "value": 64.0
+            },
+            {
+              "name": "Step C14 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C14 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C14 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C15 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step C15 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C15 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C15 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C16 Pitch",
+              "type": "Number",
+              "value": 70.0
+            },
+            {
+              "name": "Step C16 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step C16 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C16 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D1 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step D1 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D1 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D1 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D2 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step D2 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D2 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D2 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D3 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step D3 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D3 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D3 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D4 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step D4 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D4 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D4 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D5 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step D5 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D5 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D5 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D6 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step D6 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D6 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D6 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D7 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step D7 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D7 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D7 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D8 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step D8 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D8 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D8 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D9 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step D9 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D9 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D9 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D10 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step D10 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D10 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D10 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D11 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step D11 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D11 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D11 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D12 Pitch",
+              "type": "Number",
+              "value": 60.0
+            },
+            {
+              "name": "Step D12 Gate",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D12 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D12 Tie",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D13 Pitch",
+              "type": "Number",
+              "value": 61.0
+            },
+            {
+              "name": "Step D13 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D13 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D13 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D14 Pitch",
+              "type": "Number",
+              "value": 64.0
+            },
+            {
+              "name": "Step D14 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D14 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D14 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D15 Pitch",
+              "type": "Number",
+              "value": 67.0
+            },
+            {
+              "name": "Step D15 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D15 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D15 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D16 Pitch",
+              "type": "Number",
+              "value": 70.0
+            },
+            {
+              "name": "Step D16 Gate",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Step D16 Velocity",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D16 Tie",
+              "type": "Toggle",
+              "value": true
+            },
+            {
+              "name": "Glide",
+              "type": "Number",
+              "value": 0.0
+            },
+            {
+              "name": "Step 1 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 2 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 3 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 4 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 5 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 6 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 7 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 8 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 9 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 10 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 11 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 12 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 13 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 14 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 15 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step 16 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B1 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B2 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B3 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B4 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B5 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B6 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B7 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B8 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B9 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B10 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B11 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B12 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B13 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B14 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B15 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step B16 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C1 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C2 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C3 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C4 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C5 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C6 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C7 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C8 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C9 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C10 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C11 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C12 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C13 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C14 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C15 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step C16 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D1 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D2 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D3 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D4 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D5 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D6 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D7 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D8 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D9 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D10 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D11 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D12 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D13 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D14 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D15 Slide",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Step D16 Slide",
+              "type": "Toggle",
+              "value": false
+            }
+          ]
+        },
+        {
+          "id": 152,
+          "module_id": "util.logic",
+          "position": [
+            338.0,
+            560.0
+          ],
+          "parameters": [
+            {
+              "name": "Threshold",
+              "type": "Number",
+              "value": 0.5
+            }
+          ]
         }
       ],
       "connections": [
-        {
-          "from_node": 85,
-          "from_port": "Gate",
-          "to_node": 87,
-          "to_port": "Gate"
-        },
         {
           "from_node": 85,
           "from_port": "Pitch",
@@ -28879,6 +30583,60 @@
           "from_port": "Run",
           "to_node": 86,
           "to_port": "Run"
+        },
+        {
+          "from_node": 145,
+          "from_port": "Bar",
+          "to_node": 151,
+          "to_port": "Clock"
+        },
+        {
+          "from_node": 145,
+          "from_port": "Reset",
+          "to_node": 151,
+          "to_port": "Reset"
+        },
+        {
+          "from_node": 145,
+          "from_port": "Run",
+          "to_node": 151,
+          "to_port": "Run"
+        },
+        {
+          "from_node": 145,
+          "from_port": "Phrase",
+          "to_node": 151,
+          "to_port": "Pattern"
+        },
+        {
+          "from_node": 151,
+          "from_port": "Pitch",
+          "to_node": 85,
+          "to_port": "Pattern"
+        },
+        {
+          "from_node": 151,
+          "from_port": "Pitch",
+          "to_node": 86,
+          "to_port": "Pattern"
+        },
+        {
+          "from_node": 85,
+          "from_port": "Gate",
+          "to_node": 152,
+          "to_port": "A"
+        },
+        {
+          "from_node": 151,
+          "from_port": "Gate",
+          "to_node": 152,
+          "to_port": "B"
+        },
+        {
+          "from_node": 152,
+          "from_port": "AND",
+          "to_node": 87,
+          "to_port": "Gate"
         }
       ]
     },
