@@ -17,6 +17,8 @@ pub enum ParamFormat {
     RawWithUnit { decimals: usize, unit: &'static str },
     /// Percentage (0-100%).
     Percent,
+    /// A share either way from -1 to 1, signed: "-20%", "0%", "+20%".
+    BipolarPercent,
     /// Frequency in Hz/kHz.
     Frequency,
     /// Time in ms/s, from a value in seconds.
@@ -48,6 +50,15 @@ impl ParamFormat {
             }
             ParamFormat::Percent => {
                 format!("{:.0}%", value * 100.0)
+            }
+            ParamFormat::BipolarPercent => {
+                let percent = (value * 100.0).round();
+                if percent > 0.0 {
+                    format!("+{percent:.0}%")
+                } else {
+                    // -0.004 rounds to -0, which prints "-0%"
+                    format!("{:.0}%", percent + 0.0)
+                }
             }
             ParamFormat::Frequency => {
                 if value >= 1000.0 {
@@ -883,6 +894,15 @@ mod tests {
         assert_eq!(ParamFormat::Percent.format(0.5), "50%");
         assert_eq!(ParamFormat::Percent.format(1.0), "100%");
         assert_eq!(ParamFormat::Percent.format(0.0), "0%");
+    }
+
+    #[test]
+    fn test_param_format_bipolar_percent() {
+        assert_eq!(ParamFormat::BipolarPercent.format(0.2), "+20%");
+        assert_eq!(ParamFormat::BipolarPercent.format(-0.6), "-60%");
+        assert_eq!(ParamFormat::BipolarPercent.format(0.0), "0%");
+        assert_eq!(ParamFormat::BipolarPercent.format(-0.004), "0%");
+        assert_eq!(ParamFormat::BipolarPercent.format(-1.0), "-100%");
     }
 
     #[test]

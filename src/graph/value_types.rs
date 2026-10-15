@@ -67,6 +67,8 @@ impl NumberSpec {
             "st" => ParamFormat::Semitones,
             "pan" => ParamFormat::Pan,
             "" | "%" if unit_interval => ParamFormat::Percent,
+            // A share either way (Distortion's Symmetry): signed, as a percent
+            "%" if self.min == -1.0 && self.max == 1.0 => ParamFormat::BipolarPercent,
             "%" | "BPM" => ParamFormat::RawWithUnit { decimals: 0, unit: self.unit },
             "" => ParamFormat::Raw { decimals: if self.logarithmic { 2 } else { 1 } },
             unit => ParamFormat::RawWithUnit { decimals: 1, unit },
@@ -342,6 +344,8 @@ mod tests {
         assert_eq!(spec(0.001, 10.0, "s").format().format(0.25), "250 ms");
         assert_eq!(spec(0.0, 1.0, "").format().format(0.5), "50%");
         assert_eq!(spec(1.0, 99.0, "%").format().format(50.0), "50 %");
+        assert_eq!(spec(-1.0, 1.0, "%").format().format(0.2), "+20%");
+        assert_eq!(spec(-1.0, 1.0, "%").format().format(-0.6), "-60%");
         assert_eq!(spec(1.0, 10.0, "x").format().format(2.0), "2.0 x");
     }
 
