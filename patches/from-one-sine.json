@@ -9114,7 +9114,7 @@
         {
           "name": "Sections",
           "type": "Number",
-          "value": 22.0
+          "value": 23.0
         },
         {
           "name": "Loop",
@@ -9269,7 +9269,7 @@
         {
           "name": "Length 22",
           "type": "Number",
-          "value": 12.0
+          "value": 8.0
         },
         {
           "name": "Length 23",
@@ -10179,7 +10179,7 @@
         {
           "name": "Section 22 Lane 4",
           "type": "Number",
-          "value": 2000100.0
+          "value": 2120100.0
         },
         {
           "name": "Section 22 Lane 5",
@@ -10653,7 +10653,8 @@
         "Section 6": "Bass",
         "Section 7": "Bells",
         "Section 8": "Riser",
-        "Section 9": "Groove"
+        "Section 9": "Groove",
+        "Section 23": "Broaden"
       }
     },
     {
@@ -10672,7 +10673,7 @@
         {
           "name": "Sections",
           "type": "Number",
-          "value": 22.0
+          "value": 23.0
         },
         {
           "name": "Loop",
@@ -10827,7 +10828,7 @@
         {
           "name": "Length 22",
           "type": "Number",
-          "value": 12.0
+          "value": 8.0
         },
         {
           "name": "Length 23",
@@ -11752,7 +11753,7 @@
         {
           "name": "Section 22 Lane 7",
           "type": "Number",
-          "value": 2000000.0
+          "value": 2120000.0
         },
         {
           "name": "Section 22 Lane 8",
@@ -12241,7 +12242,8 @@
         "Section 6": "Bass",
         "Section 7": "Bells",
         "Section 8": "Riser",
-        "Section 9": "Groove"
+        "Section 9": "Groove",
+        "Section 23": "Broaden"
       }
     },
     {
@@ -12260,7 +12262,7 @@
         {
           "name": "Sections",
           "type": "Number",
-          "value": 22.0
+          "value": 23.0
         },
         {
           "name": "Loop",
@@ -12415,7 +12417,7 @@
         {
           "name": "Length 22",
           "type": "Number",
-          "value": 12.0
+          "value": 8.0
         },
         {
           "name": "Length 23",
@@ -12475,7 +12477,7 @@
         {
           "name": "Section 01 Lane 2",
           "type": "Number",
-          "value": 0.0
+          "value": 1000000.0
         },
         {
           "name": "Section 01 Lane 3",
@@ -13355,7 +13357,7 @@
         {
           "name": "Section 23 Lane 2",
           "type": "Number",
-          "value": 0.0
+          "value": 5001000.0
         },
         {
           "name": "Section 23 Lane 3",
@@ -13792,7 +13794,9 @@
         "Section 8": "Riser",
         "Section 9": "Groove",
         "Name": "Tape",
-        "Lane 1": "Wow"
+        "Lane 1": "Wow",
+        "Section 23": "Broaden",
+        "Lane 2": "Tempo"
       }
     },
     {
@@ -13842,6 +13846,26 @@
           "name": "Speed",
           "type": "Select",
           "value": 1
+        }
+      ]
+    },
+    {
+      "id": 83,
+      "module_id": "util.attenuverter",
+      "position": [
+        1054.0,
+        120.0
+      ],
+      "parameters": [
+        {
+          "name": "Amount",
+          "type": "Number",
+          "value": -0.23
+        },
+        {
+          "name": "Offset",
+          "type": "Number",
+          "value": 0.0
         }
       ]
     }
@@ -14776,6 +14800,18 @@
       "from_port": "Lane 1",
       "to_node": 82,
       "to_port": "Wow"
+    },
+    {
+      "from_node": 81,
+      "from_port": "Lane 2",
+      "to_node": 83,
+      "to_port": "In"
+    },
+    {
+      "from_node": 83,
+      "from_port": "Out",
+      "to_node": 1,
+      "to_port": "Tempo"
     }
   ],
   "midi_mappings": [],
@@ -14787,7 +14823,7 @@
         0.0
       ],
       "size": [
-        1050.0,
+        1238.0,
         406.0
       ],
       "color": "green"
@@ -14927,7 +14963,7 @@
   ],
   "notes": [
     {
-      "text": "**This patch is its own score.** Three **Arrangers** count the song in bars, 22 sections from First Sound to One Sine. **Desk**, on the left, rides eight faders. **Cues** follows Desk's sections, through the cable into its **Follow**, picks the drums' pattern and the melody's, strikes the crash, holds the riser, brightens the pad and bass, and presses the Looper's pedals. **Tape** follows too, and warps the master tape through the breakdown.",
+      "text": "**This patch is its own score.** Three **Arrangers** count the song in bars, 23 sections from First Sound to Broaden. **Desk**, on the left, rides eight faders. **Cues** follows Desk's sections, through the cable into its **Follow**, picks the drums' pattern and the melody's, strikes the crash, holds the riser, brightens the pad and bass, and presses the Looper's pedals. **Tape** follows too, and warps the master tape through the breakdown, then slows the Clock over the last four bars, as a player broadens.",
       "position": [
         24.0,
         450.0

@@ -17,7 +17,7 @@ Nothing outside the patch tells it what to do. Three [Arrangers](../modules/util
 
 *The whole song, filmed in the app as it plays. The camera follows the score: it opens close on the lone sine, visits each part as it enters, watches the master tape bend the mix through the build, pulls back to the whole rack for the drop, and ends where it began. [Watch on YouTube](https://youtu.be/NlWGFWRZs-U).*
 
-Each section of the song is sixteen bars. On the Arrangers they're 22 sections: a new one wherever a part enters or the band changes, a one-bar **Fill** to close each phrase of the groove, and a long last one where the song fades back to its first sound.
+Each section of the song is sixteen bars. On the Arrangers they're 23 sections: a new one wherever a part enters or the band changes, a one-bar **Fill** to close each phrase of the groove, and a long fade back to its first sound, whose last four bars slow down.
 
 | Bars | Section | What happens |
 |------|---------|--------------|
@@ -28,7 +28,7 @@ Each section of the song is sixteen bars. On the Arrangers they're 22 sections: 
 | 65–80 | Memory | The drums, bass and lead drop out. The Looper's take of bars 5–8 plays reversed at half speed under the open pad and sparkles. The sine answers its own ghost with the motif played forward. The master tape starts to waver as the ghost comes in. Then a four-bar build with a riser, where the line's last phrase turns back toward the top and the tape bends further out of true. |
 | 81–96 | Everything | The tape snaps back to speed. Drums, bass, arpeggio, pad, bells, sparkles and the lead's whole line at once, at the brightest the score sets. |
 | 97–112 | Second wave | The lead rests and the sine sings the line over the groove instead, with the ghost underneath. The lead returns for its second half. |
-| 113–128 | Return | The lead fades and the drums fall back to the pulse. Then the sine returns to the motif alone, and the other parts fade away around it in the reverse of the order they came, until it's alone again. |
+| 113–128 | Return | The lead fades and the drums fall back to the pulse. Then the sine returns to the motif alone, and the other parts fade away around it in the reverse of the order they came, until it's alone again. Over the last four bars the song slows, the way a player broadens into the end. |
 
 ## What it teaches
 
@@ -36,6 +36,7 @@ Each section of the song is sixteen bars. On the Arrangers they're 22 sections: 
 - **Swells and fades.** A Ramp can start from a level of its own and take a curve. The parts swell in on lines and fade out on **Log** curves, which fall fast and tail away, much as a fade sounds to the ear.
 - **Smoothing a control voltage.** A lane's **Glide** turns a jump into a glide, so a fader can move under a ringing note without a click: a second for the sustained parts, 40 ms for the rhythmic ones.
 - **One lane, two jobs.** A lane's **Gate** is high while the lane is above zero, so the riser's lane sets its level and opens its envelope for exactly its section.
+- **A score that bends its own tempo.** A lane patched back into the Clock's **Tempo** slows the song into its last bars, on an **Exp** curve that holds and then gives way.
 - **A line longer than a sequencer's sixteen steps.** The motif's sequencer holds four patterns, and an Arranger lane picks one for each pass through its **Pattern** input. Where the line should run on, the lane ramps in a straight line, so the four passes play A, B, C and D.
 - **A progression as a lead sheet.** One [Chord Sequencer](../modules/utilities/chord-sequencer.md) holds sixteen bars of chords, and voice leading moves the pad's voices by step from one to the next. Its **Root** plays the bass and transposes the arpeggio and bass line through **Exp FM**.
 - **A chord as one sound.** The pad's three voices ride one polyphonic cable, and a [Mix](../modules/utilities/mix.md) with **Sum Voices** on adds them into one channel, so the Ladder Filter drives the chord as a whole.
@@ -48,9 +49,9 @@ Each section of the song is sixteen bars. On the Arrangers they're 22 sections: 
 
 | Module | Role |
 |--------|------|
-| [Clock](../modules/modulation/clock.md) | **BPM** 112, **Div** 1/16, **Swing** 54% |
+| [Clock](../modules/modulation/clock.md) | **BPM** 112, **Div** 1/16, **Swing** 54%. Its **Tempo** jack broadens the last four bars |
 | [Clock Divider](../modules/utilities/divider.md) ×4 | Beats (÷4), eighths (÷2), bars (÷16), and ÷3 for the sparkles |
-| [Arranger](../modules/utilities/arranger.md) ×3 | The score: 22 sections, 128 bars. **Desk** rides eight faders. **Cues** picks the drum pattern and the melody's, strikes the crash, holds the riser, sets the brightness and the Looper's level, and presses its pedals. **Tape** warps the master through the breakdown |
+| [Arranger](../modules/utilities/arranger.md) ×3 | The score: 23 sections, 128 bars. **Desk** rides eight faders. **Cues** picks the drum pattern and the melody's, strikes the crash, holds the riser, sets the brightness and the Looper's level, and presses its pedals. **Tape** warps the master through the breakdown and slows the Clock at the end |
 | [Sample & Hold](../modules/utilities/sample-hold.md) | Samples the sparkles' random voltage |
 | [Chord Sequencer](../modules/utilities/chord-sequencer.md) | The harmony, a chord a bar: **Voices** 3, **Range** 4, **Rootless** |
 | [Step Sequencer](../modules/utilities/sequencer.md) ×5 | The motif and the line it grows into (quarters, four patterns), the arp and bass (sixteenths), the bells (eighths) |
@@ -60,7 +61,7 @@ Each section of the song is sixteen bars. On the Arrangers they're 22 sections: 
 | [Ladder Filter](../modules/filters/ladder-filter.md) ×2 | Pad and bass |
 | [VCA](../modules/utilities/vca.md) ×6 | Each voice's envelope |
 | [LFO](../modules/modulation/lfo.md) ×3 | The chorus depth and the wind's sweep (4 bars), the arp's pulse width (1 bar) |
-| [Attenuverter](../modules/utilities/attenuverter.md) ×3 | Scaling: the pad's brightness, the bass drive, the arp's PWM |
+| [Attenuverter](../modules/utilities/attenuverter.md) ×4 | Scaling: the pad's brightness, the bass drive, the arp's PWM, and the ending's slowing |
 | [Noise](../modules/sources/noise.md) ×2 | Pink wind, and the Random voltage for the sparkles |
 | [Quantizer](../modules/utilities/quantizer.md) | D minor pentatonic for the sparkles |
 | [Sampler](../modules/sources/sampler.md) | The bell from [Sampled Keys](../recipes/sampled-keys.md) |
@@ -93,13 +94,13 @@ Each section of the song is sixteen bars. On the Arrangers they're 22 sections: 
 [Cues Gate 3] ──> [Riser ADSR Gate]           (and its envelope)
 ```
 
-All three Arrangers count the Clock's sixteenths, sixteen to a bar, through the same 22 sections: First Sound, Echo, Sparkles, Arp, Pulse, Bass, Bells, Riser, Groove, Fill, Lift, Fill, Memory, Answer, Build, Everything, Fill, Second Wave, Lead Returns, Fill, Return and One Sine. They change section on the same clock edge as the sequencers step on, so the score and the music can't drift apart. **Loop to** is 1, so the song goes round again.
+All three Arrangers count the Clock's sixteenths, sixteen to a bar, through the same 22 sections: First Sound, Echo, Sparkles, Arp, Pulse, Bass, Bells, Riser, Groove, Fill, Lift, Fill, Memory, Answer, Build, Everything, Fill, Second Wave, Lead Returns, Fill, Return, One Sine and Broaden. They change section on the same clock edge as the sequencers step on, so the score and the music can't drift apart, even when the Clock [slows](#broadening). **Loop to** is 1, so the song goes round again.
 
 **Desk**, the Arranger on the left, has a lane for each fader: the sine, arpeggio, bells, sparkles, bass, pad, wind and lead. On the Echoes, Body and Sky mixers each channel's **Level** knob is at zero, and its **Level** input adds the lane on top.
 
 The faders swell and fade more than they jump. The wind breathes in over the first twelve bars on a Log curve. Echo brings the pad in at 28% and ramps it in a line to 42% over twelve bars, through Sparkles and Arp, which hold. The sparkles rise over eight bars and thin away over the next twelve as the band arrives. The arpeggio swells in under the sine, then lifts into the Pulse as the sine rests. The bass and the bells come in on swells of their own. Where the music turns on a downbeat (a crash, the breakdown, the drop) the faders still jump: everything that leaves at Memory, or comes back at Everything, goes or comes at once.
 
-One Sine, the last twelve bars, is the score's longest fade. Each part falls on its own curve over its own length, so they leave one after another in the reverse of the order they came: bells, bass, arpeggio, sparkles, pad and wind. Meanwhile the sine climbs a little, to stand alone at the end, as it began. The pad and wind, the bed under everything, fade last, on the gentler S-curve.
+One Sine and Broaden, the last twelve bars, are the score's longest fade. The fades are cued in One Sine, and the ones longer than its eight bars carry on through Broaden, which holds them. Each part falls on its own curve over its own length, so they leave one after another in the reverse of the order they came: bells, bass, arpeggio, sparkles, pad and wind. Meanwhile the sine climbs a little, to stand alone at the end, as it began. The pad and wind, the bed under everything, fade last, on the gentler S-curve.
 
 The mixer adds a control voltage without smoothing it, so each lane has a **Glide** for its jumps: a second for the pad, wind and sparkles, 0.8 s for the sine, 0.3 s for the lead, and 40 ms for the arp, bass and bells, which still land on the downbeat but never cut a tail short.
 
@@ -206,7 +207,7 @@ The sine, arpeggio, bells and sparkles share the Echoes mixer, whose send feeds 
 
 The whole mix goes onto a [Tape](../modules/effects/tape.md) last. For most of the song it's a well-kept machine at 15 ips. **Wow** and **Flutter** are at 10%, which sways the pitch by less than a cent. **Saturation** at 25% rounds the loud sections a little, and there's a touch of **Age** and **Hiss**. The record head squashes the loudest sections by up to a decibel. Sky's **Master** at −2.9 dB sets how hard the mix meets the head, with the Output's **Volume** at its usual 80%, and leaves the song at −16 LUFS, where every example sits.
 
-The tape earns its place in the breakdown. The Looper plays the opening back reversed, the rack remembering how it began, and memories don't hold their pitch. A third Arranger, **Tape**, follows Desk as Cues does. Its one lane is patched into the Tape's **Wow**, where it adds to the knob:
+The tape earns its place in the breakdown. The Looper plays the opening back reversed, the rack remembering how it began, and memories don't hold their pitch. A third Arranger, **Tape**, follows Desk as Cues does. Its first lane is patched into the Tape's **Wow**, where it adds to the knob:
 
 | Section | Wow lane | What you hear |
 |---------|----------|---------------|
@@ -218,6 +219,24 @@ The tape earns its place in the breakdown. The Looper plays the opening back rev
 Wow's swing grows with the square of the setting, so the knob's 10% alone is under half a cent, the knob and lane together at 55% are 12 cents, and at 85% they're 29. The drop lands harder for coming out of a lurch. The Tape glides the depth of its wobble over 300 ms, so the jump back to 0 is a snap and not a click. First Sound jumps the lane to 0 as well, so the song comes round on steady tape.
 
 The warp needs an Arranger of its own because Cues has no lane to spare. Its **Rec** and **Clear** lanes are only used for their gates, but a lane that rose through the breakdown would raise its gate too, and press the Looper's pedal.
+
+### Broadening
+
+A player slows into the end of a piece, and the score does too. Broaden, the last four bars, is a section only so that a ramp can start there. The Tape Arranger's second lane, **Tempo**, is patched through an [Attenuverter](../modules/utilities/attenuverter.md) at −0.23 into the [Clock](../modules/modulation/clock.md#tempo-cv)'s **Tempo** jack, which bends the BPM by octaves:
+
+```text
+[Tape Lane 2] ──> [Attenuverter In]   (Amount −0.23)
+[Attenuverter Out] ──> [Clock Tempo]
+```
+
+| Section | Tempo lane | What you hear |
+|---------|------------|---------------|
+| First Sound | Jump to 0 | 112 BPM, each time the song comes round |
+| Broaden | Exp ramp to 100% | The first bar barely gives. The next three stretch by 2%, 5% and 12%, and the song ends near 95 BPM, 15% slower than it ran |
+
+**Exp** holds nearly steady and then gives way, which is how players slow: a *ritardando* that starts evenly sounds like a machine running down. The cable closes a loop, since the Clock drives the Arranger that bends it, and the Clock hears it a block late, a few milliseconds no tempo shows. Everything that keeps time by the Clock broadens with it. The sequencers' notes lengthen, and the delay's dotted eighths, synced to the patch tempo, stretch with them, so the sine's last echoes trail further apart. The delay is a tape echo, and its motor glides to each new time, so as they stretch the echoes sag a little flat, about 30 cents by the last bar: a tape machine winding down under the last notes.
+
+The bars still count, so the score keeps its sections in bars and the sequencers stay on them. Only the seconds change: the last four bars take 8.99 seconds where they took 8.57.
 
 ## Variations
 

@@ -183,7 +183,7 @@ Every pianist broadens into the last chord of a piece, and a sequenced patch can
 - A **Jump** changes tempo on a section's downbeat.
 - **Glide** on the lane eases a Jump, so the change takes a beat or two.
 
-Put the Arranger's last section after the ramp, with the final chord in it, and the chord lands at the slower tempo.
+Put the Arranger's last section after the ramp, with the final chord in it, and the chord lands at the slower tempo. [From One Sine](../../songs/from-one-sine.md#broadening) ends this way, broadening over its last four bars.
 
 ### An LFO in time
 

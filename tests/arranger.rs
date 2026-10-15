@@ -5,7 +5,7 @@
 
 use soba::dsp::{DspModule, ProcessContext, SignalBuffer};
 use soba::modules::arranger::{Arranger, SECTIONS};
-use soba::modules::Clock;
+use soba::modules::{Attenuverter, Clock};
 use soba::persistence::{patch_from_json, NodeData, Patch};
 
 const RATE: f32 = 48_000.0;
@@ -228,4 +228,65 @@ fn the_parts_fade_away_in_the_order_they_came() {
     assert!(bells < bass && bass < arp && arp < sparkles && sparkles < pad && pad < wind, "bells, bass, arp, sparkles, pad, wind");
     // Leaving the sine alone, as it began
     assert!(played.lanes[0][bar_129 - 1] > 0.6, "the sine at the end: {}", played.lanes[0][bar_129 - 1]);
+}
+
+#[test]
+fn the_song_broadens_into_its_last_bars() {
+    // The Tape Arranger's Tempo lane, through an Attenuverter, bends the
+    // Clock that drives it: a ritardando over Broaden, the last four bars
+    let patch = from_one_sine();
+    let node = |id: u64| patch.nodes.iter().find(|n| n.id == id).unwrap();
+    let clock_node = patch.nodes.iter().find(|n| n.module_id == "util.clock").unwrap();
+    let tape_node = patch.nodes.iter().find(|n| n.labels.get("Name").map(String::as_str) == Some("Tape")).unwrap();
+    assert_eq!(tape_node.labels.get("Lane 2").map(String::as_str), Some("Tempo"));
+    let cable = |from: u64, from_port: &str, to: u64, to_port: &str| {
+        patch.connections.iter().any(|c| c.from_node == from && c.from_port == from_port && c.to_node == to && c.to_port == to_port)
+    };
+    let atten = patch.connections.iter().find(|c| c.from_node == tape_node.id && c.from_port == "Lane 2").expect("the Tempo lane is patched").to_node;
+    assert!(cable(atten, "Out", clock_node.id, "Tempo"), "into the Clock's Tempo");
+
+    let mut clock = Clock::new();
+    let mut arranger = Arranger::new();
+    let mut attenuverter = Attenuverter::new();
+    let clock_params = params_of(&clock, clock_node);
+    let arranger_params = params_of(&arranger, tape_node);
+    let atten_params = params_of(&attenuverter, node(atten));
+    let (starts, bars) = section_bars(&arranger_params);
+    assert_eq!((starts.last(), bars), (Some(&124), 128), "Broaden is the last four bars");
+    for module in [&mut clock as &mut dyn DspModule, &mut arranger, &mut attenuverter] {
+        module.prepare(RATE, BLOCK);
+    }
+
+    // Two minutes in, then the end and the loop round. The Clock hears the
+    // lane a block late, as the engine plays a cable that closes a loop
+    let mut gate = Vec::new();
+    let mut clock_out: Vec<SignalBuffer> = (0..3).map(|_| SignalBuffer::gate(BLOCK)).collect();
+    let mut arranger_out: Vec<SignalBuffer> = (0..Arranger::OUT_COUNT).map(|_| SignalBuffer::control(BLOCK)).collect();
+    let mut tempo = vec![SignalBuffer::control(BLOCK)];
+    let (sync, idle) = (SignalBuffer::control(BLOCK), SignalBuffer::gate(BLOCK));
+    let ctx = ProcessContext::new(RATE, BLOCK);
+    for _ in 0..(285.0 * RATE) as usize / BLOCK {
+        clock.process(&[&sync, &tempo[0]], &mut clock_out, &clock_params, &ctx);
+        let ctx = ProcessContext::with_transport(RATE, BLOCK, clock.transport(&clock_params).unwrap_or_default());
+        arranger.process(&[&clock_out[0], &idle, &idle, &idle], &mut arranger_out, &arranger_params, &ctx);
+        attenuverter.process(&[&arranger_out[Arranger::OUT_LANES + 2]], &mut tempo, &atten_params, &ctx);
+        gate.extend_from_slice(&clock_out[0].samples);
+    }
+
+    let clocks = rises(&gate);
+    let bar = |n: usize| (clocks[n * 16] - clocks[(n - 1) * 16]) as f64;
+    let steady = 4.0 * 60.0 / 112.0 * RATE as f64;
+    for n in 1..=124 {
+        assert!((bar(n) - steady).abs() <= 1.0, "bar {n} at 112 BPM: {} samples", bar(n));
+    }
+    // Exp holds and then gives way: each bar of Broaden longer than the last,
+    // the first hardly at all, the last some 10% slower
+    let broaden: Vec<f64> = (125..=128).map(|n| bar(n) / steady).collect();
+    assert!(broaden.windows(2).all(|w| w[1] > w[0]), "slowing through Broaden: {broaden:?}");
+    assert!(broaden[0] < 1.02, "Broaden's first bar hardly slower: {broaden:?}");
+    assert!((1.08..1.15).contains(&broaden[3]), "its last bar 8–15% slower: {broaden:?}");
+    // First Sound jumps the lane back to zero: in time again from the loop,
+    // after the block the Clock hears it late
+    assert!((bar(129) - steady).abs() < 64.0, "back to 112 BPM round the loop: {}", bar(129));
+    assert!((bar(130) - steady).abs() <= 1.0, "and steady: {}", bar(130));
 }
