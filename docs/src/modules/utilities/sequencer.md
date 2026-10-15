@@ -47,7 +47,7 @@ The grid shows one button per active step, in rows of eight. Steps beyond **Step
 - **Click** a step to switch its gate on (green) or off (dark). An off step is a rest: Pitch still moves to its note, but no gate fires.
 - **Shift + click** a step to tie it into the next step. A bar joins the two. Shift + click again to untie.
 - **Ctrl + click** a step to [slide](#slides) into it from the step before. An orange slur arches over the two. Ctrl + click again to strike it instead.
-- **Drag** a step up or down to change its note, a semitone for every few pixels. The note it will land on shows above the step as you drag. Hold **Shift** while dragging to move by whole octaves. A drag is one undo step, however far it goes.
+- **Drag** a step up or down to change its note, a semitone for every few pixels. The note it will land on shows above the step as you drag, and you hear it: the step's note sounds at its Velocity as the drag begins and follows it up or down, each semitone gliding in under the held note the way a key held under the hand does. Let go and it stops; with the clock running, the sequence takes over again at its next note. Hold **Shift** while dragging to move by whole octaves. A drag is one undo step, however far it goes.
 - **Right-click** a step to open its piano (below).
 
 While the patch plays, the current step is drawn brighter, with a white outline.

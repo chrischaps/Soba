@@ -3,7 +3,8 @@
 //!
 //! - Click switches a step's gate, Shift+click its tie, Ctrl+click its slide.
 //! - Drag a step up or down to move its note a semitone at a time, or with
-//!   Shift an octave at a time. The note it will land on shows above it.
+//!   Shift an octave at a time. The note it will land on shows above it,
+//!   and sounds, on the sequencer's own outputs like the piano's below.
 //! - Right-click opens a two-octave piano under the step, for writing notes
 //!   the way a hardware sequencer's step-record does: each key played writes
 //!   the step and moves along to the next one, so a melody goes in key after
@@ -312,11 +313,23 @@ fn auditions(sounding: Option<Audition>, held: Option<Audition>, struck: Option<
     sent
 }
 
-/// A drag under way: the step, and its note when the drag began.
+/// A drag under way: the step, its note when the drag began, and the note
+/// it has sounding.
 #[derive(Clone, Copy, Debug)]
 struct StepDrag {
     step: usize,
     from: u8,
+    sounding: Option<Audition>,
+}
+
+impl StepDrag {
+    /// What to send the engine as the drag holds `held`, or lets go with
+    /// None. The note it begins on is struck, each one it moves to after
+    /// moves Pitch under the held gate, legato, the way a key held under the
+    /// hand does, and letting go lets the gate fall.
+    fn sound(&mut self, held: Option<Audition>) -> Vec<Option<Audition>> {
+        auditions(std::mem::replace(&mut self.sounding, held), held, None)
+    }
 }
 
 /// The note a drag lands on: `dy` points down the screen from where it
@@ -493,12 +506,14 @@ pub(super) fn step_grid(
                 ui.memory_mut(|m| m.open_popup(entry_id));
             }
 
-            // Dragging up or down moves the note
+            // Dragging up or down moves the note, sounding it as it goes, at
+            // the step's Velocity. With the clock running the sequence takes
+            // over again at its next note once it's let go of
             if response.drag_started() {
-                ui.data_mut(|d| d.insert_temp(drag_id, StepDrag { step, from: pitch }));
+                ui.data_mut(|d| d.insert_temp(drag_id, StepDrag { step, from: pitch, sounding: None }));
             }
             let drag = ui.data(|d| d.get_temp::<StepDrag>(drag_id)).filter(|d| d.step == step);
-            if let Some(drag) = drag.filter(|_| response.dragged()) {
+            if let Some(mut drag) = drag.filter(|_| response.dragged()) {
                 let (origin, now, octaves) =
                     ui.input(|i| (i.pointer.press_origin(), i.pointer.interact_pos(), i.modifiers.shift));
                 if let (Some(origin), Some(now)) = (origin, now) {
@@ -506,11 +521,16 @@ pub(super) fn step_grid(
                     if to != pitch {
                         set(pattern.param(step, StepField::Pitch), to as f32);
                     }
+                    sounded.extend(drag.sound(Some(audition_of(to, pattern.velocities[step]))));
+                    ui.data_mut(|d| d.insert_temp(drag_id, drag));
                     ui.ctx().set_cursor_icon(CursorIcon::ResizeVertical);
                     drag_badge(ui, node_id, *step_rect, &note_to_name(to), zoom);
                 }
             }
             if response.drag_stopped() {
+                if let Some(mut drag) = ui.data(|d| d.get_temp::<StepDrag>(drag_id)) {
+                    sounded.extend(drag.sound(None));
+                }
                 ui.data_mut(|d| d.remove::<StepDrag>(drag_id));
             }
         }
@@ -944,6 +964,18 @@ mod tests {
     fn a_key_tapped_within_a_frame_still_blips() {
         let e = audition_of(64, 100);
         assert_eq!(auditions(None, None, Some((e, false))), vec![Some(e), None]);
+    }
+
+    #[test]
+    fn a_drag_strikes_its_note_then_moves_it_legato() {
+        let mut drag = StepDrag { step: 0, from: 60, sounding: None };
+        let [c, cs, d] = [60, 61, 62].map(|note| audition_of(note, 100));
+        assert_eq!(drag.sound(Some(c)), vec![Some(c)], "the drag's start strikes once");
+        assert_eq!(drag.sound(Some(c)), vec![], "and holds while it stays on the note");
+        assert_eq!(drag.sound(Some(cs)), vec![Some(cs)], "each semitone moves Pitch without letting go");
+        assert_eq!(drag.sound(Some(d)), vec![Some(d)]);
+        assert_eq!(drag.sound(None), vec![None], "letting go lets the gate fall");
+        assert_eq!(drag.sound(None), vec![], "once");
     }
 
     #[test]
