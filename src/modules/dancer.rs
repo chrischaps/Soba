@@ -202,6 +202,10 @@ impl Dancer {
     /// 1 while it dances to the beat it hears in Audio, 0.5 while it
     /// listens for one there (nothing else giving it a beat), 0 otherwise.
     pub const READOUT_EAR: usize = 8;
+    /// While it listens, how near it is to hearing a beat, 0 to 1: up to a
+    /// half as a tempo starts to stand out, the rest as that tempo holds
+    /// (see [`BeatTracker::hunch`]). 1 dancing to one, 0 otherwise.
+    pub const READOUT_HUNCH: usize = 9;
 
     /// Counters in the readout wrap here, well inside an f32's whole numbers.
     pub const WRAP: u64 = 4096;
@@ -418,6 +422,7 @@ impl DspModule for Dancer {
         }
         v[Self::READOUT_ENERGY] = self.energy;
         v[Self::READOUT_EAR] = self.ear;
+        v[Self::READOUT_HUNCH] = if self.ear > 0.0 { self.ears.hunch() } else { 0.0 };
         v[Self::READOUT_PUNCH] = self.punch;
         v[Self::READOUT_ACCENTS] = (self.accent_count as u64 % Self::WRAP) as f32;
         let move_seconds = self.dance.map_or(0.5, |(_, seconds)| seconds);
@@ -631,12 +636,25 @@ mod tests {
         assert!((seconds - 60.0 / 124.0).abs() < 0.01, "a {seconds} s move");
         assert!(value(&dancer, Dancer::READOUT_ENERGY) > 0.5);
         assert_eq!(value(&dancer, Dancer::READOUT_EAR), 1.0);
+        assert_eq!(value(&dancer, Dancer::READOUT_HUNCH), 1.0);
 
-        // Before it's sure, it listens
+        // Before it's sure, it listens, nearer a beat as the hits go on
         let mut listening = self::dancer();
-        run(&mut listening, None, Some(&music[..48000]), None, TransportState::new(), 48000);
+        let mut hunches = Vec::new();
+        for half in 1..4 {
+            run(&mut listening, None, Some(&music[(half - 1) * 24000..half * 24000]), None, TransportState::new(), 24000);
+            hunches.push(value(&listening, Dancer::READOUT_HUNCH));
+        }
         assert_eq!(value(&listening, Dancer::READOUT_DANCING), 0.0);
         assert_eq!(value(&listening, Dancer::READOUT_EAR), 0.5);
+        assert!(hunches.windows(2).all(|w| w[0] < w[1]) && hunches[0] > 0.0 && hunches[2] < 1.0, "hunches {hunches:?}");
+
+        // A held note never hits, so there's nothing to listen for
+        let mut held = self::dancer();
+        let note = sine(0.3, 96000);
+        run(&mut held, None, Some(&note), None, TransportState::new(), note.len());
+        assert_eq!(value(&held, Dancer::READOUT_EAR), 0.5);
+        assert_eq!(value(&held, Dancer::READOUT_HUNCH), 0.0);
 
         // Unpatching the Audio forgets it
         run(&mut dancer, None, None, None, TransportState::new(), BLOCK);

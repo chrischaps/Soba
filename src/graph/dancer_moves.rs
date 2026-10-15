@@ -706,6 +706,33 @@ pub fn idle(time: f64, energy: f32) -> Pose {
     pose
 }
 
+/// How far the head cocks while listening, in radians: toward the music,
+/// which comes in at the Audio jack on the left.
+const COCK: f32 = 0.22;
+/// How high the toe comes up between the hits it taps to.
+const TAP: f32 = 0.05;
+
+/// Listening for a beat in music that's hitting: `standing` (the idle pose)
+/// leaning toward the music, the head cocked and a hand cupped to that ear.
+/// `hunch` (0 to 1) is how near it is to hearing one: it leans in at once,
+/// and from part way a foot starts to tap and the knees give with it, `toe`
+/// (0 down, 1 up) saying where the foot is. At 1 it's ready to dance.
+pub fn listening(standing: &Pose, hunch: f32, toe: f32) -> Pose {
+    let ear = smooth(hunch / 0.25);
+    let tapping = smooth((hunch - 0.35) / 0.5);
+    let toe = toe.clamp(0.0, 1.0);
+    let mut pose = *standing;
+    // Weight on the foot nearer the music, leaning in
+    pose.hip.x = 0.5 * standing.hip.x - 0.02;
+    pose.hip.y = standing.hip.y - 0.012 * tapping * (1.0 - toe);
+    pose.lean = 0.5 * standing.lean - 0.06;
+    pose.head = COCK + 0.04 * tapping * (1.0 - toe);
+    // The near hand cupped at the ear, the other hanging easy
+    pose.arms = [hands([vec2(-0.11, 0.12), vec2(0.0, 0.0)])[0], standing.arms[1]];
+    pose.feet = [vec2(-0.1, 0.0), vec2(0.1, TAP * tapping * toe)];
+    standing.lerp(&pose, ear)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -837,6 +864,53 @@ mod tests {
             assert!(moved(&last, &pose) < 0.02, "idle jumps at {}", i as f64 / 60.0);
             assert!(inside(&joints(&pose)));
             last = pose;
+        }
+    }
+
+    #[test]
+    fn test_listening_keeps_its_bones_and_eases_in() {
+        let rest = bones(&joints(&Pose::stand()));
+        let standing = idle(3.0, 0.0);
+        assert_eq!(listening(&standing, 0.0, 1.0), standing, "nothing heard, it just stands");
+        let mut last = listening(&standing, 0.0, 0.0);
+        // The hunch rising over three seconds at 60 frames a second, a hit
+        // every half second snapping the toe down and letting it up again
+        for i in 1..=180 {
+            let s = i as f32 / 60.0;
+            let since = s % 0.5;
+            let toe = if since < 0.05 { 1.0 - since / 0.05 } else { ((since - 0.05) / 0.2).min(1.0) };
+            let now = listening(&idle(3.0 + s as f64, 0.0), s / 3.0, toe);
+            let j = joints(&now);
+            for (a, b) in bones(&j).iter().zip(&rest) {
+                assert!((a - b).abs() < 1e-3, "at {s}: bone {a} not {b}");
+            }
+            assert!(inside(&j), "at {s}: {j:?}");
+            assert!(j.feet.iter().all(|f| f.y >= -1e-4));
+            let d = moved(&last, &now);
+            assert!(d < 0.03, "listening jumps {d} at {s}");
+            last = now;
+        }
+        // Cupping the ear, the hand comes up beside the head
+        let j = joints(&listening(&standing, 0.5, 0.0));
+        assert!(j.hands[0].x < j.head.x && (j.hands[0] - j.head).length() < 2.0 * HEAD, "{j:?}");
+    }
+
+    #[test]
+    fn test_listening_flows_into_the_first_move() {
+        // As the dancer's face does, at 120 BPM: from listening, the dance
+        // eases in over 0.35 s. Ticks are 1/600 s
+        for style in 0..4 {
+            let moment = |tick: u32| Moment { style, beat: tick / 300, phase: (tick % 300) as f32 / 300.0, energy: 0.7, punch: 0.0, accent: (0, 16.0) };
+            let at = |tick: u32| {
+                let ease = smooth(tick as f32 / 210.0);
+                listening(&idle(tick as f64 / 600.0, 0.0), 1.0, 1.0).lerp(&dance(&moment(tick)), ease)
+            };
+            let fastest = |pose: &dyn Fn(u32) -> Pose| (1..600).map(|tick| moved(&pose(tick - 1), &pose(tick))).fold(0.0, f32::max);
+            let dancing = fastest(&|tick| dance(&moment(tick)));
+            let easing = fastest(&at);
+            // The cupped hand flung out into the first move is quick, but no
+            // quicker than the dance's own snaps
+            assert!(easing < dancing.max(0.005) * 1.2, "style {style}: {easing} a tick easing in, {dancing} dancing");
         }
     }
 }

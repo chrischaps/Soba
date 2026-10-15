@@ -6,7 +6,8 @@
 //! music is loud, a shadow that spreads when the figure lands and shrinks
 //! when it leaves the ground, and a faint trail of where the limbs just
 //! were. While stopped, or with no beat, the figure stands about, and it
-//! eases between the two.
+//! eases between the two. Listening for a beat in Audio, it leans in with a
+//! hand to its ear, and as it grows surer a foot taps along to the hits.
 //!
 //! The stage is as big as its hidden Size parameter says; the grip in its
 //! corner drags it bigger. Everything moves on the engine's beat and on
@@ -28,6 +29,18 @@ const HEIGHT: f32 = 116.0;
 
 /// How long the figure takes to ease between dancing and standing about.
 const EASE_SECONDS: f64 = 0.35;
+
+/// How long the figure takes to lean in to listen, or to stop listening.
+const LISTEN_SECONDS: f64 = 0.25;
+/// A hit sets the toe down for this long, and it gets there in about
+/// [`TOE_DOWN_SECONDS`], then lifts again in about [`TOE_UP_SECONDS`].
+const TOE_HELD: f64 = 0.06;
+const TOE_DOWN_SECONDS: f64 = 0.02;
+const TOE_UP_SECONDS: f64 = 0.12;
+/// A hit, as the readout's punch: at least this, and up this much since the
+/// last frame.
+const HIT_PUNCH: f32 = 0.3;
+const HIT_RISE: f32 = 0.05;
 
 /// Trail frames kept, and how far apart in time.
 const TRAIL: usize = 6;
@@ -58,6 +71,13 @@ struct Stage {
     /// Where the joints were lately, newest last, and when the last was kept.
     trail: Vec<[Vec2; 12]>,
     trail_time: f64,
+    /// How near it is to hearing a beat, eased (see `Dancer::READOUT_HUNCH`).
+    hunch: f32,
+    /// The tapping toe, 0 down and 1 up; the punch last frame, and how long
+    /// since the last hit.
+    toe: f32,
+    punch: f32,
+    since_hit: f64,
 }
 
 /// Draws the stage; returns a new Size when its grip is dragged.
@@ -106,9 +126,18 @@ pub fn dancer_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
     if let Some(m) = moment {
         stage.last = Some(Moment { style, ..m });
     }
+    // Listening for a beat, and tapping along to the hits
+    let ear = value(Dancer::READOUT_EAR);
+    let hunch = if playing && ear > 0.25 { value(Dancer::READOUT_HUNCH) } else { 0.0 };
+    stage.hunch += (hunch - stage.hunch) * approach(dt, LISTEN_SECONDS);
+    let punch = if playing { value(Dancer::READOUT_PUNCH) } else { 0.0 };
+    stage.since_hit = if punch >= HIT_PUNCH && punch > stage.punch + HIT_RISE { 0.0 } else { stage.since_hit + dt };
+    stage.punch = punch;
+    let (toe, seconds) = if stage.since_hit < TOE_HELD { (0.0, TOE_DOWN_SECONDS) } else { (1.0, TOE_UP_SECONDS) };
+    stage.toe += (toe - stage.toe) * approach(dt, seconds);
 
-    // Standing about, a dance, or part way between
-    let idle = dancer_moves::idle(time, energy);
+    // Standing about (or listening), a dance, or part way between
+    let idle = dancer_moves::listening(&dancer_moves::idle(time, energy), stage.hunch, stage.toe);
     let pose = match stage.last {
         Some(m) if stage.dancing > 0.0 => idle.lerp(&dancer_moves::dance(&Moment { style, ..m }), smooth(stage.dancing)),
         _ => idle,
@@ -179,7 +208,6 @@ pub fn dancer_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
     limbs(&painter, &joints, &at, Stroke::new(width, CHALK), HEAD * scale, CHALK);
 
     // Its style, and the tempo it's dancing at: by ear, roughly
-    let ear = value(Dancer::READOUT_EAR);
     let tempo = if live {
         let seconds = value(Dancer::READOUT_MOVE_SECONDS);
         let by_ear = if ear > 0.75 { "~" } else { "" };
@@ -230,6 +258,12 @@ pub fn dancer_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(33));
     }
     changed.filter(|&new| (new - size).abs() > 1e-3).map(|new| ("Size".to_string(), new))
+}
+
+/// How far to go toward a target `dt` seconds on, closing in on it over
+/// about `seconds`.
+fn approach(dt: f64, seconds: f64) -> f32 {
+    (1.0 - (-dt / seconds).exp()) as f32
 }
 
 /// 0 to 1, eased at both ends.

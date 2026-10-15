@@ -169,6 +169,26 @@ impl Default for BeatTracker {
 }
 
 impl BeatTracker {
+    /// How near it is to claiming a beat, 0 to 1, for a listener to show:
+    /// up to a half as the best tempo's score climbs toward the claim, then
+    /// the rest as the music keeps hitting and that score holds. 1 with a
+    /// beat, 0 while nothing hits.
+    pub fn hunch(&self) -> f32 {
+        if self.beat.is_some() {
+            return 1.0;
+        }
+        if self.heard == 0 {
+            return 0.0;
+        }
+        let best = self.memory.scores.iter().fold(0.0f32, |a, &b| a.max(b));
+        let climbing = ((best - LOSE_SCORE) / (CLAIM_SCORE - LOSE_SCORE)).clamp(0.0, 1.0);
+        let heard = self.heard as f32 * FRAME_SECONDS / HEARD_SECONDS;
+        let sure = self.sure as f32 * FRAME_SECONDS / SURE_SECONDS;
+        0.5 * climbing + 0.5 * heard.min(sure).min(1.0)
+    }
+}
+
+impl BeatTracker {
     /// A tracker that has heard nothing, at 48 kHz.
     pub fn new() -> Self {
         let mut tracker = Self {
