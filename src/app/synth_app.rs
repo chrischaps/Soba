@@ -1896,14 +1896,16 @@ impl SynthApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 self.apply_pending_view(ui, editor_rect);
 
-                // Draw the node graph editor
-                let (zoom_before, pan_before) = (self.graph_state.pan_zoom.zoom, self.graph_state.pan_zoom.pan);
                 // Fitted again each frame for a few: zoomed out, modules that
-                // were off screen are drawn and measured, and may need more room
+                // were off screen are drawn and measured, and may need more room.
+                // Before the zoom below is noted: the fit follows its own zoom
                 if self.fit_pending > 0 {
                     self.fit_pending -= 1;
                     self.fit_level(ui);
                 }
+
+                // Draw the node graph editor
+                let (zoom_before, pan_before) = (self.graph_state.pan_zoom.zoom, self.graph_state.pan_zoom.pan);
                 self.follow_gestures(ui, editor_rect);
                 // A capture script moves the view like a camera, from where
                 // a `fit` lands once it has
