@@ -45,6 +45,14 @@
 //! hitting for a couple of seconds and one tempo stands clear of the rest,
 //! and lets go when it stops hitting. A drone, a pad or silence has none.
 //!
+//! **Through a breakdown.** When the drums drop out and the beat grows
+//! faint, a beat it has followed for a while isn't let go at once: it keeps
+//! going at the pace it was, for up to eight bars, and is followed again
+//! when the drums come back near it, on the beat it was on. Nor is it taken
+//! over by what plays across it meanwhile, a tresillo or a dotted-quarter
+//! delay three against two of the beat; or by any tempo too faint to claim
+//! a beat of its own.
+//!
 //! Everything is allocated up front: it runs on the audio thread.
 
 use super::onsets::{BandSplit, FLOOR_DB, LEAST_RISE_DB, RELEASE_SECONDS, SILENCE_DB};
@@ -83,6 +91,16 @@ const SURE_SECONDS: f32 = 1.0;
 /// nothing has hit for [`QUIET_SECONDS`].
 const LOSE_SCORE: f32 = 0.14;
 const QUIET_SECONDS: f32 = 2.0;
+/// Doubting a beat it has followed for this many beats (8 bars) while the
+/// music still plays, it keeps it going as it was for as many again, and
+/// follows it again once it's sure of a tempo this near it: a breakdown
+/// that drops the drums is danced through.
+const COAST_BEATS: f64 = 32.0;
+const COAST_NEAR: f32 = 1.04;
+/// Nor can a beat it has followed that long be taken over by a tempo three
+/// against two or four against three of it, octaves aside, to within this:
+/// a tresillo or a dotted-quarter delay is played across the beat.
+const ACROSS_NEAR: f32 = 1.03;
 /// Another tempo takes over from the one being followed only when it
 /// scores this much better, as a lead held over [`RIVAL_SECONDS`]: at once
 /// for a beat danced for less than that, and more patiently over as long
@@ -145,6 +163,8 @@ const MOST_TRIM: f32 = 0.02;
 const LOCKED: f64 = 0.1;
 /// How long the beat takes to settle on a new tempo, in seconds.
 const TEMPO_SECONDS: f32 = 1.0;
+/// How long the pace it coasts at is averaged over, on the beat, in seconds.
+const PACE_SECONDS: f32 = 8.0;
 
 /// Hears the beat in music as it plays.
 pub struct BeatTracker {
@@ -202,6 +222,9 @@ struct Beat {
     /// How far the last frame moved it, so a block between frames can be
     /// read part way.
     step: f64,
+    /// How far a frame has moved it on average while on the beat: the pace
+    /// it coasts at, pull and all.
+    pace: f64,
     /// How much more backbeat lies half a beat from the clock's tooth than
     /// on it, as a log, learned while the clock is on that tooth.
     lean: f32,
@@ -211,6 +234,8 @@ struct Beat {
     /// How far another tempo has led this one lately, as a log, 0 while
     /// this one is the best.
     rival: f32,
+    /// While it coasts, doubting the beat, where it began to.
+    coasting: Option<f64>,
 }
 
 impl Default for BeatTracker {
@@ -369,12 +394,18 @@ impl BeatTracker {
         let heard_enough = self.heard as f32 * FRAME_SECONDS >= HEARD_SECONDS;
         let sure = self.sure as f32 * FRAME_SECONDS >= SURE_SECONDS;
         let doubtful = self.doubt as f32 * FRAME_SECONDS >= SURE_SECONDS;
-        self.beat = match (self.beat, chosen) {
-            (None, Some((frames, ..))) if heard_enough && sure => {
-                let (phase, _) = self.phase(frames, None);
-                Some(Beat { frames, trim: 0.0, position: phase as f64, step: 0.0, lean: 0.0, heading: None, rival: 0.0 })
+        let claim = |frames: f32| {
+            let (phase, _) = self.phase(frames, None);
+            Some(Beat { frames, trim: 0.0, position: phase as f64, step: 0.0, pace: 1.0 / frames as f64, lean: 0.0, heading: None, rival: 0.0, coasting: None })
+        };
+        let beat = match (self.beat, chosen) {
+            (None, Some((frames, ..))) if heard_enough && sure => claim(frames),
+            _ if quiet => None,
+            // Sure again after coasting: the same beat, or another
+            (Some(beat), Some((frames, ..))) if beat.coasting.is_some() && sure => {
+                if (frames / beat.frames).ln().abs() < COAST_NEAR.ln() { Some(self.follow(beat, frames)) } else { claim(frames) }
             }
-            (Some(beat), Some((frames, _, taking_over))) if !quiet && !doubtful => {
+            (Some(beat), Some((frames, _, taking_over))) if beat.coasting.is_none() && !doubtful => {
                 // A new tempo has beats of its own: where the clock was in the
                 // old one, and how it trimmed and leaned there, say nothing
                 // about them, so it finds them afresh, as a claim does, and
@@ -382,8 +413,10 @@ impl BeatTracker {
                 let beat = if taking_over { Beat { heading: Some(self.phase(frames, None).0 as f64), trim: 0.0, lean: 0.0, ..beat } } else { beat };
                 Some(self.follow(beat, frames))
             }
+            (Some(beat), _) if beat.may_coast() => Some(beat.coast()),
             _ => None,
         };
+        self.beat = beat;
     }
 
     /// This frame's onset strength: how far the bands rose together, in dB,
@@ -424,6 +457,13 @@ impl BeatTracker {
         SHORTEST_BEAT * (i / CANDIDATES as f32).exp2()
     }
 
+    /// Whether candidates `apart` are three against two or four against
+    /// three, octaves aside.
+    fn across(apart: f32) -> bool {
+        let octaves = (apart / CANDIDATES as f32).rem_euclid(1.0);
+        [4.0f32 / 3.0, 1.5].iter().any(|ratio| (octaves - ratio.log2()).abs() < ACROSS_NEAR.log2())
+    }
+
     /// The beat to follow, in frames, its score, and whether it takes over
     /// from the beat being followed: that beat, found again, unless another
     /// has scored clearly better for a while.
@@ -458,7 +498,10 @@ impl BeatTracker {
             let danced = beat.position as f32 * beat.frames * FRAME_SECONDS;
             let patience = (danced - RIVAL_SECONDS).clamp(FRAME_SECONDS, RIVAL_SECONDS);
             beat.rival = if lead > 0.0 { beat.rival + (lead - beat.rival) * (FRAME_SECONDS / patience) } else { 0.0 };
-            if beat.rival <= SWITCH.ln() {
+            // Nor can one scoring too little to claim a beat of its own, or
+            // one played across a beat followed a while
+            let across = beat.position >= COAST_BEATS && Self::across(best as f32 - following as f32);
+            if beat.rival <= SWITCH.ln() || scores[best] < CLAIM_SCORE || across {
                 chosen = near;
                 same = true;
             }
@@ -613,6 +656,7 @@ impl BeatTracker {
         // heard. Only near the beat, though: catching up with a beat found
         // afresh is the pull's job, and trimming through it would overshoot
         let trim = if error.abs() < LOCKED { (beat.trim + TRIM * error as f32).clamp(-MOST_TRIM, MOST_TRIM) } else { beat.trim };
+        let pace = if error.abs() < LOCKED { beat.pace + (step - beat.pace) * (FRAME_SECONDS / PACE_SECONDS) as f64 } else { beat.pace };
         let (lean, heading) = match beat.heading {
             // Turning: on the beat there, what it leaned toward is under it
             None if beat.lean > TURN => (-beat.lean, Some(target)),
@@ -621,7 +665,7 @@ impl BeatTracker {
             _ if error.abs() < LOCKED => (beat.lean + (toward - beat.lean) * clear * (FRAME_SECONDS / LEAN_SECONDS), None),
             _ => (beat.lean, None),
         };
-        Beat { frames, trim, position: beat.position + step, step, lean, heading, rival: beat.rival }
+        Beat { frames, trim, position: beat.position + step, step, pace, lean, heading, rival: beat.rival, coasting: None }
     }
 }
 
@@ -629,6 +673,20 @@ impl Beat {
     /// How long the clock's beat lasts, in frames.
     fn length(&self) -> f32 {
         self.frames * (1.0 - self.trim)
+    }
+
+    /// Whether it may coast on: once it has been followed for [`COAST_BEATS`],
+    /// for as many again.
+    fn may_coast(&self) -> bool {
+        match self.coasting {
+            None => self.position >= COAST_BEATS,
+            Some(from) => self.position - from < COAST_BEATS,
+        }
+    }
+
+    /// Moves it on a frame at the pace it was going, hearing nothing.
+    fn coast(self) -> Beat {
+        Beat { position: self.position + self.pace, step: self.pace, coasting: self.coasting.or(Some(self.position)), ..self }
     }
 }
 
@@ -750,13 +808,26 @@ pub(crate) mod tests {
 
     /// A broken beat at 116 BPM for `seconds`, as Canopy's: the kick on one
     /// and harder on the ands of two and three, the snare on two and four,
-    /// and a hat on every eighth. The music, and when each beat falls.
-    fn broken_beat(seconds: f32) -> (Vec<f32>, Vec<f32>) {
+    /// and a hat on every eighth. In bars starting in `breakdown` the drums
+    /// drop out and a bell plays three times a bar instead, at the sixteenths
+    /// `bells` gives for each bar. The music, and when each beat falls.
+    fn broken_beat(seconds: f32, breakdown: std::ops::Range<f32>, bells: fn(usize) -> [f32; 3]) -> (Vec<f32>, Vec<f32>) {
         let sixteenth = 15.0 / 116.0;
         let mut out = vec![0.0; (seconds * RATE) as usize];
         let mut noise = Noise(7);
         let mut bar = 0.0;
         while bar + 16.0 * sixteenth < seconds {
+            if breakdown.contains(&bar) {
+                for step in bells((bar / (16.0 * sixteenth)).round() as usize) {
+                    let start = ((bar + step * sixteenth) * RATE) as usize;
+                    for (n, s) in out.iter_mut().skip(start).enumerate().take((0.4 * RATE) as usize) {
+                        let t = n as f32 / RATE;
+                        *s += 0.3 * (std::f32::consts::TAU * 660.0 * t).sin() * (-t / 0.15).exp();
+                    }
+                }
+                bar += 16.0 * sixteenth;
+                continue;
+            }
             for (step, hit, level) in [(0, Hit::Kick, 0.5), (6, Hit::Kick, 0.9), (10, Hit::Kick, 0.9), (4, Hit::Snare, 0.3), (12, Hit::Snare, 0.3)] {
                 add_hit(&mut out, hit, bar + step as f32 * sixteenth, level, &mut noise);
             }
@@ -774,7 +845,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_a_broken_beat_is_danced_on_its_snare_not_its_kicks() {
-        let (music, beats) = broken_beat(30.0);
+        let (music, beats) = broken_beat(30.0, 0.0..0.0, |_| [0.0; 3]);
         let heard = listen(&music);
         let (_, seconds) = heard.last().unwrap().expect("a beat");
         assert!((seconds - 60.0 / 116.0).abs() < 0.01, "a {seconds} s beat");
@@ -831,6 +902,34 @@ pub(crate) mod tests {
         }
         let misses = misses(&heard, &beats, 10.0);
         assert!(misses.iter().all(|miss| miss.abs() < 0.025), "{misses:?}");
+    }
+
+    #[test]
+    fn test_a_breakdown_is_danced_through_on_the_beat() {
+        // Eleven bars of drums, four of a bell, and the drums back. The bell
+        // plays a tresillo, three against two of the beat, as Canopy's
+        // kalimba does in its Clearing; or at no steady spacing at all, so
+        // there's no beat to hear and it coasts. Before it doubts the beat,
+        // that bell can pull it a little way off, so only the tresillo is
+        // held to the beat while the drums are out
+        let tresillo: fn(usize) -> [f32; 3] = |_| [0.0, 6.0, 12.0];
+        let scattered: fn(usize) -> [f32; 3] = |bar| {
+            let jitter = |by: f32| (bar as f32 * by) % 3.0;
+            [1.3 + jitter(2.37), 6.1 + jitter(1.61), 11.4 + jitter(0.83)]
+        };
+        for (name, bells, off) in [("tresillo", tresillo, 0.025), ("scattered", scattered, f32::INFINITY)] {
+            let (music, beats) = broken_beat(46.0, 22.0..30.0, bells);
+            let heard = listen(&music);
+            let at = |seconds: f32| (seconds / FRAME_SECONDS) as usize;
+            assert!(heard[at(20.0)..].iter().all(Option::is_some), "{name}: the beat is held through the breakdown");
+            // When the drums come back, its beats land on the beat rather
+            // than the and
+            for (from, to, off) in [(22.0, 31.0, off), (36.0, 46.0, 0.012)] {
+                let misses = misses(&heard[..at(to)], &beats, to - from);
+                assert!(misses.len() as f32 >= 0.9 * (to - from) * 116.0 / 60.0, "{name}, {from}–{to} s: {misses:?}");
+                assert!(misses.iter().all(|miss| miss.abs() < off), "{name}, {from}–{to} s: {misses:?}");
+            }
+        }
     }
 
     #[test]

@@ -60,7 +60,6 @@ const SONGS: &[(&str, f32, f32, f32)] = &[
 
 /// Windows known not to hold the beat: (file, from and to, in seconds, and why).
 const LOOSE: &[(&str, f32, f32, &str)] = &[
-    ("canopy.json", 113.0, 143.0, "the Clearing drops the drums and the beat is lost; it's found again on the and, and turned 10 s into the Peak (#287)"),
     ("interlock.json", 10.0, 20.0, "no drums and one voice at first: it hears dotted eighths, turns to the beat at 8 s and is still settling (#288)"),
 ];
 
