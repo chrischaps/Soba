@@ -5,6 +5,9 @@
 //! A take draws in red, growing from the left across a span that doubles
 //! whenever the take outgrows it (or across its bars, when it's in bars),
 //! with seconds ticked along the foot and the time so far at the head.
+//! A take in bars is the loop it's becoming: its beats are ticked instead,
+//! each bar more strongly, and the counter reads bar.beat of the bars, so
+//! it's plain how much of the phrase is left to play.
 //! What the Sampler held before stays where it was until the take is done.
 //!
 //! Waiting for a sound, the panel dims and an input meter runs along its
@@ -54,6 +57,10 @@ pub struct RecView {
     pub room: bool,
     /// The Thresh knob, in dB.
     pub threshold_db: f32,
+    /// Seconds in a beat of a take in bars, 0 for a free take.
+    pub beat: f32,
+    /// Beats in that take's bar.
+    pub per_bar: u32,
 }
 
 impl RecView {
@@ -66,6 +73,27 @@ impl RecView {
             level: value(Sampler::READOUT_REC_LEVEL),
             room: value(Sampler::READOUT_ROOM) > 0.0,
             threshold_db,
+            beat: value(Sampler::READOUT_REC_BEAT),
+            per_bar: (value(Sampler::READOUT_REC_BAR).round() as u32).max(1),
+        }
+    }
+
+    /// The beats and bars of a take in bars, if it is one: (beats so far,
+    /// bars it lasts).
+    fn in_bars(&self) -> Option<(f32, u32)> {
+        (self.beat > 0.0).then(|| (self.seconds / self.beat, ((self.scale / self.beat / self.per_bar as f32).round() as u32).max(1)))
+    }
+
+    /// The recorder's counter: `REC  2.3 / 4` (bar 2, beat 3, of four
+    /// bars) for a take in bars, or the seconds so far.
+    pub fn counter(&self) -> String {
+        match self.in_bars() {
+            Some((beats, bars)) => {
+                // The beat under way, from 0, held on the last as the take closes
+                let whole = ((beats + 1e-3).floor() as u32).min(bars * self.per_bar - 1);
+                format!("REC  {}.{} / {bars}", whole / self.per_bar + 1, whole % self.per_bar + 1)
+            }
+            None => format!("REC  {:.1} s", self.seconds),
         }
     }
 
@@ -121,18 +149,35 @@ pub fn rec_block(graph: &SynthGraph, node_id: NodeId, user_state: &SynthGraphSta
 }
 
 /// Draws a take as it comes in, across `plot`.
-pub fn draw_take(painter: &egui::Painter, plot: Rect, view: &RecView, overview: Option<&ScopeData>, label: &str, z: f32) {
+pub fn draw_take(painter: &egui::Painter, plot: Rect, view: &RecView, overview: Option<&ScopeData>, z: f32) {
     let red = theme::accent::ERROR;
     let x_at = |seconds: f32| plot.left() + (seconds / view.scale).clamp(0.0, 1.0) * plot.width();
     let mid = plot.center().y;
 
-    // Seconds along the foot, a tick for each, or every few on a long span
-    let every = [1.0, 2.0, 4.0, 8.0, 16.0].into_iter().find(|step| view.scale / step <= 16.0).unwrap_or(30.0);
-    let mut tick = every;
-    while tick < view.scale {
-        let x = x_at(tick);
-        painter.vline(x, (plot.bottom() - 3.0 * z)..=plot.bottom(), Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.12)));
-        tick += every;
+    let foot_tick = |x: f32, height: f32, alpha: f32| {
+        painter.vline(x, (plot.bottom() - height * z)..=plot.bottom(), Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(alpha)));
+    };
+    if let Some((_, bars)) = view.in_bars() {
+        // Its beats along the foot, each bar taller and brighter, and the
+        // beats left out where they'd crowd
+        let beats = bars * view.per_bar;
+        let roomy = plot.width() / beats as f32 >= 3.0 * z;
+        for beat in 1..beats {
+            let x = x_at(beat as f32 * view.beat);
+            if beat % view.per_bar == 0 {
+                foot_tick(x, 6.0, 0.3);
+            } else if roomy {
+                foot_tick(x, 3.0, 0.12);
+            }
+        }
+    } else {
+        // Seconds along the foot, a tick for each, or every few on a long span
+        let every = [1.0, 2.0, 4.0, 8.0, 16.0].into_iter().find(|step| view.scale / step <= 16.0).unwrap_or(30.0);
+        let mut tick = every;
+        while tick < view.scale {
+            foot_tick(x_at(tick), 3.0, 0.12);
+            tick += every;
+        }
     }
     painter.hline(plot.x_range(), mid, Stroke::new(0.5 * z, Color32::from_rgba_unmultiplied(255, 255, 255, 10)));
 
@@ -167,7 +212,7 @@ pub fn draw_take(painter: &egui::Painter, plot: Rect, view: &RecView, overview: 
     // The time so far, as a recorder's counter: on a dark tab of its own,
     // so the take can run under it
     let font = egui::FontId::proportional(8.0 * z);
-    let text = painter.layout_no_wrap(label.to_string(), font, Color32::WHITE);
+    let text = painter.layout_no_wrap(view.counter(), font, Color32::WHITE);
     let tab = Rect::from_min_size(plot.left_top() + Vec2::new(1.0 * z, 1.0 * z), text.size() + Vec2::new(14.0 * z, 2.0 * z));
     painter.rect_filled(tab, 3.0 * z, Color32::from_black_alpha(190));
     painter.circle_filled(Pos2::new(tab.left() + 5.5 * z, tab.center().y), 2.4 * z, red);
@@ -396,4 +441,27 @@ pub fn rec_button(
         }
     });
     responses
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn recording(seconds: f32, scale: f32, beat: f32) -> RecView {
+        RecView { state: RecState::Recording, seconds, scale, level: 0.0, room: true, threshold_db: NO_THRESHOLD_DB, beat, per_bar: 4 }
+    }
+
+    #[test]
+    fn test_a_take_in_bars_counts_bars_and_beats() {
+        // Four bars at 120 BPM: 8 s, half a second a beat
+        assert_eq!(recording(0.0, 8.0, 0.5).counter(), "REC  1.1 / 4");
+        assert_eq!(recording(2.6, 8.0, 0.5).counter(), "REC  2.2 / 4");
+        assert_eq!(recording(7.99, 8.0, 0.5).counter(), "REC  4.4 / 4");
+        assert_eq!(recording(8.0, 8.0, 0.5).counter(), "REC  4.4 / 4", "held on the last beat as it closes");
+    }
+
+    #[test]
+    fn test_a_free_take_counts_seconds() {
+        assert_eq!(recording(2.34, 4.0, 0.0).counter(), "REC  2.3 s");
+    }
 }

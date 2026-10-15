@@ -394,6 +394,10 @@ impl Sampler {
     pub const READOUT_REC_SCALE: usize = 2 * MAX_CHANNELS + 4;
     /// How loud In is, its peak falling slowly.
     pub const READOUT_REC_LEVEL: usize = 2 * MAX_CHANNELS + 5;
+    /// Seconds in a beat of a take in bars as it comes in, 0 for a free take.
+    pub const READOUT_REC_BEAT: usize = 2 * MAX_CHANNELS + 6;
+    /// Beats in that take's bar.
+    pub const READOUT_REC_BAR: usize = 2 * MAX_CHANNELS + 7;
 
     const GATE_THRESHOLD: f32 = 0.5;
 
@@ -740,6 +744,9 @@ impl DspModule for Sampler {
         readout.values[Self::READOUT_ROOM] = recorder.room() as f32 / rate;
         readout.values[Self::READOUT_REC_SCALE] = recorder.scale_seconds();
         readout.values[Self::READOUT_REC_LEVEL] = recorder.meter();
+        let (beat, per_bar) = recorder.take_meter();
+        readout.values[Self::READOUT_REC_BEAT] = beat;
+        readout.values[Self::READOUT_REC_BAR] = per_bar as f32;
         Some(readout)
     }
 

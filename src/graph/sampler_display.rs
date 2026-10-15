@@ -274,7 +274,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         }
         None if live => {
             let scope = engine_id.and_then(|id| user_state.get_scope_data(id));
-            sampler_take::draw_take(&painter, plot, &rec, scope, &format!("REC  {:.1} s", rec.seconds), z);
+            sampler_take::draw_take(&painter, plot, &rec, scope, z);
             ui.ctx().request_repaint();
         }
         None if hovered.is_some() => {

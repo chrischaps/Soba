@@ -152,6 +152,10 @@ pub struct Recorder {
     prev_bar: Option<i64>,
     /// Frames in a beat, while a Clock runs (the last it ran at, after).
     beat_frames: Option<f64>,
+    /// Beats in a bar, as the Clock last counted them.
+    per_bar: u32,
+    /// Frames in a beat of the take under way, if it's in bars.
+    bar_take: Option<f64>,
     /// How loud the input is, for a take waiting for a sound.
     onset: f32,
     /// The input's peak, falling slowly, for the display.
@@ -183,6 +187,8 @@ impl Default for Recorder {
             prev_gate: false,
             prev_bar: None,
             beat_frames: None,
+            per_bar: 4,
+            bar_take: None,
             onset: 0.0,
             meter: 0.0,
             takes: 0,
@@ -247,6 +253,12 @@ impl Recorder {
         self.scale as f32 / self.sample_rate
     }
 
+    /// Seconds in a beat of the take under way, if it's in bars (0 if not),
+    /// and beats in its bar: the face counts it in bars and beats.
+    pub fn take_meter(&self) -> (f32, u32) {
+        (self.bar_take.map_or(0.0, |frames| (frames / self.sample_rate as f64) as f32), self.per_bar)
+    }
+
     /// Takes room to record into, if it fits: at this rate, held by nothing
     /// else, and not while a take is under way. Returns room to hand back.
     ///
@@ -309,6 +321,7 @@ impl Recorder {
         let bar = beats.map(|(_, bpm)| rate as f64 * 60.0 / bpm as f64 * per_bar);
         if let Some(bar) = bar {
             self.beat_frames = Some(bar / per_bar);
+            self.per_bar = per_bar as u32;
         }
         // A take in bars, with a Clock to count them
         let clocked = bar.filter(|_| bars > 0).map(|bar| (bars as f64 * bar).round().max(1.0) as usize);
@@ -569,6 +582,7 @@ impl Recorder {
         self.highs = [0.0; TAKE_COLUMNS];
         self.lows = [0.0; TAKE_COLUMNS];
         self.scale = clocked.unwrap_or((FIRST_SCALE_SECONDS * self.sample_rate) as usize).max(TAKE_COLUMNS);
+        self.bar_take = clocked.and(self.beat_frames);
         self.overview_due = 0;
     }
 
@@ -733,6 +747,9 @@ mod tests {
         assert_eq!(rig.state(), RecState::Armed);
         rig.run_to(96000 + BLOCK);
         assert_eq!(rig.state(), RecState::Recording);
+        // Counted in its beats as it comes in: half a second each, four to the bar
+        assert_eq!(rig.readout(Sampler::READOUT_REC_BEAT), 0.5);
+        assert_eq!(rig.readout(Sampler::READOUT_REC_BAR), 4.0);
         // Two bars on, and the round trip after them: a bar, four beats
         rig.run_to(4 * 48000 + 512);
         assert_eq!(rig.sampler.recorder.finished_beats(), Some(4));
@@ -914,6 +931,7 @@ mod tests {
         // Past four seconds, it spans eight
         assert_eq!(rig.readout(Sampler::READOUT_REC_SCALE), 8.0);
         assert!((rig.readout(Sampler::READOUT_REC_SECONDS) - 5.0).abs() < 0.01);
+        assert_eq!(rig.readout(Sampler::READOUT_REC_BEAT), 0.0, "a free take is counted in seconds");
         let (highs, lows) = rig.sampler.recorder.take_overview().map(|(h, l)| (h.to_vec(), l.to_vec())).expect("an overview to show");
         // The first second is the first eighth
         assert_eq!(highs[0], 0.5);

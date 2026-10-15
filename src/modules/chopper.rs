@@ -392,6 +392,8 @@ impl Chopper {
     pub const READOUT_ROOM: usize = Sampler::READOUT_ROOM;
     pub const READOUT_REC_SCALE: usize = Sampler::READOUT_REC_SCALE;
     pub const READOUT_REC_LEVEL: usize = Sampler::READOUT_REC_LEVEL;
+    pub const READOUT_REC_BEAT: usize = Sampler::READOUT_REC_BEAT;
+    pub const READOUT_REC_BAR: usize = Sampler::READOUT_REC_BAR;
 
     const GATE_THRESHOLD: f32 = 0.5;
     const SEED: u32 = 0x2545_F491;
@@ -890,6 +892,9 @@ impl DspModule for Chopper {
         readout.values[Self::READOUT_ROOM] = recorder.room() as f32 / rate;
         readout.values[Self::READOUT_REC_SCALE] = recorder.scale_seconds();
         readout.values[Self::READOUT_REC_LEVEL] = recorder.meter();
+        let (beat, per_bar) = recorder.take_meter();
+        readout.values[Self::READOUT_REC_BEAT] = beat;
+        readout.values[Self::READOUT_REC_BAR] = per_bar as f32;
         Some(readout)
     }
 
