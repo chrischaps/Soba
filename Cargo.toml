@@ -64,3 +64,10 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_Wind
 # would panic on the audio thread
 [profile.dev.package.cpal]
 overflow-checks = false
+
+# cargo test renders whole patches offline, which crawls unoptimised. Level 1
+# ran the suite in 38 s rather than 235 s for 22 s more build, and keeps debug
+# assertions and overflow checks (#272). Level 2 built twice as long again
+# for 9 s more
+[profile.test]
+opt-level = 1

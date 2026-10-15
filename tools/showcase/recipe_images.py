@@ -2,6 +2,7 @@
 
     python tools/showcase/recipe_images.py [name ...]
     python tools/showcase/recipe_images.py --check [name ...]
+    python tools/showcase/recipe_images.py --refresh [name ...]  # --check, then save just the stale ones
 
 A recipe with a playable embed shows its whole patch there, so it has no
 picture of it (#225). The pictures left are of a patch with no embed, listed
@@ -287,7 +288,8 @@ def changed(new, path):
 
 
 def main(args):
-    check = "--check" in args
+    refresh = "--refresh" in args
+    check = "--check" in args or refresh
     names = [a for a in args if not a.startswith("--")]
     names = names or STILLS + list(MOMENTS) + list(CLOSEUPS)
     stale = []
@@ -306,12 +308,16 @@ def main(args):
                 print(f"{name:22} {verdict}")
                 if fraction > STALE_FRACTION:
                     stale.append(name)
+                    if refresh:
+                        image.save(path, optimize=True)
             else:
                 image.save(path, optimize=True)
                 print(f"{name:22} {image.width}x{image.height}, {path.stat().st_size // 1024} KB")
-    if check and stale:
+    if refresh and stale:
+        print(f"\nRe-shot {' '.join(stale)}")
+    elif check and stale:
         print(f"\nRe-shoot with: python tools/showcase/recipe_images.py {' '.join(stale)}")
-    return 1 if stale else 0
+    return 1 if stale and not refresh else 0
 
 
 if __name__ == "__main__":

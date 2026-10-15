@@ -72,3 +72,37 @@ jobs:
 
       - name: Check the web build
         run: cargo check --target wasm32-unknown-unknown --bin soba
+
+  # A push to master that fails opens one issue labelled ci-failure, or
+  # comments on the one already open, so the next session sees it without
+  # watching CI. The next green push to master closes it
+  report:
+    needs: [test, web]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TITLE: CI fails on master
+      RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      SHA: ${{ github.sha }}
+      FAILED: ${{ contains(needs.*.result, 'failure') }}
+      GREEN: ${{ needs.test.result == 'success' && needs.web.result == 'success' }}
+
+    steps:
+      - name: Open, update or close the ci-failure issue
+        run: |
+          open=$(gh issue list --label ci-failure --state open --json number,title \
+            -q "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+          if [ "$FAILED" = "true" ]; then
+            body="The push of ${SHA::7} fails CI: $RUN"
+            if [ -n "$open" ]; then
+              gh issue comment "$open" --body "$body"
+            else
+              gh issue create --title "$TITLE" --label ci-failure --body "$body"
+            fi
+          elif [ "$GREEN" = "true" ] && [ -n "$open" ]; then
+            gh issue close "$open" --comment "Green again at ${SHA::7}: $RUN"
+          fi

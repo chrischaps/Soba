@@ -2,7 +2,7 @@
 //! a recording session reads back from the WAV sample for sample, with no
 //! frame dropped or doubled, through odd device buffer sizes and a stop.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use soba::engine::{AudioProcessor, EngineChannels, EngineCommand, Recording, UiHandle};
 
@@ -36,14 +36,20 @@ fn recording_reads_back_sample_identical() {
     let device_buffers = [256, 441, 480, 128, 1024, 64, 1];
     let mut heard = Vec::new();
     let mut round = 0;
+    let started = Instant::now();
     while heard.len() < SAMPLE_RATE as usize * 5 * 2 {
         let frames = device_buffers[round % device_buffers.len()];
         processor.process(&mut output[..frames * 2], 2);
         heard.extend_from_slice(&output[..frames * 2]);
         round += 1;
-        // Roughly real time, a little faster, so the writer must keep up
+        // Twice real time by the clock, so the writer must keep up. A fixed
+        // sleep paced it by how fast process runs, which an optimised build
+        // outran until the ring overflowed
         if round % 32 == 0 {
-            std::thread::sleep(Duration::from_millis(1));
+            let played = Duration::from_secs_f64(heard.len() as f64 / 2.0 / SAMPLE_RATE as f64);
+            if let Some(wait) = (played / 2).checked_sub(started.elapsed()) {
+                std::thread::sleep(wait);
+            }
         }
     }
 

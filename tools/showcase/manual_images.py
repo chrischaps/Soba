@@ -4,6 +4,7 @@ popover, each played and posed by a capture script.
 
     python tools/showcase/manual_images.py [name ...]
     python tools/showcase/manual_images.py --check [name ...]
+    python tools/showcase/manual_images.py --refresh [name ...]  # --check, then save just the stale ones
 
 Each picture in PICTURES names a patch, the cues that pose it (a chord
 held, a menu opened, a key down) and what to keep of the window:
@@ -180,7 +181,8 @@ def shoot(name, tmp):
 
 
 def main(args):
-    check = "--check" in args
+    refresh = "--refresh" in args
+    check = "--check" in args or refresh
     names = [a for a in args if not a.startswith("--")] or list(PICTURES)
     unknown = [n for n in names if n not in PICTURES]
     if unknown:
@@ -197,12 +199,16 @@ def main(args):
                 print(f"{name:28} {verdict}")
                 if fraction > STALE_FRACTION:
                     stale.append(name)
+                    if refresh:
+                        image.save(path, optimize=True)
             else:
                 image.save(path, optimize=True)
                 print(f"{name:28} {image.width}x{image.height}, {path.stat().st_size // 1024} KB")
-    if check and stale:
+    if refresh and stale:
+        print(f"\nRe-shot {' '.join(stale)}")
+    elif check and stale:
         print(f"\nRe-shoot with: python tools/showcase/manual_images.py {' '.join(stale)}")
-    return 1 if stale else 0
+    return 1 if stale and not refresh else 0
 
 
 if __name__ == "__main__":

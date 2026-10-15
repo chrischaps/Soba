@@ -107,7 +107,7 @@ When asked to implement the next issue, follow this workflow:
 gh issue list --state open --limit 30 --search "-label:deferred -label:claimed"
 ```
 
-The **lowest issue number** is the next to implement. Issues are ordered by phase and dependency. Issues labeled `deferred` are parked: skip them unless Chris asks for one by number. Issues labeled `claimed` are taken (`gh issue list --label claimed` lists them). If the lowest one is already claimed on this machine (see `git worktree list` / `git branch`), take the next one that doesn't depend on it. Then claim yours: `python tools/claim.py <n>`.
+The **lowest issue number** is the next to implement. Issues are ordered by phase and dependency. Issues labeled `deferred` are parked: skip them unless Chris asks for one by number. Issues labeled `claimed` are taken (`gh issue list --label claimed` lists them). If the lowest one is already claimed on this machine (see `git worktree list` / `git branch`), take the next one that doesn't depend on it. Then claim yours: `python tools/claim.py <n>`. An open `ci-failure` or `nightly-failure` issue comes before all of them, because master is broken.
 
 ### 2. Read the Issue Details
 
@@ -130,27 +130,28 @@ Understand:
 
 ### 4. Verify the Implementation
 
-Run the verification commands from the issue. At minimum:
+Check what you touched, not the whole suite. The rest runs elsewhere and doesn't wait for you (#272):
+
+- **On every push, GitHub CI** runs the full `cargo test`, the allocation guard, and the ASIO and wasm builds. A failure on master opens a `ci-failure` issue.
+- **Every night, `tools/nightly.py`** runs the slow checks that need this machine's windows: the loudness of every example, `check_layout.py`, `zoom_jitter.py` on every patch, and the recipe, manual and module pictures. It re-shoots stale pictures and pushes them as a `[Docs]` commit of their own. A failing step opens a `nightly-failure` issue.
+
+So the full `cargo test`, the layout and zoom checks and the picture re-shoots are no longer part of a ticket. At minimum:
 
 ```bash
 cargo check
-cargo build
-cargo run  # If the issue adds visible functionality
-cargo test # If tests exist
+cargo test --lib <module>      # the unit tests of what you changed, e.g. cargo test --lib clock
+cargo test --test <file>       # and the tests/<file>.rs that covers it, if one does
+cargo run                      # if the issue adds visible functionality
 ```
 
-For audio-related issues, verify sound output works.
+- **The whole `cargo test`:** run it only when the change reaches across the engine (the audio graph, the command channel, persistence), where no filter names everything it touched.
+- **Templates:** a change to them means regenerating the snapshot with `UPDATE_SNAPSHOTS=1 cargo test --lib test_templates_match_snapshot`. Review its diff.
+- **Audio:** for audio-related issues, verify sound output works.
 
-If you changed a module's face (a port, knob, row, display or anything else that can change its size), check the examples still fit around it:
+If you changed a module's face, the nightly run finds an example that no longer fits around it, or a face that steps as the view zooms. A face is a port, knob, row, display or anything else that can change its size. To see it now, commit and run `python tools/nightly.py --ref HEAD --only layout,zoom` from your worktree. It builds and films in `../Modular-nightly`, files no issues and pushes nothing.
 
-```bash
-CARGO_TARGET_DIR=target/capture cargo build --release
-python tools/showcase/check_layout.py   # modules inside their frames, clear of notes and each other
-```
-
-Fix any example it flags by growing the frame or moving its neighbours. A face should also keep its size as the view zooms: `python tools/showcase/zoom_jitter.py patches/<an example with it>.json --max 0.5` fails if it doesn't. epaint draws fonts at whole pixels, so anything sized by its text steps as the view zooms (#255). Size rows with `steady_text` (`src/graph/steady_text.rs`) or in patch units (`ROW * zoom`), not from `galley.size()` or `ui.label`.
-
-Then re-shoot the recipe images: `python tools/showcase/recipe_images.py --check` lists the stale ones (a face change that keeps the size leaves them stale too), and `python tools/showcase/recipe_images.py <name...>` re-shoots them.
+- **An example it flags:** fix it by growing the frame or moving its neighbours.
+- **Steady sizes:** epaint draws fonts at whole pixels, so anything sized by its text steps as the view zooms (#255). Size rows with `steady_text` (`src/graph/steady_text.rs`) or in patch units (`ROW * zoom`), not from `galley.size()` or `ui.label`.
 
 ### 5. Commit the Changes
 
@@ -168,7 +169,7 @@ Closes #<issue_number>
 Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
-git fetch && git rebase origin/master   # then re-run cargo test if anything came in
+git fetch && git rebase origin/master   # then re-run your step 4 tests if anything came in
 git push
 git push origin --delete issue-<n>      # releases the claim
 ```
@@ -209,8 +210,14 @@ cargo run --release --bin render -- patch.json out.wav --input voice.wav
 # ...pressing knobs and footswitches from a cue script (`<seconds> param <module> <param> <value>`)
 cargo run --release --bin render -- patches/live-looper.json out.wav --seconds 30 --input take.wav --cue cues.txt
 # Every example near -16 LUFS with peaks under -1 dBFS into the limiter: renders
-# them all at length (a couple of minutes); run before a release, or after an example's levels change
+# them all at length (a couple of minutes); the nightly run does this, or run it after an example's levels change
 cargo test --release --test example_loudness -- --ignored --nocapture
+# The slow checks against origin/master, in ../Modular-nightly at low priority: loudness, layout,
+# zoom and the pictures (stale ones re-shot and pushed). Failures open nightly-failure issues
+python tools/nightly.py                      # skips if master passed last time; --force runs anyway
+python tools/nightly.py --only layout,zoom   # some of: tests, loudness, layout, zoom, images
+python tools/nightly.py --ref HEAD --only layout   # your commit instead: no issues, no push
+powershell -File tools/nightly_schedule.ps1  # run it every night at 03:00 (-At, -Unregister)
 # The real input device, end to end (needs a mic; the patch is muted)
 cargo test --release --test live_input -- --ignored --nocapture
 
@@ -240,6 +247,7 @@ python tools/showcase/check_layout.py
 # an embed has no whole-patch still. --check lists the stale ones instead
 python tools/showcase/recipe_images.py [name ...]
 python tools/showcase/recipe_images.py --check
+python tools/showcase/recipe_images.py --refresh   # all three tools: --check, saving only the stale ones
 # The same for the interface pictures, the tutorial's finished patch and a chord played into
 # the Chord Sequencer (interface-*.png, tutorial-complete-patch.png, chord-sequencer-play.png),
 # each posed by a short cue script

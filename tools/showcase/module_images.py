@@ -4,6 +4,7 @@ caption describes.
 
     python tools/showcase/module_images.py [name ...]
     python tools/showcase/module_images.py --check [name ...]
+    python tools/showcase/module_images.py --refresh [name ...]  # --check, then save just the stale ones
 
 Each close-up in MODULES names its patch, the module pictured, the zoom it's
 drawn at, the width it's saved at and the cues that pose it (a chord held, a
@@ -267,7 +268,8 @@ def shoot(name, tmp):
 
 
 def main(args):
-    check = "--check" in args
+    refresh = "--refresh" in args
+    check = "--check" in args or refresh
     names = [a for a in args if not a.startswith("--")] or list(MODULES)
     unknown = [n for n in names if n not in MODULES]
     if unknown:
@@ -284,12 +286,16 @@ def main(args):
                 print(f"{name:20} {verdict}")
                 if fraction > STALE_FRACTION:
                     stale.append(name)
+                    if refresh:
+                        image.save(path, optimize=True)
             else:
                 image.save(path, optimize=True)
                 print(f"{name:20} {image.width}x{image.height}, {path.stat().st_size // 1024} KB")
-    if check and stale:
+    if refresh and stale:
+        print(f"\nRe-shot {' '.join(stale)}")
+    elif check and stale:
         print(f"\nRe-shoot with: python tools/showcase/module_images.py {' '.join(stale)}")
-    return 1 if stale else 0
+    return 1 if stale and not refresh else 0
 
 
 if __name__ == "__main__":
