@@ -53,7 +53,7 @@ const MAX_MIDI_NOTES: usize = 64;
 
 /// How strongly a cable shows through what it passes under, at first (the
 /// Cables menu changes it).
-pub const CABLE_THROUGH: f32 = 0.15;
+pub const CABLE_THROUGH: f32 = 0.05;
 
 /// A MIDI event with display timestamp for the MIDI Monitor.
 #[derive(Clone, Debug)]
