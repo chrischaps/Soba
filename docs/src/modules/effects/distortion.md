@@ -3,11 +3,22 @@
 **Module ID** `fx.distortion` · **Category** Effect
 
 ![Distortion Module](../../images/module-distortion.png)
-*The character of the curve on top, its color and level below*
+*A low sine into the folder: the whole curve lit, and the wave on the right folding back at its peaks*
 
 The Distortion adds harmonics by pushing a signal into a curve: rounding it off, clipping it, folding it back on itself, or crushing it into steps. Five types cover everything from a touch of warmth on a bass to a sine folded into a buzzing, vocal tone.
 
 Every curve runs at four times the sample rate with antiderivative anti-aliasing (ADAA). Even full drive on a high note adds only harmonics of that note, not the inharmonic "digital fizz" a naive distortion folds back into the audible range. The dry signal is mixed in at the same oversampled rate and aligned to the sample, so **Mix** blends cleanly without comb filtering.
+
+## The display
+
+The display shows the bend and how far into it the sound goes.
+
+- **The curve.** On the left, what goes in runs across from −1 to 1, and what comes out runs up. It is the module's own curve for the chosen **Type**, after **Drive** (and for Fold, **Sym**), blended by **Mix** and scaled by **Out**. Soft is a gentle S, Hard flattens at the top, Fold zigzags back down, Tube leans, and Bit is a staircase with fewer steps the harder it's driven.
+- **The lit stretch.** The part of the curve the input reaches right now is lit, with a dot at each end, and it glows hotter as Drive rises. Turn up a quiet input and you can watch it walk into the bend.
+- **The wave.** On the right is one cycle of a sine at the input's level, faint, and over it what the curve makes of that sine. That is the shape the new harmonics come from: rounded shoulders for Soft, flat tops for Hard, extra wiggles for Fold.
+- **Words.** The top right gives the drive, in orange while **Drive** CV moves it. For Bit it gives the bits kept and the crushed rate instead.
+
+**Tone** isn't drawn: it shapes the sound after the curve.
 
 ## Inputs
 

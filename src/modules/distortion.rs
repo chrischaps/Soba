@@ -10,10 +10,10 @@
 use crate::dsp::{
     context::ProcessContext,
     dynamics::DcBlocker,
-    module_trait::{DspModule, ModuleCategory, ModuleInfo},
+    module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::{Adaa1, BiasedTanh, Downsampler4x, HardClip, RoundedFolder, Tanh, Upsampler4x},
+    primitives::{Adaa1, BiasedTanh, Curve, Downsampler4x, HardClip, RoundedFolder, Tanh, Upsampler4x},
     signal::{connected_input, SignalBuffer},
     smoothed_value::SmoothedValue,
     ParameterDisplay, SignalType,
@@ -21,6 +21,9 @@ use crate::dsp::{
 
 /// Oversampling factor for the waveshapers.
 const OVERSAMPLE: usize = 4;
+
+/// How fast the input level the display shows falls once the sound passes.
+const INPUT_VIEW_FALL_MS: f32 = 150.0;
 
 /// Distortion algorithm types.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,7 +42,7 @@ pub enum DistortionType {
 
 impl DistortionType {
     /// Convert from parameter index to distortion type.
-    fn from_index(index: usize) -> Self {
+    pub fn from_index(index: usize) -> Self {
         match index {
             0 => DistortionType::Soft,
             1 => DistortionType::Hard,
@@ -171,6 +174,10 @@ pub struct Distortion {
     output_gain_smooth: SmoothedValue,
     /// Smoothed fold symmetry.
     symmetry_smooth: SmoothedValue,
+    /// For the display: the input's recent peak, held and let fall at
+    /// `INPUT_VIEW_FALL_MS`, and the drive after CV.
+    input_view: f32,
+    drive_now: f32,
     /// Port definitions.
     ports: Vec<PortDefinition>,
     /// Parameter definitions.
@@ -208,6 +215,8 @@ impl Distortion {
             mix_smooth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             output_gain_smooth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             symmetry_smooth: SmoothedValue::with_default_smoothing(0.0, sample_rate),
+            input_view: 0.0,
+            drive_now: 0.5,
             ports: vec![
                 PortDefinition::input_with_default("in", "In", SignalType::Audio, 0.0).describe("Audio to distort"),
                 PortDefinition::input_with_default("drive_cv", "Drive CV", SignalType::Control, 0.0).describe("CV that adds to the drive amount"),
@@ -278,6 +287,10 @@ impl Distortion {
         dist
     }
 
+    /// Readout slots: the input's recent peak, and the drive after CV.
+    pub const READOUT_INPUT_PEAK: usize = 0;
+    pub const READOUT_DRIVE: usize = 1;
+
     /// Port index constants.
     const PORT_IN: usize = 0;
     const PORT_DRIVE_CV: usize = 1;
@@ -310,6 +323,31 @@ impl Distortion {
             DistortionType::Fold => 1.0 + drive * 5.0,
             DistortionType::Bit => 1.0,
         }
+    }
+
+    /// Where a steady input `x` comes out, before the tone filter: the
+    /// type's curve after its drive (and, for Fold, the symmetry offset),
+    /// blended with the dry by `mix` and scaled by `output_db`. Bit is its
+    /// staircase of levels; its rate reduction acts in time, not here.
+    pub fn transfer(distortion_type: DistortionType, drive: f32, symmetry: f32, mix: f32, output_db: f32, x: f32) -> f32 {
+        let gain = Self::input_gain(distortion_type, drive.clamp(0.0, 1.0));
+        let u = (x * gain + if distortion_type == DistortionType::Fold { symmetry } else { 0.0 }) as f64;
+        let wet = match distortion_type {
+            DistortionType::Soft => Tanh.value(u) as f32,
+            DistortionType::Hard => HardClip.value(u) as f32,
+            DistortionType::Fold => RoundedFolder::new(Self::FOLD_ROUNDING).value(u) as f32,
+            DistortionType::Tube => BiasedTanh::new(Self::TUBE_BIAS).value(u) as f32,
+            DistortionType::Bit => {
+                let levels = (16.0 - drive.clamp(0.0, 1.0) * 14.0).max(2.0).exp2();
+                (x * levels).round() / levels
+            }
+        };
+        (x + (wet - x) * mix.clamp(0.0, 1.0)) * Self::db_to_linear(output_db)
+    }
+
+    /// How many bits the Bit type keeps at `drive`.
+    pub fn bits(drive: f32) -> f32 {
+        (16.0 - drive.clamp(0.0, 1.0) * 14.0).max(2.0)
     }
 
     /// Runs the active curve on one oversampled sample.
@@ -422,6 +460,7 @@ impl DspModule for Distortion {
         let drive_cv = connected_input(inputs, Self::PORT_DRIVE_CV);
         let out = &mut outputs[Self::PORT_OUT];
         let is_curve = distortion_type.is_curve();
+        let mut heard = 0.0f32;
 
         for i in 0..context.block_size {
             let base_drive = self.drive_smooth.next();
@@ -437,6 +476,8 @@ impl DspModule for Distortion {
             let offset = if distortion_type == DistortionType::Fold { symmetry } else { 0.0 };
 
             let dry = audio_in.map_or(0.0, |buf| buf.samples.get(i).copied().unwrap_or(0.0));
+            heard = heard.max(dry.abs());
+            self.drive_now = drive;
 
             let mut mixed = [0.0f32; OVERSAMPLE];
             for (slot, x) in mixed.iter_mut().zip(self.upsampler.process(dry)) {
@@ -459,6 +500,16 @@ impl DspModule for Distortion {
             let output = self.downsampler.process(mixed) * output_gain;
             out.samples[i] = output.clamp(-2.0, 2.0);
         }
+
+        let fall = (-(context.block_size as f32) / (INPUT_VIEW_FALL_MS * 0.001 * self.sample_rate)).exp();
+        self.input_view = heard.max(self.input_view * fall);
+    }
+
+    fn readout(&self, _params: &[f32]) -> Option<Readout> {
+        let mut readout = Readout::default();
+        readout.values[Self::READOUT_INPUT_PEAK] = self.input_view;
+        readout.values[Self::READOUT_DRIVE] = self.drive_now;
+        Some(readout)
     }
 
     fn reset(&mut self) {
@@ -876,5 +927,49 @@ mod tests {
         assert_eq!(module.info().name, "Distortion");
         assert_eq!(module.ports().len(), 3);
         assert_eq!(module.parameters().len(), 7);
+    }
+
+    #[test]
+    fn test_transfer_is_the_curve_the_sound_takes() {
+        // A sine comes out as loud as the drawn curve makes it (RMS, which the
+        // oversampling filters' ripple on a clipped wave doesn't move)
+        for ty in [DistortionType::Soft, DistortionType::Hard, DistortionType::Fold, DistortionType::Tube] {
+            for (drive, amplitude) in [(0.2, 0.5), (0.6, 0.8)] {
+                let mut dist = prepared();
+                let input = sine(200.0, amplitude, 44100);
+                let p = [drive, 1.0, ty as usize as f32, 1.0, 0.0, 0.0, Distortion::RATE_MAX_HZ];
+                let out = run(&mut dist, &input, &p, None);
+                // Less the offset Tube's lean leaves, which the DC blocker takes out
+                let drawn: Vec<f32> = input[22050..].iter().map(|&x| Distortion::transfer(ty, drive, 0.0, 1.0, 0.0, x)).collect();
+                let mean = drawn.iter().sum::<f32>() / drawn.len() as f32;
+                let drawn: Vec<f32> = drawn.iter().map(|y| y - mean).collect();
+                let (heard, expected) = (rms(&out[22050..]), rms(&drawn));
+                assert!((heard / expected - 1.0).abs() < 0.04, "{ty:?} drive {drive}: {heard} vs {expected}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_transfer_knows_mix_output_and_bits() {
+        let soft = |x| Distortion::transfer(DistortionType::Soft, 0.0, 0.0, 1.0, 0.0, x);
+        assert!((soft(0.5) - 0.5f32.tanh()).abs() < 1e-5);
+        // Dry passes untouched, and Output scales it
+        assert!((Distortion::transfer(DistortionType::Hard, 1.0, 0.0, 0.0, 0.0, 0.3) - 0.3).abs() < 1e-6);
+        assert!((Distortion::transfer(DistortionType::Hard, 1.0, 0.0, 0.0, 6.0, 0.3) - 0.3 * 1.9953).abs() < 1e-3);
+        // Full drive crushes to 2 bits: steps a quarter apart
+        assert_eq!(Distortion::bits(1.0), 2.0);
+        assert_eq!(Distortion::transfer(DistortionType::Bit, 1.0, 0.0, 1.0, 0.0, 0.3), 0.25);
+    }
+
+    #[test]
+    fn test_readout_follows_the_input() {
+        let mut dist = prepared();
+        let p = params(0.7, 0.5, DistortionType::Soft, 1.0, 0.0);
+        run(&mut dist, &sine(200.0, 0.6, 22050), &p, None);
+        let r = dist.readout(&p).unwrap().values;
+        assert!((r[Distortion::READOUT_INPUT_PEAK] - 0.6).abs() < 0.05, "{:?}", &r[..2]);
+        assert!((r[Distortion::READOUT_DRIVE] - 0.7).abs() < 1e-3);
+        run(&mut dist, &vec![0.0; 44100], &p, None);
+        assert!(dist.readout(&p).unwrap().values[Distortion::READOUT_INPUT_PEAK] < 0.01);
     }
 }

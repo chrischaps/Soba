@@ -466,6 +466,7 @@ static MODULE_UI: &[ModuleUi] = &[
             knob_as("Output", "Out"),
         ],
         knobs_per_row: 3,
+        display: NodeDisplay::DistortionCurve,
         ..ModuleUi::DEFAULT
     },
     ModuleUi {

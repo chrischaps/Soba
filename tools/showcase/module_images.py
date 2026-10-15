@@ -86,6 +86,11 @@ MODULES = {
     "chorus": Module("chorus", "fx.chorus", 1.0, 320, """
         -2.4 play
     """, palette=False),
+    # A low sine into the folder, a little off centre: the lit stretch runs
+    # over the first fold, and the wave on the right folds back at its peaks
+    "distortion": Module("distortion", "fx.distortion", 1.0, 300, """
+        -1.5 play
+    """, palette=False),
 }
 
 

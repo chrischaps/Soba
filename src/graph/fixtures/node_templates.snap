@@ -2443,6 +2443,7 @@ knob Rate               "Rate" KnobOnly
 knob Tone               "Tone" KnobOnly
 knob Mix                "Mix" KnobOnly
 knob Output             "Out" KnobOnly
+display DistortionCurve
 
 == fx.chorus "Chorus" finder="Chorus" Effect
 in   In L               Audio    ConnectionOnly       inline=true  port
