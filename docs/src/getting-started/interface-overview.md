@@ -50,7 +50,7 @@ The background grid moves and zooms with the patch, with a brighter line every f
 
 Right-click empty canvas to open the add menu. It lists the six categories in their header colors; hover or click one to see its modules, then click a module to place it where you right-clicked. Hover a module's name to read what it does. Groups you've saved are under **My Modules**, in rose (see [Groups](../concepts/groups.md#my-modules)). Below the categories, **Frame** and **Note** add a [frame or a note](#frames-and-notes).
 
-On a touch screen, hold a finger still on empty canvas for half a second instead. Tap a category to see its modules, then tap a module.
+On a touch screen, hold a finger still on empty canvas for half a second instead. The menu opens with finger-sized rows. Tap a category to see its modules, then tap a module. To read what a module does, rest a finger on it and the footer under the list tells you. If you then lift the finger after a moment, nothing is added. On a phone, a category's modules often have no room beside the menu, so they open in its place, with **‹ Back** at the top.
 
 ![The add menu, showing the Effect category](../images/interface-context-menu.png)
 *Right-click empty canvas, pick a category, then a module.*

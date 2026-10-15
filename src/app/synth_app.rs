@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use web_time::Instant;
 
 use eframe::egui::{self, RichText, Layout, Align};
-use egui_node_graph2::{FlowGlyph, GraphEditorState, NodeResponse, NodeTemplateTrait, InputParamKind};
+use egui_node_graph2::{FlowGlyph, GraphEditorState, NodeResponse, InputParamKind};
 
 use crate::engine::{
     AudioEngine, AudioError, AudioProcessor, AudioSystem, DeviceInfo, EngineChannels, EngineCommand, InputMonitor, Recording, RoundTrip,
@@ -24,7 +24,7 @@ use crate::graph::{
 use crate::modules::keyboard::{key_to_note, relative_to_midi, KeyPriority, KeyboardInput};
 use crate::persistence::{
     capture_patch, examples, load_from_file, renumber_groups, save_to_file, stage_patch, Example, MidiMapping, Patch, PatchError,
-    Section, Shelf, EXAMPLES,
+    Shelf, EXAMPLES,
 };
 #[cfg(target_arch = "wasm32")]
 use crate::persistence::patch_from_json;
@@ -45,9 +45,11 @@ use super::undo::{Applied, History};
 #[cfg(not(target_arch = "wasm32"))]
 use super::update::Updater;
 use super::WEB;
+use add_menu::AddMenu;
 #[cfg(target_arch = "wasm32")]
 use super::web;
 
+mod add_menu;
 mod cue;
 mod dive;
 mod file_hover;
@@ -342,6 +344,8 @@ pub struct SynthApp {
     /// A finger resting on the canvas, which opens the add menu as a
     /// right-click would.
     long_press: LongPress,
+    /// How the add menu was opened, and where its submenu went
+    add_menu: AddMenu,
     /// Patch files the visitor picked, which the browser hands over later.
     #[cfg(target_arch = "wasm32")]
     uploads: (std::sync::mpsc::Sender<web::Upload>, std::sync::mpsc::Receiver<web::Upload>),
@@ -527,6 +531,7 @@ impl SynthApp {
             glide: None,
             touch_panning: false,
             long_press: LongPress::default(),
+            add_menu: AddMenu::default(),
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
         };
@@ -2197,6 +2202,7 @@ impl SynthApp {
                 // so on the frame of the click, so go by where the click was
                 if let Some(click_pos) = click_pos.filter(|pos| !self.is_over_module(ctx, *pos)) {
                     self.user_state.context_menu_pos = Some(click_pos);
+                    self.add_menu = AddMenu::opened(right_click.is_none());
                     self.my_modules = library::list();
                     menu_just_opened = true;
                 }
@@ -2204,274 +2210,7 @@ impl SynthApp {
         }
 
         // Show custom context menu for adding nodes
-        if let Some(menu_pos) = self.user_state.context_menu_pos {
-            let mut close_menu = false;
-            let mut template_to_create: Option<SynthNodeTemplate> = None;
-            let mut saved_to_add: Option<SavedModule> = None;
-            let mut open_library = false;
-            let mut annotation_to_create: Option<NewAnnotation> = None;
-            let mut zoom_to: Option<framing::Target> = None;
-
-            // Hover delay before switching submenus (in seconds)
-            const SUBMENU_HOVER_DELAY: f32 = 0.15;
-
-            let categories = AllNodeTemplates::by_category();
-
-            let menu_id = egui::Id::new("add_node_context_menu");
-            let menu_response = egui::Area::new(menu_id)
-                .fixed_pos(menu_pos)
-                .order(egui::Order::Foreground)
-                .show(ctx, |ui| {
-                    egui::Frame::menu(ui.style()).show(ui, |ui| {
-                        ui.set_min_width(120.0);
-
-                        // The categories, then My Modules if anything's saved
-                        // there, then the Library
-                        let rows: Vec<(&str, egui::Color32)> = categories
-                            .iter()
-                            .map(|(category, _)| (category.name(), category.color()))
-                            .chain((!self.my_modules.is_empty()).then_some(("My Modules", theme::module::GROUP)))
-                            .chain(std::iter::once(("Library", theme::module::GROUP)))
-                            .collect();
-                        for (cat_index, (name, color)) in rows.into_iter().enumerate() {
-                            // Create category button with arrow indicator
-                            let button_text = egui::RichText::new(format!("{}  \u{25B6}", name)).color(color);
-
-                            let response = ui.add(
-                                egui::Button::new(button_text)
-                                    .min_size(egui::vec2(110.0, 0.0))
-                                    .frame(false)
-                            );
-
-                            // Handle hover intent with delay
-                            if response.hovered() {
-                                let now = Instant::now();
-
-                                // Check if we're already tracking this category
-                                if let Some((tracked_cat, hover_start)) = self.user_state.context_menu_hover_intent {
-                                    if tracked_cat == cat_index {
-                                        // Same category - check if delay has passed
-                                        if hover_start.elapsed().as_secs_f32() >= SUBMENU_HOVER_DELAY {
-                                            self.user_state.context_menu_open_category = Some(cat_index);
-                                        }
-                                    } else {
-                                        // Different category - start new tracking
-                                        self.user_state.context_menu_hover_intent = Some((cat_index, now));
-                                    }
-                                } else {
-                                    // No tracking yet - start tracking
-                                    self.user_state.context_menu_hover_intent = Some((cat_index, now));
-
-                                    // If no submenu is open, open immediately
-                                    if self.user_state.context_menu_open_category.is_none() {
-                                        self.user_state.context_menu_open_category = Some(cat_index);
-                                    }
-                                }
-                            }
-
-                            // Handle click to immediately open/toggle
-                            if response.clicked() {
-                                self.user_state.context_menu_open_category = Some(cat_index);
-                                self.user_state.context_menu_hover_intent = None;
-                            }
-                        }
-
-                        // Frames and notes, to explain the patch, on its top level
-                        let framing = !self.graph_state.selected_nodes.is_empty();
-                        let annotating = self.frames_allowed();
-                        if annotating {
-                            ui.separator();
-                        }
-                        for (label, kind, hint) in [
-                            ("Frame", NewAnnotation::Frame,
-                                if framing { "A titled backdrop around the selected modules (Ctrl+Shift+F)" }
-                                else { "A titled backdrop to group modules under (Ctrl+Shift+F frames the selection)" }),
-                            ("Note", NewAnnotation::Note, "A card of text. **Bold** for emphasis"),
-                        ].into_iter().filter(|_| annotating) {
-                            let response = ui.add(
-                                egui::Button::new(RichText::new(label).color(theme::text::SECONDARY))
-                                    .min_size(egui::vec2(110.0, 0.0))
-                                    .frame(false),
-                            );
-                            if response.hovered() {
-                                self.user_state.context_menu_open_category = None;
-                                self.user_state.context_menu_hover_intent = None;
-                            }
-                            if response.on_hover_text(hint).clicked() {
-                                annotation_to_create = Some(kind);
-                                close_menu = true;
-                            }
-                        }
-
-                        // Bringing things into view: F, and Shift+F for all of it
-                        ui.separator();
-                        let selection = self.selection_target();
-                        let selected = selection != framing::Target::All;
-                        for (label, shortcut, target, hint) in [
-                            ("Zoom to Selection", "F", selection, "Bring the selected modules, frames and notes into view"),
-                            ("Zoom to Fit", if selected { "Shift+F" } else { "F" }, framing::Target::All,
-                                if self.user_state.level.is_some() { "Bring everything in this group into view" }
-                                else { "Bring the whole patch into view, frames and notes too" }),
-                        ].into_iter().filter(|item| selected || item.2 == framing::Target::All) {
-                            let response = ui.add(
-                                egui::Button::new(RichText::new(label).color(theme::text::SECONDARY))
-                                    .shortcut_text(shortcut)
-                                    .min_size(egui::vec2(110.0, 0.0))
-                                    .frame(false),
-                            );
-                            if response.hovered() {
-                                self.user_state.context_menu_open_category = None;
-                                self.user_state.context_menu_hover_intent = None;
-                            }
-                            if response.on_hover_text(hint).clicked() {
-                                zoom_to = Some(target);
-                                close_menu = true;
-                            }
-                        }
-                    });
-                });
-
-            // Show submenu for open category
-            let mut submenu_rect: Option<egui::Rect> = None;
-            // To the right of the menu, or to its left where the screen ends
-            // first, as it soon does on a phone
-            let submenu_area = |row: usize| {
-                let id = egui::Id::new("add_node_submenu");
-                let menu = menu_response.response.rect;
-                let screen = ctx.screen_rect();
-                let width = ctx.memory(|m| m.area_rect(id)).map_or(160.0, |r| r.width());
-                let top = menu.top() + row as f32 * 22.0;
-                let area = egui::Area::new(id).order(egui::Order::Foreground);
-                if menu.right() + 4.0 + width > screen.right() && menu.left() - 4.0 - width >= screen.left() {
-                    area.pivot(egui::Align2::RIGHT_TOP).fixed_pos(egui::pos2(menu.left() - 4.0, top))
-                } else {
-                    area.fixed_pos(egui::pos2(menu.right() + 4.0, top))
-                }
-            };
-            if let Some(open_cat_index) = self.user_state.context_menu_open_category {
-                if let Some((_category, templates)) = categories.get(open_cat_index) {
-                    let submenu_response = submenu_area(open_cat_index)
-                        .show(ctx, |ui| {
-                            egui::Frame::menu(ui.style()).show(ui, |ui| {
-                                ui.set_min_width(100.0);
-
-                                for template in templates {
-                                    let label = template.node_finder_label(&mut self.user_state);
-                                    if ui.button(label.as_ref()).on_hover_text(template.description()).clicked() {
-                                        template_to_create = Some(*template);
-                                        close_menu = true;
-                                    }
-                                }
-                            });
-                        });
-
-                    submenu_rect = Some(submenu_response.response.rect);
-
-                    // Keep submenu open if mouse is inside it
-                    if submenu_response.response.rect.contains(ctx.input(|i| i.pointer.hover_pos().unwrap_or_default())) {
-                        // Reset hover intent when mouse is in submenu
-                        self.user_state.context_menu_hover_intent = None;
-                    }
-                } else if open_cat_index == categories.len() && !self.my_modules.is_empty() {
-                    // My Modules: the groups saved there
-                    let submenu_response = submenu_area(open_cat_index)
-                        .show(ctx, |ui| {
-                            egui::Frame::menu(ui.style()).show(ui, |ui| {
-                                ui.set_min_width(120.0);
-                                for saved in &self.my_modules {
-                                    let text = RichText::new(&saved.name).color(theme::module::GROUP);
-                                    if ui.button(text).on_hover_text(&saved.summary).clicked() {
-                                        saved_to_add = Some(saved.clone());
-                                        close_menu = true;
-                                    }
-                                }
-                                ui.separator();
-                                if ui.button(RichText::new("Open folder").color(theme::text::SECONDARY)).clicked() {
-                                    open_library = true;
-                                    close_menu = true;
-                                }
-                            });
-                        });
-                    submenu_rect = Some(submenu_response.response.rect);
-                    if submenu_response.response.rect.contains(ctx.input(|i| i.pointer.hover_pos().unwrap_or_default())) {
-                        self.user_state.context_menu_hover_intent = None;
-                    }
-                } else if open_cat_index == categories.len() + usize::from(!self.my_modules.is_empty()) {
-                    // The Library: ready-made groups, under their sections
-                    let submenu_response = submenu_area(open_cat_index)
-                        .constrain(true)
-                        .show(ctx, |ui| {
-                            egui::Frame::menu(ui.style()).show(ui, |ui| {
-                                ui.set_min_width(140.0);
-                                for (n, section) in Section::ALL.into_iter().enumerate() {
-                                    if n > 0 {
-                                        ui.add_space(4.0);
-                                    }
-                                    ui.label(RichText::new(section.name().to_uppercase()).small().color(theme::text::DISABLED));
-                                    for saved in self.library_modules.iter().filter(|m| m.library_group().is_some_and(|g| g.section == section)) {
-                                        let text = RichText::new(&saved.name).color(theme::module::GROUP);
-                                        if ui.button(text).on_hover_text(&saved.summary).clicked() {
-                                            saved_to_add = Some(saved.clone());
-                                            close_menu = true;
-                                        }
-                                    }
-                                }
-                            });
-                        });
-                    submenu_rect = Some(submenu_response.response.rect);
-                    if submenu_response.response.rect.contains(ctx.input(|i| i.pointer.hover_pos().unwrap_or_default())) {
-                        self.user_state.context_menu_hover_intent = None;
-                    }
-                }
-            }
-
-            // Close menu on click outside
-            let menu_rect = menu_response.response.rect;
-            // Near the bottom of the window the menu is moved up to fit, off the
-            // click that opened it, which mustn't count as a click outside
-            if ctx.input(|i| i.pointer.any_click()) && !menu_just_opened && !self.long_press.lifted() {
-                if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
-                    // Check if click was outside both main menu and submenu
-                    let in_main_menu = menu_rect.contains(pos);
-                    let in_submenu = submenu_rect.map_or(false, |r| r.contains(pos));
-                    if !in_main_menu && !in_submenu && template_to_create.is_none() && annotation_to_create.is_none() && saved_to_add.is_none() {
-                        close_menu = true;
-                    }
-                }
-            }
-
-            // Close menu on Escape
-            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-                close_menu = true;
-            }
-
-            // Create node if a template was selected
-            if let Some(template) = template_to_create {
-                self.add_module_at(template, menu_pos);
-                close_menu = true;
-            }
-            if let Some(saved) = saved_to_add {
-                self.add_saved_module(&saved, menu_pos);
-            }
-            if open_library {
-                self.open_library_folder();
-            }
-            match annotation_to_create {
-                Some(NewAnnotation::Frame) if !self.graph_state.selected_nodes.is_empty() => self.frame_selection(ctx),
-                Some(NewAnnotation::Frame) => self.add_frame_at(menu_pos),
-                Some(NewAnnotation::Note) => self.add_note_at(menu_pos),
-                None => {}
-            }
-            if let Some(target) = zoom_to {
-                self.start_glide(ctx, target);
-            }
-
-            if close_menu {
-                self.user_state.context_menu_pos = None;
-                self.user_state.context_menu_open_category = None;
-                self.user_state.context_menu_hover_intent = None;
-            }
-        }
+        self.show_add_menu(ctx, menu_just_opened);
 
         // The quick-add palette
         if let Some(palette) = &mut self.quick_add {
