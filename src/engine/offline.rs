@@ -397,7 +397,7 @@ pub const AUDITION: &[(u8, f32, f32)] = &[
     (67, 2.5, 1.5),
 ];
 
-/// Reads a mono or stereo WAV, MP3 or Ogg Vorbis file (a bigger one gives
+/// Reads a mono or stereo WAV, MP3, FLAC or Ogg file (a bigger one gives
 /// its first two channels), returning it with its sample rate.
 pub fn read_wav(path: &std::path::Path) -> Result<(StereoBuffer, u32), String> {
     let sample = crate::persistence::sample_files::read_file(path)?.sample;

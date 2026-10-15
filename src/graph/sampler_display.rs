@@ -490,7 +490,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                 _ => describe(key, sample),
             },
             (None, None, Some(key)) => format!("{key}\n{}\nClick to open another sound file", problem.filter(|p| !sample_files::is_loading(p)).unwrap_or("Loading…")),
-            _ => "Click to open a WAV, MP3 or Ogg file, or drag one from your files onto the node".to_string(),
+            _ => "Click to open a WAV, MP3, FLAC or Ogg file, or drag one from your files onto the node".to_string(),
         };
         response.on_hover_text(tip);
     }
@@ -553,7 +553,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
     ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
     ui.painter().text(button.center(), egui::Align2::CENTER_CENTER, "Open…", small, theme::text::PRIMARY);
-    if open.on_hover_text("Open a WAV, MP3 or Ogg file for this Sampler").clicked() {
+    if open.on_hover_text("Open a WAV, MP3, FLAC or Ogg file for this Sampler").clicked() {
         responses.push(SynthResponse::OpenSample(node_id));
     }
 

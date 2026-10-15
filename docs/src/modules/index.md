@@ -15,7 +15,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Oscillator](./sources/oscillator.md) | `osc.sine` | Band-limited VCO with a tune section, hard sync, through-zero FM, a sub-oscillator and unison |
 | [Noise](./sources/noise.md) | `source.noise` | White, pink and brown noise, and a smooth random voltage |
 | [Drum](./sources/drum.md) | `source.drum` | An analog-style drum voice: kick, snare, tom, clap, hats, cymbal, rim, cowbell or shaker, with accent and choke |
-| [Sampler](./sources/sampler.md) | `source.sampler` | Plays a WAV, MP3 or Ogg file: one-shots from a gate, an instrument across the keyboard, or its slices by note |
+| [Sampler](./sources/sampler.md) | `source.sampler` | Plays a WAV, MP3, FLAC or Ogg file: one-shots from a gate, an instrument across the keyboard, or its slices by note |
 | [Chopper](./sources/chopper.md) | `source.chopper` | Plays a sliced break in time with the Clock, at any tempo, rearranged step by step |
 | [Audio Input](./sources/audio-input.md) | `source.audio_input` | A microphone, guitar or line input, with an envelope follower and a gate |
 | [Keyboard](./midi/keyboard.md) | `input.keyboard` | Play notes from your computer keyboard |

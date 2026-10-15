@@ -30,7 +30,9 @@ image = { version = "0.25", default-features = false, features = ["png"], option
 # std::time's clocks panic in the browser; this is std's on the desktop
 web-time = "1.1"
 triple_buffer = "9.0.0"
-symphonia = { version = "0.5", default-features = false, features = ["mp3", "vorbis", "ogg"] }
+symphonia = { version = "0.5", default-features = false, features = ["mp3", "vorbis", "flac", "ogg"] }
+# Opus in Ogg, which symphonia 0.5 can split into packets but not decode
+opus-decoder = "0.1.1"
 
 # Updates (src/app/update): one request to GitHub's releases API, then the
 # release's zip, checked against its SHA256SUMS before it's unpacked

@@ -8,6 +8,7 @@ pub mod examples;
 mod example_fetch;
 pub mod graph_io;
 pub mod library;
+mod opus;
 pub mod patch;
 pub mod sample_files;
 pub mod stored_zip;

@@ -46,7 +46,7 @@ The row has at most 64 steps, so more slices allow fewer passes: up to 16 slices
 
 ## Loading a break
 
-Load a file as on the Sampler: click **Open…**, or the empty panel, or drag a WAV, MP3 or Ogg file onto the node. While a dragged file is over the node you hear it, so you can audition files before you drop one. It plays once when it loads, so you hear what you chose, and **▶** plays it again at any time, dry, beside the patch. **Alt-click** a slice to hear just that slice.
+Load a file as on the Sampler: click **Open…**, or the empty panel, or drag a WAV, MP3, FLAC or Ogg file onto the node. While a dragged file is over the node you hear it, so you can audition files before you drop one. It plays once when it loads, so you hear what you chose, and **▶** plays it again at any time, dry, beside the patch. **Alt-click** a slice to hear just that slice.
 
 The file should be the loop itself, start to end: a break cut on its downbeats, as you'd cut one to loop it in a sampler. The [Cut-Up](../../recipes/cut-up.md) example's break is made by Soba's own Drums (`tools/breaks/make_break.py`), so it's free to use however you like.
 

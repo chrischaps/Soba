@@ -1,4 +1,4 @@
-//! Sample files: reading WAV, MP3 and Ogg Vorbis files into [`SampleData`],
+//! Sample files: reading WAV, MP3, FLAC, Ogg Vorbis and Ogg Opus files into [`SampleData`],
 //! and where a patch's samples are.
 //!
 //! In the editor, a Sampler names its file by a *key*: an absolute path, or
@@ -38,7 +38,7 @@ pub fn is_loading(problem: &str) -> bool {
 }
 
 /// The extensions of the files a Sampler plays.
-pub const EXTENSIONS: &[&str] = &["wav", "wave", "mp3", "ogg", "oga"];
+pub const EXTENSIONS: &[&str] = &["wav", "wave", "mp3", "flac", "ogg", "oga", "opus"];
 
 /// Whether a file's name says it's one a Sampler plays.
 pub fn is_sound_file(name: &str) -> bool {
@@ -89,7 +89,7 @@ pub fn decode_wav(reader: impl Read) -> Result<Decoded, String> {
     Ok(Decoded { sample, truncated: keep < total })
 }
 
-/// Decodes a WAV, MP3 or Ogg Vorbis file, telling a WAV by its first bytes
+/// Decodes a WAV, MP3, FLAC or Ogg file, telling a WAV by its first bytes
 /// and the others by what they hold. `name` is a hint, for an MP3 without
 /// tags at its start.
 pub fn decode(mut source: impl MediaSource + 'static, name: &str) -> Result<Decoded, String> {
@@ -103,7 +103,7 @@ pub fn decode(mut source: impl MediaSource + 'static, name: &str) -> Result<Deco
     }
 }
 
-/// Decodes an MP3 or Ogg Vorbis file. Mono stays mono, and more than one
+/// Decodes an MP3, FLAC or Ogg (Vorbis or Opus) file. Mono stays mono, and more than one
 /// channel keeps the first two. Anything past [`MAX_SAMPLE_SECONDS`] is
 /// left unread, and a damaged frame is skipped rather than failing the file.
 fn decode_compressed(source: Box<dyn MediaSource>, name: &str) -> Result<Decoded, String> {
@@ -124,15 +124,15 @@ fn decode_compressed(source: Box<dyn MediaSource>, name: &str) -> Result<Decoded
     let options = FormatOptions { enable_gapless: true, ..Default::default() };
     let mut format = symphonia::default::get_probe()
         .format(&hint, stream, &options, &MetadataOptions::default())
-        .map_err(|_| "not a WAV, MP3 or Ogg Vorbis file".to_string())?
+        .map_err(|_| "not a WAV, MP3, FLAC or Ogg file".to_string())?
         .format;
     let track = format.default_track().ok_or("no audio in the file")?;
     let track_id = track.id;
     // Where it says how long it is: an Ogg's last packet decodes past its end
     let length = track.codec_params.n_frames.map(|n| n as usize);
-    let mut decoder = symphonia::default::get_codecs()
+    let mut decoder = codecs()
         .make(&track.codec_params, &DecoderOptions::default())
-        .map_err(|_| "its audio isn't MP3 or Vorbis".to_string())?;
+        .map_err(|_| "its audio isn't MP3, FLAC, Vorbis or Opus".to_string())?;
 
     let (mut left, mut right) = (Vec::new(), Vec::new());
     let (mut rate, mut stereo, mut truncated) = (0, false, false);
@@ -185,7 +185,18 @@ fn decode_compressed(source: Box<dyn MediaSource>, name: &str) -> Result<Decoded
     Ok(Decoded { sample, truncated })
 }
 
-/// Reads a WAV, MP3 or Ogg Vorbis file from disk.
+/// symphonia's decoders, and ours for Opus.
+fn codecs() -> &'static symphonia::core::codecs::CodecRegistry {
+    static CODECS: std::sync::OnceLock<symphonia::core::codecs::CodecRegistry> = std::sync::OnceLock::new();
+    CODECS.get_or_init(|| {
+        let mut codecs = symphonia::core::codecs::CodecRegistry::new();
+        symphonia::default::register_enabled_codecs(&mut codecs);
+        codecs.register_all::<super::opus::OpusDecoder>();
+        codecs
+    })
+}
+
+/// Reads a WAV, MP3, FLAC or Ogg file from disk.
 pub fn read_file(path: &Path) -> Result<Decoded, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     decode(file, &path.to_string_lossy())
@@ -412,11 +423,59 @@ mod tests {
     }
 
     #[test]
+    fn decodes_flac_exactly() {
+        // Half a second of 440 Hz at 44.1 kHz, mono, lossless
+        let sample = fixture("sine-440-mono.flac");
+        assert!(!sample.is_stereo());
+        assert_eq!(sample.sample_rate(), 44100.0);
+        assert_eq!(sample.frames(), 22050);
+        // ffmpeg's sine, to 16 bits: an eighth of full scale from the first sample
+        for (i, s) in sample.left().iter().enumerate() {
+            let sine = 0.125 * (std::f32::consts::TAU * 440.0 * i as f32 / 44100.0).sin();
+            assert!((s - sine).abs() < 1e-3, "frame {i}: {s} for {sine}");
+        }
+    }
+
+    /// How far `samples` lags a 440 Hz sine at `rate`, in frames, by the
+    /// lag that best lines them up.
+    fn lag_behind_sine(samples: &[f32], rate: f32) -> i32 {
+        let sine = |i: i32| (std::f32::consts::TAU * 440.0 * i as f32 / rate).sin();
+        let fit = |lag: i32| samples[400..4000].iter().enumerate().map(|(i, s)| s * sine(i as i32 + 400 - lag)).sum::<f32>();
+        (-60..60).max_by(|a, b| fit(*a).total_cmp(&fit(*b))).unwrap()
+    }
+
+    #[test]
+    fn decodes_ogg_opus_without_its_pre_skip() {
+        // Half a second of 440 Hz at 48 kHz, stereo (so 3 dB down), from
+        // libopus. Its encoder lays 312 frames of pre-skip before the sine
+        let sample = fixture("sine-440-stereo.opus");
+        assert!(sample.is_stereo());
+        assert_eq!(sample.sample_rate(), 48000.0);
+        assert_eq!(sample.frames(), 24000);
+        assert!((peak(sample.left()) - 0.088).abs() < 0.01, "{}", peak(sample.left()));
+        assert!((peak(sample.right()) - 0.088).abs() < 0.01, "{}", peak(sample.right()));
+        // It starts at once, in phase with the sine it was
+        assert!(peak(&sample.left()[..64]) > 0.02);
+        assert_eq!(lag_behind_sine(sample.left(), 48000.0), 0);
+    }
+
+    #[test]
+    fn decodes_ogg_opus_from_any_rate_at_48_khz() {
+        // Mono at 44.1 kHz going in; Opus gives it back at 48
+        let sample = fixture("sine-440-mono-44k.opus");
+        assert!(!sample.is_stereo());
+        assert_eq!(sample.sample_rate(), 48000.0);
+        assert_eq!(sample.frames(), 24000);
+        assert!((peak(sample.left()) - 0.125).abs() < 0.01, "{}", peak(sample.left()));
+    }
+
+    #[test]
     fn says_what_it_plays() {
         assert!(is_sound_file("kick.WAV") && is_sound_file("C:/loops/break.mp3") && is_sound_file("pad.ogg"));
+        assert!(is_sound_file("take.flac") && is_sound_file("memo.opus"));
         assert!(!is_sound_file("notes.txt") && !is_sound_file("mp3"));
         let problem = decode(std::io::Cursor::new(b"not audio at all".to_vec()), "notes.txt").unwrap_err();
-        assert_eq!(problem, "not a WAV, MP3 or Ogg Vorbis file");
+        assert_eq!(problem, "not a WAV, MP3, FLAC or Ogg file");
     }
 
     #[test]
