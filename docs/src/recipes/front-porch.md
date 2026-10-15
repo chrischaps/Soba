@@ -146,4 +146,4 @@ A light chorus widens the piano into stereo, as two microphones would a guitar. 
 - [Trigger Sequencer](../modules/utilities/trigger-sequencer.md) – ratchets, velocity and the lanes the porch plays
 - [Roll Call](./roll-call.md) – a whole kit on one Trigger Sequencer
 - [Afterglow](./afterglow.md) – the Chord Sequencer playing a pad and moving an arpeggio
-- [Clair de Satellite](./clair-de-satellite.md) – an electric piano comping in a whole song
+- [Clair de Satellite](../songs/clair-de-satellite.md) – an electric piano comping in a whole song

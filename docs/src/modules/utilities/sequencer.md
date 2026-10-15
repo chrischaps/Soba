@@ -107,7 +107,7 @@ A pass ends where the pattern comes round: after the last step going **Fwd**, af
 
 With a cable in **Pattern**, the CV picks the patterns instead, and the Chain dims. The CV is read once a pass, on the clock that starts it, in the same four zones as the Trigger Sequencer's, so one CV means the same pattern on both. An [Arranger](./arranger.md) lane is made for this: a verse section that holds the lane at A and a chorus that holds it at B make one sequencer play the song's two melodies. The Arranger moves its lanes on the same clock edge the sequencer steps on, so a section's first note comes from its own pattern, with no lag. Leave that lane's **Glide** at 0.
 
-Because the CV is only read as a pass starts, a lane that ramps can play a chain inside one long section. A **Linear** ramp from 12.5% to 87.5% over three passes stands in the middle of A, B, C and D at the start of each one. [From One Sine](../../recipes/from-one-sine.md#the-motif-and-the-line) grows its motif into a sixteen-bar line that way, and holds the lane at A wherever the motif plays alone.
+Because the CV is only read as a pass starts, a lane that ramps can play a chain inside one long section. A **Linear** ramp from 12.5% to 87.5% over three passes stands in the middle of A, B, C and D at the start of each one. [From One Sine](../../songs/from-one-sine.md#the-motif-and-the-line) grows its motif into a sixteen-bar line that way, and holds the lane at A wherever the motif plays alone.
 
 ## Timing
 

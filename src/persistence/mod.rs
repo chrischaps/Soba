@@ -12,7 +12,7 @@ pub mod patch;
 pub mod sample_files;
 
 pub use compile::{compile_patch, CompiledPatch};
-pub use examples::{Example, EXAMPLES};
+pub use examples::{Example, Shelf, EXAMPLES};
 pub use library::{LibraryGroup, Section, LIBRARY};
 pub use graph_io::{
     capture_level, capture_patch, merge_patch, renumber_groups, stage_patch, CapturedLevel, Merged, StagedNode, StagedPart,

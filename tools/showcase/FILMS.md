@@ -1,6 +1,6 @@
 # Films: a whole song, filmed as it plays
 
-A *film* is a capture of a self-playing patch from start to end. The camera goes wherever the music is: into a group as its part plays, back out, and across to the next. This is how the [Canopy](../../docs/src/recipes/canopy.md) films were made: a full-length YouTube cut, and a one-minute vertical cut for Instagram. The steps below re-shoot them, and are the template for the next song.
+A *film* is a capture of a self-playing patch from start to end. The camera goes wherever the music is: into a group as its part plays, back out, and across to the next. This is how the [Canopy](../../docs/src/songs/canopy.md) films were made: a full-length YouTube cut, and a one-minute vertical cut for Instagram. The steps below re-shoot them, and are the template for the next song.
 
 There is no text over the picture: what you see is the app.
 

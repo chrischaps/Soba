@@ -80,6 +80,10 @@
 - [Held Vowels](./recipes/held-vowels.md)
 - [Interlock](./recipes/interlock.md)
 - [Cut-Up](./recipes/cut-up.md)
-- [From One Sine](./recipes/from-one-sine.md)
-- [Clair de Satellite](./recipes/clair-de-satellite.md)
-- [Canopy](./recipes/canopy.md)
+
+# Songs
+
+- [From One Sine](./songs/from-one-sine.md)
+- [Clair de Satellite](./songs/clair-de-satellite.md)
+- [Canopy](./songs/canopy.md)
+- [Orrery](./songs/orrery.md)

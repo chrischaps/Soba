@@ -149,9 +149,9 @@ Each was checked by rendering [Afterglow](../../recipes/afterglow.md) through it
 [Tape Out R] ──> [Audio Output Right]
 ```
 
-[Afterglow](../../recipes/afterglow.md), [Shoreline](../../recipes/shoreline.md), [Clair de Satellite](../../recipes/clair-de-satellite.md) and [From One Sine](../../recipes/from-one-sine.md) all end this way. Each recipe says what its tape adds.
+[Afterglow](../../recipes/afterglow.md), [Shoreline](../../recipes/shoreline.md), [Clair de Satellite](../../songs/clair-de-satellite.md) and [From One Sine](../../songs/from-one-sine.md) all end this way. Each recipe says what its tape adds.
 
-**A warped moment.** Patch an [Arranger](../utilities/arranger.md) lane into **Wow**, with the knob low. Ramp the lane up through a breakdown and back down for the drop, and the whole mix bends out of shape and back. [From One Sine](../../recipes/from-one-sine.md#a-warped-memory) ramps it up through its breakdown and jumps it back to 0 on the drop's downbeat.
+**A warped moment.** Patch an [Arranger](../utilities/arranger.md) lane into **Wow**, with the knob low. Ramp the lane up through a breakdown and back down for the drop, and the whole mix bends out of shape and back. [From One Sine](../../songs/from-one-sine.md#a-warped-memory) ramps it up through its breakdown and jumps it back to 0 on the drop's downbeat.
 
 **Breathing tape.** A slow [LFO](../modulation/lfo.md), around 0.05 Hz, into **Wow** with a small depth makes the sway itself come and go.
 

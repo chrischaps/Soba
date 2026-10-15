@@ -63,7 +63,7 @@ While the patch plays, the chord sounding is drawn brighter, with a white outlin
 ### The chord popover
 
 ![The chord popover](../../images/chord-sequencer-popover.png)
-*Step 1 of [From One Sine](../../recipes/from-one-sine.md): Dmadd9, with E on top. The bass row is spelled from the root, so the note a half step under D reads C#, as a lead sheet writes it. The top row offers only the tones the chord keeps: with **Rootless** on and three voices, Dmadd9 keeps F, A and E.*
+*Step 1 of [From One Sine](../../songs/from-one-sine.md): Dmadd9, with E on top. The bass row is spelled from the root, so the note a half step under D reads C#, as a lead sheet writes it. The top row offers only the tones the chord keeps: with **Rootless** on and three voices, Dmadd9 keeps F, A and E.*
 
 Right-click a step and its chord opens under it:
 
@@ -157,7 +157,7 @@ The first chord after **Reset** or a stop is in root position, and the rest lead
 
 A step's **Top** picks the chord tone that goes on top of the voicing, the way an arranger writes a pad's top line. The sequencer then chooses only among the inversions with that tone on top. With voice leading on, it takes the nearest of those; otherwise, the one whose lowest note is in the **Range** octave. **Auto** leaves the choice to the voicing.
 
-Most steps can leave it on Auto. Set it where voice leading picks a different voicing from the one you hear. A progression that loops back to its first chord is the usual case. Voice leading moves the first chord as close to the last one as it can, so each pass round can start lower than the one before. A **Top** on the first step starts every pass from the same place. [From One Sine](../../recipes/from-one-sine.md) sets two tops in sixteen chords, and voice leading finds the rest. You don't have to set them by hand: play the voicing you want into the step (see [Playing a chord into a step](#playing-a-chord-into-a-step)) and the popover writes the top if the step needs one.
+Most steps can leave it on Auto. Set it where voice leading picks a different voicing from the one you hear. A progression that loops back to its first chord is the usual case. Voice leading moves the first chord as close to the last one as it can, so each pass round can start lower than the one before. A **Top** on the first step starts every pass from the same place. [From One Sine](../../songs/from-one-sine.md) sets two tops in sixteen chords, and voice leading finds the rest. You don't have to set them by hand: play the voicing you want into the step (see [Playing a chord into a step](#playing-a-chord-into-a-step)) and the popover writes the top if the step needs one.
 
 A top that the voicing can't put on top is ignored, as if it were Auto. That happens if the tone isn't in the chord, or if **Voices** leaves it out, or if a voicing can't reach it: Spread can't put every tone on top. Change the chord and its top stays, so it comes back if the new chord has that tone.
 

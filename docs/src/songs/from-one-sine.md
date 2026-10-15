@@ -63,7 +63,7 @@ Each section of the song is sixteen bars. On the Arrangers they're 22 sections: 
 | [Attenuverter](../modules/utilities/attenuverter.md) ×3 | Scaling: the pad's brightness, the bass drive, the arp's PWM |
 | [Noise](../modules/sources/noise.md) ×2 | Pink wind, and the Random voltage for the sparkles |
 | [Quantizer](../modules/utilities/quantizer.md) | D minor pentatonic for the sparkles |
-| [Sampler](../modules/sources/sampler.md) | The bell from [Sampled Keys](./sampled-keys.md) |
+| [Sampler](../modules/sources/sampler.md) | The bell from [Sampled Keys](../recipes/sampled-keys.md) |
 | [Looper](../modules/utilities/looper.md) | **Bars** 4, **Speed** ½×, **Reverse** on, **Dry** 0 |
 | [Drum](../modules/sources/drum.md) ×8 | Kick (tuned to A1), Snare, Clap, Closed Hat, Open Hat (choked by the closed hat), Rim, Tom (A2), and a Cymbal for the crash |
 | [Trigger Sequencer](../modules/utilities/trigger-sequencer.md) | The drums: four patterns, picked by **Pattern** CV |
@@ -128,7 +128,7 @@ Its **Root** output plays each chord's root on a saw of its own, an octave down.
 
 The voices all come out of one Oscillator, three saws on one cable. A Ladder Filter on that cable would filter each voice on its own, and drive each one less hard than the whole chord. So the root saw and the chord meet in a [Mix](../modules/utilities/mix.md) with **Sum Voices** on, which adds the three voices into one channel. Then one Ladder Filter drives the chord as a whole, the Compressor ducks it under the kick, and the Chorus spreads it into stereo.
 
-The arpeggio and the bass are written over C, and the **Root** moves them to each chord through **Exp FM** at 1 octave per volt, as in [Afterglow](./afterglow.md). That only stays in key if the shapes have no third, so the arpeggio is made of roots, ninths and fifths, and the bass of roots, fifths and octaves. Over these roots, every note they play is in D minor.
+The arpeggio and the bass are written over C, and the **Root** moves them to each chord through **Exp FM** at 1 octave per volt, as in [Afterglow](../recipes/afterglow.md). That only stays in key if the shapes have no third, so the arpeggio is made of roots, ninths and fifths, and the bass of roots, fifths and octaves. Over these roots, every note they play is in D minor.
 
 ### The motif and the line
 
@@ -243,8 +243,8 @@ The warp needs an Arranger of its own because Cues has no lane to spare. Its **R
 
 - [Arranger](../modules/utilities/arranger.md): sections, lanes, and the cues that move them
 - [Tape](../modules/effects/tape.md): the master tape, and its Wow input
-- [Afterglow](./afterglow.md): transposing an arpeggio with a second sequencer
-- [Roll Call](./roll-call.md): one Trigger Sequencer, eight drums
-- [Live Looper](./live-looper.md): the Looper with your own instrument
-- [Interlock](./interlock.md): Logic deciding whose turn it is
+- [Afterglow](../recipes/afterglow.md): transposing an arpeggio with a second sequencer
+- [Roll Call](../recipes/roll-call.md): one Trigger Sequencer, eight drums
+- [Live Looper](../recipes/live-looper.md): the Looper with your own instrument
+- [Interlock](../recipes/interlock.md): Logic deciding whose turn it is
 - [Tempo and Sync](../concepts/tempo-and-sync.md): one Clock for the whole patch

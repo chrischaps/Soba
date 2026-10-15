@@ -24,7 +24,7 @@ use crate::graph::{
 use crate::modules::keyboard::{key_to_note, relative_to_midi, KeyPriority, KeyboardInput};
 use crate::persistence::{
     capture_patch, examples, load_from_file, renumber_groups, save_to_file, stage_patch, Example, MidiMapping, Patch, PatchError,
-    Section, EXAMPLES,
+    Section, Shelf, EXAMPLES,
 };
 #[cfg(target_arch = "wasm32")]
 use crate::persistence::{patch_from_json, patch_to_json};
@@ -1451,10 +1451,16 @@ impl SynthApp {
             }
 
             ui.menu_button("📚 Examples", |ui| {
-                for example in EXAMPLES {
-                    if ui.button(example.name).on_hover_text(example.description).clicked() {
-                        actions.open_example = Some(example);
-                        ui.close_menu();
+                for (n, shelf) in Shelf::ALL.into_iter().enumerate() {
+                    if n > 0 {
+                        ui.separator();
+                    }
+                    ui.label(RichText::new(shelf.title()).small().color(theme::text::SECONDARY));
+                    for example in EXAMPLES.iter().filter(|e| e.shelf == shelf) {
+                        if ui.button(example.name).on_hover_text(example.description).clicked() {
+                            actions.open_example = Some(example);
+                            ui.close_menu();
+                        }
                     }
                 }
             });

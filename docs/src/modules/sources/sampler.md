@@ -272,7 +272,7 @@ Load a one-bar drum loop and set **Slices** to 8 or 16, so each slice is an eigh
 
 ### Many lines in one file
 
-The [Clair de Satellite](../../recipes/clair-de-satellite.md) example keeps all eight of its sung lines in one file, a line to a slice. A Step Sequencer that steps every two bars sings line *k* on note C4 + *k*.
+The [Clair de Satellite](../../songs/clair-de-satellite.md) example keeps all eight of its sung lines in one file, a line to a slice. A Step Sequencer that steps every two bars sings line *k* on note C4 + *k*.
 
 ### Scrubbing
 

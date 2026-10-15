@@ -82,7 +82,7 @@ Fm9, D♭maj9, B♭m9 and E♭(add9), two bars each. On the second pass the last
 [Chops Gate]      ──> [Sampler Gate]      (Gated, so each chop is as long as its notes)
 ```
 
-The singer is nobody's recording. Like [Held Vowels](./held-vowels.md)' singer, it comes from the small formant synthesizer in `tools/voice/`, this time [`chops.py`](https://github.com/chrischaps/Soba/blob/master/tools/voice/chops.py), with the formants raised for a lighter voice. The hook is four bars: *oh · ah · ya · ah · oh*, then *mah · hey · ah-oh*, then the first bar again, rising to *hey · lah*, and an *ooh* to end. Every note is pentatonic, so it sits over all six chords. The chops go to the echo more than anything else, and their repeats fill the gaps between them.
+The singer is nobody's recording. Like [Held Vowels](../recipes/held-vowels.md)' singer, it comes from the small formant synthesizer in `tools/voice/`, this time [`chops.py`](https://github.com/chrischaps/Soba/blob/master/tools/voice/chops.py), with the formants raised for a lighter voice. The hook is four bars: *oh · ah · ya · ah · oh*, then *mah · hey · ah-oh*, then the first bar again, rising to *hey · lah*, and an *ooh* to end. Every note is pentatonic, so it sits over all six chords. The chops go to the echo more than anything else, and their repeats fill the gaps between them.
 
 ## Variations
 

@@ -18,6 +18,12 @@ edit-url-template = "https://github.com/chrischaps/Soba/edit/master/docs/{path}"
 no-section-label = false
 additional-css = ["theme/custom.css"]
 
+# The songs were recipes until they had a part of their own
+[output.html.redirect]
+"/recipes/from-one-sine.html" = "../songs/from-one-sine.html"
+"/recipes/clair-de-satellite.html" = "../songs/clair-de-satellite.html"
+"/recipes/canopy.html" = "../songs/canopy.html"
+
 [output.html.fold]
 enable = true
 level = 1

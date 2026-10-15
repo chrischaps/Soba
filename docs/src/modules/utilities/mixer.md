@@ -201,7 +201,7 @@ Chain Mixers. The first one's mix and sends pass through the second on one cable
 [Mixer B Out R] ──> [Audio Output Right]
 ```
 
-The [Backbeat](../../recipes/backbeat.md) example compresses its kick and snare on a drum-bus Mixer chained into the main one, with one room for the whole kit. [From One Sine](../../recipes/from-one-sine.md) chains four.
+The [Backbeat](../../recipes/backbeat.md) example compresses its kick and snare on a drum-bus Mixer chained into the main one, with one room for the whole kit. [From One Sine](../../songs/from-one-sine.md) chains four.
 
 ## Related modules
 

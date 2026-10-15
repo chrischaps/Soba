@@ -53,7 +53,7 @@ Character and the [Tape](../effects/tape.md) module both add warmth, but they do
 
 **Tape** colours everything that passes through it, quiet or loud. You patch it in front of the output, and it has its own level calibration (0 VU is a sine at -18 dBFS RMS). The record head squashes the treble first, the head bump lifts the lows, the top end rolls off with speed and age, and wow, flutter and hiss make the sound move. Putting a patch on tape is a decision about how the whole patch sounds.
 
-The two work together. Tape colours the mix, Character rounds whatever peaks still reach the output, and the limiter holds the ceiling. [Clair de Satellite](../../recipes/clair-de-satellite.md) and [From One Sine](../../recipes/from-one-sine.md) use the whole chain.
+The two work together. Tape colours the mix, Character rounds whatever peaks still reach the output, and the limiter holds the ceiling. [Clair de Satellite](../../songs/clair-de-satellite.md) and [From One Sine](../../songs/from-one-sine.md) use the whole chain.
 
 ## The meter
 

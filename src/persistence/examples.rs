@@ -4,15 +4,39 @@
 //! link to them, and are compiled into the binary so the File → Examples
 //! menu works wherever the app is run from. Each recipe in the docs
 //! (`docs/src/recipes/`) has a patch here that builds exactly what it
-//! describes.
+//! describes, and so does each song (`docs/src/songs/`).
 
 use super::{patch_from_json, Patch, PatchError};
+
+/// Which shelf of the Examples menu an example sits on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shelf {
+    /// A patch built around one idea, with a recipe in the docs.
+    Recipe,
+    /// A whole piece that plays itself from start to end.
+    Song,
+}
+
+impl Shelf {
+    /// Every shelf, in menu order.
+    pub const ALL: [Shelf; 2] = [Shelf::Recipe, Shelf::Song];
+
+    /// The shelf's heading in the Examples menu.
+    pub fn title(self) -> &'static str {
+        match self {
+            Shelf::Recipe => "Recipes",
+            Shelf::Song => "Songs",
+        }
+    }
+}
 
 /// A patch that ships with the app.
 #[derive(Debug)]
 pub struct Example {
     /// Name shown in the Examples menu.
     pub name: &'static str,
+    /// The shelf it's shown on.
+    pub shelf: Shelf,
     /// File name in `patches/`, also offered when the example is saved.
     pub file_name: &'static str,
     /// One line on what the patch teaches, for the menu tooltip.
@@ -69,133 +93,162 @@ pub const EXAMPLE_SAMPLES: &[(&str, &[u8])] = &[
     shipped!("samples/canopy-chops.wav"),
 ];
 
-/// Every example, in menu order: from a first note to self-playing patches.
+/// Every example, in menu order: from a first note to self-playing patches,
+/// and then the songs.
 pub const EXAMPLES: &[Example] = &[
     Example {
         name: "First Sound",
+        shelf: Shelf::Recipe,
         file_name: "first-sound.json",
         description: "Oscillator, envelope and VCA: the smallest playable voice. Press Play, then play the Z to M keys",
         json: include_str!("../../patches/first-sound.json"),
     },
     Example {
         name: "Basic Subtractive",
+        shelf: Shelf::Recipe,
         file_name: "basic-subtractive.json",
         description: "A saw through a filter, with separate envelopes for brightness and volume",
         json: include_str!("../../patches/basic-subtractive.json"),
     },
     Example {
         name: "FM Synthesis",
+        shelf: Shelf::Recipe,
         file_name: "fm-synthesis.json",
         description: "One sine bending another's pitch into a bell that starts bright and fades pure",
         json: include_str!("../../patches/fm-synthesis.json"),
     },
     Example {
         name: "Lush Pad",
+        shelf: Shelf::Recipe,
         file_name: "lush-pad.json",
         description: "A polyphonic unison saw pad with slow attack, chorus and reverb. Hold chords",
         json: include_str!("../../patches/lush-pad.json"),
     },
     Example {
         name: "Sampled Keys",
+        shelf: Shelf::Recipe,
         file_name: "sampled-keys.json",
         description: "A bell, sampled from the FM Synthesis example, played across the keyboard: a Sampler voice for every key you hold",
         json: include_str!("../../patches/sampled-keys.json"),
     },
     Example {
         name: "Live Looper",
+        shelf: Shelf::Recipe,
         file_name: "live-looper.json",
         description: "Play your own instrument into a looper: record four bars on the downbeat, overdub layers over them and undo the last, through tempo-synced echo and a room",
         json: include_str!("../../patches/live-looper.json"),
     },
     Example {
         name: "Generative Ambient",
+        shelf: Shelf::Recipe,
         file_name: "generative-ambient.json",
         description: "Plays itself: a slow pentatonic sequence, sample-and-hold brightness, long echoes",
         json: include_str!("../../patches/generative-ambient.json"),
     },
     Example {
         name: "Shoreline",
+        shelf: Shelf::Recipe,
         file_name: "shoreline.json",
         description: "Plays itself: one Noise module makes the surf, varies every wave, and picks the notes of a glassy chime",
         json: include_str!("../../patches/shoreline.json"),
     },
     Example {
         name: "Rhythmic Sequence",
+        shelf: Shelf::Recipe,
         file_name: "rhythmic-sequence.json",
         description: "Plays itself: a 16-step acid bassline with a resonant filter, drive and delay, over noise hi-hats",
         json: include_str!("../../patches/rhythmic-sequence.json"),
     },
     Example {
         name: "Backbeat",
+        shelf: Shelf::Recipe,
         file_name: "backbeat.json",
         description: "Plays itself: a full drum kit from oscillators and noise, with ghost notes, choked hats, and a tom fill and crash every four bars",
         json: include_str!("../../patches/backbeat.json"),
     },
     Example {
         name: "Drum Machine",
+        shelf: Shelf::Recipe,
         file_name: "drum-machine.json",
         description: "Plays itself: Backbeat's kit in 14 modules. Five Drum voices on five lanes, a choked open hat, tuned toms and a room",
         json: include_str!("../../patches/drum-machine.json"),
     },
     Example {
         name: "Roll Call",
+        shelf: Shelf::Recipe,
         file_name: "roll-call.json",
         description: "Plays itself: eight drums on one Trigger Sequencer, with ratcheted rolls, ghost notes that only sometimes play, and a fill and crash every four bars from its Chain",
         json: include_str!("../../patches/roll-call.json"),
     },
     Example {
         name: "Afterglow",
+        shelf: Shelf::Recipe,
         file_name: "afterglow.json",
         description: "Plays itself: a Chord Sequencer moves an arpeggio through Fmaj9, Cadd9, G6 and Am9 and plays them on a warm pad, under dotted-eighth tape echoes",
         json: include_str!("../../patches/afterglow.json"),
     },
     Example {
         name: "Front Porch",
+        shelf: Shelf::Recipe,
         file_name: "front-porch.json",
         description: "Plays itself: rhythm guitar on the Electric Piano. A Chord Sequencer strums G, D/F#, Em7 and Cadd9 down and up in eighths, rolling each chord across its strings and brushing the last ones lightly, over a heel stomping on 1 and 3 and a shaker in sixteenths",
         json: include_str!("../../patches/front-porch.json"),
     },
     Example {
         name: "Soba Speaks",
+        shelf: Shelf::Recipe,
         file_name: "soba-speaks.json",
         description: "Plays itself: a Vocoder puts a spoken line on a pad of four falling chords. Mixer mutes switch the voice between a person, a robot and your own mic",
         json: include_str!("../../patches/soba-speaks.json"),
     },
     Example {
         name: "Held Vowels",
+        shelf: Shelf::Recipe,
         file_name: "held-vowels.json",
         description: "Plays itself: a soft triangle pad sings ohh, ooh, ee and ahh. The Vocoder's Freeze holds each vowel through a chord and lets go for one beat to take the next, and Flatten lets a dull pad speak",
         json: include_str!("../../patches/held-vowels.json"),
     },
     Example {
         name: "Interlock",
+        shelf: Shelf::Recipe,
         file_name: "interlock.json",
         description: "Plays itself: Logic splits a three-against-four rhythm between two gamelan-style parts that interlock into one fast melody, while a slow tide brings the second part in and out",
         json: include_str!("../../patches/interlock.json"),
     },
     Example {
         name: "Cut-Up",
+        shelf: Shelf::Recipe,
         file_name: "cut-up.json",
         description: "Plays itself: a two-bar break, sliced, follows the Clock 16 BPM faster than it was played without going up in pitch. A Chopper rearranges it step by step: a slice reversed, one pitched down, a stutter into the top, and dice on a few",
         json: include_str!("../../patches/cut-up.json"),
     },
     Example {
         name: "From One Sine",
+        shelf: Shelf::Song,
         file_name: "from-one-sine.json",
         description: "Plays itself, start to finish: a four-and-a-half-minute song in 77 modules, scored by three Arrangers that ride the faders section by section. A lone sine's motif grows into the whole rack, and a Looper brings it back reversed on warping tape",
         json: include_str!("../../patches/from-one-sine.json"),
     },
     Example {
         name: "Clair de Satellite",
+        shelf: Shelf::Song,
         file_name: "clair-de-satellite.json",
         description: "Plays itself: a song in the manner of Air, scored by three Arrangers. Rhodes, string machine and a vocoder singing on the chords, each part a group, and a satellite at either end",
         json: include_str!("../../patches/clair-de-satellite.json"),
     },
     Example {
         name: "Canopy",
+        shelf: Shelf::Song,
         file_name: "canopy.json",
         description: "Plays itself: a song in the manner of Bonobo, scored by three Arrangers. Pentatonic loops of twelve and ten steps drift against the bar over a broken beat, a chopped break, pitched vocal chops and a breathy flute",
         json: include_str!("../../patches/canopy.json"),
+    },
+    Example {
+        name: "Orrery",
+        shelf: Shelf::Song,
+        file_name: "orrery.json",
+        description: "Plays itself, with no Arranger: five minutes of E minor scored by slow LFO orbits. As a Day rises and sets, each voice comes in when it reaches its height, a Tide makes a breakdown, and eclipses of two clock dividers strike a gong",
+        json: include_str!("../../patches/orrery.json"),
     },
 ];
 
@@ -223,6 +276,16 @@ mod tests {
         let mut listed: Vec<String> = EXAMPLES.iter().map(|e| e.file_name.to_string()).collect();
         listed.sort();
         assert_eq!(files, listed, "patches/ and EXAMPLES must list the same files");
+    }
+
+    #[test]
+    fn test_the_shelves_keep_together() {
+        // The menu draws each shelf in EXAMPLES order, so the list itself
+        // reads shelf by shelf, as the docs' parts do
+        let shelves: Vec<Shelf> = EXAMPLES.iter().map(|e| e.shelf).collect();
+        let first_song = shelves.iter().position(|&s| s == Shelf::Song).unwrap();
+        assert!(shelves[first_song..].iter().all(|&s| s == Shelf::Song), "{:?}", shelves);
+        assert_eq!(first_sound().shelf, Shelf::Recipe);
     }
 
     #[test]

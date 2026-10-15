@@ -53,6 +53,7 @@ const SONGS: &[(&str, f32, f32)] = &[
     ("from-one-sine.json", 128.0, 112.0),
     ("clair-de-satellite.json", 93.0, 88.0),
     ("canopy.json", 124.0, 116.0),
+    ("orrery.json", 140.0, 112.0),
 ];
 
 /// Examples that sit below the house level, and why.

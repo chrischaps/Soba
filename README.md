@@ -52,7 +52,7 @@ cargo run --release                           # opens with the First Sound examp
 cargo run --release -- patches/lush-pad.json  # or open a patch
 ```
 
-Nineteen example patches are in [`patches/`](patches) and in the app's **Examples** menu. Press **Play**, then hold a few keys on the computer keyboard (`Z` to `M` is a white-key octave, with the sharps on the row above).
+The example patches are in [`patches/`](patches) and in the app's **Examples** menu, on two shelves: **Recipes**, each built around one idea, and **Songs**, whole pieces that play themselves from start to end. Press **Play**, then hold a few keys on the computer keyboard (`Z` to `M` is a white-key octave, with the sharps on the row above).
 
 ### Render a patch offline
 

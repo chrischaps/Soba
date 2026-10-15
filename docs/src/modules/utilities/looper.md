@@ -151,4 +151,4 @@ Patch **Start** into a sequencer's **Reset** so its phrase restarts with the loo
 - [Audio Input](../sources/audio-input.md): live sound in, and the round trip
 - [Clock](../modulation/clock.md) and [Clock Divider](./divider.md): bar-synced takes
 - [Live Looper](../../recipes/live-looper.md): the example patch
-- [From One Sine](../../recipes/from-one-sine.md): a Looper pressed by the patch itself, keeping its opening to play back reversed in the breakdown
+- [From One Sine](../../songs/from-one-sine.md): a Looper pressed by the patch itself, keeping its opening to play back reversed in the breakdown

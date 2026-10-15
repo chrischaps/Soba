@@ -82,7 +82,7 @@ A [Chord Sequencer](./chord-sequencer.md) plays its chord on one polyphonic cabl
 [Mix Out] ──> [Ladder Filter In]
 ```
 
-With **Sum Voices** on, the bass joins the sum once. With it off, the bass would join each of the chord's three voices, and come out three times as loud once they were added together. [From One Sine](../../recipes/from-one-sine.md) builds its pad this way.
+With **Sum Voices** on, the bass joins the sum once. With it off, the bass would join each of the chord's three voices, and come out three times as loud once they were added together. [From One Sine](../../songs/from-one-sine.md) builds its pad this way.
 
 ## Related modules
 
