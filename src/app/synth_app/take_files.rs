@@ -130,7 +130,9 @@ impl TakeFiles {
         let mut unnamed = Vec::new();
         for folder in left_behind(temp, running) {
             let files = std::fs::read_dir(&folder).into_iter().flatten().filter_map(Result::ok);
-            let files: Vec<PathBuf> = files.filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file())).map(|entry| entry.path()).collect();
+            let mut files: Vec<PathBuf> = files.filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file())).map(|entry| entry.path()).collect();
+            // read_dir's order is the file system's (hashed on ext4)
+            files.sort();
             for file in files {
                 match named(&file) {
                     Some(key) => self.wrote(&key),
