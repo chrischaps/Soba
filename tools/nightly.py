@@ -11,7 +11,9 @@ Steps, in order (--only picks some):
     tests      cargo test
     loudness   the ignored example_loudness test: every example at length
     layout     check_layout.py: every example's modules inside their frames
-    zoom       zoom_jitter.py --max 0.5 on every patch
+    zoom       zoom_check.py: zoom_jitter.py --max 0.5 on each patch that
+               something it holds has changed since it last passed, several at
+               once
     images     the recipe, manual and module pictures; stale ones are re-shot
                and pushed to master as a [Docs] commit of their own. Only the
                pictures something they show has changed since are filmed,
@@ -217,10 +219,9 @@ def run_steps(steps, worktree, logs, push):
         elif step == "layout":
             passed = step_run([python, showcase / "check_layout.py"], log, worktree, env) == 0
         elif step == "zoom":
-            bad = [p.stem for p in sorted((worktree / "patches").glob("*.json"))
-                   if step_run([python, showcase / "zoom_jitter.py", p, "--max", "0.5"], log, worktree, env) != 0]
-            passed = not bad
-            note = f"steps in {', '.join(bad)}" if bad else ""
+            passed = step_run([python, showcase / "zoom_check.py"], log, worktree, env) == 0
+            steps_in = [line for line in tail(log).splitlines() if line.startswith("Steps in: ")]
+            note = steps_in[-1].lower() if steps_in else ""
         elif step == "images":
             passed = all(step_run([python, showcase / tool, "--refresh"], log, worktree, env) == 0
                          for tool in ["recipe_images.py", "module_images.py", "manual_images.py"])

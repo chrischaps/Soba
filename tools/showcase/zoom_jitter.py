@@ -17,6 +17,10 @@ Size it with src/graph/steady_text.rs instead.
 
 Needs the capture build (CARGO_TARGET_DIR=target/capture cargo build
 --release). Output goes to target/showcase/zoom-jitter/<patch>/.
+
+zoom_check.py sweeps every example this way, several at once, skipping the
+ones nothing they hold has changed since they last held still. The nightly
+run uses it.
 """
 
 import argparse
@@ -52,17 +56,13 @@ def names_of(patch):
     return names
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("patch")
-    ap.add_argument("--ppp", type=float, default=1.25)
-    ap.add_argument("--steps", type=int, default=80)
-    ap.add_argument("--zoom", type=float, nargs=2, default=(0.3, 2.0))
-    ap.add_argument("--max", type=float)
-    a = ap.parse_args()
-    path = Path(a.patch).resolve()
+def sweep(path, ppp=1.25, steps=80, zoom=(0.3, 2.0)):
+    """Films the zoom sweep over one patch and returns its rows, worst first:
+    (width change, height change, zooms seen, name, width, height). Each
+    patch films into its own folder, so several can sweep at once (#276)."""
+    path = Path(path).resolve()
     patch = json.loads(path.read_text(encoding="utf-8"))
-    x0, y0, x1, y1 = EDITORS[(SIZE, a.ppp)]
+    x0, y0, x1, y1 = EDITORS[(SIZE, ppp)]
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     out = ROOT / "target" / "showcase" / "zoom-jitter" / path.stem
     out.mkdir(parents=True, exist_ok=True)
@@ -72,18 +72,17 @@ def main():
     # The camera is relative to the view as the patch opens (zoom 1, patch
     # (0, 0) at the editor's top left): centring P at zoom Z is this cue
     lines, t, k = ["-1 play"], 0.0, 0
-    lo, hi = a.zoom
+    lo, hi = zoom
     for _, (px, py) in centres(patch):
-        for i in range(a.steps):
-            z = lo * (hi / lo) ** (i / (a.steps - 1))
+        for i in range(steps):
+            z = lo * (hi / lo) ** (i / (steps - 1))
             lines.append(f"{t:.3f} camera {-(x0 + px - cx) * z:.2f} {-(y0 + py - cy) * z:.2f} {z:.5f} 0.03")
             lines.append(f"{t + 0.15:.3f} layout z{k:04}")
             t, k = t + 0.2, k + 1
     lines.append(f"{t + 0.1:.3f} end")
     script = out / "sweep.txt"
     script.write_text("\n".join(lines) + "\n")
-    print(f"sweeping {len(centres(patch))} region(s), {a.steps} zooms each ...", flush=True)
-    subprocess.run([str(EXE), str(path), "--capture", str(script), "--out", str(out), "--fps", "30", "--ppp", str(a.ppp),
+    subprocess.run([str(EXE), str(path), "--capture", str(script), "--out", str(out), "--fps", "30", "--ppp", str(ppp),
                     "--size", SIZE, "--crf", "30"], check=True, capture_output=True)
 
     names = names_of(patch)
@@ -111,13 +110,36 @@ def main():
             ws, hs = [w for _, w, _ in seen_at], [h for _, _, h in seen_at]
             rows.append((max(ws) - min(ws), max(hs) - min(hs), len(seen_at), name, min(ws), min(hs)))
     rows.sort(key=lambda r: -max(r[0], r[1]))
-    print(f"\n{'':40} {'width':>7} {'height':>7}  how much each changes, in patch units")
-    for dw, dh, n, name, w, h in rows:
-        print(f"{name[:40]:40} {dw:7.1f} {dh:7.1f}  ({w:.0f} x {h:.0f}, {n} zooms)")
     (out / "report.json").write_text(json.dumps([{"name": r[3], "width": r[0], "height": r[1], "seen": r[2]} for r in rows], indent=1))
-    worst = max((max(r[0], r[1]) for r in rows), default=0.0)
-    if a.max is not None and worst > a.max:
-        sys.exit(f"\n{worst:.1f} patch units moved: more than --max {a.max}")
+    return rows
+
+
+def worst(rows):
+    return max((max(r[0], r[1]) for r in rows), default=0.0)
+
+
+def table(rows):
+    lines = [f"{'':40} {'width':>7} {'height':>7}  how much each changes, in patch units"]
+    for dw, dh, n, name, w, h in rows:
+        lines.append(f"{name[:40]:40} {dw:7.1f} {dh:7.1f}  ({w:.0f} x {h:.0f}, {n} zooms)")
+    return "\n".join(lines)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("patch")
+    ap.add_argument("--ppp", type=float, default=1.25)
+    ap.add_argument("--steps", type=int, default=80)
+    ap.add_argument("--zoom", type=float, nargs=2, default=(0.3, 2.0))
+    ap.add_argument("--max", type=float)
+    a = ap.parse_args()
+    patch = json.loads(Path(a.patch).read_text(encoding="utf-8"))
+    print(f"sweeping {len(centres(patch))} region(s), {a.steps} zooms each ...", flush=True)
+    rows = sweep(a.patch, a.ppp, a.steps, tuple(a.zoom))
+    print("\n" + table(rows))
+    moved = worst(rows)
+    if a.max is not None and moved > a.max:
+        sys.exit(f"\n{moved:.1f} patch units moved: more than --max {a.max}")
 
 
 if __name__ == "__main__":

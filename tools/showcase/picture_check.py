@@ -334,9 +334,15 @@ def describe(paths, owners):
 class Plan:
     """Which pictures to film, and why the rest can wait."""
 
-    def __init__(self, names, png, inputs, forced=None):
-        """`forced` is why every picture is filmed (--all, say), if it is."""
+    def __init__(self, names, png, inputs, forced=None, key=None):
+        """`forced` is why every picture is filmed (--all, say), if it is.
+
+        A check that films no picture (zoom_check.py's sweeps, #276) passes
+        png=None and `key(name)`, its ledger entry's name. Its entries are
+        recorded once it passes, and it's filmed again only when its inputs
+        move or the entry ages."""
         self.png, self.inputs = png, inputs
+        self.key = key or (lambda name: png(name).name)
         self.head = git("rev-parse", "HEAD").stdout.strip()
         self.owners = ownership()
         self.ledger = read_ledger()
@@ -352,7 +358,7 @@ class Plan:
                 self.film.append(name)
                 self.why[name] = reason
             else:
-                commit = self.ledger[png(name).name]["commit"]
+                commit = self.ledger[self.key(name)]["commit"]
                 moved = changes_since(commit)
                 why = (f"nothing they show moved since {commit[:7]} ({describe(moved, self.owners)} did)"
                        if moved else f"nothing moved since {commit[:7]}")
@@ -360,12 +366,15 @@ class Plan:
 
     def reason(self, name):
         """Why the picture needs filming, or None if it can wait."""
-        path = self.png(name)
-        entry = self.ledger.get(path.name)
-        if not entry or not path.exists():
-            return "never filmed here" if path.exists() else "missing"
-        if entry.get("png") != png_hash(path):
-            return "its PNG changed"
+        entry = self.ledger.get(self.key(name))
+        if self.png:
+            path = self.png(name)
+            if not entry or not path.exists():
+                return "never filmed here" if path.exists() else "missing"
+            if entry.get("png") != png_hash(path):
+                return "its PNG changed"
+        elif not entry:
+            return "never passed here"
         age = datetime.datetime.now() - datetime.datetime.fromisoformat(entry["date"])
         if age > STALEST:
             return f"last filmed {age.days} days ago"
@@ -383,8 +392,10 @@ class Plan:
         inputs = self.inputs(name)
         if self.old_exe or any(touches(p, inputs, self.owners) for p in self.dirty):
             return None
-        return {"commit": self.head, "png": png_hash(self.png(name)),
-                "date": datetime.datetime.now().isoformat(timespec="seconds")}
+        entry = {"commit": self.head, "date": datetime.datetime.now().isoformat(timespec="seconds")}
+        if self.png:
+            entry["png"] = png_hash(self.png(name))
+        return entry
 
 
 def exe_is_old():

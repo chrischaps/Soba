@@ -133,7 +133,7 @@ Understand:
 Check what you touched, not the whole suite. The rest runs elsewhere and doesn't wait for you (#272):
 
 - **On every push, GitHub CI** runs the full `cargo test`, the allocation guard, and the ASIO and wasm builds. A failure on master opens a `ci-failure` issue.
-- **Every night, `tools/nightly.py`** runs the slow checks that need this machine's windows: the loudness of every example, `check_layout.py`, `zoom_jitter.py` on every patch, and the recipe, manual and module pictures. It re-shoots stale pictures and pushes them as a `[Docs]` commit of their own. A failing step opens a `nightly-failure` issue.
+- **Every night, `tools/nightly.py`** runs the slow checks that need this machine's windows: the loudness of every example, `check_layout.py`, `zoom_check.py` (`zoom_jitter.py` on every patch something it holds has changed), and the recipe, manual and module pictures. It re-shoots stale pictures and pushes them as a `[Docs]` commit of their own. A failing step opens a `nightly-failure` issue.
 
 So the full `cargo test`, the layout and zoom checks and the picture re-shoots are no longer part of a ticket. At minimum:
 
@@ -239,6 +239,8 @@ python tools/showcase/shots.py canopy --converge
 python tools/showcase/check_film.py canopy
 # Does everything scale smoothly as the view zooms? (#255: text-sized parts step)
 python tools/showcase/zoom_jitter.py patches/canopy.json
+# ...every example, six at once, skipping those nothing they hold has changed since they passed
+python tools/showcase/zoom_check.py   # --all sweeps them all; --plan says which it would
 # After a module grows: are every example's modules still inside their frames,
 # clear of notes and of each other? (Re-shoot any recipe image of an example it flags)
 python tools/showcase/check_layout.py
