@@ -3,7 +3,7 @@
 **Module ID** `mod.adsr` · **Category** Modulation
 
 ![ADSR Envelope Module](../../images/module-adsr.png)
-*The display draws the same curve the audio follows.*
+*The display draws the same curve the audio follows. An LFO is patched into **Release**, so the R is lit and **Rel** reads the time it has stretched to.*
 
 The ADSR Envelope gives each note a shape in time. When a gate goes high (a key goes down), it rises, falls to a held level, and when the gate goes low (the key comes up), it fades away: **Attack**, **Decay**, **Sustain**, **Release**. Patch it into a [VCA](../utilities/vca.md) to shape a note's loudness, or into a filter's **Cutoff** to shape its brightness.
 

@@ -1,0 +1,59 @@
+{
+  "name": "Keyboard close-up",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "input.keyboard",
+      "position": [400.0, 40.0],
+      "parameters": [
+        {"name": "Glide", "type": "Number", "value": 0.05}
+      ]
+    },
+    {
+      "id": 10,
+      "module_id": "osc.sine",
+      "position": [1000.0, 40.0],
+      "parameters": [
+        {"name": "Waveform", "type": "Select", "value": 1},
+        {"name": "Voices", "type": "Number", "value": 2.0},
+        {"name": "Detune", "type": "Number", "value": 0.2}
+      ]
+    },
+    {
+      "id": 11,
+      "module_id": "mod.adsr",
+      "position": [1000.0, 420.0],
+      "parameters": [
+        {"name": "Attack", "type": "Number", "value": 0.01},
+        {"name": "Decay", "type": "Number", "value": 0.3},
+        {"name": "Sustain", "type": "Number", "value": 0.6},
+        {"name": "Release", "type": "Number", "value": 0.5}
+      ]
+    },
+    {
+      "id": 12,
+      "module_id": "util.vca",
+      "position": [1300.0, 40.0],
+      "parameters": []
+    },
+    {
+      "id": 13,
+      "module_id": "output.audio",
+      "position": [1600.0, 40.0],
+      "parameters": [
+        {"name": "Volume", "type": "Number", "value": 0.7}
+      ]
+    }
+  ],
+  "connections": [
+    {"from_node": 1, "from_port": "Pitch", "to_node": 10, "to_port": "V/Oct"},
+    {"from_node": 1, "from_port": "Gate", "to_node": 11, "to_port": "Gate"},
+    {"from_node": 10, "from_port": "Out", "to_node": 12, "to_port": "In"},
+    {"from_node": 11, "from_port": "Out", "to_node": 12, "to_port": "CV"},
+    {"from_node": 12, "from_port": "Out", "to_node": 13, "to_port": "Mono"}
+  ],
+  "midi_mappings": [],
+  "frames": [],
+  "notes": []
+}

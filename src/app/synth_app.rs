@@ -631,7 +631,11 @@ impl SynthApp {
             [min.x, min.y, max.x, max.y]
         };
         let modules: Vec<serde_json::Value> = self.graph_state.node_order.iter().filter_map(|&node_id| {
-            let rect = annotation_ui::module_rect(ctx, node_id)?;
+            // Only modules drawn last frame have a window response. It stops
+            // short of the node's foot, so take the height it was drawn at
+            let window = annotation_ui::module_rect(ctx, node_id)?;
+            let height = egui_node_graph2::drawn_node_rect(ctx, node_id).map_or(0.0, |d| d.height());
+            let rect = egui::Rect::from_min_size(window.min, egui::vec2(window.width(), window.height().max(height)));
             let position = self.history.to_patch(*self.graph_state.node_positions.get(node_id)?, zoom);
             Some(serde_json::json!({
                 "module_id": self.graph_state.graph.nodes.get(node_id)?.user_data.module_id,
@@ -780,7 +784,7 @@ impl SynthApp {
     ///
     /// Notes reach MIDI Note modules on the audio thread, sample-accurately;
     /// nothing here affects what they play.
-    fn process_midi_events(&mut self) {
+    fn process_midi_events(&mut self, now: f64) {
         let mut notes_changed = false;
         let mut cc_updates: Vec<(u64, usize, f32)> = Vec::new();
         let mut learned_mapping: Option<MidiMapping> = None;
@@ -790,7 +794,7 @@ impl SynthApp {
                 let event = timestamped.event;
 
                 // Store the event for MIDI Monitor display
-                self.user_state.push_midi_event(event);
+                self.user_state.push_midi_event(event, now);
 
                 match event {
                     MidiEvent::NoteOn { note, velocity, .. } => {
@@ -4442,7 +4446,7 @@ impl eframe::App for SynthApp {
         }
 
         // Process pending MIDI events
-        self.process_midi_events();
+        self.process_midi_events(ctx.input(|i| i.time));
 
         // A stopped take's note, once its file is finished
         self.poll_recording(ctx);

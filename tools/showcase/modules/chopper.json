@@ -1,0 +1,55 @@
+{
+  "name": "Chopper close-up",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "util.clock",
+      "position": [0.0, 40.0],
+      "parameters": [
+        {"name": "Tempo", "type": "Number", "value": 100.0},
+        {"name": "Division", "type": "Select", "value": 4}
+      ]
+    },
+    {
+      "id": 2,
+      "module_id": "source.chopper",
+      "position": [400.0, 40.0],
+      "parameters": [
+        {"name": "Pulse", "type": "Select", "value": 4},
+        {"name": "Beats", "type": "Number", "value": 8.0},
+        {"name": "Slices", "type": "Number", "value": 16.0},
+        {"name": "Level", "type": "Number", "value": 0.9},
+        {"name": "Step 04", "type": "Number", "value": 101203.0},
+        {"name": "Step 06", "type": "Number", "value": 111202.0},
+        {"name": "Step 08", "type": "Number", "value": 201200.0},
+        {"name": "Step 11", "type": "Number", "value": 101205.0},
+        {"name": "Step 12", "type": "Number", "value": 100712.0},
+        {"name": "Step 14", "type": "Number", "value": -101200.0},
+        {"name": "Step 15", "type": "Number", "value": 111213.0},
+        {"name": "Step 16", "type": "Number", "value": 401216.0},
+        {"name": "Chance 07", "type": "Number", "value": 25.0},
+        {"name": "Chance 10", "type": "Number", "value": 20.0},
+        {"name": "Chance 13", "type": "Number", "value": 15.0}
+      ],
+      "file": "example:samples/soba-break.wav"
+    },
+    {
+      "id": 3,
+      "module_id": "output.audio",
+      "position": [1200.0, 300.0],
+      "parameters": [
+        {"name": "Volume", "type": "Number", "value": 0.7}
+      ]
+    }
+  ],
+  "connections": [
+    {"from_node": 1, "from_port": "Gate", "to_node": 2, "to_port": "Clock"},
+    {"from_node": 1, "from_port": "Reset", "to_node": 2, "to_port": "Reset"},
+    {"from_node": 2, "from_port": "L", "to_node": 3, "to_port": "Left"},
+    {"from_node": 2, "from_port": "R", "to_node": 3, "to_port": "Right"}
+  ],
+  "midi_mappings": [],
+  "frames": [],
+  "notes": []
+}

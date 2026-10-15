@@ -1,0 +1,42 @@
+{
+  "name": "Audio Input close-up",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "source.audio_input",
+      "position": [400.0, 40.0],
+      "parameters": [
+        {"name": "Channel", "type": "Select", "value": 1},
+        {"name": "Threshold", "type": "Number", "value": -18.0},
+        {"name": "Attack", "type": "Number", "value": 2.0},
+        {"name": "Release", "type": "Number", "value": 120.0}
+      ]
+    },
+    {
+      "id": 2,
+      "module_id": "source.drum",
+      "position": [1000.0, 300.0],
+      "parameters": [
+        {"name": "Type", "type": "Select", "value": 2},
+        {"name": "Level", "type": "Number", "value": 0.5}
+      ]
+    },
+    {
+      "id": 3,
+      "module_id": "output.audio",
+      "position": [1000.0, 40.0],
+      "parameters": [
+        {"name": "Volume", "type": "Number", "value": 0.7}
+      ]
+    }
+  ],
+  "connections": [
+    {"from_node": 1, "from_port": "L", "to_node": 3, "to_port": "Left"},
+    {"from_node": 1, "from_port": "R", "to_node": 3, "to_port": "Right"},
+    {"from_node": 1, "from_port": "Gate", "to_node": 2, "to_port": "Trig"}
+  ],
+  "midi_mappings": [],
+  "frames": [],
+  "notes": []
+}

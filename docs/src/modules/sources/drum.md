@@ -3,7 +3,7 @@
 **Module ID** `source.drum` · **Category** Source
 
 ![Drum Module](../../images/module-drum.png)
-*A kick just after a hit. The orange line is its pitch, falling two and a half octaves to 45 Hz in the first few milliseconds. The blue curve is its level, lit up to the playhead.*
+*A kick just after a hit. The orange line is its pitch, falling two and a half octaves to 48 Hz in the first few milliseconds. The blue curve is its level, lit up to the playhead.*
 
 Drum is one analog drum voice. Its **Type** turns it into a kick, snare, tom, clap, closed hat, open hat, cymbal, rim or cowbell, each built the way an 808 or 909 builds that sound: a few oscillators, a noise source, filters and decays. Send it a trigger and it plays one hit.
 

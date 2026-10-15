@@ -40,6 +40,10 @@ A recipe with a playable embed (`<iframe class="patch-embed">`) has no picture o
 
 `python tools/showcase/manual_images.py` re-shoots the four `interface-*.png` pictures and `tutorial-complete-patch.png` the same way: each patch is played and posed by a short capture script (a chord held, a menu opened, a key down), then cropped to the window, the patch or a fixed box, and saved as the recipe images are. Name pictures to do only those, or pass `--check` to list the stale ones. A picture's pointer positions are in window points, so a change that moves a menu or the palette means re-aiming its cues: see the script.
 
+## Re-shooting the module close-ups
+
+`python tools/showcase/module_images.py` re-shoots every `module-<page>.png`. Each close-up has a small patch in `tools/showcase/modules/` that holds the moment its caption describes (a chord held, a loop overdubbing, a filter swept), or uses an example when the caption names one, and an entry in the script's `MODULES` table with the cues that pose it. The script finds the module, aims the view at it, plays the cues up to a still and crops to the node with 22 points of grid at the sides for its cable stubs and 6 above and below. Name close-ups to do only those, or pass `--check` to list the stale ones. A face change that alters a caption's moment means changing its patch or cues, then the caption.
+
 The groups and sequencer pictures are still shot by hand.
 
 ## Wanted

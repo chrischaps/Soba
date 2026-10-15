@@ -40,10 +40,6 @@ from PIL import Image
 
 from recipe_images import EXE, IMAGES, ROOT, STALE_FRACTION, changed, crop_box
 
-# How far a node's foot reaches below its layout rect (#199), so a module at
-# the bottom of a picture isn't cut off
-MODULE_FOOT = 12.0
-
 PPP = 2.0
 SIZE = (3600, 2100)
 
@@ -170,7 +166,7 @@ def shoot(name, tmp):
     image = Image.open(out / "shot.ppm").convert("RGB")
     crop = pic["crop"]
     if crop == "patch":
-        box, overrun = crop_box(json.loads((out / "shot.json").read_text()), foot=MODULE_FOOT)
+        box, overrun = crop_box(json.loads((out / "shot.json").read_text()))
         if overrun:
             print(f"    {name}: the fit left part of the patch out of view", file=sys.stderr)
         image = image.crop(box)

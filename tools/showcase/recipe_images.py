@@ -127,13 +127,10 @@ def film(patch, out, size, ppp, script=None):
     return json.loads((out / "shot.json").read_text())
 
 
-def crop_box(lay, foot=0.0):
-    """The patch's drawn bounds, frames and notes included, in pixels.
-
-    `foot` reaches past each module's rect, which stops short of the node's
-    foot (#199): a picture whose lowest thing is a module needs it."""
+def crop_box(lay):
+    """The patch's drawn bounds, frames and notes included, in pixels."""
     view = lay["view"]
-    rects = [m["rect"][:3] + [m["rect"][3] + foot] for m in lay["modules"]]
+    rects = [m["rect"] for m in lay["modules"]]
     rects += [f["rect"] for f in lay["frames"]] + [n["rect"] for n in lay["notes"]]
     x0, y0 = min(r[0] for r in rects), min(r[1] for r in rects)
     x1, y1 = max(r[2] for r in rects), max(r[3] for r in rects)

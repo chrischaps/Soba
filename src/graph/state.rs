@@ -150,8 +150,9 @@ pub struct SynthGraphState {
     /// Recent MIDI events for display in MIDI Monitor modules.
     pub midi_events: VecDeque<DisplayMidiEvent>,
 
-    /// Timestamp of the first MIDI event received (for relative timestamps).
-    midi_first_event_time: Option<Instant>,
+    /// When the first MIDI event arrived, on the UI's clock (for relative
+    /// timestamps).
+    midi_first_event_time: Option<f64>,
 
     /// The MIDI notes struck and let go lately, in order, each with its
     /// velocity (0 for a release), and how many there have ever been. A note
@@ -563,15 +564,12 @@ impl SynthGraphState {
     /// Add a MIDI event for display in MIDI Monitor modules.
     ///
     /// Events are stored with a relative timestamp from the first event.
+    /// `now` is the UI's clock (egui's input time), which a capture steps
+    /// frame by frame, so a filmed log reads the same every time.
     /// Only the most recent MAX_MIDI_EVENTS are kept.
-    pub fn push_midi_event(&mut self, event: MidiEvent) {
-        let now = Instant::now();
-        let timestamp = if let Some(first_time) = self.midi_first_event_time {
-            first_time.elapsed().as_secs_f32()
-        } else {
-            self.midi_first_event_time = Some(now);
-            0.0
-        };
+    pub fn push_midi_event(&mut self, event: MidiEvent, now: f64) {
+        let first = *self.midi_first_event_time.get_or_insert(now);
+        let timestamp = (now - first) as f32;
 
         self.midi_events.push_back(DisplayMidiEvent { event, timestamp });
         match event {
@@ -786,15 +784,15 @@ mod tests {
         // A note tapped and let go between frames, among more events than a
         // MIDI Monitor keeps
         for controller in 0..20 {
-            state.push_midi_event(MidiEvent::ControlChange { channel: 0, controller, value: 64 });
+            state.push_midi_event(MidiEvent::ControlChange { channel: 0, controller, value: 64 }, 0.0);
         }
-        state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 60, velocity: 40 });
-        state.push_midi_event(MidiEvent::NoteOff { channel: 0, note: 60, velocity: 64 });
+        state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 60, velocity: 40 }, 0.0);
+        state.push_midi_event(MidiEvent::NoteOff { channel: 0, note: 60, velocity: 64 }, 0.0);
         assert_eq!(state.midi_notes_since(seen), vec![(60, 40), (60, 0)]);
         assert_eq!(state.midi_notes_since(state.midi_note_count()), vec![]);
         // Only as many as are kept
         for _ in 0..MAX_MIDI_NOTES {
-            state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 61, velocity: 90 });
+            state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 61, velocity: 90 }, 0.0);
         }
         assert_eq!(state.midi_notes_since(seen).len(), MAX_MIDI_NOTES);
     }

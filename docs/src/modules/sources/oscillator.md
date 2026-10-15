@@ -3,7 +3,7 @@
 **Module ID** `osc.sine` · **Category** Source
 
 ![Oscillator Module](../../images/module-oscillator.png)
-*The tune, timbre and ensemble rows, under a preview of the selected waveform.*
+*Three detuned voices of a square wave, an LFO sweeping its pulse width through **PWM**: the trace is **Out** as it plays, and **PW** follows the CV. Under it, the tune, timbre and ensemble rows.*
 
 The Oscillator is the main sound source in Soba. It is a **VCO** (voltage-controlled oscillator): a tuned waveform whose pitch follows a keyboard, an LFO or another oscillator.
 

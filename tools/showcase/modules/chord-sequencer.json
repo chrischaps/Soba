@@ -1,0 +1,115 @@
+{
+  "name": "Chord Sequencer close-up",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "util.clock",
+      "position": [0.0, 40.0],
+      "parameters": [
+        {"name": "Tempo", "type": "Number", "value": 120.0},
+        {"name": "Division", "type": "Select", "value": 0}
+      ]
+    },
+    {
+      "id": 2,
+      "module_id": "seq.chord",
+      "position": [400.0, 40.0],
+      "parameters": [
+        {"name": "Steps", "type": "Number", "value": 8.0},
+        {"name": "Voices", "type": "Number", "value": 5.0},
+        {"name": "Bass Voice", "type": "Toggle", "value": true},
+        {"name": "Step 1 Root", "type": "Number", "value": 45.0},
+        {"name": "Step 1 Type", "type": "Select", "value": 14},
+        {"name": "Step 1 Gate", "type": "Toggle", "value": true},
+        {"name": "Step 1 Velocity", "type": "Number", "value": 100.0},
+        {"name": "Step 2 Root", "type": "Number", "value": 45.0},
+        {"name": "Step 2 Type", "type": "Select", "value": 1},
+        {"name": "Step 2 Bass", "type": "Select", "value": 9},
+        {"name": "Step 2 Gate", "type": "Toggle", "value": true},
+        {"name": "Step 2 Velocity", "type": "Number", "value": 100.0},
+        {"name": "Step 3 Root", "type": "Number", "value": 45.0},
+        {"name": "Step 3 Type", "type": "Select", "value": 1},
+        {"name": "Step 3 Bass", "type": "Select", "value": 8},
+        {"name": "Step 3 Gate", "type": "Toggle", "value": true},
+        {"name": "Step 3 Velocity", "type": "Number", "value": 100.0},
+        {"name": "Step 4 Root", "type": "Number", "value": 50.0},
+        {"name": "Step 4 Type", "type": "Select", "value": 0},
+        {"name": "Step 4 Bass", "type": "Select", "value": 7},
+        {"name": "Step 4 Gate", "type": "Toggle", "value": true},
+        {"name": "Step 4 Velocity", "type": "Number", "value": 100.0},
+        {"name": "Step 5 Root", "type": "Number", "value": 41.0},
+        {"name": "Step 5 Type", "type": "Select", "value": 3},
+        {"name": "Step 5 Gate", "type": "Toggle", "value": true},
+        {"name": "Step 5 Velocity", "type": "Number", "value": 100.0},
+        {"name": "Step 6 Root", "type": "Number", "value": 38.0},
+        {"name": "Step 6 Type", "type": "Select", "value": 14},
+        {"name": "Step 6 Gate", "type": "Toggle", "value": true},
+        {"name": "Step 6 Velocity", "type": "Number", "value": 100.0},
+        {"name": "Step 7 Root", "type": "Number", "value": 40.0},
+        {"name": "Step 7 Type", "type": "Select", "value": 9},
+        {"name": "Step 7 Gate", "type": "Toggle", "value": true},
+        {"name": "Step 7 Velocity", "type": "Number", "value": 100.0},
+        {"name": "Step 8 Root", "type": "Number", "value": 40.0},
+        {"name": "Step 8 Type", "type": "Select", "value": 2},
+        {"name": "Step 8 Gate", "type": "Toggle", "value": true},
+        {"name": "Step 8 Velocity", "type": "Number", "value": 100.0},
+        {"name": "Step 7 Tie", "type": "Toggle", "value": true}
+      ]
+    },
+    {
+      "id": 3,
+      "module_id": "osc.sine",
+      "position": [1000.0, 40.0],
+      "parameters": [
+        {"name": "Waveform", "type": "Select", "value": 1},
+        {"name": "Detune", "type": "Number", "value": 0.2}
+      ]
+    },
+    {
+      "id": 4,
+      "module_id": "mod.adsr",
+      "position": [1000.0, 560.0],
+      "parameters": [
+        {"name": "Attack", "type": "Number", "value": 0.2},
+        {"name": "Sustain", "type": "Number", "value": 0.8},
+        {"name": "Release", "type": "Number", "value": 0.8}
+      ]
+    },
+    {
+      "id": 5,
+      "module_id": "util.vca",
+      "position": [1300.0, 40.0],
+      "parameters": []
+    },
+    {
+      "id": 6,
+      "module_id": "util.mix",
+      "position": [1600.0, 40.0],
+      "parameters": [
+        {"name": "Sum Voices", "type": "Toggle", "value": true}
+      ]
+    },
+    {
+      "id": 7,
+      "module_id": "output.audio",
+      "position": [1900.0, 40.0],
+      "parameters": [
+        {"name": "Volume", "type": "Number", "value": 0.7}
+      ]
+    }
+  ],
+  "connections": [
+    {"from_node": 1, "from_port": "Gate", "to_node": 2, "to_port": "Clock"},
+    {"from_node": 2, "from_port": "Pitch", "to_node": 3, "to_port": "V/Oct"},
+    {"from_node": 2, "from_port": "Gate", "to_node": 4, "to_port": "Gate"},
+    {"from_node": 2, "from_port": "Velocity", "to_node": 4, "to_port": "Velocity"},
+    {"from_node": 3, "from_port": "Out", "to_node": 5, "to_port": "In"},
+    {"from_node": 4, "from_port": "Out", "to_node": 5, "to_port": "CV"},
+    {"from_node": 5, "from_port": "Out", "to_node": 6, "to_port": "In 1"},
+    {"from_node": 6, "from_port": "Out", "to_node": 7, "to_port": "Mono"}
+  ],
+  "midi_mappings": [],
+  "frames": [],
+  "notes": []
+}

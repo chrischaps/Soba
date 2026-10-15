@@ -10313,7 +10313,7 @@
       "module_id": "output.audio",
       "position": [
         3782.0,
-        478.0
+        492.0
       ],
       "parameters": [
         {
@@ -10898,7 +10898,7 @@
       ],
       "size": [
         1290.0,
-        724.0
+        751.0
       ],
       "color": "violet"
     },

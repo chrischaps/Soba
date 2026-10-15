@@ -1,0 +1,146 @@
+{
+  "name": "Arranger close-up",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "util.clock",
+      "position": [0.0, 40.0],
+      "parameters": [
+        {"name": "Tempo", "type": "Number", "value": 300.0},
+        {"name": "Division", "type": "Select", "value": 4}
+      ]
+    },
+    {
+      "id": 2,
+      "module_id": "seq.arranger",
+      "position": [400.0, 40.0],
+      "parameters": [
+        {"name": "Steps", "type": "Number", "value": 16.0},
+        {"name": "Sections", "type": "Number", "value": 5.0},
+        {"name": "Loop", "type": "Select", "value": 1},
+        {"name": "Length 01", "type": "Number", "value": 8.0},
+        {"name": "Length 02", "type": "Number", "value": 8.0},
+        {"name": "Length 03", "type": "Number", "value": 16.0},
+        {"name": "Length 04", "type": "Number", "value": 1.0},
+        {"name": "Length 05", "type": "Number", "value": 7.0},
+        {"name": "Section 01 Lane 1", "type": "Number", "value": 1000400.0},
+        {"name": "Section 02 Lane 1", "type": "Number", "value": 2000750.0},
+        {"name": "Section 05 Lane 1", "type": "Number", "value": 2000000.0},
+        {"name": "Section 02 Lane 2", "type": "Number", "value": 2040450.0},
+        {"name": "Section 03 Lane 2", "type": "Number", "value": 1000600.0},
+        {"name": "Section 05 Lane 2", "type": "Number", "value": 2060000.0},
+        {"name": "Section 03 Lane 3", "type": "Number", "value": 3001000.0},
+        {"name": "Section 05 Lane 3", "type": "Number", "value": 3001000.0},
+        {"name": "Section 01 Lane 4", "type": "Number", "value": 1000250.0},
+        {"name": "Section 02 Lane 4", "type": "Number", "value": 1000400.0},
+        {"name": "Section 03 Lane 4", "type": "Number", "value": 1000650.0},
+        {"name": "Section 04 Lane 4", "type": "Number", "value": 1000900.0},
+        {"name": "Section 05 Lane 4", "type": "Number", "value": 1000400.0},
+        {"name": "Section 01 Lane 5", "type": "Number", "value": 1000300.0},
+        {"name": "Section 02 Lane 5", "type": "Number", "value": 2000850.0},
+        {"name": "Section 03 Lane 5", "type": "Number", "value": 1000600.0},
+        {"name": "Section 05 Lane 5", "type": "Number", "value": 2000150.0}
+      ],
+      "labels": {"Section 1": "Intro", "Section 2": "Build", "Section 3": "Drop", "Section 4": "Fill", "Section 5": "Outro", "Lane 1": "Pad", "Lane 2": "Bass", "Lane 3": "Crash", "Lane 4": "Drums", "Lane 5": "Filter"}
+    },
+    {
+      "id": 3,
+      "module_id": "osc.sine",
+      "position": [1500.0, 40.0],
+      "parameters": [
+        {"name": "Waveform", "type": "Select", "value": 1},
+        {"name": "Voices", "type": "Number", "value": 3.0}
+      ]
+    },
+    {
+      "id": 4,
+      "module_id": "filter.svf",
+      "position": [1800.0, 40.0],
+      "parameters": [
+        {"name": "Cutoff", "type": "Number", "value": 500.0}
+      ]
+    },
+    {
+      "id": 5,
+      "module_id": "util.vca",
+      "position": [2100.0, 40.0],
+      "parameters": []
+    },
+    {
+      "id": 6,
+      "module_id": "osc.sine",
+      "position": [1500.0, 600.0],
+      "parameters": [
+        {"name": "Octave", "type": "Number", "value": -2.0},
+        {"name": "Waveform", "type": "Select", "value": 2}
+      ]
+    },
+    {
+      "id": 7,
+      "module_id": "util.vca",
+      "position": [1800.0, 600.0],
+      "parameters": []
+    },
+    {
+      "id": 8,
+      "module_id": "source.drum",
+      "position": [1500.0, 1100.0],
+      "parameters": [
+        {"name": "Type", "type": "Select", "value": 6},
+        {"name": "Level", "type": "Number", "value": 0.5}
+      ]
+    },
+    {
+      "id": 9,
+      "module_id": "source.drum",
+      "position": [1800.0, 1100.0],
+      "parameters": [
+        {"name": "Type", "type": "Select", "value": 0}
+      ]
+    },
+    {
+      "id": 10,
+      "module_id": "util.vca",
+      "position": [2100.0, 1100.0],
+      "parameters": []
+    },
+    {
+      "id": 11,
+      "module_id": "util.mixer",
+      "position": [2400.0, 40.0],
+      "parameters": []
+    },
+    {
+      "id": 12,
+      "module_id": "output.audio",
+      "position": [2900.0, 40.0],
+      "parameters": [
+        {"name": "Volume", "type": "Number", "value": 0.7}
+      ]
+    }
+  ],
+  "connections": [
+    {"from_node": 1, "from_port": "Gate", "to_node": 2, "to_port": "Clock"},
+    {"from_node": 1, "from_port": "Reset", "to_node": 2, "to_port": "Reset"},
+    {"from_node": 2, "from_port": "Bar", "to_node": 9, "to_port": "Trig"},
+    {"from_node": 3, "from_port": "Out", "to_node": 4, "to_port": "In"},
+    {"from_node": 4, "from_port": "LowPass", "to_node": 5, "to_port": "In"},
+    {"from_node": 2, "from_port": "Lane 1", "to_node": 5, "to_port": "CV"},
+    {"from_node": 2, "from_port": "Lane 5", "to_node": 4, "to_port": "Cutoff"},
+    {"from_node": 6, "from_port": "Out", "to_node": 7, "to_port": "In"},
+    {"from_node": 2, "from_port": "Lane 2", "to_node": 7, "to_port": "CV"},
+    {"from_node": 2, "from_port": "Gate 3", "to_node": 8, "to_port": "Trig"},
+    {"from_node": 9, "from_port": "Out", "to_node": 10, "to_port": "In"},
+    {"from_node": 2, "from_port": "Lane 4", "to_node": 10, "to_port": "CV"},
+    {"from_node": 5, "from_port": "Out", "to_node": 11, "to_port": "Ch 1"},
+    {"from_node": 7, "from_port": "Out", "to_node": 11, "to_port": "Ch 2"},
+    {"from_node": 8, "from_port": "Out", "to_node": 11, "to_port": "Ch 3"},
+    {"from_node": 10, "from_port": "Out", "to_node": 11, "to_port": "Ch 4"},
+    {"from_node": 11, "from_port": "Out L", "to_node": 12, "to_port": "Left"},
+    {"from_node": 11, "from_port": "Out R", "to_node": 12, "to_port": "Right"}
+  ],
+  "midi_mappings": [],
+  "frames": [],
+  "notes": []
+}

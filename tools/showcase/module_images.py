@@ -17,8 +17,6 @@ Read them off a still: (pixel / PPP - margin) / zoom, with the margins below.
 The face's layout shifts a little from one ppp to another, so aim from a
 still filmed at PPP.
 
-Only the Sampler is scripted so far (#195); #199 brings the rest across.
-
 Build into target/capture first, as for shots.py. --check films each one
 the same way but writes nothing, lists the close-ups that no longer match the
 build, and exits 1 if any is stale or missing.
@@ -32,7 +30,6 @@ from pathlib import Path
 
 from PIL import Image
 
-from manual_images import MODULE_FOOT
 from recipe_images import IMAGES, ROOT, SIZE, STALE_FRACTION, aim, changed, film
 
 MODULES_DIR = ROOT / "tools" / "showcase" / "modules"
@@ -42,7 +39,8 @@ PPP = 2.0
 SIDE = 22
 TOP = 6
 
-# `patch` is tools/showcase/modules/<patch>.json. The cues run up to the
+# `patch` is tools/showcase/modules/<patch>.json, or an example's path when
+# the caption names the example. The cues run up to the
 # still at 0.0; the view is aimed before the first of them. palette=False
 # keeps full colour, for faces whose gradients band in 256 colours
 Module = namedtuple("Module", "patch module zoom width cues palette", defaults=(True,))
@@ -69,28 +67,150 @@ MODULES = {
     "compressor": Module("compressor", "fx.compressor", 1.0, 420, """
         -2.8 play
     """, palette=False),
-    # Pink noise through a warm low shelf, a cut in the middle and an airy top,
-    # the pointer on the mid band's dot: its wings light, and the header reads it
-    "eq": Module("eq", "fx.eq", 1.0, 440, """
-        -2.0 play
-        -0.6 move face 234 135 0.3
+
+    # Sources. A detuned square whose width an LFO sweeps: the trace is Out, live
+    "oscillator": Module("oscillator", "osc.sine", 1.0, 327, "-2.0 play"),
+    # White and Pink patched, Brown dimmed
+    "noise": Module("noise", "source.noise", 1.0, 326, "-2.0 play"),
+    # A kick 60 ms after a MIDI note strikes it: the pitch line has fallen, the
+    # level lit to the playhead (the time axis is warped, so that's past halfway)
+    "drum": Module("drum", "source.drum", 1.0, 467, """
+        -1.0 play
+        -0.06 note 36 100 0.05
+    """),
+    # Cut Up's break in sixteen slices, playing
+    "chopper": Module("chopper", "source.chopper", 1.0, 484, "-3.0 play", palette=False),
+    # A drum loop on input 1, Channel on 1: Follow scrolls past the Threshold line
+    "audio-input": Module("audio-input", "source.audio_input", 1.0, 400, """
+        -4.0 input patches/samples/soba-break.wav
+        -4.0 play
     """, palette=False),
+
+    # MIDI. C4 and G4 held on the computer keys
+    "keyboard": Module("keyboard", "input.keyboard", 1.0, 336, """
+        -1.5 play
+        -1.2 key Z 3.0
+        -0.6 key B 3.0
+    """),
+    "midi-note": Module("midi-note", "input.midi_note", 1.0, 343, """
+        -1.5 play
+        -1.0 note 60 100 3.0
+        -0.5 note 64 100 3.0
+    """),
+    "poly-midi": Module("poly-midi", "input.poly_midi", 1.0, 324, """
+        -1.5 play
+        -1.0 chord 48,55,60,64,67 100 3.0
+    """),
+    # A phrase and a chord, the newest at the top
+    "midi-monitor": Module("midi-monitor", "util.midi_monitor", 1.0, 371, """
+        -3.5 play
+        -3.0 note 60 90 0.3
+        -2.6 note 64 100 0.3
+        -2.2 note 67 80 0.3
+        -1.8 chord 48,55,64 110 1.0
+        -0.5 note 72 70 1.0
+    """),
+
+    # Filters, swept: the sound's trail along the floor
+    "svf-filter": Module("svf-filter", "filter.svf", 1.0, 395, "-3.0 play", palette=False),
+    "ladder-filter": Module("ladder-filter", "filter.ladder", 1.0, 395, "-3.0 play", palette=False),
+
+    # Modulation. An LFO lane into Release: the R lit, Rel reading the stretched time
+    "adsr": Module("adsr", "mod.adsr", 1.0, 395, "-3.0 play"),
+    # Synced to 1/4: Rate reads the division, the dot in step with the beat
+    "lfo": Module("lfo", "mod.lfo", 1.0, 250, "-2.0 play"),
+    # Cycling, 1.2 s up and 400 ms down: the dot on its way down the fall
+    "slope": Module("slope", "mod.slope", 1.0, 340, "-2.85 play"),
+    # Sixteenths swung at 62%, Run and Reset into a sequencer
+    "clock": Module("clock", "util.clock", 1.0, 224, "-2.0 play"),
+
+    # Utilities. Level at 80%, an envelope holding a key's note at 44%
+    "vca": Module("vca", "util.vca", 1.0, 332, """
+        -1.5 play
+        -1.2 key Z 3.0
+    """),
+    "attenuverter": Module("attenuverter", "util.attenuverter", 1.0, 265, "-2.0 play"),
+    "mix": Module("mix", "util.mix", 1.0, 393, "-2.0 play"),
+    # An LFO rides channel 2's Send and a slower one the Return
+    "mixer": Module("mixer", "util.mixer", 1.0, 643, "-3.0 play", palette=False),
+    "sample-hold": Module("sample-hold", "util.sample_hold", 1.0, 279, "-2.0 play"),
+    # C minor pentatonic, D# playing
+    "quantizer": Module("quantizer", "util.quantizer", 1.0, 365, "-3.0 play"),
+    # A sixteenth clock divided by 16, the gate open for six: the count on bead 6
+    "divider": Module("divider", "util.divider", 1.0, 315, "-0.8 play"),
+    # A clock in A, an LFO in CV, nothing in B
+    "logic": Module("logic", "util.logic", 1.0, 297, "-2.1 play"),
+    # A four-bar loop recorded, closed, then overdubbed: the ring amber
+    "looper": Module("looper", "util.looper", 1.0, 330, """
+        -16.0 play
+        -15.0 param util.looper Pedal Rec 1
+        -14.9 param util.looper Pedal Rec 0
+        -4.0 param util.looper Pedal Rec 1
+        -3.9 param util.looper Pedal Rec 0
+    """, palette=False),
+    "oscilloscope": Module("oscilloscope", "util.oscilloscope", 1.0, 395, "-1.0 play"),
+    # Disco, just after a beat
+    "dancer": Module("dancer", "util.dancer", 1.0, 400, "-2.1 play", palette=False),
+
+    # Sequencers. Pattern B, chained A A B C, partway through
+    "sequencer": Module("sequencer", "seq.step", 1.0, 505, """
+        -4.69 play
+        -0.6 move face 79 385 0.1
+        -0.4 press
+        -0.35 release
+        -0.3 move face 700 300 0.1
+    """),
+    # A line cliché, Am9 to E7, on Dm9
+    "chord-sequencer": Module("chord-sequencer", "seq.chord", 1.0, 479, "-11.0 play"),
+    # Roll Call's pattern B, its snare roll ratcheting, C next
+    "trigger-sequencer": Module("patches/roll-call.json", "seq.trigger", 1.0, 720, """
+        -7.57 play
+        -0.6 move face 81 457 0.1
+        -0.4 press
+        -0.35 release
+        -0.3 move face 700 300 0.1
+    """),
+    # A five-section song, playing its Build
+    "arranger": Module("arranger", "seq.arranger", 1.0, 881, "-10.8 play"),
+
+    # Effects
     # A clap into the left side only, ping-ponged on worn tape: its echoes
     # take turns down the train, left above the line and right below,
     # warming as they go
     "delay": Module("delay", "fx.delay", 1.0, 320, """
         -2.6 play
     """, palette=False),
-    # Toms on every beat through three voices: the braid lights in bursts
-    # where each hit passed, and slowly weaves on between them
-    "chorus": Module("chorus", "fx.chorus", 1.0, 320, """
-        -2.4 play
+    "reverb": Module("reverb", "fx.reverb", 1.0, 395, "-1.0 play"),
+    # Pink noise through a warm low shelf, a cut in the middle and an airy top,
+    # the pointer on the mid band's dot: its wings light, and the header reads it
+    "eq": Module("eq", "fx.eq", 1.0, 440, """
+        -2.0 play
+        -0.6 move face 234 135 0.3
     """, palette=False),
     # A low sine into the folder, a little off centre: the lit stretch runs
     # over the first fold, and the wave on the right folds back at its peaks
     "distortion": Module("distortion", "fx.distortion", 1.0, 300, """
         -1.5 play
     """, palette=False),
+    # Toms on every beat through three voices: the braid lights in bursts
+    # where each hit passed, and slowly weaves on between them
+    "chorus": Module("chorus", "fx.chorus", 1.0, 320, """
+        -2.4 play
+    """, palette=False),
+    # A held key brakes the tape halfway through its Stop time
+    "tape": Module("tape", "fx.tape", 1.0, 405, """
+        -3.0 play
+        -0.75 key Z 2.0
+    """, palette=False),
+    # Frozen mid-word, Flatten halfway
+    "vocoder": Module("vocoder", "fx.vocoder", 1.0, 291, """
+        -4.0 play
+        -4.0 chord 48,55,60,63 90 6.0
+        -1.0 param fx.vocoder Freeze 1
+    """, palette=False),
+
+    # Pushed hot, so the limiter catches some
+    "audio-output": Module("audio-output", "output.audio", 1.0, 359, "-2.0 play"),
 }
 
 
@@ -118,12 +238,12 @@ def script(cues, camera, origin, rect, zoom):
 def shoot(name, tmp):
     """Films a close-up and returns it, cropped and scaled."""
     shot = MODULES[name]
-    patch = MODULES_DIR / f"{shot.patch}.json"
+    patch = ROOT / shot.patch if shot.patch.endswith(".json") else MODULES_DIR / f"{shot.patch}.json"
     probe = Path(tmp) / f"{name}-probe"
     probe.mkdir()
     lay = film(patch, probe, SIZE, PPP, "0.0 layout shot\n0.1 end\n")
     rect = module_rect(lay, name)
-    camera, origin = aim(lay["view"], ((rect[0] + rect[2]) / 2, (rect[1] + rect[3] + MODULE_FOOT) / 2), shot.zoom)
+    camera, origin = aim(lay["view"], ((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2), shot.zoom)
     out = Path(tmp) / name
     out.mkdir()
     lay = film(patch, out, SIZE, PPP, script(shot.cues, camera, origin, rect, shot.zoom))
@@ -131,7 +251,7 @@ def shoot(name, tmp):
     view = lay["view"]
     zoom, (ox, oy) = view["zoom"], view["origin"]
     box = [(ox + (x0 - SIDE) * zoom) * PPP, (oy + (y0 - TOP) * zoom) * PPP,
-           (ox + (x1 + SIDE) * zoom) * PPP, (oy + (y1 + MODULE_FOOT + TOP) * zoom) * PPP]
+           (ox + (x1 + SIDE) * zoom) * PPP, (oy + (y1 + TOP) * zoom) * PPP]
     width, height = Image.open(out / "shot.ppm").size
     if box[0] < 0 or box[1] < 0 or box[2] > width or box[3] > height:
         raise RuntimeError(f"{name}: the node runs out of the window at zoom {shot.zoom}")
