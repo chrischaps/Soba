@@ -43,6 +43,22 @@ Every input is optional. The module has no outputs.
 
 **Latency.** Seoul gets the lanes within a few milliseconds, sooner than it hears the sound, which goes the long way round through your audio device. Set Seoul's `delay_ms` by ear until a gate's flash lands with the kick.
 
+## One patch, many presets
+
+Seoul's link-aware presets agree on what each lane does, so a patch wired this way plays all of them:
+
+| Lane | Plays |
+|------|-------|
+| **Gate 1** | the kick |
+| **Gate 2** | the snare |
+| **Gate 3** | the hats |
+| **Gate 4** | a downbeat, or any accent |
+| **CV 1** | energy: a brighter, busier picture |
+| **CV 2** | color |
+| **CV 3** | motion |
+
+A gate takes over from the drum Seoul hears only once it has played, and the CV lanes only add to what a preset does, so leave any lane empty and the preset follows the music there instead. Han River, Jongno Rain, Hongsalmun, Window Within and Cheonggyecheon Lanterns follow the convention, and Gayageum and Obangsaek give each lane a part of their own.
+
 ## Tips
 
 - **A preset should look good without Soba.** Seoul's link presets blend between what they hear and what Link Out sends, so a lane with no cable falls back to the music.

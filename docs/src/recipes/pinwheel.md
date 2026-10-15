@@ -70,7 +70,7 @@ The picture gets the lanes sooner than Seoul hears the sound, which goes the lon
 
 ## Try this
 
-**Another preset.** Pick Seoul's **Gayageum**: each CV lane bends one of its strings, and each gate plucks one.
+**Another preset.** The gates follow Seoul's lane convention (kick, snare, hats, downbeat), so the patch plays more than Obangsaek. Try **Han River**, where the kick surges the fountain and the snare sets off fireworks, or **Hongsalmun**, where each kick is a stride through the gates. In **Gayageum**, each CV lane bends one of its strings and each gate plucks one.
 
 **A colour from the music.** Patch an [Audio Input](../modules/sources/audio-input.md)'s **Follow** into a lane in place of an LFO, and sing the colour in.
 
