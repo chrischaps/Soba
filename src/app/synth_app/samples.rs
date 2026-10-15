@@ -370,7 +370,10 @@ impl SynthApp {
                 (None, Some(bytes)) => {
                     let key = format!("{DROPPED_PREFIX}{name}");
                     match sample_files::decode(std::io::Cursor::new(bytes.to_vec()), &name) {
-                        Ok(decoded) => self.user_state.samples.insert(&key, decoded),
+                        Ok(decoded) => {
+                            self.keep_in_tab(&key, || bytes.to_vec());
+                            self.user_state.samples.insert(&key, decoded);
+                        }
                         Err(e) => {
                             self.status_message = Some(format!("Couldn't load {name}: {e}"));
                             continue;

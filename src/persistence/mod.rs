@@ -11,6 +11,8 @@ pub mod library;
 pub mod patch;
 pub mod sample_files;
 pub mod stored_zip;
+#[cfg(target_arch = "wasm32")]
+pub mod tab_store;
 
 pub use compile::{compile_patch, CompiledPatch};
 pub use examples::{Example, Shelf, EXAMPLES};

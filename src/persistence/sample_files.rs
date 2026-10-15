@@ -213,6 +213,11 @@ pub fn load(key: &str) -> Result<Decoded, String> {
     if key.starts_with(EXAMPLE_PREFIX) {
         return decode(std::io::Cursor::new(shipped(key)?), key);
     }
+    // Kept in the browser's IndexedDB, once the tab's own copy is gone
+    #[cfg(target_arch = "wasm32")]
+    if key.starts_with(DROPPED_PREFIX) {
+        return decode(std::io::Cursor::new(super::tab_store::read(key)?), key);
+    }
     let path = Path::new(key);
     if !path.exists() {
         return Err("file not found".to_string());
@@ -290,6 +295,21 @@ pub fn name_tab_files_in(patch: &mut super::Patch, folder: &str) -> Vec<String> 
     names.sort();
     names.dedup();
     names
+}
+
+/// In the browser, which has no folder beside a patch: names each file a
+/// patch opened there names by a path relative to it (as a downloaded one
+/// names its takes, in `Song samples/`) by the key the tab keeps a file of
+/// that name under, so the takes kept from earlier come back with it.
+/// Undoes [`name_tab_files_in`].
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub fn name_tab_files_within(patch: &mut super::Patch) {
+    for node in patch.all_nodes_mut() {
+        let Some(file) = node.file.as_mut() else { continue };
+        if !file.starts_with(EXAMPLE_PREFIX) && !file.starts_with(DROPPED_PREFIX) && !Path::new(file.as_str()).is_absolute() {
+            *file = format!("{DROPPED_PREFIX}{}", file_name(file));
+        }
+    }
 }
 
 /// The folder a patch saved as `patch` keeps its copied samples in:
@@ -497,5 +517,12 @@ mod tests {
             resolve(&files[0], SampleBase::Folder(Path::new("Downloads"))),
             Path::new("Downloads").join("Song samples").join("Take 1.wav").to_string_lossy()
         );
+
+        // Opened in the browser again, they're the takes the tab kept
+        name_tab_files_within(&mut patch);
+        let files: Vec<_> = patch.all_nodes().iter().map(|n| n.file.clone().unwrap()).collect();
+        assert_eq!(files, ["dropped:Take 1.wav", "example:samples/break.wav", "dropped:Take 1.wav", "dropped:voice trimmed.wav"]);
+        name_tab_files_within(&mut patch);
+        assert_eq!(patch.all_nodes()[0].file.as_deref(), Some("dropped:Take 1.wav"), "named once");
     }
 }

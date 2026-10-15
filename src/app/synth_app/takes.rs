@@ -155,10 +155,13 @@ impl SynthApp {
         #[cfg(target_arch = "wasm32")]
         {
             use crate::graph::sample_shelf::DROPPED_PREFIX;
+            use crate::persistence::tab_store;
+            // Free in the tab, and among those kept from earlier visits
             let key = (1..)
                 .map(|n| format!("{DROPPED_PREFIX}{}", name(n)))
-                .find(|key| self.user_state.samples.get(key).is_none())
+                .find(|key| self.user_state.samples.get(key).is_none() && !tab_store::has(key))
                 .expect("some name is free");
+            self.keep_in_tab(&key, || sample_files::encode_wav(&sample));
             self.user_state.samples.insert(&key, Decoded { sample, truncated: false });
             Ok(key)
         }

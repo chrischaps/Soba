@@ -7,6 +7,10 @@
 //! `<name>.json` beside `<name> samples/`, the files in it as WAVs and the
 //! patch naming them there. Unzipped, it opens whole on the desktop, the way
 //! Save As gathers a patch's samples beside it there.
+//!
+//! Each is kept in the browser's IndexedDB too (`persistence::tab_store`),
+//! so a reload, an autosave recovered, or the downloaded patch opened
+//! again in the browser, finds it. An embed keeps nothing.
 
 use std::sync::Arc;
 
@@ -72,6 +76,30 @@ impl SynthApp {
         let zip_name = format!("{name}.zip");
         super::web::download_bytes(&zip_name, &bytes, "application/zip")?;
         Ok(downloaded(&zip_name, file_name, &folder, in_tab.len() - missing.len(), &missing))
+    }
+
+    /// Keeps a file kept only in the tab, made of `bytes`, in the browser's
+    /// IndexedDB too, under its key. The desktop has it on disk already.
+    pub(super) fn keep_in_tab(&self, key: &str, bytes: impl FnOnce() -> Vec<u8>) {
+        #[cfg(target_arch = "wasm32")]
+        if !self.embedded {
+            crate::persistence::tab_store::keep(key, bytes());
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        let _ = (key, bytes);
+    }
+
+    /// Once the recovery prompt is answered (or there was none), lets go of
+    /// the files IndexedDB keeps that the patch now open doesn't name, as
+    /// the desktop tidies the takes a crash left behind. Once a visit.
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn tidy_tab_files(&self) {
+        use crate::persistence::tab_store;
+        if self.embedded || self.recovery.is_some() || tab_store::tidied() {
+            return;
+        }
+        let patch = self.create_patch("");
+        tab_store::tidy(patch.all_nodes().into_iter().filter_map(|node| node.file.clone()).collect());
     }
 }
 

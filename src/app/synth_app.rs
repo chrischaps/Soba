@@ -3168,7 +3168,11 @@ impl SynthApp {
         let loaded = upload
             .text
             .and_then(|json| patch_from_json(&json).map_err(|e| e.to_string()))
-            .and_then(|patch| Ok((self.load_patch(&patch, SampleBase::Keys).map_err(|e| e.to_string())?, patch.name)));
+            .and_then(|mut patch| {
+                // The takes it names beside it are the ones this browser kept
+                crate::persistence::sample_files::name_tab_files_within(&mut patch);
+                Ok((self.load_patch(&patch, SampleBase::Keys).map_err(|e| e.to_string())?, patch.name))
+            });
         match loaded {
             Ok((warnings, name)) => {
                 self.fit_on_web();
@@ -4211,6 +4215,8 @@ impl eframe::App for SynthApp {
         // A patch file the browser has finished uploading
         #[cfg(target_arch = "wasm32")]
         self.collect_upload();
+        #[cfg(target_arch = "wasm32")]
+        self.tidy_tab_files();
 
         // Process events from the audio engine
         self.process_engine_events();

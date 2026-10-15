@@ -96,6 +96,60 @@
         window.addEventListener("keydown", (e) => {
             if (e.key === "F1") e.preventDefault();
         }, { capture: true });
+
+        // Files kept only in the tab (takes, trims, files dropped in) are
+        // kept in IndexedDB too, so a reload, or an autosave recovered,
+        // finds them again (src/persistence/tab_store.rs). Every open copy
+        // of the app notes in localStorage that it's still open, so one
+        // starting up tidies away files nobody names only when it's alone.
+        window.sobaTabFiles = (function () {
+            const ALIVE = "soba-open-";
+            // A hidden tab's timers can slow to one a minute
+            const GONE_AFTER_MS = 3 * 60 * 1000;
+            const me = ALIVE + Math.random().toString(36).slice(2);
+            // An embed (?patch=) keeps nothing, so it needn't be waited for
+            if (!new URLSearchParams(location.search).has("patch")) {
+                const beat = () => { try { localStorage.setItem(me, String(Date.now())); } catch (e) {} };
+                beat();
+                setInterval(beat, 5000);
+                window.addEventListener("pageshow", beat);
+                window.addEventListener("pagehide", () => { try { localStorage.removeItem(me); } catch (e) {} });
+            }
+
+            let db;
+            const open = () => db ??= new Promise((resolve, reject) => {
+                const request = indexedDB.open("soba", 1);
+                request.onupgradeneeded = () => request.result.createObjectStore("tab-files");
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            // Answers once the transaction is done, so a write is on disk
+            const run = (mode, act) => open().then((db) => new Promise((resolve, reject) => {
+                const transaction = db.transaction("tab-files", mode);
+                const request = act(transaction.objectStore("tab-files"));
+                transaction.oncomplete = () => resolve(request.result);
+                transaction.onerror = transaction.onabort = () => reject(transaction.error);
+            }));
+            return {
+                keys: () => run("readonly", (files) => files.getAllKeys()),
+                get: (key) => run("readonly", (files) => files.get(key)),
+                put: (key, bytes) => run("readwrite", (files) => files.put(bytes, key)),
+                remove: (key) => run("readwrite", (files) => files.delete(key)),
+                // Whether another copy of the app is open, forgetting any long gone
+                othersOpen: () => {
+                    let others = false;
+                    try {
+                        for (const key of Object.keys(localStorage).filter((k) => k.startsWith(ALIVE) && k !== me)) {
+                            if (Date.now() - Number(localStorage.getItem(key)) < GONE_AFTER_MS) others = true;
+                            else localStorage.removeItem(key);
+                        }
+                    } catch (e) {
+                        return true;
+                    }
+                    return others;
+                },
+            };
+        })();
     </script>
 
     <style>
