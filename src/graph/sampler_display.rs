@@ -21,6 +21,9 @@
 //!
 //! ▶ beside the name plays the file from Start to End, beside the patch,
 //! whether or not the transport runs; Alt-click plays it from anywhere.
+//! Sliced, Alt-click plays just the slice it's on, outlined while Alt is
+//! held, and letting go of a dragged marker with Alt held plays the slice
+//! it now begins, so nudging a marker is a listen-and-adjust loop.
 //! That cue has a playhead of its own: a plain white line capped at both
 //! ends, unlike the voices', with what it has played washed faintly behind it.
 //!
@@ -355,9 +358,28 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         _ => None,
     };
     let hot = dragging.or_else(|| if shown.is_some() && slice_hot.is_none() && !slice_dragging { pointer.and_then(|p| nearest(p.x)) } else { None });
-    // With Alt down, a click plays from the pointer: a faint line shows where
+    // With Alt down, a click plays from the pointer: a faint line shows where.
+    // Sliced, it plays just the slice it's on, outlined
     let alt = ui.input(|i| i.modifiers.alt);
-    if let (true, Some(_), Some(p), None) = (alt, shown, response.hover_pos(), dragging) {
+    let pointed = match (alt, shown, response.hover_pos(), dragging, slice_dragging) {
+        (true, Some(_), Some(p), None, false) => slice_at(place_at(p.x)),
+        _ => None,
+    };
+    // Letting go of a marker with Alt down plays the slice it now begins
+    // (End, the one it ends; unsliced, Start to End)
+    let let_go = match (dragging, &slice_markers) {
+        _ if !alt || shown.is_none() => None,
+        (Some(m), _) if m < 2 => Some(match slices {
+            Some(slices) => span_of(slices, if m == 0 { 0 } else { slices.count() - 1 }),
+            None => (lo, hi),
+        }),
+        (None, Some(markers)) => markers.in_hand_begins(ui).zip(slices).map(|(index, slices)| span_of(slices, index)),
+        _ => None,
+    };
+    if let Some((from, to)) = pointed.zip(slices).map(|(index, slices)| span_of(slices, index)).or(let_go) {
+        let heard = Rect::from_x_y_ranges(x_at(from)..=x_at(to), plot.y_range());
+        painter.rect_stroke(heard, 1.0 * z, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.6)));
+    } else if let (true, Some(_), Some(p), None, false) = (alt, shown, response.hover_pos(), dragging, slice_dragging) {
         let x = x_at(place_at(p.x));
         let line = [Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())];
         painter.extend(Shape::dashed_line(&line, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.6)), 2.0 * z, 2.0 * z));
@@ -414,6 +436,9 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             }
         }
         if response.drag_stopped() {
+            if let Some((from, to)) = let_go {
+                responses.push(SynthResponse::CueSample { node_id, from, to });
+            }
             ui.ctx().data_mut(|d| d.remove::<usize>(drag_id));
             if let Some(markers) = &slice_markers {
                 markers.put_down(ui);
@@ -426,12 +451,16 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             }
         }
         if response.clicked() && alt {
-            // From there to End, or to the end of the file past End
-            let from = response.interact_pointer_pos().map_or(lo, |p| place_at(p.x));
-            let to = if from < hi { hi } else { 1.0 };
+            // Sliced, just the slice; otherwise from there to End, or to the
+            // end of the file past End
+            let place = response.interact_pointer_pos().map_or(lo, |p| place_at(p.x));
+            let (from, to) = match slices.zip(slice_at(place)) {
+                Some((slices, index)) => span_of(slices, index),
+                None => (place, if place < hi { hi } else { 1.0 }),
+            };
             responses.push(SynthResponse::CueSample { node_id, from, to });
         }
-        if alt && hot.is_none() {
+        if alt && hot.is_none() && !slice_dragging {
             ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
         } else if hot.is_some() || slice_hot.is_some() || slice_dragging {
             ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
@@ -440,20 +469,30 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         responses.push(SynthResponse::OpenSample(node_id));
     }
     // A file dragged over says what it is on the panel
-    if response.hovered() && dragging.is_none() && !drop_here {
+    if response.hovered() && dragging.is_none() && !slice_dragging && !drop_here {
         let tip = match (hot, shown, key) {
             _ if live => "Recording what's patched into In: press Rec to stop".to_string(),
-            (_, Some(_), _) if alt => "Click to hear it from here".to_string(),
+            (_, Some(_), _) if alt => pointed.map_or("Click to hear it from here".to_string(), |index| format!("Click to hear slice {}", index + 1)),
+            (Some(m), _, _) if m < 2 => {
+                let heard = match (slices, m) {
+                    (None, _) => "it, Start to End",
+                    (Some(_), 0) => "the slice it begins",
+                    (Some(_), _) => "the slice it ends",
+                };
+                format!("{}: drag to move it\nLet go with Alt held to hear {heard}", MARKERS[m].1)
+            }
             (Some(m), _, _) => format!("{}: drag to move it", MARKERS[m].1),
             (None, Some(_), _) if slice_hot.is_some() => {
                 let begins = slice_hot.and_then(|m| slice_markers.as_ref()?.slice_of(m));
-                let what = begins.map_or("A marker outside Start–End, cutting nothing".to_string(), |slice| format!("Slice {slice} begins here"));
-                format!("{what}\nDrag to move it, or off the panel to take it away")
+                match begins {
+                    Some(slice) => format!("Slice {slice} begins here\nDrag to move it, or off the panel to take it away\nLet go with Alt held to hear the slice"),
+                    None => "A marker outside Start–End, cutting nothing\nDrag to move it, or off the panel to take it away".to_string(),
+                }
             }
             (None, Some(sample), Some(key)) => match (slices, pointer.and_then(|p| slice_at(place_at(p.x)))) {
                 (Some(slices), Some(index)) => {
                     let key = note_to_name((root + index as f32).clamp(0.0, 127.0) as u8);
-                    let tip = format!("Slice {} of {}, played by {key}", index + 1, slices.count());
+                    let tip = format!("Slice {} of {}, played by {key}\nAlt-click to hear it", index + 1, slices.count());
                     if slices.is_marked() {
                         format!("{tip}\nDouble-click to add a marker")
                     } else {
@@ -493,10 +532,10 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             let points = vec![Pos2::new(c.x - 2.5 * z, c.y - 3.5 * z), Pos2::new(c.x + 3.5 * z, c.y), Pos2::new(c.x - 2.5 * z, c.y + 3.5 * z)];
             ui.painter().add(Shape::convex_polygon(points, icon, Stroke::NONE));
         }
-        let tip = if cue.is_some() {
-            "Stop"
-        } else {
-            "Hear it, Start to End, as recorded: dry, beside the patch, playing or stopped\nAlt-click the waveform to hear it from anywhere"
+        let tip = match (cue, slices) {
+            (Some(_), _) => "Stop",
+            (None, Some(_)) => "Hear it, Start to End, as recorded: dry, beside the patch, playing or stopped\nAlt-click a slice to hear just it",
+            (None, None) => "Hear it, Start to End, as recorded: dry, beside the patch, playing or stopped\nAlt-click the waveform to hear it from anywhere",
         };
         if hear.on_hover_text(tip).clicked() {
             responses.push(if cue.is_some() { SynthResponse::StopCue(node_id) } else { SynthResponse::CueSample { node_id, from: lo, to: hi } });

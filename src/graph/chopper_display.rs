@@ -21,7 +21,8 @@
 //! right-click has all of those and its pitch. Every edit is one undo step.
 //!
 //! Sliced by Onsets, the markers drag as on the Sampler (see
-//! [`super::sampler_slices`]). Alt-click a slice to hear just that slice.
+//! [`super::sampler_slices`]). Alt-click a slice to hear just that slice,
+//! or let go of a marker with Alt held to hear the slice it now begins.
 //! Under it all: ▶ to hear the whole break, its name and the tempo it
 //! plays at unchanged, and Open….
 
@@ -303,6 +304,10 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             responses.extend(markers.drag(ui, wave_rect, p, place_at(p.x), z));
         }
         if let (Some(markers), true) = (&slice_markers, wave.drag_stopped()) {
+            if let (true, Some(index)) = (alt, markers.in_hand_begins(ui)) {
+                let (from, to) = span_of(index);
+                responses.push(SynthResponse::CueSample { node_id, from, to });
+            }
             markers.put_down(ui);
         }
         if let (Some(markers), Some(p), true) = (&slice_markers, wave.interact_pointer_pos(), wave.double_clicked()) {
@@ -310,24 +315,28 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                 responses.push(markers.add(place_at(p.x)));
             }
         }
-        // Alt-click a slice to hear just it
-        let pointed = pointer.and_then(|p| slices.at(place_at(p.x) as f64, 0.0, 1.0));
+        // Alt-click a slice to hear just it; a marker in hand, the slice it begins
+        let in_hand = slice_markers.as_ref().and_then(|markers| markers.in_hand_begins(ui));
+        let pointed = in_hand.or_else(|| pointer.and_then(|p| slices.at(place_at(p.x) as f64, 0.0, 1.0)));
         if let (true, Some(index)) = (alt, pointed) {
             let (from, to) = span_of(index);
             painter.rect_stroke(Rect::from_x_y_ranges(x_at(from)..=x_at(to), plot.y_range()), 1.0 * z, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.6)));
-            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
             if wave.clicked() {
                 responses.push(SynthResponse::CueSample { node_id, from, to });
             }
-        } else if slice_hot.is_some() || slice_dragging {
+        }
+        if slice_dragging || (slice_hot.is_some() && !alt) {
             ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
+        } else if alt && pointed.is_some() {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
         }
         if wave.hovered() && !slice_dragging {
             let tip = match (slice_hot, pointed) {
                 (Some(m), _) => {
                     let begins = slice_markers.as_ref().and_then(|markers| markers.slice_of(m));
                     let what = begins.map_or("A marker past the 63 that cut it".to_string(), |slice| format!("Slice {slice} begins here"));
-                    format!("{what}\nDrag to move it, or off the panel to take it away")
+                    let heard = if begins.is_some() { "\nLet go with Alt held to hear the slice" } else { "" };
+                    format!("{what}\nDrag to move it, or off the panel to take it away{heard}")
                 }
                 (None, Some(index)) => {
                     let mut tip = format!("Slice {} of {count}\nAlt-click to hear it", index + 1);

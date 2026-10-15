@@ -27,6 +27,8 @@ You don't have to patch anything to hear what a Sampler holds.
 
 - **▶**, beside the file's name, plays it from **Start** to **End** and stops there. It plays at the Sampler's **Tune** and **Fine**, at a **Speed** of 1. Press it again (it shows ■ while playing) to stop.
 - **Alt-click** the waveform to play from that point to **End**. Past **End**, it plays on to the end of the file. With Alt held, a dashed line follows the pointer to show where it will start. Dragging the markers works as before.
+- **Sliced**, **Alt-click** a slice to play just that slice, from its start to its end. With Alt held, the slice under the pointer is outlined.
+- **Let go of a marker with Alt held** to hear what it now marks. A slice marker plays the slice it begins, **Start** the first slice and **End** the last. Unsliced, **Start** and **End** play **Start** to **End**. While you drag with Alt held, the slice you'll hear is outlined. You can nudge a marker and hear the result each time you let go, as in ReCycle or Simpler.
 
 This works whether the transport is running or not. What you hear is the file itself, not the patch: it plays dry, beside the patch rather than through it, after the Audio Output's limiter, 6 dB below the file's own level. It isn't in a recording made with **Record**. It's how a sampler's or a DAW's file preview works.
 
@@ -178,7 +180,7 @@ Set **Slices** to cut the recording into equal parts, and each key plays one par
 
 Patch an [Arranger](../utilities/arranger.md) lane, a [Sample & Hold](../utilities/sample-hold.md) or an LFO into **Slice** to pick slices without a keyboard. Its value spreads evenly across them, 0 for the first and 1 for the last, and adds to whatever the note picked. With **V/Oct** unpatched, **Slice** alone chooses.
 
-On the display, rules divide the waveform into its slices, numbered while they're wide enough to read. The slice a voice is playing glows. Hover a slice to see which key plays it. Sliced by **Onsets**, the rules are markers you can drag (see [Slicing at the hits](#slicing-at-the-hits)).
+On the display, rules divide the waveform into its slices, numbered while they're wide enough to read. The slice a voice is playing glows. Hover a slice to see which key plays it, and **Alt-click** it to hear it. Sliced by **Onsets**, the rules are markers you can drag (see [Slicing at the hits](#slicing-at-the-hits)).
 
 ### Slicing at the hits
 
@@ -191,7 +193,7 @@ Turn **Slices** past 64 to **Onsets** and the Sampler puts a marker where each h
 
 - **Sens** sets how many hits count. Turned down, only the loudest hits get a marker: the kick and the snare. Turned up, ghost notes, hi-hats and quieter syllables get one too. The markers move as you turn it.
 - **The markers are where the sound rises.** The recording is split into four bands, from the bass up. A hit is a moment when several of them suddenly get louder together: a quiet hi-hat over a ringing kick still counts, in the top band. A marker goes a millisecond before its hit, so the slice keeps the whole attack.
-- **Drag a marker** (the white tabs along the top) to move it. **Drag it off the panel**, up or down, to take it away, and **double-click** between markers to add one. Each change is a step you can undo.
+- **Drag a marker** (the white tabs along the top) to move it. **Drag it off the panel**, up or down, to take it away, and **double-click** between markers to add one. Each change is a step you can undo. Let go with **Alt** held to hear the slice the marker now begins.
 - **Markers you've moved are kept with the patch.** Turning **Sens** finds them afresh, letting go of what you moved. Undo brings them back.
 - **A new file finds them afresh** too, as does a new take. **Trim to the sound** moves them with the sound.
 - **Up to 64 slices.** Markers outside **Start**–**End** cut nothing and are drawn faint. So are markers past the 63rd, and the last slice runs on to **End**.

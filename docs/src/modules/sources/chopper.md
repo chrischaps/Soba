@@ -44,7 +44,7 @@ The file should be the loop itself, start to end: a break cut on its downbeats, 
 
 ## Slicing at the hits
 
-**Slices** cuts the loop into 2 to 64 equal slices. Eighth notes suit a swung break, since swing moves the sixteenths in between, not the eighths. Turn it past 64 to **Onsets** and the loop is cut at its hits instead, exactly as on the [Sampler](./sampler.md#slicing-at-the-hits): **Sens** chooses how many hits count, and the markers drag, come off the panel and are added by double-click.
+**Slices** cuts the loop into 2 to 64 equal slices. Eighth notes suit a swung break, since swing moves the sixteenths in between, not the eighths. Turn it past 64 to **Onsets** and the loop is cut at its hits instead, exactly as on the [Sampler](./sampler.md#slicing-at-the-hits): **Sens** chooses how many hits count, and the markers drag, come off the panel and are added by double-click. Let go of a marker with **Alt** held to hear the slice it now begins.
 
 Cut at the hits, the steps stay evenly spaced under the waveform but the slices don't, so the fan of rules between them leans. Each hit then starts on its own place in the beat, swing and all, and the step row still gives every hit a step.
 

@@ -459,9 +459,11 @@ impl Capture {
         }
         raw.hovered_files.clear();
         raw.dropped_files.clear();
-        // A drag lasts across passes, as a real one does
+        // A drag lasts across passes, as a real one does, and so does a held
+        // key: a still is drawn in the pass after its cues, so without it Alt
+        // held over a face never shows
         self.hover_into(raw);
-        raw.modifiers = egui::Modifiers::default();
+        raw.modifiers = self.modifiers;
         raw.focused = true;
         raw.predicted_dt = self.dt() as f32;
 

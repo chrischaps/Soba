@@ -5,7 +5,8 @@
 //! loop's flags would be (they step aside while sliced). Drag one to move
 //! it; drag it off the panel, up or down, to take it away; double-click
 //! the waveform to add one. Markers outside Start–End, or past the 63 that
-//! cut it into 64 slices, cut nothing, and are drawn faint.
+//! cut it into 64 slices, cut nothing, and are drawn faint. Let go of one
+//! with Alt held to hear the slice it now begins.
 //!
 //! Every edit sets the whole list, as markers placed by hand at the
 //! Sampler's Sensitivity (see [`HandMarkers`]): the node keeps it, a patch
@@ -111,6 +112,15 @@ impl SliceMarkers<'_> {
         Some(self.set(places, label))
     }
 
+    /// The slice the marker in hand begins as the drag has left it, from 0
+    /// as [`crate::dsp::primitives::Slices`] counts: none once it's pulled
+    /// off, or where it cuts nothing. Call before [`put_down`](Self::put_down).
+    pub fn in_hand_begins(&self, ui: &egui::Ui) -> Option<usize> {
+        let drag: Drag = ui.ctx().data(|d| d.get_temp(self.drag_id(ui)))?;
+        let place = self.places.iter().find(|place| !drag.others.contains(place))?;
+        self.cutting.as_slice().iter().position(|cut| cut == place).map(|index| index + 1)
+    }
+
     /// Puts down the marker in hand.
     pub fn put_down(&self, ui: &egui::Ui) {
         ui.ctx().data_mut(|d| d.remove::<Drag>(self.drag_id(ui)));
@@ -149,4 +159,45 @@ fn tab(painter: &egui::Painter, plot: Rect, x: f32, color: Color32, lit: bool, z
         color,
         Stroke::NONE,
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Runs `f` on a frame's panel, as a display draws on one.
+    fn in_frame<R>(ctx: &egui::Context, f: impl FnOnce(&egui::Ui) -> R) -> R {
+        let (mut f, mut out) = (Some(f), None);
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                if let Some(f) = f.take() {
+                    out = Some(f(ui));
+                }
+            });
+        });
+        out.expect("the panel was drawn")
+    }
+
+    /// Markers at `places`, cutting Start 0.1 to End 0.9.
+    fn markers(places: &[f32]) -> SliceMarkers<'_> {
+        SliceMarkers { node_id: NodeId::default(), places, cutting: Markers::between(places, 0.1, 0.9), sensitivity: 0.5 }
+    }
+
+    #[test]
+    fn a_marker_in_hand_names_the_slice_it_now_begins() {
+        let ctx = egui::Context::default();
+        assert_eq!(in_frame(&ctx, |ui| markers(&[0.2, 0.5, 0.7]).in_hand_begins(ui)), None, "nothing is in hand yet");
+        in_frame(&ctx, |ui| markers(&[0.2, 0.5, 0.7]).pick_up(ui, 1));
+        assert_eq!(in_frame(&ctx, |ui| markers(&[0.2, 0.5, 0.7]).in_hand_begins(ui)), Some(2), "picked up, it begins slice 3");
+
+        // Dragged past the third, it begins the last of four
+        assert_eq!(in_frame(&ctx, |ui| markers(&[0.2, 0.7, 0.8]).in_hand_begins(ui)), Some(3));
+        // Past End it cuts nothing, and pulled off the panel it's gone
+        assert_eq!(in_frame(&ctx, |ui| markers(&[0.2, 0.7, 0.95]).in_hand_begins(ui)), None);
+        assert_eq!(in_frame(&ctx, |ui| markers(&[0.2, 0.7]).in_hand_begins(ui)), None);
+
+        // Put down, there's none in hand
+        in_frame(&ctx, |ui| markers(&[0.2, 0.7, 0.8]).put_down(ui));
+        assert_eq!(in_frame(&ctx, |ui| markers(&[0.2, 0.7, 0.8]).in_hand_begins(ui)), None);
+    }
 }
