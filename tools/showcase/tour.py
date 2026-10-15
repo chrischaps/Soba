@@ -318,26 +318,39 @@ class Tour:
             self._still(t + 0.1, note)
         return t + 0.15
 
-    def previsit(self, t):
+    def previsit(self, t, follow=None):
         """Opens every group once, nested ones too, before recording starts
         (call it at a negative time, first). A module is measured the first
         time it's drawn; until then its group's miniature, and the framing
         of its level, use nominal sizes. Dumps each level's layout for
-        `learn`, and leaves the view as it found it."""
+        `learn`, and leaves the view as it found it.
+
+        `follow` maps a group's name to the sequencers inside it (as capture
+        scripts name them, "seq.step#2") whose Follow is switched on while
+        it's open, so their grids show the pattern playing. The pointer
+        leaves the window after."""
+        follow = follow or {}
         for gid in self.map.children(None):
-            t = self._visit(t, gid)
+            t = self._visit(t, gid, follow)
+        if follow:
+            self.s.at(t, "move off")
         # The top last, once the window has settled and every group's face
         # shows its measured insides
         self._dump(t, None)
         return t + 0.05
 
-    def _visit(self, t, gid):
+    def _visit(self, t, gid, follow):
         # Dumped once the dive has landed and the level is drawn
         t = self.enter(t, gid, fast=True)
         self._dump(t, gid)
         t += 0.05
+        for seq in follow.get(self.map.names[gid], ()):
+            self.s.at(t, f"move {seq} follow")
+            self.s.at(t + 0.05, "press")
+            self.s.at(t + 0.1, "release")
+            t += 0.15
         for child in self.map.children(gid):
-            t = self._visit(t, child)
+            t = self._visit(t, child, follow)
         return self.leave(t, fast=True) + 0.05
 
     def _dump(self, t, level):

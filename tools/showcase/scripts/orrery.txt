@@ -33,27 +33,34 @@
 -32.1400 leave
 -31.4800 enter Bass
 -30.8700 layout lvl011
--30.8200 leave
--30.1600 enter Drums
--29.5500 layout lvl012
--29.5000 leave
--28.8400 enter Eclipse
--28.2300 layout lvl013
--28.1800 enter Eclipse/FM Bell
--27.5700 layout lvl014
--27.5200 leave
--26.8600 leave
--26.2000 enter Surf
--25.5900 layout lvl015
--25.5400 leave
--24.8800 enter Faders
--24.2700 layout lvl016
--24.2200 leave
--23.5600 layout lvl017
+-30.8200 move seq.step#3 follow
+-30.7700 press
+-30.7200 release
+-30.6700 leave
+-30.0100 enter Drums
+-29.4000 layout lvl012
+-29.3500 move seq.trigger follow
+-29.3000 press
+-29.2500 release
+-29.2000 leave
+-28.5400 enter Eclipse
+-27.9300 layout lvl013
+-27.8800 enter Eclipse/FM Bell
+-27.2700 layout lvl014
+-27.2200 leave
+-26.5600 leave
+-25.9000 enter Surf
+-25.2900 layout lvl015
+-25.2400 leave
+-24.5800 enter Faders
+-23.9700 layout lvl016
+-23.9200 leave
+-23.2600 move off
+-23.2600 layout lvl017
 -0.5000 aim 2276.00 693.00 0.500000 0.05   # the orbits, at the first eclipse
 0.0000 play
-0.8000 aim 2526.75 411.25 0.850000 4.6   # the Day, and its reading once a phrase
-5.8000 aim 1602.47 1137.83 0.420207 1.2   # Who is up: the drone and the steady Twin (over)
+0.8000 aim 2526.75 411.20 0.850000 4.6   # the Day, and its reading once a phrase
+5.8000 aim 1602.47 1137.80 0.420193 1.2   # Who is up: the drone and the steady Twin (over)
 7.0000 aim 678.18 1864.40 1.100000 1.2   # Who is up: the drone and the steady Twin
 11.6000 aim 711.43 2240.40 1.050000 4.6   # the heartbeat's height
 19.6000 aim 748.00 1864.40 1.000000 4.4   # the Sun's height, then the drifting Twin's
@@ -86,10 +93,10 @@
 77.8000 aim 1475.00 1037.62 0.470271 1.1   # the Sun (over)
 78.9000 aim 1828.00 1686.85 1.500000 1.1   # the Sun
 80.2000 enter Sun
-81.0000 aim 314.70 318.48 0.896883 0.8   # Sun: a String Machine and two Pumps
+81.0000 aim 314.70 318.53 0.896755 0.8   # Sun: a String Machine and two Pumps
 83.6000 enter String Machine
 84.4000 aim 903.70 539.51 0.529440 0.9   # String Machine: the whole group
-85.6000 aim 1741.00 193.70 1.200000 5.9429   # String Machine: in on fx.chorus
+85.6000 aim 1741.00 193.75 1.200000 5.9429   # String Machine: in on fx.chorus
 91.8429 leave
 92.4429 leave
 93.0429 aim 3031.00 2096.00 0.550000 3.0   # the desk
@@ -115,7 +122,7 @@
 146.6000 aim 2106.29 1421.88 0.309592 0.85   # the Eclipse (over)
 147.4500 aim 2062.00 2408.05 1.500000 0.85   # the Eclipse
 148.6000 enter Eclipse
-149.4000 aim 191.70 515.20 0.554428 0.9   # Eclipse: the gong: the whole group
+149.4000 aim 191.70 515.24 0.554379 0.9   # Eclipse: the gong: the whole group
 150.6000 aim 309.00 196.70 1.400000 3.0857   # Eclipse: the gong: in on 194
 153.9857 leave
 154.5857 aim 1594.00 2275.20 1.500000 2.0   # the Comet

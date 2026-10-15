@@ -33,23 +33,30 @@
 -32.1400 leave
 -31.4800 enter Bass
 -30.8700 layout lvl011
--30.8200 leave
--30.1600 enter Drums
--29.5500 layout lvl012
--29.5000 leave
--28.8400 enter Eclipse
--28.2300 layout lvl013
--28.1800 enter Eclipse/FM Bell
--27.5700 layout lvl014
--27.5200 leave
--26.8600 leave
--26.2000 enter Surf
--25.5900 layout lvl015
--25.5400 leave
--24.8800 enter Faders
--24.2700 layout lvl016
--24.2200 leave
--23.5600 layout lvl017
+-30.8200 move seq.step#3 follow
+-30.7700 press
+-30.7200 release
+-30.6700 leave
+-30.0100 enter Drums
+-29.4000 layout lvl012
+-29.3500 move seq.trigger follow
+-29.3000 press
+-29.2500 release
+-29.2000 leave
+-28.5400 enter Eclipse
+-27.9300 layout lvl013
+-27.8800 enter Eclipse/FM Bell
+-27.2700 layout lvl014
+-27.2200 leave
+-26.5600 leave
+-25.9000 enter Surf
+-25.2900 layout lvl015
+-25.2400 leave
+-24.5800 enter Faders
+-23.9700 layout lvl016
+-23.9200 leave
+-23.2600 move off
+-23.2600 layout lvl017
 -0.5000 aim 2062.00 2062.55 2.000000 0.05   # the Drums
 0.0000 play
 134.5000 enter Drums

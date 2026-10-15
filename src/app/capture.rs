@@ -62,6 +62,8 @@
 //! 3.0  move seq.chord step:2 0.3    # a step, cell, pedal or section
 //! 3.0  move frame:Shape 0.3         # a frame's title bar, or x y from its corner
 //! 3.0  move by 0 -60 2.0            # from where the pointer is
+//! 3.0  move off                     # take the pointer out of the window,
+//!                                   # so nothing under it lights up
 //! 3.5  drag 500 340 0.8             # press, glide, release (to any of
 //!                                   # the same spots)
 //! 3.5  press / release
@@ -207,6 +209,8 @@ enum Cue {
     Param { module: String, nth: usize, input: String, value: f32, dur: f64 },
     Cursor(bool),
     Move { to: Spot, dur: f64 },
+    /// The pointer leaves the window.
+    PointerOff,
     Button(bool),
     /// The secondary button, pressed or released.
     SecondaryButton(bool),
@@ -723,6 +727,11 @@ impl Capture {
                         Spot::Part(part) => Some(part),
                         _ => None,
                     };
+                }
+                Cue::PointerOff => {
+                    self.pointer = None;
+                    self.pointer_glide = None;
+                    self.pointer_aim = None;
                 }
                 Cue::Button(down) => {
                     self.button_down = down;
@@ -1270,6 +1279,7 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
                 cues.push((t, Cue::Param { module, nth, input, value: num(value_at)? as f32, dur: opt(value_at + 1)? }));
             }
             "cursor" => cues.push((t, Cue::Cursor(words.get(2) != Some(&"off")))),
+            "move" if words.get(2) == Some(&"off") && words.len() == 3 => cues.push((t, Cue::PointerOff)),
             "move" => {
                 let (to, rest) = capture_aim::parse_spot(&words[2..]).map_err(err)?;
                 if rest.len() > 1 {
@@ -1372,6 +1382,14 @@ mod tests {
         let cues = parse_script("0.0 fit\n1.0 fit 1.5\n2 end").unwrap();
         assert!(matches!(cues[0].1, Cue::Fit(d) if d == 0.0));
         assert!(matches!(cues[1].1, Cue::Fit(d) if d == 1.5));
+    }
+
+    #[test]
+    fn the_pointer_can_leave_the_window() {
+        let cues = parse_script("0 move 400 300 0.5
+1 move off
+2 end").unwrap();
+        assert!(matches!(cues[1].1, Cue::PointerOff));
     }
 
     #[test]
