@@ -396,49 +396,6 @@ def from_one_sine(s):
     s.at(281.0, "end")
 
 
-@shot("patches/from-one-sine.json", ppp=1.0, fps=30)
-def from_one_sine_line(s):
-    """A still for the recipe: the motif sequencer's tabs at the Lift, as the
-    lead's line reaches its C pattern."""
-    # The song plays through the warmup, so the first frame is mid-Lift: two
-    # bars into unit 15, the line's third pass
-    t = u(15) + SONG_UNIT / 2
-    c = (960.0, 508.0)
-    (x, y), zoom = (456, 2185), 1.75
-    s.at(-t, "play").at(-t, f"camera {-(x - c[0]) * zoom:.1f} {-(y - c[1]) * zoom:.1f} {zoom} 0.05")
-    # Edit the pattern playing, so the grid shows C, then move the pointer
-    # off the face
-    s.click(-1.5, 875, 799)
-    s.at(-0.8, "move 1900 1000 0.2")
-    s.at(0.0, "still from-one-sine-line")
-    s.at(0.1, "end")
-
-
-@shot("patches/from-one-sine.json", ppp=1.0, fps=30, size="1620x1396")
-def from_one_sine_whole(s):
-    """The recipe's picture: the whole rack at the drop, Everything playing.
-    Crop the toolbar and status bar off: 43 points at the top, 21 below."""
-    # In this window the editor's centre is 666 points below patch y = 0
-    t = u(23)
-    c = (810.0, 666.0)
-    (x, y), zoom = (2962, 2479), 0.26
-    s.at(-t, "play").at(-t, f"camera {-(x - c[0]) * zoom:.1f} {-(y - c[1]) * zoom:.1f} {zoom} 0.05")
-    s.at(0.0, "still from-one-sine")
-    s.at(0.1, "end")
-
-
-@shot("patches/from-one-sine.json", ppp=1.0, fps=30)
-def from_one_sine_harmony(s):
-    """A still for the recipe: the Chord Sequencer playing Everything's
-    chords. Crop it to the Harmony frame."""
-    t = u(23)
-    c = (960.0, 508.0)
-    (x, y), zoom = (194, 1555), 1.5
-    s.at(-t, "play").at(-t, f"camera {-(x - c[0]) * zoom:.1f} {-(y - c[1]) * zoom:.1f} {zoom} 0.05")
-    s.at(0.0, "still from-one-sine-harmony")
-    s.at(0.1, "end")
-
-
 # Canopy is 116 BPM in 4/4, 124 bars of 2.069 s; bar n (from 1) starts at
 # bar(n). Its sections start at bars 1 Dawn, 9 Canopy, 17 Groove, 33 Groove
 # II, 49 Clearing, 57 Rise, 65 Peak, 81 Peak II, 97 Dusk, 113 Night and 121

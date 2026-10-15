@@ -1,8 +1,0 @@
--124.2857 play
--124.2857 camera 882.0 -2934.8 1.75 0.05
--1.5000 move 875 799 0.4
--1.0200 press
--0.9400 release
--0.8000 move 1900 1000 0.2
-0.0000 still from-one-sine-line
-0.1000 end
