@@ -89,23 +89,54 @@ Every edit is one undo step. The top of the face says the step length and how ma
 
 ## Patterns
 
-The right-click menu starts the row from one of these. They're written a step to a character: `X` an accent, `x` a hit, `.` a ghost, `=` a tie, `-` a rest.
+The right-click menu starts the row from one of these, filed by feel. They're written a step to a character: `X` an accent, `x` a hit, `.` a ghost, `=` a tie, `-` a rest. The menu marks the family holding the row the face is playing.
+
+### Steady
 
 | Pattern | Row | Feel |
 |---------|-----|------|
 | **Trance** | `X-xXx-x-X-xXx-xx` | The classic gated pad. A new Slicer starts on this |
 | **Sixteenths** | `XxxxXxxxXxxxXxxx` | Every step, the beat accented |
 | **Eighths** | `X=x=X=x=X=x=X=x=` | Every other step, held through the next |
+| **Quarters** | `X=--x=--X=--x=--` | A short slice on each beat |
 | **Offbeats** | `--X=--X=--X=--X=` | The upbeat stab of house and dub |
-| **Gallop** | `X-xxX-xxX-xxX-xx` | An eighth and two sixteenths |
-| **Reverse Gallop** | `Xx-xXx-xXx-xXx-x` | Two sixteenths and an eighth |
-| **Tresillo** | `X==X==X=X==X==X=` | 3 + 3 + 2, twice a bar |
-| **Clave** | `X--x--X---x-X---` | The son clave, 3-2 |
-| **Ghosts** | `X..xX..xX..xX.xx` | Soft notes filling the gaps |
-| **Stutter** | `XxXxXxXx-.-.X=--` | Busy, then breaking off |
+| **Sidechain** | `.X==.X==.X==.X==` | Ducks on every beat and comes back after it, the pump of a sidechained pad. Turn Shape up |
 | **Pulse** | `X===----X===----` | Two long throbs a bar |
 | **Breath** | `X=======.=======` | Half a bar open, then half a bar barely there. Turn Shape up |
-| **Threes** | `X-xX-xX-xX-xX-x-` with 12 steps | Threes across the bar |
+
+### Groove
+
+| Pattern | Row | Feel |
+|---------|-----|------|
+| **Gallop** | `X-xxX-xxX-xxX-xx` | An eighth and two sixteenths |
+| **Reverse Gallop** | `Xx-xXx-xXx-xXx-x` | Two sixteenths and an eighth |
+| **Ghosts** | `X..xX..xX..xX.xx` | Soft notes filling the gaps |
+| **Funk** | `X.x..xX.x.xX.x..` | Syncopated sixteenths, ghosts between |
+| **Stutter** | `XxXxXxXx-.-.X=--` | Busy, then breaking off |
+| **Build** | `x-x-x-x-xxxxXXXX` | Eighths, then sixteenths, then accents: a riser into the next bar |
+| **Heartbeat** | `Xx------Xx------` | Lub-dub, twice a bar |
+| **SOS** | `x-x-x-X=-X=-X=--` | Three short, three long |
+
+### Clave and kin
+
+| Pattern | Row | Feel |
+|---------|-----|------|
+| **Tresillo** | `X==X==X=X==X==X=` | 3 + 3 + 2, twice a bar |
+| **Son Clave** | `X--x--X---x-X---` | The son clave, 3-2 |
+| **Rumba Clave** | `X--x---x--x-X---` | The son clave with its third stroke a step late |
+| **Bossa Nova** | `X--x--x---x--x--` | The bossa clave, the tresillo carried on into the second half |
+| **Cinquillo** | `X-xx-xx-X-xx-xx-` | Five strokes in each half bar, from Cuban danzón |
+| **Dembow** | `X--xX-x-X--xX-x-` | Reggaeton's beat: the pulse with a tresillo on top |
+| **Samba** | `X--x-x-x--x-x-x-` | Seven strokes spread as evenly as sixteen steps allow |
+
+### Across the bar
+
+| Pattern | Row | Feel |
+|---------|-----|------|
+| **Dotted** | `X==x==x==x==x=x=` | Dotted eighths, 3-3-3-3-2-2: the figure of a dotted-eighth delay |
+| **Threes** | `X-xX-xX-xX-xX-x-` with 12 steps | Threes across the bar, back round every three bars |
+| **Fives** | `X-xx-X-xx-X-xx--` with 15 steps | Fives across the bar, back round every five |
+| **Sevens** | `X-x-x--X-x-x----` with 14 steps | Sevens across the bar, back round every seven |
 
 ## Tips
 

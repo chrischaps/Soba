@@ -146,22 +146,41 @@ impl Slice {
 }
 
 /// Patterns to start from, each sixteen steps written as [`Slice`]
-/// symbols, and how many of them play.
-pub const PATTERNS: &[(&str, &str, usize)] = &[
-    ("Trance", "X-xXx-x-X-xXx-xx", 16),
-    ("Sixteenths", "XxxxXxxxXxxxXxxx", 16),
-    ("Eighths", "X=x=X=x=X=x=X=x=", 16),
-    ("Offbeats", "--X=--X=--X=--X=", 16),
-    ("Gallop", "X-xxX-xxX-xxX-xx", 16),
-    ("Reverse Gallop", "Xx-xXx-xXx-xXx-x", 16),
-    ("Tresillo", "X==X==X=X==X==X=", 16),
-    ("Clave", "X--x--X---x-X---", 16),
-    ("Ghosts", "X..xX..xX..xX.xx", 16),
-    ("Stutter", "XxXxXxXx-.-.X=--", 16),
-    ("Pulse", "X===----X===----", 16),
-    ("Breath", "X=======.=======", 16),
-    ("Threes", "X-xX-xX-xX-xX-x-", 12),
+/// symbols, how many of them play, and the family the menu files it under.
+pub const PATTERNS: &[(&str, &str, usize, &str)] = &[
+    ("Trance", "X-xXx-x-X-xXx-xx", 16, "Steady"),
+    ("Sixteenths", "XxxxXxxxXxxxXxxx", 16, "Steady"),
+    ("Eighths", "X=x=X=x=X=x=X=x=", 16, "Steady"),
+    ("Quarters", "X=--x=--X=--x=--", 16, "Steady"),
+    ("Offbeats", "--X=--X=--X=--X=", 16, "Steady"),
+    ("Sidechain", ".X==.X==.X==.X==", 16, "Steady"),
+    ("Pulse", "X===----X===----", 16, "Steady"),
+    ("Breath", "X=======.=======", 16, "Steady"),
+    ("Gallop", "X-xxX-xxX-xxX-xx", 16, "Groove"),
+    ("Reverse Gallop", "Xx-xXx-xXx-xXx-x", 16, "Groove"),
+    ("Ghosts", "X..xX..xX..xX.xx", 16, "Groove"),
+    ("Funk", "X.x..xX.x.xX.x..", 16, "Groove"),
+    ("Stutter", "XxXxXxXx-.-.X=--", 16, "Groove"),
+    ("Build", "x-x-x-x-xxxxXXXX", 16, "Groove"),
+    ("Heartbeat", "Xx------Xx------", 16, "Groove"),
+    ("SOS", "x-x-x-X=-X=-X=--", 16, "Groove"),
+    ("Tresillo", "X==X==X=X==X==X=", 16, "Clave and kin"),
+    ("Son Clave", "X--x--X---x-X---", 16, "Clave and kin"),
+    ("Rumba Clave", "X--x---x--x-X---", 16, "Clave and kin"),
+    ("Bossa Nova", "X--x--x---x--x--", 16, "Clave and kin"),
+    ("Cinquillo", "X-xx-xx-X-xx-xx-", 16, "Clave and kin"),
+    ("Dembow", "X--xX-x-X--xX-x-", 16, "Clave and kin"),
+    ("Samba", "X--x-x-x--x-x-x-", 16, "Clave and kin"),
+    ("Dotted", "X==x==x==x==x=x=", 16, "Across the bar"),
+    ("Threes", "X-xX-xX-xX-xX-x-", 12, "Across the bar"),
+    ("Fives", "X-xx-X-xx-X-xx--", 15, "Across the bar"),
+    ("Sevens", "X-x-x--X-x-x----", 14, "Across the bar"),
 ];
+
+/// The menu's families, in order.
+pub fn pattern_families() -> impl Iterator<Item = &'static str> {
+    PATTERNS.iter().enumerate().filter(|&(i, p)| PATTERNS[..i].iter().all(|q| q.3 != p.3)).map(|(_, p)| p.3)
+}
 
 /// The pattern a new Slicer plays.
 pub const DEFAULT_PATTERN: usize = 0;
@@ -747,12 +766,24 @@ mod tests {
             assert_eq!(Slice::decode(slice.encode()), slice);
             assert_eq!(Slice::from_symbol(slice.symbol()), Some(slice));
         }
-        for (name, symbols, count) in PATTERNS {
+        for (name, symbols, count, _) in PATTERNS {
             assert_eq!(symbols.chars().count(), STEPS, "{name}");
             assert!(symbols.chars().all(|c| Slice::from_symbol(c).is_some()), "{name}");
             assert!((1..=STEPS).contains(count), "{name}");
             assert_ne!(symbols.chars().next(), Some('='), "{name} starts with a tie");
         }
+        // Each is its own row and its own name, so the face can name it
+        for (i, (name, symbols, count, _)) in PATTERNS.iter().enumerate() {
+            for (other, theirs, their_count, _) in &PATTERNS[..i] {
+                assert_ne!(name, other);
+                assert!(count != their_count || pattern_steps(symbols)[..*count] != pattern_steps(theirs)[..*count], "{name} is {other}");
+            }
+        }
+        // Each family's patterns sit together, so the menu reads in table order
+        let families: Vec<_> = pattern_families().collect();
+        assert_eq!(families, ["Steady", "Groove", "Clave and kin", "Across the bar"]);
+        let order: Vec<_> = PATTERNS.iter().map(|p| families.iter().position(|&f| f == p.3).unwrap()).collect();
+        assert!(order.windows(2).all(|w| w[0] <= w[1]));
     }
 
     #[test]

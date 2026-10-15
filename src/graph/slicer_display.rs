@@ -22,7 +22,7 @@ use eframe::egui::{self, Color32, CursorIcon, Id, Pos2, Rect, Sense, Shape, Stro
 use egui_node_graph2::NodeId;
 
 use crate::app::theme;
-use crate::modules::slicer::{pattern_steps, Slice, Slicer, FILTER_CLOSE, PATTERNS, RATES, STEPS, STEP_NAMES, SWELL_ATTACK, SWELL_RELEASE};
+use crate::modules::slicer::{pattern_families, pattern_steps, Slice, Slicer, FILTER_CLOSE, PATTERNS, RATES, STEPS, STEP_NAMES, SWELL_ATTACK, SWELL_RELEASE};
 
 use super::display_frame::{self, value_of, with_alpha, PANEL};
 use super::{SynthGraph, SynthGraphState, SynthResponse};
@@ -57,8 +57,8 @@ pub fn columns(count: usize, swing: f32) -> Vec<(f32, f32)> {
 pub fn pattern_named(steps: &[Slice; STEPS], count: usize) -> Option<&'static str> {
     PATTERNS
         .iter()
-        .find(|(_, symbols, length)| *length == count && pattern_steps(symbols)[..count] == steps[..count])
-        .map(|(name, _, _)| *name)
+        .find(|(_, symbols, length, _)| *length == count && pattern_steps(symbols)[..count] == steps[..count])
+        .map(|(name, ..)| *name)
 }
 
 /// The first `count` steps turned round by `by`: later for a positive `by`,
@@ -307,15 +307,22 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, steps: &[Slice; STEPS], count: 
     ui.separator();
     let current = pattern_named(steps, count);
     ui.menu_button("Patterns", |ui| {
-        for (name, symbols, length) in PATTERNS {
-            let shown: String = symbols.chars().take(*length).collect();
-            let response = ui.selectable_label(current == Some(*name), *name).on_hover_text(format!("{shown}\nx a hit · X an accent · . a ghost · = a tie · - a rest"));
-            if response.clicked() {
-                let mut changes = write(&pattern_steps(symbols));
-                changes.push(("Steps".to_string(), *length as f32));
-                edits.push(edit(node_id, format!("Slicer pattern: {name}"), changes));
-                ui.close_menu();
-            }
+        for family in pattern_families() {
+            let holds_current = PATTERNS.iter().any(|p| p.3 == family && current == Some(p.0));
+            let label = if holds_current { format!("● {family}") } else { family.to_string() };
+            ui.menu_button(label, |ui| {
+                for (name, symbols, length, _) in PATTERNS.iter().filter(|p| p.3 == family) {
+                    let shown: String = symbols.chars().take(*length).collect();
+                    let response = ui.selectable_label(current == Some(*name), *name).on_hover_text(format!("{shown}
+x a hit · X an accent · . a ghost · = a tie · - a rest"));
+                    if response.clicked() {
+                        let mut changes = write(&pattern_steps(symbols));
+                        changes.push(("Steps".to_string(), *length as f32));
+                        edits.push(edit(node_id, format!("Slicer pattern: {name}"), changes));
+                        ui.close_menu();
+                    }
+                }
+            });
         }
     });
     ui.horizontal(|ui| {
@@ -356,7 +363,7 @@ mod tests {
 
     #[test]
     fn test_a_row_as_written_is_named_and_a_changed_one_isnt() {
-        for (name, symbols, count) in PATTERNS {
+        for (name, symbols, count, _) in PATTERNS {
             assert_eq!(pattern_named(&pattern_steps(symbols), *count), Some(*name));
         }
         let mut steps = pattern_steps(PATTERNS[0].1);
