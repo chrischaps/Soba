@@ -35,6 +35,7 @@ One `wasm32` cfg gate keeps the desktop build exactly as it was; the
 | **Clocks** | `std::time::Instant` and `SystemTime` panic on wasm32 | `web-time` everywhere (on the desktop it *is* `std::time`) |
 | **Audio** | cpal needs a host | cpal's `wasm-bindgen` feature: the WebAudio host. A browser without Web Audio shows "No sound in this browser" instead of cpal's panic |
 | **Autoplay** | Browsers hold an `AudioContext` until a gesture, and Safari only releases it *inside* the gesture | `index.html` notes every context and resumes it from the first pointer or key event; the status bar says "Click to start sound" until then |
+| **F1** | Chrome, Edge and Firefox open their own help on `F1`, and eframe only stops the browser's default for Tab, Space, Backspace and the arrows | `index.html` calls `preventDefault` on `F1` itself, so it only toggles the Keyboard Shortcuts sheet |
 | **MIDI** | The scanner thread holds a non-`Send` Web MIDI handle; Web MIDI needs a permission prompt and Safari has none | No device list or scanner in the browser. The engine and its queues stay, so the computer keys still play Poly MIDI |
 | **Threads** | The recorder's writer thread, the MIDI scanner | Recording is hidden (it writes to a folder); the scanner isn't started |
 | **Files** | `rfd`'s dialogs are async on the web, and there's no file system | **Save** downloads the patch; **Open** uploads one (`app/web.rs`). Examples were already `include_str!`. Recent files and the recordings folder are hidden; **My Modules** can't save (it needs a folder) |

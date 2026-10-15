@@ -89,6 +89,13 @@
                 return start.call(this, when, ...rest);
             };
         })();
+
+        // F1 shows the app's Keyboard Shortcuts, but Chrome, Edge and Firefox
+        // open their own help on it unless the page says no. The app still
+        // hears the key: this only stops the browser's default
+        window.addEventListener("keydown", (e) => {
+            if (e.key === "F1") e.preventDefault();
+        }, { capture: true });
     </script>
 
     <style>
