@@ -85,15 +85,20 @@ pub const SHEET: &[Group] = &[
     },
 ];
 
-/// The letter keys that play notes, as the manual names them: the bottom
-/// row for white keys, the row above for black. (`key_to_note` also takes
-/// the top row, as aliases the manual leaves out.)
+/// The keys that play notes, as the manual names them: the bottom row for
+/// white keys from C4, the row above for black; then the top row for white
+/// keys from C5 and the numbers for black, as a tracker lays them out.
 pub const PIANO_KEYS: &[(egui::Key, &str)] = &[
     (egui::Key::Z, "Z"), (egui::Key::S, "S"), (egui::Key::X, "X"), (egui::Key::D, "D"),
     (egui::Key::C, "C"), (egui::Key::V, "V"), (egui::Key::G, "G"), (egui::Key::B, "B"),
     (egui::Key::H, "H"), (egui::Key::N, "N"), (egui::Key::J, "J"), (egui::Key::M, "M"),
     (egui::Key::Comma, ","), (egui::Key::L, "L"), (egui::Key::Period, "."),
     (egui::Key::Semicolon, ";"), (egui::Key::Slash, "/"),
+    (egui::Key::Q, "Q"), (egui::Key::Num2, "2"), (egui::Key::W, "W"), (egui::Key::Num3, "3"),
+    (egui::Key::E, "E"), (egui::Key::R, "R"), (egui::Key::Num5, "5"), (egui::Key::T, "T"),
+    (egui::Key::Num6, "6"), (egui::Key::Y, "Y"), (egui::Key::Num7, "7"), (egui::Key::U, "U"),
+    (egui::Key::I, "I"), (egui::Key::Num9, "9"), (egui::Key::O, "O"), (egui::Key::Num0, "0"),
+    (egui::Key::P, "P"),
 ];
 
 /// The actions' column, and the gap between the sheet's two columns
@@ -308,27 +313,32 @@ fn draw_keys(ui: &egui::Ui, rect: Rect, shortcut: &str) {
     }
 }
 
-/// The letter keys as the piano they play, from C4 (middle C) up to E5.
-/// Each key is labeled with the letter that plays it, by `key_to_note`, and
-/// lights up while it's held.
+/// The keys as the piano they play, from C4 (middle C) up to E6. Each key is
+/// labeled with the keys that play it, by `key_to_note`, and lights up while
+/// it's held. Where the two pianos overlap (C5 to E5), the upper row's key
+/// sits above the lower's, as it does on the keyboard.
 fn piano(ui: &mut egui::Ui, held: &[i32]) {
-    const WHITE: [i32; 10] = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16];
-    const WHITE_W: f32 = 28.0;
-    const WHITE_H: f32 = 74.0;
-    const BLACK_W: f32 = 17.0;
-    const BLACK_H: f32 = 44.0;
+    const WHITE: [i32; 17] = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24, 26, 28];
+    const WHITE_H: f32 = 80.0;
+    const BLACK_H: f32 = 48.0;
+    /// Between the two letters on a key the rows share
+    const LINE: f32 = 13.0;
+    // As wide as the column allows, up to a comfortable key
+    let white_w = (ui.available_width() / WHITE.len() as f32).clamp(20.0, 28.0);
+    let black_w = white_w * 0.62;
     let lit = theme::signal::MIDI;
-    let letter = |note: i32| PIANO_KEYS.iter().find(|(key, _)| key_to_note(*key) == Some(note)).map(|(_, name)| *name);
+    let letters = |note: i32| PIANO_KEYS.iter().filter(move |(key, _)| key_to_note(*key) == Some(note)).map(|(_, name)| *name);
 
-    let (rect, _) = ui.allocate_exact_size(vec2(WHITE.len() as f32 * WHITE_W, WHITE_H + 16.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(WHITE.len() as f32 * white_w, WHITE_H + 16.0), Sense::hover());
     let painter = ui.painter();
     let font = FontId::proportional(11.0);
     for (i, &note) in WHITE.iter().enumerate() {
-        let key = Rect::from_min_size(pos2(rect.left() + i as f32 * WHITE_W, rect.top()), vec2(WHITE_W, WHITE_H)).shrink2(vec2(1.0, 0.0));
+        let key = Rect::from_min_size(pos2(rect.left() + i as f32 * white_w, rect.top()), vec2(white_w, WHITE_H)).shrink2(vec2(1.0, 0.0));
         let fill = if held.contains(&note) { lit } else { Color32::from_rgb(226, 226, 234) };
         painter.rect_filled(key, egui::Rounding { nw: 0.0, ne: 0.0, sw: 4.0, se: 4.0 }, fill);
-        if let Some(name) = letter(note) {
-            painter.text(key.center_bottom() - vec2(0.0, 6.0), Align2::CENTER_BOTTOM, name, font.clone(), theme::background::MAIN);
+        for (row, name) in letters(note).enumerate() {
+            let at = key.center_bottom() - vec2(0.0, 6.0 + row as f32 * LINE);
+            painter.text(at, Align2::CENTER_BOTTOM, name, font.clone(), theme::background::MAIN);
         }
     }
     for (i, pair) in WHITE.windows(2).enumerate() {
@@ -337,26 +347,29 @@ fn piano(ui: &mut egui::Ui, held: &[i32]) {
             continue;
         }
         let note = pair[0] + 1;
-        let x = rect.left() + (i + 1) as f32 * WHITE_W;
-        let key = Rect::from_min_size(pos2(x - BLACK_W / 2.0, rect.top()), vec2(BLACK_W, BLACK_H));
+        let x = rect.left() + (i + 1) as f32 * white_w;
+        let key = Rect::from_min_size(pos2(x - black_w / 2.0, rect.top()), vec2(black_w, BLACK_H));
         let fill = if held.contains(&note) { lit } else { theme::background::MAIN };
         painter.rect(key, egui::Rounding { nw: 0.0, ne: 0.0, sw: 3.0, se: 3.0 }, fill, Stroke::new(1.0, theme::background::WIDGET_ACTIVE));
-        if let Some(name) = letter(note) {
-            painter.text(key.center_bottom() - vec2(0.0, 5.0), Align2::CENTER_BOTTOM, name, font.clone(), theme::text::PRIMARY);
+        for (row, name) in letters(note).enumerate() {
+            let at = key.center_bottom() - vec2(0.0, 5.0 + row as f32 * LINE);
+            painter.text(at, Align2::CENTER_BOTTOM, name, font.clone(), theme::text::PRIMARY);
         }
     }
-    // Middle C, named under its key
-    painter.text(
-        pos2(rect.left() + WHITE_W / 2.0, rect.bottom()),
-        Align2::CENTER_BOTTOM,
-        "C4",
-        FontId::proportional(10.0),
-        theme::text::DISABLED,
-    );
+    // Each C, named under its key: middle C, and the octaves above it
+    for (i, name) in [(0, "C4"), (7, "C5"), (14, "C6")] {
+        painter.text(
+            pos2(rect.left() + (i as f32 + 0.5) * white_w, rect.bottom()),
+            Align2::CENTER_BOTTOM,
+            name,
+            FontId::proportional(10.0),
+            theme::text::DISABLED,
+        );
+    }
     ui.add_space(4.0);
     ui.add(
         egui::Label::new(
-            RichText::new("The bottom two rows of letters play every Keyboard module, and Poly MIDI too")
+            RichText::new("The letter rows and the numbers above them play every Keyboard module, and Poly MIDI too")
                 .small()
                 .color(theme::text::DISABLED),
         )
@@ -462,9 +475,12 @@ mod tests {
         let mut named = Vec::new();
         for cells in table.iter().filter_map(|line| cells(line)).skip(1) {
             let keys: Vec<&str> = cells[0].split('`').map(str::trim).filter(|k| !k.is_empty()).collect();
-            let (notes, octave) = match cells[1].split_once(", an octave up") {
-                Some((notes, _)) => (notes, 12),
-                None => (cells[1], 0),
+            let (notes, octave) = if let Some((notes, _)) = cells[1].split_once(", two octaves up") {
+                (notes, 24)
+            } else if let Some((notes, _)) = cells[1].split_once(", an octave up") {
+                (notes, 12)
+            } else {
+                (cells[1], 0)
             };
             let notes: Vec<&str> = notes.split_whitespace().collect();
             assert_eq!(keys.len(), notes.len(), "keys and notes don't pair up: {cells:?}");
@@ -483,9 +499,22 @@ mod tests {
         ours.sort_unstable();
         assert_eq!(named, ours, "the sheet's piano and the manual's keys differ");
 
-        // And they're a piano: one key each for C4 up to E5
-        let mut notes: Vec<i32> = PIANO_KEYS.iter().filter_map(|(key, _)| key_to_note(*key)).collect();
-        notes.sort_unstable();
-        assert_eq!(notes, (0..=16).collect::<Vec<_>>());
+        // And they're two pianos an octave apart: C4 up to E5 on the lower
+        // rows, C5 up to E6 on the upper ones
+        let notes = |keys: &[(egui::Key, &str)]| {
+            let mut notes: Vec<i32> = keys.iter().filter_map(|(key, _)| key_to_note(*key)).collect();
+            notes.sort_unstable();
+            notes
+        };
+        let (lower, upper) = PIANO_KEYS.split_at(17);
+        assert_eq!(notes(lower), (0..=16).collect::<Vec<_>>());
+        assert_eq!(notes(upper), (12..=28).collect::<Vec<_>>());
+
+        // No other key plays a note, so nothing sounds that isn't on the sheet
+        for key in egui::Key::ALL {
+            if key_to_note(*key).is_some() {
+                assert!(PIANO_KEYS.iter().any(|(k, _)| k == key), "{key:?} plays a note the sheet doesn't show");
+            }
+        }
     }
 }

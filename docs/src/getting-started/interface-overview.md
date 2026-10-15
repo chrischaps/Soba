@@ -196,7 +196,7 @@ Nothing sounds until you press **▶ Play**. **⏹ Stop** silences the patch, le
 
 ### The computer keyboard
 
-The bottom row of letter keys plays like a piano, starting from C4 (middle C):
+The bottom row of letter keys plays like a piano, starting from C4 (middle C), with the sharps on the row above it. The top row and the numbers above it are a second piano, an octave higher, as in a tracker:
 
 | Keys | Notes |
 |------|-------|
@@ -204,6 +204,12 @@ The bottom row of letter keys plays like a piano, starting from C4 (middle C):
 | `,` `.` `/` | C D E, an octave up |
 | `S` `D` `G` `H` `J` | C♯ D♯ F♯ G♯ A♯ |
 | `L` `;` | C♯ D♯, an octave up |
+| `Q` `W` `E` `R` `T` `Y` `U` | C D E F G A B, an octave up |
+| `I` `O` `P` | C D E, two octaves up |
+| `2` `3` `5` `6` `7` | C♯ D♯ F♯ G♯ A♯, an octave up |
+| `9` `0` | C♯ D♯, two octaves up |
+
+The two pianos overlap: `,` `.` `/` play the same notes as `Q` `W` `E`.
 
 The keys play every [Keyboard](../modules/midi/keyboard.md) module in the patch; use its **Oct** knob to shift it up or down. If the patch has a [Poly MIDI](../modules/midi/poly-midi.md) module, the keys play that too, so you can play chords without a MIDI controller. Keys typed into the quick-add box, or held with `Ctrl` or `Alt`, don't play notes. While a [Chord Sequencer](../modules/utilities/chord-sequencer.md#playing-a-chord-into-a-step)'s chord popover is open, the keys write chords into it instead.
 

@@ -242,10 +242,13 @@ impl DspModule for KeyboardInput {
 
 /// Maps a computer keyboard key to a MIDI note number relative to C4.
 ///
-/// Uses a piano-like layout where:
-/// - Bottom row (Z, X, C, V, B, N, M, comma, period, slash) = white keys
-/// - Middle row (S, D, G, H, J, L, semicolon) = black keys (sharps/flats)
-/// - Upper rows (W, E, T, Y, U, O, P) = black keys for higher octave
+/// Uses a tracker-style layout: two pianos, an octave apart.
+/// - Bottom row (Z, X, C, V, B, N, M, comma, period, slash) = white keys from C4
+/// - Middle row (S, D, G, H, J, L, semicolon) = their black keys
+/// - Top row (Q, W, E, R, T, Y, U, I, O, P) = white keys from C5
+/// - Number row (2, 3, 5, 6, 7, 9, 0) = their black keys
+///
+/// The two pianos overlap: `,` `.` `/` play the same C D E as Q W E.
 ///
 /// Returns None if the key doesn't map to a note.
 pub fn key_to_note(key: egui::Key) -> Option<i32> {
@@ -277,17 +280,27 @@ pub fn key_to_note(key: egui::Key) -> Option<i32> {
         Key::L => Some(13),  // C# (next octave)
         Key::Semicolon => Some(15), // D# (next octave)
 
-        // Upper row for additional black keys (Q W E R T Y U I O P)
-        Key::Q => Some(0),   // C (alternative)
-        Key::W => Some(1),   // C# (alternative)
-        Key::E => Some(3),   // D# (alternative)
-        Key::R => Some(4),   // E (alternative)
-        Key::T => Some(6),   // F# (alternative)
-        Key::Y => Some(8),   // G# (alternative)
-        Key::U => Some(10),  // A# (alternative)
-        Key::I => Some(11),  // B (alternative)
-        Key::O => Some(13),  // C# upper (alternative)
-        Key::P => Some(15),  // D# upper (alternative)
+        // Upper octave - white keys (Q W E R T Y U I O P), from C5
+        Key::Q => Some(12),  // C
+        Key::W => Some(14),  // D
+        Key::E => Some(16),  // E
+        Key::R => Some(17),  // F
+        Key::T => Some(19),  // G
+        Key::Y => Some(21),  // A
+        Key::U => Some(23),  // B
+        Key::I => Some(24),  // C (next octave)
+        Key::O => Some(26),  // D (next octave)
+        Key::P => Some(28),  // E (next octave)
+
+        // Upper octave - black keys (2 3 5 6 7 9 0), skipping 4 and 8 as
+        // the middle row skips F and K
+        Key::Num2 => Some(13), // C#
+        Key::Num3 => Some(15), // D#
+        Key::Num5 => Some(18), // F#
+        Key::Num6 => Some(20), // G#
+        Key::Num7 => Some(22), // A#
+        Key::Num9 => Some(25), // C# (next octave)
+        Key::Num0 => Some(27), // D# (next octave)
 
         _ => None,
     }
@@ -408,6 +421,15 @@ mod tests {
         assert_eq!(key_to_note(Key::J), Some(10)); // A#
 
         // Non-note keys
+        // Top row and numbers: the same piano, an octave up
+        assert_eq!(key_to_note(Key::Q), Some(12)); // C5
+        assert_eq!(key_to_note(Key::R), Some(17)); // F5
+        assert_eq!(key_to_note(Key::P), Some(28)); // E6
+        assert_eq!(key_to_note(Key::Num2), Some(13)); // C#5
+        assert_eq!(key_to_note(Key::Num0), Some(27)); // D#6
+        assert_eq!(key_to_note(Key::Num4), None);
+        assert_eq!(key_to_note(Key::Num8), None);
+
         assert_eq!(key_to_note(Key::Space), None);
         assert_eq!(key_to_note(Key::Escape), None);
     }

@@ -31,15 +31,19 @@ The **Gate** output lights up on the node while a note is held.
 
 ## Key layout
 
-The bottom two letter rows form a piano keyboard starting at C4. The bottom row plays the white keys and the row above it plays the black keys, sitting between them as they would on a piano:
+The bottom two letter rows form a piano keyboard starting at C4. The bottom row plays the white keys and the row above it plays the black keys, sitting between them as they would on a piano. The top letter row and the numbers above it are a second piano laid out the same way, an octave higher, as in a tracker:
 
 ```text
+Black keys:    2   3       5   6   7       9   0
+White keys:  Q   W   E   R   T   Y   U   I   O   P
+Note:        C5  D   E   F   G   A   B   C6  D   E
+
 Black keys:    S   D       G   H   J       L   ;
 White keys:  Z   X   C   V   B   N   M   ,   .   /
-Note:        C   D   E   F   G   A   B   C   D   E
+Note:        C4  D   E   F   G   A   B   C5  D   E
 ```
 
-That's C4 to E5, a little over an octave. The top letter row plays too, in the same octave: **Q** is C4, **R** is E4 and **I** is B4, and **W E T Y U O P** are the black keys from C♯4 to D♯5. Turn **Oct** to move the whole range.
+That's C4 to E6, a little over two octaves. The pianos overlap by a few notes: **,** **.** **/** play the same C, D and E as **Q W E**, so a run up the bottom row can carry on along the top. Turn **Oct** to move the whole range.
 
 The piano display plays too. Hold a key with the mouse, or a finger on a touch screen, and it plays like a computer key; slide across the keys and the pitch follows, legato. It's how the Keyboard is played on a phone.
 
