@@ -5,12 +5,17 @@
 Modules grow: a knob or a row of tabs added to one can push it out of the
 frame drawn around it in an example, over a note, or over its neighbour.
 This films frame 0 of each example in patches/ (or the ones named) with a
-`layout` cue, which saves where each module, frame and note was drawn, and
-reports:
+`layout` cue, which saves where each module, frame and note was drawn, then
+steps into every group, at every depth, as a person would (a dive into it,
+then F) and takes another. It reports, under the group's path for a level
+inside one (`Strings/Pump#2`, as an `enter` cue takes it, to film it by):
 
 - a module that runs out of the frame its middle sits in
 - a module that crosses into a frame it isn't in
 - a module over a note, or over another module
+
+Frames and notes are drawn on the top level only, so inside a group it's
+modules over modules.
 
 Build into target/capture first, as for shots.py. Exits 1 if anything is
 reported.
@@ -38,12 +43,60 @@ def area(r):
     return (r[2] - r[0]) * (r[3] - r[1])
 
 
-def layout(patch, out):
+# Seconds for a dive in or out to land, and for a fitted view to be drawn
+DIVE = 0.6
+SETTLE = 0.3
+
+
+def groups(patch):
+    """Every group in a patch, depth first, as (path, name to enter it by
+    from the level above). Siblings that share a name are told apart as
+    the `enter` cue counts them, as a page reads: `Pump#1`, `Pump#2`."""
+    found = []
+
+    def walk(level, path):
+        names = [g["name"] for g in level]
+        ordered = sorted(level, key=lambda g: (g["position"][1], g["position"][0]))
+        for g in level:
+            name = g["name"]
+            if names.count(name) > 1:
+                same = [o for o in ordered if o["name"] == name]
+                name = f"{name}#{next(i for i, o in enumerate(same) if o is g) + 1}"
+            found.append((path + [name], name))
+            walk(g.get("groups", []), path + [name])
+
+    walk(json.loads(Path(patch).read_text(encoding="utf-8")).get("groups", []), [])
+    return found
+
+
+def layouts(patch, out):
+    """The top level's layout and each group's, as (path, layout), from one
+    capture that dives down into each group and back out to the next."""
+    walk = groups(patch)
+    cues, t, depth = ["0.0 layout level0"], 0.1, 0
+    for i, (path, name) in enumerate(walk, start=1):
+        # Out to the level it sits on, then in
+        for _ in range(depth - (len(path) - 1)):
+            cues.append(f"{t:.2f} leave")
+            t += DIVE
+        cues.append(f"{t:.2f} enter {name}")
+        t += DIVE
+        cues.append(f"{t:.2f} fit")
+        t += SETTLE
+        cues.append(f"{t:.2f} layout level{i}")
+        t += 0.1
+        depth = len(path)
+    cues.append(f"{t:.2f} end")
     script = out / "layout.txt"
-    script.write_text("0.0 layout all\n0.1 end\n")
-    subprocess.run([str(EXE), str(patch), "--capture", str(script), "--out", str(out), "--fps", "10", "--size", "960x540"],
-                   check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return json.loads((out / "all.json").read_text())
+    script.write_text("\n".join(cues) + "\n")
+    run = subprocess.run([str(EXE), str(patch), "--capture", str(script), "--out", str(out), "--fps", "10", "--size", "960x540"],
+                         check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
+    # A level it couldn't reach would be checked as the one it stayed on
+    lost = [line for line in run.stderr.splitlines() if "can't enter" in line or "no group to leave" in line]
+    if lost:
+        raise RuntimeError(f"{patch}: " + "; ".join(lost))
+    levels = [([], "level0")] + [(path, f"level{i}") for i, (path, _) in enumerate(walk, start=1)]
+    return [(path, json.loads((out / f"{name}.json").read_text())) for path, name in levels]
 
 
 def problems(lay):
@@ -79,9 +132,10 @@ if __name__ == "__main__":
         for name in names:
             out = Path(tmp) / name
             out.mkdir()
-            found = problems(layout(ROOT / "patches" / f"{name}.json", out))
+            found = [("/".join(path), p) for path, lay in layouts(ROOT / "patches" / f"{name}.json", out)
+                     for p in problems(lay)]
             print(f"{name:20} {'ok' if not found else ''}")
-            for p in found:
-                print(f"    {p}")
+            for where, p in found:
+                print(f"    {where}: {p}" if where else f"    {p}")
             failed |= bool(found)
     sys.exit(1 if failed else 0)

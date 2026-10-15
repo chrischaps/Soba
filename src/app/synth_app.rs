@@ -672,7 +672,10 @@ impl SynthApp {
         }).collect();
         let annotations = &self.user_state.annotations;
         let (mut frames, mut notes) = (Vec::new(), Vec::new());
-        for (id, annotation) in annotations.iter() {
+        // Frames and notes are drawn on the top level only: inside a group,
+        // where they were drawn last is the level above
+        let on_top = self.user_state.level.is_none();
+        for (id, annotation) in annotations.iter().filter(|_| on_top) {
             let Some(&rect) = annotations.drawn.get(&id) else { continue };
             match annotation {
                 Annotation::Frame(frame) => frames.push(serde_json::json!({ "title": frame.title, "rect": patch_rect(rect) })),
