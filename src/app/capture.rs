@@ -498,7 +498,11 @@ impl Capture {
             }
         }
         if self.finished {
+            // Still the capture's clock, not eframe's: at a low frame rate
+            // the script runs ahead of the wall, and egui's pointer history
+            // panics if time goes back (#224)
             self.fresh = false;
+            raw.time = Some(self.ui_time());
             return;
         }
 
