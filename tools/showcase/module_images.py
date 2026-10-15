@@ -63,6 +63,12 @@ MODULES = {
     "slicer": Module("slicer", "fx.slicer", 1.0, 400, """
         -2.65 play
     """, palette=False),
+    # A kick on every beat over a low saw: the dot rides up the knee on each
+    # hit, and the reduction hangs from the strip's top in time, the saw's
+    # landscape steady beneath it
+    "compressor": Module("compressor", "fx.compressor", 1.0, 420, """
+        -2.8 play
+    """, palette=False),
 }
 
 

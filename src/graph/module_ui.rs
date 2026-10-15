@@ -518,6 +518,9 @@ static MODULE_UI: &[ModuleUi] = &[
             knob_as("Makeup", "Mkup"),
             knob("Mix"),
         ],
+        // The strip's gain reduction, whether or not GR is patched
+        monitor: &["GR"],
+        display: NodeDisplay::CompressorCurve,
         ..ModuleUi::DEFAULT
     },
     ModuleUi {

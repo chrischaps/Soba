@@ -3,7 +3,7 @@
 **Module ID** `fx.compressor` · **Category** Effect
 
 ![Compressor Module](../../images/module-compressor.png)
-*Threshold and Ratio set how much; Atk and Rel set how fast*
+*A kick on every beat over a low saw: each hit climbs the curve, and the reduction it brings hangs over the sound coming in*
 
 The Compressor turns down a signal when it gets loud and leaves it alone when it's quiet. That evens out the level of a bass line, adds snap to percussion, holds a pad steady, or, with a kick in the **Sidechain** input, makes a pad pump in time.
 
@@ -17,6 +17,15 @@ It also puts its gain reduction out as a control signal on **GR**, so the amount
 4. **Mkup** adds gain back afterward, and **Mix** blends the result with the dry input.
 
 Attack and release shape the *gain reduction*, in dB, not the measured level. So a steady tone above the threshold comes out exactly where the ratio says it should, however fast or slow the timing knobs are set; attack and release only decide how it gets there.
+
+## The display
+
+The display has two halves: the curve the compressor works to, and the last two seconds of it working.
+
+- **The curve.** On the left, the level the detector hears runs across and the output's level runs up, both from −60 dB to 0 dB. Below the threshold the curve follows the faint diagonal, where nothing changes. Past it the curve bends flatter by the ratio, through a soft band as wide as **Knee**. **Mkup** lifts the whole curve, and **Mix** pulls it back towards the diagonal.
+- **The dot.** The dot sits at the level the detector hears now, at the height the gain reduction applied right now gives it. While **Atk** is still clamping down, or **Rel** is still letting go, the dot is off the curve, and a short trail shows the path it took. It glows orange while the compressor is turning the sound down.
+- **The strip.** On the right, time runs from the left up to now at the right edge. The sound coming into **In** is a faint blue landscape, and what leaves through **Out** is the line over it. The gain reduction hangs from the top in orange: 24 dB of reduction reaches the floor. A faint line marks the threshold, so you can see which peaks cross it and how the output ducks after each one.
+- **Words.** The top left gives the ratio and threshold, plus **RMS** when the detector measures RMS and **SC** when the Sidechain is patched. The top right gives the reduction now. Hover over the display for more.
 
 ## Inputs
 

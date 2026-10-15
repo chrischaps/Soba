@@ -10,6 +10,7 @@ pub mod groups;
 mod group_face;
 mod steady_text;
 mod clock_display;
+mod compressor_display;
 mod data_types;
 pub mod hints;
 pub mod input_display;

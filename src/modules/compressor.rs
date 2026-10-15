@@ -10,7 +10,7 @@
 use std::f32::consts::LN_10;
 
 use crate::dsp::{
-    module_trait::{DspModule, ModuleCategory, ModuleInfo},
+    module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     context::ProcessContext,
     denormal::flush,
     parameter::ParameterDefinition,
@@ -33,6 +33,10 @@ const RMS_WINDOW_MS: f32 = 20.0;
 /// Gain reduction below this many dB is called none, so a compressor
 /// at rest does no transcendental math at all.
 const GR_FLOOR_DB: f32 = 1e-5;
+
+/// How fast the level the display's dot rides falls once the sound has
+/// passed, so it glides down the curve instead of blinking off.
+const DETECTOR_VIEW_FALL_MS: f32 = 120.0;
 
 /// One-pole coefficient for a time constant in milliseconds.
 #[inline]
@@ -97,6 +101,9 @@ pub struct Compressor {
     gr_held: f32,
     /// Gain reduction applied, the held value smoothed at the attack rate (dB).
     gr_db: f32,
+    /// The level the detector has heard lately (linear), for the display:
+    /// its peaks held and let fall at `DETECTOR_VIEW_FALL_MS`.
+    detector_view: f32,
     /// Attack and release coefficients, recomputed only when their knob moves.
     attack_coeff: CachedCoeff,
     release_coeff: CachedCoeff,
@@ -135,6 +142,7 @@ impl Compressor {
             rms_coeff: time_coeff(RMS_WINDOW_MS, sample_rate),
             gr_held: 0.0,
             gr_db: 0.0,
+            detector_view: 0.0,
             attack_coeff: CachedCoeff::new(),
             release_coeff: CachedCoeff::new(),
             knee_start: 0.0,
@@ -228,12 +236,17 @@ impl Compressor {
     const PARAM_DETECTOR: usize = 7;
 
     /// Detector choices.
-    const DETECTOR_RMS: f32 = 1.0;
+    pub const DETECTOR_RMS: f32 = 1.0;
+
+    /// Readout slots: the level the detector hears (dB), and the gain
+    /// reduction being applied (dB, 0 or more).
+    pub const READOUT_DETECTOR_DB: usize = 0;
+    pub const READOUT_GR_DB: usize = 1;
 
     /// Compute gain reduction in dB for a given input level in dB.
     /// Uses soft knee algorithm for smooth transition into compression.
     #[inline]
-    fn compute_gain_reduction(level_db: f32, threshold: f32, ratio: f32, knee: f32) -> f32 {
+    pub fn compute_gain_reduction(level_db: f32, threshold: f32, ratio: f32, knee: f32) -> f32 {
         // Distance above threshold
         let over_threshold = level_db - threshold;
 
@@ -262,6 +275,15 @@ impl Compressor {
                 (1.0 - 1.0 / ratio) * knee_factor * knee_factor / (2.0 * knee)
             }
         }
+    }
+
+    /// How much louder (or quieter) the output is than the input, in dB,
+    /// with `gr_db` of reduction applied: the makeup, and the dry signal
+    /// blended back in by `mix`, as `process` does it.
+    pub fn output_gain_db(gr_db: f32, makeup_db: f32, mix: f32) -> f32 {
+        let mix = mix.clamp(0.0, 1.0);
+        let gain = (1.0 - mix) + mix * ((makeup_db - gr_db) * NEPER_PER_DB).exp();
+        DB_PER_NEPER * gain.max(1e-6).ln()
     }
 
     /// Linear sidechain level where the knee begins, recomputed only when
@@ -344,6 +366,9 @@ impl DspModule for Compressor {
         let out = &mut out_slice[Self::PORT_OUT];
         let gr_out = &mut gr_slice[0];
 
+        // The loudest the detector hears in this block, for the display
+        let mut heard = 0.0f32;
+
         // Process each sample
         for i in 0..context.block_size {
             // Get smoothed values
@@ -373,6 +398,7 @@ impl DspModule for Compressor {
                     self.rms_coeff * self.mean_square
                         + (1.0 - self.rms_coeff) * sidechain_sample * sidechain_sample,
                 );
+                heard = heard.max(self.mean_square);
                 if self.mean_square > knee_start * knee_start {
                     // 20·log10(sqrt(ms)) without the sqrt
                     let level_db = 0.5 * DB_PER_NEPER * self.mean_square.ln();
@@ -382,6 +408,7 @@ impl DspModule for Compressor {
                 }
             } else {
                 let level = sidechain_sample.abs();
+                heard = heard.max(level);
                 if level > knee_start {
                     let level_db = DB_PER_NEPER * level.ln();
                     Self::compute_gain_reduction(level_db, threshold_db, ratio_val, knee_db)
@@ -415,6 +442,10 @@ impl DspModule for Compressor {
             // Normalize GR to 0-1 range: 0dB GR = 0, 60dB GR = 1
             gr_out.samples[i] = (self.gr_db / 60.0).clamp(0.0, 1.0);
         }
+
+        let heard = if rms { heard.sqrt() } else { heard };
+        let fall = (-(context.block_size as f32) / (DETECTOR_VIEW_FALL_MS * 0.001 * self.sample_rate)).exp();
+        self.detector_view = flush(heard.max(self.detector_view * fall));
     }
 
     fn key_inputs(&self) -> &'static [usize] {
@@ -425,6 +456,7 @@ impl DspModule for Compressor {
         self.mean_square = 0.0;
         self.gr_held = 0.0;
         self.gr_db = 0.0;
+        self.detector_view = 0.0;
 
         // Reset smoothed values
         self.threshold_smooth.reset(self.threshold_smooth.target());
@@ -434,6 +466,13 @@ impl DspModule for Compressor {
         self.knee_smooth.reset(self.knee_smooth.target());
         self.makeup_smooth.reset(self.makeup_smooth.target());
         self.mix_smooth.reset(self.mix_smooth.target());
+    }
+
+    fn readout(&self, _params: &[f32]) -> Option<Readout> {
+        let mut readout = Readout::default();
+        readout.values[Self::READOUT_DETECTOR_DB] = DB_PER_NEPER * self.detector_view.max(1e-6).ln();
+        readout.values[Self::READOUT_GR_DB] = self.gr_db;
+        Some(readout)
     }
 }
 
@@ -937,5 +976,54 @@ mod tests {
         assert_eq!(module.info().name, "Compressor");
         assert_eq!(module.ports().len(), 4);
         assert_eq!(module.parameters().len(), 8);
+    }
+
+    /// Runs `blocks` blocks of a 1 kHz sine of `amplitude` (0 for silence),
+    /// and returns the readout after them.
+    fn readout_after(compressor: &mut Compressor, amplitude: f32, blocks: usize, params: &[f32; 8]) -> Readout {
+        let (sample_rate, block) = (48000.0, 256);
+        let ctx = ProcessContext::new(sample_rate, block);
+        let sidechain = SignalBuffer::unconnected(block, SignalType::Audio);
+        let mut input = SignalBuffer::audio(block);
+        let mut outputs = vec![SignalBuffer::audio(block), SignalBuffer::control(block)];
+        for b in 0..blocks {
+            for (i, s) in input.samples.iter_mut().enumerate() {
+                let n = (b * block + i) as f32;
+                *s = amplitude * (std::f32::consts::TAU * 1000.0 * n / sample_rate).sin();
+            }
+            compressor.process(&[&input, &sidechain], &mut outputs, params, &ctx);
+        }
+        compressor.readout(params).unwrap()
+    }
+
+    #[test]
+    fn test_readout_shows_what_the_detector_hears_and_the_reduction() {
+        let mut compressor = Compressor::new();
+        compressor.prepare(48000.0, 256);
+        let params = [-30.0, 4.0, 1.0, 100.0, 0.0, 0.0, 1.0, PEAK];
+
+        // A 0.5 sine peaks at -6 dB: 24 dB over, 18 dB of it taken away
+        let loud = readout_after(&mut compressor, 0.5, 200, &params);
+        let heard = loud.values[Compressor::READOUT_DETECTOR_DB];
+        let reduction = loud.values[Compressor::READOUT_GR_DB];
+        assert!((heard - db(0.5)).abs() < 0.5, "detector heard {heard} dB");
+        assert!((reduction - 18.0).abs() < 1.0, "reduced by {reduction} dB");
+
+        // Silence lets both go
+        let quiet = readout_after(&mut compressor, 0.0, 200, &params);
+        assert!(quiet.values[Compressor::READOUT_DETECTOR_DB] < -60.0);
+        assert!(quiet.values[Compressor::READOUT_GR_DB] < 0.1);
+    }
+
+    #[test]
+    fn test_output_gain_follows_makeup_and_mix() {
+        assert!(Compressor::output_gain_db(0.0, 0.0, 1.0).abs() < 1e-4);
+        assert!((Compressor::output_gain_db(6.0, 0.0, 1.0) + 6.0).abs() < 1e-3);
+        assert!((Compressor::output_gain_db(6.0, 6.0, 1.0)).abs() < 1e-3);
+        // Fully dry, nothing the compressor does is heard
+        assert!(Compressor::output_gain_db(20.0, 0.0, 0.0).abs() < 1e-4);
+        // Half wet: the dry half keeps it from falling far
+        let half = Compressor::output_gain_db(40.0, 0.0, 0.5);
+        assert!((half - db(0.5 + 0.5 * 0.01)).abs() < 1e-3, "{half}");
     }
 }

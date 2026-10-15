@@ -301,6 +301,9 @@ pub enum NodeDisplay {
     SlicerRow,
     /// Tape: two reels turning, and the tape trembling across a glowing head.
     TapeReels,
+    /// Compressor: its transfer curve with a dot riding it, and the last
+    /// two seconds of gain reduction hanging over the sound coming in.
+    CompressorCurve,
     /// Vocoder: a bar per band, the voice's level there, on a frequency
     /// axis with the carrier's bands shifted by Formant.
     VocoderBands,
@@ -2057,6 +2060,10 @@ impl NodeDataTrait for SynthNodeData {
 
         if self.display == NodeDisplay::VocoderBands {
             super::vocoder_display::vocoder_display(ui, node_id, graph, user_state, zoom);
+        }
+
+        if self.display == NodeDisplay::CompressorCurve {
+            super::compressor_display::compressor_display(ui, node_id, graph, user_state, zoom);
         }
 
         if self.display == NodeDisplay::DrumHit {

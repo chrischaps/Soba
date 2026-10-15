@@ -887,7 +887,7 @@
       "text": "Each step under the waveform plays a slice, tinted like it. Step 6 plays slice 2 backwards, step 12 plays slice 12 a fourth down, step 14 rests, and step 16 stutters into the top. The dots roll dice. Drag a step up or down to give it another slice, or right-click it for the rest.",
       "position": [
         560.0,
-        330.0
+        410.0
       ],
       "width": 386.0
     },

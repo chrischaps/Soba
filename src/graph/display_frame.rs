@@ -30,8 +30,13 @@ pub fn knob_row_width(ui: &egui::Ui, knobs: usize, z: f32) -> f32 {
 /// A face: the separator above it, its panel, and a painter clipped to it.
 /// `None` when it's scrolled out of view.
 pub fn frame(ui: &mut egui::Ui, width: f32, accent: Color32, z: f32) -> Option<(Rect, Response, Painter)> {
+    frame_of_height(ui, width, HEIGHT * z, accent, z)
+}
+
+/// A face [`frame`] `height` tall (zoomed), for one that needs more room.
+pub fn frame_of_height(ui: &mut egui::Ui, width: f32, height: f32, accent: Color32, z: f32) -> Option<(Rect, Response, Painter)> {
     ui.add_space(8.0 * z);
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, HEIGHT * z), Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
     if !ui.is_rect_visible(rect) {
         return None;
     }

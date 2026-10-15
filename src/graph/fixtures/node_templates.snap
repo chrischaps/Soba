@@ -2570,6 +2570,8 @@ knob Release            "Rel" KnobOnly
 knob Knee               "Knee" KnobOnly
 knob Makeup             "Mkup" KnobOnly
 knob Mix                "Mix" KnobOnly
+monitor [1]
+display CompressorCurve
 
 == util.midi_monitor "MIDI Monitor" finder="MIDI Monitor" Utility
 in   Channel            Control  ConstantOnly         inline=true  select 0 ["All", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] "Ch"
