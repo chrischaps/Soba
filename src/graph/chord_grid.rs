@@ -17,9 +17,11 @@
 //!   root, type, root, type.
 //! - Each choice is heard as it's made: a type, bass or top clicked sounds
 //!   the step's chord for a moment, as it now stands, and a key on the
-//!   piano sounds its note alone. Resting the pointer on a chip sounds its
-//!   chord without writing it, so two can be compared before one's chosen
-//!   (see [`super::chord_chime`]).
+//!   piano sounds its note alone. A stroke clicked, or the Velocity slider
+//!   let go, sounds the step's chord struck that way or that hard (the Tie
+//!   is about the next step, so it's quiet). Resting the pointer on a chip
+//!   sounds its chord without writing it, so two can be compared before
+//!   one's chosen (see [`super::chord_chime`]).
 //! - Or play the chord, on a MIDI keyboard or the letter keys, while the
 //!   popover is open. When the hand lifts, the chord is named (see
 //!   [`recognise`]) and written, and the popover moves to the next step, the
@@ -172,7 +174,13 @@ impl ChordPattern {
     /// after a reset, so a step takes the stroke of its place the first time
     /// round, as its clock falls in the bar.
     fn strummed_down(&self, step: usize) -> bool {
-        match self.strums[step].unwrap_or(self.strum_dir) {
+        self.struck_down(step, self.strums[step])
+    }
+
+    /// Whether `step` would be strummed from its highest note down with
+    /// `stroke` as its own. See [`Self::strummed_down`].
+    fn struck_down(&self, step: usize, stroke: Option<StrumDirection>) -> bool {
+        match stroke.unwrap_or(self.strum_dir) {
             StrumDirection::Up => false,
             StrumDirection::Down => true,
             StrumDirection::Alternate => {
@@ -324,12 +332,16 @@ fn chord_audition(spec: ChordSpec, step: usize, velocity: f32, pattern: &ChordPa
 }
 
 /// What a chip chosen for `step` sounds: the step's chord as the chip
-/// leaves it, or a root on the piano alone, as a piano would play it, on
-/// the first channel at the step's velocity.
+/// leaves it, struck with the stroke or as hard as it chooses, or a root on
+/// the piano alone, as a piano would play it, on the first channel at the
+/// step's velocity.
 fn chime_of(sound: Sound, step: usize, pattern: &ChordPattern) -> Audition {
     let velocity = pattern.velocities[step];
+    let spec = pattern.specs[step];
     match sound {
         Sound::Chord(spec) => chord_audition(spec, step, velocity, pattern),
+        Sound::Stroke(stroke) => Audition { down: pattern.struck_down(step, stroke), ..chord_audition(spec, step, velocity, pattern) },
+        Sound::Velocity(velocity) => chord_audition(spec, step, velocity, pattern),
         Sound::Note(note) => {
             let mut audition = Audition { len: 1, root: note, bass: note, velocity, ..Audition::default() };
             audition.notes[0] = note;
@@ -338,10 +350,15 @@ fn chime_of(sound: Sound, step: usize, pattern: &ChordPattern) -> Audition {
     }
 }
 
-/// What a chip sounds: a chord, or a note on the piano.
+/// What a chip sounds: a chord, the step's chord struck another way, or a
+/// note on the piano.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Sound {
     Chord(ChordSpec),
+    /// With this stroke of its own, or `None` to follow Strum dir.
+    Stroke(Option<StrumDirection>),
+    /// This hard, 0 to 1.
+    Velocity(f32),
     Note(u8),
 }
 
@@ -880,15 +897,20 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
     ui.separator();
     ui.horizontal(|ui| {
         let mut velocity = (pattern.velocities[step] * 127.0).round();
-        if ui.add(egui::Slider::new(&mut velocity, 0.0..=127.0).text("Velocity").integer()).changed() {
+        let slider = ui.add(egui::Slider::new(&mut velocity, 0.0..=127.0).text("Velocity").integer());
+        if slider.changed() {
             set(format!("Step {} Velocity", step + 1), velocity);
+        }
+        // Heard once, as it's let go: a click on the rail is a drag too
+        if slider.drag_stopped() {
+            touch.clicked = Some((Chip::Velocity, step, Sound::Velocity(velocity / 127.0)));
         }
         let mut tie = pattern.ties[step];
         if ui.checkbox(&mut tie, "Tie").on_hover_text("Holds this chord into the next step, which changes chord without a new attack (Shift+click)").changed() {
             set(format!("Step {} Tie", step + 1), if tie { 1.0 } else { 0.0 });
         }
     });
-    strum_row(ui, step, pattern, set);
+    strum_row(ui, step, pattern, touch, set);
     ui.label(RichText::new("Play a root, pick a bass if it has one, then a type: it writes the step and moves on").small().weak())
         .on_hover_text("Each choice sounds as it's made. Rest the pointer on a chip to hear its chord without writing it");
     ui.label(RichText::new("Or hold the chord on a MIDI keyboard or the letter keys, and let go").small().weak())
@@ -896,8 +918,10 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
 }
 
 /// The step's own stroke: Auto, following Strum dir, or Up or Down for this
-/// step alone, so a written rhythm puts an upstroke where it belongs.
-fn strum_row(ui: &mut egui::Ui, step: usize, pattern: &ChordPattern, set: &mut impl FnMut(String, f32)) {
+/// step alone, so a written rhythm puts an upstroke where it belongs. A
+/// choice clicked sounds the step's chord struck that way. Resting on one
+/// doesn't: there are only three, and a click is as quick.
+fn strum_row(ui: &mut egui::Ui, step: usize, pattern: &ChordPattern, touch: &mut Touch, set: &mut impl FnMut(String, f32)) {
     let follows = match pattern.strum_dir {
         StrumDirection::Up => "Up",
         StrumDirection::Down => "Down",
@@ -914,6 +938,7 @@ fn strum_row(ui: &mut egui::Ui, step: usize, pattern: &ChordPattern, set: &mut i
         for (value, (stroke, label, hint)) in choices.into_iter().enumerate() {
             if ui.selectable_label(pattern.strums[step] == stroke, label).on_hover_text(hint).clicked() {
                 set(format!("Step {} Strum", step + 1), value as f32);
+                touch.clicked = Some((Chip::Strum(value), step, Sound::Stroke(stroke)));
             }
         }
     });
@@ -1180,6 +1205,31 @@ mod tests {
         let over_eb = ChordSpec { bass: Some(3), ..fm7 };
         let chime = chime_of(Sound::Chord(over_eb), 2, &bassed);
         assert_eq!((chime.notes()[0], chime.notes()[0] % 12), (chime.bass, 3));
+    }
+
+    #[test]
+    fn a_stroke_chosen_strikes_the_steps_chord_that_way() {
+        // Strum Dir Up, so the step strums up until it names its own
+        let four = pattern(4, false);
+        let as_it_stands = chime_of(Sound::Chord(four.specs[1]), 1, &four);
+        let down = chime_of(Sound::Stroke(Some(StrumDirection::Down)), 1, &four);
+        assert!(down.down, "struck from the top, before the pattern has it");
+        assert_eq!(down, Audition { down: true, ..as_it_stands }, "the same chord otherwise");
+        assert!(!chime_of(Sound::Stroke(Some(StrumDirection::Up)), 1, &four).down);
+        // Auto follows Strum dir, whatever the step said before
+        let mut named = pattern(4, false);
+        named.strums[1] = Some(StrumDirection::Up);
+        named.strum_dir = StrumDirection::Down;
+        assert!(chime_of(Sound::Stroke(None), 1, &named).down);
+        assert!(!chime_of(Sound::Chord(named.specs[1]), 1, &named).down, "its own Up, until it's let go");
+    }
+
+    #[test]
+    fn a_velocity_let_go_sounds_that_hard() {
+        let four = pattern(4, false);
+        let as_it_stands = chime_of(Sound::Chord(four.specs[2]), 2, &four);
+        let soft = chime_of(Sound::Velocity(0.25), 2, &four);
+        assert_eq!(soft, Audition { velocity: 0.25, ..as_it_stands });
     }
 
     #[test]

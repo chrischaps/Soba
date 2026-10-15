@@ -33,6 +33,10 @@ pub(super) enum Chip {
     Top(Option<i32>),
     /// A chord type, by its index in the type list.
     Type(usize),
+    /// A Strum choice: 0 for Auto, 1 for Up, 2 for Down.
+    Strum(usize),
+    /// The Velocity slider, let go.
+    Velocity,
 }
 
 /// How long a chime of `audition` rings, for a strum of `strum` seconds
