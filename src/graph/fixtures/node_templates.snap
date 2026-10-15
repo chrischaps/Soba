@@ -245,6 +245,7 @@ in   Chance 63          Control  ConstantOnly         inline=false num 0 [0..100
 in   Chance 64          Control  ConstantOnly         inline=false num 0 [0..100] %
 in   Take               Control  ConstantOnly         inline=true  select 1 ["Free", "1 bar", "2 bars", "4 bars", "8 bars", "16 bars"] "Take"
 in   Rec Button         Control  ConstantOnly         inline=false toggle false ""
+in   Steps              Control  ConstantOnly         inline=true  select 0 ["1 per slice", "2 per slice", "3 per slice", "4 per slice"] "Steps"
 out  L                  Audio
 out  R                  Audio
 out  Gate               Gate

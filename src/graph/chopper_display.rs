@@ -15,6 +15,9 @@
 //!   die's dot in its corner, as big as the chance.
 //! - While it plays, the slice heard glows on the waveform, a playhead
 //!   rides it, and a tick on the row shows where the loop is in time.
+//! - A row of two, three or four steps per slice wraps into a line for each
+//!   pass over the break, the fan joining the slices to the first; the
+//!   lines below read straight down as the same slices' later turns.
 //!
 //! Click a step to rest it; drag it up or down to choose its slice;
 //! Shift+click repeats, Alt+click reverses, Ctrl+click sets its chance, and
@@ -178,7 +181,12 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let width = 4.0 * 44.0 * z + 3.0 * gap - 8.0 * z;
     let wave_height = 58.0 * z;
     let fan_height = 9.0 * z;
-    let row_height = 17.0 * z;
+    // A line of steps for each pass over the break
+    let passes = Chopper::passes(params.value(Chopper::PARAM_PASSES), count);
+    let steps = passes * count;
+    let line_height = if passes > 1 { 14.0 * z } else { 17.0 * z };
+    let line_gap = 4.0 * z;
+    let row_height = passes as f32 * line_height + (passes - 1) as f32 * line_gap;
 
     ui.add_space(8.0 * z);
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, wave_height + fan_height + row_height), Sense::hover());
@@ -385,14 +393,17 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
 
     // The fan: each slice to its step
     let cell_width = row_rect.width() / count as f32;
-    let cell_x = |step: usize| row_rect.left() + step as f32 * cell_width;
+    let cell_x = |step: usize| row_rect.left() + (step % count) as f32 * cell_width;
+    let line_top = |line: usize| row_rect.top() + line as f32 * (line_height + line_gap);
+    // The slice playing, whichever pass it's in
+    let slot_playing = playing.step.filter(|_| playing.phase.is_some()).map(|step| step % count);
     let fan_top = wave_rect.bottom();
     let fan_bottom = row_rect.top();
     for index in 0..count {
         let (from, _) = span_of(index);
         let top = Pos2::new(x_at(from), fan_top);
         let bottom = Pos2::new(cell_x(index) + 0.5 * z, fan_bottom);
-        let lit = playing.step == Some(index) && playing.phase.is_some();
+        let lit = slot_playing == Some(index);
         let color = slice_color(index, count).gamma_multiply(if lit { 0.9 } else { 0.25 });
         if index > 0 || slices.is_marked() {
             painter.line_segment([top, bottom], Stroke::new(if lit { 1.2 * z } else { 0.8 * z }, color));
@@ -401,11 +412,11 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
 
     // The steps
     let mut edits = Vec::new();
-    for index in 0..count.min(MAX_STEPS) {
+    for index in 0..steps.min(MAX_STEPS) {
         let step = params.step(index);
         let chance = params.chance(index);
         let slice = step.slice_of(index, count);
-        let cell = Rect::from_min_size(Pos2::new(cell_x(index), row_rect.top()), Vec2::new(cell_width, row_rect.height())).shrink2(Vec2::new(0.5 * z, 0.0));
+        let cell = Rect::from_min_size(Pos2::new(cell_x(index), line_top(index / count)), Vec2::new(cell_width, line_height)).shrink2(Vec2::new(0.5 * z, 0.0));
         let here = playing.step == Some(index) && playing.phase.is_some();
         draw_step(&painter, cell, step, slice, count, chance, here, z);
 
@@ -442,25 +453,29 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             ui.ctx().data_mut(|data| data.insert_temp(drag_id, (from, moved)));
             let to = (from + (moved / DRAG_PER_SLICE).round()).rem_euclid(count as f32) as usize;
             if to != slice {
-                let next = Step { plays: true, slice: own_or(index, to), ..step };
+                let next = Step { plays: true, slice: own_or(index, to, count), ..step };
                 edits.push(edit(node_id, format!("{what} plays slice {}", to + 1), vec![params.set_step(index, next)]));
             }
         }
 
+        let pass = if passes > 1 { format!(" (pass {} of {passes})", index / count + 1) } else { String::new() };
         let hint = format!(
-            "{what}: {}\nClick to {} · drag up or down for another slice\nShift+click repeats · Alt+click reverses · Ctrl+click chance",
+            "{what}{pass}: {}\nClick to {} · drag up or down for another slice\nShift+click repeats · Alt+click reverses · Ctrl+click chance",
             describe(step, slice, chance),
             if step.plays { "rest" } else { "play" },
         );
         let response = response.on_hover_text(hint);
-        response.context_menu(|ui| step_menu(ui, node_id, &params, index, step, chance, count, &mut edits));
+        response.context_menu(|ui| step_menu(ui, node_id, &params, index, step, chance, count, steps, &mut edits));
     }
 
-    // Where the loop is, in time
+    // Where the loop is, in time, under the line of the pass it's in
     if let Some(phase) = playing.phase {
-        let x = row_rect.left() + phase * row_rect.width();
+        let along = phase.clamp(0.0, 1.0) * passes as f32;
+        let line = (along as usize).min(passes - 1);
+        let x = row_rect.left() + (along - line as f32) * row_rect.width();
+        let bottom = line_top(line) + line_height;
         painter.add(Shape::convex_polygon(
-            vec![Pos2::new(x - 2.5 * z, row_rect.bottom() + 3.0 * z), Pos2::new(x + 2.5 * z, row_rect.bottom() + 3.0 * z), Pos2::new(x, row_rect.bottom())],
+            vec![Pos2::new(x - 2.5 * z, bottom + 3.0 * z), Pos2::new(x + 2.5 * z, bottom + 3.0 * z), Pos2::new(x, bottom)],
             Color32::WHITE.gamma_multiply(0.8),
             Stroke::NONE,
         ));
@@ -542,9 +557,10 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     responses
 }
 
-/// The slice field for step `index` playing slice `to`: 0 for its own.
-fn own_or(index: usize, to: usize) -> u8 {
-    if to == index { 0 } else { (to + 1) as u8 }
+/// The slice field for step `index` playing slice `to` of `count`: 0 for
+/// its own, the slice whose turn it takes.
+fn own_or(index: usize, to: usize, count: usize) -> u8 {
+    if to == index % count.max(1) { 0 } else { (to + 1) as u8 }
 }
 
 /// A step, said in words.
@@ -616,7 +632,7 @@ fn draw_step(painter: &egui::Painter, cell: Rect, step: Step, slice: usize, coun
 
 /// A step's right-click menu: everything about how it plays.
 #[allow(clippy::too_many_arguments)]
-fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, index: usize, step: Step, chance: f32, count: usize, edits: &mut Vec<SynthResponse>) {
+fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, index: usize, step: Step, chance: f32, count: usize, steps: usize, edits: &mut Vec<SynthResponse>) {
     let what = format!("Step {}", index + 1);
     ui.label(egui::RichText::new(&what).strong());
     ui.separator();
@@ -665,7 +681,7 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, index: usize, 
         for slice in 0..count {
             let text = egui::RichText::new(format!("{:>2}", slice + 1)).color(slice_color(slice, count));
             if ui.selectable_label(current == slice, text).clicked() {
-                set(format!("{what} plays slice {}", slice + 1), Step { plays: true, slice: own_or(index, slice), ..step }, edits);
+                set(format!("{what} plays slice {}", slice + 1), Step { plays: true, slice: own_or(index, slice, count), ..step }, edits);
                 ui.close_menu();
             }
             if (slice + 1) % 8 == 0 {
@@ -674,21 +690,33 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, index: usize, 
         }
     });
     ui.separator();
-    if ui.add_enabled(!step.is_plain(index, count) || chance > 0.0, egui::Button::new(format!("Back to slice {}, as it was", index + 1))).clicked() {
+    if ui.add_enabled(!step.is_plain(index, count) || chance > 0.0, egui::Button::new(format!("Back to slice {}, as it was", index % count + 1))).clicked() {
         edits.push(edit(node_id, format!("Reset {what}"), vec![params.set_step(index, Step::DEFAULT), params.set_chance(index, 0.0)]));
         ui.close_menu();
     }
     ui.separator();
-    // The whole row
-    if ui.button("Shuffle the slices").on_hover_text("Every step plays a slice at random, each slice once").clicked() {
+    // The pass it's in, and the whole row
+    let first = index / count * count;
+    let pass = first / count + 1;
+    if first > 0 {
+        let before = pass - 1;
+        if ui.button(format!("Same as pass {before}")).on_hover_text("Copies every step of the pass before into this one, to vary from there").clicked() {
+            let mut changes: Vec<(String, f32)> = (first..first + count).map(|k| params.set_step(k, params.step(k - count))).collect();
+            changes.extend((first..first + count).map(|k| params.set_chance(k, params.chance(k - count))));
+            edits.push(edit(node_id, format!("Pass {pass} as pass {before}"), changes));
+            ui.close_menu();
+        }
+    }
+    let shuffle = if steps > count { format!("Shuffle the slices in pass {pass}") } else { "Shuffle the slices".to_string() };
+    if ui.button(&shuffle).on_hover_text("Every step plays a slice at random, each slice once").clicked() {
         let order = shuffled(count, ui.input(|i| i.time).to_bits());
-        let changes = (0..count).map(|k| params.set_step(k, Step { plays: true, slice: own_or(k, order[k]), ..params.step(k) })).collect();
-        edits.push(edit(node_id, "Shuffle the slices", changes));
+        let changes = (first..first + count).map(|k| params.set_step(k, Step { plays: true, slice: own_or(k, order[k - first], count), ..params.step(k) })).collect();
+        edits.push(edit(node_id, shuffle, changes));
         ui.close_menu();
     }
     if ui.button("Reset every step").on_hover_text("Back to the break as it was: each step its own slice, once, forwards").clicked() {
-        let mut changes: Vec<(String, f32)> = (0..count).map(|k| params.set_step(k, Step::DEFAULT)).collect();
-        changes.extend((0..count).map(|k| params.set_chance(k, 0.0)));
+        let mut changes: Vec<(String, f32)> = (0..steps).map(|k| params.set_step(k, Step::DEFAULT)).collect();
+        changes.extend((0..steps).map(|k| params.set_chance(k, 0.0)));
         edits.push(edit(node_id, "Reset every step", changes));
         ui.close_menu();
     }
@@ -751,8 +779,11 @@ mod tests {
 
     #[test]
     fn test_a_step_names_its_own_slice_as_none() {
-        assert_eq!(own_or(3, 3), 0);
-        assert_eq!(own_or(3, 0), 1);
-        assert_eq!(Step { slice: own_or(5, 9), ..Step::DEFAULT }.slice_of(5, 16), 9);
+        assert_eq!(own_or(3, 3, 16), 0);
+        assert_eq!(own_or(3, 0, 16), 1);
+        assert_eq!(Step { slice: own_or(5, 9, 16), ..Step::DEFAULT }.slice_of(5, 16), 9);
+        // A step in the second pass owns the slice whose turn it takes
+        assert_eq!(own_or(19, 3, 16), 0);
+        assert_eq!(Step { slice: own_or(19, 4, 16), ..Step::DEFAULT }.slice_of(19, 16), 4);
     }
 }

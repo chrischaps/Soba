@@ -14,6 +14,12 @@
 //! so the break varies itself, as a chopped break does in a producer's
 //! hands.
 //!
+//! The row can be two, three or four steps per slice, longer than the
+//! break: it wraps over the break again, a pass at a time, so a 2-bar
+//! break plays under a 4-bar pattern whose second half is a variation of
+//! its own. Step 17 of 32 over 16 slices takes slice 1's turn in the
+//! second pass, and plays slice 1 until it's told otherwise.
+//!
 //! Every start and stop is a short crossfade. A slice played through runs
 //! on past its end into the sound after it while the next fades in, so an
 //! unedited pattern at the break's own tempo crossfades the recording into
@@ -60,8 +66,16 @@ use super::sequencer::StepTimer;
 /// The Chopper's module ID.
 pub const CHOPPER_ID: &str = "source.chopper";
 
-/// The most steps in the row: one per slice.
+/// The most steps in the row: one per slice, or across up to
+/// [`MAX_PASSES`] passes of fewer slices.
 pub const MAX_STEPS: usize = MAX_SLICES;
+
+/// The Steps menu: how many steps the row has for each slice, a pass over
+/// the break for each.
+pub const PASSES: &[&str] = &["1 per slice", "2 per slice", "3 per slice", "4 per slice"];
+
+/// The most passes over the break the row makes.
+pub const MAX_PASSES: usize = 4;
 
 /// The most times a step repeats its slice.
 pub const MAX_REPEAT: u8 = 4;
@@ -138,7 +152,7 @@ impl Step {
 
     /// Whether it plays its own slice, once, forwards, unchanged.
     pub fn is_plain(self, index: usize, count: usize) -> bool {
-        self.plays && !self.reverse && self.repeat == 1 && self.pitch == 0 && self.slice_of(index, count) == index
+        self.plays && !self.reverse && self.repeat == 1 && self.pitch == 0 && self.slice_of(index, count) == index % count.max(1)
     }
 }
 
@@ -280,6 +294,8 @@ impl Voice {
 /// - **Sensitivity** (0–1): how strong a hit must be to get a marker, when
 ///   sliced by Onsets. The editor finds them; here it's only kept.
 /// - **Step 01–64**, **Chance 01–64**: the row (see [`Step`]).
+/// - **Steps** (1 to 4 per slice): how long the row is, in passes over the
+///   break; never more than 64 steps.
 /// - **Take** (Free, 1–16 bars): with a Clock running, a take starts on the
 ///   next bar and lasts that long.
 /// - **Rec Button**: the face's Rec, pressed to start a take and again to stop.
@@ -354,7 +370,10 @@ impl Chopper {
     // Recording, after the row, so patches from before it load unchanged
     pub const PARAM_TAKE: usize = Self::PARAM_CHANCE + MAX_STEPS;
     pub const PARAM_REC_BUTTON: usize = Self::PARAM_TAKE + 1;
-    pub const PARAM_COUNT: usize = Self::PARAM_REC_BUTTON + 1;
+    // The row's length, after recording, so patches from before it load
+    // unchanged: a step per slice
+    pub const PARAM_PASSES: usize = Self::PARAM_REC_BUTTON + 1;
+    pub const PARAM_COUNT: usize = Self::PARAM_PASSES + 1;
 
     /// Where the readout holds the playhead: its place and level, packed as
     /// the Sampler packs them ([`Sampler::pack_playhead`]).
@@ -363,7 +382,8 @@ impl Chopper {
     pub const READOUT_STEP: usize = 1;
     /// The slice it played, from 1.
     pub const READOUT_SLICE: usize = 2;
-    /// Where the loop is, 0 to 1, or -1 waiting for a pulse.
+    /// Where the row is, 0 to 1 across all its passes, or -1 waiting for a
+    /// pulse.
     pub const READOUT_PHASE: usize = 3;
     /// The recorder, where the Sampler shows it, so the face reads both alike.
     pub const READOUT_REC_STATE: usize = Sampler::READOUT_REC_STATE;
@@ -427,6 +447,10 @@ impl Chopper {
         parameters.push(
             ParameterDefinition::new("rec_button", "Rec Button", 0.0, 1.0, 0.0, ParameterDisplay::on_off())
                 .describe("The Rec button on the face: pressed to start a take, and again to stop it"),
+        );
+        parameters.push(
+            ParameterDefinition::choice("passes", "Steps", PASSES, 0)
+                .describe("How many steps the row has for each slice: past the first pass it wraps over the break again, so 2 per slice plays a 2-bar break under a 4-bar pattern whose second half is edited on its own"),
         );
         debug_assert_eq!(parameters.len(), Self::PARAM_COUNT);
 
@@ -495,6 +519,13 @@ impl Chopper {
     /// Slices setting cuts it, at least into two.
     pub fn slices(value: f32, markers: &[f32]) -> Slices {
         Slices::from_param(value.max(2.0), markers, 0.0, 1.0).unwrap_or(Slices::equal(2))
+    }
+
+    /// How many passes over `count` slices the row makes: as many as Steps
+    /// says, while they fit in [`MAX_STEPS`].
+    pub fn passes(value: f32, count: usize) -> usize {
+        let wanted = (value.round().max(0.0) as usize + 1).min(MAX_PASSES);
+        wanted.min(MAX_STEPS / count.max(1)).max(1)
     }
 
     /// The tempo, in BPM, at which a recording `seconds` long plays as a
@@ -745,6 +776,8 @@ impl DspModule for Chopper {
             self.retire(room);
         }
         let slices = Self::slices(params[Self::PARAM_SLICES], self.markers.as_slice());
+        let count = slices.count();
+        let passes = Self::passes(params.get(Self::PARAM_PASSES).copied().unwrap_or(0.0), count);
         self.level.set_target(params[Self::PARAM_LEVEL].clamp(0.0, 1.0));
         let end_fade = (FADE_SECONDS * self.sample_rate) as f64;
 
@@ -770,11 +803,14 @@ impl DspModule for Chopper {
                 let pulse = self.pulse_samples(pulse_beats, context);
                 let pass = (beat / loop_beats).floor();
                 let phase = (beat / loop_beats - pass).clamp(0.0, 1.0);
-                self.phase = Some(phase as f32);
+                // Which pass of the row this is, when it's longer than the break
+                let row_pass = (pass as u64 % passes as u64) as usize;
+                self.phase = Some(((row_pass as f64 + phase) / passes as f64) as f32);
 
-                let index = slices.at(phase, 0.0, 1.0).unwrap_or(0);
-                let (from, to) = slices.span(index, 0.0, 1.0);
-                let step = Step::decode(params[Self::step_param(index.min(MAX_STEPS - 1))]);
+                let slot = slices.at(phase, 0.0, 1.0).unwrap_or(0);
+                let index = (row_pass * count + slot).min(MAX_STEPS - 1);
+                let (from, to) = slices.span(slot, 0.0, 1.0);
+                let step = Step::decode(params[Self::step_param(index)]);
                 let repeat = step.repeat.max(1);
                 let along = ((phase - from) / (to - from).max(1e-9)).clamp(0.0, 1.0);
                 let hit = ((along * repeat as f64) as u8).min(repeat - 1);
@@ -1048,7 +1084,8 @@ mod tests {
         assert_eq!(params[Chopper::chance_param(0)].name, "Chance 01");
         assert_eq!(params[Chopper::chance_param(63)].name, "Chance 64");
         assert_eq!(params[Chopper::PARAM_TAKE].name, "Take");
-        assert_eq!(params[Chopper::PARAM_COUNT - 1].name, "Rec Button");
+        assert_eq!(params[Chopper::PARAM_REC_BUTTON].name, "Rec Button");
+        assert_eq!(params[Chopper::PARAM_COUNT - 1].name, "Steps");
     }
 
     #[test]
@@ -1153,6 +1190,48 @@ mod tests {
         assert_eq!(gates.len(), 15, "{gates:?}");
         assert!(!gates.iter().any(|&at| at.abs_diff(turn) < 10));
         assert!(largest_step(&played.left) < CLICK);
+    }
+
+    #[test]
+    fn test_a_row_longer_than_the_break_plays_it_again_each_pass_its_own() {
+        // 32 steps over 16 slices: step 17 rests, so the second pass's first
+        // slice is silent and the first and third passes' aren't
+        let two = params(&[(Chopper::PARAM_PASSES, 1.0)]);
+        let rest = with_step(two.clone(), 16, Step { plays: false, ..Step::DEFAULT });
+        let bar = 16 * SIXTEENTH;
+        let mut row = chopper(ramp());
+        let played = play(&mut row, &rest, 6.0, SIXTEENTH, None);
+        assert!(played.left[300..SIXTEENTH - 300].iter().all(|v| v.abs() > 0.1), "the first pass plays slice 1");
+        assert!(played.left[bar + 300..bar + SIXTEENTH].iter().all(|v| v.abs() < 1e-6), "the second pass rests on it");
+        assert!(played.left[2 * bar + 300..2 * bar + SIXTEENTH - 300].iter().all(|v| v.abs() > 0.1), "the row starts over");
+        assert_eq!(row.readout(&rest).unwrap().values[Chopper::READOUT_STEP], 16.0, "the last step of the row heard last");
+
+        // Unedited, two passes play the break back as one does
+        let source = sine(441.0);
+        let original = source.left().to_vec();
+        let played = play(&mut chopper(source), &two, 4.0, SIXTEENTH, None);
+        let worst = played.left[SETTLED..]
+            .iter()
+            .enumerate()
+            .map(|(n, &out)| (out - original[(n + SETTLED) % original.len()]).abs())
+            .fold(0.0, f32::max);
+        assert!(worst < 1e-3, "strays {worst} from the recording");
+    }
+
+    #[test]
+    fn test_a_step_per_slice_is_the_default_and_the_row_never_passes_64_steps() {
+        let chopper = Chopper::new();
+        assert_eq!(chopper.parameters()[Chopper::PARAM_PASSES].name, "Steps");
+        assert_eq!(chopper.parameters()[Chopper::PARAM_PASSES].default, 0.0);
+        assert_eq!(Chopper::passes(0.0, 16), 1);
+        assert_eq!(Chopper::passes(1.0, 16), 2);
+        assert_eq!(Chopper::passes(3.0, 16), 4);
+        assert_eq!(Chopper::passes(3.0, 32), 2);
+        assert_eq!(Chopper::passes(3.0, 64), 1);
+        assert_eq!(Chopper::passes(9.0, 2), MAX_PASSES);
+        // A step past the first pass plays its slice in the pass it's in
+        assert_eq!(Step::DEFAULT.slice_of(17, 16), 1);
+        assert!(Step::DEFAULT.is_plain(17, 16));
     }
 
     #[test]

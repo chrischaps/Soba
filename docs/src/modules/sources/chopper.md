@@ -36,6 +36,14 @@ Each step can be told to play it differently:
 
 A rest remembers what it was, so clicking it again plays it as before. Right-click a step for all of these, **Back to slice n, as it was**, **Shuffle the slices** (every step a slice at random, each slice once) and **Reset every step**. Every edit is a step you can undo.
 
+## A pattern longer than the break
+
+A chopped break often runs under a longer pattern: two bars of break, four bars of pattern, the second half a variation on the first. **Steps** sets how long the row is: **1 per slice** (the row as above), or **2**, **3** or **4 per slice**. Past the first pass the row wraps over the break again, and each extra step starts out playing its slice in the next pass, so left alone it still plays the break as recorded, round and round.
+
+The face shows a line of steps for each pass, each line under the same slices, so a step reads straight down to the same slice's turn in the other passes. Edit any of them on its own. A step past the first pass has two more things on its right-click menu: **Same as pass n** copies the pass above into its own, to vary from there, and **Shuffle the slices in pass n** shuffles only its own line. **Reset every step** resets the whole row.
+
+The row has at most 64 steps, so more slices allow fewer passes: up to 16 slices take all four, up to 21 three, up to 32 two, and more than that one.
+
 ## Loading a break
 
 Load a file as on the Sampler: click **Open…**, or the empty panel, or drag a WAV, MP3 or Ogg file onto the node. While a dragged file is over the node you hear it, so you can audition files before you drop one. It plays once when it loads, so you hear what you chose, and **▶** plays it again at any time, dry, beside the patch. **Alt-click** a slice to hear just that slice.
@@ -85,6 +93,7 @@ Cut at the hits, the steps stay evenly spaced under the waveform but the slices 
 | **Slices** | 2 – 64, Onsets | 16 | Equal slices, or one at each hit. Each slice gets a step |
 | **Sens** (Sensitivity) | 0 – 100% | 50% | Sliced by **Onsets**, how strong a hit must be to get a marker |
 | **Level** | 0 – 100% | 80% | Output level |
+| **Steps** | 1 – 4 per slice | 1 per slice | How long the row is: a pass over the break for each (see [A pattern longer than the break](#a-pattern-longer-than-the-break)) |
 | **Take** | Free, 1 – 16 bars | 1 bar | In bars, with a Clock running, a take starts on the next bar and lasts that long, and sets **Beats** to match |
 
 ## Tips
