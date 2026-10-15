@@ -3333,6 +3333,8 @@ impl SynthApp {
                 } else {
                     // An Arranger follows only another's Section, and not round in a loop
                     crate::graph::arranger_follow::refusal(&self.graph_state.graph, output, input)
+                        // Nor may a cable close a loop the engine would turn away
+                        .or_else(|| crate::graph::loops::refusal(&self.graph_state.graph, output, input))
                 }
             }
             _ => {

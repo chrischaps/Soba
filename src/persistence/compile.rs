@@ -17,6 +17,7 @@ use crate::engine::{EngineCommand, NodeId as EngineNodeId};
 use crate::graph::{groups, port_mapping, SynthGraph};
 use crate::modules::plays_a_sample;
 
+use super::graph_io::patch_order;
 use super::{stage_patch, Patch, PatchError};
 
 /// The engine commands that build a patch, plus bookkeeping for callers.
@@ -115,21 +116,11 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
         }
     }
 
-    // Module to module, through any groups between them. The engine turns
-    // away a cable that would close a loop, so which one of a loop's cables
-    // goes is down to their order: it's the order a patch without groups
-    // saves them in, by module ID and port name, whatever groups they cross
+    // Module to module, through any groups between them, in the order
+    // staging took them in to skip any that would close a loop
     let patch_ids: HashMap<NodeId, u64> = staged.nodes.iter().map(|n| (n.graph_id, n.patch_id)).collect();
     let mut cables = groups::leaf_cables(graph);
-    cables.sort_by_cached_key(|&(output_id, input_id)| {
-        let (from, to) = (graph.get_output(output_id).node, graph.get_input(input_id).node);
-        (
-            patch_ids.get(&from).copied(),
-            port_name(&graph[from].outputs, output_id),
-            patch_ids.get(&to).copied(),
-            port_name(&graph[to].inputs, input_id),
-        )
-    });
+    patch_order(graph, &mut cables, &patch_ids);
     for (output_id, input_id) in cables {
         let from = graph.get_output(output_id).node;
         let to = graph.get_input(input_id).node;
@@ -149,11 +140,6 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
     }
 
     Ok(compiled)
-}
-
-/// The name of the port with the given ID.
-fn port_name<Id: PartialEq>(ports: &[(String, Id)], id: Id) -> Option<String> {
-    ports.iter().find(|(_, p)| *p == id).map(|(name, _)| name.clone())
 }
 
 /// How a Sampler (or a Chopper) is cut, if it's sliced by Onsets.
@@ -275,5 +261,77 @@ mod tests {
         patch.connections.push(ConnectionData::new(10, "Nope", 20, "Left"));
         let compiled = compile_patch(&patch).unwrap();
         assert_eq!(compiled.warnings.len(), 1);
+    }
+
+    fn connects(compiled: &CompiledPatch) -> usize {
+        compiled.commands.iter().filter(|c| matches!(c, EngineCommand::Connect { .. })).count()
+    }
+
+    #[test]
+    fn test_a_cable_closing_a_loop_is_skipped_with_a_warning() {
+        // The filter's LowPass back into the oscillator that feeds it
+        let mut patch = osc_to_output();
+        patch.nodes.push(NodeData::new(30, "filter.svf", (100.0, 0.0)));
+        patch.connections.push(ConnectionData::new(10, "Out", 30, "In"));
+        patch.connections.push(ConnectionData::new(30, "LowPass", 10, "FM"));
+        let compiled = compile_patch(&patch).unwrap();
+
+        assert_eq!(connects(&compiled), 2);
+        assert_eq!(compiled.warnings.len(), 1, "{:?}", compiled.warnings);
+        let warning = &compiled.warnings[0];
+        assert!(warning.starts_with("Skipped connection SVF Filter (node 30) 'LowPass' -> Oscillator (node 10) 'FM'"), "{warning}");
+        assert!(warning.ends_with("it would close the loop Oscillator → SVF Filter → Oscillator"), "{warning}");
+
+        // Nor does the editor show it
+        let staged = stage_patch(&patch).unwrap();
+        let osc = staged.graph_id(10).unwrap();
+        let fm = staged.graph[osc].get_input("FM").unwrap();
+        assert_eq!(staged.graph.connection(fm), None);
+    }
+
+    #[test]
+    fn test_a_loop_through_a_group_is_skipped_too() {
+        use crate::persistence::{GroupData, JackData};
+        let jack = |name: &str| JackData { name: name.into(), signal: "Audio".into() };
+        let mut patch = osc_to_output();
+        patch.groups.push(GroupData {
+            id: 9000,
+            name: "Tone".into(),
+            position: (100.0, 0.0),
+            inputs: vec![jack("In")],
+            outputs: vec![jack("LowPass")],
+            inputs_position: (0.0, 0.0),
+            outputs_position: (300.0, 0.0),
+            nodes: vec![NodeData::new(30, "filter.svf", (150.0, 0.0))],
+            connections: vec![
+                ConnectionData::new(9000, "In", 30, "In"),
+                ConnectionData::new(30, "LowPass", 9000, "LowPass"),
+            ],
+            groups: Vec::new(),
+        });
+        patch.connections.push(ConnectionData::new(10, "Out", 9000, "In"));
+        patch.connections.push(ConnectionData::new(9000, "LowPass", 10, "FM"));
+        let compiled = compile_patch(&patch).unwrap();
+
+        assert_eq!(connects(&compiled), 2);
+        assert_eq!(compiled.warnings.len(), 1, "{:?}", compiled.warnings);
+        assert!(compiled.warnings[0].contains("SVF Filter (node 30) 'LowPass' -> Oscillator (node 10) 'FM'"), "{:?}", compiled.warnings);
+    }
+
+    #[test]
+    fn test_a_loop_closed_through_a_late_input_is_kept() {
+        // A mixer's send through a filter and back into its Return
+        let mut patch = osc_to_output();
+        patch.connections.clear();
+        patch.nodes.push(NodeData::new(30, "filter.svf", (100.0, 0.0)));
+        patch.nodes.push(NodeData::new(40, "util.mixer", (100.0, 0.0)));
+        patch.connections.push(ConnectionData::new(10, "Out", 40, "Ch 1"));
+        patch.connections.push(ConnectionData::new(40, "Send L", 30, "In"));
+        patch.connections.push(ConnectionData::new(30, "LowPass", 40, "Return L"));
+        patch.connections.push(ConnectionData::new(40, "Out L", 20, "Left"));
+        let compiled = compile_patch(&patch).unwrap();
+
+        assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+        assert_eq!(connects(&compiled), 4);
     }
 }

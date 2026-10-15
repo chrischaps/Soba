@@ -105,7 +105,7 @@ Drag from an output to an input to patch a cable; a jack turns white when the ca
 
 - **One output can feed many inputs.** Each gets the full signal.
 - **Each input takes one cable.** Dropping a new cable onto an occupied input replaces the old one.
-- **No loops.** A cable that would feed a module's output back into its own input, directly or through other modules, is refused.
+- **No loops.** A cable that would feed a module's output back into its own input, directly or through other modules, is refused, and the status bar names the modules round the loop.
 - **To remove a cable,** drag its end off the input jack and let go over empty canvas.
 
 Cables run behind the modules, and behind frame titles and notes, showing faintly through them so a route can still be followed without covering the controls or the words. **〰 Cables ▸ Under modules and labels** sets how faintly.

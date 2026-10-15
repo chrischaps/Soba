@@ -28,6 +28,7 @@ mod filter_display;
 mod filter_spectrum;
 mod filter_trail;
 pub mod knob_cv;
+pub mod loops;
 mod cable_spotlight;
 mod lfo_display;
 mod logic_display;

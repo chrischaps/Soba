@@ -10,11 +10,12 @@
 
 use std::collections::{HashMap, HashSet};
 
-use egui_node_graph2::{NodeId, NodeTemplateTrait};
+use egui_node_graph2::{InputId, NodeId, NodeTemplateTrait, OutputId};
 
 use crate::dsp::SignalType;
 use crate::engine::NodeId as EngineNodeId;
 use crate::graph::groups::{self, GroupIndex, Jack};
+use crate::graph::loops;
 use crate::graph::{
     port_mapping, validate_connection, GroupId, NodeKind, SynthGraph, SynthGraphState, SynthNodeTemplate,
     SynthValueType,
@@ -112,6 +113,7 @@ pub fn renumber_groups(graph: &mut SynthGraph, mut allocate: impl FnMut() -> Gro
 /// - parameters with an unknown name (parameters missing from the patch keep
 ///   their defaults)
 /// - connections to skipped nodes, missing ports, or of incompatible types
+/// - connections that would close a loop, which the engine would turn away
 /// - MIDI mappings to skipped nodes or unknown parameters
 pub fn stage_patch(patch: &Patch) -> Result<StagedPatch, PatchError> {
     check_version(patch)?;
@@ -194,6 +196,7 @@ fn build_into(
         warnings: Vec::new(),
     };
     builder.level(&patch.nodes, &patch.groups, &patch.connections, parent, None);
+    builder.skip_loops();
 
     let mut midi_mappings = Vec::with_capacity(patch.midi_mappings.len());
     for mapping in &patch.midi_mappings {
@@ -356,6 +359,39 @@ impl Builder<'_> {
         }
     }
 
+    /// Takes out each cable that would close a loop, which the engine would
+    /// turn away, so the editor never shows a cable that isn't heard. Which
+    /// of a loop's cables goes is down to their order: the graph's own
+    /// first, then the patch's in [`patch_order`].
+    fn skip_loops(&mut self) {
+        let graph = &*self.graph;
+        let patch_ids: HashMap<NodeId, u64> = self.modules.iter().map(|(&patch_id, &node)| (node, patch_id)).collect();
+        let mut cables = groups::leaf_cables(graph);
+        patch_order(graph, &mut cables, &patch_ids);
+        let mut skipped = Vec::new();
+        for found in loops::closing(graph, &cables) {
+            let (output, input) = cables[found.index];
+            let (from, to) = (graph.get_output(output).node, graph.get_input(input).node);
+            let end = |node: NodeId, port: Option<String>| {
+                let id = patch_ids.get(&node).map_or("?".to_string(), u64::to_string);
+                format!("{} (node {}) '{}'", graph[node].label, id, port.unwrap_or_default())
+            };
+            self.warnings.push(format!(
+                "Skipped connection {} -> {}: it would close the loop {}",
+                end(from, port_name(&graph[from].outputs, output)),
+                end(to, port_name(&graph[to].inputs, input)),
+                loops::describe(graph, &found.route)
+            ));
+            skipped.push(input);
+        }
+        // Each cable's last stretch, into its module, after any groups
+        for input in skipped {
+            if let Some(hop) = self.graph.connection(input) {
+                self.graph.remove_connection(input, hop);
+            }
+        }
+    }
+
     /// A group's saved jacks. One naming a signal this version doesn't know
     /// carries Control.
     fn jacks(&mut self, group: &str, jacks: &[JackData]) -> Vec<Jack> {
@@ -373,6 +409,21 @@ impl Builder<'_> {
             })
             .collect()
     }
+}
+
+/// Sorts module-to-module cables the way a patch without groups saves them,
+/// by module ID and port name, whatever groups they cross. Cables between
+/// modules without a patch ID (ones already in the graph) come first.
+pub(super) fn patch_order(graph: &SynthGraph, cables: &mut [(OutputId, InputId)], patch_ids: &HashMap<NodeId, u64>) {
+    cables.sort_by_cached_key(|&(output_id, input_id)| {
+        let (from, to) = (graph.get_output(output_id).node, graph.get_input(input_id).node);
+        (
+            patch_ids.get(&from).copied(),
+            port_name(&graph[from].outputs, output_id),
+            patch_ids.get(&to).copied(),
+            port_name(&graph[to].inputs, input_id),
+        )
+    });
 }
 
 /// The signal type a jack names.
