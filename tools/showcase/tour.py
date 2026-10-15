@@ -18,6 +18,7 @@ How the view moves:
 - `enter` and `leave` are the cues of the same names: the app dives into a
   group by its name (or its path, `Bells/FM Bell`, where names repeat) and
   back out, as a double-click and Escape would, with no click to aim.
+  `enter(..., land=("seq.trigger", 1.0))` lands the dive on a module inside.
 - A level's modules come from the patch, a group by `group("Bells")` or any
   node by its id; their sizes from what the app drew, so `middle()`,
   `centre_of()` and `fit_zoom()` aim at what is really there. The previsit
@@ -272,19 +273,31 @@ class Tour:
         key = self.find(focus) if isinstance(focus, str) else focus
         return self.look(t + 0.3, self.centre_of(key), zoom, max(1.0, until - t - 0.3), f"{note}: along to {focus}", subject)
 
-    def enter(self, t, group, note="", fast=False):
+    def enter(self, t, group, note="", fast=False, land=None, subject=None):
         """Dives into a group on the level on show, through its miniature.
+        `land=(focus, zoom)` lands the dive on one module inside (an id, or
+        the first of a kind) rather than on the whole level, so the zoom
+        through the miniature and the push in on it are one move: for a
+        portrait cut, where a wide group dives in as a thin strip.
         Returns when the camera may move again."""
         gid = self.group(group)
         t = self._when(t, 1.3, fast)
-        self.s.at(t, f"enter {self.map.path(gid)}")
         self.trail.append((gid, self.zoom, self.origin))
         self.level = gid
-        # The app frames all of the level, never closer than 1:1
-        (mx, my), self.zoom = self.framed()
+        if land is None:
+            self.s.at(t, f"enter {self.map.path(gid)}")
+            # The app frames all of the level, never closer than 1:1
+            (mx, my), self.zoom = self.framed()
+        else:
+            focus, zoom = land
+            key = self.find(focus) if isinstance(focus, str) else focus
+            (mx, my), self.zoom = self.centre_of(key), max(ZOOM_MIN, min(ZOOM_MAX, zoom))
+            self.s.at(t, f"enter {self.map.path(gid)} at {mx:.2f} {my:.2f} {self.zoom:.6f}")
         self.origin = (self.c[0] - mx * self.zoom, self.c[1] - my * self.zoom)
         if not fast:
             self._close_hold(t)
+            if subject is not None:
+                self.holds.append((t + DIVE, None, subject, note))
         return self._arrive(t + DIVE + 0.1, note or f"into {self.map.names[gid]}", fast)
 
     def leave(self, t, note="", fast=False):

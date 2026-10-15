@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 
-use eframe::egui::{self, emath::TSTransform, layers::ShapeIdx, LayerId, Rect};
+use eframe::egui::{self, emath::TSTransform, layers::ShapeIdx, LayerId, Pos2, Rect};
 use egui_node_graph2::NodeId;
 
 use crate::graph::groups::{self, GroupIndex, Preview};
@@ -55,6 +55,10 @@ pub(super) struct Dive {
     other_view: View,
     /// Going in from under the pointer, where the miniature showed Open.
     lit: bool,
+    /// Going in to land on this view of the inside rather than on all of
+    /// it: a capture's `enter ... at`, so the zoom through the miniature
+    /// arrives on a module without stopping on the whole level first.
+    landing: Option<View>,
 }
 
 /// How a frame of a dive is drawn.
@@ -112,32 +116,46 @@ impl SynthApp {
     /// Steps into a group by zooming through its miniature, or straight in
     /// with Shift held, or where there's no miniature to zoom through.
     pub(super) fn dive_into(&mut self, ctx: &egui::Context, node: NodeId) {
+        self.dive_into_landing(ctx, node, None);
+    }
+
+    /// Dives in as [`Self::dive_into`] does, to `landing` if there is one,
+    /// otherwise to all of the inside, framed.
+    fn dive_into_landing(&mut self, ctx: &egui::Context, node: NodeId, landing: Option<View>) {
         self.land_dive();
         let graph = &self.graph_state.graph;
         let Some(id) = graph.nodes.get(node).and_then(|n| n.user_data.kind.group()) else { return };
         let on_show = graph[node].user_data.parent == self.user_state.level;
-        let view = self.framed_view(Some(id)).filter(|_| on_show && self.can_dive(ctx, id));
+        let view = landing.or_else(|| self.framed_view(Some(id))).filter(|_| on_show && self.can_dive(ctx, id));
         let Some(view) = view else {
             self.enter_group(node);
+            if let Some(landing) = landing {
+                self.land_level_on(landing);
+            }
             return;
         };
         let pointer = ctx.input(|i| i.pointer.hover_pos());
         let lit = pointer.is_some_and(|p| self.user_state.miniatures.get(&id).is_some_and(|r| r.contains(p)));
-        self.start_dive(ctx, Dive { group: id, node, inward: true, started: 0.0, switched: false, other_view: view, lit });
+        self.start_dive(ctx, Dive { group: id, node, inward: true, started: 0.0, switched: false, other_view: view, lit, landing });
     }
 
     /// A capture's `enter` cue: dives into the group a name or path stands
     /// for (see [`groups::find_group`]) if it's on the level on show, or
-    /// goes straight there if it isn't.
-    pub(super) fn dive_into_named(&mut self, ctx: &egui::Context, name: &str) -> Result<(), String> {
+    /// goes straight there if it isn't. With an `aim` (a patch point inside
+    /// and a zoom), it lands there instead of on the whole inside.
+    pub(super) fn dive_into_named(&mut self, ctx: &egui::Context, name: &str, aim: Option<(Pos2, f32)>) -> Result<(), String> {
         let graph = &self.graph_state.graph;
         let position = |n| self.graph_state.node_positions.get(n).copied();
         let id = groups::find_group(graph, position, self.user_state.level, name)?;
         let node = GroupIndex::of(graph).node(id).ok_or("it has no node")?;
+        let landing = aim.map(|(at, zoom)| self.aimed_view(at, zoom));
         if graph[node].user_data.parent == self.user_state.level {
-            self.dive_into(ctx, node);
+            self.dive_into_landing(ctx, node, landing);
         } else {
             self.go_to_level(Some(id));
+            if let Some(landing) = landing {
+                self.land_level_on(landing);
+            }
         }
         Ok(())
     }
@@ -151,7 +169,7 @@ impl SynthApp {
         let node = GroupIndex::of(&self.graph_state.graph).node(level);
         let view = self.view_out_of(level).filter(|_| self.can_dive(ctx, level));
         let (Some(node), Some(view)) = (node, view) else { return self.step_out() };
-        self.start_dive(ctx, Dive { group: level, node, inward: false, started: 0.0, switched: false, other_view: view, lit: false });
+        self.start_dive(ctx, Dive { group: level, node, inward: false, started: 0.0, switched: false, other_view: view, lit: false, landing: None });
         true
     }
 
@@ -191,6 +209,9 @@ impl SynthApp {
     fn switch_dive(&mut self, dive: &Dive) {
         if dive.inward {
             self.enter_group(dive.node);
+            if let Some(landing) = dive.landing {
+                self.land_level_on(landing);
+            }
         } else {
             self.step_out();
         }

@@ -90,6 +90,7 @@ Use Canopy as the example: the shots are `canopy` (1920×1080, the whole song) a
    The moves:
    - `look(t, point, zoom, dur, note, subject)` glides to centre a patch point. `hop` does the same for long ways, rising over the middle.
    - `enter(t, "Group")` and `leave(t)` dive in and out. The cue names the group, so nothing is clicked and nothing needs aiming.
+   - `enter(t, "Group", land=("seq.trigger", 1.0))` lands the dive on one module inside (an id, or the first of a kind) at a zoom, rather than on the whole level. The cue is `enter Group at x y zoom`.
    - `inside(...)` settles on a whole level, then drifts in on one module. `inside_tall(...)` is the portrait version, which drifts from one module to another.
    - A level's modules come from the patch, through `centre_of`, `middle`, `fit_zoom` and `find("module.kind")`.
 
@@ -102,7 +103,7 @@ These lessons are from the Canopy session, 2026-10-14. The vault note "Soba Film
 
 - **Every group is opened once before recording.** Since #245 the app measures the modules inside groups when a patch opens, so miniatures and the framing of a level no longer wait for a first visit. The tour still opens each group once, unseen, and dumps its layout: that's how it learns the sizes it aims from.
 - **Name the group; don't click it (#252).** The first Canopy films entered groups with a double-click on the title bar and steered the camera with relative `camera` cues. Every dive's landing had to be measured on dry runs, and a missed click left the tour on the wrong level, so every later aim was wrong. A gliding pointer also lit the Open pills of the faces it crossed. The `enter`, `leave` and `aim` cues need no aiming: the app finds the group by name and the point in patch space, from wherever the view is.
-- **In a portrait window, inside a wide group, frame a module, not the level.** A whole level fitted to 720 points wide is a thin strip, and a dive lands on it. Start the first look inside at the time `enter` returns, so the dive flows straight into the push in on a module rather than stalling on the strip.
+- **In a portrait window, inside a wide group, frame a module, not the level.** A whole level fitted to 720 points wide is a thin strip, and a dive lands on it. Land the dive on a module instead (`enter(..., land=(module, zoom))`, #259): the zoom through the miniature arrives on it in one move, with no stop on the strip. Without `land`, start the first look inside at the time `enter` returns: the dive's ease-out and the look's ease-in still meet at a standstill of about a third of a second.
 - **A riser ramps up from silence.** Dive into it once it's audible, not when its section starts; the activity check catches this.
 - **A capture's noise isn't the render's (#253).** Sync is exact, but a byte compare against `render` fails for patches with noise.
 - **Text steps as the view zooms (#255).** Notes rewrap, and the Arranger's width and module heights saw. A film shows it more than anything, so check `zoom_jitter.py` before filming.

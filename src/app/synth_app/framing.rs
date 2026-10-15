@@ -250,6 +250,15 @@ impl SynthApp {
         Some(View { zoom, looking_at: aim(bounds, zoom, view) })
     }
 
+    /// The view an `aim` at a patch point and zoom ends on: the point in the
+    /// middle of the editor, as a camera has it.
+    pub(super) fn aimed_view(&self, at: Pos2, zoom: f32) -> View {
+        let zoom = zoom.max(FURTHEST_ZOOM);
+        let view = self.editor_rect.size();
+        let target = Target::Point { at, zoom };
+        View { zoom, looking_at: at + (middle(view) - centre(&target, view)) / zoom }
+    }
+
     /// The patch-space rectangle around everything on a level, its frames
     /// and notes included, and whether every module, frame and note in it
     /// has been measured.

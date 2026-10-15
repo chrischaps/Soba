@@ -588,8 +588,8 @@ impl SynthApp {
                 CaptureAction::Aim { at, zoom, seconds } => {
                     self.start_glide_over(ctx, framing::Target::Point { at, zoom }, seconds);
                 }
-                CaptureAction::Enter(name) => {
-                    if let Err(e) = self.dive_into_named(ctx, &name) {
+                CaptureAction::Enter(name, aim) => {
+                    if let Err(e) = self.dive_into_named(ctx, &name, aim) {
                         eprintln!("capture: can't enter {name}: {e}");
                     }
                 }

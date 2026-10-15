@@ -418,6 +418,13 @@ impl SynthApp {
         }
     }
 
+    /// Shows the level on show from `view` rather than framed whole, and
+    /// leaves it there once its modules are measured.
+    pub(super) fn land_level_on(&mut self, view: View) {
+        self.reframe_level = false;
+        self.show_view(view);
+    }
+
     /// Puts the view there as the next frame is drawn: zooming takes the
     /// editor's [`egui::Ui`].
     fn show_view(&mut self, view: View) {
