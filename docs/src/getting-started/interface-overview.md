@@ -85,7 +85,7 @@ Hover any jack's name or knob for a tooltip: what it does, its signal type in th
 | Return to the default | Double-click |
 | Map to a MIDI controller | Right-click, then **Learn MIDI CC** |
 
-A knob's ring lights up in its module's header color. Knobs with a range either side of zero, like **Semi** and **Fine**, light outward from the top, so you can see at a glance which way they're set.
+A knob's ring lights up in its module's header color. Knobs with a range either side of zero, like **Semi** and **Fine**, light outward from the top, so you can see at a glance which way they're set. A small mark stands where zero is, so a knob at zero shows a dark ring with its pointer on the mark.
 
 Some knobs move in whole steps, like the Oscillator's **Oct** and **Semi**: they click from one value to the next as you drag.
 

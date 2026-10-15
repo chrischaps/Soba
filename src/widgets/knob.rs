@@ -293,6 +293,14 @@ impl KnobConfig {
         }
     }
 
+    /// Where zero sits round the travel (0 to 1) of a knob whose range runs
+    /// either way from it: its ring lights out from there toward the value,
+    /// and a mark shows where it is
+    pub fn zero(&self) -> Option<f32> {
+        let (min, max) = (*self.range.start(), *self.range.end());
+        (!self.logarithmic && min < 0.0 && max > 0.0).then(|| -min / (max - min))
+    }
+
     /// The value at `travel` (0 to 1) round a logarithmic knob.
     fn value_at(&self, travel: f32) -> f32 {
         let (min, max) = (*self.range.start(), *self.range.end());
@@ -411,15 +419,12 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
 
         let style = config.style;
         if style != KnobStyle::Classic {
-            let (min, max) = (*config.range.start(), *config.range.end());
-            // A range either side of zero sweeps out from its middle
-            let zero = (!config.logarithmic && min < 0.0 && max > 0.0).then(|| -min / (max - min));
             let face = Face {
                 center,
                 radius: config.size / 2.0 - config.size / 36.0,
                 s: config.size / 36.0,
                 value: normalized.clamp(0.0, 1.0),
-                zero,
+                zero: config.zero(),
                 accent: config.accent,
                 hot,
                 dragged: response.dragged(),
@@ -471,12 +476,22 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
             Color32::from_rgba_unmultiplied(0, 0, 0, 15),
         );
 
-        // Draw value arc
+        // Draw value arc, out from zero on a range either side of it
+        let zero = config.zero();
+        let from_angle = zero.map_or(start_angle, |z| start_angle + z * (end_angle - start_angle));
+        if zero.is_some() {
+            let (cos, sin) = (from_angle.cos(), from_angle.sin());
+            let at = |r: f32| Pos2::new(center.x + r * cos, center.y + r * sin);
+            painter.line_segment(
+                [at(radius - 6.5 * scale), at(radius - 1.5 * scale)],
+                Stroke::new(1.2 * scale, ZERO_MARK),
+            );
+        }
         draw_value_arc(
             painter,
             center,
             radius - 4.0 * scale,
-            start_angle,
+            from_angle,
             angle,
             theme::accent::PRIMARY,
             scale,
@@ -626,6 +641,17 @@ impl Face {
         stroke_arc(painter, self.center, radius, self.angle(from), self.angle(to), width, self.accent);
     }
 
+    /// A short radial bar across `radius` at zero, on a range either side of
+    /// it: the knob's centre detent, there whether or not the ring is lit
+    fn paint_zero(&self, painter: &egui::Painter, radius: f32, length: f32, width: f32, color: Color32) {
+        let Some(zero) = self.zero else { return };
+        let a = self.angle(zero);
+        let (inner, outer) = (polar(self.center, a, radius - length / 2.0), polar(self.center, a, radius + length / 2.0));
+        painter.line_segment([inner, outer], Stroke::new(width, color));
+        painter.circle_filled(inner, width / 2.0, color);
+        painter.circle_filled(outer, width / 2.0, color);
+    }
+
     /// The pointer, from near the middle of the cap to just inside its edge
     fn paint_pointer(&self, painter: &egui::Painter, inner: f32, outer: f32, width: f32, color: Color32) {
         let a = self.angle(self.value);
@@ -677,11 +703,17 @@ fn shaded_disc(painter: &egui::Painter, center: Pos2, radius: f32, top: Color32,
 
 const TRACK: Color32 = Color32::from_rgb(21, 23, 31);
 
+/// Where zero sits on a knob whose range runs either way from it: quieter
+/// than a lit ring, brighter than an unlit one
+const ZERO_MARK: Color32 = Color32::from_rgb(120, 124, 144);
+
 /// Flat and modern: a quiet cap inside a full-range track
 fn paint_arc(painter: &egui::Painter, f: &Face) {
     let s = f.s;
     let track_r = f.radius - 2.0 * s;
     stroke_arc(painter, f.center, track_r, f.angle(0.0), f.angle(1.0), 3.2 * s, TRACK);
+    // Across the track, standing proud of the value arc where it starts
+    f.paint_zero(painter, track_r, 5.4 * s, 1.2 * s, ZERO_MARK);
     f.paint_value(painter, track_r, 3.2 * s);
 
     let cap_r = f.radius - 6.5 * s;
@@ -703,6 +735,9 @@ fn paint_machined(painter: &egui::Painter, f: &Face) {
             Stroke::new(1.5 * s, color),
         );
     }
+    // Zero is a major tick, reaching further in than the scale
+    let lit = to - from > 1e-3;
+    f.paint_zero(painter, f.radius - 2.0 * s, 4.0 * s, 1.5 * s, if lit { f.accent } else { ZERO_MARK });
 
     let cap_r = f.radius - 5.0 * s;
     painter.circle_filled(f.center + Vec2::new(0.0, 2.2 * s), cap_r + 0.8 * s, Color32::from_black_alpha(45));
@@ -738,6 +773,9 @@ fn paint_led_ring(painter: &egui::Painter, f: &Face) {
     let count = 19;
     let half = 0.5 / (count - 1) as f32;
     let ring_r = f.radius - 2.8 * s;
+    // On a range either side of zero, the LED nearest it stands there as a
+    // short bar: the encoder's centre detent
+    let detent = f.zero.map(|z| (z * (count - 1) as f32).round() as usize);
     for i in 0..count {
         let t = i as f32 / (count - 1) as f32;
         let covered = (to.min(t + half) - from.max(t - half)).max(0.0) / (2.0 * half);
@@ -746,7 +784,11 @@ fn paint_led_ring(painter: &egui::Painter, f: &Face) {
         if level > 0.0 {
             painter.circle_filled(pos, 2.9 * s, f.accent.gamma_multiply(0.22 * level));
         }
-        painter.circle_filled(pos, 1.25 * s, mix(Color32::from_rgb(52, 55, 70), f.accent, level));
+        if detent == Some(i) {
+            f.paint_zero(painter, ring_r, 2.6 * s, 1.5 * s, mix(ZERO_MARK, f.accent, level));
+        } else {
+            painter.circle_filled(pos, 1.25 * s, mix(Color32::from_rgb(52, 55, 70), f.accent, level));
+        }
     }
 
     let cap_r = f.radius - 6.2 * s;
@@ -760,6 +802,7 @@ fn paint_hybrid(painter: &egui::Painter, f: &Face) {
     let s = f.s;
     let track_r = f.radius - 1.8 * s;
     stroke_arc(painter, f.center, track_r, f.angle(0.0), f.angle(1.0), 2.8 * s, TRACK);
+    f.paint_zero(painter, track_r, 4.8 * s, 1.1 * s, ZERO_MARK);
     f.paint_value(painter, track_r, 2.8 * s);
     painter.circle_filled(f.at(f.value, track_r), 1.9 * s, Color32::WHITE);
 
@@ -985,6 +1028,16 @@ mod tests {
     fn test_knob_config_with_size() {
         let config = KnobConfig::default().with_size(60.0);
         assert_eq!(config.size, 60.0);
+    }
+
+    #[test]
+    fn test_zero_sits_where_the_range_crosses_it() {
+        let range = |range, logarithmic| KnobConfig { range, logarithmic, ..Default::default() };
+        assert_eq!(range(-1.0..=1.0, false).zero(), Some(0.5), "Sym, Pan: twelve o'clock");
+        assert_eq!(range(-60.0..=6.0, false).zero(), Some(60.0 / 66.0), "a Master's 0 dB, near the top");
+        assert_eq!(range(0.0..=1.0, false).zero(), None, "a 0-100 knob lights from the left");
+        assert_eq!(range(-60.0..=0.0, false).zero(), None);
+        assert_eq!(range(-1.0..=1.0, true).zero(), None);
     }
 
     #[test]
