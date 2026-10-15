@@ -2814,11 +2814,11 @@ in   High Gain          Control  ConstantOnly         inline=false num 0 [-15..1
 in   Output             Control  ConstantOnly         inline=false num 0 [-12..12] dB
 out  Out                Audio
 knob Low Freq           "LoFrq" KnobOnly
-knob Low Gain           "LoGn" KnobOnly
 knob Mid Freq           "MdFrq" KnobOnly
-knob Mid Gain           "MdGn" KnobOnly
-knob Mid Q              "MdQ" KnobOnly
 knob High Freq          "HiFrq" KnobOnly
+knob Mid Q              "MdQ" KnobOnly
+knob Low Gain           "LoGn" KnobOnly
+knob Mid Gain           "MdGn" KnobOnly
 knob High Gain          "HiGn" KnobOnly
 knob Output             "Out" KnobOnly
 display EqCurve

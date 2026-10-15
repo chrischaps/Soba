@@ -443,16 +443,19 @@ static MODULE_UI: &[ModuleUi] = &[
     },
     ModuleUi {
         module_id: "fx.eq",
+        // Two rows, a band to each column: its frequency over its gain. The
+        // mid band's width and the output level take the last column
         knobs: &[
             knob_as("Low Freq", "LoFrq"),
-            knob_as("Low Gain", "LoGn"),
             knob_as("Mid Freq", "MdFrq"),
-            knob_as("Mid Gain", "MdGn"),
-            knob_as("Mid Q", "MdQ"),
             knob_as("High Freq", "HiFrq"),
+            knob_as("Mid Q", "MdQ"),
+            knob_as("Low Gain", "LoGn"),
+            knob_as("Mid Gain", "MdGn"),
             knob_as("High Gain", "HiGn"),
             knob_as("Output", "Out"),
         ],
+        knobs_per_row: 4,
         display: NodeDisplay::EqCurve,
         ..ModuleUi::DEFAULT
     },
