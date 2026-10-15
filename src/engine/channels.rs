@@ -107,8 +107,9 @@ impl AudioConfig {
     }
 }
 
-/// Play/stop changes waiting for room in the message queue, collapsed to
-/// what the audio thread still needs to see: at most a stop, then a play.
+/// Play/stop changes waiting for room in the message queue, or a play
+/// waiting for the graph edits made before it, collapsed to what the audio
+/// thread still needs to see: at most a stop, then a play.
 #[derive(Debug, Default)]
 struct UnsentTransport {
     /// A stop to deliver before `playing`, so its reset of module state
@@ -268,6 +269,9 @@ impl UiHandle {
     ///   full the value is still recorded in the graph, and travels with the
     ///   next plan.
     /// - Play/stop is queued immediately, or kept until `flush` finds room.
+    ///   A play also waits for the plan holding any graph edits sent before
+    ///   it, so a patch opened while playing starts as it was saved, not
+    ///   from its modules' defaults or with a moment of the old patch.
     pub fn send_command(&mut self, cmd: EngineCommand) {
         match cmd {
             EngineCommand::SetParameter { node_id, param_index, value } => {
@@ -359,16 +363,25 @@ impl UiHandle {
         true
     }
 
-    /// Sends any play/stop changes that are waiting for room in the queue.
-    /// Returns true if none are left waiting.
+    /// Sends any play/stop changes that are waiting for room in the queue,
+    /// except a play while graph edits are still to go. Returns true if none
+    /// are left waiting.
     fn send_transport(&mut self) -> bool {
         while let Some(playing) = self.unsent_transport.peek() {
+            if playing && self.edits_unsent() {
+                return false;
+            }
             if self.message_tx.push(AudioMessage::SetPlaying(playing)).is_err() {
                 return false;
             }
             self.unsent_transport.pop();
         }
         true
+    }
+
+    /// Whether graph edits have been made that no sent plan holds yet.
+    fn edits_unsent(&self) -> bool {
+        self.graph.is_dirty() || self.unsent_plan.is_some()
     }
 
     /// Delivers pending graph edits to the audio thread as a compiled plan,
@@ -397,7 +410,11 @@ impl UiHandle {
         let (sample_rate, block_size) = self.config.load();
         self.graph.set_audio_config(sample_rate, block_size);
 
-        if !self.send_handoffs() || !self.send_transport() {
+        // A stop goes ahead of the edits; a play waits for them, below
+        if !self.send_handoffs() || (!self.send_transport() && !self.edits_unsent()) {
+            return false;
+        }
+        if self.unsent_transport.peek() == Some(false) {
             return false;
         }
 
@@ -431,7 +448,8 @@ impl UiHandle {
             return false;
         }
 
-        !self.graph.is_dirty()
+        // A play held back for the edits follows them, and the recordings
+        self.send_transport() && !self.graph.is_dirty()
     }
 
     /// Asks the audio thread for a copy of a module's recording (a Looper's
@@ -863,7 +881,8 @@ mod tests {
 
         assert_eq!(run_audio_side(&mut engine, &mut plan), vec!["play", "stop"]);
         assert!(ui.flush());
-        assert_eq!(run_audio_side(&mut engine, &mut plan), vec!["play", "plan"]);
+        // The held play waits for the plan made before it
+        assert_eq!(run_audio_side(&mut engine, &mut plan), vec!["plan", "play"]);
         assert_eq!(plan.len(), 1);
     }
 
@@ -898,6 +917,31 @@ mod tests {
             ui.flush();
         }
         assert_eq!(seen, vec!["param", "stop"]);
+    }
+
+    #[test]
+    fn test_play_waits_for_the_patch_opened_before_it() {
+        let (mut ui, mut engine) = EngineChannels::new(64, 8).split();
+        let mut plan = Box::new(GraphPlan::empty(256));
+        ui.send_command(add(1, "osc.sine"));
+        ui.send_command(EngineCommand::SetPlaying(true));
+        assert!(ui.flush());
+        assert_eq!(run_audio_side(&mut engine, &mut plan), vec!["plan", "play"]);
+
+        // Another patch opened while playing: stop, swap the graph, set its
+        // knobs, play on. The audio thread mustn't play before the new patch
+        // is there, or it plays the old one, or the new one's defaults
+        ui.send_command(EngineCommand::SetPlaying(false));
+        ui.send_command(EngineCommand::ClearGraph);
+        ui.send_command(add(2, "osc.sine"));
+        ui.send_command(EngineCommand::SetParameter { node_id: 2, param_index: 0, value: 1234.0 });
+        ui.send_command(EngineCommand::SetPlaying(true));
+        assert_eq!(run_audio_side(&mut engine, &mut plan), vec!["stop", "param"], "the play waits");
+
+        assert!(ui.flush());
+        assert_eq!(run_audio_side(&mut engine, &mut plan), vec!["plan", "play"]);
+        assert_eq!(plan.len(), 1);
+        assert_eq!(plan.nodes[0].params[0], 1234.0, "the knob came with the patch");
     }
 
     #[test]

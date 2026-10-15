@@ -2749,7 +2749,10 @@ impl SynthApp {
             );
         }
 
-        // Restore playback state
+        // Restore playback state. The knobs go with the patch, which the
+        // play waits for, so it starts as it was saved rather than from its
+        // modules' defaults until the next frame's sync
+        self.sync_parameters();
         if was_playing {
             self.is_playing = true;
             self.user_state.is_playing = true;
