@@ -16,6 +16,14 @@
 //!
 //! A file the session didn't write is left alone. So is everything when
 //! Soba restarts into another version, whose autosave still names them.
+//!
+//! An untitled patch's takes go in a folder of the session's own in temp,
+//! which a crash leaves behind. Once the recovery prompt is answered, the
+//! folders of sessions that are no longer running are taken over: the
+//! takes the patch now open names (the recovered one, or one handed over
+//! across a restart) are adopted, as if this session had written them, so
+//! Save As gathers them and letting the patch go tidies them, and the rest
+//! are removed. A folder whose session still runs is left alone.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -29,6 +37,57 @@ pub(in crate::app) struct TakeFiles {
     written: HashSet<String>,
     /// The written files each patch saved this session names, by its path.
     saved: HashMap<PathBuf, HashSet<String>>,
+}
+
+/// What a session's folder in temp is called, before its process id.
+const TEMP_FOLDER: &str = "Soba takes ";
+
+/// The folder in temp for this session's untitled takes.
+pub(super) fn temp_folder() -> PathBuf {
+    std::env::temp_dir().join(format!("{TEMP_FOLDER}{}", std::process::id()))
+}
+
+/// The folders in `temp` that sessions no longer `running` left behind.
+fn left_behind(temp: &Path, running: impl Fn(u32) -> bool) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(temp) else { return Vec::new() };
+    let mut folders: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .filter(|entry| {
+            let name = entry.file_name();
+            let pid = name.to_str().and_then(|name| name.strip_prefix(TEMP_FOLDER)).and_then(|pid| pid.parse::<u32>().ok());
+            pid.is_some_and(|pid| pid != std::process::id() && !running(pid))
+        })
+        .map(|entry| entry.path())
+        .collect();
+    folders.sort();
+    folders
+}
+
+/// Whether the process `pid` is still running. When it can't tell, it
+/// says so: a folder is only taken over from a session that's gone.
+#[cfg(windows)]
+fn running(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ACCESS_DENIED, STILL_ACTIVE};
+    use windows_sys::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    // SAFETY: the handle is checked before use and closed after
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if process.is_null() {
+            // Denied is someone else's (or an elevated copy's): still there
+            return GetLastError() == ERROR_ACCESS_DENIED;
+        }
+        let mut code = 0u32;
+        let still = GetExitCodeProcess(process, &mut code) == 0 || code == STILL_ACTIVE as u32;
+        CloseHandle(process);
+        still
+    }
+}
+
+#[cfg(not(windows))]
+fn running(pid: u32) -> bool {
+    let proc = Path::new("/proc");
+    !proc.is_dir() || proc.join(pid.to_string()).exists()
 }
 
 impl TakeFiles {
@@ -61,6 +120,27 @@ impl TakeFiles {
             .collect();
         unkept.sort();
         unkept
+    }
+
+    /// Takes over the folders in `temp` left by sessions no longer
+    /// `running`: adopts each file in one that `named` gives a key for,
+    /// and removes the rest, with the folder once it's empty. Returns the
+    /// keys of those removed.
+    fn take_over(&mut self, temp: &Path, running: impl Fn(u32) -> bool, named: impl Fn(&Path) -> Option<String>) -> Vec<String> {
+        let mut unnamed = Vec::new();
+        for folder in left_behind(temp, running) {
+            let files = std::fs::read_dir(&folder).into_iter().flatten().filter_map(Result::ok);
+            let files: Vec<PathBuf> = files.filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file())).map(|entry| entry.path()).collect();
+            for file in files {
+                match named(&file) {
+                    Some(key) => self.wrote(&key),
+                    None => unnamed.push(file.to_string_lossy().into_owned()),
+                }
+            }
+            // One with nothing left in it at all goes too
+            let _ = std::fs::remove_dir(&folder);
+        }
+        self.remove(unnamed)
     }
 
     /// Removes `keys` from disk, and each folder that leaves empty. Returns
@@ -103,6 +183,19 @@ impl SynthApp {
     pub(super) fn tidy_takes_on_leave(&mut self) {
         let unkept = self.take_files.unkept(|_| false);
         self.forget_takes(unkept);
+    }
+
+    /// Takes over the folders in temp that sessions no longer running left
+    /// behind: adopts the takes the patch names, and removes the rest.
+    /// Once the recovery prompt is answered, either way.
+    pub(super) fn take_over_left_takes(&mut self) {
+        let named = self.files_named();
+        let removed = self.take_files.take_over(&std::env::temp_dir(), running, |file| {
+            named.iter().find(|key| Path::new(key.as_str()) == file).cloned()
+        });
+        for key in removed {
+            self.user_state.samples.forget(&key);
+        }
     }
 
     /// Every file a module in the patch plays, by sample key.
@@ -185,6 +278,54 @@ mod tests {
         assert!(Path::new(&theirs).exists(), "a file the session didn't write stays");
         assert!(files.unkept(|_| false).is_empty());
         std::fs::remove_dir_all(&shared).ok();
+    }
+
+    #[test]
+    fn a_gone_session_s_takes_are_adopted_or_removed() {
+        let temp = folder("left-behind");
+        let gone = temp.join("Soba takes 7");
+        let running = temp.join("Soba takes 8");
+        let emptied = temp.join("Soba takes 9");
+        let own = temp.join(format!("Soba takes {}", std::process::id()));
+        let other = temp.join("Soba takes elsewhere");
+        for folder in [&gone, &running, &emptied, &own, &other] {
+            std::fs::create_dir_all(folder).unwrap();
+        }
+        let named = write(&gone, "Take 1.wav");
+        let undone = write(&gone, "Take 2.wav");
+        let half = write(&gone, "Take 3.wav.partial");
+        let live = write(&running, "Take 1.wav");
+        let dropped = write(&emptied, "Take 1.wav");
+        let ours = write(&own, "Take 1.wav");
+        let unrelated = write(&other, "Take 1.wav");
+
+        let mut files = TakeFiles::default();
+        let removed = files.take_over(&temp, |pid| pid == 8, |file| (file == Path::new(&named)).then(|| named.clone()));
+        assert_eq!(removed, [undone.clone(), half.clone(), dropped.clone()]);
+        assert!(Path::new(&named).exists(), "the patch names it, so it's adopted");
+        assert!(!Path::new(&undone).exists() && !Path::new(&half).exists());
+        assert!(!emptied.exists(), "emptied, so it goes");
+        assert!(Path::new(&live).exists(), "its session still runs");
+        assert!(Path::new(&ours).exists(), "this session's own is tidied as usual");
+        assert!(Path::new(&unrelated).exists(), "not a session's folder");
+        // Adopted: unsaved, it's tidied when the patch is let go, with its folder
+        assert_eq!(files.unkept(|_| false), [named.clone()]);
+        files.remove(files.unkept(|_| false));
+        assert!(!gone.exists());
+        std::fs::remove_dir_all(&temp).ok();
+    }
+
+    #[test]
+    fn a_process_runs_until_it_exits() {
+        assert!(running(std::process::id()));
+        // The test binary itself, listing its tests and gone again
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("--list")
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        child.wait().unwrap();
+        assert!(!running(child.id()));
     }
 
     /// A tone a second long between two seconds of a quiet room, to trim.
@@ -274,5 +415,36 @@ mod tests {
         assert!(exists(&peak));
 
         std::fs::remove_dir_all(&folder).ok();
+    }
+
+    /// A crash left an untitled patch's take in its session's folder in
+    /// temp: recovering adopts it, so letting the patch go tidies it and
+    /// the folder. Opens the audio device, but the patch has no output.
+    #[test]
+    #[ignore = "opens the audio device; run with --ignored"]
+    fn a_recovered_patch_s_takes_are_tidied_when_it_is_let_go() {
+        use crate::app::session::Autosave;
+        use crate::modules::sampler::SAMPLER_ID;
+        use crate::persistence::{sample_files, NodeData, Patch};
+
+        // A process id no session has: past what Windows or Linux hand out
+        let crashed = std::env::temp_dir().join("Soba takes 4294967291");
+        std::fs::create_dir_all(&crashed).unwrap();
+        let take = crashed.join("Take 1.wav");
+        std::fs::write(&take, sample_files::encode_wav(&padded())).unwrap();
+        let undone = write(&crashed, "Take 2.wav");
+        let mut patch = Patch::new("Untitled");
+        let mut sampler = NodeData::new(1, SAMPLER_ID, (0.0, 0.0));
+        sampler.file = Some(take.to_string_lossy().into_owned());
+        patch.nodes.push(sampler);
+
+        let mut app = SynthApp::new(false);
+        app.recover(&Autosave::new(&patch, None, None).unwrap());
+        app.take_over_left_takes();
+        assert!(take.exists(), "the recovered patch plays it");
+        assert!(!Path::new(&undone).exists(), "nothing names it");
+        app.new_patch();
+        assert!(!take.exists(), "adopted, and never saved");
+        assert!(!crashed.exists(), "emptied, so it goes");
     }
 }

@@ -139,7 +139,7 @@ impl SynthApp {
         {
             let folder = match &self.current_patch_path {
                 Some(path) => sample_files::samples_folder(path),
-                None => std::env::temp_dir().join(format!("Soba takes {}", std::process::id())),
+                None => super::take_files::temp_folder(),
             };
             std::fs::create_dir_all(&folder).map_err(|e| format!("couldn't make {}: {e}", folder.display()))?;
             let path = (1..).map(|n| folder.join(name(n))).find(|path| !path.exists()).expect("some name is free");

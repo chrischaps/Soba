@@ -3486,6 +3486,9 @@ impl SynthApp {
                 if recover {
                     self.recover(&autosave);
                 }
+                // The crashed session's takes are this one's now, or nobody's
+                #[cfg(not(target_arch = "wasm32"))]
+                self.take_over_left_takes();
             }
         }
     }

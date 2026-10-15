@@ -159,6 +159,8 @@ impl SynthApp {
         // The handover has the patch; the autosave was only a fallback
         self.recovery = None;
         self.recover(&resume.patch);
+        // The takes the last copy kept in temp are this one's now
+        self.take_over_left_takes();
         if !resume.unsaved {
             self.mark_saved();
         }
