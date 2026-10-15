@@ -22,6 +22,7 @@ use std::sync::Arc;
 use soba::dsp::{SampleData, Snapshot, SnapshotOutcome};
 
 use soba::engine::{
+    Probe, ProbeScope, SCOPE_WINDOW,
     create_module_registry, input_channel, input_channel_same_clock, AudioProcessor, EngineChannels, EngineCommand, EngineEvent, MidiEvent,
     NodeId, Recording, TimestampedMidiEvent, UiHandle,
 };
@@ -233,6 +234,11 @@ fn audio_callback_never_allocates() {
     let mut snapshots_done = 0;
     let mut loops_loaded = 0;
 
+    // A cable probed, moved from one module's output to the next (some of
+    // them being swapped out meanwhile), and let go of now and then. The
+    // scope is kept here, so the audio thread never frees one
+    let scope = Arc::new(ProbeScope::new());
+
     // Record the whole run: the tap copies every callback into its ring
     let takes = std::env::temp_dir().join("soba-realtime-alloc");
     std::fs::create_dir_all(&takes).unwrap();
@@ -327,6 +333,13 @@ fn audio_callback_never_allocates() {
             ui.send_command(EngineCommand::RemoveModule { node_id });
             ui.send_command(EngineCommand::AddModule { node_id, module_id });
         }
+        if round % 30 == 7 {
+            let probe = (round % 90 != 7).then(|| {
+                let (node_id, _) = nodes[round / 30 % nodes.len()];
+                Probe { node_id, output_index: round / 7 % 2, scope: scope.clone() }
+            });
+            ui.probe(probe);
+        }
         // Play: notes on and off every block, with bends and pressure. The
         // queue would overflow (and the push panic) unless the callback drains it
         let note = 48 + (round % 24) as u8;
@@ -382,6 +395,7 @@ fn audio_callback_never_allocates() {
     assert!(loads > 25);
     assert!(snapshots_done > 5, "{snapshots_done} snapshots of a loop came back");
     assert!(loops_loaded >= 4);
+    assert!(scope.read(&mut [0.0; SCOPE_WINDOW]) > 10_000, "the probe heard the patch");
     for state in ["Recording", "Playing", "Overdubbing", "Stopped", "Empty"] {
         assert!(looper_states.contains(state), "the Looper never reached {state}: {looper_states:?}");
     }

@@ -112,6 +112,16 @@ Cables run behind the modules, and behind frame titles and notes, showing faintl
 
 While the patch plays, cables show what their signal has been doing over the last few seconds. [Reading the signal in a cable](../concepts/connections.md#reading-the-signal-in-a-cable) explains what you're seeing.
 
+### Probing a cable
+
+To hear what a cable carries on its own, hold `Alt` over it while the patch plays. You'll hear the LFO before it reaches the filter, or the dry voice before the reverb. A small scope beside the pointer shows the signal's waveform and names the output it comes from. The probe plays on top of the patch at the same fixed level as a Sampler's ▶. It never comes out louder than that, and it isn't recorded. It fades in, and it fades out when you let go of `Alt` or move off the cable.
+
+- **Audio** cables play as they are. On a polyphonic cable, all the voices are summed.
+- **Control** cables play as a quiet sine whose pitch follows the value: A3 at 0, two octaves higher at 1, and two octaves lower at -1. You hear an LFO as a siren and a stepped sequence as a tune.
+- **Gate** cables play a soft click each time the gate opens, with a faint tone while it's held, so you can hear how long each gate lasts as well as when it starts.
+
+Probing works on cables inside groups and on cables into a group's jacks, where you hear the module output the cable carries. MIDI cables have no sound to probe.
+
 ## Editing modules
 
 ### The module menu
@@ -352,5 +362,6 @@ Recent files, the autosave, your cable style and the window's size and position 
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl + R` | Record, or end the take |
+| `Alt` over a cable | Hear what the cable carries |
 
 The letter keys play notes: see [The computer keyboard](#the-computer-keyboard).

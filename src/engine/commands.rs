@@ -11,6 +11,7 @@ use crate::modules::oscilloscope::SCOPE_BUFFER_SIZE;
 
 use super::audio_input::InputFeed;
 use super::cue::Cue;
+use super::probe::Probe;
 use super::graph_plan::GraphPlan;
 use super::recorder::RecordTap;
 
@@ -226,6 +227,8 @@ pub enum AudioMessage {
     /// Hear a recording from a module's face, beside the patch, playing or
     /// stopped; or with `None`, stop the one playing.
     Cue(Option<Cue>),
+    /// Hear what a cable carries, beside the patch, or with `None`, stop.
+    Probe(Option<Probe>),
 }
 
 /// One oscilloscope capture, sent from the audio thread by value so that

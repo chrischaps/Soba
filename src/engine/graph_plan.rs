@@ -95,6 +95,25 @@ pub(crate) struct PlanNode {
     pub(crate) spectrum: Option<SpectrumWatch>,
 }
 
+#[cfg(test)]
+impl PlanNode {
+    /// A node with no module, owning `outputs`: enough to find its buffers.
+    pub(crate) fn bare(node_id: NodeId, outputs: Range<usize>) -> Self {
+        Self {
+            node_id,
+            module: None,
+            params: Vec::new(),
+            inputs: Vec::new(),
+            outputs,
+            bypassed: false,
+            wet: 1.0,
+            dry: Vec::new(),
+            hears_live: false,
+            spectrum: None,
+        }
+    }
+}
+
 /// A node whose input and output are copied to its display's spectrum tap
 /// after every block.
 pub(crate) struct SpectrumWatch {

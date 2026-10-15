@@ -56,6 +56,7 @@ mod file_hover;
 mod framing;
 mod grouping;
 mod loops;
+mod probe;
 mod record_into;
 mod samples;
 mod slicing;
@@ -346,6 +347,8 @@ pub struct SynthApp {
     long_press: LongPress,
     /// How the add menu was opened, and where its submenu went
     add_menu: AddMenu,
+    /// The cable heard while Alt is held over it
+    probe: probe::CableProbe,
     /// Patch files the visitor picked, which the browser hands over later.
     #[cfg(target_arch = "wasm32")]
     uploads: (std::sync::mpsc::Sender<web::Upload>, std::sync::mpsc::Receiver<web::Upload>),
@@ -531,6 +534,7 @@ impl SynthApp {
             touch_panning: false,
             long_press: LongPress::default(),
             add_menu: AddMenu::default(),
+            probe: Default::default(),
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
         };
@@ -1972,6 +1976,7 @@ impl SynthApp {
                 ui.set_clip_rect(view_clip);
                 let dt = ctx.input(|i| i.stable_dt).min(0.1);
                 self.user_state.cable_spotlight.end_frame(graph_response.hovered_cable, dt);
+                self.tend_probe(ctx, graph_response.hovered_cable);
                 self.note_miniatures();
                 if let Some(dive) = &dive {
                     self.paint_dive(ui, layer, &[(grid_start, grid_end), (graph_start, next_shape())], dive);

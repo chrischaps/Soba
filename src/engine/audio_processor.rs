@@ -16,6 +16,7 @@ use super::audio_input::InputFeed;
 use super::channels::{EngineHandle, MAX_SNAPSHOTS};
 use super::commands::{AudioMessage, EngineEvent, NodeId, ScopeFrame};
 use super::cue::CuePlayer;
+use super::probe::ProbePlayer;
 use super::graph_plan::GraphPlan;
 use super::midi_engine::TimestampedMidiEvent;
 use super::midi_scheduler::{take_chunk, MidiScheduler};
@@ -156,6 +157,8 @@ pub struct AudioProcessor {
     snapshots: Vec<(NodeId, Box<Snapshot>)>,
     /// A recording heard from a module's face, beside the patch.
     cue: CuePlayer,
+    /// A cable heard on its own, beside the patch.
+    probe: Box<ProbePlayer>,
 }
 
 /// Frames of background copying (loops loaded or snapshotted) per frame a
@@ -187,6 +190,7 @@ impl AudioProcessor {
             input: LiveInput::new(block_size),
             snapshots: Vec::with_capacity(MAX_SNAPSHOTS),
             cue: CuePlayer::default(),
+            probe: Box::default(),
         }
     }
 
@@ -234,7 +238,8 @@ impl AudioProcessor {
     ///    size, each with its share of the audio input
     /// 4. Writes the output module's audio to the output buffer
     /// 5. While recording, copies that buffer to the recording
-    /// 6. Mixes in the cue, if one is playing, stopped or not
+    /// 6. Mixes in the cue, if one is playing, stopped or not, and the
+    ///    cable being probed, while playing
     ///
     /// REAL-TIME SAFE: no allocation, locking or blocking.
     ///
@@ -263,6 +268,7 @@ impl AudioProcessor {
             // Reset CPU load when not playing
             self.cpu_load_avg = 0.0;
             self.record(output, channels);
+            self.probe.idle();
             self.play_cue(output, channels);
             return;
         }
@@ -273,8 +279,9 @@ impl AudioProcessor {
             feed.begin(num_frames);
         }
         let latency = if self.input.feed.is_some() { self.engine_handle.input_latency() } else { 0 };
-        Self::render(&mut self.plan, self.sample_rate, output, channels, midi, RenderInput::Live(&mut self.input), latency);
+        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Live(&mut self.input), latency);
         self.record(output, channels);
+        self.probe.mix(output, channels);
         self.play_cue(output, channels);
 
         self.plan.publish_monitors();
@@ -314,13 +321,15 @@ impl AudioProcessor {
         output.fill(0.0);
         if !self.is_playing || channels == 0 {
             self.record(output, channels);
+            self.probe.idle();
             self.play_cue(output, channels);
             return;
         }
 
         // Input given with the picture is already in time with it
-        Self::render(&mut self.plan, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0);
+        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0);
         self.record(output, channels);
+        self.probe.mix(output, channels);
         self.play_cue(output, channels);
 
         self.plan.publish_monitors();
@@ -330,9 +339,12 @@ impl AudioProcessor {
 
     /// Runs the graph over a buffer in plan-sized blocks, each with the MIDI
     /// that falls inside it and the next block of `input` (`latency` frames
-    /// late), and writes the output module's audio into it.
+    /// late), and writes the output module's audio into it. The probe
+    /// listens to each block as it's made.
+    #[allow(clippy::too_many_arguments)]
     fn render(
         plan: &mut GraphPlan,
+        probe: &mut ProbePlayer,
         sample_rate: f32,
         output: &mut [f32],
         channels: usize,
@@ -341,6 +353,7 @@ impl AudioProcessor {
         latency: usize,
     ) {
         let block = plan.max_block_size().max(1);
+        probe.begin(plan);
         for (index, chunk) in output.chunks_mut(block * channels).enumerate() {
             let frames = chunk.len() / channels;
             let start = index * block;
@@ -354,6 +367,7 @@ impl AudioProcessor {
                 .with_input(chunk_input)
                 .with_input_latency(latency);
             plan.process(&context);
+            probe.listen(plan, frames, sample_rate);
             Self::write_output(plan, chunk, channels, frames);
         }
     }
@@ -457,6 +471,9 @@ impl AudioProcessor {
                 }
                 AudioMessage::Cue(cue) => {
                     self.cue.play(cue, self.sample_rate);
+                }
+                AudioMessage::Probe(probe) => {
+                    self.probe.probe(probe);
                 }
                 AudioMessage::GiveRoom { node_id, room } => {
                     if let Some(old) = self.plan.give_room(node_id, room) {

@@ -81,6 +81,7 @@ pub const SHEET: &[Group] = &[
         color: theme::signal::MIDI,
         rows: &[
             ("`Ctrl + R`", "Record, or end the take"),
+            ("`Alt` over a cable", "Hear what the cable carries"),
         ],
     },
 ];

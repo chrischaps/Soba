@@ -336,6 +336,14 @@ impl UiHandle {
         self.send_handoffs();
     }
 
+    /// Hears what a cable carries, beside the patch (see
+    /// [`Probe`](super::probe::Probe)), or with `None`, stops. Never
+    /// dropped: a stop mustn't be lost, or the probe would play on.
+    pub fn probe(&mut self, probe: Option<super::probe::Probe>) {
+        self.unsent_handoffs.push(AudioMessage::Probe(probe));
+        self.send_handoffs();
+    }
+
     /// Hands an audio input's feed to the audio thread, which reads from it
     /// from the next callback, replacing any input it had. Never dropped.
     pub fn connect_input(&mut self, feed: InputFeed) {
@@ -747,6 +755,7 @@ mod tests {
                     }
                     seen.push("cue");
                 }
+                AudioMessage::Probe(_) => seen.push("probe"),
                 AudioMessage::SnapshotLoop { node_id, mut snapshot } => {
                     let mut budget = usize::MAX;
                     current.fill_snapshot(node_id, &mut snapshot, &mut budget);
