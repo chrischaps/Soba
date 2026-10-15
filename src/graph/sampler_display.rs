@@ -506,6 +506,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     if loaded.is_some() {
         let play = Rect::from_min_size(Pos2::new(row.left(), row.top() + 1.0 * z), Vec2::new(18.0 * z, row_height - 2.0 * z));
         let hear = ui.interact(play, ui.id().with(("sampler_cue", node_id)), Sense::click());
+        super::marks::mark(ui.ctx(), node_id, "cue", play);
         let fill = match (cue.is_some(), hear.hovered()) {
             (true, _) => blue.gamma_multiply(0.45),
             (false, true) => theme::background::WIDGET_HOVERED,
@@ -548,6 +549,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     }
     let button = Rect::from_min_size(Pos2::new(row.right() - button_width, row.top() + 1.0 * z), Vec2::new(button_width, row_height - 2.0 * z));
     let open = ui.interact(button, ui.id().with(("sampler_open", node_id)), Sense::click());
+    super::marks::mark(ui.ctx(), node_id, "file", button);
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
     ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
     ui.painter().text(button.center(), egui::Align2::CENTER_CENTER, "Open…", small, theme::text::PRIMARY);

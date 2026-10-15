@@ -13,11 +13,11 @@ cue playing). The patch is filmed once to find the module, then again with
 the view aimed at it, and the still is cropped to the node with room at the
 sides for its cable stubs.
 
-Pointer cues aim at the face: `face x y` in a cue stands for the window
-point over (x, y) points from the module's top left, as drawn at zoom 1.
-Read them off a still: (pixel / PPP - margin) / zoom, with the margins below.
-The face's layout shifts a little from one ppp to another, so aim from a
-still filmed at PPP.
+Pointer cues aim at the module's parts by name (`move source.sampler cue`,
+see src/app/capture_aim.rs), or at a point on it: `move fx.eq 234 135` is
+(234, 135) points from its top left, as drawn at zoom 1. Read those off a
+still, (pixel / PPP - margin) / zoom with the margins below, filmed at PPP:
+the face's layout shifts a little from one ppp to another.
 
 Build into target/capture first, as for shots.py. --check films each one
 the same way but writes nothing, lists the close-ups that no longer match the
@@ -28,7 +28,6 @@ changed since, several at once (--jobs N): see picture_check.py. --all films
 them all, and close-ups named on the command line are always filmed.
 """
 
-import re
 import sys
 from collections import namedtuple
 from pathlib import Path
@@ -57,10 +56,10 @@ MODULES = {
     "sampler": Module("sampler", "source.sampler", 0.9, 395, """
         -4.0 play
         -3.0 chord 48,55,60,64,67 90 6.0
-        -2.6 move face 24 453 0.2
+        -2.6 move source.sampler cue 0.2
         -2.3 press
         -2.25 release
-        -2.2 move face 600 300 0.2
+        -2.2 move source.sampler 600 300 0.2
     """, palette=False),
     # A swung, ping-ponged row through a saw chord, the step filter half up: the dot
     # rides a slice partway through the bar, violet slices bound for the right
@@ -161,20 +160,20 @@ MODULES = {
     # Sequencers. Pattern B, chained A A B C, partway through
     "sequencer": Module("sequencer", "seq.step", 1.0, 505, """
         -4.69 play
-        -0.6 move face 79 385 0.1
+        -0.6 move seq.step pattern:B 0.1
         -0.4 press
         -0.35 release
-        -0.3 move face 700 300 0.1
+        -0.3 move seq.step 700 300 0.1
     """),
     # A line cliché, Am9 to E7, on Dm9
     "chord-sequencer": Module("chord-sequencer", "seq.chord", 1.0, 479, "-11.0 play"),
     # Roll Call's pattern B, its snare roll ratcheting, C next
     "trigger-sequencer": Module("patches/roll-call.json", "seq.trigger", 1.0, 720, """
         -7.57 play
-        -0.6 move face 81 457 0.1
+        -0.6 move seq.trigger pattern:B 0.1
         -0.4 press
         -0.35 release
-        -0.3 move face 700 300 0.1
+        -0.3 move seq.trigger 700 300 0.1
     """),
     # A five-section song, playing its Build
     "arranger": Module("arranger", "seq.arranger", 1.0, 881, "-10.8 play"),
@@ -195,7 +194,7 @@ MODULES = {
     # the pointer on the mid band's dot: its wings light, and the header reads it
     "eq": Module("eq", "fx.eq", 1.0, 440, """
         -2.0 play
-        -0.6 move face 234 135 0.3
+        -0.6 move fx.eq 234 135 0.3
     """, palette=False),
     # A low sine into the folder, a little off centre: the lit stretch runs
     # over the first fold, and the wave on the right folds back at its peaks
@@ -233,14 +232,10 @@ def module_rect(lay, name):
     return rect
 
 
-def script(cues, camera, origin, rect, zoom):
-    """The close-up's cues, aimed at the face, with the view moved to it before
-    the first and the still taken at 0.0."""
-    def at_face(match):
-        x, y = float(match.group(1)), float(match.group(2))
-        return f"{origin[0] + (rect[0] + x) * zoom:.1f} {origin[1] + (rect[1] + y) * zoom:.1f}"
-
-    lines = [re.sub(r"face (-?[\d.]+) (-?[\d.]+)", at_face, line.strip()) for line in cues.strip().splitlines()]
+def script(cues, camera):
+    """The close-up's cues, with the view moved to the module before the first
+    and the still taken at 0.0."""
+    lines = [line.strip() for line in cues.strip().splitlines()]
     first = min([float(line.split()[0]) for line in lines] + [0.0])
     return "\n".join([f"{first - 0.5:.2f} {camera}"] + lines + ["0.0 layout shot", "0.0 still shot", "0.1 end"]) + "\n"
 
@@ -253,10 +248,10 @@ def shoot(name, tmp):
     probe.mkdir()
     lay = film(patch, probe, SIZE, PPP, "0.0 layout shot\n0.1 end\n")
     rect = module_rect(lay, name)
-    camera, origin = aim(lay["view"], ((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2), shot.zoom)
+    camera, _ = aim(lay["view"], ((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2), shot.zoom)
     out = Path(tmp) / name
     out.mkdir()
-    lay = film(patch, out, SIZE, PPP, script(shot.cues, camera, origin, rect, shot.zoom))
+    lay = film(patch, out, SIZE, PPP, script(shot.cues, camera))
     x0, y0, x1, y1 = module_rect(lay, name)
     view = lay["view"]
     zoom, (ox, oy) = view["zoom"], view["origin"]

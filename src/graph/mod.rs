@@ -54,6 +54,7 @@ pub mod port_mapping;
 mod responses;
 mod reverb_display;
 pub mod hovered_file;
+pub mod marks;
 pub mod resample;
 pub mod sample_shelf;
 mod sampler_display;

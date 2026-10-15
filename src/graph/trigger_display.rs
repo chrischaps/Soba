@@ -674,6 +674,7 @@ pub(super) fn pattern_tabs(
             painter.circle_stroke(dot, 2.2 * z, Stroke::new(1.0 * z, green));
         }
 
+        super::marks::mark(ui.ctx(), node_id, format_args!("pattern:{letter}"), rect);
         let response = ui
             .interact(rect, Id::new((node_id, "trigger-tab", pattern)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand)

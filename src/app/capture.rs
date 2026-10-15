@@ -30,8 +30,10 @@
 //! aimed at the `--ppp` the script is filmed at. The layout shifts a little
 //! from one ppp to another, since text rows snap to whole pixels: by the
 //! foot of a tall module, a button can sit 7 points lower at ppp 2 than at
-//! ppp 1. So aim from a still filmed at the shot's own ppp (pixel / ppp). A
-//! press or right-click that just misses a control says so on stderr.
+//! ppp 1. So aim from a still filmed at the shot's own ppp (pixel / ppp), or
+//! better, at a module's part by name, which is found wherever it was last
+//! drawn. A press or right-click that just misses a control says so on
+//! stderr.
 //!
 //! ```text
 //! 0.0  play                         # start the transport: a capture
@@ -49,7 +51,13 @@
 //! 2.0  param filter.svf#2 Cutoff 800
 //! 3.0  cursor on                    # draw a pointer over the picture
 //! 3.0  move 400 300 0.6             # glide the pointer
-//! 3.5  drag 500 340 0.8             # press, glide, release
+//! 3.0  move source.sampler file 0.3 # ...to a module's part, wherever it's
+//!                                   # drawn: see capture_aim for the names
+//! 3.0  move osc.sine#2 knob:Detune  # a knob's dial; in:CV, out:Out a jack
+//! 3.0  move fx.eq 234 135 0.3       # patch points from a module's corner
+//! 3.0  move by 0 -60 2.0            # from where the pointer is
+//! 3.5  drag 500 340 0.8             # press, glide, release (to any of
+//!                                   # the same spots)
 //! 3.5  press / release
 //! 3.5  rclick                       # right-click, for context menus
 //! 3.5  wheel -120                   # turn the mouse wheel (points, down < 0)
@@ -94,6 +102,7 @@ use std::process::{Child, Command, Stdio};
 use eframe::egui;
 use egui::{Pos2, Rect, Vec2};
 
+use super::capture_aim::{self, Part, Spot};
 use crate::dsp::InputAudio;
 use crate::engine::{read_wav_at, MidiEvent, StereoBuffer};
 
@@ -188,7 +197,7 @@ enum Cue {
     Midi(MidiEvent),
     Param { module: String, nth: usize, input: String, value: f32, dur: f64 },
     Cursor(bool),
-    Move { to: Pos2, dur: f64 },
+    Move { to: Spot, dur: f64 },
     Button(bool),
     /// The secondary button, pressed or released.
     SecondaryButton(bool),
@@ -335,6 +344,8 @@ pub struct Capture {
     /// nothing is hovered by accident.
     pointer: Option<Pos2>,
     pointer_glide: Option<Glide<Vec2>>,
+    /// The part the pointer is gliding to, followed as the view moves.
+    pointer_aim: Option<Part>,
     button_down: bool,
     /// Modifier keys held with the last key pressed.
     modifiers: egui::Modifiers,
@@ -373,6 +384,12 @@ impl Capture {
         let text = std::fs::read_to_string(&config.script)
             .map_err(|e| format!("can't read {}: {}", config.script.display(), e))?;
         let cues = parse_script(&text)?;
+        for (at, cue) in &cues {
+            if let Cue::Move { to: Spot::Part(part), .. } = cue {
+                capture_aim::check(part).map_err(|e| format!("the move at {at:.2} s: {e}"))?;
+            }
+        }
+        crate::graph::marks::start();
         let earliest = cues.first().map_or(0.0, |c| c.0).min(0.0);
         let warmup = WARMUP_FRAMES.max((-earliest * config.fps as f64).ceil() as i64 + 1);
         std::fs::create_dir_all(&config.out_dir).map_err(|e| e.to_string())?;
@@ -416,6 +433,7 @@ impl Capture {
             cursor_visible: false,
             pointer: None,
             pointer_glide: None,
+            pointer_aim: None,
             button_down: false,
             modifiers: egui::Modifiers::default(),
             ramps: Vec::new(),
@@ -465,8 +483,13 @@ impl Capture {
 
     /// Replaces the frame's input with the script's: called before each UI
     /// pass. A pass only becomes a new frame once the last frame's
-    /// screenshot is in hand.
-    pub fn prepare_input(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+    /// screenshot is in hand. `locate` finds a module's part on screen.
+    pub fn prepare_input(
+        &mut self,
+        ctx: &egui::Context,
+        raw: &mut egui::RawInput,
+        mut locate: impl FnMut(&Part) -> Result<Pos2, String>,
+    ) {
         let mut shot = None;
         for event in raw.events.drain(..) {
             if let egui::Event::Screenshot { image, .. } = event {
@@ -522,7 +545,14 @@ impl Capture {
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(self.config.size_in_points()));
         }
 
-        self.fire_cues(raw);
+        self.fire_cues(raw, &mut locate);
+        // A move's part is followed as the view glides, but not by a drag,
+        // which might be what moves it
+        if let (Some(part), Some(glide), false) = (&self.pointer_aim, self.pointer_glide.as_mut(), self.button_down) {
+            if let Ok(to) = locate(part) {
+                glide.to = to.to_vec2();
+            }
+        }
         raw.modifiers = self.modifiers;
         self.animate(raw);
     }
@@ -568,8 +598,8 @@ impl Capture {
         }
         self.frame = next;
         self.skipped += 1;
-        // None of these cues touch the pass's input
-        self.fire_cues(&mut egui::RawInput::default());
+        // None of these cues touch the pass's input, or aim at anything
+        self.fire_cues(&mut egui::RawInput::default(), &mut |_| Err("isn't drawn".into()));
         true
     }
 
@@ -582,7 +612,7 @@ impl Capture {
     }
 
     /// Fires the cues that fall inside this frame.
-    fn fire_cues(&mut self, raw: &mut egui::RawInput) {
+    fn fire_cues(&mut self, raw: &mut egui::RawInput, locate: &mut dyn FnMut(&Part) -> Result<Pos2, String>) {
         let t = self.time();
         let end = t + self.dt();
         while let Some((at, cue)) = self.cues.get(self.next_cue).cloned() {
@@ -624,11 +654,30 @@ impl Capture {
                     dur,
                 }),
                 Cue::Cursor(on) => self.cursor_visible = on,
-                Cue::Move { to, dur } => {
+                Cue::Move { to: spot, dur } => {
+                    // Where a glide under way was headed, for a move by
+                    let heading = self.pointer_glide.map(|g| g.to.to_pos2()).or(self.pointer);
+                    let to = match &spot {
+                        Spot::Point(p) => Ok(*p),
+                        Spot::By(by) => heading.map(|p| p + *by).ok_or_else(|| "has no pointer to move from".to_string()),
+                        Spot::Part(part) => locate(part),
+                    };
+                    let to = match to {
+                        Ok(to) => to,
+                        Err(e) => {
+                            eprintln!("capture: the move at {at:.2} s {e}");
+                            self.finished = true;
+                            continue;
+                        }
+                    };
                     // The first move comes in from below and to the right
                     let from = self.pointer.unwrap_or(to + Vec2::new(150.0, 200.0));
                     self.pointer = Some(from);
                     self.pointer_glide = Some(Glide { from: from.to_vec2(), to: to.to_vec2(), start: at, dur });
+                    self.pointer_aim = match spot {
+                        Spot::Part(part) => Some(part),
+                        _ => None,
+                    };
                 }
                 Cue::Button(down) => {
                     self.button_down = down;
@@ -735,6 +784,7 @@ impl Capture {
             self.pointer = Some(glide.at(t).to_pos2());
             if glide.done(t) {
                 self.pointer_glide = None;
+                self.pointer_aim = None;
             }
         }
         // egui needs to know where the pointer is every frame
@@ -1133,17 +1183,20 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
             }
             "param" => {
                 let target = words.get(2).ok_or_else(|| err("missing module"))?;
-                let (module, nth) = match target.split_once('#') {
-                    Some((m, n)) => (m.to_string(), n.parse::<usize>().map_err(|_| err("bad #n"))?.max(1) - 1),
-                    None => (target.to_string(), 0),
-                };
+                let (module, nth) = capture_aim::module_ref(target).map_err(err)?;
                 // Input names may contain spaces: everything up to the value
                 let value_at = (3..words.len()).find(|&i| words[i].parse::<f64>().is_ok()).ok_or_else(|| err("missing value"))?;
                 let input = words[3..value_at].join(" ");
                 cues.push((t, Cue::Param { module, nth, input, value: num(value_at)? as f32, dur: opt(value_at + 1)? }));
             }
             "cursor" => cues.push((t, Cue::Cursor(words.get(2) != Some(&"off")))),
-            "move" => cues.push((t, Cue::Move { to: Pos2::new(num(2)? as f32, num(3)? as f32), dur: opt(4)? })),
+            "move" => {
+                let (to, rest) = capture_aim::parse_spot(&words[2..]).map_err(err)?;
+                if rest.len() > 1 {
+                    return Err(err("too many values"));
+                }
+                cues.push((t, Cue::Move { to, dur: rest.first().copied().unwrap_or(0.0) }));
+            }
             "press" => cues.push((t, Cue::Button(true))),
             "release" => cues.push((t, Cue::Button(false))),
             "rclick" => {
@@ -1151,9 +1204,10 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
                 cues.push((t + 0.05, Cue::SecondaryButton(false)));
             }
             "drag" => {
-                let dur = num(4)?;
+                let (to, rest) = capture_aim::parse_spot(&words[2..]).map_err(err)?;
+                let &[dur] = rest.as_slice() else { return Err(err("expected one length")) };
                 cues.push((t, Cue::Button(true)));
-                cues.push((t + 0.05, Cue::Move { to: Pos2::new(num(2)? as f32, num(3)? as f32), dur }));
+                cues.push((t + 0.05, Cue::Move { to, dur }));
                 cues.push((t + 0.1 + dur, Cue::Button(false)));
             }
             "wheel" => cues.push((t, Cue::Wheel { delta: num(2)? as f32, ctrl: words.get(3) == Some(&"ctrl") })),
