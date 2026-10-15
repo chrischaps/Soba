@@ -1,0 +1,155 @@
+-46.0000 enter Twins
+-45.3900 layout lvl000
+-45.3400 enter Sixteen
+-44.7300 layout lvl001
+-44.6800 leave
+-44.0200 enter Fifteen
+-43.4100 layout lvl002
+-43.3600 leave
+-42.7000 leave
+-42.0400 enter Moon
+-41.4300 layout lvl003
+-41.3800 enter Moon/FM Bell
+-40.7700 layout lvl004
+-40.7200 leave
+-40.0600 leave
+-39.4000 enter Comet
+-38.7900 layout lvl005
+-38.7400 leave
+-38.0800 enter Sun
+-37.4700 layout lvl006
+-37.4200 enter String Machine
+-36.8100 layout lvl007
+-36.7600 leave
+-36.1000 enter Sun/Pump#1
+-35.4900 layout lvl008
+-35.4400 leave
+-34.7800 enter Sun/Pump#2
+-34.1700 layout lvl009
+-34.1200 leave
+-33.4600 leave
+-32.8000 enter Earth
+-32.1900 layout lvl010
+-32.1400 leave
+-31.4800 enter Bass
+-30.8700 layout lvl011
+-30.8200 leave
+-30.1600 enter Drums
+-29.5500 layout lvl012
+-29.5000 leave
+-28.8400 enter Eclipse
+-28.2300 layout lvl013
+-28.1800 enter Eclipse/FM Bell
+-27.5700 layout lvl014
+-27.5200 leave
+-26.8600 leave
+-26.2000 enter Surf
+-25.5900 layout lvl015
+-25.5400 leave
+-24.8800 enter Faders
+-24.2700 layout lvl016
+-24.2200 leave
+-23.5600 layout lvl017
+-0.5000 aim 2276.00 693.00 0.500000 0.05   # the orbits, at the first eclipse
+0.0000 play
+0.8000 aim 2526.75 411.25 0.850000 4.6   # the Day, and its reading once a phrase
+5.8000 aim 1602.47 1137.83 0.420207 1.2   # Who is up: the drone and the steady Twin (over)
+7.0000 aim 678.18 1864.40 1.100000 1.2   # Who is up: the drone and the steady Twin
+11.6000 aim 711.43 2240.40 1.050000 4.6   # the heartbeat's height
+19.6000 aim 748.00 1864.40 1.000000 4.4   # the Sun's height, then the drifting Twin's
+24.4000 aim 647.83 1864.40 1.150000 10.4857   # the Sun's height, then the drifting Twin's
+35.1857 aim 1594.00 1970.35 1.500000 2.4   # the Twins
+37.7857 enter Twins
+38.5857 aim 113.70 245.20 1.000000 0.8   # Twins: one figure, played twice
+40.2857 enter Sixteen
+40.8857 aim 155.00 263.75 1.300000 1.0   # Sixteen: all sixteen steps
+42.2571 leave
+43.0571 enter Fifteen
+43.6571 aim 155.00 263.75 1.300000 1.0   # Fifteen: one step short, so it slips
+46.2000 leave
+46.8000 leave
+47.4000 aim 2062.00 1676.70 1.500000 1.6   # the Bass
+49.2000 enter Bass
+50.0000 aim 664.70 504.45 0.566239 0.9   # Bass: the ostinato: the whole group
+51.2000 aim 155.00 263.75 1.400000 4.5   # Bass: the ostinato: in on seq.step
+56.0000 leave
+56.6000 aim 1354.91 1676.55 0.868917 1.3   # Who is up: the kit's height (over)
+57.9000 aim 647.83 1676.40 1.150000 1.3   # Who is up: the kit's height
+62.4000 aim 1354.91 1869.48 0.868917 1.2   # the Drums (over)
+63.6000 aim 2062.00 2062.55 1.500000 1.2   # the Drums
+65.1000 enter Drums
+65.9000 aim 638.70 703.72 0.405901 0.9   # Drums: the heartbeat becomes a beat: the whole group
+67.1000 aim 168.00 298.00 1.300000 4.0   # Drums: the heartbeat becomes a beat: in on seq.trigger
+71.4000 leave
+72.0000 aim 1592.00 1225.48 0.364737 1.3   # the clockwork: the gears meet (over)
+73.3000 aim 1122.00 388.40 1.150000 1.3   # the clockwork: the gears meet
+77.8000 aim 1475.00 1037.62 0.470271 1.1   # the Sun (over)
+78.9000 aim 1828.00 1686.85 1.500000 1.1   # the Sun
+80.2000 enter Sun
+81.0000 aim 314.70 318.48 0.896883 0.8   # Sun: a String Machine and two Pumps
+83.6000 enter String Machine
+84.4000 aim 903.70 539.51 0.529440 0.9   # String Machine: the whole group
+85.6000 aim 1741.00 193.70 1.200000 5.9429   # String Machine: in on fx.chorus
+91.8429 leave
+92.4429 leave
+93.0429 aim 3031.00 2096.00 0.550000 3.0   # the desk
+96.3429 aim 2945.67 2082.55 0.900000 2.1714   # along the desk to the tape
+100.4571 aim 1867.04 1973.48 0.569615 1.1   # Who is up: the groove's height (over)
+101.5571 aim 788.42 1864.40 0.950000 1.1   # Who is up: the groove's height
+105.4571 aim 2062.00 2062.55 1.500000 2.4   # the Drums
+108.1571 enter Drums
+108.9571 aim 638.70 703.72 0.405901 0.9   # Drums: the groove, and a fill: the whole group
+110.1571 aim 168.00 298.00 1.300000 10.4429   # Drums: the groove, and a fill: in on seq.trigger
+120.9000 leave
+121.5000 aim 1594.00 1655.30 1.500000 2.2   # the Moon
+124.0000 enter Moon
+124.8000 aim 508.20 232.62 0.900767 0.8   # Moon: two orbits, a scale, and a bell
+126.4000 aim 748.20 178.90 1.400000 4.0   # Moon: the orbits snapped to E minor
+132.0000 enter Moon/FM Bell
+132.8000 aim 543.70 373.12 0.765536 0.9   # the Moon's bell: the whole group
+134.0000 aim 435.00 599.70 1.300000 7.9714   # the Moon's bell: in on mod.adsr
+142.2714 leave
+142.8714 leave
+143.4714 aim 1872.29 1045.50 0.500676 1.3   # the Tide at its lowest (over)
+144.7714 aim 2150.58 435.70 0.950000 1.3   # the Tide at its lowest
+146.6000 aim 2106.29 1421.88 0.309592 0.85   # the Eclipse (over)
+147.4500 aim 2062.00 2408.05 1.500000 0.85   # the Eclipse
+148.6000 enter Eclipse
+149.4000 aim 191.70 515.20 0.554428 0.9   # Eclipse: the gong: the whole group
+150.6000 aim 309.00 196.70 1.400000 3.0857   # Eclipse: the gong: in on 194
+153.9857 leave
+154.5857 aim 1594.00 2275.20 1.500000 2.0   # the Comet
+156.8857 enter Comet
+157.6857 aim 651.70 521.30 0.547939 0.9   # Comet: its glide: the whole group
+158.8857 aim 585.00 184.55 1.300000 16.1143   # Comet: its glide: in on mod.slope
+175.3000 leave
+175.9000 aim 711.43 2428.40 1.050000 2.8   # Who is up: the Tide lets the rhythm back
+183.0000 aim 1386.71 2052.55 0.812324 1.2   # the Bass (over)
+184.2000 aim 2062.00 1676.70 1.500000 1.2   # the Bass
+185.7000 enter Bass
+186.5000 aim 664.70 504.45 0.566239 0.9   # Bass: the Breath picks the pattern: the whole group
+187.7000 aim 1307.00 150.85 1.400000 8.8429   # Bass: the Breath picks the pattern: in on filter.ladder
+196.8429 leave
+197.4429 aim 1644.00 2007.00 0.620000 3.0   # the voices, the Comet over the band
+200.7429 aim 1700.00 2000.00 0.720000 6.0   # the voices
+207.8571 aim 3031.00 2096.00 0.550000 3.0   # the desk
+211.1571 aim 2990.58 1900.55 0.950000 5.2714   # the hall and the tape
+218.6714 aim 1594.00 1970.35 1.500000 2.4   # the Twins
+221.3143 enter Twins
+222.1143 aim 113.70 245.20 1.000000 0.8   # Twins
+223.5143 enter Fifteen
+224.1143 aim 155.00 263.75 1.300000 1.0   # Fifteen: pulled back into step at the eclipse
+229.3857 leave
+229.9857 leave
+230.5857 aim 1855.75 1432.12 0.567257 1.5   # the Day turns at the Sundial's dusk (over)
+232.0857 aim 2117.50 893.90 0.800000 1.5   # the Day turns at the Sundial's dusk
+238.4571 aim 1594.00 1655.30 1.500000 2.4   # the Moon
+241.1571 enter Moon
+241.9571 aim 508.20 232.62 0.900767 0.9   # Moon: the Day sets its reach: the whole group
+243.1571 aim 337.75 305.85 1.400000 4.8143   # Moon: the Day sets its reach: in on util.attenuverter
+248.2714 leave
+248.8714 aim 1094.00 2111.00 0.530000 3.4   # Who is up, and the voices
+252.5714 aim 1000.00 2111.00 0.600000 34.5714   # the gates go dark, one by one
+287.5429 aim 1901.00 1383.00 0.250000 11.8571   # the whole orrery, for the last eclipse
+300.2000 param util.clock Run 0
+312.0000 end

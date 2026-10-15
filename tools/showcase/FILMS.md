@@ -81,6 +81,12 @@ Use Canopy as the example: the shots are `canopy` (1920×1080, the whole song) a
    ```bash
    python tools/showcase/activity.py <patch> <stems> --out tools/showcase/films/<film>
    ```
+   The sections are read from the patch's Arranger. A song with no Arranger names them with `--sections`, each at the bar it starts on. Orrery, which the Day drives, was measured like this:
+   ```bash
+   python tools/showcase/activity.py patches/orrery.json target/showcase/orrery-stems --out tools/showcase/films/orrery \
+       --sections "Dawn@1,Morning@21,Noon@49,Tide@69,Afternoon@85,Dusk@117,Night@141"
+   ```
+   If a song doesn't stop on its own, stop its Clock once the last note is struck. Orrery's Day would begin a second day at 5:08, so `orrery` stops the Clock just after the last gong.
 3. **Read the heat strip** (`activity.png`) with the score. Write the shot list in `shots.py` beside `canopy`, as one function per cut. The song's section times are the clock: `bar(n)` for Canopy. Each shot starts a `Tour`:
    ```python
    tour = Tour(s, ROOT / "patches/<patch>.json", editor=EDITORS[(s.size, s.ppp)],
@@ -99,7 +105,7 @@ Use Canopy as the example: the shots are `canopy` (1920×1080, the whole song) a
 
 ## What the films taught
 
-These lessons are from the Canopy session, 2026-10-14. The vault note "Soba Films Canopy Diving Through Its Groups" has the full story.
+These lessons are from the Canopy session (2026-10-14) and the Orrery one (2026-10-15). The vault note "Soba Films Canopy Diving Through Its Groups" has the full story.
 
 - **Every group is opened once before recording.** Since #245 the app measures the modules inside groups when a patch opens, so miniatures and the framing of a level no longer wait for a first visit. The tour still opens each group once, unseen, and dumps its layout: that's how it learns the sizes it aims from.
 - **Name the group; don't click it (#252).** The first Canopy films entered groups with a double-click on the title bar and steered the camera with relative `camera` cues. Every dive's landing had to be measured on dry runs, and a missed click left the tour on the wrong level, so every later aim was wrong. A gliding pointer also lit the Open pills of the faces it crossed. The `enter`, `leave` and `aim` cues need no aiming: the app finds the group by name and the point in patch space, from wherever the view is.
@@ -108,3 +114,8 @@ These lessons are from the Canopy session, 2026-10-14. The vault note "Soba Film
 - **A capture's noise isn't the render's (#253).** Sync is exact, but a byte compare against `render` fails for patches with noise.
 - **Text steps as the view zooms (#255).** Notes rewrap, and the Arranger's width and module heights saw. A film shows it more than anything, so check `zoom_jitter.py` before filming.
 - **A dive lands where the app frames it, so the tour must agree (#257).** Opening a group fits all of its inside, below the breadcrumb trail. `Tour.framed()` mirrors that fit (`FRAME_MARGIN` and `TRAIL_HEIGHT` in `tour.py` match `framing.rs`), and `inside` holds on it. When the two disagreed, every dive landed and then zoomed about 10% closer. If the app's margins change, change them in `tour.py` too. The previsit's `lvl###.json` dumps show where the app really landed.
+- **Centre a module at the patch's edge and a third of the frame is empty canvas.** Orrery's "Who is up" Logic modules sit at x = 24, the Tide's LFO at the right of its frame, and the Tape at the right of the desk. `orrery` aims through `clear()`, which moves the view in from the edge so it fills the frame and the module isn't centred.
+- **In a portrait window, inside a group, centre a level's top row and the top third of the phone is empty.** Most levels start at y = 0, so `inside_tall` left the top of the frame empty on every dive. `orrery-vertical` aims through `upright()`. It centres a short level in the frame, and keeps a tall one in frame from just under the breadcrumb trail.
+- **A small group's level dives in small.** The app never frames closer than 1:1, so Orrery's Eclipse lands as a little island. Push in on the module that's playing (`inside(..., focus=...)`), timed so it lands before the moment, here the gong.
+- **To show a pattern, go inside it.** A group's miniature doesn't show its steps. The Twins' 16 against 15 only reads with a dive into each Step Sequencer.
+- **`check_film.py --against` matches frames by number.** Add or remove a move and every later frame compares against the wrong one. After changing moves, grab the holds you changed from the video at their times instead (`ffmpeg -ss <t> -frames:v 1`).

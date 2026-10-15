@@ -636,6 +636,221 @@ def canopy_vertical(s):
     s.at(tour.end(max(t, bar(81) + 11.0)), "end")
 
 
+# Orrery is 112 BPM in 4/4, 140 bars of 2.143 s; bar n (from 1) starts at
+# orbit(n). It has no Arranger: the Day (an LFO) decides who plays. The
+# voices come in at bars 5 (drone and steady Twin), 9 (heartbeat), 13 (Sun),
+# 17 (drifting Twin), 21 (bass) and 29 (the kit); the drums step up at 49;
+# the Tide rests the rhythm over 69-84 and the Comet flies over 73-108;
+# eclipses (a gong) fall at bars 1, 36, 71, 106 and 141
+ORRERY_BAR = 240 / 112
+
+
+def orbit(n):
+    return (n - 1) * ORRERY_BAR
+
+
+def orrery_tour(s, aims):
+    """A Tour of Orrery, every group opened once before recording starts."""
+    tour = Tour(s, ROOT / "patches/orrery.json", editor=EDITORS[(s.size, s.ppp)], bases=FILMS / "orrery" / aims, dry=s.dry)
+    end = tour.previsit(-46.0)
+    assert end < -1.0, f"the previsit runs to {end:.1f} s: start it earlier"
+    return tour
+
+
+# Orrery's top level, by node id: the Day and its reading, and "Who is up",
+# one Logic for each voice's height
+DAY, DAY_READ, SUNDIAL, DUSK, TIDE, TIDE_READ = 19, 23, 16, 17, 20, 24
+GEARS = (8, 9, 10)
+UP = {"drone": 26, "twin": 27, "sun": 28, "drift": 29, "comet": 30, "tide": 31,
+      "heart": 32, "bass": 33, "kit": 34, "step": 35, "groove": 36, "fill": 38}
+
+
+@shot("patches/orrery.json", ppp=1.25, fps=30, crf=12, preset="fast")
+def orrery(s):
+    """Orrery, the whole song (5:12): the orbits climb, the gates of "Who
+    is up" light as each voice comes in, and the camera dives into each
+    voice and back out, to the clockwork for each eclipse."""
+    tour = orrery_tour(s, "aims.json")
+    face = 1.5
+    orbits = (2276, 693)
+    whole = (1901, 1383)
+    desk = (3031, 2096)
+
+    def clear(point, zoom, right=None):
+        """A point to centre, moved so the view keeps off the empty canvas
+        left of the patch and right of `right` (the patch's right edge)."""
+        half = (tour.ed[2] - tour.ed[0]) / 2 / zoom
+        right = tour.extent()[2] if right is None else right
+        return (max(min(point[0], right + 20 - half), half - 20), point[1])
+
+    def up(names, zoom):
+        """Who is up: some of its gates."""
+        return clear(tour.middle([UP[n] for n in names]), zoom)
+
+    s.at(0.0, "play")
+
+    # Dawn: a gong, and the orbits begin to turn
+    tour.look(-0.5, orbits, 0.5, 0.05, "the orbits, at the first eclipse", "eclipse-gong")
+    tour.look(0.8, tour.middle([DAY, DAY_READ]), 0.85, 4.6, "the Day, and its reading once a phrase", ["eclipse-gong", "moon"])
+    # Who is up: each gate lights as the Day reaches its height
+    tour.hop(5.8, up(["drone", "twin"], 1.1), 1.1, 2.4, "Who is up: the drone and the steady Twin", ["earth", "twins-sixteen"])
+    tour.look(11.6, up(["twin", "heart"], 1.05), 1.05, 4.6, "the heartbeat's height", ["twins-sixteen", "drums-kit"])
+    tour.look(19.6, up(["sun", "drift"], 1.0), 1.0, 4.4, "the Sun's height, then the drifting Twin's", ["sun", "twins-sixteen"])
+    tour.look(24.4, up(["sun", "drift"], 1.15), 1.15, orbit(17) + 0.6 - 24.4, "the Sun's height, then the drifting Twin's", ["sun", "twins-fifteen"])
+    # The Twins: one figure in sixteen eighths and in fifteen
+    tour.hop(orbit(17) + 0.9, tour.centre_of("Twins"), face, 2.4, "the Twins", ["twins-sixteen", "twins-fifteen"])
+    twins = ["twins-sixteen", "twins-fifteen"]
+    tour.enter(orbit(17) + 3.5, "Twins")
+    tour.look(orbit(17) + 4.3, *tour.framed(), 0.8, "Twins: one figure, played twice", twins)
+    tour.enter(orbit(17) + 6.0, "Sixteen")
+    tour.look(orbit(17) + 6.6, tour.centre_of(tour.find("seq.step")), 1.3, 1.0, "Sixteen: all sixteen steps", "twins-sixteen")
+    tour.leave(orbit(21) - 0.6)
+    tour.enter(orbit(21) + 0.2, "Fifteen")
+    tour.look(orbit(21) + 0.8, tour.centre_of(tour.find("seq.step")), 1.3, 1.0, "Fifteen: one step short, so it slips", "twins-fifteen")
+    tour.leave(orbit(22) + 1.2)
+    tour.leave(orbit(22) + 1.8)
+
+    # Morning: the bass, then the kit
+    tour.look(orbit(22) + 2.4, tour.centre_of("Bass"), face, 1.6, "the Bass", "bass")
+    tour.enter(orbit(22) + 4.2, "Bass")
+    tour.inside(orbit(22) + 5.0, orbit(29) - 4.3, "seq.step", 1.4, "Bass: the ostinato", "bass")
+    tour.leave(orbit(29) - 4.0)
+    tour.hop(orbit(29) - 3.4, up(["kit", "step"], 1.15), 1.15, 2.6, "Who is up: the kit's height", ["drums-kit", "bass"])
+    tour.hop(orbit(29) + 2.4, tour.centre_of("Drums"), face, 2.4, "the Drums", "drums-kit")
+    tour.enter(orbit(29) + 5.1, "Drums")
+    tour.inside(orbit(29) + 5.9, orbit(36) - 3.9, "seq.trigger", 1.3, "Drums: the heartbeat becomes a beat", "drums-kit")
+    tour.leave(orbit(36) - 3.6)
+
+    # The first eclipse: two gears, five bars and seven, meet
+    tour.hop(orbit(36) - 3.0, tour.middle(GEARS), 1.15, 2.6, "the clockwork: the gears meet", ["eclipse-gong", "bass"])
+    tour.hop(orbit(36) + 2.8, tour.centre_of("Sun"), face, 2.2, "the Sun", "sun")
+    tour.enter(orbit(36) + 5.2, "Sun")
+    tour.look(orbit(36) + 6.0, *tour.framed(), 0.8, "Sun: a String Machine and two Pumps", "sun")
+    tour.enter(orbit(36) + 8.6, "String Machine")
+    tour.inside(orbit(36) + 9.4, orbit(44) - 0.6, "fx.chorus", 1.2, "String Machine", "sun")
+    tour.leave(orbit(44) - 0.3)
+    tour.leave(orbit(44) + 0.3)
+    tour.hop(orbit(44) + 0.9, desk, 0.55, 3.0, "the desk", None)
+    tour.look(orbit(44) + 4.2, clear(tour.centre_of(178), 0.9), 0.9, orbit(48) - orbit(44) - 6.4, "along the desk to the tape", None)
+
+    # Noon: the Day passes halfway, and the drums step up to the groove
+    tour.hop(orbit(49) - 2.4, up(["step", "groove"], 0.95), 0.95, 2.2, "Who is up: the groove's height", ["drums-kit", "bass"])
+    tour.hop(orbit(49) + 2.6, tour.centre_of("Drums"), face, 2.4, "the Drums", "drums-kit")
+    tour.enter(orbit(49) + 5.3, "Drums")
+    tour.inside(orbit(49) + 6.1, orbit(57) + 0.6, "seq.trigger", 1.3, "Drums: the groove, and a fill", "drums-kit")
+    tour.leave(orbit(57) + 0.9)
+    # The Moon sings in wide arcs now
+    tour.hop(orbit(57) + 1.5, tour.centre_of("Moon"), face, 2.2, "the Moon", "moon")
+    tour.enter(orbit(57) + 4.0, "Moon")
+    tour.look(orbit(57) + 4.8, *tour.framed(), 0.8, "Moon: two orbits, a scale, and a bell", "moon")
+    tour.look(orbit(57) + 6.4, tour.centre_of(tour.find("util.quantizer")), 1.4, 4.0, "Moon: the orbits snapped to E minor", "moon")
+    tour.enter(orbit(57) + 12.0, "FM Bell")
+    tour.inside(orbit(57) + 12.8, orbit(68) - 1.6, "mod.adsr", 1.3, "the Moon's bell", "moon")
+    tour.leave(orbit(68) - 1.3)
+    tour.leave(orbit(68) - 0.7)
+
+    # The Tide's low: the rhythm rests, and an eclipse rings out in the space
+    tour.hop(orbit(68) - 0.1, clear(tour.middle([TIDE, TIDE_READ]), 0.95, right=2939), 0.95, 2.6, "the Tide at its lowest", ["moon", "sun"])
+    tour.hop(orbit(71) - 3.4, tour.centre_of("Eclipse"), face, 1.7, "the Eclipse", "eclipse-gong")
+    tour.enter(orbit(71) - 1.4, "Eclipse")
+    tour.inside(orbit(71) - 0.6, orbit(73) - 0.6, tour.group("FM Bell"), 1.4, "Eclipse: the gong", "eclipse-gong")
+    tour.leave(orbit(73) - 0.3)
+    # The Comet arrives over the drone
+    tour.hop(orbit(73) + 0.3, tour.centre_of("Comet"), face, 2.0, "the Comet", "comet")
+    tour.enter(orbit(73) + 2.6, "Comet")
+    tour.inside(orbit(73) + 3.4, orbit(85) - 5.0, "mod.slope", 1.3, "Comet: its glide", "comet")
+    tour.leave(orbit(85) - 4.7)
+
+    # Afternoon: the rhythm comes back
+    tour.hop(orbit(85) - 4.1, up(["heart", "bass", "tide"], 1.05), 1.05, 2.8, "Who is up: the Tide lets the rhythm back", ["comet", "bass"])
+    tour.hop(orbit(85) + 3.0, tour.centre_of("Bass"), face, 2.4, "the Bass", "bass")
+    tour.enter(orbit(85) + 5.7, "Bass")
+    tour.inside(orbit(85) + 6.5, orbit(93) - 0.6, "filter.ladder", 1.4, "Bass: the Breath picks the pattern", "bass")
+    tour.leave(orbit(93) - 0.3)
+    tour.hop(orbit(93) + 0.3, (1644, 2007), 0.62, 3.0, "the voices, the Comet over the band", ["comet", "bass", "drums-kit"])
+    tour.look(orbit(93) + 3.6, (1700, 2000), 0.72, 6.0, "the voices", ["comet", "bass", "drums-kit"])
+    tour.hop(orbit(98), desk, 0.55, 3.0, "the desk", None)
+    tour.look(orbit(98) + 3.3, clear(tour.middle([177, 178]), 0.95), 0.95, orbit(102) - orbit(98) - 3.3, "the hall and the tape", None)
+
+    # The third eclipse: the Twins snap back into step
+    tour.hop(orbit(103) + 0.1, tour.centre_of("Twins"), face, 2.4, "the Twins", ["twins-sixteen", "twins-fifteen"])
+    tour.enter(orbit(104) + 0.6, "Twins")
+    tour.look(orbit(104) + 1.4, *tour.framed(), 0.8, "Twins", twins)
+    tour.enter(orbit(104) + 2.8, "Fifteen")
+    tour.look(orbit(104) + 3.4, tour.centre_of(tour.find("seq.step")), 1.3, 1.0, "Fifteen: pulled back into step at the eclipse", twins)
+    tour.leave(orbit(108) + 0.1)
+    tour.leave(orbit(108) + 0.7)
+
+    # The Day turns: the Sundial times its dusk
+    tour.hop(orbit(108) + 1.3, tour.middle([SUNDIAL, DUSK, DAY]), 0.8, 3.0, "the Day turns at the Sundial's dusk", "moon")
+    # ...and as it falls, the Moon's reach narrows with it
+    tour.hop(orbit(112) + 0.6, tour.centre_of("Moon"), face, 2.4, "the Moon", "moon")
+    tour.enter(orbit(112) + 3.3, "Moon")
+    tour.inside(orbit(112) + 4.1, orbit(117) - 0.6, "util.attenuverter", 1.4, "Moon: the Day sets its reach", "moon")
+    tour.leave(orbit(117) - 0.3)
+
+    # Dusk and night: the gates go dark one by one, then the whole orrery
+    # for the last eclipse
+    tour.hop(orbit(117) + 0.3, (1094, 2111), 0.53, 3.4, "Who is up, and the voices", None)
+    tour.look(orbit(117) + 4.0, (1000, 2111), 0.6, orbit(135) - orbit(117) - 4.0, "the gates go dark, one by one", None)
+    t = tour.look(orbit(135) + 0.4, whole, 0.25, orbit(141) - orbit(135) - 1.0, "the whole orrery, for the last eclipse", None)
+    if not s.dry:
+        # The gong is struck; stop before the Day begins a second day
+        s.at(orbit(141) + 0.2, "param util.clock Run 0")
+    s.at(tour.end(max(t, 312.0)), "end")
+
+
+@shot("patches/orrery.json", ppp=1.5, fps=30, crf=12, preset="fast", size="1080x2124")
+def orrery_vertical(s):
+    """Orrery's minute from the band thinning to the rhythm's return
+    (2:15-3:15): the groove, the Tide's rest, an eclipse, the Comet. A
+    portrait window, cropped to 1080x1920 below the toolbar (y 165)."""
+    tour = orrery_tour(s, "aims-vertical.json")
+
+    def upright(key, zoom):
+        """A module's centre on the level on show, moved up or down so a tall
+        frame holds as much of the level as it can: centred on a level
+        shorter than the frame, kept within one that's taller (and clear of
+        the breadcrumb trail along the top)."""
+        x, y = tour.centre_of(tour.find(key) if isinstance(key, str) else key)
+        _, top, _, bottom = tour.extent()
+        half = (tour.ed[3] - tour.ed[1]) / 2 / zoom
+        if bottom - top < 2 * half - 120 / zoom:
+            return (x, (top + bottom) / 2 - 30 / zoom)
+        return (x, min(max(y, top - 90 / zoom + half), bottom + 40 / zoom - half))
+
+    def tall(t, until, start, focus, zoom, note, subject):
+        """inside_tall, framed upright: open on one module, drift to another."""
+        t = tour.look(t, upright(start, zoom * 0.85), zoom * 0.85, 0.9, f"{note}: {start}", subject)
+        return tour.look(t + 0.3, upright(focus, zoom), zoom, max(1.0, until - t - 0.3), f"{note}: along to {focus}", subject)
+
+    s.at(0.0, "play")
+    t0 = orbit(64)
+    tour.look(-0.5, tour.centre_of("Drums"), 2.0, 0.05, "the Drums", "drums-kit")
+    t = tour.enter(t0 - 0.5, "Drums")
+    tall(t, t0 + 6.4, "seq.trigger", "source.drum", 1.4, "Drums", "drums-kit")
+    tour.leave(t0 + 6.7)
+    # The Tide's gate goes dark, and the rhythm rests
+    tour.hop(t0 + 7.3, tour.centre_of(UP["tide"]), 1.6, 2.4, "the Tide's gate", ["moon", "sun"])
+    # The eclipse, from inside
+    tour.hop(orbit(71) - 3.6, tour.centre_of("Eclipse"), 2.0, 1.9, "the Eclipse", "eclipse-gong")
+    t = tour.enter(orbit(71) - 1.4, "Eclipse")
+    tour.look(t, upright(tour.group("FM Bell"), 1.3), 1.3, 0.8, "Eclipse: the gong", "eclipse-gong")
+    tour.leave(orbit(73) - 0.4)
+    # The Comet arrives
+    tour.hop(orbit(73) + 0.2, tour.centre_of("Comet"), 2.0, 2.0, "the Comet", "comet")
+    t = tour.enter(orbit(73) + 2.4, "Comet")
+    tall(t, orbit(80) - 0.6, "mod.slope", "filter.ladder", 1.5, "Comet", "comet")
+    tour.leave(orbit(80) - 0.3)
+    tour.hop(orbit(80) + 0.3, (1610, 1990), 0.9, 3.0, "the voices: Moon, Twins, Comet, Sun", ["comet", "moon", "sun"])
+    # The rhythm comes back: the Tide's gate, then the bass
+    tour.hop(orbit(85) - 2.6, tour.middle([UP["twin"], UP["bass"], UP["tide"]]), 1.1, 1.9, "Who is up: the rhythm returns", ["comet", "bass"])
+    tour.hop(orbit(85) + 3.0, tour.centre_of("Bass"), 2.0, 2.2, "the Bass", "bass")
+    t = tour.enter(orbit(85) + 5.5, "Bass")
+    t = tall(t, orbit(85) + 15.0, "seq.step", "filter.ladder", 1.5, "Bass", "bass")
+    s.at(tour.end(max(t, orbit(85) + 16.0)), "end")
+
+
 def framings(cues):
     """Every camera move of a shot, landed one a second with a still of
     each: a contact sheet to check the aim before a long take. The patch

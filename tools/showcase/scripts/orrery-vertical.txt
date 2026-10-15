@@ -1,0 +1,80 @@
+-46.0000 enter Twins
+-45.3900 layout lvl000
+-45.3400 enter Sixteen
+-44.7300 layout lvl001
+-44.6800 leave
+-44.0200 enter Fifteen
+-43.4100 layout lvl002
+-43.3600 leave
+-42.7000 leave
+-42.0400 enter Moon
+-41.4300 layout lvl003
+-41.3800 enter Moon/FM Bell
+-40.7700 layout lvl004
+-40.7200 leave
+-40.0600 leave
+-39.4000 enter Comet
+-38.7900 layout lvl005
+-38.7400 leave
+-38.0800 enter Sun
+-37.4700 layout lvl006
+-37.4200 enter String Machine
+-36.8100 layout lvl007
+-36.7600 leave
+-36.1000 enter Sun/Pump#1
+-35.4900 layout lvl008
+-35.4400 leave
+-34.7800 enter Sun/Pump#2
+-34.1700 layout lvl009
+-34.1200 leave
+-33.4600 leave
+-32.8000 enter Earth
+-32.1900 layout lvl010
+-32.1400 leave
+-31.4800 enter Bass
+-30.8700 layout lvl011
+-30.8200 leave
+-30.1600 enter Drums
+-29.5500 layout lvl012
+-29.5000 leave
+-28.8400 enter Eclipse
+-28.2300 layout lvl013
+-28.1800 enter Eclipse/FM Bell
+-27.5700 layout lvl014
+-27.5200 leave
+-26.8600 leave
+-26.2000 enter Surf
+-25.5900 layout lvl015
+-25.5400 leave
+-24.8800 enter Faders
+-24.2700 layout lvl016
+-24.2200 leave
+-23.5600 layout lvl017
+-0.5000 aim 2062.00 2062.55 2.000000 0.05   # the Drums
+0.0000 play
+134.5000 enter Drums
+135.1100 aim 168.00 462.34 1.190000 0.9   # Drums: seq.trigger
+136.3100 aim 505.00 392.99 1.400000 5.09   # Drums: along to source.drum
+141.7000 leave
+142.3000 aim 1278.50 2245.48 0.367581 1.2   # the Tide's gate (over)
+143.5000 aim 495.00 2428.40 1.600000 1.2   # the Tide's gate
+146.4000 aim 1278.50 2418.23 0.367581 0.95   # the Eclipse (over)
+147.3500 aim 2062.00 2408.05 2.000000 0.95   # the Eclipse
+148.6000 enter Eclipse
+149.2100 aim 309.00 423.22 1.300000 0.8   # Eclipse: the gong
+153.8857 leave
+154.4857 aim 1828.00 2341.62 1.230769 1.0   # the Comet (over)
+155.4857 aim 1594.00 2275.20 2.000000 1.0   # the Comet
+156.6857 enter Comet
+157.2957 aim 585.00 431.51 1.275000 0.9   # Comet: mod.slope
+158.4957 aim 1281.00 366.79 1.500000 10.19   # Comet: along to filter.ladder
+168.9857 leave
+169.5857 aim 1610.00 1990.00 0.900000 3.0   # the voices: Moon, Twins, Comet, Sun
+177.4000 aim 955.50 2115.20 0.440031 0.95   # Who is up: the rhythm returns (over)
+178.3500 aim 301.00 2240.40 1.100000 0.95   # Who is up: the rhythm returns
+183.0000 aim 1181.50 1958.55 0.327087 1.1   # the Bass (over)
+184.1000 aim 2062.00 1676.70 2.000000 1.1   # the Bass
+185.5000 enter Bass
+186.1100 aim 155.00 431.51 1.275000 0.9   # Bass: seq.step
+187.3100 aim 1307.00 366.79 1.500000 7.69   # Bass: along to filter.ladder
+196.0000 end

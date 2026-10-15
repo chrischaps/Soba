@@ -1,11 +1,12 @@
 """What is sounding when: each part's level through a song, from soloed stems.
 
-    python tools/showcase/activity.py patch.json stems/ [--out DIR]
+    python tools/showcase/activity.py patch.json stems/ [--out DIR] [--sections Dawn@1,Noon@49,...]
 
 `stems/` holds one WAV per part, rendered from the start of the song (the
 name of the file is the part's name). Writes activity.json (each part's RMS
 per beat, in dB, and the song's sections, read from the patch's first
-Arranger and its Clock) and activity.png, a heat strip of every part across
+Arranger and its Clock, or for a song with no Arranger, from `--sections`:
+names at the bars they start on, counted from 1) and activity.png, a heat strip of every part across
 the song with the sections marked.
 
 A film imports it to aim the camera at what is playing:
@@ -46,12 +47,20 @@ def read_wav(path):
     raise ValueError(f"{path}: no audio")
 
 
-def sections_of(patch):
+def sections_of(patch, given=None):
     """[(name, start seconds, bars)] from the patch's first Arranger, timed
-    by its Clock (Tempo, and a 1/16 clock at the Arranger's Steps a bar)."""
+    by its Clock (Tempo, and a 1/16 clock at the Arranger's Steps a bar).
+    `given` ([(name, first bar)]) names them instead, in 4/4 bars, where the
+    song has no Arranger (Orrery); the last runs to the end of the song."""
     nodes = patch["nodes"]
     clock = next(n for n in nodes if n["module_id"] == "util.clock")
-    arranger = next(n for n in nodes if n["module_id"] == "seq.arranger")
+    arranger = next((n for n in nodes if n["module_id"] == "seq.arranger"), None)
+    if given is not None or arranger is None:
+        tempo = next(p["value"] for p in clock["parameters"] if p["name"] == "Tempo")
+        bar = 4 * 60.0 / tempo
+        given = given or [("", 1)]
+        ends = [b for _, b in given[1:]] + [None]
+        return [(name, round((b - 1) * bar, 4), (end - b) if end else 1) for (name, b), end in zip(given, ends)], tempo, bar
     param = {p["name"]: p["value"] for p in arranger["parameters"]}
     tempo = next(p["value"] for p in clock["parameters"] if p["name"] == "Tempo")
     bar = param["Steps"] / 4 * 60.0 / tempo
@@ -110,9 +119,9 @@ class Activity:
         return bad
 
 
-def measure(patch_path, stems):
+def measure(patch_path, stems, given=None):
     patch = json.loads(Path(patch_path).read_text(encoding="utf-8"))
-    sections, tempo, bar = sections_of(patch)
+    sections, tempo, bar = sections_of(patch, given)
     beat = 60.0 / tempo
     parts = {}
     for wav in sorted(Path(stems).glob("*.wav")):
@@ -163,10 +172,14 @@ def main():
     ap.add_argument("patch")
     ap.add_argument("stems")
     ap.add_argument("--out", default=".")
+    ap.add_argument("--sections", help="Name@bar,...: the sections, where the patch has no Arranger")
     a = ap.parse_args()
+    given = None
+    if a.sections:
+        given = [(name, int(b)) for name, b in (s.rsplit("@", 1) for s in a.sections.split(","))]
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    data = measure(a.patch, a.stems)
+    data = measure(a.patch, a.stems, given)
     (out / "activity.json").write_text(json.dumps(data))
     heat_strip(data, out / "activity.png")
     act = Activity(data)
