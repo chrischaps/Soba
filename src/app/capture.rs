@@ -100,8 +100,20 @@ use crate::engine::{read_wav_at, MidiEvent, StereoBuffer};
 /// The fewest frames drawn before recording starts, so the window size,
 /// theme and patch have settled. Cues at negative times lengthen the warmup
 /// to reach them: a shot can start the transport, set its view and let a
-/// reverb fill before the first recorded frame.
+/// reverb fill before the first recorded frame. A long one costs little:
+/// see `FAST_FORWARD_MARGIN`.
 const WARMUP_FRAMES: i64 = 45;
+
+/// A long warmup (a still three minutes into a song) runs its frames' cues
+/// and audio without drawing them until it's this many seconds from the
+/// first recorded frame. The app keeps cables' and meters' histories as it
+/// goes; the drawn seconds after are for anything that only moves as it's
+/// drawn, such as a face's animation, to catch up.
+const FAST_FORWARD_MARGIN: f64 = 3.0;
+
+/// Seconds of a fast-forward stepped between drawn frames, so the window
+/// keeps answering the system while it runs.
+const FAST_FORWARD_STRIDE: f64 = 5.0;
 
 /// How near a press can come to a control without landing on it before the
 /// capture says so, in points.
@@ -307,6 +319,8 @@ pub struct Capture {
     /// Whether this UI pass is a new frame (rather than a repaint while
     /// waiting for the last frame's screenshot).
     fresh: bool,
+    /// Frames stepped without drawing since the last drawn one.
+    skipped: i64,
     /// A screenshot has been asked for and hasn't arrived.
     awaiting_shot: bool,
     actions: Vec<CaptureAction>,
@@ -391,6 +405,7 @@ impl Capture {
             frame: -warmup - 1,
             warmup,
             fresh: false,
+            skipped: 0,
             awaiting_shot: false,
             actions: Vec::new(),
             ffmpeg: Some(ffmpeg),
@@ -425,7 +440,8 @@ impl Capture {
         &self.config
     }
 
-    fn dt(&self) -> f64 {
+    /// Seconds per frame.
+    pub fn dt(&self) -> f64 {
         1.0 / self.config.fps as f64
     }
 
@@ -488,6 +504,7 @@ impl Capture {
 
         self.frame += 1;
         self.fresh = true;
+        self.skipped = 0;
         raw.time = Some(self.ui_time());
 
         // Draw the interface at the configured scale, whatever the display's
@@ -507,8 +524,49 @@ impl Capture {
     }
 
     /// egui's clock, which mustn't go below zero during warmup.
-    fn ui_time(&self) -> f64 {
+    pub fn ui_time(&self) -> f64 {
         (self.frame + self.warmup + 1) as f64 * self.dt()
+    }
+
+    /// Steps on to the next frame without drawing it, if nobody could
+    /// tell: a long warmup fast-forwards until
+    /// it's `FAST_FORWARD_MARGIN` from the first recorded frame, so long as
+    /// the frame's cues only reach the sound (notes, params, `play`) and
+    /// nothing on screen is moving. `settled` is the app's word that its own
+    /// view isn't (a fit or a dive). The app then runs the frame's actions
+    /// and renders its audio as for a drawn one. Returns whether it did.
+    pub fn skip_frame(&mut self, settled: bool) -> bool {
+        let next = self.frame + 1;
+        let end = (next + 1) as f64 * self.dt();
+        let ready = self.fresh
+            && settled
+            && !self.finished
+            && self.frame + self.warmup + 1 >= WARMUP_FRAMES
+            && end <= -FAST_FORWARD_MARGIN
+            && (self.skipped as f64) < FAST_FORWARD_STRIDE * self.config.fps as f64;
+        let still = self.pointer_glide.is_none()
+            && self.pan_glide.is_none()
+            && self.zoom_left.is_none()
+            && self.camera_glide.is_none()
+            && self.pending_pan_delta == Vec2::ZERO
+            && self.pending_zoom == 1.0
+            && !self.button_down
+            && self.hovering.is_none()
+            && self.modifiers.is_none();
+        let heard_only = self.cues[self.next_cue..].iter().take_while(|(at, _)| *at < end - 1e-9).all(|(_, cue)| {
+            matches!(
+                cue,
+                Cue::Play(_) | Cue::Note { .. } | Cue::Midi(_) | Cue::Param { .. } | Cue::Cursor(_) | Cue::Still(_) | Cue::Input(_)
+            )
+        });
+        if !(ready && still && heard_only) {
+            return false;
+        }
+        self.frame = next;
+        self.skipped += 1;
+        // None of these cues touch the pass's input
+        self.fire_cues(&mut egui::RawInput::default());
+        true
     }
 
     /// Tells the pass which file is dragged over the window, if one is.

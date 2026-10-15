@@ -620,6 +620,33 @@ impl SynthApp {
         capture.commit_audio();
     }
 
+    /// Steps a long capture warmup on without drawing while nothing would
+    /// show it: each frame's cues and audio as for a drawn one, and what the
+    /// engine and MIDI said about them, taken in at the frame's own time.
+    /// Cables, filter trails and meters keep seconds of the past, so they
+    /// look the same as if every frame had been drawn.
+    fn fast_forward_capture(&mut self, ctx: &egui::Context) {
+        loop {
+            let settled = self.glide.is_none() && self.dive.is_none() && self.fit_pending == 0;
+            let Some(capture) = self.capture.as_mut() else { return };
+            if !capture.skip_frame(settled) {
+                return;
+            }
+            let (now, dt) = (capture.ui_time(), capture.dt() as f32);
+            self.step_capture(ctx);
+            self.process_engine_events();
+            self.user_state.tick_signal_history(now, &self.graph_state.graph);
+            if let Some(handle) = self.ui_handle.as_ref() {
+                self.user_state.spectra.listen(handle.graph().spectrum_taps(), dt);
+            }
+            self.user_state.output_meter.tick(dt);
+            for meters in self.user_state.module_meters.values_mut() {
+                meters.tick(dt);
+            }
+            self.process_midi_events(now);
+        }
+    }
+
     /// Writes where each module, frame and note was last drawn, in patch
     /// space, for a capture's `layout` cue: what frames around modules need
     /// to clear, and whether a module covers a note.
@@ -4547,6 +4574,8 @@ impl eframe::App for SynthApp {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
         }
+        // Then the frames of a long warmup that would look no different
+        self.fast_forward_capture(ctx);
     }
 
     /// While capturing, the script replaces the mouse and keyboard, and the
