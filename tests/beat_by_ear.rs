@@ -43,12 +43,14 @@ const HELD_SHARE: f32 = 0.8;
 /// The examples with a beat to find: (file, BPM, when the beat comes in
 /// and how long to listen, in seconds). Canopy's drums come in with its
 /// Groove, From One Sine's with its Pulse, and Canopy is heard to the end
-/// of its Night, when they stop.
+/// of its Night, when they stop. Interlock is heard through both of the
+/// stretches its LFO silences one of its two voices for, when three against
+/// four scores about as well as the beat.
 const SONGS: &[(&str, f32, f32, f32)] = &[
     ("canopy.json", 116.0, 33.0, 243.0),
     ("backbeat.json", 96.0, 0.0, 40.0),
     ("drum-machine.json", 100.0, 0.0, 40.0),
-    ("interlock.json", 100.0, 0.0, 40.0),
+    ("interlock.json", 100.0, 0.0, 80.0),
     ("cut-up.json", 112.0, 0.0, 40.0),
     ("front-porch.json", 96.0, 0.0, 40.0),
     ("roll-call.json", 104.0, 0.0, 40.0),
@@ -59,7 +61,7 @@ const SONGS: &[(&str, f32, f32, f32)] = &[
 /// Windows known not to hold the beat: (file, from and to, in seconds, and why).
 const LOOSE: &[(&str, f32, f32, &str)] = &[
     ("canopy.json", 113.0, 143.0, "the Clearing drops the drums and the beat is lost; it's found again on the and, and turned 10 s into the Peak (#287)"),
-    ("interlock.json", 10.0, 40.0, "no drums: it settles late, and past 30 s hears the three against four at 126 BPM (#288)"),
+    ("interlock.json", 10.0, 20.0, "no drums and one voice at first: it hears dotted eighths, turns to the beat at 8 s and is still settling (#288)"),
 ];
 
 /// One window of an example heard: its start, the median offset of the

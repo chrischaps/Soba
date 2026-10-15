@@ -17,7 +17,10 @@
 //! Each beat from 0.4 to 0.8 s (150 to 75 BPM) is scored by its lag, half
 //! of it and twice it together: a sixteenth-note hat and a kick on every
 //! other beat both count toward the beat they belong to, so the tempo comes
-//! out already folded into the range a person dances at.
+//! out already folded into the range a person dances at. Once it's dancing
+//! one, another takes over only by leading for a few seconds: three against
+//! four puts the beat and the dotted eighth ahead by turns, and a dancer
+//! keeps to the one it found.
 //!
 //! **Where the beats fall.** A comb with a tooth every beat slides along the
 //! last few seconds of onset strength, and where it catches the most hits
@@ -81,8 +84,11 @@ const SURE_SECONDS: f32 = 1.0;
 const LOSE_SCORE: f32 = 0.14;
 const QUIET_SECONDS: f32 = 2.0;
 /// Another tempo takes over from the one being followed only when it
-/// scores this much better.
+/// scores this much better, as a lead held over [`RIVAL_SECONDS`]: at once
+/// for a beat danced for less than that, and more patiently over as long
+/// again.
 const SWITCH: f32 = 1.15;
+const RIVAL_SECONDS: f32 = 4.0;
 /// How far either side of the beat being followed it looks for that beat
 /// again, in candidates.
 const NEARBY: usize = 4;
@@ -202,6 +208,9 @@ struct Beat {
     /// While it turns half a beat to the backbeat, where in the beat it's
     /// headed.
     heading: Option<f64>,
+    /// How far another tempo has led this one lately, as a log, 0 while
+    /// this one is the best.
+    rival: f32,
 }
 
 impl Default for BeatTracker {
@@ -354,18 +363,25 @@ impl BeatTracker {
 
         // Where the beat could be, and how sure
         let chosen = self.choose_tempo();
-        let score = chosen.map_or(0.0, |(_, score)| score);
+        let score = chosen.map_or(0.0, |(_, score, _)| score);
         self.sure = if score >= CLAIM_SCORE { self.sure + 1 } else { 0 };
         self.doubt = if score < LOSE_SCORE { self.doubt + 1 } else { 0 };
         let heard_enough = self.heard as f32 * FRAME_SECONDS >= HEARD_SECONDS;
         let sure = self.sure as f32 * FRAME_SECONDS >= SURE_SECONDS;
         let doubtful = self.doubt as f32 * FRAME_SECONDS >= SURE_SECONDS;
         self.beat = match (self.beat, chosen) {
-            (None, Some((frames, _))) if heard_enough && sure => {
+            (None, Some((frames, ..))) if heard_enough && sure => {
                 let (phase, _) = self.phase(frames, None);
-                Some(Beat { frames, trim: 0.0, position: phase as f64, step: 0.0, lean: 0.0, heading: None })
+                Some(Beat { frames, trim: 0.0, position: phase as f64, step: 0.0, lean: 0.0, heading: None, rival: 0.0 })
             }
-            (Some(beat), Some((frames, _))) if !quiet && !doubtful => Some(self.follow(beat, frames)),
+            (Some(beat), Some((frames, _, taking_over))) if !quiet && !doubtful => {
+                // A new tempo has beats of its own: where the clock was in the
+                // old one, and how it trimmed and leaned there, say nothing
+                // about them, so it finds them afresh, as a claim does, and
+                // catches up
+                let beat = if taking_over { Beat { heading: Some(self.phase(frames, None).0 as f64), trim: 0.0, lean: 0.0, ..beat } } else { beat };
+                Some(self.follow(beat, frames))
+            }
             _ => None,
         };
     }
@@ -408,9 +424,10 @@ impl BeatTracker {
         SHORTEST_BEAT * (i / CANDIDATES as f32).exp2()
     }
 
-    /// The beat to follow, in frames, and its score: the beat being
-    /// followed, found again, unless another scores clearly better.
-    fn choose_tempo(&mut self) -> Option<(f32, f32)> {
+    /// The beat to follow, in frames, its score, and whether it takes over
+    /// from the beat being followed: that beat, found again, unless another
+    /// has scored clearly better for a while.
+    fn choose_tempo(&mut self) -> Option<(f32, f32, bool)> {
         if self.memory.correlation[0] <= 1e-6 {
             return None;
         }
@@ -428,10 +445,20 @@ impl BeatTracker {
         // The candidates wrap round: 0.8 s is 0.4 s an octave down
         let mut chosen = best as isize;
         let mut same = false;
-        if let Some(beat) = self.beat {
+        if let Some(beat) = &mut self.beat {
             let following = (CANDIDATES as f32 * (beat.frames / SHORTEST_BEAT).log2()).round() as isize;
             let near = (following - NEARBY as isize..=following + NEARBY as isize).fold(following, |m, i| if at(i) > at(m) { i } else { m });
-            if scores[best] <= SWITCH * at(near) {
+            // Another tempo takes over once it has led for a while, not the
+            // moment it's ahead: three against four has each ahead by turns,
+            // and a dancer keeps to the one it found. A beat only just
+            // claimed is held lightly, though: one better at once takes over
+            // at once, and it grows patient as the beat is danced. Gliding to
+            // a new tempo, that one keeps leading until the glide arrives
+            let lead = if scores[best] > at(near) { (scores[best] / at(near).max(1e-6)).ln().min(1.0) } else { 0.0 };
+            let danced = beat.position as f32 * beat.frames * FRAME_SECONDS;
+            let patience = (danced - RIVAL_SECONDS).clamp(FRAME_SECONDS, RIVAL_SECONDS);
+            beat.rival = if lead > 0.0 { beat.rival + (lead - beat.rival) * (FRAME_SECONDS / patience) } else { 0.0 };
+            if beat.rival <= SWITCH.ln() {
                 chosen = near;
                 same = true;
             }
@@ -450,7 +477,7 @@ impl BeatTracker {
                 frames = Self::candidate(CANDIDATES as f32 * (frames / SHORTEST_BEAT).log2().rem_euclid(1.0));
             }
         }
-        Some((frames, peak))
+        Some((frames, peak, self.beat.is_some() && !same))
     }
 
     /// The onset strength `back` frames before now, read between frames
@@ -594,7 +621,7 @@ impl BeatTracker {
             _ if error.abs() < LOCKED => (beat.lean + (toward - beat.lean) * clear * (FRAME_SECONDS / LEAN_SECONDS), None),
             _ => (beat.lean, None),
         };
-        Beat { frames, trim, position: beat.position + step, step, lean, heading }
+        Beat { frames, trim, position: beat.position + step, step, lean, heading, rival: beat.rival }
     }
 }
 
@@ -758,6 +785,54 @@ pub(crate) mod tests {
         assert!(misses.iter().all(|miss| miss.abs() < 0.012), "{misses:?}");
     }
 
+    /// Three against four at 100 BPM, as Interlock plays it: a gong where
+    /// they meet, every three beats, and a bell on every sixteenth that
+    /// three or four divides, louder on the beat, and more so in every other
+    /// three cycles than the rest. For the first `full` seconds a second bell
+    /// fills the sixteenths between, as Interlock's does while its LFO lets
+    /// it. The music, and when each beat falls.
+    fn three_against_four(full: f32, seconds: f32) -> (Vec<f32>, Vec<f32>) {
+        let sixteenth = 15.0 / 100.0;
+        let mut out = vec![0.0; (seconds * RATE) as usize];
+        let mut noise = Noise(3);
+        let bell = |out: &mut [f32], at: f32, hz: f32, level: f32| {
+            let start = (at * RATE) as usize;
+            for (n, s) in out.iter_mut().skip(start).enumerate().take((0.6 * RATE) as usize) {
+                let t = n as f32 / RATE;
+                *s += level * (std::f32::consts::TAU * hz * t).sin() * (-t / 0.25).exp();
+            }
+        };
+        let pitches = [523.0, 587.0, 659.0, 784.0, 880.0];
+        for step in 0..(seconds / sixteenth) as usize {
+            let at = step as f32 * sixteenth;
+            let hz = pitches[step * 7 % pitches.len()];
+            match step % 12 {
+                0 => add_hit(&mut out, Hit::Kick, at, 0.6, &mut noise),
+                4 | 8 => bell(&mut out, at, hz, if step / 36 % 2 == 0 { 0.6 } else { 0.4 }),
+                3 | 6 | 9 => bell(&mut out, at, hz, 0.35),
+                _ if at < full => bell(&mut out, at, hz * 1.5, 0.35),
+                _ => {}
+            }
+        }
+        let beats = (0..).map(|beat| beat as f32 * 4.0 * sixteenth).take_while(|&at| at < seconds + 1.0).collect();
+        (out, beats)
+    }
+
+    #[test]
+    fn test_three_against_four_keeps_the_beat_it_found() {
+        // Once the second bell stops, the bell after each gap lands every
+        // dotted eighth, and that tempo scores about as well as the beat's,
+        // ahead while the accents are soft. A dancer on the beat stays on it
+        let (music, beats) = three_against_four(15.0, 40.0);
+        let heard = listen(&music);
+        for (at, beat) in heard.iter().enumerate().skip(1500) {
+            let (_, seconds) = beat.unwrap_or_else(|| panic!("no beat at {} s", at as f32 * FRAME_SECONDS));
+            assert!((seconds - 0.6).abs() < 0.012, "a {seconds} s beat at {} s", at as f32 * FRAME_SECONDS);
+        }
+        let misses = misses(&heard, &beats, 10.0);
+        assert!(misses.iter().all(|miss| miss.abs() < 0.025), "{misses:?}");
+    }
+
     #[test]
     fn test_a_drone_noise_and_silence_have_no_beat() {
         let len = (8.0 * RATE) as usize;
@@ -815,3 +890,4 @@ pub(crate) mod tests {
         assert_eq!(tracker.memory.correlation[0], 0.0);
     }
 }
+
