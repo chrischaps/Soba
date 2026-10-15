@@ -159,6 +159,9 @@ pub(crate) struct OutputTap {
     pub(crate) node_id: NodeId,
     pub(crate) output_index: PortIndex,
     pub(crate) buffer: usize,
+    /// The loudest of every block since the UI was last given a reading, so
+    /// a hit early in a callback of several blocks isn't lost to the last.
+    pub(crate) peaks: Option<ChannelPeaks>,
 }
 
 /// A compiled audio graph, ready to run on the audio thread.
@@ -485,6 +488,12 @@ impl GraphPlan {
                 line.write(&outputs[source]);
             }
         }
+
+        // Each monitored output's loudest since it was last read
+        for tap in self.output_taps.iter_mut() {
+            let now = ChannelPeaks::of(&self.outputs[tap.buffer]);
+            tap.peaks = Some(tap.peaks.map_or(now, |earlier| earlier.louder(&now)));
+        }
     }
 
     /// How many channels a node's output (counted among its outputs) carried
@@ -544,15 +553,23 @@ impl GraphPlan {
         })
     }
 
-    /// The values at monitored outputs after the last block: the peak of each
-    /// channel, and across all of them, as the sample with the largest
-    /// magnitude, sign preserved, so cables can draw bipolar signals such as
-    /// LFOs swinging either side of zero.
+    /// The values at monitored outputs over the blocks since they were last
+    /// read (see [`restart_output_peaks`](Self::restart_output_peaks)): the
+    /// peak of each channel, and across all of them, as the sample with the
+    /// largest magnitude, sign preserved, so cables can draw bipolar signals
+    /// such as LFOs swinging either side of zero.
     pub fn output_values(&self) -> impl Iterator<Item = (NodeId, PortIndex, f32, ChannelPeaks)> + '_ {
         self.output_taps.iter().map(|tap| {
-            let peaks = ChannelPeaks::of(&self.outputs[tap.buffer]);
+            let peaks = tap.peaks.unwrap_or_else(|| ChannelPeaks::of(&self.outputs[tap.buffer]));
             (tap.node_id, tap.output_index, peaks.overall(), peaks)
         })
+    }
+
+    /// Starts each monitored output's peaks over, once they've been read.
+    pub fn restart_output_peaks(&mut self) {
+        for tap in self.output_taps.iter_mut() {
+            tap.peaks = None;
+        }
     }
 
     /// The first module in processing order that produces the final audio

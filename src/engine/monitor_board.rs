@@ -83,6 +83,7 @@ impl MonitorWriter {
         for (slot, (_, _, _, peaks)) in held.outputs.iter_mut().zip(plan.output_values()) {
             *slot = if fresh { peaks } else { slot.louder(&peaks) };
         }
+        plan.restart_output_peaks();
         let modules = held.meters.iter_mut().zip(held.readouts.iter_mut()).zip(plan.nodes.iter_mut());
         for ((meter, readout), node) in modules {
             let Some(module) = node.module.as_mut() else { continue };
@@ -228,7 +229,7 @@ mod tests {
         let mut plan = Box::new(GraphPlan::empty(4));
         for n in 0..outputs {
             plan.outputs.push(SignalBuffer::new(4, SignalType::Gate));
-            plan.output_taps.push(OutputTap { node_id: 1, output_index: n, buffer: n });
+            plan.output_taps.push(OutputTap { node_id: 1, output_index: n, buffer: n, peaks: None });
         }
         for n in 0..inputs {
             plan.input_taps.push(InputTap { node_id: 2, input_index: n, source: MonitorSource::Output(0) });
@@ -278,6 +279,27 @@ mod tests {
         assert!(sweep(&mut monitors).is_empty(), "already given out");
         plan.publish_monitors();
         assert_eq!(sweep(&mut monitors).len(), 2);
+    }
+
+    #[test]
+    fn test_a_hit_early_in_a_callback_is_heard() {
+        // A callback of several blocks: a pulse in the first, silence after
+        let mut monitors = Monitors::default();
+        let mut plan = monitors.watch(plan(1, 0));
+        let context = crate::dsp::ProcessContext::new(48000.0, 4);
+        plan.outputs[0].samples.fill(1.0);
+        plan.process(&context);
+        plan.outputs[0].samples.fill(0.0);
+        for _ in 0..3 {
+            plan.process(&context);
+        }
+        plan.publish_monitors();
+        assert_eq!(sweep(&mut monitors).iter().map(output_value).collect::<Vec<_>>(), [1.0]);
+
+        // Read, it starts over: the next callback is silent
+        plan.process(&context);
+        plan.publish_monitors();
+        assert_eq!(sweep(&mut monitors).iter().map(output_value).collect::<Vec<_>>(), [0.0]);
     }
 
     #[test]

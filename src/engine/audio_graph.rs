@@ -927,7 +927,7 @@ impl AudioGraph {
                 continue;
             };
             if output_index < spec.output_count() {
-                plan.output_taps.push(OutputTap { node_id, output_index, buffer: base + output_index });
+                plan.output_taps.push(OutputTap { node_id, output_index, buffer: base + output_index, peaks: None });
             }
         }
 
