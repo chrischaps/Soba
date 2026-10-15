@@ -453,8 +453,12 @@ pub struct Tape {
     reel_turns: f32,
     pitch_cents: f32,
     drive_peak: f32,
-    /// The left track's lag at the end of the last block.
+    /// The left track's lag at the end of the last block, all of it and the
+    /// wow's part alone.
     last_lag: f32,
+    last_wow_lag: f32,
+    /// How fast the reels turned in the last block, against the tape speed.
+    reel_speed: f32,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
 }
@@ -486,6 +490,8 @@ impl Tape {
             pitch_cents: 0.0,
             drive_peak: 0.0,
             last_lag: 0.0,
+            last_wow_lag: 0.0,
+            reel_speed: 1.0,
             ports: vec![
                 PortDefinition::input_with_default("in_l", "In L", SignalType::Audio, 0.0).describe("Left of the bus to put on tape"),
                 PortDefinition::input_with_default("in_r", "In R", SignalType::Audio, 0.0).describe("Right of the bus; copies left when unpatched"),
@@ -531,8 +537,9 @@ impl Tape {
     pub const READOUT_PITCH: usize = 1;
     pub const READOUT_DRIVE: usize = 2;
     pub const READOUT_DROPOUT: usize = 3;
-    /// How far the left read head lags, in seconds.
-    pub const READOUT_LAG: usize = 4;
+    /// How fast the reels are turning against the tape speed: 1 steady, and
+    /// swinging either side of it with the wow, exaggerated for the eye.
+    pub const READOUT_REEL_SPEED: usize = 4;
     /// How far the Stop has slowed the transport: 0 at speed, 1 stopped.
     pub const READOUT_BRAKE: usize = 5;
 
@@ -670,6 +677,7 @@ impl DspModule for Tape {
 
         let mut drive_peak = 0.0f32;
         let mut lag_left = self.last_lag;
+        let mut wow_left = self.last_wow_lag;
         let mut travelled = 0.0;
         for i in 0..context.block_size {
             let x_left = in_left.and_then(|buf| buf.samples.get(i).copied()).unwrap_or(0.0);
@@ -690,6 +698,7 @@ impl DspModule for Tape {
             let drag_left = self.transport_left.next_drag();
             let drag_right = self.transport_right.next_drag();
             lag_left = (0..4).map(|p| lag[p] * drag_left[p]).sum::<f32>();
+            wow_left = lag[0] * drag_left[0] + lag[1] * drag_left[1];
             let lag_right_own = (0..4).map(|p| lag[p] * drag_right[p]).sum::<f32>();
             let lag_right = lag_left + self.width.next() * (lag_right_own - lag_left);
 
@@ -721,13 +730,18 @@ impl DspModule for Tape {
             out_right.samples[i] = x_right + mix * (wet_right - x_right);
         }
 
-        // For the display: the reels turn at the speed, and the pitch follows the lag
+        // For the display: the pitch follows the lag, and the reels turn at
+        // the speed, lurching with the wow. The flutter is the capstan's, so
+        // it stays off the reels
         let block = context.block_size as f32;
         if block > 0.0 {
             self.pitch_cents = -(lag_left - self.last_lag) / block * CENTS_PER_DEVIATION;
-            self.reel_turns = (self.reel_turns + REEL_TURNS_PER_SECOND * speed.rate * travelled / sr).fract();
+            self.reel_speed = reel_speed(-(wow_left - self.last_wow_lag) / block);
+            self.reel_turns =
+                (self.reel_turns + REEL_TURNS_PER_SECOND * speed.rate * self.reel_speed * travelled / sr).fract();
         }
         self.last_lag = lag_left;
+        self.last_wow_lag = wow_left;
         self.drive_peak = drive_peak / RecordHead::LEVEL;
     }
 
@@ -750,6 +764,8 @@ impl DspModule for Tape {
             value.reset(value.target());
         }
         self.last_lag = 0.0;
+        self.last_wow_lag = 0.0;
+        self.reel_speed = 1.0;
         self.pitch_cents = 0.0;
         self.drive_peak = 0.0;
     }
@@ -760,7 +776,7 @@ impl DspModule for Tape {
         readout.values[Self::READOUT_PITCH] = self.pitch_cents;
         readout.values[Self::READOUT_DRIVE] = self.drive_peak;
         readout.values[Self::READOUT_DROPOUT] = self.dropouts.gain;
-        readout.values[Self::READOUT_LAG] = self.last_lag / self.sample_rate;
+        readout.values[Self::READOUT_REEL_SPEED] = self.reel_speed;
         readout.values[Self::READOUT_BRAKE] = 1.0 - self.stop.speed();
         Some(readout)
     }
@@ -768,6 +784,21 @@ impl DspModule for Tape {
 
 /// How fast the display's reels turn at 15 ips.
 pub const REEL_TURNS_PER_SECOND: f32 = 0.6;
+
+/// How many times over the reels show the wow's swing in speed: the 22
+/// cents of Wow at 75% swing them about half as fast again either way.
+const REEL_LURCH: f32 = 50.0;
+
+/// The most the reels' lurch can take from or add to their speed, so even
+/// full Wow at 7½ ips never stalls them or runs them backwards.
+const REEL_LURCH_MAX: f32 = 0.85;
+
+/// How fast the reels turn against the tape speed, for the wow's swing
+/// in the tape's speed (`d` in a ratio of `1 + d`): exaggerated so the eye
+/// can follow it, and gently held back as it nears the limit.
+fn reel_speed(deviation: f32) -> f32 {
+    1.0 + REEL_LURCH_MAX * (REEL_LURCH * deviation / REEL_LURCH_MAX).tanh()
+}
 
 #[cfg(test)]
 mod tests {
@@ -1178,6 +1209,50 @@ mod tests {
         assert!(readout.values[Tape::READOUT_REEL] > 0.0);
         assert!(readout.values[Tape::READOUT_DRIVE] > 1.0);
         assert_eq!(readout.values[Tape::READOUT_DROPOUT], 1.0);
+    }
+
+    /// The slowest and fastest the reels turn, block by block, over `seconds`.
+    fn reel_speeds(params: &[f32], seconds: f32) -> (f32, f32) {
+        let mut tape = tape();
+        let ctx = ProcessContext::new(SR, BLOCK);
+        let l = SignalBuffer::audio(BLOCK);
+        let r = SignalBuffer::unconnected(BLOCK, SignalType::Audio);
+        let cv = SignalBuffer::control(BLOCK);
+        let gate = SignalBuffer::gate(BLOCK);
+        let mut outputs = vec![SignalBuffer::audio(BLOCK), SignalBuffer::audio(BLOCK)];
+        let (mut slowest, mut fastest) = (f32::MAX, f32::MIN);
+        for _ in 0..(seconds * SR) as usize / BLOCK {
+            tape.process(&[&l, &r, &cv, &gate], &mut outputs, params, &ctx);
+            let speed = tape.readout(params).unwrap().values[Tape::READOUT_REEL_SPEED];
+            slowest = slowest.min(speed);
+            fastest = fastest.max(speed);
+        }
+        (slowest, fastest)
+    }
+
+    #[test]
+    fn test_the_reels_lurch_with_the_wow() {
+        // Wow at 75%: the reels swing well either side of their speed
+        let mut p = zeros();
+        p[Tape::PARAM_WOW] = 0.75;
+        let (slowest, fastest) = reel_speeds(&p, 6.0);
+        assert!(slowest < 0.7 && fastest > 1.3, "reels between {slowest} and {fastest}");
+
+        // Without wow or flutter they turn steadily, as they did
+        assert_eq!(reel_speeds(&zeros(), 2.0), (1.0, 1.0));
+
+        // The flutter is the capstan's: it shivers the tape, not the reels
+        let mut p = zeros();
+        p[Tape::PARAM_FLUTTER] = 1.0;
+        let (slowest, fastest) = reel_speeds(&p, 2.0);
+        assert_eq!((slowest, fastest), (1.0, 1.0));
+
+        // Full wow at 7½ ips lurches hard, but never stalls or reverses
+        let mut p = zeros();
+        p[Tape::PARAM_WOW] = 1.0;
+        p[Tape::PARAM_SPEED] = 0.0;
+        let (slowest, fastest) = reel_speeds(&p, 10.0);
+        assert!(slowest > 0.1 && fastest < 1.9, "reels between {slowest} and {fastest}");
     }
 
     /// Runs a mono input with a Stop gate, high over `stopped` (in seconds).

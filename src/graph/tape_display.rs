@@ -1,7 +1,8 @@
 //! The Tape's display: two reels and the tape running between them.
 //!
 //! The reels turn at the tape speed, and lurch with the wow, many times
-//! exaggerated so the eye can follow what the ear hears as a slow sway. The
+//! exaggerated so the eye can follow what the ear hears as a slow sway (the
+//! engine turns them, so the lurch keeps time with the pitch). The
 //! tape between the guides trembles with the flutter as it crosses the
 //! head, and the head glows as Saturation drives it. Age fades the oxide
 //! from a fresh dark brown to a dusty tan, and a dropout thins the tape
@@ -14,12 +15,9 @@ use eframe::egui::{self, Color32, Pos2, Sense, Shape, Stroke, Vec2};
 use egui_node_graph2::NodeId;
 
 use crate::app::theme;
-use crate::modules::tape::{Tape, REEL_TURNS_PER_SECOND, SPEEDS};
+use crate::modules::tape::{Tape, SPEEDS};
 
 use super::{SynthGraph, SynthGraphState, SynthValueType};
-
-/// How many times over the reels show the read head's lag.
-const LAG_EXAGGERATION: f32 = 25.0;
 
 /// How far, in points, the tape between the guides trembles per cent of pitch.
 const TREMBLE_PER_CENT: f32 = 0.12;
@@ -49,13 +47,12 @@ pub fn tape_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user
         .copied()
         .unwrap_or_default();
     let values = readout.values;
-    let lag = values[Tape::READOUT_LAG];
     let pitch = values[Tape::READOUT_PITCH];
     let drive = values[Tape::READOUT_DRIVE];
     let running = 1.0 - values[Tape::READOUT_BRAKE].clamp(0.0, 1.25);
     // Before the engine has said anything, the tape is whole
     let dropout = if values[Tape::READOUT_DROPOUT] > 0.0 { values[Tape::READOUT_DROPOUT] } else { 1.0 };
-    let turns = values[Tape::READOUT_REEL] - lag * REEL_TURNS_PER_SECOND * speed.rate * LAG_EXAGGERATION;
+    let turns = values[Tape::READOUT_REEL];
 
     // As wide as the four knobs below
     let gap = ui.spacing().item_spacing.x;

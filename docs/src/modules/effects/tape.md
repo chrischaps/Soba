@@ -3,7 +3,7 @@
 **Module ID** `fx.tape` · **Category** Effect
 
 ![Tape module](../../images/module-tape.png)
-*The reels turn at the tape speed and sway with the wow; the head glows as Saturation drives it. When the Stop gate brakes the tape, the reels slow to a halt and the speed between them counts down*
+*The reels turn at the tape speed and lurch with the wow, dragging as the pitch sags and hurrying as it rises; the head glows as Saturation drives it. When the Stop gate brakes the tape, the reels slow to a halt and the speed between them counts down*
 
 The Tape module is a tape machine for a bus. Much of what makes vintage-flavoured music sound warm happens on tape, after the instruments: the record head's soft squash, the head bump in the low end, the slow sway and fast shiver of the transport, the top end the tape can't hold, and, on an old reel, dropouts and hiss. Put it on a mix bus or in front of the [Audio Output](../output/audio-output.md) to give the whole patch that sound.
 
