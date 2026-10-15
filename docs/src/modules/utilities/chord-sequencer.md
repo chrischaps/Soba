@@ -103,7 +103,7 @@ While the popover is open, the letter keys belong to it, the way a text field ta
 
 ## Patterns and the Chain
 
-The tabs under the steps pick which pattern you're editing: clicking, dragging, the popover and chords played in all write to the pattern on show. The one playing wears a green dot, and the one coming next a green ring. The playing step's outline only shows on the pattern playing. Which tab is open isn't saved with the patch. **Right-click** a tab to copy its pattern to another, to start a chorus from the verse, or to clear it. Clearing turns every step into a rest but keeps the chords.
+The tabs under the steps pick which pattern you're editing: clicking, dragging, the popover and chords played in all write to the pattern on show. The one playing wears a green dot, and the one coming next a green ring. **Follow**, beside the tabs, keeps the grid on whichever pattern is playing, so it turns over as the Chain (or the Pattern CV) moves on; clicking a tab to edit one turns it off. The playing step's outline only shows on the pattern playing. Which tab is open isn't saved with the patch. **Right-click** a tab to copy its pattern to another, to start a chorus from the verse, or to clear it. Clearing turns every step into a rest but keeps the chords.
 
 The **Chain** is the order the patterns play in, a pass each, round and round, as on the [Step Sequencer](./sequencer.md#patterns-and-the-chain): **click** a slot to change its pattern, **right-click** it to pick one or remove it, and **+** adds a pass of the pattern you're editing. A new Chord Sequencer plays `A`, and so do patches saved before it had patterns, exactly as they always did.
 

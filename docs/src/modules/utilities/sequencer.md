@@ -91,7 +91,7 @@ Velocities have no knob on the node. Each step plays at 100 until a MIDI keyboar
 
 ## Patterns and the Chain
 
-The tabs under the grid pick which pattern you're editing: clicking, dragging and the piano all write to the pattern on show. The one playing wears a green dot, and the one coming next a green ring. The playhead's outline only shows on the pattern playing. Which tab is open is the editor's choice: it isn't saved with the patch, and it isn't an edit. **Right-click** a tab to copy its pattern to another (to start a variation from it), or to clear it. Clearing turns every step into a rest but keeps the notes, ready for the piano to write a new line over.
+The tabs under the grid pick which pattern you're editing: clicking, dragging and the piano all write to the pattern on show. The one playing wears a green dot, and the one coming next a green ring. **Follow**, beside the tabs, keeps the grid on whichever pattern is playing, so it turns over as the Chain (or the Pattern CV) moves on; clicking a tab to edit one turns it off. The playhead's outline only shows on the pattern playing. Which tab is open is the editor's choice: it isn't saved with the patch, and it isn't an edit. **Right-click** a tab to copy its pattern to another (to start a variation from it), or to clear it. Clearing turns every step into a rest but keeps the notes, ready for the piano to write a new line over.
 
 The **Chain** is the order the patterns play in, a pass each, round and round. The pass playing is underlined. It works as on the [Trigger Sequencer](./trigger-sequencer.md#patterns-and-the-chain):
 

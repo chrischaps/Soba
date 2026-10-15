@@ -57,7 +57,7 @@ While the patch plays, each lane's current step has a white outline, and a pad l
 
 ## Patterns and the Chain
 
-The tabs under the grid pick which pattern you're editing. The one playing wears a green dot, and the one coming next a green ring. Which tab is open is the editor's choice: it isn't saved with the patch, and it isn't an edit. **Right-click** a tab to copy its pattern to another, which is the quick way to start a fill from the groove, or to clear it.
+The tabs under the grid pick which pattern you're editing. The one playing wears a green dot, and the one coming next a green ring. **Follow**, beside the tabs, keeps the grid on whichever pattern is playing, so it turns over as the Chain (or the Pattern CV) moves on; clicking a tab to edit one turns it off. Which tab is open is the editor's choice: it isn't saved with the patch, and it isn't an edit. **Right-click** a tab to copy its pattern to another, which is the quick way to start a fill from the groove, or to clear it.
 
 The **Chain** is the order the patterns play in, a bar each, round and round. The bar playing is underlined.
 

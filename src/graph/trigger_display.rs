@@ -126,6 +126,26 @@ fn set_edit_pattern(ctx: &egui::Context, node_id: NodeId, pattern: usize) {
     ctx.data_mut(|data| data.insert_temp(Id::new((node_id, "edit-pattern")), pattern));
 }
 
+/// Whether the grid follows the pattern playing, as the Follow toggle beside
+/// the tabs sets it. Like the pattern shown, it's the editor's.
+fn following(ctx: &egui::Context, node_id: NodeId) -> bool {
+    ctx.data(|data| data.get_temp::<bool>(Id::new((node_id, "follow-pattern")))).unwrap_or(false)
+}
+
+fn set_following(ctx: &egui::Context, node_id: NodeId, on: bool) {
+    ctx.data_mut(|data| data.insert_temp(Id::new((node_id, "follow-pattern")), on));
+}
+
+/// The pattern the grid shows: the one being edited, or while it follows,
+/// `playing`, so the grid turns over as the Chain (or the Pattern CV) moves
+/// on. Read before drawing, so the grid and its tabs agree in every frame.
+pub(super) fn shown_pattern(ctx: &egui::Context, node_id: NodeId, playing: Option<usize>) -> usize {
+    if let Some(pattern) = playing.filter(|_| following(ctx, node_id)) {
+        set_edit_pattern(ctx, node_id, pattern.min(PATTERNS - 1));
+    }
+    edit_pattern(ctx, node_id)
+}
+
 fn position(user_state: &SynthGraphState, node_id: NodeId) -> Option<Position> {
     let engine_id = user_state.get_engine_node_id(node_id)?;
     user_state.readouts.get(&engine_id).map(Position::from_readout)
@@ -230,8 +250,8 @@ pub fn output_row(
     if !ui.is_rect_visible(rect.expand2(Vec2::new(0.0, 2.0 * ROW * z))) {
         return Some(Vec::new());
     }
-    let pattern = edit_pattern(ui.ctx(), node_id);
     let position = position(user_state, node_id).filter(|p| p.started);
+    let pattern = shown_pattern(ui.ctx(), node_id, position.map(|p| p.pattern));
     let mut edits = Vec::new();
     match row {
         Row::Accent => accent_row(ui, rect, node_id, &params, pattern, position, lit(user_state, node_id, Seq::OUT_ACCENT), &mut edits),
@@ -682,10 +702,14 @@ pub(super) fn pattern_tabs(
             .on_hover_cursor(CursorIcon::PointingHand)
             .on_hover_text(format!("Edit pattern {letter}. Right-click to copy or clear it"));
         if response.clicked() {
+            // Picking a pattern to edit stops the grid turning over under you
             set_edit_pattern(ui.ctx(), node_id, pattern);
+            set_following(ui.ctx(), node_id, false);
         }
         response.context_menu(|ui| menu(ui, pattern, &mut edits));
     }
+    let after_tabs = row.left() + inset + PATTERNS as f32 * (tab.x + 4.0 * z) + 6.0 * z;
+    follow_toggle(ui, node_id, z, Rect::from_min_size(Pos2::new(after_tabs, row.top()), Vec2::new(46.0 * z, tab.y)), position.map(|p| p.pattern));
 
     ui.add_space(3.0 * z);
 
@@ -778,6 +802,50 @@ pub(super) fn pattern_tabs(
     }
     ui.add_space(4.0 * z);
     edits
+}
+
+/// Follow, after the tabs, in `rect`: while it's on, the grid shows whichever
+/// pattern is playing. Green like the playing dot when on, and sized in
+/// patch units so it holds still as the view zooms.
+fn follow_toggle(ui: &mut egui::Ui, node_id: NodeId, z: f32, rect: Rect, playing: Option<usize>) {
+    let was_on = following(ui.ctx(), node_id);
+    let green = theme::signal::GATE;
+    super::marks::mark(ui.ctx(), node_id, format_args!("follow"), rect);
+    let response = ui
+        .interact(rect, Id::new((node_id, "trigger-follow")), Sense::click())
+        .on_hover_cursor(CursorIcon::PointingHand)
+        .on_hover_text(if was_on {
+            "Following the pattern playing. Click to stop, or click a tab to edit one"
+        } else {
+            "Follow the pattern playing, so the grid turns over as the Chain moves on"
+        });
+    let on = was_on != response.clicked();
+    if response.clicked() {
+        set_following(ui.ctx(), node_id, on);
+        if let Some(pattern) = playing.filter(|_| on) {
+            set_edit_pattern(ui.ctx(), node_id, pattern);
+        }
+    }
+
+    let painter = ui.painter();
+    let (fill, stroke, ink) = if on {
+        (green.gamma_multiply(0.18), green.gamma_multiply(0.8), theme::text::PRIMARY)
+    } else if response.hovered() {
+        (theme::background::WIDGET_ACTIVE, theme::text::SECONDARY, theme::text::PRIMARY)
+    } else {
+        (theme::background::WIDGET, Color32::TRANSPARENT, theme::text::SECONDARY)
+    };
+    painter.rect_filled(rect, 3.0 * z, fill);
+    painter.rect_stroke(rect, 3.0 * z, Stroke::new(1.0 * z, stroke));
+    // A playhead's arrow, filled green while it follows
+    let tip = Pos2::new(rect.left() + 10.0 * z, rect.center().y);
+    let arrow = vec![tip + Vec2::new(-4.0 * z, -3.5 * z), tip + Vec2::new(1.0 * z, 0.0), tip + Vec2::new(-4.0 * z, 3.5 * z)];
+    if on {
+        painter.add(Shape::convex_polygon(arrow, green, Stroke::NONE));
+    } else {
+        painter.add(Shape::closed_line(arrow, Stroke::new(1.0 * z, ink)));
+    }
+    painter.text(Pos2::new(rect.left() + 13.0 * z, rect.center().y), egui::Align2::LEFT_CENTER, "Follow", FontId::proportional(9.5 * z), ink);
 }
 
 /// A pattern tab's right-click menu: copy it to another pattern, or clear it.

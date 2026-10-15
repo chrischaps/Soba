@@ -62,7 +62,7 @@ use crate::widgets::{piano_keys, PianoConfig, PianoData};
 use super::chord_chime::{ring_for, Chimes, Chip};
 use super::chord_ear::{take_letter_keys, ChordEar, Hand};
 use super::step_grid::{drag_badge, dragged_pitch};
-use super::trigger_display::{edit_pattern, pattern_tabs, PatternBar, Playing};
+use super::trigger_display::{pattern_tabs, shown_pattern, PatternBar, Playing};
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
 const GATE_ON: Color32 = Color32::from_rgb(100, 200, 100);
@@ -452,15 +452,14 @@ fn popover_base(root: i32) -> u8 {
 pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphState, zoom: f32) -> Vec<SynthResponse> {
     let z = zoom;
     let params = params_of(graph, node_id);
-    let pattern = ChordPattern::read(&params, edit_pattern(ui.ctx(), node_id));
-    let mut edits = Vec::new();
-    let mut set = |param_name: String, value: f32| edits.push(SynthResponse::ParameterChanged { node_id, param_name, value });
-
     // What the engine is playing, if it has said. The playhead only shows
     // on the pattern playing
     let engine = user_state.get_engine_node_id(node_id);
     let readout = engine.and_then(|id| user_state.readouts.get(&id)).copied();
     let position = readout.map(|r| PatternPosition::read(&r, ChordSequencer::READOUT_PATTERN));
+    let pattern = ChordPattern::read(&params, shown_pattern(ui.ctx(), node_id, position.filter(|p| p.started).map(|p| p.pattern)));
+    let mut edits = Vec::new();
+    let mut set = |param_name: String, value: f32| edits.push(SynthResponse::ParameterChanged { node_id, param_name, value });
     let step = readout.map_or(0, |r| (r.values[ChordSequencer::READOUT_STEP] as usize).min(pattern.steps - 1));
     let current = (position.map_or(0, |p| p.pattern) == pattern.pattern).then_some(step);
     let gate_high = engine.and_then(|id| user_state.get_output_value(id, ChordSequencer::PORT_GATE)).is_some_and(|g| g > 0.5);

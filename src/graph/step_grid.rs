@@ -47,7 +47,7 @@ use crate::widgets::{piano_keys, PianoConfig, PianoData};
 use super::chord_ear::take_letter_keys;
 use super::chord_grid::MIDI_MODULES;
 use super::step_ear::{StepEar, Strike};
-use super::trigger_display::{edit_pattern, pattern_tabs, PatternBar, Playing};
+use super::trigger_display::{pattern_tabs, shown_pattern, PatternBar, Playing};
 use super::{SynthGraph, SynthGraphState, SynthNodeData, SynthResponse};
 
 const GATE_ON: Color32 = Color32::from_rgb(100, 200, 100);
@@ -174,9 +174,9 @@ pub(super) fn step_sequencer_display(
     responses: &mut Vec<NodeResponse<SynthResponse, SynthNodeData>>,
 ) {
     let Some(values) = Values::of(graph, node_id) else { return };
-    let editing = edit_pattern(ui.ctx(), node_id);
     let engine_id = user_state.get_engine_node_id(node_id);
     let position = engine_id.and_then(|id| user_state.readouts.get(&id)).map(PatternPosition::from_readout);
+    let editing = shown_pattern(ui.ctx(), node_id, position.filter(|p| p.started).map(|p| p.pattern));
 
     let steps = values.get("Steps").map_or(8, |v| (v as usize).clamp(1, MAX_STEPS));
     // The playhead only shows on the pattern playing

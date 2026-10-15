@@ -26,9 +26,9 @@ static MARKING: AtomicBool = AtomicBool::new(false);
 pub const FACE: &[(&str, &[&str])] = &[
     ("source.sampler", &["file", "cue", "rec"]),
     ("source.chopper", &["rec"]),
-    ("seq.step", &["pattern:A", "pattern:B", "pattern:C", "pattern:D", "step:<n>"]),
-    ("seq.trigger", &["pattern:A", "pattern:B", "pattern:C", "pattern:D", "cell:<lane>:<step>", "accent:<step>"]),
-    ("seq.chord", &["step:<n>"]),
+    ("seq.step", &["pattern:A", "pattern:B", "pattern:C", "pattern:D", "follow", "step:<n>"]),
+    ("seq.trigger", &["pattern:A", "pattern:B", "pattern:C", "pattern:D", "follow", "cell:<lane>:<step>", "accent:<step>"]),
+    ("seq.chord", &["follow", "step:<n>"]),
     ("util.looper", &["pedal:Rec", "pedal:Stop", "pedal:Undo", "pedal:Clear"]),
     ("seq.arranger", &["section:<n>", "cell:<lane>:<section>"]),
 ];
