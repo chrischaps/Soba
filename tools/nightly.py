@@ -13,7 +13,9 @@ Steps, in order (--only picks some):
     layout     check_layout.py: every example's modules inside their frames
     zoom       zoom_jitter.py --max 0.5 on every patch
     images     the recipe, manual and module pictures; stale ones are re-shot
-               and pushed to master as a [Docs] commit of their own
+               and pushed to master as a [Docs] commit of their own. Only the
+               pictures something they show has changed since are filmed,
+               several at once (tools/showcase/picture_check.py)
 
 A ticket checks only what it touched (CLAUDE.md, step 4) and pushes, and
 GitHub CI runs the full cargo test on every push. This is the rest: the

@@ -248,6 +248,8 @@ python tools/showcase/check_layout.py
 python tools/showcase/recipe_images.py [name ...]
 python tools/showcase/recipe_images.py --check
 python tools/showcase/recipe_images.py --refresh   # all three tools: --check, saving only the stale ones
+# --check and --refresh film only the pictures whose patch, modules or shared drawing code changed
+# since they last matched, six at a time (tools/showcase/picture_check.py). --all films every one
 # The same for the interface pictures, the tutorial's finished patch and a chord played into
 # the Chord Sequencer (interface-*.png, tutorial-complete-patch.png, chord-sequencer-play.png),
 # each posed by a short cue script

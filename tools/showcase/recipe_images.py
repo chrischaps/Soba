@@ -3,6 +3,7 @@
     python tools/showcase/recipe_images.py [name ...]
     python tools/showcase/recipe_images.py --check [name ...]
     python tools/showcase/recipe_images.py --refresh [name ...]  # --check, then save just the stale ones
+    python tools/showcase/recipe_images.py --check --all          # film them all, changed or not
 
 A recipe with a playable embed shows its whole patch there, so it has no
 picture of it (#225). The pictures left are of a patch with no embed, listed
@@ -44,16 +45,21 @@ on a grid.
 
 Build into target/capture first, as for shots.py. --check exits 1 if any
 image is stale or missing.
+
+--check and --refresh film only the pictures that something they show has
+changed since, several at once (--jobs N): see picture_check.py. --all films
+them all, and pictures named on the command line are always filmed.
 """
 
 import json
 import subprocess
 import sys
-import tempfile
 from collections import namedtuple
 from pathlib import Path
 
 from PIL import Image, ImageChops
+
+import picture_check
 
 ROOT = Path(__file__).resolve().parents[2]
 EXE = ROOT / "target" / "capture" / "release" / "soba.exe"
@@ -287,37 +293,29 @@ def changed(new, path):
     return sum(hist[CHANNEL_TOLERANCE + 1:]) / (new.width * new.height)
 
 
+def patch_of(name):
+    """The example a picture is filmed from."""
+    if name in MOMENTS:
+        return MOMENTS[name].patch
+    if name in CLOSEUPS:
+        return CLOSEUPS[name].patch
+    return name
+
+
+def shoot_any(name, tmp):
+    if name in MOMENTS:
+        return shoot_moment(name, tmp)
+    if name in CLOSEUPS:
+        return shoot_closeup(name, tmp)
+    return shoot(name, tmp)
+
+
 def main(args):
-    refresh = "--refresh" in args
-    check = "--check" in args or refresh
-    names = [a for a in args if not a.startswith("--")]
-    names = names or STILLS + list(MOMENTS) + list(CLOSEUPS)
-    stale = []
-    with tempfile.TemporaryDirectory() as tmp:
-        for name in names:
-            path = IMAGES / f"recipe-{name}.png"
-            if name in MOMENTS:
-                image = shoot_moment(name, tmp)
-            elif name in CLOSEUPS:
-                image = shoot_closeup(name, tmp)
-            else:
-                image = shoot(name, tmp)
-            if check:
-                fraction = changed(image, path)
-                verdict = "ok" if fraction <= STALE_FRACTION else ("missing" if not path.exists() else f"stale ({fraction:.1%} changed)")
-                print(f"{name:22} {verdict}")
-                if fraction > STALE_FRACTION:
-                    stale.append(name)
-                    if refresh:
-                        image.save(path, optimize=True)
-            else:
-                image.save(path, optimize=True)
-                print(f"{name:22} {image.width}x{image.height}, {path.stat().st_size // 1024} KB")
-    if refresh and stale:
-        print(f"\nRe-shot {' '.join(stale)}")
-    elif check and stale:
-        print(f"\nRe-shoot with: python tools/showcase/recipe_images.py {' '.join(stale)}")
-    return 1 if stale and not refresh else 0
+    return picture_check.run(
+        args, "recipe_images.py", STILLS + list(MOMENTS) + list(CLOSEUPS),
+        png=lambda name: IMAGES / f"recipe-{name}.png",
+        inputs=lambda name: picture_check.patch_inputs(ROOT / "patches" / f"{patch_of(name)}.json"),
+        shoot=shoot_any, compare=changed, width=22)
 
 
 if __name__ == "__main__":

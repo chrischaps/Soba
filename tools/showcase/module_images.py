@@ -5,6 +5,7 @@ caption describes.
     python tools/showcase/module_images.py [name ...]
     python tools/showcase/module_images.py --check [name ...]
     python tools/showcase/module_images.py --refresh [name ...]  # --check, then save just the stale ones
+    python tools/showcase/module_images.py --check --all          # film them all, changed or not
 
 Each close-up in MODULES names its patch, the module pictured, the zoom it's
 drawn at, the width it's saved at and the cues that pose it (a chord held, a
@@ -21,17 +22,21 @@ still filmed at PPP.
 Build into target/capture first, as for shots.py. --check films each one
 the same way but writes nothing, lists the close-ups that no longer match the
 build, and exits 1 if any is stale or missing.
+
+--check and --refresh film only the close-ups that something they show has
+changed since, several at once (--jobs N): see picture_check.py. --all films
+them all, and close-ups named on the command line are always filmed.
 """
 
 import re
 import sys
-import tempfile
 from collections import namedtuple
 from pathlib import Path
 
 from PIL import Image
 
-from recipe_images import IMAGES, ROOT, SIZE, STALE_FRACTION, aim, changed, film
+import picture_check
+from recipe_images import IMAGES, ROOT, SIZE, aim, changed, film
 
 MODULES_DIR = ROOT / "tools" / "showcase" / "modules"
 PPP = 2.0
@@ -243,7 +248,7 @@ def script(cues, camera, origin, rect, zoom):
 def shoot(name, tmp):
     """Films a close-up and returns it, cropped and scaled."""
     shot = MODULES[name]
-    patch = ROOT / shot.patch if shot.patch.endswith(".json") else MODULES_DIR / f"{shot.patch}.json"
+    patch = patch_path(name)
     probe = Path(tmp) / f"{name}-probe"
     probe.mkdir()
     lay = film(patch, probe, SIZE, PPP, "0.0 layout shot\n0.1 end\n")
@@ -267,35 +272,21 @@ def shoot(name, tmp):
     return image.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
 
 
+def patch_path(name):
+    patch = MODULES[name].patch
+    return ROOT / patch if patch.endswith(".json") else MODULES_DIR / f"{patch}.json"
+
+
 def main(args):
-    refresh = "--refresh" in args
-    check = "--check" in args or refresh
-    names = [a for a in args if not a.startswith("--")] or list(MODULES)
-    unknown = [n for n in names if n not in MODULES]
+    unknown = [n for n in picture_check.names_arg(args) if n not in MODULES]
     if unknown:
         print(f"unknown: {' '.join(unknown)} (close-ups: {' '.join(MODULES)})", file=sys.stderr)
         return 2
-    stale = []
-    with tempfile.TemporaryDirectory() as tmp:
-        for name in names:
-            path = IMAGES / f"module-{name}.png"
-            image = shoot(name, tmp)
-            if check:
-                fraction = changed(image, path)
-                verdict = "ok" if fraction <= STALE_FRACTION else ("missing" if not path.exists() else f"stale ({fraction:.1%} changed)")
-                print(f"{name:20} {verdict}")
-                if fraction > STALE_FRACTION:
-                    stale.append(name)
-                    if refresh:
-                        image.save(path, optimize=True)
-            else:
-                image.save(path, optimize=True)
-                print(f"{name:20} {image.width}x{image.height}, {path.stat().st_size // 1024} KB")
-    if refresh and stale:
-        print(f"\nRe-shot {' '.join(stale)}")
-    elif check and stale:
-        print(f"\nRe-shoot with: python tools/showcase/module_images.py {' '.join(stale)}")
-    return 1 if stale and not refresh else 0
+    return picture_check.run(
+        args, "module_images.py", list(MODULES),
+        png=lambda name: IMAGES / f"module-{name}.png",
+        inputs=lambda name: picture_check.patch_inputs(patch_path(name)),
+        shoot=shoot, compare=changed, width=20)
 
 
 if __name__ == "__main__":

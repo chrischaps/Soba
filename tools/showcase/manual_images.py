@@ -5,6 +5,7 @@ popover, each played and posed by a capture script.
     python tools/showcase/manual_images.py [name ...]
     python tools/showcase/manual_images.py --check [name ...]
     python tools/showcase/manual_images.py --refresh [name ...]  # --check, then save just the stale ones
+    python tools/showcase/manual_images.py --check --all          # film them all, changed or not
 
 Each picture in PICTURES names a patch, the cues that pose it (a chord
 held, a menu opened, a key down) and what to keep of the window:
@@ -29,17 +30,23 @@ it reads stale for that alone.
 
 Build into target/capture first, as for shots.py. --check exits 1 if any
 picture is stale or missing.
+
+--check and --refresh film only the pictures that something they show has
+changed since, several at once (--jobs N): see picture_check.py. A picture
+of a menu that lists every module says every_module=True, so a change to
+any module films it. --all films them all, and pictures named on the
+command line are always filmed.
 """
 
 import json
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 from PIL import Image
 
-from recipe_images import EXE, IMAGES, ROOT, STALE_FRACTION, changed, crop_box
+import picture_check
+from recipe_images import EXE, IMAGES, ROOT, changed, crop_box
 
 PPP = 2.0
 SIZE = (3600, 2100)
@@ -50,6 +57,7 @@ SIZE = (3600, 2100)
 PICTURES = {
     "interface-overview": dict(
         patch="patches/lush-pad.json",
+        every_module=True,
         # 1800 points keeps the toolbar to one row
         size=(3600, 1800),
         crop="window",
@@ -63,6 +71,7 @@ PICTURES = {
     ),
     "interface-context-menu": dict(
         patch="patches/first-sound.json",
+        every_module=True,
         crop=(1339, 549, 1609, 907),
         width=405,
         # Seven category colours on a small picture: a palette merges
@@ -80,6 +89,7 @@ PICTURES = {
     ),
     "interface-quick-add": dict(
         patch="patches/first-sound.json",
+        every_module=True,
         crop=(600, 325, 1350, 800),
         width=1120,
         cues="""
@@ -181,34 +191,16 @@ def shoot(name, tmp):
 
 
 def main(args):
-    refresh = "--refresh" in args
-    check = "--check" in args or refresh
-    names = [a for a in args if not a.startswith("--")] or list(PICTURES)
-    unknown = [n for n in names if n not in PICTURES]
+    unknown = [n for n in picture_check.names_arg(args) if n not in PICTURES]
     if unknown:
         print(f"unknown: {' '.join(unknown)} (pictures: {' '.join(PICTURES)})", file=sys.stderr)
         return 2
-    stale = []
-    with tempfile.TemporaryDirectory() as tmp:
-        for name in names:
-            path = IMAGES / f"{name}.png"
-            image = shoot(name, tmp)
-            if check:
-                fraction = changed(image, path)
-                verdict = "ok" if fraction <= STALE_FRACTION else ("missing" if not path.exists() else f"stale ({fraction:.1%} changed)")
-                print(f"{name:28} {verdict}")
-                if fraction > STALE_FRACTION:
-                    stale.append(name)
-                    if refresh:
-                        image.save(path, optimize=True)
-            else:
-                image.save(path, optimize=True)
-                print(f"{name:28} {image.width}x{image.height}, {path.stat().st_size // 1024} KB")
-    if refresh and stale:
-        print(f"\nRe-shot {' '.join(stale)}")
-    elif check and stale:
-        print(f"\nRe-shoot with: python tools/showcase/manual_images.py {' '.join(stale)}")
-    return 1 if stale and not refresh else 0
+    return picture_check.run(
+        args, "manual_images.py", list(PICTURES),
+        png=lambda name: IMAGES / f"{name}.png",
+        inputs=lambda name: picture_check.patch_inputs(ROOT / PICTURES[name]["patch"],
+                                                       every_module=PICTURES[name].get("every_module", False)),
+        shoot=shoot, compare=changed, width=28)
 
 
 if __name__ == "__main__":
