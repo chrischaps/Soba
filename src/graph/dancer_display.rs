@@ -178,10 +178,14 @@ pub fn dancer_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
     limbs(&painter, &joints, &at, Stroke::new(width * 3.2, face::with_alpha(colour, 46)), HEAD * scale, Color32::TRANSPARENT);
     limbs(&painter, &joints, &at, Stroke::new(width, CHALK), HEAD * scale, CHALK);
 
-    // Its style, and the tempo it's dancing at
+    // Its style, and the tempo it's dancing at: by ear, roughly
+    let ear = value(Dancer::READOUT_EAR);
     let tempo = if live {
         let seconds = value(Dancer::READOUT_MOVE_SECONDS);
-        (seconds > 0.0).then(|| format!("{:.0} bpm", 60.0 / seconds))
+        let by_ear = if ear > 0.75 { "~" } else { "" };
+        (seconds > 0.0).then(|| format!("{by_ear}{:.0} bpm", 60.0 / seconds))
+    } else if playing && ear > 0.25 {
+        Some("listening".to_string())
     } else if playing {
         Some("no beat".to_string())
     } else {

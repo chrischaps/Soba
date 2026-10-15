@@ -23,7 +23,9 @@
 //! way from what was sounding before to the hit's peak, a millisecond
 //! early, so a slice starting there keeps its whole attack.
 //!
-//! All of this allocates freely and runs on the UI side, never the audio thread.
+//! All of this allocates freely and runs on the UI side, never the audio
+//! thread. The Dancer hears the beat with the same bands as it plays
+//! (`beat_tracker.rs`).
 
 use serde::{Deserialize, Serialize};
 
@@ -34,16 +36,16 @@ const HOP_SECONDS: f32 = 0.002;
 /// How far back a rise is measured from: 3 hops, 6 ms.
 const RISE_HOPS: usize = 3;
 /// Where the bands divide, in Hz.
-const CROSSOVERS: [f64; 3] = [150.0, 1000.0, 4000.0];
+pub(crate) const CROSSOVERS: [f64; 3] = [150.0, 1000.0, 4000.0];
 /// How fast each band's envelope falls away (low to high): slow enough to
 /// ride over a cycle of its lowest notes.
-const RELEASE_SECONDS: [f64; 4] = [0.05, 0.015, 0.008, 0.005];
+pub(crate) const RELEASE_SECONDS: [f64; 4] = [0.05, 0.015, 0.008, 0.005];
 /// Levels this far under the loudest are silence.
-const FLOOR_DB: f32 = 50.0;
+pub(crate) const FLOOR_DB: f32 = 50.0;
 /// Quieter than this is silence, however loud the rest is.
-const SILENCE_DB: f32 = -90.0;
+pub(crate) const SILENCE_DB: f32 = -90.0;
 /// A rise smaller than this, all bands together, is never an onset.
-const LEAST_RISE_DB: f32 = 6.0;
+pub(crate) const LEAST_RISE_DB: f32 = 6.0;
 /// Two onsets are at least this far apart: 30 ms, a fast flam.
 const GAP_SECONDS: f32 = 0.03;
 /// Markers go this far before the hit: 1 ms.
@@ -216,39 +218,72 @@ fn begins(band: &[f32], k: usize, hop: usize) -> usize {
 
 /// The mix in four bands, from the lowest, which add back up to it.
 fn split(mono: &[f32], rate: f64) -> [Vec<f32>; 4] {
-    let mut rest = mono.to_vec();
     let mut bands: [Vec<f32>; 4] = Default::default();
-    for (b, &hz) in CROSSOVERS.iter().enumerate() {
-        let low = lowpass(&rest, hz, rate);
-        for (r, l) in rest.iter_mut().zip(&low) {
-            *r -= l;
-        }
-        bands[b] = low;
+    for band in bands.iter_mut() {
+        band.reserve_exact(mono.len());
     }
-    bands[3] = rest;
+    let mut splitter = BandSplit::new(rate);
+    for &x in mono {
+        for (band, s) in bands.iter_mut().zip(splitter.step(x)) {
+            band.push(s);
+        }
+    }
     bands
 }
 
+/// Splits a mix into four bands a sample at a time: each crossover's
+/// low-pass takes what the ones below it left.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BandSplit {
+    lowpasses: [Lowpass; 3],
+}
+
+impl BandSplit {
+    pub(crate) fn new(rate: f64) -> Self {
+        Self { lowpasses: CROSSOVERS.map(|hz| Lowpass::new(hz, rate)) }
+    }
+
+    /// The next sample of each band, from the lowest.
+    #[inline]
+    pub(crate) fn step(&mut self, x: f32) -> [f32; 4] {
+        let mut rest = x;
+        let mut bands = [0.0; 4];
+        for (band, lowpass) in bands.iter_mut().zip(&mut self.lowpasses) {
+            *band = lowpass.step(rest);
+            rest -= *band;
+        }
+        bands[3] = rest;
+        bands
+    }
+}
+
 /// A two-pole low-pass (a state-variable filter, Butterworth), run forwards.
-fn lowpass(input: &[f32], hz: f64, rate: f64) -> Vec<f32> {
-    let g = (std::f64::consts::PI * (hz / rate).min(0.49)).tan();
-    let k = std::f64::consts::SQRT_2;
-    let (a1, a2, a3) = {
+#[derive(Clone, Copy, Debug)]
+struct Lowpass {
+    a1: f64,
+    a2: f64,
+    a3: f64,
+    ic1: f64,
+    ic2: f64,
+}
+
+impl Lowpass {
+    fn new(hz: f64, rate: f64) -> Self {
+        let g = (std::f64::consts::PI * (hz / rate).min(0.49)).tan();
+        let k = std::f64::consts::SQRT_2;
         let a1 = 1.0 / (1.0 + g * (g + k));
-        (a1, g * a1, g * g * a1)
-    };
-    let (mut ic1, mut ic2) = (0.0f64, 0.0f64);
-    input
-        .iter()
-        .map(|&x| {
-            let v3 = x as f64 - ic2;
-            let v1 = a1 * ic1 + a2 * v3;
-            let v2 = ic2 + a2 * ic1 + a3 * v3;
-            ic1 = 2.0 * v1 - ic1;
-            ic2 = 2.0 * v2 - ic2;
-            v2 as f32
-        })
-        .collect()
+        Self { a1, a2: g * a1, a3: g * g * a1, ic1: 0.0, ic2: 0.0 }
+    }
+
+    #[inline]
+    fn step(&mut self, x: f32) -> f32 {
+        let v3 = x as f64 - self.ic2;
+        let v1 = self.a1 * self.ic1 + self.a2 * v3;
+        let v2 = self.ic2 + self.a2 * self.ic1 + self.a3 * v3;
+        self.ic1 = 2.0 * v1 - self.ic1;
+        self.ic2 = 2.0 * v2 - self.ic2;
+        v2 as f32
+    }
 }
 
 #[cfg(test)]
@@ -259,7 +294,7 @@ pub(crate) mod tests {
     const RATE: f32 = 48000.0;
 
     /// A deterministic white noise, -1 to 1.
-    pub(crate) struct Noise(u32);
+    pub(crate) struct Noise(pub(crate) u32);
 
     impl Noise {
         pub(crate) fn next(&mut self) -> f32 {

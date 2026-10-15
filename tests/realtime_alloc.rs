@@ -167,6 +167,14 @@ fn audio_callback_never_allocates() {
     ui.send_command(EngineCommand::LoadSample { node_id: sampler, sample: tone(220.0) });
     let mut loads = 1;
 
+    // A Dancer listening to the Sampler, so it hunts for a beat in it
+    ui.send_command(EngineCommand::Connect {
+        from_node: sampler,
+        from_port: port("source.sampler", "L"),
+        to_node: node_of(&nodes, "util.dancer"),
+        to_port: port("util.dancer", "Audio"),
+    });
+
     // A Chopper on the same Clock, cut at markers, given a new loop (and
     // new markers) every so often, mid-slice or not
     let chopper = node_of(&nodes, "source.chopper");

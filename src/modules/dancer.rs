@@ -7,12 +7,14 @@
 //! choreography lives with the drawing.
 //!
 //! With nothing patched the Dancer follows the patch's Clock through the
-//! transport. A cable into Clock takes over from the first two pulses. Either
+//! transport. A cable into Clock takes over from the first two pulses. With
+//! neither, it listens for the beat in Audio (`dsp::beat_tracker`). Every
 //! way the beat is folded by powers of two into a tempo a person dances at,
 //! so a sixteenth-note clock is danced on the quarters and a slow ballad is
 //! danced double time.
 
 use crate::dsp::{
+    beat_tracker::BeatTracker,
     context::ProcessContext,
     denormal::flush,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
@@ -31,6 +33,8 @@ pub const STYLES: &[&str] = &["Bounce", "Disco", "Robot", "Headbang"];
 enum Source {
     Clock,
     Transport,
+    /// The beat heard in Audio.
+    Heard,
 }
 
 /// A stick figure who dances to the patch.
@@ -39,7 +43,7 @@ enum Source {
 ///
 /// **Inputs:**
 /// - **Clock** (Gate): Each pulse is a step. Left empty, the Dancer follows
-///   the patch's Clock.
+///   the patch's Clock, or with no Clock running, the beat it hears in Audio.
 /// - **Audio** (Audio): The music to dance to: the louder it plays, the
 ///   bigger the moves.
 /// - **Accent** (Gate): A rising edge asks for a big move: a jump, a spin,
@@ -70,10 +74,14 @@ pub struct Dancer {
     slow: Follower,
     /// The last hit, held and fading so a frame between callbacks sees it.
     punch: f32,
+    /// Listens for a beat in Audio, for when nothing else gives one.
+    ears: BeatTracker,
     coefficients: Coefficients,
     /// Where the dance is at the end of the block: moves since the start
     /// and a move's length in seconds. `None` when there's no beat.
     dance: Option<(f64, f32)>,
+    /// Whether it's dancing by ear, or listening for a beat.
+    ear: f32,
     energy: f32,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
@@ -144,14 +152,16 @@ impl Dancer {
             fast: Follower::default(),
             slow: Follower::default(),
             punch: 0.0,
+            ears: BeatTracker::new(),
             coefficients: Coefficients::at(48000.0),
             dance: None,
+            ear: 0.0,
             energy: 0.0,
             ports: vec![
                 PortDefinition::input_with_default("clock", "Clock", SignalType::Gate, 0.0)
                     .describe("Each pulse is a step; leave it empty to dance to the patch's Clock"),
                 PortDefinition::input_with_default("audio", "Audio", SignalType::Audio, 0.0)
-                    .describe("Patch the mix here: the louder it plays, the bigger the moves"),
+                    .describe("Patch the mix here: the louder it plays, the bigger the moves. With no Clock, it dances to the beat it hears"),
                 PortDefinition::input_with_default("accent", "Accent", SignalType::Gate, 0.0)
                     .describe("A rising edge makes a big move: a jump, a spin, arms in the air"),
             ],
@@ -189,6 +199,9 @@ impl Dancer {
     /// Moves since the last accent (half-seconds when there's no beat),
     /// up to [`ACCENT_LONG_AGO`](Self::ACCENT_LONG_AGO).
     pub const READOUT_ACCENT_AGE: usize = 7;
+    /// 1 while it dances to the beat it hears in Audio, 0.5 while it
+    /// listens for one there (nothing else giving it a beat), 0 otherwise.
+    pub const READOUT_EAR: usize = 8;
 
     /// Counters in the readout wrap here, well inside an f32's whole numbers.
     pub const WRAP: u64 = 4096;
@@ -242,7 +255,8 @@ impl Dancer {
     }
 
     /// The beat this block, at its end: the position in beats or pulses,
-    /// and how long one lasts in seconds.
+    /// and how long one lasts in seconds. A patched clock comes first, then
+    /// the transport, then the beat heard in Audio.
     fn beat(&self, clock_patched: bool, context: &ProcessContext) -> Option<(Source, f64, f32)> {
         if clock_patched {
             if let (Some(pulses), Some(step), Some(since)) = (self.pulses, self.clock.coming_step(), self.clock.since_clock()) {
@@ -254,12 +268,13 @@ impl Dancer {
             }
         }
         let transport = &context.transport;
-        if !transport.playing {
-            return None;
+        if transport.playing {
+            if let Some(beat) = transport.beat_at(context.block_size, context.sample_rate) {
+                let unit = 60.0 / transport.tempo_bpm.unwrap_or(120.0).max(1.0);
+                return Some((Source::Transport, beat, unit));
+            }
         }
-        let beat = transport.beat_at(context.block_size, context.sample_rate)?;
-        let unit = 60.0 / transport.tempo_bpm.unwrap_or(120.0).max(1.0);
-        Some((Source::Transport, beat, unit))
+        self.ears.beat().map(|(beat, unit)| (Source::Heard, beat, unit))
     }
 }
 
@@ -295,6 +310,7 @@ impl DspModule for Dancer {
         self.sample_rate = sample_rate;
         self.coefficients = Coefficients::at(sample_rate);
         self.clock.forget();
+        self.ears.prepare(sample_rate);
     }
 
     fn process(
@@ -338,6 +354,7 @@ impl DspModule for Dancer {
                 // only while the fast one leaps ahead at a hit
                 let hit = if fast > 1e-3 { ((fast / slow.max(1e-4) - Self::HIT_RATIO) / 1.5).clamp(0.0, 1.0) } else { 0.0 };
                 self.punch = flush((self.punch * c.punch_decay).max(hit));
+                self.ears.hear(x);
             }
         }
         if clock_in.is_none() {
@@ -348,9 +365,16 @@ impl DspModule for Dancer {
         if audio_in.is_none() {
             self.level = Follower::default();
             self.punch = 0.0;
+            self.ears.forget();
         }
 
-        self.dance = self.beat(clock_in.is_some(), context).map(|(source, position, unit)| {
+        let beat = self.beat(clock_in.is_some(), context);
+        self.ear = match beat {
+            Some((Source::Heard, ..)) => 1.0,
+            None if audio_in.is_some() => 0.5,
+            _ => 0.0,
+        };
+        self.dance = beat.map(|(source, position, unit)| {
             let current = self.fold.filter(|(was, _)| *was == source).map(|(_, k)| k);
             let k = Self::fold_for(unit, current);
             self.fold = Some((source, k));
@@ -376,7 +400,9 @@ impl DspModule for Dancer {
         self.fast = Follower::default();
         self.slow = Follower::default();
         self.punch = 0.0;
+        self.ears.forget();
         self.dance = None;
+        self.ear = 0.0;
         self.energy = 0.0;
     }
 
@@ -391,6 +417,7 @@ impl DspModule for Dancer {
             v[Self::READOUT_MOVE_SECONDS] = move_seconds;
         }
         v[Self::READOUT_ENERGY] = self.energy;
+        v[Self::READOUT_EAR] = self.ear;
         v[Self::READOUT_PUNCH] = self.punch;
         v[Self::READOUT_ACCENTS] = (self.accent_count as u64 % Self::WRAP) as f32;
         let move_seconds = self.dance.map_or(0.5, |(_, seconds)| seconds);
@@ -592,6 +619,44 @@ mod tests {
         let mut dancer = self::dancer();
         run(&mut dancer, None, Some(&audio), None, playing(120.0, 0.0), audio.len());
         assert!(value(&dancer, Dancer::READOUT_PUNCH) > 0.5);
+    }
+
+    #[test]
+    fn test_with_no_clock_it_dances_to_the_beat_it_hears() {
+        let (music, _) = crate::dsp::beat_tracker::tests::four_to_the_floor(124.0, 8.0);
+        let mut dancer = dancer();
+        run(&mut dancer, None, Some(&music), None, TransportState::new(), music.len());
+        assert_eq!(value(&dancer, Dancer::READOUT_DANCING), 1.0);
+        let seconds = value(&dancer, Dancer::READOUT_MOVE_SECONDS);
+        assert!((seconds - 60.0 / 124.0).abs() < 0.01, "a {seconds} s move");
+        assert!(value(&dancer, Dancer::READOUT_ENERGY) > 0.5);
+        assert_eq!(value(&dancer, Dancer::READOUT_EAR), 1.0);
+
+        // Before it's sure, it listens
+        let mut listening = self::dancer();
+        run(&mut listening, None, Some(&music[..48000]), None, TransportState::new(), 48000);
+        assert_eq!(value(&listening, Dancer::READOUT_DANCING), 0.0);
+        assert_eq!(value(&listening, Dancer::READOUT_EAR), 0.5);
+
+        // Unpatching the Audio forgets it
+        run(&mut dancer, None, None, None, TransportState::new(), BLOCK);
+        assert_eq!(value(&dancer, Dancer::READOUT_DANCING), 0.0);
+    }
+
+    #[test]
+    fn test_a_clock_or_the_transport_comes_before_the_beat_heard() {
+        // Music at 124 BPM, but the transport plays at 90: a 0.667 s beat
+        let (music, _) = crate::dsp::beat_tracker::tests::four_to_the_floor(124.0, 8.0);
+        let mut dancer = dancer();
+        run(&mut dancer, None, Some(&music), None, playing(90.0, 0.0), music.len());
+        assert!((value(&dancer, Dancer::READOUT_MOVE_SECONDS) - 60.0 / 90.0).abs() < 1e-3);
+        assert_eq!(value(&dancer, Dancer::READOUT_EAR), 0.0);
+
+        // ...and a patched clock, sixteenths at 120 BPM, before both
+        let clock = pulses(6000, music.len() / 6000);
+        let mut dancer = self::dancer();
+        run(&mut dancer, Some(&clock), Some(&music), None, playing(90.0, 0.0), clock.len());
+        assert!((value(&dancer, Dancer::READOUT_MOVE_SECONDS) - 0.5).abs() < 1e-3);
     }
 
     #[test]
