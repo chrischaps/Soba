@@ -6,7 +6,11 @@
 //! per UI frame, however long each frame takes to draw and save, and the
 //! audio engine renders that frame's samples by hand instead of running on
 //! the device. Picture and sound can't drift apart, and a script plays out
-//! the same way every time.
+//! the same way every time. The engine cuts its blocks where `render` does,
+//! counted from the first recorded frame, so a script that plays from 0
+//! records what `render` makes of the patch, sample for sample. MIDI cues
+//! land on their sample; a knob, key or `param` cue reaches the sound at
+//! the next block edge.
 //!
 //! The script drives the app through its real input paths: key presses
 //! reach the QWERTY keyboard, mouse moves and drags reach the node graph and
@@ -109,7 +113,7 @@ use egui::{Pos2, Rect, Vec2};
 
 use super::capture_aim::{self, Part, Spot};
 use crate::dsp::InputAudio;
-use crate::engine::{read_wav_at, MidiEvent, StereoBuffer};
+use crate::engine::{read_wav_at, MidiEvent, StereoBuffer, BLOCK_SIZE};
 
 /// The fewest frames drawn before recording starts, so the window size,
 /// theme and patch have settled. Cues at negative times lengthen the warmup
@@ -235,7 +239,7 @@ enum Cue {
 #[derive(Debug, Clone)]
 pub enum CaptureAction {
     Play(bool),
-    /// A MIDI event, `offset` samples into the frame's audio.
+    /// A MIDI event, `offset` samples into the audio the engine renders next.
     Midi { event: MidiEvent, offset: u32 },
     /// Set a module's input to a value in real units.
     SetParam { module: String, nth: usize, input: String, value: f32 },
@@ -342,9 +346,22 @@ pub struct Capture {
     actions: Vec<CaptureAction>,
     ffmpeg: Option<Child>,
     wav: Option<hound::WavWriter<BufWriter<File>>>,
+    /// The audio rendered this frame, interleaved stereo.
     audio: Vec<f32>,
-    /// Samples rendered so far, so each frame takes its exact share.
+    /// Samples taken by frames so far, so each frame takes its exact share.
     samples_done: u64,
+    /// Where the engine's blocks are counted from: the first recorded
+    /// frame, as `render` counts them from its first sample.
+    grid: i64,
+    /// How far the engine has rendered, always on the grid. It runs up to a
+    /// block ahead of the frames.
+    rendered: i64,
+    /// Audio rendered past the frames, for the next frame to take first.
+    carry: Vec<f32>,
+    /// The script's MIDI, kept apart from its other cues: it's sent as
+    /// far ahead as the engine renders, so each event lands on its sample.
+    midi: Vec<(f64, MidiEvent)>,
+    next_midi: usize,
     stills: Vec<String>,
     cursor_visible: bool,
     /// Where the pointer is; `None` until the script first moves it, so
@@ -371,14 +388,14 @@ pub struct Capture {
 
     finished: bool,
     size_checked: bool,
-    /// A WAV playing into Audio Input modules, and how far it has played.
-    input: Option<(StereoBuffer, usize)>,
+    /// A WAV playing into Audio Input modules, and the sample it started at.
+    input: Option<(StereoBuffer, i64)>,
     /// A file dragged over the window, as from the desktop.
     hovering: Option<PathBuf>,
     /// Where this frame's presses and right-clicks landed, and their cue
     /// times, to check against what egui found under them.
     presses: Vec<(f64, &'static str, Pos2)>,
-    /// This frame's share of `input`, interleaved stereo.
+    /// The share of `input` the engine renders this frame.
     input_frame: StereoBuffer,
     /// Whether the transport ran during any recorded frame. A capture
     /// starts stopped, so a script that never plays it films silence.
@@ -390,15 +407,9 @@ impl Capture {
     pub fn start(config: CaptureConfig) -> Result<Self, String> {
         let text = std::fs::read_to_string(&config.script)
             .map_err(|e| format!("can't read {}: {}", config.script.display(), e))?;
-        let cues = parse_script(&text)?;
-        for (at, cue) in &cues {
-            if let Cue::Move { to: Spot::Part(part), .. } = cue {
-                capture_aim::check(part).map_err(|e| format!("the move at {at:.2} s: {e}"))?;
-            }
-        }
+        let mut capture = Self::from_script(config, &text)?;
+        let config = &capture.config;
         crate::graph::marks::start();
-        let earliest = cues.first().map_or(0.0, |c| c.0).min(0.0);
-        let warmup = WARMUP_FRAMES.max((-earliest * config.fps as f64).ceil() as i64 + 1);
         std::fs::create_dir_all(&config.out_dir).map_err(|e| e.to_string())?;
 
         let wav = hound::WavWriter::create(
@@ -422,6 +433,33 @@ impl Capture {
             .spawn()
             .map_err(|e| format!("can't start ffmpeg: {}", e))?;
 
+        capture.wav = Some(wav);
+        capture.ffmpeg = Some(ffmpeg);
+        Ok(capture)
+    }
+
+    /// A capture playing `text`, with nowhere to write yet.
+    fn from_script(config: CaptureConfig, text: &str) -> Result<Self, String> {
+        let cues = parse_script(text)?;
+        let earliest = cues.first().map_or(0.0, |c| c.0).min(0.0);
+        let warmup = WARMUP_FRAMES.max((-earliest * config.fps as f64).ceil() as i64 + 1);
+        let grid = (warmup as f64 * config.sample_rate as f64 / config.fps as f64).round() as i64;
+        let (midi, cues): (Vec<_>, Vec<_>) = cues.into_iter().partition(|(_, cue)| matches!(cue, Cue::Note { .. } | Cue::Midi(_)));
+        let midi = midi
+            .into_iter()
+            .map(|(at, cue)| match cue {
+                Cue::Note { note, velocity, on: true } => (at, MidiEvent::NoteOn { channel: 0, note, velocity }),
+                Cue::Note { note, on: false, .. } => (at, MidiEvent::NoteOff { channel: 0, note, velocity: 0 }),
+                Cue::Midi(event) => (at, event),
+                _ => unreachable!(),
+            })
+            .collect();
+        for (at, cue) in &cues {
+            if let Cue::Move { to: Spot::Part(part), .. } = cue {
+                capture_aim::check(part).map_err(|e| format!("the move at {at:.2} s: {e}"))?;
+            }
+        }
+
         Ok(Self {
             config,
             cues,
@@ -432,10 +470,16 @@ impl Capture {
             skipped: 0,
             awaiting_shot: false,
             actions: Vec::new(),
-            ffmpeg: Some(ffmpeg),
-            wav: Some(wav),
+            ffmpeg: None,
+            wav: None,
             audio: Vec::new(),
             samples_done: 0,
+            grid,
+            // From the start of the block the warmup's first sample is in
+            rendered: -(-grid).rem_euclid(BLOCK_SIZE as i64),
+            carry: Vec::new(),
+            midi,
+            next_midi: 0,
             stills: Vec::new(),
             cursor_visible: false,
             pointer: None,
@@ -618,8 +662,10 @@ impl Capture {
         }
     }
 
-    /// Fires the cues that fall inside this frame.
+    /// Fires the cues that fall inside this frame, and the MIDI that falls
+    /// inside the audio the engine renders for it.
     fn fire_cues(&mut self, raw: &mut egui::RawInput, locate: &mut dyn FnMut(&Part) -> Result<Pos2, String>) {
+        self.fire_midi();
         let t = self.time();
         let end = t + self.dt();
         while let Some((at, cue)) = self.cues.get(self.next_cue).cloned() {
@@ -627,7 +673,6 @@ impl Capture {
                 break;
             }
             self.next_cue += 1;
-            let offset = (((at - t).max(0.0)) * self.config.sample_rate as f64).round() as u32;
             match cue {
                 Cue::Play(on) => self.actions.push(CaptureAction::Play(on)),
                 Cue::KeyDown(key, modifiers) | Cue::KeyUp(key, modifiers) => {
@@ -642,15 +687,8 @@ impl Capture {
                     });
                 }
                 Cue::Text(text) => raw.events.push(egui::Event::Text(text)),
-                Cue::Note { note, velocity, on } => {
-                    let event = if on {
-                        MidiEvent::NoteOn { channel: 0, note, velocity }
-                    } else {
-                        MidiEvent::NoteOff { channel: 0, note, velocity: 0 }
-                    };
-                    self.actions.push(CaptureAction::Midi { event, offset });
-                }
-                Cue::Midi(event) => self.actions.push(CaptureAction::Midi { event, offset }),
+                // Kept apart, for `fire_midi`
+                Cue::Note { .. } | Cue::Midi(_) => {}
                 Cue::Param { module, nth, input, value, dur } => self.ramps.push(Ramp {
                     module,
                     nth,
@@ -755,8 +793,8 @@ impl Capture {
                         }
                         let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
                         self.actions.push(CaptureAction::InputFile(name));
-                        // From this frame's start: a cue's offset isn't kept
-                        self.input = Some((audio, 0));
+                        // From the next sample the engine renders: a cue's offset isn't kept
+                        self.input = Some((audio, self.rendered));
                     }
                     Err(e) => eprintln!("capture: {}: {}", path.display(), e),
                 },
@@ -890,36 +928,71 @@ impl Capture {
         end.saturating_sub(self.samples_done) as usize
     }
 
-    /// A buffer for this frame's audio, interleaved stereo, and the audio
-    /// input it hears: the frame's share of an `input` file, if one plays.
-    pub fn audio_and_input(&mut self) -> (&mut Vec<f32>, InputAudio<'_>) {
-        let frames = self.samples_this_frame();
-        self.audio.resize(frames * 2, 0.0);
-        let Some((file, played)) = self.input.as_mut() else {
-            return (&mut self.audio, InputAudio::default());
-        };
-        let start = (*played).min(file.left.len());
-        let end = (start + frames).min(file.left.len());
-        *played += frames;
-        self.input_frame.left.clear();
-        self.input_frame.right.clear();
-        self.input_frame.left.extend_from_slice(&file.left[start..end]);
-        self.input_frame.right.extend_from_slice(&file.right[start..end]);
-        let input = InputAudio { left: &self.input_frame.left, right: &self.input_frame.right };
-        (&mut self.audio, input)
+    /// How far the engine renders for this frame: to the first block edge
+    /// at or past its end.
+    fn horizon(&self) -> i64 {
+        let end = (self.samples_done + self.samples_this_frame() as u64) as i64;
+        self.rendered.max(end + (self.grid - end).rem_euclid(BLOCK_SIZE as i64))
     }
 
-    /// Keeps the frame's rendered audio.
-    pub fn commit_audio(&mut self) {
-        self.samples_done += (self.audio.len() / 2) as u64;
-        if !self.recording() {
-            return;
+    /// Sends the script's MIDI that falls before the horizon, placed by
+    /// sample in the audio the engine renders next. The capture knows its
+    /// MIDI ahead of time, so an event in the part of a block that runs on
+    /// past a frame still lands on its sample.
+    fn fire_midi(&mut self) {
+        let horizon = self.horizon();
+        let rate = self.config.sample_rate as f64;
+        while let Some(&(at, event)) = self.midi.get(self.next_midi) {
+            let sample = self.grid + (at * rate).round() as i64;
+            if sample >= horizon {
+                break;
+            }
+            self.next_midi += 1;
+            let offset = (sample - self.rendered).max(0) as u32;
+            self.actions.push(CaptureAction::Midi { event, offset });
         }
-        if let Some(wav) = self.wav.as_mut() {
-            for &s in &self.audio {
-                let _ = wav.write_sample(s);
+    }
+
+    /// Renders the audio this frame covers with `render` (the engine), and
+    /// keeps it. The engine runs in whole blocks counted from the first
+    /// recorded frame, cut where `render` cuts them, so a film's sound is
+    /// `render`'s sample for sample: the block that runs past a frame's end
+    /// is rendered whole, and the next frame takes the rest. `midi` is
+    /// placed from the first sample rendered, as `fire_midi` placed it, and
+    /// the engine hears the share of an `input` file that it renders.
+    pub fn render_audio(&mut self, midi: &mut [crate::dsp::MidiEvent], render: impl FnOnce(&mut [f32], &mut [crate::dsp::MidiEvent], InputAudio<'_>)) {
+        let start = self.rendered;
+        let horizon = self.horizon();
+        let frames = (horizon - start) as usize;
+        if frames > 0 {
+            self.audio.clear();
+            self.audio.resize(frames * 2, 0.0);
+            self.input_frame.left.clear();
+            self.input_frame.right.clear();
+            if let Some((file, from)) = &self.input {
+                let len = file.left.len() as i64;
+                let (a, b) = ((start - from).clamp(0, len) as usize, (horizon - from).clamp(0, len) as usize);
+                self.input_frame.left.extend_from_slice(&file.left[a..b]);
+                self.input_frame.right.extend_from_slice(&file.right[a..b]);
+            }
+            let input = InputAudio { left: &self.input_frame.left, right: &self.input_frame.right };
+            render(&mut self.audio, midi, input);
+            self.rendered = horizon;
+            // Only the warmup's first block starts before the frames do
+            let stale = (self.samples_done as i64 - start).max(0) as usize;
+            self.carry.extend_from_slice(&self.audio[stale * 2..]);
+        }
+
+        let taken = self.samples_this_frame() * 2;
+        self.samples_done += (taken / 2) as u64;
+        if self.recording() {
+            if let Some(wav) = self.wav.as_mut() {
+                for &s in &self.carry[..taken] {
+                    let _ = wav.write_sample(s);
+                }
             }
         }
+        self.carry.drain(..taken);
     }
 
     /// Draws the pointer, which the screenshot wouldn't otherwise show.
@@ -1355,6 +1428,40 @@ mod tests {
         assert_eq!((c.crf, c.preset.as_str()), (12, "fast"));
         assert!(CaptureConfig::from_args(&args("soba --capture s.txt --crf high")).is_err());
         assert!(CaptureConfig::is_option("--crf") && CaptureConfig::is_option("--preset"));
+    }
+
+    #[test]
+    fn frames_take_their_audio_from_whole_blocks_on_renders_grid() {
+        let args = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
+        let config = CaptureConfig::from_args(&args("soba p.json --capture s.txt --fps 30")).unwrap().unwrap();
+        // 0.5 s is 93.75 blocks: the note falls in the block that runs on past frame 14
+        let mut c = Capture::from_script(config, "0.0 play\n0.5 note 60 100 0.25\n1.0 end\n").unwrap();
+        let block = BLOCK_SIZE as i64;
+        let mut notes = Vec::new();
+        while c.frame < 30 {
+            c.frame += 1;
+            c.fire_cues(&mut egui::RawInput::default(), &mut |_| Err(String::new()));
+            let (frame, start, grid) = (c.frame, c.rendered, c.grid);
+            for action in c.take_actions() {
+                if let CaptureAction::Midi { offset, .. } = action {
+                    notes.push((frame, start + offset as i64 - grid));
+                }
+            }
+            c.render_audio(&mut [], |buffer, _, _| {
+                let frames = buffer.len() / 2;
+                assert_eq!(((start - grid).rem_euclid(block), frames as i64 % block), (0, 0), "frame {frame}");
+                // Each sample says where it is
+                for (i, pair) in buffer.chunks_mut(2).enumerate() {
+                    pair.fill((start + i as i64) as f32);
+                }
+            });
+            assert!(c.carry.len() < BLOCK_SIZE * 2);
+            if let Some(&next) = c.carry.first() {
+                assert_eq!(next, c.samples_done as f32, "frame {frame} left a gap");
+            }
+        }
+        assert_eq!(c.samples_done as i64, c.grid + 31 * 1600);
+        assert_eq!(notes, [(14, 24_000), (22, 36_000)]);
     }
 
     #[test]

@@ -33,7 +33,7 @@ use std::process::ExitCode;
 
 use soba::dsp::analysis::{amp_to_db, peak, rms};
 use soba::dsp::loudness::{loudness, true_peak, Loudness};
-use soba::engine::{create_module_registry, read_wav, read_wav_at, EngineCommand, LimiterReport, OfflineRenderer};
+use soba::engine::{create_module_registry, read_wav, read_wav_at, EngineCommand, LimiterReport, OfflineRenderer, BLOCK_SIZE};
 use soba::persistence::sample_files::SampleBase;
 use soba::persistence::{load_from_file, CompiledPatch, Patch};
 
@@ -59,7 +59,7 @@ fn parse_args() -> Result<Args, String> {
     let mut positional = Vec::new();
     let mut seconds = 5.0;
     let mut sample_rate = 48_000;
-    let mut block_size = 256;
+    let mut block_size = BLOCK_SIZE;
     let mut audition = false;
     let mut input = None;
     let mut cue = None;

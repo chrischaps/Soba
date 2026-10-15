@@ -116,6 +116,11 @@ enum RenderInput<'a> {
     Given(InputAudio<'a>),
 }
 
+/// The block the app runs its graph in, and `render`'s default. A capture
+/// cuts its audio on a grid of these, as `render` does, so the two make the
+/// same samples.
+pub const BLOCK_SIZE: usize = 256;
+
 /// Audio processor that runs in the audio callback.
 ///
 /// This struct is moved into the audio callback closure and handles

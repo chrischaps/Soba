@@ -436,8 +436,7 @@ impl SynthApp {
         // Create and start the audio processor if engine is available
         let ui_handle = if let Ok(ref mut engine) = audio_engine {
             let sample_rate = engine.sample_rate() as f32;
-            let block_size = 256; // Standard block size
-            let mut processor = AudioProcessor::new(sample_rate, block_size, engine_handle);
+            let mut processor = AudioProcessor::new(sample_rate, crate::engine::BLOCK_SIZE, engine_handle);
             if let Some(midi) = midi_audio_consumer {
                 processor.set_midi_input(midi);
             }
@@ -620,9 +619,9 @@ impl SynthApp {
         }
         midi.sort_by_key(|e| e.sample_offset);
         let (Ok(engine), Some(capture)) = (self.audio_engine.as_ref(), self.capture.as_mut()) else { return };
-        let (buffer, input) = capture.audio_and_input();
-        engine.render_offline(buffer, 2, &mut midi, input);
-        capture.commit_audio();
+        capture.render_audio(&mut midi, |buffer, midi, input| {
+            engine.render_offline(buffer, 2, midi, input);
+        });
     }
 
     /// Steps a long capture warmup on without drawing while nothing would
