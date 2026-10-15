@@ -341,6 +341,42 @@ def cover(s):
     s.at(5.2, "end")
 
 
+# The Dance Floor is 108 BPM, and a Dancer's phrase is 16 beats: four bars.
+# At 108, three phrases are a whole number of frames (1600 at 60 fps, 800 at
+# 30) and of samples, so the loop's two ends line up exactly
+DANCE_BEAT = 60 / 108
+DANCE_PHRASE = 16 * DANCE_BEAT
+# Each phrase a Dancer changes step, on a walk of its own that never comes
+# round again, so a clip only loops where every style on the stage is back
+# on the step it started on. For Robot, Disco and Headbang that's phrases 44
+# and 47 (dancer_moves::step_in): the shot films from beat 12 of phrase 44,
+# so a crash lands 4 beats in, and runs three phrases, the band's four bars
+# three times over
+DANCE_FROM = (44 * 16 + 12) * DANCE_BEAT
+DANCE_LOOP = 3 * DANCE_PHRASE
+# encode.py --loop crossfades this much of the end under the start
+DANCE_SEAM = 0.5
+
+
+@shot("tools/showcase/patches/dance-floor.json")
+def dancers(s):
+    """Three Dancers on one funk vamp, each hearing a different part of the
+    band, the big one in the middle hearing all of it, and the crash at
+    every phrase change its cue. Loops on its last half second."""
+    stage, wide = (2810, 410), 0.72
+    big, close = (2810, 448), 1.05
+    s.at(-DANCE_FROM, "play")
+    s.look(-1.0, stage, wide, 0.05, "the stage, all three")
+    # In on the middle one through the second phrase, catching its crash,
+    # and back out through the third to where it began
+    s.look(4.0, big, close, 6.5, "in on the big one")
+    s.look(14.5, stage, wide, 10.5, "back out to all three")
+    # Each crash, half a beat into the big move it cues
+    for k in range(3):
+        s.at((4.5 + 16 * k) * DANCE_BEAT, f"still dancers-accent-{k}")
+    s.at(DANCE_LOOP + DANCE_SEAM + 0.1, "end")
+
+
 # From One Sine is in 4-bar units of 8.571 s (112 BPM); unit n starts at u(n)
 SONG_UNIT = 16 * 60 / 112
 

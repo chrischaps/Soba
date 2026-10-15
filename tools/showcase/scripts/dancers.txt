@@ -1,0 +1,8 @@
+-397.7778 play
+-1.0000 camera -1577.3 -80.6 0.72 0.05   # the stage, all three
+2.5000 still dancers-accent-0
+4.0000 camera -2300.2 -157.4 1.05 6.5   # in on the big one
+11.3889 still dancers-accent-1
+14.5000 camera -1577.3 -80.6 0.72 10.5   # back out to all three
+20.2778 still dancers-accent-2
+27.2667 end

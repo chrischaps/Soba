@@ -1,0 +1,7686 @@
+{
+ "name": "Dance Floor",
+ "version": 6,
+ "nodes": [
+  {
+   "id": 1,
+   "module_id": "util.clock",
+   "position": [
+    40.0,
+    80.0
+   ],
+   "parameters": [
+    {
+     "name": "Tempo",
+     "type": "Number",
+     "value": 108.0
+    },
+    {
+     "name": "Gate Length",
+     "type": "Number",
+     "value": 50.0
+    },
+    {
+     "name": "Division",
+     "type": "Select",
+     "value": 4
+    },
+    {
+     "name": "Run",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Source",
+     "type": "Select",
+     "value": 0
+    },
+    {
+     "name": "Swing",
+     "type": "Number",
+     "value": 57.0
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "module_id": "util.divider",
+   "position": [
+    40.0,
+    460.0
+   ],
+   "parameters": [
+    {
+     "name": "Divide",
+     "type": "Number",
+     "value": 2.0
+    },
+    {
+     "name": "Offset",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Length",
+     "type": "Number",
+     "value": 1.0
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "module_id": "seq.arranger",
+   "position": [
+    260.0,
+    80.0
+   ],
+   "parameters": [
+    {
+     "name": "Steps",
+     "type": "Number",
+     "value": 16.0
+    },
+    {
+     "name": "Sections",
+     "type": "Number",
+     "value": 4.0
+    },
+    {
+     "name": "Loop",
+     "type": "Select",
+     "value": 1
+    },
+    {
+     "name": "Glide 1",
+     "type": "Number",
+     "value": 0.04
+    },
+    {
+     "name": "Glide 2",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Glide 3",
+     "type": "Number",
+     "value": 0.04
+    },
+    {
+     "name": "Glide 4",
+     "type": "Number",
+     "value": 0.04
+    },
+    {
+     "name": "Glide 5",
+     "type": "Number",
+     "value": 0.04
+    },
+    {
+     "name": "Glide 6",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Glide 7",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Glide 8",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Length 01",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Section 01 Lane 1",
+     "type": "Number",
+     "value": 1001000.0
+    },
+    {
+     "name": "Section 01 Lane 2",
+     "type": "Number",
+     "value": 1000100.0
+    },
+    {
+     "name": "Section 01 Lane 3",
+     "type": "Number",
+     "value": 1000800.0
+    },
+    {
+     "name": "Section 01 Lane 4",
+     "type": "Number",
+     "value": 1000550.0
+    },
+    {
+     "name": "Section 01 Lane 5",
+     "type": "Number",
+     "value": 6010000.0
+    },
+    {
+     "name": "Section 01 Lane 6",
+     "type": "Number",
+     "value": 3001000.0
+    },
+    {
+     "name": "Section 01 Lane 7",
+     "type": "Number",
+     "value": 1000220.0
+    },
+    {
+     "name": "Length 02",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Length 03",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Section 03 Lane 5",
+     "type": "Number",
+     "value": 1000420.0
+    },
+    {
+     "name": "Length 04",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Section 04 Lane 2",
+     "type": "Number",
+     "value": 1000350.0
+    }
+   ],
+   "labels": {
+    "Name": "Dance Floor",
+    "Lane 1": "Drums",
+    "Lane 2": "Pattern",
+    "Lane 3": "Bass",
+    "Lane 4": "Keys",
+    "Lane 5": "Lead",
+    "Lane 6": "Crash",
+    "Lane 7": "Room",
+    "Section 1": "Groove",
+    "Section 2": "Groove",
+    "Section 3": "Answer",
+    "Section 4": "Fill"
+   }
+  },
+  {
+   "id": 10,
+   "module_id": "seq.trigger",
+   "position": [
+    40.0,
+    900.0
+   ],
+   "parameters": [
+    {
+     "name": "Steps",
+     "type": "Number",
+     "value": 16.0
+    },
+    {
+     "name": "Gate Length",
+     "type": "Number",
+     "value": 40.0
+    },
+    {
+     "name": "Accent Amount",
+     "type": "Number",
+     "value": 40.0
+    },
+    {
+     "name": "Step A1 01",
+     "type": "Number",
+     "value": 1100100.0
+    },
+    {
+     "name": "Step A1 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A1 03",
+     "type": "Number",
+     "value": 1100062.0
+    },
+    {
+     "name": "Step A1 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A1 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A1 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A1 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A1 08",
+     "type": "Number",
+     "value": 1100078.0
+    },
+    {
+     "name": "Step A1 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A1 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A1 11",
+     "type": "Number",
+     "value": 1100088.0
+    },
+    {
+     "name": "Step A1 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A1 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A1 14",
+     "type": "Number",
+     "value": 1100070.0
+    },
+    {
+     "name": "Step A1 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A1 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A2 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A2 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A2 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A2 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A2 05",
+     "type": "Number",
+     "value": 1100100.0
+    },
+    {
+     "name": "Step A2 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A2 07",
+     "type": "Number",
+     "value": 1100020.0
+    },
+    {
+     "name": "Step A2 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A2 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A2 10",
+     "type": "Number",
+     "value": 1100024.0
+    },
+    {
+     "name": "Step A2 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A2 12",
+     "type": "Number",
+     "value": 1100018.0
+    },
+    {
+     "name": "Step A2 13",
+     "type": "Number",
+     "value": 1100100.0
+    },
+    {
+     "name": "Step A2 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A2 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A2 16",
+     "type": "Number",
+     "value": 1100026.0
+    },
+    {
+     "name": "Step A3 01",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step A3 02",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step A3 03",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step A3 04",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step A3 05",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step A3 06",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step A3 07",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step A3 08",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step A3 09",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step A3 10",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step A3 11",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step A3 12",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step A3 13",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step A3 14",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step A3 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A3 16",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step A4 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A4 15",
+     "type": "Number",
+     "value": 1100062.0
+    },
+    {
+     "name": "Step A4 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A5 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A6 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A7 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step A8 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 01",
+     "type": "Number",
+     "value": 1100100.0
+    },
+    {
+     "name": "Step B1 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 03",
+     "type": "Number",
+     "value": 1100062.0
+    },
+    {
+     "name": "Step B1 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 08",
+     "type": "Number",
+     "value": 1100078.0
+    },
+    {
+     "name": "Step B1 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 11",
+     "type": "Number",
+     "value": 1100088.0
+    },
+    {
+     "name": "Step B1 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B1 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B2 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B2 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B2 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B2 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B2 05",
+     "type": "Number",
+     "value": 1100100.0
+    },
+    {
+     "name": "Step B2 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B2 07",
+     "type": "Number",
+     "value": 1100020.0
+    },
+    {
+     "name": "Step B2 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B2 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B2 10",
+     "type": "Number",
+     "value": 1100024.0
+    },
+    {
+     "name": "Step B2 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B2 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B2 13",
+     "type": "Number",
+     "value": 1100100.0
+    },
+    {
+     "name": "Step B2 14",
+     "type": "Number",
+     "value": 2100070.0
+    },
+    {
+     "name": "Step B2 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B2 16",
+     "type": "Number",
+     "value": 1100090.0
+    },
+    {
+     "name": "Step B3 01",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step B3 02",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step B3 03",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step B3 04",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step B3 05",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step B3 06",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step B3 07",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step B3 08",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step B3 09",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step B3 10",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step B3 11",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step B3 12",
+     "type": "Number",
+     "value": 1100038.0
+    },
+    {
+     "name": "Step B3 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B3 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B3 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B3 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B4 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B5 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B6 15",
+     "type": "Number",
+     "value": 1100088.0
+    },
+    {
+     "name": "Step B6 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B7 16",
+     "type": "Number",
+     "value": 1100092.0
+    },
+    {
+     "name": "Step B8 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 13",
+     "type": "Number",
+     "value": 1100070.0
+    },
+    {
+     "name": "Step B8 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step B8 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 01",
+     "type": "Number",
+     "value": 1100092.0
+    },
+    {
+     "name": "Step C1 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 11",
+     "type": "Number",
+     "value": 1100072.0
+    },
+    {
+     "name": "Step C1 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C1 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C2 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C3 01",
+     "type": "Number",
+     "value": 1100066.0
+    },
+    {
+     "name": "Step C3 02",
+     "type": "Number",
+     "value": 1100034.0
+    },
+    {
+     "name": "Step C3 03",
+     "type": "Number",
+     "value": 1100066.0
+    },
+    {
+     "name": "Step C3 04",
+     "type": "Number",
+     "value": 1100034.0
+    },
+    {
+     "name": "Step C3 05",
+     "type": "Number",
+     "value": 1100066.0
+    },
+    {
+     "name": "Step C3 06",
+     "type": "Number",
+     "value": 1100034.0
+    },
+    {
+     "name": "Step C3 07",
+     "type": "Number",
+     "value": 1100066.0
+    },
+    {
+     "name": "Step C3 08",
+     "type": "Number",
+     "value": 1100034.0
+    },
+    {
+     "name": "Step C3 09",
+     "type": "Number",
+     "value": 1100066.0
+    },
+    {
+     "name": "Step C3 10",
+     "type": "Number",
+     "value": 1100034.0
+    },
+    {
+     "name": "Step C3 11",
+     "type": "Number",
+     "value": 1100066.0
+    },
+    {
+     "name": "Step C3 12",
+     "type": "Number",
+     "value": 1100034.0
+    },
+    {
+     "name": "Step C3 13",
+     "type": "Number",
+     "value": 1100066.0
+    },
+    {
+     "name": "Step C3 14",
+     "type": "Number",
+     "value": 1100034.0
+    },
+    {
+     "name": "Step C3 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C3 16",
+     "type": "Number",
+     "value": 1100034.0
+    },
+    {
+     "name": "Step C4 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C4 15",
+     "type": "Number",
+     "value": 1100052.0
+    },
+    {
+     "name": "Step C4 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 05",
+     "type": "Number",
+     "value": 1100070.0
+    },
+    {
+     "name": "Step C5 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 13",
+     "type": "Number",
+     "value": 1100070.0
+    },
+    {
+     "name": "Step C5 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C5 16",
+     "type": "Number",
+     "value": 1100035.0
+    },
+    {
+     "name": "Step C6 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C6 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C7 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step C8 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 01",
+     "type": "Number",
+     "value": 1100100.0
+    },
+    {
+     "name": "Step D1 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D1 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 01",
+     "type": "Number",
+     "value": 1100090.0
+    },
+    {
+     "name": "Step D2 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D2 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D3 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D4 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D5 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D6 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 01",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D7 16",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 01",
+     "type": "Number",
+     "value": 1100080.0
+    },
+    {
+     "name": "Step D8 02",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 03",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 04",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 05",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 06",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 07",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 08",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 09",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 10",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 11",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 12",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 13",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 14",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 15",
+     "type": "Number",
+     "value": -1100080.0
+    },
+    {
+     "name": "Step D8 16",
+     "type": "Number",
+     "value": -1100080.0
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "module_id": "source.drum",
+   "position": [
+    440.0,
+    900.0
+   ],
+   "parameters": [
+    {
+     "name": "Type",
+     "type": "Select",
+     "value": 0
+    },
+    {
+     "name": "Tune",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Tone",
+     "type": "Number",
+     "value": 0.38
+    },
+    {
+     "name": "Snap",
+     "type": "Number",
+     "value": 0.45
+    },
+    {
+     "name": "Level",
+     "type": "Number",
+     "value": 0.88
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "module_id": "source.drum",
+   "position": [
+    730.0,
+    900.0
+   ],
+   "parameters": [
+    {
+     "name": "Type",
+     "type": "Select",
+     "value": 1
+    },
+    {
+     "name": "Tune",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.38
+    },
+    {
+     "name": "Tone",
+     "type": "Number",
+     "value": 0.55
+    },
+    {
+     "name": "Snap",
+     "type": "Number",
+     "value": 0.6
+    },
+    {
+     "name": "Level",
+     "type": "Number",
+     "value": 0.8
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "module_id": "source.drum",
+   "position": [
+    1020.0,
+    900.0
+   ],
+   "parameters": [
+    {
+     "name": "Type",
+     "type": "Select",
+     "value": 4
+    },
+    {
+     "name": "Tune",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.22
+    },
+    {
+     "name": "Tone",
+     "type": "Number",
+     "value": 0.6
+    },
+    {
+     "name": "Snap",
+     "type": "Number",
+     "value": 0.4
+    },
+    {
+     "name": "Level",
+     "type": "Number",
+     "value": 0.55
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "module_id": "source.drum",
+   "position": [
+    1310.0,
+    900.0
+   ],
+   "parameters": [
+    {
+     "name": "Type",
+     "type": "Select",
+     "value": 5
+    },
+    {
+     "name": "Tune",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.42
+    },
+    {
+     "name": "Tone",
+     "type": "Number",
+     "value": 0.55
+    },
+    {
+     "name": "Snap",
+     "type": "Number",
+     "value": 0.4
+    },
+    {
+     "name": "Level",
+     "type": "Number",
+     "value": 0.5
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "module_id": "source.drum",
+   "position": [
+    440.0,
+    1270.0
+   ],
+   "parameters": [
+    {
+     "name": "Type",
+     "type": "Select",
+     "value": 7
+    },
+    {
+     "name": "Tune",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.35
+    },
+    {
+     "name": "Tone",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Snap",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Level",
+     "type": "Number",
+     "value": 0.6
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "module_id": "source.drum",
+   "position": [
+    730.0,
+    1270.0
+   ],
+   "parameters": [
+    {
+     "name": "Type",
+     "type": "Select",
+     "value": 2
+    },
+    {
+     "name": "Tune",
+     "type": "Number",
+     "value": 5.0
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.4
+    },
+    {
+     "name": "Tone",
+     "type": "Number",
+     "value": 0.45
+    },
+    {
+     "name": "Snap",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Level",
+     "type": "Number",
+     "value": 0.7
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "module_id": "source.drum",
+   "position": [
+    1020.0,
+    1270.0
+   ],
+   "parameters": [
+    {
+     "name": "Type",
+     "type": "Select",
+     "value": 2
+    },
+    {
+     "name": "Tune",
+     "type": "Number",
+     "value": -2.0
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Tone",
+     "type": "Number",
+     "value": 0.45
+    },
+    {
+     "name": "Snap",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Level",
+     "type": "Number",
+     "value": 0.75
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "module_id": "source.drum",
+   "position": [
+    1310.0,
+    1270.0
+   ],
+   "parameters": [
+    {
+     "name": "Type",
+     "type": "Select",
+     "value": 3
+    },
+    {
+     "name": "Tune",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.4
+    },
+    {
+     "name": "Tone",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Snap",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Level",
+     "type": "Number",
+     "value": 0.6
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "module_id": "source.drum",
+   "position": [
+    1600.0,
+    1270.0
+   ],
+   "parameters": [
+    {
+     "name": "Type",
+     "type": "Select",
+     "value": 6
+    },
+    {
+     "name": "Tune",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.75
+    },
+    {
+     "name": "Tone",
+     "type": "Number",
+     "value": 0.45
+    },
+    {
+     "name": "Snap",
+     "type": "Number",
+     "value": 0.4
+    },
+    {
+     "name": "Level",
+     "type": "Number",
+     "value": 0.55
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "module_id": "util.mixer",
+   "position": [
+    1920.0,
+    1270.0
+   ],
+   "parameters": [
+    {
+     "name": "Level 1",
+     "type": "Number",
+     "value": 0.7
+    },
+    {
+     "name": "Level 2",
+     "type": "Number",
+     "value": 0.75
+    },
+    {
+     "name": "Level 3",
+     "type": "Number",
+     "value": 0.8
+    },
+    {
+     "name": "Level 4",
+     "type": "Number",
+     "value": 0.8
+    },
+    {
+     "name": "Pan 1",
+     "type": "Number",
+     "value": -0.25
+    },
+    {
+     "name": "Pan 2",
+     "type": "Number",
+     "value": -0.35
+    },
+    {
+     "name": "Pan 3",
+     "type": "Number",
+     "value": 0.3
+    },
+    {
+     "name": "Pan 4",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Send 1",
+     "type": "Number",
+     "value": 0.15
+    },
+    {
+     "name": "Send 2",
+     "type": "Number",
+     "value": 0.3
+    },
+    {
+     "name": "Send 3",
+     "type": "Number",
+     "value": 0.3
+    },
+    {
+     "name": "Send 4",
+     "type": "Number",
+     "value": 0.35
+    },
+    {
+     "name": "Master",
+     "type": "Number",
+     "value": 0.0
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "module_id": "util.mix",
+   "position": [
+    1600.0,
+    900.0
+   ],
+   "parameters": [
+    {
+     "name": "Level 1",
+     "type": "Number",
+     "value": 0.8
+    },
+    {
+     "name": "Level 2",
+     "type": "Number",
+     "value": 0.75
+    },
+    {
+     "name": "Level 3",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Level 4",
+     "type": "Number",
+     "value": 0.0
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "module_id": "util.mixer",
+   "position": [
+    2660.0,
+    900.0
+   ],
+   "parameters": [
+    {
+     "name": "Level 1",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Level 2",
+     "type": "Number",
+     "value": 0.85
+    },
+    {
+     "name": "Level 3",
+     "type": "Number",
+     "value": 0.6
+    },
+    {
+     "name": "Level 4",
+     "type": "Number",
+     "value": 0.55
+    },
+    {
+     "name": "Pan 1",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Pan 2",
+     "type": "Number",
+     "value": 0.05
+    },
+    {
+     "name": "Pan 3",
+     "type": "Number",
+     "value": 0.35
+    },
+    {
+     "name": "Pan 4",
+     "type": "Number",
+     "value": 0.4
+    },
+    {
+     "name": "Send 1",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Send 2",
+     "type": "Number",
+     "value": 0.18
+    },
+    {
+     "name": "Send 3",
+     "type": "Number",
+     "value": 0.05
+    },
+    {
+     "name": "Send 4",
+     "type": "Number",
+     "value": 0.1
+    },
+    {
+     "name": "Master",
+     "type": "Number",
+     "value": 0.0
+    }
+   ]
+  },
+  {
+   "id": 30,
+   "module_id": "seq.step",
+   "position": [
+    40.0,
+    1820.0
+   ],
+   "parameters": [
+    {
+     "name": "Steps",
+     "type": "Number",
+     "value": 16.0
+    },
+    {
+     "name": "Direction",
+     "type": "Select",
+     "value": 0
+    },
+    {
+     "name": "Gate Length",
+     "type": "Number",
+     "value": 55.0
+    },
+    {
+     "name": "Glide",
+     "type": "Number",
+     "value": 0.05
+    },
+    {
+     "name": "Chain 1",
+     "type": "Select",
+     "value": 1
+    },
+    {
+     "name": "Chain 2",
+     "type": "Select",
+     "value": 2
+    },
+    {
+     "name": "Step 1 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 1 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 1 Velocity",
+     "type": "Number",
+     "value": 120.0
+    },
+    {
+     "name": "Step 1 Tie",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 1 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 2 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 2 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 2 Velocity",
+     "type": "Number",
+     "value": 120.0
+    },
+    {
+     "name": "Step 2 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 2 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 3 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 3 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 4 Pitch",
+     "type": "Number",
+     "value": 76.0
+    },
+    {
+     "name": "Step 4 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 4 Velocity",
+     "type": "Number",
+     "value": 88.0
+    },
+    {
+     "name": "Step 4 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 4 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 5 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 5 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 6 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 6 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 6 Velocity",
+     "type": "Number",
+     "value": 58.0
+    },
+    {
+     "name": "Step 6 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 6 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 7 Pitch",
+     "type": "Number",
+     "value": 67.0
+    },
+    {
+     "name": "Step 7 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 7 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step 7 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 7 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 8 Pitch",
+     "type": "Number",
+     "value": 69.0
+    },
+    {
+     "name": "Step 8 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 8 Velocity",
+     "type": "Number",
+     "value": 104.0
+    },
+    {
+     "name": "Step 8 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 8 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 9 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 9 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 10 Pitch",
+     "type": "Number",
+     "value": 76.0
+    },
+    {
+     "name": "Step 10 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 10 Velocity",
+     "type": "Number",
+     "value": 96.0
+    },
+    {
+     "name": "Step 10 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 10 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 11 Pitch",
+     "type": "Number",
+     "value": 74.0
+    },
+    {
+     "name": "Step 11 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 11 Velocity",
+     "type": "Number",
+     "value": 84.0
+    },
+    {
+     "name": "Step 11 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 11 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 12 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 12 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 13 Pitch",
+     "type": "Number",
+     "value": 71.0
+    },
+    {
+     "name": "Step 13 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 13 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step 13 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 13 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 14 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 14 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 15 Pitch",
+     "type": "Number",
+     "value": 74.0
+    },
+    {
+     "name": "Step 15 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 15 Velocity",
+     "type": "Number",
+     "value": 90.0
+    },
+    {
+     "name": "Step 15 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 15 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 16 Pitch",
+     "type": "Number",
+     "value": 76.0
+    },
+    {
+     "name": "Step 16 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 16 Velocity",
+     "type": "Number",
+     "value": 78.0
+    },
+    {
+     "name": "Step 16 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 16 Slide",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B1 Pitch",
+     "type": "Number",
+     "value": 69.0
+    },
+    {
+     "name": "Step B1 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B1 Velocity",
+     "type": "Number",
+     "value": 120.0
+    },
+    {
+     "name": "Step B1 Tie",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B1 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B2 Pitch",
+     "type": "Number",
+     "value": 69.0
+    },
+    {
+     "name": "Step B2 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B2 Velocity",
+     "type": "Number",
+     "value": 120.0
+    },
+    {
+     "name": "Step B2 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B2 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B3 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B3 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B4 Pitch",
+     "type": "Number",
+     "value": 81.0
+    },
+    {
+     "name": "Step B4 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B4 Velocity",
+     "type": "Number",
+     "value": 88.0
+    },
+    {
+     "name": "Step B4 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B4 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B5 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B5 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B6 Pitch",
+     "type": "Number",
+     "value": 69.0
+    },
+    {
+     "name": "Step B6 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B6 Velocity",
+     "type": "Number",
+     "value": 58.0
+    },
+    {
+     "name": "Step B6 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B6 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B7 Pitch",
+     "type": "Number",
+     "value": 73.0
+    },
+    {
+     "name": "Step B7 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B7 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step B7 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B7 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B8 Pitch",
+     "type": "Number",
+     "value": 76.0
+    },
+    {
+     "name": "Step B8 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B8 Velocity",
+     "type": "Number",
+     "value": 104.0
+    },
+    {
+     "name": "Step B8 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B8 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B9 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B9 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B10 Pitch",
+     "type": "Number",
+     "value": 79.0
+    },
+    {
+     "name": "Step B10 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B10 Velocity",
+     "type": "Number",
+     "value": 96.0
+    },
+    {
+     "name": "Step B10 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B10 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B11 Pitch",
+     "type": "Number",
+     "value": 78.0
+    },
+    {
+     "name": "Step B11 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B11 Velocity",
+     "type": "Number",
+     "value": 84.0
+    },
+    {
+     "name": "Step B11 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B11 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B12 Pitch",
+     "type": "Number",
+     "value": 76.0
+    },
+    {
+     "name": "Step B12 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B12 Velocity",
+     "type": "Number",
+     "value": 80.0
+    },
+    {
+     "name": "Step B12 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B12 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B13 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B13 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B14 Pitch",
+     "type": "Number",
+     "value": 74.0
+    },
+    {
+     "name": "Step B14 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B14 Velocity",
+     "type": "Number",
+     "value": 92.0
+    },
+    {
+     "name": "Step B14 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B14 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B15 Pitch",
+     "type": "Number",
+     "value": 71.0
+    },
+    {
+     "name": "Step B15 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B15 Velocity",
+     "type": "Number",
+     "value": 86.0
+    },
+    {
+     "name": "Step B15 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B15 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B16 Pitch",
+     "type": "Number",
+     "value": 63.0
+    },
+    {
+     "name": "Step B16 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B16 Velocity",
+     "type": "Number",
+     "value": 90.0
+    },
+    {
+     "name": "Step B16 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B16 Slide",
+     "type": "Toggle",
+     "value": false
+    }
+   ]
+  },
+  {
+   "id": 31,
+   "module_id": "osc.sine",
+   "position": [
+    440.0,
+    1820.0
+   ],
+   "parameters": [
+    {
+     "name": "Octave",
+     "type": "Number",
+     "value": -3.0
+    },
+    {
+     "name": "Semitone",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Fine",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Waveform",
+     "type": "Select",
+     "value": 1
+    },
+    {
+     "name": "Voices",
+     "type": "Number",
+     "value": 1.0
+    }
+   ]
+  },
+  {
+   "id": 32,
+   "module_id": "util.mix",
+   "position": [
+    660.0,
+    1820.0
+   ],
+   "parameters": [
+    {
+     "name": "Level 1",
+     "type": "Number",
+     "value": 0.55
+    },
+    {
+     "name": "Level 2",
+     "type": "Number",
+     "value": 0.6
+    },
+    {
+     "name": "Level 3",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Level 4",
+     "type": "Number",
+     "value": 0.0
+    }
+   ]
+  },
+  {
+   "id": 33,
+   "module_id": "filter.ladder",
+   "position": [
+    930.0,
+    1820.0
+   ],
+   "parameters": [
+    {
+     "name": "Cutoff",
+     "type": "Number",
+     "value": 170.0
+    },
+    {
+     "name": "Resonance",
+     "type": "Number",
+     "value": 0.32
+    },
+    {
+     "name": "Drive",
+     "type": "Number",
+     "value": 2.2
+    },
+    {
+     "name": "Cutoff CV",
+     "type": "Number",
+     "value": 3.6
+    }
+   ]
+  },
+  {
+   "id": 34,
+   "module_id": "util.vca",
+   "position": [
+    1200.0,
+    1820.0
+   ],
+   "parameters": [
+    {
+     "name": "Level",
+     "type": "Number",
+     "value": 0.9
+    },
+    {
+     "name": "CV Amount",
+     "type": "Number",
+     "value": 1.0
+    }
+   ]
+  },
+  {
+   "id": 35,
+   "module_id": "mod.adsr",
+   "position": [
+    930.0,
+    2140.0
+   ],
+   "parameters": [
+    {
+     "name": "Attack",
+     "type": "Number",
+     "value": 0.001
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.16
+    },
+    {
+     "name": "Sustain",
+     "type": "Number",
+     "value": 0.12
+    },
+    {
+     "name": "Release",
+     "type": "Number",
+     "value": 0.07
+    },
+    {
+     "name": "Attack Curve",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Decay Curve",
+     "type": "Number",
+     "value": 0.55
+    },
+    {
+     "name": "Release Curve",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Velocity Amount",
+     "type": "Number",
+     "value": 0.75
+    }
+   ]
+  },
+  {
+   "id": 36,
+   "module_id": "mod.adsr",
+   "position": [
+    1200.0,
+    2140.0
+   ],
+   "parameters": [
+    {
+     "name": "Attack",
+     "type": "Number",
+     "value": 0.002
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.35
+    },
+    {
+     "name": "Sustain",
+     "type": "Number",
+     "value": 0.65
+    },
+    {
+     "name": "Release",
+     "type": "Number",
+     "value": 0.06
+    },
+    {
+     "name": "Attack Curve",
+     "type": "Number",
+     "value": 0.2
+    },
+    {
+     "name": "Decay Curve",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Release Curve",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Velocity Amount",
+     "type": "Number",
+     "value": 0.55
+    }
+   ]
+  },
+  {
+   "id": 40,
+   "module_id": "seq.chord",
+   "position": [
+    40.0,
+    2700.0
+   ],
+   "parameters": [
+    {
+     "name": "Steps",
+     "type": "Number",
+     "value": 16.0
+    },
+    {
+     "name": "Direction",
+     "type": "Select",
+     "value": 0
+    },
+    {
+     "name": "Gate Length",
+     "type": "Number",
+     "value": 42.0
+    },
+    {
+     "name": "Voicing",
+     "type": "Select",
+     "value": 0
+    },
+    {
+     "name": "Voice Leading",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Voices",
+     "type": "Number",
+     "value": 4.0
+    },
+    {
+     "name": "Range",
+     "type": "Number",
+     "value": 3.0
+    },
+    {
+     "name": "Bass Voice",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Rootless",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Strum",
+     "type": "Number",
+     "value": 6.0
+    },
+    {
+     "name": "Strum Dir",
+     "type": "Select",
+     "value": 2
+    },
+    {
+     "name": "Strum Taper",
+     "type": "Number",
+     "value": 20.0
+    },
+    {
+     "name": "Step 1 Root",
+     "type": "Number",
+     "value": 52.0
+    },
+    {
+     "name": "Step 1 Type",
+     "type": "Select",
+     "value": 14
+    },
+    {
+     "name": "Step 1 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 1 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step 1 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 2 Root",
+     "type": "Number",
+     "value": 52.0
+    },
+    {
+     "name": "Step 2 Type",
+     "type": "Select",
+     "value": 14
+    },
+    {
+     "name": "Step 2 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 2 Velocity",
+     "type": "Number",
+     "value": 90.0
+    },
+    {
+     "name": "Step 2 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 3 Root",
+     "type": "Number",
+     "value": 52.0
+    },
+    {
+     "name": "Step 3 Type",
+     "type": "Select",
+     "value": 14
+    },
+    {
+     "name": "Step 3 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 3 Velocity",
+     "type": "Number",
+     "value": 90.0
+    },
+    {
+     "name": "Step 3 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 4 Root",
+     "type": "Number",
+     "value": 52.0
+    },
+    {
+     "name": "Step 4 Type",
+     "type": "Select",
+     "value": 14
+    },
+    {
+     "name": "Step 4 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 4 Velocity",
+     "type": "Number",
+     "value": 92.0
+    },
+    {
+     "name": "Step 4 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 5 Root",
+     "type": "Number",
+     "value": 52.0
+    },
+    {
+     "name": "Step 5 Type",
+     "type": "Select",
+     "value": 14
+    },
+    {
+     "name": "Step 5 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 5 Velocity",
+     "type": "Number",
+     "value": 90.0
+    },
+    {
+     "name": "Step 5 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 6 Root",
+     "type": "Number",
+     "value": 52.0
+    },
+    {
+     "name": "Step 6 Type",
+     "type": "Select",
+     "value": 14
+    },
+    {
+     "name": "Step 6 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 6 Velocity",
+     "type": "Number",
+     "value": 84.0
+    },
+    {
+     "name": "Step 6 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 7 Root",
+     "type": "Number",
+     "value": 52.0
+    },
+    {
+     "name": "Step 7 Type",
+     "type": "Select",
+     "value": 14
+    },
+    {
+     "name": "Step 7 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 7 Velocity",
+     "type": "Number",
+     "value": 90.0
+    },
+    {
+     "name": "Step 7 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 8 Root",
+     "type": "Number",
+     "value": 57.0
+    },
+    {
+     "name": "Step 8 Type",
+     "type": "Select",
+     "value": 17
+    },
+    {
+     "name": "Step 8 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 8 Velocity",
+     "type": "Number",
+     "value": 104.0
+    },
+    {
+     "name": "Step 8 Tie",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 9 Root",
+     "type": "Number",
+     "value": 57.0
+    },
+    {
+     "name": "Step 9 Type",
+     "type": "Select",
+     "value": 17
+    },
+    {
+     "name": "Step 9 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 9 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step 9 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 10 Root",
+     "type": "Number",
+     "value": 57.0
+    },
+    {
+     "name": "Step 10 Type",
+     "type": "Select",
+     "value": 17
+    },
+    {
+     "name": "Step 10 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 10 Velocity",
+     "type": "Number",
+     "value": 90.0
+    },
+    {
+     "name": "Step 10 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 11 Root",
+     "type": "Number",
+     "value": 57.0
+    },
+    {
+     "name": "Step 11 Type",
+     "type": "Select",
+     "value": 17
+    },
+    {
+     "name": "Step 11 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 11 Velocity",
+     "type": "Number",
+     "value": 90.0
+    },
+    {
+     "name": "Step 11 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 12 Root",
+     "type": "Number",
+     "value": 57.0
+    },
+    {
+     "name": "Step 12 Type",
+     "type": "Select",
+     "value": 17
+    },
+    {
+     "name": "Step 12 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 12 Velocity",
+     "type": "Number",
+     "value": 94.0
+    },
+    {
+     "name": "Step 12 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 13 Root",
+     "type": "Number",
+     "value": 57.0
+    },
+    {
+     "name": "Step 13 Type",
+     "type": "Select",
+     "value": 17
+    },
+    {
+     "name": "Step 13 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 13 Velocity",
+     "type": "Number",
+     "value": 90.0
+    },
+    {
+     "name": "Step 13 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 14 Root",
+     "type": "Number",
+     "value": 57.0
+    },
+    {
+     "name": "Step 14 Type",
+     "type": "Select",
+     "value": 17
+    },
+    {
+     "name": "Step 14 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 14 Velocity",
+     "type": "Number",
+     "value": 84.0
+    },
+    {
+     "name": "Step 14 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 15 Root",
+     "type": "Number",
+     "value": 57.0
+    },
+    {
+     "name": "Step 15 Type",
+     "type": "Select",
+     "value": 17
+    },
+    {
+     "name": "Step 15 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 15 Velocity",
+     "type": "Number",
+     "value": 70.0
+    },
+    {
+     "name": "Step 15 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 16 Root",
+     "type": "Number",
+     "value": 52.0
+    },
+    {
+     "name": "Step 16 Type",
+     "type": "Select",
+     "value": 14
+    },
+    {
+     "name": "Step 16 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 16 Velocity",
+     "type": "Number",
+     "value": 104.0
+    },
+    {
+     "name": "Step 16 Tie",
+     "type": "Toggle",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 42,
+   "module_id": "filter.svf",
+   "position": [
+    720.0,
+    2700.0
+   ],
+   "parameters": [
+    {
+     "name": "Cutoff",
+     "type": "Number",
+     "value": 520.0
+    },
+    {
+     "name": "Resonance",
+     "type": "Number",
+     "value": 0.62
+    },
+    {
+     "name": "Drive",
+     "type": "Number",
+     "value": 1.4
+    },
+    {
+     "name": "Cutoff CV",
+     "type": "Number",
+     "value": 2.6
+    }
+   ]
+  },
+  {
+   "id": 43,
+   "module_id": "mod.adsr",
+   "position": [
+    720.0,
+    3060.0
+   ],
+   "parameters": [
+    {
+     "name": "Attack",
+     "type": "Number",
+     "value": 0.012
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.22
+    },
+    {
+     "name": "Sustain",
+     "type": "Number",
+     "value": 0.1
+    },
+    {
+     "name": "Release",
+     "type": "Number",
+     "value": 0.12
+    },
+    {
+     "name": "Attack Curve",
+     "type": "Number",
+     "value": 0.3
+    },
+    {
+     "name": "Decay Curve",
+     "type": "Number",
+     "value": 0.55
+    },
+    {
+     "name": "Release Curve",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Velocity Amount",
+     "type": "Number",
+     "value": 0.6
+    }
+   ]
+  },
+  {
+   "id": 44,
+   "module_id": "fx.chorus",
+   "position": [
+    990.0,
+    2700.0
+   ],
+   "parameters": [
+    {
+     "name": "Rate",
+     "type": "Number",
+     "value": 0.6
+    },
+    {
+     "name": "Depth",
+     "type": "Number",
+     "value": 0.35
+    },
+    {
+     "name": "Delay",
+     "type": "Number",
+     "value": 9.0
+    },
+    {
+     "name": "Feedback",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Voices",
+     "type": "Select",
+     "value": 1
+    },
+    {
+     "name": "Mix",
+     "type": "Number",
+     "value": 0.4
+    },
+    {
+     "name": "Shape",
+     "type": "Select",
+     "value": 0
+    }
+   ]
+  },
+  {
+   "id": 50,
+   "module_id": "seq.step",
+   "position": [
+    40.0,
+    3640.0
+   ],
+   "parameters": [
+    {
+     "name": "Steps",
+     "type": "Number",
+     "value": 16.0
+    },
+    {
+     "name": "Direction",
+     "type": "Select",
+     "value": 0
+    },
+    {
+     "name": "Gate Length",
+     "type": "Number",
+     "value": 70.0
+    },
+    {
+     "name": "Glide",
+     "type": "Number",
+     "value": 0.07
+    },
+    {
+     "name": "Chain 1",
+     "type": "Select",
+     "value": 2
+    },
+    {
+     "name": "Chain 2",
+     "type": "Select",
+     "value": 1
+    },
+    {
+     "name": "Step 1 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 1 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 2 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 2 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 3 Pitch",
+     "type": "Number",
+     "value": 71.0
+    },
+    {
+     "name": "Step 3 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 3 Velocity",
+     "type": "Number",
+     "value": 96.0
+    },
+    {
+     "name": "Step 3 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 3 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 4 Pitch",
+     "type": "Number",
+     "value": 74.0
+    },
+    {
+     "name": "Step 4 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 4 Velocity",
+     "type": "Number",
+     "value": 104.0
+    },
+    {
+     "name": "Step 4 Tie",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 4 Slide",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 5 Pitch",
+     "type": "Number",
+     "value": 74.0
+    },
+    {
+     "name": "Step 5 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 5 Velocity",
+     "type": "Number",
+     "value": 104.0
+    },
+    {
+     "name": "Step 5 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 5 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 6 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 6 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 7 Pitch",
+     "type": "Number",
+     "value": 76.0
+    },
+    {
+     "name": "Step 7 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 7 Velocity",
+     "type": "Number",
+     "value": 112.0
+    },
+    {
+     "name": "Step 7 Tie",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 7 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 8 Pitch",
+     "type": "Number",
+     "value": 76.0
+    },
+    {
+     "name": "Step 8 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 8 Velocity",
+     "type": "Number",
+     "value": 112.0
+    },
+    {
+     "name": "Step 8 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 8 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 9 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 9 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 10 Pitch",
+     "type": "Number",
+     "value": 74.0
+    },
+    {
+     "name": "Step 10 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 10 Velocity",
+     "type": "Number",
+     "value": 82.0
+    },
+    {
+     "name": "Step 10 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 10 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 11 Pitch",
+     "type": "Number",
+     "value": 71.0
+    },
+    {
+     "name": "Step 11 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 11 Velocity",
+     "type": "Number",
+     "value": 90.0
+    },
+    {
+     "name": "Step 11 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 11 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 12 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 12 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 13 Pitch",
+     "type": "Number",
+     "value": 69.0
+    },
+    {
+     "name": "Step 13 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 13 Velocity",
+     "type": "Number",
+     "value": 96.0
+    },
+    {
+     "name": "Step 13 Tie",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 13 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 14 Pitch",
+     "type": "Number",
+     "value": 69.0
+    },
+    {
+     "name": "Step 14 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 14 Velocity",
+     "type": "Number",
+     "value": 96.0
+    },
+    {
+     "name": "Step 14 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 14 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 15 Pitch",
+     "type": "Number",
+     "value": 67.0
+    },
+    {
+     "name": "Step 15 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step 15 Velocity",
+     "type": "Number",
+     "value": 80.0
+    },
+    {
+     "name": "Step 15 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 15 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step 16 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step 16 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B1 Pitch",
+     "type": "Number",
+     "value": 69.0
+    },
+    {
+     "name": "Step B1 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B1 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step B1 Tie",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B1 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B2 Pitch",
+     "type": "Number",
+     "value": 69.0
+    },
+    {
+     "name": "Step B2 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B2 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step B2 Tie",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B2 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B3 Pitch",
+     "type": "Number",
+     "value": 69.0
+    },
+    {
+     "name": "Step B3 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B3 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step B3 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B3 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B4 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B4 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B5 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B5 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B6 Pitch",
+     "type": "Number",
+     "value": 67.0
+    },
+    {
+     "name": "Step B6 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B6 Velocity",
+     "type": "Number",
+     "value": 80.0
+    },
+    {
+     "name": "Step B6 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B6 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B7 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B7 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B7 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step B7 Tie",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B7 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B8 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B8 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B8 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step B8 Tie",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B8 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B9 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B9 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B9 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step B9 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B9 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B10 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B10 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B11 Pitch",
+     "type": "Number",
+     "value": 67.0
+    },
+    {
+     "name": "Step B11 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B11 Velocity",
+     "type": "Number",
+     "value": 86.0
+    },
+    {
+     "name": "Step B11 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B11 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B12 Pitch",
+     "type": "Number",
+     "value": 69.0
+    },
+    {
+     "name": "Step B12 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B12 Velocity",
+     "type": "Number",
+     "value": 92.0
+    },
+    {
+     "name": "Step B12 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B12 Slide",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B13 Pitch",
+     "type": "Number",
+     "value": 71.0
+    },
+    {
+     "name": "Step B13 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B13 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step B13 Tie",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B13 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B14 Pitch",
+     "type": "Number",
+     "value": 71.0
+    },
+    {
+     "name": "Step B14 Gate",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Step B14 Velocity",
+     "type": "Number",
+     "value": 100.0
+    },
+    {
+     "name": "Step B14 Tie",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B14 Slide",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B15 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B15 Gate",
+     "type": "Toggle",
+     "value": false
+    },
+    {
+     "name": "Step B16 Pitch",
+     "type": "Number",
+     "value": 64.0
+    },
+    {
+     "name": "Step B16 Gate",
+     "type": "Toggle",
+     "value": false
+    }
+   ]
+  },
+  {
+   "id": 51,
+   "module_id": "osc.sine",
+   "position": [
+    440.0,
+    3640.0
+   ],
+   "parameters": [
+    {
+     "name": "Octave",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Waveform",
+     "type": "Select",
+     "value": 1
+    },
+    {
+     "name": "Voices",
+     "type": "Number",
+     "value": 3.0
+    },
+    {
+     "name": "Detune",
+     "type": "Number",
+     "value": 0.12
+    },
+    {
+     "name": "Spread",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Exp FM Depth",
+     "type": "Number",
+     "value": 0.015
+    }
+   ]
+  },
+  {
+   "id": 57,
+   "module_id": "mod.lfo",
+   "position": [
+    440.0,
+    4220.0
+   ],
+   "parameters": [
+    {
+     "name": "Rate",
+     "type": "Number",
+     "value": 5.2
+    },
+    {
+     "name": "Waveform",
+     "type": "Select",
+     "value": 0
+    },
+    {
+     "name": "Bipolar",
+     "type": "Toggle",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 52,
+   "module_id": "filter.ladder",
+   "position": [
+    660.0,
+    3640.0
+   ],
+   "parameters": [
+    {
+     "name": "Cutoff",
+     "type": "Number",
+     "value": 900.0
+    },
+    {
+     "name": "Resonance",
+     "type": "Number",
+     "value": 0.28
+    },
+    {
+     "name": "Drive",
+     "type": "Number",
+     "value": 1.6
+    },
+    {
+     "name": "Cutoff CV",
+     "type": "Number",
+     "value": 2.2
+    }
+   ]
+  },
+  {
+   "id": 53,
+   "module_id": "util.vca",
+   "position": [
+    930.0,
+    3640.0
+   ],
+   "parameters": [
+    {
+     "name": "Level",
+     "type": "Number",
+     "value": 0.55
+    },
+    {
+     "name": "CV Amount",
+     "type": "Number",
+     "value": 1.0
+    }
+   ]
+  },
+  {
+   "id": 54,
+   "module_id": "mod.adsr",
+   "position": [
+    660.0,
+    3960.0
+   ],
+   "parameters": [
+    {
+     "name": "Attack",
+     "type": "Number",
+     "value": 0.004
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.3
+    },
+    {
+     "name": "Sustain",
+     "type": "Number",
+     "value": 0.35
+    },
+    {
+     "name": "Release",
+     "type": "Number",
+     "value": 0.12
+    },
+    {
+     "name": "Attack Curve",
+     "type": "Number",
+     "value": 0.2
+    },
+    {
+     "name": "Decay Curve",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Release Curve",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Velocity Amount",
+     "type": "Number",
+     "value": 0.6
+    }
+   ]
+  },
+  {
+   "id": 55,
+   "module_id": "mod.adsr",
+   "position": [
+    930.0,
+    3960.0
+   ],
+   "parameters": [
+    {
+     "name": "Attack",
+     "type": "Number",
+     "value": 0.006
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 0.25
+    },
+    {
+     "name": "Sustain",
+     "type": "Number",
+     "value": 0.8
+    },
+    {
+     "name": "Release",
+     "type": "Number",
+     "value": 0.14
+    },
+    {
+     "name": "Attack Curve",
+     "type": "Number",
+     "value": 0.2
+    },
+    {
+     "name": "Decay Curve",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Release Curve",
+     "type": "Number",
+     "value": 0.5
+    },
+    {
+     "name": "Velocity Amount",
+     "type": "Number",
+     "value": 0.5
+    }
+   ]
+  },
+  {
+   "id": 56,
+   "module_id": "fx.delay",
+   "position": [
+    1200.0,
+    3640.0
+   ],
+   "parameters": [
+    {
+     "name": "Time",
+     "type": "Number",
+     "value": 430.0
+    },
+    {
+     "name": "Feedback",
+     "type": "Number",
+     "value": 0.32
+    },
+    {
+     "name": "Mix",
+     "type": "Number",
+     "value": 0.25
+    },
+    {
+     "name": "High Cut",
+     "type": "Number",
+     "value": 4500.0
+    },
+    {
+     "name": "Low Cut",
+     "type": "Number",
+     "value": 250.0
+    },
+    {
+     "name": "Ping-Pong",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Sync",
+     "type": "Select",
+     "value": 8
+    },
+    {
+     "name": "Tape",
+     "type": "Toggle",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 61,
+   "module_id": "util.mixer",
+   "position": [
+    2400.0,
+    2700.0
+   ],
+   "parameters": [
+    {
+     "name": "Level 1",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Level 2",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Level 3",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Level 4",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Pan 1",
+     "type": "Number",
+     "value": -0.55
+    },
+    {
+     "name": "Pan 2",
+     "type": "Number",
+     "value": 0.55
+    },
+    {
+     "name": "Send 1",
+     "type": "Number",
+     "value": 0.25
+    },
+    {
+     "name": "Send 2",
+     "type": "Number",
+     "value": 0.25
+    },
+    {
+     "name": "Master",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Pan 3",
+     "type": "Number",
+     "value": 0.45
+    }
+   ]
+  },
+  {
+   "id": 60,
+   "module_id": "util.mixer",
+   "position": [
+    2880.0,
+    1820.0
+   ],
+   "parameters": [
+    {
+     "name": "Level 1",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Level 2",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Level 3",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Level 4",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Pan 1",
+     "type": "Number",
+     "value": -1.0
+    },
+    {
+     "name": "Pan 2",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Pan 3",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Pan 4",
+     "type": "Number",
+     "value": -0.45
+    },
+    {
+     "name": "Send 1",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Send 2",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Send 3",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Send 4",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Return",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Width 4",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Master",
+     "type": "Number",
+     "value": 0.0
+    }
+   ]
+  },
+  {
+   "id": 66,
+   "module_id": "util.mixer",
+   "position": [
+    3180.0,
+    900.0
+   ],
+   "parameters": [
+    {
+     "name": "Level 1",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Level 2",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Level 3",
+     "type": "Number",
+     "value": 0.6
+    },
+    {
+     "name": "Level 4",
+     "type": "Number",
+     "value": 0.6
+    },
+    {
+     "name": "Pan 1",
+     "type": "Number",
+     "value": -1.0
+    },
+    {
+     "name": "Pan 2",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Pan 3",
+     "type": "Number",
+     "value": -1.0
+    },
+    {
+     "name": "Pan 4",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Master",
+     "type": "Number",
+     "value": 0.0
+    }
+   ]
+  },
+  {
+   "id": 62,
+   "module_id": "fx.reverb",
+   "position": [
+    3620.0,
+    900.0
+   ],
+   "parameters": [
+    {
+     "name": "Size",
+     "type": "Number",
+     "value": 0.42
+    },
+    {
+     "name": "Decay",
+     "type": "Number",
+     "value": 1.6
+    },
+    {
+     "name": "Damping",
+     "type": "Number",
+     "value": 0.6
+    },
+    {
+     "name": "Pre-Delay",
+     "type": "Number",
+     "value": 12.0
+    },
+    {
+     "name": "Mix",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Width",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Mod",
+     "type": "Number",
+     "value": 0.2
+    }
+   ]
+  },
+  {
+   "id": 67,
+   "module_id": "util.mixer",
+   "position": [
+    3320.0,
+    1820.0
+   ],
+   "parameters": [
+    {
+     "name": "Level 1",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Level 2",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Level 3",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Level 4",
+     "type": "Number",
+     "value": 0.0
+    },
+    {
+     "name": "Pan 1",
+     "type": "Number",
+     "value": -1.0
+    },
+    {
+     "name": "Pan 2",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Return",
+     "type": "Number",
+     "value": 0.85
+    },
+    {
+     "name": "Master",
+     "type": "Number",
+     "value": 2.0
+    }
+   ]
+  },
+  {
+   "id": 63,
+   "module_id": "fx.tape",
+   "position": [
+    1220.0,
+    180.0
+   ],
+   "parameters": [
+    {
+     "name": "Wow",
+     "type": "Number",
+     "value": 0.08
+    },
+    {
+     "name": "Flutter",
+     "type": "Number",
+     "value": 0.1
+    },
+    {
+     "name": "Width",
+     "type": "Number",
+     "value": 0.2
+    },
+    {
+     "name": "Saturation",
+     "type": "Number",
+     "value": 0.28
+    },
+    {
+     "name": "Age",
+     "type": "Number",
+     "value": 0.12
+    },
+    {
+     "name": "Hiss",
+     "type": "Number",
+     "value": 0.04
+    },
+    {
+     "name": "Mix",
+     "type": "Number",
+     "value": 1.0
+    },
+    {
+     "name": "Speed",
+     "type": "Select",
+     "value": 1
+    },
+    {
+     "name": "Stop Time",
+     "type": "Number",
+     "value": 1.0
+    }
+   ]
+  },
+  {
+   "id": 64,
+   "module_id": "output.audio",
+   "position": [
+    1480.0,
+    520.0
+   ],
+   "parameters": [
+    {
+     "name": "Volume",
+     "type": "Number",
+     "value": 0.8
+    },
+    {
+     "name": "Limiter",
+     "type": "Toggle",
+     "value": true
+    },
+    {
+     "name": "Character",
+     "type": "Toggle",
+     "value": false
+    }
+   ]
+  },
+  {
+   "id": 70,
+   "module_id": "util.dancer",
+   "position": [
+    2153.0,
+    336.0
+   ],
+   "parameters": [
+    {
+     "name": "Style",
+     "type": "Select",
+     "value": 2
+    },
+    {
+     "name": "Size",
+     "type": "Number",
+     "value": 1.8
+    }
+   ]
+  },
+  {
+   "id": 71,
+   "module_id": "util.dancer",
+   "position": [
+    2585.0,
+    197.0
+   ],
+   "parameters": [
+    {
+     "name": "Style",
+     "type": "Select",
+     "value": 1
+    },
+    {
+     "name": "Size",
+     "type": "Number",
+     "value": 3.0
+    }
+   ]
+  },
+  {
+   "id": 72,
+   "module_id": "util.dancer",
+   "position": [
+    3185.0,
+    336.0
+   ],
+   "parameters": [
+    {
+     "name": "Style",
+     "type": "Select",
+     "value": 3
+    },
+    {
+     "name": "Size",
+     "type": "Number",
+     "value": 1.8
+    }
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "from_node": 1,
+   "from_port": "Gate",
+   "to_node": 2,
+   "to_port": "Clock"
+  },
+  {
+   "from_node": 1,
+   "from_port": "Reset",
+   "to_node": 2,
+   "to_port": "Reset"
+  },
+  {
+   "from_node": 1,
+   "from_port": "Gate",
+   "to_node": 3,
+   "to_port": "Clock"
+  },
+  {
+   "from_node": 1,
+   "from_port": "Reset",
+   "to_node": 3,
+   "to_port": "Reset"
+  },
+  {
+   "from_node": 1,
+   "from_port": "Gate",
+   "to_node": 10,
+   "to_port": "Clock"
+  },
+  {
+   "from_node": 1,
+   "from_port": "Reset",
+   "to_node": 10,
+   "to_port": "Reset"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Lane 2",
+   "to_node": 10,
+   "to_port": "Pattern"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Gate 1",
+   "to_node": 11,
+   "to_port": "Trig"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Vel 1",
+   "to_node": 11,
+   "to_port": "Accent"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Gate 2",
+   "to_node": 12,
+   "to_port": "Trig"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Vel 2",
+   "to_node": 12,
+   "to_port": "Accent"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Gate 3",
+   "to_node": 13,
+   "to_port": "Trig"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Vel 3",
+   "to_node": 13,
+   "to_port": "Accent"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Gate 4",
+   "to_node": 14,
+   "to_port": "Trig"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Vel 4",
+   "to_node": 14,
+   "to_port": "Accent"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Gate 5",
+   "to_node": 15,
+   "to_port": "Trig"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Vel 5",
+   "to_node": 15,
+   "to_port": "Accent"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Gate 6",
+   "to_node": 16,
+   "to_port": "Trig"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Vel 6",
+   "to_node": 16,
+   "to_port": "Accent"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Gate 7",
+   "to_node": 17,
+   "to_port": "Trig"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Vel 7",
+   "to_node": 17,
+   "to_port": "Accent"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Gate 8",
+   "to_node": 18,
+   "to_port": "Trig"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Vel 8",
+   "to_node": 18,
+   "to_port": "Accent"
+  },
+  {
+   "from_node": 10,
+   "from_port": "Gate 3",
+   "to_node": 14,
+   "to_port": "Choke"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Gate 6",
+   "to_node": 19,
+   "to_port": "Trig"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Lane 6",
+   "to_node": 19,
+   "to_port": "Accent"
+  },
+  {
+   "from_node": 15,
+   "from_port": "Out",
+   "to_node": 21,
+   "to_port": "Ch 1"
+  },
+  {
+   "from_node": 16,
+   "from_port": "Out",
+   "to_node": 21,
+   "to_port": "Ch 2"
+  },
+  {
+   "from_node": 17,
+   "from_port": "Out",
+   "to_node": 21,
+   "to_port": "Ch 3"
+  },
+  {
+   "from_node": 18,
+   "from_port": "Out",
+   "to_node": 22,
+   "to_port": "In 1"
+  },
+  {
+   "from_node": 19,
+   "from_port": "Out",
+   "to_node": 22,
+   "to_port": "In 2"
+  },
+  {
+   "from_node": 22,
+   "from_port": "Out",
+   "to_node": 21,
+   "to_port": "Ch 4"
+  },
+  {
+   "from_node": 11,
+   "from_port": "Out",
+   "to_node": 20,
+   "to_port": "Ch 1"
+  },
+  {
+   "from_node": 12,
+   "from_port": "Out",
+   "to_node": 20,
+   "to_port": "Ch 2"
+  },
+  {
+   "from_node": 13,
+   "from_port": "Out",
+   "to_node": 20,
+   "to_port": "Ch 3"
+  },
+  {
+   "from_node": 14,
+   "from_port": "Out",
+   "to_node": 20,
+   "to_port": "Ch 4"
+  },
+  {
+   "from_node": 21,
+   "from_port": "Chain Out",
+   "to_node": 20,
+   "to_port": "Chain In"
+  },
+  {
+   "from_node": 1,
+   "from_port": "Gate",
+   "to_node": 30,
+   "to_port": "Clock"
+  },
+  {
+   "from_node": 1,
+   "from_port": "Reset",
+   "to_node": 30,
+   "to_port": "Reset"
+  },
+  {
+   "from_node": 30,
+   "from_port": "Pitch",
+   "to_node": 31,
+   "to_port": "V/Oct"
+  },
+  {
+   "from_node": 30,
+   "from_port": "Gate",
+   "to_node": 35,
+   "to_port": "Gate"
+  },
+  {
+   "from_node": 30,
+   "from_port": "Gate",
+   "to_node": 36,
+   "to_port": "Gate"
+  },
+  {
+   "from_node": 30,
+   "from_port": "Velocity",
+   "to_node": 35,
+   "to_port": "Velocity"
+  },
+  {
+   "from_node": 30,
+   "from_port": "Velocity",
+   "to_node": 36,
+   "to_port": "Velocity"
+  },
+  {
+   "from_node": 31,
+   "from_port": "Out",
+   "to_node": 32,
+   "to_port": "In 1"
+  },
+  {
+   "from_node": 31,
+   "from_port": "Sub",
+   "to_node": 32,
+   "to_port": "In 2"
+  },
+  {
+   "from_node": 32,
+   "from_port": "Out",
+   "to_node": 33,
+   "to_port": "In"
+  },
+  {
+   "from_node": 35,
+   "from_port": "Out",
+   "to_node": 33,
+   "to_port": "Cutoff"
+  },
+  {
+   "from_node": 33,
+   "from_port": "LP24",
+   "to_node": 34,
+   "to_port": "In"
+  },
+  {
+   "from_node": 36,
+   "from_port": "Out",
+   "to_node": 34,
+   "to_port": "CV"
+  },
+  {
+   "from_node": 2,
+   "from_port": "Gate",
+   "to_node": 40,
+   "to_port": "Clock"
+  },
+  {
+   "from_node": 1,
+   "from_port": "Reset",
+   "to_node": 40,
+   "to_port": "Reset"
+  },
+  {
+   "from_node": 40,
+   "from_port": "Pitch",
+   "to_node": 1400,
+   "to_port": "Pitch"
+  },
+  {
+   "from_node": 40,
+   "from_port": "Gate",
+   "to_node": 1400,
+   "to_port": "Gate"
+  },
+  {
+   "from_node": 40,
+   "from_port": "Velocity",
+   "to_node": 1400,
+   "to_port": "Velocity"
+  },
+  {
+   "from_node": 1400,
+   "from_port": "Out",
+   "to_node": 42,
+   "to_port": "In"
+  },
+  {
+   "from_node": 40,
+   "from_port": "Gate",
+   "to_node": 43,
+   "to_port": "Gate"
+  },
+  {
+   "from_node": 40,
+   "from_port": "Velocity",
+   "to_node": 43,
+   "to_port": "Velocity"
+  },
+  {
+   "from_node": 43,
+   "from_port": "Out",
+   "to_node": 42,
+   "to_port": "Cutoff"
+  },
+  {
+   "from_node": 42,
+   "from_port": "LowPass",
+   "to_node": 44,
+   "to_port": "In L"
+  },
+  {
+   "from_node": 1,
+   "from_port": "Gate",
+   "to_node": 50,
+   "to_port": "Clock"
+  },
+  {
+   "from_node": 1,
+   "from_port": "Reset",
+   "to_node": 50,
+   "to_port": "Reset"
+  },
+  {
+   "from_node": 50,
+   "from_port": "Pitch",
+   "to_node": 51,
+   "to_port": "V/Oct"
+  },
+  {
+   "from_node": 57,
+   "from_port": "Out",
+   "to_node": 51,
+   "to_port": "Exp FM"
+  },
+  {
+   "from_node": 50,
+   "from_port": "Gate",
+   "to_node": 54,
+   "to_port": "Gate"
+  },
+  {
+   "from_node": 50,
+   "from_port": "Gate",
+   "to_node": 55,
+   "to_port": "Gate"
+  },
+  {
+   "from_node": 50,
+   "from_port": "Velocity",
+   "to_node": 54,
+   "to_port": "Velocity"
+  },
+  {
+   "from_node": 50,
+   "from_port": "Velocity",
+   "to_node": 55,
+   "to_port": "Velocity"
+  },
+  {
+   "from_node": 51,
+   "from_port": "Out",
+   "to_node": 52,
+   "to_port": "In"
+  },
+  {
+   "from_node": 54,
+   "from_port": "Out",
+   "to_node": 52,
+   "to_port": "Cutoff"
+  },
+  {
+   "from_node": 52,
+   "from_port": "LP24",
+   "to_node": 53,
+   "to_port": "In"
+  },
+  {
+   "from_node": 55,
+   "from_port": "Out",
+   "to_node": 53,
+   "to_port": "CV"
+  },
+  {
+   "from_node": 53,
+   "from_port": "Out",
+   "to_node": 56,
+   "to_port": "In L"
+  },
+  {
+   "from_node": 53,
+   "from_port": "Out",
+   "to_node": 56,
+   "to_port": "In R"
+  },
+  {
+   "from_node": 56,
+   "from_port": "Out L",
+   "to_node": 61,
+   "to_port": "Ch 1"
+  },
+  {
+   "from_node": 56,
+   "from_port": "Out R",
+   "to_node": 61,
+   "to_port": "Ch 2"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Lane 5",
+   "to_node": 61,
+   "to_port": "Level 1"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Lane 5",
+   "to_node": 61,
+   "to_port": "Level 2"
+  },
+  {
+   "from_node": 20,
+   "from_port": "Out L",
+   "to_node": 60,
+   "to_port": "Ch 1"
+  },
+  {
+   "from_node": 20,
+   "from_port": "Out R",
+   "to_node": 60,
+   "to_port": "Ch 2"
+  },
+  {
+   "from_node": 34,
+   "from_port": "Out",
+   "to_node": 60,
+   "to_port": "Ch 3"
+  },
+  {
+   "from_node": 44,
+   "from_port": "Out L",
+   "to_node": 60,
+   "to_port": "Ch 4"
+  },
+  {
+   "from_node": 44,
+   "from_port": "Out R",
+   "to_node": 61,
+   "to_port": "Ch 3"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Lane 1",
+   "to_node": 60,
+   "to_port": "Level 1"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Lane 1",
+   "to_node": 60,
+   "to_port": "Level 2"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Lane 3",
+   "to_node": 60,
+   "to_port": "Level 3"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Lane 4",
+   "to_node": 60,
+   "to_port": "Level 4"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Lane 4",
+   "to_node": 61,
+   "to_port": "Level 3"
+  },
+  {
+   "from_node": 61,
+   "from_port": "Chain Out",
+   "to_node": 60,
+   "to_port": "Chain In"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Lane 7",
+   "to_node": 60,
+   "to_port": "Send 4"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Lane 7",
+   "to_node": 61,
+   "to_port": "Send 3"
+  },
+  {
+   "from_node": 20,
+   "from_port": "Send L",
+   "to_node": 66,
+   "to_port": "Ch 1"
+  },
+  {
+   "from_node": 20,
+   "from_port": "Send R",
+   "to_node": 66,
+   "to_port": "Ch 2"
+  },
+  {
+   "from_node": 60,
+   "from_port": "Send L",
+   "to_node": 66,
+   "to_port": "Ch 3"
+  },
+  {
+   "from_node": 60,
+   "from_port": "Send R",
+   "to_node": 66,
+   "to_port": "Ch 4"
+  },
+  {
+   "from_node": 66,
+   "from_port": "Out L",
+   "to_node": 62,
+   "to_port": "In L"
+  },
+  {
+   "from_node": 66,
+   "from_port": "Out R",
+   "to_node": 62,
+   "to_port": "In R"
+  },
+  {
+   "from_node": 60,
+   "from_port": "Out L",
+   "to_node": 67,
+   "to_port": "Ch 1"
+  },
+  {
+   "from_node": 60,
+   "from_port": "Out R",
+   "to_node": 67,
+   "to_port": "Ch 2"
+  },
+  {
+   "from_node": 62,
+   "from_port": "Out L",
+   "to_node": 67,
+   "to_port": "Return L"
+  },
+  {
+   "from_node": 62,
+   "from_port": "Out R",
+   "to_node": 67,
+   "to_port": "Return R"
+  },
+  {
+   "from_node": 67,
+   "from_port": "Out L",
+   "to_node": 63,
+   "to_port": "In L"
+  },
+  {
+   "from_node": 67,
+   "from_port": "Out R",
+   "to_node": 63,
+   "to_port": "In R"
+  },
+  {
+   "from_node": 63,
+   "from_port": "Out L",
+   "to_node": 64,
+   "to_port": "Left"
+  },
+  {
+   "from_node": 63,
+   "from_port": "Out R",
+   "to_node": 64,
+   "to_port": "Right"
+  },
+  {
+   "from_node": 34,
+   "from_port": "Out",
+   "to_node": 70,
+   "to_port": "Audio"
+  },
+  {
+   "from_node": 63,
+   "from_port": "Out L",
+   "to_node": 71,
+   "to_port": "Audio"
+  },
+  {
+   "from_node": 20,
+   "from_port": "Out L",
+   "to_node": 72,
+   "to_port": "Audio"
+  },
+  {
+   "from_node": 3,
+   "from_port": "Gate 6",
+   "to_node": 71,
+   "to_port": "Accent"
+  }
+ ],
+ "midi_mappings": [],
+ "frames": [
+  {
+   "title": "Time",
+   "position": [
+    16.0,
+    40.0
+   ],
+   "size": [
+    1160.0,
+    780.0
+   ],
+   "color": "slate"
+  },
+  {
+   "title": "Drums",
+   "position": [
+    16.0,
+    860.0
+   ],
+   "size": [
+    3080.0,
+    880.0
+   ],
+   "color": "amber"
+  },
+  {
+   "title": "Bass",
+   "position": [
+    16.0,
+    1780.0
+   ],
+   "size": [
+    1680.0,
+    820.0
+   ],
+   "color": "blue"
+  },
+  {
+   "title": "Keys",
+   "position": [
+    16.0,
+    2660.0
+   ],
+   "size": [
+    1680.0,
+    860.0
+   ],
+   "color": "green"
+  },
+  {
+   "title": "Lead",
+   "position": [
+    16.0,
+    3600.0
+   ],
+   "size": [
+    1680.0,
+    1000.0
+   ],
+   "color": "violet"
+  },
+  {
+   "title": "Mix",
+   "position": [
+    2360.0,
+    1780.0
+   ],
+   "size": [
+    1400.0,
+    1400.0
+   ],
+   "color": "teal"
+  },
+  {
+   "title": "Out",
+   "position": [
+    1200.0,
+    40.0
+   ],
+   "size": [
+    510.0,
+    780.0
+   ],
+   "color": "teal"
+  },
+  {
+   "title": "Stage",
+   "position": [
+    2040.0,
+    40.0
+   ],
+   "size": [
+    1540.0,
+    740.0
+   ],
+   "color": "rose"
+  }
+ ],
+ "notes": [
+  {
+   "text": "**Dance Floor**: a funk vamp in E Dorian, Em9 to A13, at 108 BPM with the sixteenths swung to 57%. Four bars that loop, as long as a Dancer's phrase, so the band and the dance turn over together.",
+   "position": [
+    860.0,
+    90.0
+   ],
+   "width": 290.0
+  },
+  {
+   "text": "The **Pattern** lane plays the groove for three bars and a fill on the fourth. **Crash** hits on every phrase change, and it's the big Dancer's Accent too: its big move lands with it.",
+   "position": [
+    860.0,
+    330.0
+   ],
+   "width": 290.0
+  },
+  {
+   "text": "Each Dancer hears one part of the band: the Robot the bass, the Headbanger the drums, and the one in the middle all of it, as it leaves the Tape.",
+   "position": [
+    2070.0,
+    90.0
+   ],
+   "width": 300.0
+  }
+ ],
+ "groups": [
+  {
+   "id": 1400,
+   "name": "Electric Piano",
+   "position": [
+    440.0,
+    2700.0
+   ],
+   "inputs": [
+    {
+     "name": "Pitch",
+     "type": "Control"
+    },
+    {
+     "name": "Gate",
+     "type": "Gate"
+    },
+    {
+     "name": "Velocity",
+     "type": "Control"
+    }
+   ],
+   "outputs": [
+    {
+     "name": "Out",
+     "type": "Audio"
+    }
+   ],
+   "inputs_position": [
+    -320.0,
+    0.0
+   ],
+   "outputs_position": [
+    1920.0,
+    0.0
+   ],
+   "nodes": [
+    {
+     "id": 1401,
+     "module_id": "osc.sine",
+     "position": [
+      0.0,
+      0.0
+     ],
+     "parameters": [
+      {
+       "name": "Octave",
+       "type": "Number",
+       "value": 0.0
+      },
+      {
+       "name": "Semitone",
+       "type": "Number",
+       "value": 0.0
+      },
+      {
+       "name": "Fine",
+       "type": "Number",
+       "value": 0.0
+      },
+      {
+       "name": "FM Depth",
+       "type": "Number",
+       "value": 0.0
+      },
+      {
+       "name": "Exp FM Depth",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "Waveform",
+       "type": "Select",
+       "value": 0
+      },
+      {
+       "name": "Pulse Width",
+       "type": "Number",
+       "value": 0.5
+      },
+      {
+       "name": "Voices",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "Detune",
+       "type": "Number",
+       "value": 0.4
+      },
+      {
+       "name": "Spread",
+       "type": "Number",
+       "value": 0.5
+      }
+     ]
+    },
+    {
+     "id": 1402,
+     "module_id": "osc.sine",
+     "position": [
+      0.0,
+      620.0
+     ],
+     "parameters": [
+      {
+       "name": "Octave",
+       "type": "Number",
+       "value": 3.0
+      },
+      {
+       "name": "Semitone",
+       "type": "Number",
+       "value": 10.0
+      },
+      {
+       "name": "Fine",
+       "type": "Number",
+       "value": -32.0
+      },
+      {
+       "name": "FM Depth",
+       "type": "Number",
+       "value": 0.0
+      },
+      {
+       "name": "Exp FM Depth",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "Waveform",
+       "type": "Select",
+       "value": 0
+      },
+      {
+       "name": "Pulse Width",
+       "type": "Number",
+       "value": 0.5
+      },
+      {
+       "name": "Voices",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "Detune",
+       "type": "Number",
+       "value": 0.4
+      },
+      {
+       "name": "Spread",
+       "type": "Number",
+       "value": 0.5
+      }
+     ]
+    },
+    {
+     "id": 1403,
+     "module_id": "util.vca",
+     "position": [
+      320.0,
+      0.0
+     ],
+     "parameters": [
+      {
+       "name": "Level",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "CV Amount",
+       "type": "Number",
+       "value": 1.0
+      }
+     ]
+    },
+    {
+     "id": 1404,
+     "module_id": "mod.adsr",
+     "position": [
+      320.0,
+      240.0
+     ],
+     "parameters": [
+      {
+       "name": "Attack",
+       "type": "Number",
+       "value": 0.001
+      },
+      {
+       "name": "Decay",
+       "type": "Number",
+       "value": 0.5
+      },
+      {
+       "name": "Sustain",
+       "type": "Number",
+       "value": 0.12
+      },
+      {
+       "name": "Release",
+       "type": "Number",
+       "value": 0.3
+      },
+      {
+       "name": "Attack Curve",
+       "type": "Number",
+       "value": 0.2
+      },
+      {
+       "name": "Decay Curve",
+       "type": "Number",
+       "value": 0.6
+      },
+      {
+       "name": "Release Curve",
+       "type": "Number",
+       "value": 0.5
+      },
+      {
+       "name": "Velocity Amount",
+       "type": "Number",
+       "value": 0.85
+      }
+     ],
+     "pinned": {
+      "Velocity Amount": 1
+     },
+     "face_labels": {
+      "Velocity Amount": "Bark"
+     }
+    },
+    {
+     "id": 1405,
+     "module_id": "util.vca",
+     "position": [
+      320.0,
+      620.0
+     ],
+     "parameters": [
+      {
+       "name": "Level",
+       "type": "Number",
+       "value": 0.15
+      },
+      {
+       "name": "CV Amount",
+       "type": "Number",
+       "value": 1.0
+      }
+     ]
+    },
+    {
+     "id": 1406,
+     "module_id": "mod.adsr",
+     "position": [
+      320.0,
+      860.0
+     ],
+     "parameters": [
+      {
+       "name": "Attack",
+       "type": "Number",
+       "value": 0.001
+      },
+      {
+       "name": "Decay",
+       "type": "Number",
+       "value": 0.08
+      },
+      {
+       "name": "Sustain",
+       "type": "Number",
+       "value": 0.0
+      },
+      {
+       "name": "Release",
+       "type": "Number",
+       "value": 0.05
+      },
+      {
+       "name": "Attack Curve",
+       "type": "Number",
+       "value": 0.2
+      },
+      {
+       "name": "Decay Curve",
+       "type": "Number",
+       "value": 0.6
+      },
+      {
+       "name": "Release Curve",
+       "type": "Number",
+       "value": 0.5
+      },
+      {
+       "name": "Velocity Amount",
+       "type": "Number",
+       "value": 1.0
+      }
+     ]
+    },
+    {
+     "id": 1407,
+     "module_id": "osc.sine",
+     "position": [
+      640.0,
+      0.0
+     ],
+     "parameters": [
+      {
+       "name": "Octave",
+       "type": "Number",
+       "value": 0.0
+      },
+      {
+       "name": "Semitone",
+       "type": "Number",
+       "value": 0.0
+      },
+      {
+       "name": "Fine",
+       "type": "Number",
+       "value": 0.0
+      },
+      {
+       "name": "FM Depth",
+       "type": "Number",
+       "value": 1.6
+      },
+      {
+       "name": "Exp FM Depth",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "Waveform",
+       "type": "Select",
+       "value": 0
+      },
+      {
+       "name": "Pulse Width",
+       "type": "Number",
+       "value": 0.5
+      },
+      {
+       "name": "Voices",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "Detune",
+       "type": "Number",
+       "value": 0.4
+      },
+      {
+       "name": "Spread",
+       "type": "Number",
+       "value": 0.5
+      }
+     ],
+     "pinned": {
+      "FM Depth": 1
+     },
+     "face_labels": {
+      "FM Depth": "Tine"
+     }
+    },
+    {
+     "id": 1408,
+     "module_id": "util.mix",
+     "position": [
+      960.0,
+      0.0
+     ],
+     "parameters": [
+      {
+       "name": "Level 1",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "Level 2",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "Level 3",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "Level 4",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "Sum Voices",
+       "type": "Toggle",
+       "value": false
+      }
+     ]
+    },
+    {
+     "id": 1409,
+     "module_id": "util.vca",
+     "position": [
+      1280.0,
+      0.0
+     ],
+     "parameters": [
+      {
+       "name": "Level",
+       "type": "Number",
+       "value": 0.27
+      },
+      {
+       "name": "CV Amount",
+       "type": "Number",
+       "value": 1.0
+      }
+     ]
+    },
+    {
+     "id": 1410,
+     "module_id": "mod.adsr",
+     "position": [
+      1280.0,
+      380.0
+     ],
+     "parameters": [
+      {
+       "name": "Attack",
+       "type": "Number",
+       "value": 0.002
+      },
+      {
+       "name": "Decay",
+       "type": "Number",
+       "value": 4.0
+      },
+      {
+       "name": "Sustain",
+       "type": "Number",
+       "value": 0.0
+      },
+      {
+       "name": "Release",
+       "type": "Number",
+       "value": 0.4
+      },
+      {
+       "name": "Attack Curve",
+       "type": "Number",
+       "value": 0.2
+      },
+      {
+       "name": "Decay Curve",
+       "type": "Number",
+       "value": 0.2
+      },
+      {
+       "name": "Release Curve",
+       "type": "Number",
+       "value": 0.5
+      },
+      {
+       "name": "Velocity Amount",
+       "type": "Number",
+       "value": 0.6
+      }
+     ],
+     "pinned": {
+      "Decay": 1
+     },
+     "face_labels": {
+      "Decay": "Decay"
+     }
+    },
+    {
+     "id": 1411,
+     "module_id": "util.vca",
+     "position": [
+      1600.0,
+      380.0
+     ],
+     "parameters": [
+      {
+       "name": "Level",
+       "type": "Number",
+       "value": 1.0
+      },
+      {
+       "name": "CV Amount",
+       "type": "Number",
+       "value": 0.25
+      }
+     ],
+     "pinned": {
+      "CV Amount": 1
+     },
+     "face_labels": {
+      "CV Amount": "Tremolo"
+     }
+    },
+    {
+     "id": 1412,
+     "module_id": "mod.lfo",
+     "position": [
+      1600.0,
+      620.0
+     ],
+     "parameters": [
+      {
+       "name": "Rate",
+       "type": "Number",
+       "value": 4.5
+      },
+      {
+       "name": "Waveform",
+       "type": "Select",
+       "value": 0
+      },
+      {
+       "name": "Phase",
+       "type": "Number",
+       "value": 0.0
+      },
+      {
+       "name": "Bipolar",
+       "type": "Toggle",
+       "value": false
+      },
+      {
+       "name": "Tempo Sync",
+       "type": "Select",
+       "value": 0
+      }
+     ],
+     "pinned": {
+      "Rate": 1
+     }
+    }
+   ],
+   "connections": [
+    {
+     "from_node": 1400,
+     "from_port": "Pitch",
+     "to_node": 1401,
+     "to_port": "V/Oct"
+    },
+    {
+     "from_node": 1400,
+     "from_port": "Pitch",
+     "to_node": 1402,
+     "to_port": "V/Oct"
+    },
+    {
+     "from_node": 1400,
+     "from_port": "Pitch",
+     "to_node": 1407,
+     "to_port": "V/Oct"
+    },
+    {
+     "from_node": 1400,
+     "from_port": "Gate",
+     "to_node": 1404,
+     "to_port": "Gate"
+    },
+    {
+     "from_node": 1400,
+     "from_port": "Gate",
+     "to_node": 1406,
+     "to_port": "Gate"
+    },
+    {
+     "from_node": 1400,
+     "from_port": "Gate",
+     "to_node": 1410,
+     "to_port": "Gate"
+    },
+    {
+     "from_node": 1400,
+     "from_port": "Velocity",
+     "to_node": 1404,
+     "to_port": "Velocity"
+    },
+    {
+     "from_node": 1400,
+     "from_port": "Velocity",
+     "to_node": 1406,
+     "to_port": "Velocity"
+    },
+    {
+     "from_node": 1400,
+     "from_port": "Velocity",
+     "to_node": 1410,
+     "to_port": "Velocity"
+    },
+    {
+     "from_node": 1401,
+     "from_port": "Out",
+     "to_node": 1403,
+     "to_port": "In"
+    },
+    {
+     "from_node": 1404,
+     "from_port": "Out",
+     "to_node": 1403,
+     "to_port": "CV"
+    },
+    {
+     "from_node": 1403,
+     "from_port": "Out",
+     "to_node": 1407,
+     "to_port": "FM"
+    },
+    {
+     "from_node": 1402,
+     "from_port": "Out",
+     "to_node": 1405,
+     "to_port": "In"
+    },
+    {
+     "from_node": 1406,
+     "from_port": "Out",
+     "to_node": 1405,
+     "to_port": "CV"
+    },
+    {
+     "from_node": 1407,
+     "from_port": "Out",
+     "to_node": 1408,
+     "to_port": "In 1"
+    },
+    {
+     "from_node": 1405,
+     "from_port": "Out",
+     "to_node": 1408,
+     "to_port": "In 2"
+    },
+    {
+     "from_node": 1408,
+     "from_port": "Out",
+     "to_node": 1409,
+     "to_port": "In"
+    },
+    {
+     "from_node": 1410,
+     "from_port": "Out",
+     "to_node": 1409,
+     "to_port": "CV"
+    },
+    {
+     "from_node": 1409,
+     "from_port": "Out",
+     "to_node": 1411,
+     "to_port": "In"
+    },
+    {
+     "from_node": 1412,
+     "from_port": "Out",
+     "to_node": 1411,
+     "to_port": "CV"
+    },
+    {
+     "from_node": 1411,
+     "from_port": "Out",
+     "to_node": 1400,
+     "to_port": "Out"
+    }
+   ]
+  }
+ ]
+}
