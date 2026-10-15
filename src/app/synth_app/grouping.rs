@@ -101,11 +101,9 @@ impl SynthApp {
             self.naming_group = None;
         }
 
-        // A level framed before its nodes had ever been drawn is framed
-        // again once they have
-        if self.reframe_level
-            && groups::level_nodes(&self.graph_state.graph, level).iter().all(|n| self.node_sizes.contains_key(n))
-        {
+        // A level framed before its nodes (and frames and notes) had ever
+        // been drawn is framed again once they have
+        if self.reframe_level && self.level_bounds(level).is_none_or(|(_, measured)| measured) {
             self.frame_level();
         }
     }
@@ -393,6 +391,8 @@ impl SynthApp {
         self.user_state.level = level;
         self.graph_state.selected_nodes.clear();
         self.user_state.annotations.selected.clear();
+        // Where frames and notes were drawn was on the level left, in its view
+        self.user_state.annotations.drawn.clear();
         self.user_state.renaming = None;
         self.user_state.context_menu_pos = None;
         self.graph_state.connection_in_progress = None;
@@ -410,9 +410,9 @@ impl SynthApp {
     /// Frames everything on the current level, as F does with nothing
     /// selected, once the frame is drawn.
     fn frame_level(&mut self) {
-        let nodes = groups::level_nodes(&self.graph_state.graph, self.user_state.level);
-        // Nodes never drawn yet are taken at a nominal size, and framed again once they are
-        self.reframe_level = nodes.iter().any(|n| !self.node_sizes.contains_key(n));
+        // Nodes never drawn yet are taken at a nominal size, frames and notes
+        // never drawn are left out, and the level is framed again once they are
+        self.reframe_level = self.level_bounds(self.user_state.level).is_some_and(|(_, measured)| !measured);
         if let Some(view) = self.framed_view(self.user_state.level) {
             self.show_view(view);
         }

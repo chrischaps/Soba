@@ -251,13 +251,14 @@ impl SynthApp {
     }
 
     /// The patch-space rectangle around everything on a level, its frames
-    /// and notes included, and whether every module in it has been measured.
+    /// and notes included, and whether every module, frame and note in it
+    /// has been measured.
     pub(super) fn level_bounds(&self, level: Option<GroupId>) -> Option<(Rect, bool)> {
         let nodes = groups::level_nodes(&self.graph_state.graph, level);
         // Frames and notes are only on the top level, and only where they
         // were last drawn while it's on show
         let notes = if level.is_none() && self.user_state.level.is_none() {
-            self.user_state.annotations.drawn.keys().copied().collect()
+            self.user_state.annotations.iter().map(|(id, _)| id).collect()
         } else {
             Vec::new()
         };
@@ -304,6 +305,9 @@ impl SynthApp {
         });
         let modules: Vec<Rect> = modules.collect();
         let drawn = &self.user_state.annotations.drawn;
+        // A frame or note not drawn since the level was shown is left out
+        // until it is: where it was drawn before was in another view
+        measured &= notes.iter().all(|id| drawn.contains_key(id));
         let notes = notes
             .iter()
             .filter_map(|id| drawn.get(id))
