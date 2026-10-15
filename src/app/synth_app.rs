@@ -27,7 +27,7 @@ use crate::persistence::{
     Section, Shelf, EXAMPLES,
 };
 #[cfg(target_arch = "wasm32")]
-use crate::persistence::{patch_from_json, patch_to_json};
+use crate::persistence::patch_from_json;
 use crate::persistence::sample_files::SampleBase;
 use crate::widgets::{cpu_meter, CpuMeterConfig, KnobStyle};
 use super::capture::{Capture, CaptureAction, CaptureConfig};
@@ -3117,12 +3117,11 @@ impl SynthApp {
     #[cfg(target_arch = "wasm32")]
     fn download_patch(&mut self, file_name: &str) -> bool {
         let name = file_name.strip_suffix(".json").unwrap_or(file_name);
-        let mut patch = self.create_patch(name);
-        // Files kept only in the tab are named as beside it, to download there too
-        let in_tab = crate::persistence::sample_files::name_tab_files_beside(&mut patch);
-        match patch_to_json(&patch).map_err(|e| e.to_string()).and_then(|json| web::download(file_name, &json)) {
-            Ok(()) => {
-                self.status_message = Some(tab_files::downloaded(file_name, &in_tab));
+        let patch = self.create_patch(name);
+        // With any files kept only in the tab, as a zip
+        match self.download_patch_whole(file_name, patch) {
+            Ok(said) => {
+                self.status_message = Some(said);
                 self.sync_history();
                 self.mark_saved();
                 true

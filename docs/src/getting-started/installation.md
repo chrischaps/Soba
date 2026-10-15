@@ -16,7 +16,7 @@ The browser version runs the same engine and modules, and every example is in it
 
 On a phone or tablet, a patch opens zoomed out to fit the screen: pinch to zoom in, and drag the canvas to move around.
 
-Patches go in and out as files: **💾 Save** downloads the patch, and **📂 Open** picks one to upload. Each recipe in this manual can be played on its page.
+Patches go in and out as files: **💾 Save** downloads the patch (as a zip with its samples, if it plays takes or files you've dropped), and **📂 Open** picks one to upload. Each recipe in this manual can be played on its page.
 
 ## Download a release
 

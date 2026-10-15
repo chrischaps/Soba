@@ -274,16 +274,16 @@ pub fn file_name(key: &str) -> &str {
 }
 
 /// Names each file the patch plays that's kept only in the browser's tab
-/// by its file name alone, as one beside the patch, so a patch downloaded
-/// into the folder its takes are downloaded to opens whole on the desktop.
-/// Returns those names.
-pub fn name_tab_files_beside(patch: &mut super::Patch) -> Vec<String> {
+/// as one in `folder` beside the patch (`Song samples`), so a patch
+/// downloaded with its takes in that folder opens whole on the desktop.
+/// Returns the files' names alone.
+pub fn name_tab_files_in(patch: &mut super::Patch, folder: &str) -> Vec<String> {
     let mut names: Vec<String> = patch
         .all_nodes_mut()
         .into_iter()
         .filter_map(|node| {
             let name = node.file.as_deref()?.strip_prefix(DROPPED_PREFIX)?.to_string();
-            node.file = Some(name.clone());
+            node.file = Some(format!("{folder}/{name}"));
             Some(name)
         })
         .collect();
@@ -462,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    fn a_downloaded_patch_names_its_tab_files_as_beside_it() {
+    fn a_downloaded_patch_names_its_tab_files_in_its_samples_folder() {
         use crate::persistence::{GroupData, NodeData, Patch};
         let sampler = |id, file: &str| {
             let mut node = NodeData::new(id, "sampler", (0.0, 0.0));
@@ -486,10 +486,16 @@ mod tests {
             groups: Vec::new(),
         });
 
-        assert_eq!(name_tab_files_beside(&mut patch), ["Take 1.wav", "voice trimmed.wav"]);
+        assert_eq!(name_tab_files_in(&mut patch, "Song samples"), ["Take 1.wav", "voice trimmed.wav"]);
         let files: Vec<_> = patch.all_nodes().iter().map(|n| n.file.clone().unwrap()).collect();
-        assert_eq!(files, ["Take 1.wav", "example:samples/break.wav", "Take 1.wav", "voice trimmed.wav"]);
-        // Opened from a folder on the desktop, they're found beside it
-        assert_eq!(resolve(&files[0], SampleBase::Folder(Path::new("Downloads"))), Path::new("Downloads").join("Take 1.wav").to_string_lossy());
+        assert_eq!(
+            files,
+            ["Song samples/Take 1.wav", "example:samples/break.wav", "Song samples/Take 1.wav", "Song samples/voice trimmed.wav"]
+        );
+        // Unzipped into a folder on the desktop, they're found in the folder beside it
+        assert_eq!(
+            resolve(&files[0], SampleBase::Folder(Path::new("Downloads"))),
+            Path::new("Downloads").join("Song samples").join("Take 1.wav").to_string_lossy()
+        );
     }
 }

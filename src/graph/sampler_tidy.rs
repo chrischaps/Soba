@@ -165,7 +165,7 @@ fn download_item(ui: &mut egui::Ui, sample: &ShelvedSample) -> bool {
     let size = format!("WAV, {:.1} MB", bytes as f32 / (1024.0 * 1024.0));
     let chosen = ui.add(egui::Button::new("Download").shortcut_text(size)).clicked();
     ui.add_space(2.0);
-    ui.label(egui::RichText::new("It's kept only in this tab until it's downloaded").small().weak());
+    ui.label(egui::RichText::new("It's kept only in this tab until it's downloaded, or saved with the patch").small().weak());
     chosen
 }
 

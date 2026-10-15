@@ -10,6 +10,7 @@ pub mod graph_io;
 pub mod library;
 pub mod patch;
 pub mod sample_files;
+pub mod stored_zip;
 
 pub use compile::{compile_patch, CompiledPatch};
 pub use examples::{Example, Shelf, EXAMPLES};
