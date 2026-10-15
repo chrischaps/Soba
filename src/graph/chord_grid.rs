@@ -38,7 +38,12 @@
 //!   will be struck, clock or no clock (see [`audition_of`]). A MIDI
 //!   keyboard's chords are left to the patch when a MIDI module there plays
 //!   them.
+//!
+//! Under the steps are the Step Sequencer's tabs: one for each pattern, A to
+//! D, which the steps show and edit, and the Chain that plays them. A tab's
+//! menu copies its pattern to another, or clears it to rests.
 
+use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use eframe::egui::{self, Color32, CursorIcon, Id, Key, Modifiers, PopupCloseBehavior, Rect, RichText, Sense, Stroke};
@@ -47,13 +52,17 @@ use egui_node_graph2::NodeId;
 use crate::app::theme;
 use crate::dsp::{Audition, DspModule, MAX_CHANNELS};
 use crate::modules::chord_sequencer::recognition::{pitch_classes, recognise, Heard};
-use crate::modules::chord_sequencer::{kept_tones, looped_voicings, voice_chord, Chord, ChordSequencer, ChordSpec, StrumDirection, VoicingSettings, Voicing, CHORD_TYPES, MAX_STEPS};
-use crate::modules::sequencer::{note_to_name, SequenceDirection};
+use crate::modules::chord_sequencer::{
+    kept_tones, looped_voicings, voice_chord, Chord, ChordField, ChordSequencer, ChordSpec, StrumDirection, VoicingSettings, Voicing, CHORD_TYPES, MAX_STEPS,
+};
+use crate::modules::sequencer::{note_to_name, PatternPosition, SequenceDirection};
+use crate::modules::trigger_sequencer::{CHAIN_NAMES, PATTERNS, PATTERN_NAMES};
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
 use super::chord_chime::{ring_for, Chimes, Chip};
 use super::chord_ear::{take_letter_keys, ChordEar, Hand};
 use super::step_grid::{drag_badge, dragged_pitch};
+use super::trigger_display::{edit_pattern, pattern_tabs, PatternBar, Playing};
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
 const GATE_ON: Color32 = Color32::from_rgb(100, 200, 100);
@@ -72,10 +81,14 @@ const KEY_HEIGHT: f32 = 44.0;
 const TYPE_ORDER: [usize; 19] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 13, 14, 15, 16, 17];
 /// Modules that play a MIDI keyboard's notes themselves.
 pub(super) const MIDI_MODULES: [&str; 2] = ["input.midi_note", "input.poly_midi"];
+/// Room left of the pattern tabs for their captions, before zoom.
+const TAB_INSET: f32 = 34.0;
 const HINT: &str = "Click: chord on/off · Shift+click: tie\nDrag up or down: root (Shift: by octave)\nRight-click: edit the chord";
 
 /// A Chord Sequencer's pattern and settings, as its face shows them.
 struct ChordPattern {
+    /// Which pattern, A to D, as 0 to 3.
+    pattern: usize,
     steps: usize,
     specs: [ChordSpec; MAX_STEPS],
     gates: [bool; MAX_STEPS],
@@ -93,24 +106,35 @@ struct ChordPattern {
     direction: SequenceDirection,
 }
 
-impl ChordPattern {
-    /// Reads the pattern from the node's parameters.
-    fn read(graph: &SynthGraph, node_id: NodeId) -> Self {
-        // Each parameter's name and default, in the module's order
-        static DEFINITIONS: OnceLock<Vec<(&'static str, f32)>> = OnceLock::new();
-        let definitions = DEFINITIONS.get_or_init(|| ChordSequencer::new().parameters().iter().map(|p| (p.name, p.default)).collect());
-        let mut params: Vec<f32> = definitions.iter().map(|&(_, default)| default).collect();
-        if let Some(node) = graph.nodes.get(node_id) {
-            for (name, input_id) in &node.inputs {
-                let Some(index) = definitions.iter().position(|&(n, _)| n == name) else { continue };
-                params[index] = match &graph.get_input(*input_id).value {
-                    SynthValueType::Number { value, .. } => *value,
-                    SynthValueType::Toggle { value, .. } => *value as u8 as f32,
-                    SynthValueType::Select { value, .. } => *value as f32,
-                    SynthValueType::Port => continue,
-                };
-            }
+/// A Chord Sequencer node's parameter values, in the module's order.
+fn params_of(graph: &SynthGraph, node_id: NodeId) -> Vec<f32> {
+    // Each parameter's name and default, in the module's order, and where
+    // each name is
+    static DEFINITIONS: OnceLock<(Vec<f32>, HashMap<&'static str, usize>)> = OnceLock::new();
+    let (defaults, places) = DEFINITIONS.get_or_init(|| {
+        let module = ChordSequencer::new();
+        let parameters = module.parameters();
+        (parameters.iter().map(|p| p.default).collect(), parameters.iter().enumerate().map(|(index, p)| (p.name, index)).collect())
+    });
+    let mut params = defaults.clone();
+    if let Some(node) = graph.nodes.get(node_id) {
+        for (name, input_id) in &node.inputs {
+            let Some(&index) = places.get(name.as_str()) else { continue };
+            params[index] = match &graph.get_input(*input_id).value {
+                SynthValueType::Number { value, .. } => *value,
+                SynthValueType::Toggle { value, .. } => *value as u8 as f32,
+                SynthValueType::Select { value, .. } => *value as f32,
+                SynthValueType::Port => continue,
+            };
         }
+    }
+    params
+}
+
+impl ChordPattern {
+    /// Reads one of the patterns, A to D, from the node's parameters.
+    fn read(params: &[f32], pattern: usize) -> Self {
+        let field = |step, field| params[ChordSequencer::step_param(pattern, step, field)];
         let steps = (params[ChordSequencer::PARAM_STEPS].round() as usize).clamp(1, MAX_STEPS);
         let channels = (params[ChordSequencer::PARAM_VOICES].round() as usize).clamp(1, 8);
         let bass_voice = params[ChordSequencer::PARAM_BASS_VOICE] > 0.5;
@@ -121,12 +145,13 @@ impl ChordPattern {
             rootless: bass_voice || params[ChordSequencer::PARAM_ROOTLESS] > 0.5,
         };
         Self {
+            pattern,
             steps,
-            specs: std::array::from_fn(|s| ChordSequencer::spec(&params, s)),
-            gates: std::array::from_fn(|s| params[ChordSequencer::step_gate_param(s)] > 0.5),
-            ties: std::array::from_fn(|s| params[ChordSequencer::step_tie_param(s)] > 0.5),
-            velocities: std::array::from_fn(|s| params[ChordSequencer::step_velocity_param(s)] / 127.0),
-            strums: std::array::from_fn(|s| StrumDirection::from_step_param(params[ChordSequencer::step_strum_param(s)])),
+            specs: std::array::from_fn(|s| ChordSequencer::spec_in(params, pattern, s)),
+            gates: std::array::from_fn(|s| field(s, ChordField::Gate) > 0.5),
+            ties: std::array::from_fn(|s| field(s, ChordField::Tie) > 0.5),
+            velocities: std::array::from_fn(|s| field(s, ChordField::Velocity) / 127.0),
+            strums: std::array::from_fn(|s| StrumDirection::from_step_param(field(s, ChordField::Strum))),
             strum_dir: StrumDirection::from_param(params[ChordSequencer::PARAM_STRUM_DIR]),
             strum: params[ChordSequencer::PARAM_STRUM] / 1000.0,
             settings,
@@ -135,6 +160,12 @@ impl ChordPattern {
             leading: params[ChordSequencer::PARAM_VOICE_LEADING] > 0.5,
             direction: SequenceDirection::from_param(params[ChordSequencer::PARAM_DIRECTION]),
         }
+    }
+
+    /// The name of the parameter holding one of a step's fields in this
+    /// pattern: "Step 3 Root" in A, "Step B3 Root" in B.
+    fn param(&self, step: usize, field: ChordField) -> String {
+        ChordSequencer::step_param_name(self.pattern, step, field).to_string()
     }
 
     /// A step's chord as it would sound on its own, in root position: what
@@ -277,18 +308,18 @@ impl Played {
 
     /// The step's parameters, as written: root, type, bass, top and gate, and
     /// velocity when it was played with a touch.
-    fn changes(&self) -> Vec<(String, f32)> {
-        let n = self.step + 1;
+    fn changes(&self, pattern: &ChordPattern) -> Vec<(String, f32)> {
+        let param = |field| pattern.param(self.step, field);
         let spec = &self.heard.spec;
         let mut changes = vec![
-            (format!("Step {n} Root"), spec.root.clamp(0, 127) as f32),
-            (format!("Step {n} Type"), spec.kind as f32),
-            (format!("Step {n} Bass"), spec.bass.map_or(0.0, |pc| pc as f32 + 1.0)),
-            (format!("Step {n} Top"), spec.top.map_or(0.0, |pc| pc as f32 + 1.0)),
-            (format!("Step {n} Gate"), 1.0),
+            (param(ChordField::Root), spec.root.clamp(0, 127) as f32),
+            (param(ChordField::Type), spec.kind as f32),
+            (param(ChordField::Bass), spec.bass.map_or(0.0, |pc| pc as f32 + 1.0)),
+            (param(ChordField::Top), spec.top.map_or(0.0, |pc| pc as f32 + 1.0)),
+            (param(ChordField::Gate), 1.0),
         ];
         if let Some(velocity) = self.velocity {
-            changes.push((format!("Step {n} Velocity"), velocity as f32));
+            changes.push((param(ChordField::Velocity), velocity as f32));
         }
         changes
     }
@@ -420,22 +451,26 @@ fn popover_base(root: i32) -> u8 {
 /// Draws the face and returns the parameter edits made on it.
 pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphState, zoom: f32) -> Vec<SynthResponse> {
     let z = zoom;
-    let pattern = ChordPattern::read(graph, node_id);
+    let params = params_of(graph, node_id);
+    let pattern = ChordPattern::read(&params, edit_pattern(ui.ctx(), node_id));
     let mut edits = Vec::new();
     let mut set = |param_name: String, value: f32| edits.push(SynthResponse::ParameterChanged { node_id, param_name, value });
 
-    // What the engine is playing, if it has said
+    // What the engine is playing, if it has said. The playhead only shows
+    // on the pattern playing
     let engine = user_state.get_engine_node_id(node_id);
     let readout = engine.and_then(|id| user_state.readouts.get(&id)).copied();
-    let current = readout.map_or(0, |r| (r.values[ChordSequencer::READOUT_STEP] as usize).min(pattern.steps - 1));
+    let position = readout.map(|r| PatternPosition::read(&r, ChordSequencer::READOUT_PATTERN));
+    let step = readout.map_or(0, |r| (r.values[ChordSequencer::READOUT_STEP] as usize).min(pattern.steps - 1));
+    let current = (position.map_or(0, |p| p.pattern) == pattern.pattern).then_some(step);
     let gate_high = engine.and_then(|id| user_state.get_output_value(id, ChordSequencer::PORT_GATE)).is_some_and(|g| g > 0.5);
     let sounding: Vec<i32> = match readout {
-        Some(r) if r.values[ChordSequencer::READOUT_NOTES] >= 0.0 => r.values[ChordSequencer::READOUT_NOTES..]
+        Some(r) if r.values[ChordSequencer::READOUT_NOTES] >= 0.0 => r.values[ChordSequencer::READOUT_NOTES..ChordSequencer::READOUT_PATTERN]
             .iter()
             .take_while(|&&n| n >= 0.0)
             .map(|&n| n as i32)
             .collect(),
-        _ => pattern.preview(current),
+        _ => pattern.preview(current.unwrap_or(0)),
     };
 
     let entry_id = Id::new(("chord_entry", node_id));
@@ -496,7 +531,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
         for (step, (rect, response)) in cells.iter().enumerate() {
             let spec = &pattern.specs[step];
             let on = pattern.gates[step];
-            let playing = step == current && readout.is_some();
+            let playing = current == Some(step) && readout.is_some();
             let fill = match (on, playing) {
                 (true, true) => Color32::from_rgb(170, 240, 160),
                 (true, false) => GATE_ON,
@@ -525,9 +560,9 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
 
             if response.clicked() {
                 if ui.input(|i| i.modifiers.shift) {
-                    set(format!("Step {} Tie", step + 1), if pattern.ties[step] { 0.0 } else { 1.0 });
+                    set(pattern.param(step, ChordField::Tie), if pattern.ties[step] { 0.0 } else { 1.0 });
                 } else {
-                    set(format!("Step {} Gate", step + 1), if on { 0.0 } else { 1.0 });
+                    set(pattern.param(step, ChordField::Gate), if on { 0.0 } else { 1.0 });
                 }
             }
             if response.secondary_clicked() {
@@ -546,7 +581,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
                 if let (Some(origin), Some(now)) = (origin, now) {
                     let to = dragged_pitch(drag.from, now.y - origin.y, z, octaves);
                     if to != root {
-                        set(format!("Step {} Root", step + 1), to as f32);
+                        set(pattern.param(step, ChordField::Root), to as f32);
                     }
                     ui.ctx().set_cursor_icon(CursorIcon::ResizeVertical);
                     let name = ChordSpec { root: to as i32, ..*spec }.name();
@@ -646,9 +681,52 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
     // A chord played is one undo step, named for it
     if let Some(chord) = played {
         let label = format!("Play {} into step {}", chord.heard.spec.name(), chord.step + 1);
-        edits.push(SynthResponse::EditParameters { node_id, label, changes: chord.changes() });
+        edits.push(SynthResponse::EditParameters { node_id, label, changes: chord.changes(&pattern) });
     }
+
+    // The pattern tabs and the Chain
+    ui.add_space(6.0 * z);
+    let chain_values = &params[ChordSequencer::PARAM_CHAIN..ChordSequencer::PARAM_CHAIN + CHAIN_NAMES.len()];
+    let pattern_cv = position.is_some_and(|p| p.pattern_cv);
+    let bar = PatternBar {
+        inset: TAB_INSET * z,
+        width,
+        chain: std::array::from_fn(|slot| (chain_values[slot].round().max(0.0) as usize).min(PATTERNS)),
+        chain_names: std::array::from_fn(|slot| CHAIN_NAMES[slot].to_string()),
+        playing: position.filter(|p| p.started).map(|p| Playing { pattern: p.pattern, chain_slot: p.chain_slot, next: p.next_pattern }),
+        pattern_cv,
+    };
+    edits.extend(pattern_tabs(ui, node_id, z, &bar, |ui, from, edits| pattern_menu(ui, node_id, &params, from, edits)));
     edits
+}
+
+/// A pattern tab's right-click menu: copy the pattern to another, to start
+/// a chorus from the verse, or clear it to rests.
+fn pattern_menu(ui: &mut egui::Ui, node_id: NodeId, params: &[f32], pattern: usize, edits: &mut Vec<SynthResponse>) {
+    let from = PATTERN_NAMES[pattern];
+    let edit = |label: String, changes: Vec<(String, f32)>| SynthResponse::EditParameters { node_id, label, changes };
+    ui.label(RichText::new(format!("Pattern {from}")).strong());
+    ui.separator();
+    for to in (0..PATTERNS).filter(|&p| p != pattern) {
+        let copy = ui.button(format!("Copy to {}", PATTERN_NAMES[to])).on_hover_text("Every step's chord, bass, top, velocity, tie and stroke, to start a variation from");
+        if copy.clicked() {
+            let changes = (0..MAX_STEPS)
+                .flat_map(|step| {
+                    ChordField::ALL.map(|field| (ChordSequencer::step_param_name(to, step, field).to_string(), params[ChordSequencer::step_param(pattern, step, field)]))
+                })
+                .collect();
+            edits.push(edit(format!("Copy pattern {from} to {}", PATTERN_NAMES[to]), changes));
+            ui.close_menu();
+        }
+    }
+    ui.separator();
+    if ui.button(format!("Clear {from}")).on_hover_text("Every step a rest, keeping its chord").clicked() {
+        let changes = (0..MAX_STEPS)
+            .flat_map(|step| [ChordField::Gate, ChordField::Tie].map(|field| (ChordSequencer::step_param_name(pattern, step, field).to_string(), 0.0)))
+            .collect();
+        edits.push(edit(format!("Clear pattern {from}"), changes));
+        ui.close_menu();
+    }
 }
 
 /// A step's chord name inside its cell: the chord on top, a slash bass
@@ -768,12 +846,12 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
     let spec = pattern.specs[step];
     let switch_on = |set: &mut dyn FnMut(String, f32)| {
         if !pattern.gates[step] {
-            set(format!("Step {} Gate", step + 1), 1.0);
+            set(pattern.param(step, ChordField::Gate), 1.0);
         }
     };
 
     ui.horizontal(|ui| {
-        ui.label(RichText::new(format!("Step {}", step + 1)).strong());
+        ui.label(RichText::new(format!("Step {}{}", if pattern.pattern == 0 { "" } else { PATTERN_NAMES[pattern.pattern] }, step + 1)).strong());
         ui.label(RichText::new(spec.name()).color(theme::signal::CONTROL).size(16.0));
         if let Some(top) = spec.top {
             ui.label(RichText::new(format!("{} on top", spec.spell(top))).weak());
@@ -824,7 +902,7 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         })
         .inner;
     if let Some(note) = played {
-        set(format!("Step {} Root", step + 1), note as f32);
+        set(pattern.param(step, ChordField::Root), note as f32);
         switch_on(set);
     }
     heard_line(ui, listening, pattern, step);
@@ -845,7 +923,7 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
             let chip = ui.selectable_label(current == choice, label);
             touch.follow(&chip, Chip::Bass(choice), step, Sound::Chord(chosen));
             if chip.clicked() {
-                set(format!("Step {} Bass", step + 1), choice as f32);
+                set(pattern.param(step, ChordField::Bass), choice as f32);
             }
         }
     });
@@ -857,14 +935,14 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         let auto = ui.selectable_label(spec.top.is_none(), "Auto").on_hover_text("Leave the top to the voicing");
         touch.follow(&auto, Chip::Top(None), step, Sound::Chord(ChordSpec { top: None, ..spec }));
         if auto.clicked() {
-            set(format!("Step {} Top", step + 1), 0.0);
+            set(pattern.param(step, ChordField::Top), 0.0);
         }
         let tones = kept_tones(&spec, &pattern.settings);
         for &pc in &tones {
             let chip = ui.selectable_label(spec.top == Some(pc), spec.spell(pc));
             touch.follow(&chip, Chip::Top(Some(pc)), step, Sound::Chord(ChordSpec { top: Some(pc), ..spec }));
             if chip.on_hover_text("Voice the chord with this tone on top").clicked() {
-                set(format!("Step {} Top", step + 1), pc as f32 + 1.0);
+                set(pattern.param(step, ChordField::Top), pc as f32 + 1.0);
             }
         }
         // A top the voicing doesn't keep, written before the chord changed
@@ -884,7 +962,7 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
             let chip = ui.add_sized([52.0, 20.0], egui::SelectableLabel::new(spec.kind == index, name));
             touch.follow(&chip, Chip::Type(index), step, Sound::Chord(ChordSpec { kind: index, ..spec }));
             if chip.on_hover_text(kind.label).clicked() {
-                set(format!("Step {} Type", step + 1), index as f32);
+                set(pattern.param(step, ChordField::Type), index as f32);
                 switch_on(set);
                 open.step = step_along(step, 1, pattern.steps);
             }
@@ -899,7 +977,7 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         let mut velocity = (pattern.velocities[step] * 127.0).round();
         let slider = ui.add(egui::Slider::new(&mut velocity, 0.0..=127.0).text("Velocity").integer());
         if slider.changed() {
-            set(format!("Step {} Velocity", step + 1), velocity);
+            set(pattern.param(step, ChordField::Velocity), velocity);
         }
         // Heard once, as it's let go: a click on the rail is a drag too
         if slider.drag_stopped() {
@@ -907,7 +985,7 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         }
         let mut tie = pattern.ties[step];
         if ui.checkbox(&mut tie, "Tie").on_hover_text("Holds this chord into the next step, which changes chord without a new attack (Shift+click)").changed() {
-            set(format!("Step {} Tie", step + 1), if tie { 1.0 } else { 0.0 });
+            set(pattern.param(step, ChordField::Tie), if tie { 1.0 } else { 0.0 });
         }
     });
     strum_row(ui, step, pattern, touch, set);
@@ -937,7 +1015,7 @@ fn strum_row(ui: &mut egui::Ui, step: usize, pattern: &ChordPattern, touch: &mut
         ui.label(RichText::new("Strum").weak());
         for (value, (stroke, label, hint)) in choices.into_iter().enumerate() {
             if ui.selectable_label(pattern.strums[step] == stroke, label).on_hover_text(hint).clicked() {
-                set(format!("Step {} Strum", step + 1), value as f32);
+                set(pattern.param(step, ChordField::Strum), value as f32);
                 touch.clicked = Some((Chip::Strum(value), step, Sound::Stroke(stroke)));
             }
         }
@@ -1022,6 +1100,7 @@ mod tests {
     fn pattern(voices: usize, bass_voice: bool) -> ChordPattern {
         let params: Vec<f32> = ChordSequencer::new().parameters().iter().map(|p| p.default).collect();
         ChordPattern {
+            pattern: 0,
             steps: 4,
             specs: std::array::from_fn(|s| ChordSequencer::spec(&params, s)),
             gates: [true; MAX_STEPS],
@@ -1058,7 +1137,7 @@ mod tests {
     fn top_written(notes: &[u8], step: usize, pattern: &ChordPattern) -> f32 {
         let played = Played::new(keys(notes), step, pattern).unwrap();
         let name = format!("Step {} Top", step + 1);
-        played.changes().into_iter().find(|(param, _)| *param == name).unwrap().1
+        played.changes(pattern).into_iter().find(|(param, _)| *param == name).unwrap().1
     }
 
     #[test]
@@ -1182,10 +1261,20 @@ mod tests {
         assert_eq!(audition_of(struck.clone(), 1, &four).unwrap().velocity, 1.0);
         // ...and written so
         let played = Played::new(struck, 1, &four).unwrap();
-        assert!(played.changes().contains(&("Step 2 Velocity".to_string(), 127.0)));
+        assert!(played.changes(&four).contains(&("Step 2 Velocity".to_string(), 127.0)));
         // The letter keys leave the step's velocity as it was
         let keyed = Played::new(keys(&[57, 60, 64]), 1, &four).unwrap();
-        assert!(keyed.changes().iter().all(|(name, _)| !name.ends_with("Velocity")));
+        assert!(keyed.changes(&four).iter().all(|(name, _)| !name.ends_with("Velocity")));
+    }
+
+    #[test]
+    fn a_chord_played_into_another_pattern_writes_its_steps() {
+        let params: Vec<f32> = ChordSequencer::new().parameters().iter().map(|p| p.default).collect();
+        let b = ChordPattern::read(&params, 1);
+        assert_eq!(b.specs[1].name(), "Am7", "B starts from the same progression as A");
+        let played = Played::new(keys(&[50, 53, 57]), 1, &b).unwrap();
+        let names: Vec<String> = played.changes(&b).into_iter().map(|(name, _)| name).collect();
+        assert_eq!(names, ["Step B2 Root", "Step B2 Type", "Step B2 Bass", "Step B2 Top", "Step B2 Gate"]);
     }
 
     #[test]

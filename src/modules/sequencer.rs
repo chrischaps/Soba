@@ -1098,15 +1098,20 @@ impl DspModule for StepSequencer {
 
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
         let mut readout = Readout::default();
-        let started = if self.reset_pending { 0 } else { 32 };
-        readout.values[Self::READOUT_PATTERN] = (self.pattern + 4 * self.chain_slot + started) as f32;
-        let patched = if self.pattern_cv { 64 } else { 0 };
-        readout.values[Self::READOUT_NEXT] = (self.next_pattern + patched) as f32;
+        let position = PatternPosition {
+            pattern: self.pattern,
+            chain_slot: self.chain_slot,
+            started: !self.reset_pending,
+            next_pattern: self.next_pattern,
+            pattern_cv: self.pattern_cv,
+        };
+        position.write(&mut readout, Self::READOUT_PATTERN);
         Some(readout)
     }
 }
 
-/// Where a Step Sequencer is in its chain, read back from its [`Readout`].
+/// Where a Step or Chord Sequencer is in its chain, read back from its
+/// [`Readout`]: two values, the pattern and then the next.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PatternPosition {
     pub pattern: usize,
@@ -1119,9 +1124,25 @@ pub struct PatternPosition {
 }
 
 impl PatternPosition {
+    /// A Step Sequencer's.
     pub fn from_readout(readout: &Readout) -> Self {
-        let now = readout.values[StepSequencer::READOUT_PATTERN] as usize;
-        let next = readout.values[StepSequencer::READOUT_NEXT] as usize;
+        Self::read(readout, StepSequencer::READOUT_PATTERN)
+    }
+
+    /// Written into a readout from `at`: the pattern, + 4 × the Chain slot,
+    /// + 32 once a step has played; then the next pass's pattern, + 64
+    /// while Pattern is patched.
+    pub fn write(&self, readout: &mut Readout, at: usize) {
+        let started = if self.started { 32 } else { 0 };
+        readout.values[at] = (self.pattern + 4 * self.chain_slot + started) as f32;
+        let patched = if self.pattern_cv { 64 } else { 0 };
+        readout.values[at + 1] = (self.next_pattern + patched) as f32;
+    }
+
+    /// Read back from a readout, from `at`, as [`Self::write`] puts it.
+    pub fn read(readout: &Readout, at: usize) -> Self {
+        let now = readout.values[at] as usize;
+        let next = readout.values[at + 1] as usize;
         Self {
             pattern: now % 4,
             chain_slot: (now / 4) % 8,

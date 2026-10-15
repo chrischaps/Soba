@@ -145,7 +145,7 @@ When a Jump or Hit lands while the gate is already high, the gate drops for one 
 
 A Jump moves on one sample, and a Mixer's **Level** adds its CV without smoothing, so a jump under a ringing note clicks. **Glide** smooths the lane's CV: it's how long the CV takes to move all the way from 0 to 1, so 1 s brings a half-way fader up in half a second, the same as a [Sample & Hold](./sample-hold.md)'s **Slew**. A second or so suits a pad, and 40 ms keeps a rhythmic part on the beat while still saving its tails. The gate follows the cue, not the glide.
 
-Leave **Glide** at 0 on a lane that picks something: a [Trigger Sequencer](./trigger-sequencer.md)'s or [Step Sequencer](./sequencer.md#pattern-cv)'s **Pattern**, say. The sequencer reads the CV on the downbeat, the same sample the lane jumps on, and a glide would still be on its way there.
+Leave **Glide** at 0 on a lane that picks something: a [Trigger Sequencer](./trigger-sequencer.md)'s, [Step Sequencer](./sequencer.md#pattern-cv)'s or [Chord Sequencer](./chord-sequencer.md#pattern-cv)'s **Pattern**, say. The sequencer reads the CV on the downbeat, the same sample the lane jumps on, and a glide would still be on its way there.
 
 ## Timing
 

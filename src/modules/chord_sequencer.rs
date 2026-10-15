@@ -19,17 +19,26 @@
 //! A chord being played into its face can be heard on its outputs (see
 //! [`DspModule::audition`]): it sounds for as long as the hand is down,
 //! clock or no clock, and the sequence comes back on its next chord.
+//!
+//! It holds four patterns, A to D, played in the order a Chain gives, or
+//! picked by a Pattern CV, as on the Step Sequencer: a 16-bar verse in A, a
+//! chorus in B. Pattern A's parameters are the ones the sequencer always
+//! had ("Step 3 Root"); B to D's come after everything else ("Step B3
+//! Root"), so patches saved before there were patterns load with only A.
+
+use std::sync::LazyLock;
 
 use crate::dsp::{
     context::ProcessContext,
     module_trait::{Audition, DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    signal::{SignalBuffer, MAX_CHANNELS},
+    signal::{connected_input, SignalBuffer, MAX_CHANNELS},
     ParameterDisplay, SignalType,
 };
 
-use super::sequencer::{SequenceDirection, StepTimer};
+use super::sequencer::{PatternPosition, SequenceDirection, StepTimer};
+use super::trigger_sequencer::{chain_from, TriggerSequencer, CHAIN_CHOICES, CHAIN_IDS, CHAIN_NAMES, CHAIN_SLOTS, PATTERNS, PATTERN_NAMES};
 
 pub mod recognition;
 
@@ -68,6 +77,83 @@ static VELOCITY: StepNames = per_step!("Velocity", "velocity");
 static TIE: StepNames = per_step!("Tie", "tie");
 static TOP: StepNames = per_step!("Top", "top");
 static STRUM: StepNames = per_step!("Strum", "strum");
+
+/// The things each step holds, in the order its parameters are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChordField {
+    Root = 0,
+    Type = 1,
+    Bass = 2,
+    Gate = 3,
+    Velocity = 4,
+    Tie = 5,
+    Top = 6,
+    Strum = 7,
+}
+
+impl ChordField {
+    /// Every field, as copying a pattern copies them.
+    pub const ALL: [ChordField; 8] =
+        [ChordField::Root, ChordField::Type, ChordField::Bass, ChordField::Gate, ChordField::Velocity, ChordField::Tie, ChordField::Top, ChordField::Strum];
+
+    /// Pattern A's names and ids for this field, a step at a time.
+    fn names(self) -> &'static StepNames {
+        match self {
+            ChordField::Root => &ROOT,
+            ChordField::Type => &TYPE,
+            ChordField::Bass => &BASS,
+            ChordField::Gate => &GATE,
+            ChordField::Velocity => &VELOCITY,
+            ChordField::Tie => &TIE,
+            ChordField::Top => &TOP,
+            ChordField::Strum => &STRUM,
+        }
+    }
+}
+
+/// Patterns B to D's parameter names and ids ("Step B3 Root",
+/// "step_b3_root"), made once and kept: they must be `'static`, and there
+/// are 384 of them. In the order the parameters are: pattern, then step,
+/// then field.
+static PATTERN_PARAM_NAMES: LazyLock<(Vec<&'static str>, Vec<&'static str>)> = LazyLock::new(|| {
+    let keep = |text: String| -> &'static str { Box::leak(text.into_boxed_str()) };
+    let (mut names, mut ids) = (Vec::new(), Vec::new());
+    for letter in &PATTERN_NAMES[1..] {
+        for step in 1..=MAX_STEPS {
+            for field in ChordField::ALL {
+                let field = field.names().0[0].trim_start_matches("Step 1 ");
+                names.push(keep(format!("Step {letter}{step} {field}")));
+                ids.push(keep(format!("step_{}{step}_{}", letter.to_lowercase(), field.to_lowercase())));
+            }
+        }
+    }
+    (names, ids)
+});
+
+/// One of a step's parameters, in any pattern. Every pattern starts from
+/// the same progression: Cmaj7, Am7, Fmaj7, G7, the bass walking down from
+/// C2, and the rest C major.
+fn step_parameter(id: &'static str, name: &'static str, field: ChordField, step: usize) -> ParameterDefinition {
+    let starts: [(f32, usize); 4] = [(36.0, 3), (33.0, 4), (29.0, 3), (31.0, 2)];
+    let (root, kind) = starts.get(step).copied().unwrap_or((36.0, 0));
+    match field {
+        ChordField::Root => ParameterDefinition::new(id, name, 0.0, 127.0, root, ParameterDisplay::stepped(""))
+            .describe("The chord's root as a MIDI note; the Root output plays it in this octave"),
+        ChordField::Type => ParameterDefinition::choice(id, name, &TYPE_LABELS, kind).describe("The kind of chord"),
+        ChordField::Bass => {
+            ParameterDefinition::choice(id, name, &BASS_LABELS, 0).describe("A note to put under the chord, as in D/F#, or the root")
+        }
+        ChordField::Gate => ParameterDefinition::toggle(id, name, true).describe("Plays this chord when on; a rest when off"),
+        ChordField::Velocity => ParameterDefinition::new(id, name, 0.0, 127.0, 100.0, ParameterDisplay::stepped(""))
+            .describe("Velocity for this chord, 0 to 127"),
+        ChordField::Tie => ParameterDefinition::toggle(id, name, false)
+            .describe("Holds this chord into the next step, which changes to its own chord without a new attack"),
+        ChordField::Top => ParameterDefinition::choice(id, name, &TOP_LABELS, 0)
+            .describe("A chord tone to put on top of the voicing, as an arranger writes a pad's top line; Auto leaves it to the voicing"),
+        ChordField::Strum => ParameterDefinition::choice(id, name, &["Auto", "Up", "Down"], 0)
+            .describe("Which way this chord is strummed: from the lowest note (Up) or the highest (Down); Auto follows Strum Dir"),
+    }
+}
 
 /// A kind of chord: its name and its tones.
 #[derive(Debug)]
@@ -538,17 +624,28 @@ pub struct ChordSequencer {
     legato: bool,
     /// Clocks since a reset: Alt strums down on the odd ones.
     strokes: u32,
-    /// The step being strummed, and whether from the top down.
-    stroke_step: usize,
+    /// The Velocity parameter of the step being strummed, and whether
+    /// from the top down.
+    stroke_velocity: usize,
     stroke_down: bool,
-    /// Each channel's step and place in the strum when it was last struck,
-    /// which its velocity is read from.
+    /// The Velocity parameter of the step that last struck each channel,
+    /// and the channel's place in that strum, which its velocity is read from.
     struck: [(usize, usize); MAX_VOICES],
     tied: bool,
     timer: StepTimer,
     eoc_timer: usize,
     random_state: u32,
     sample_rate: f32,
+    /// The pattern playing.
+    pattern: usize,
+    /// Which Chain entry is playing.
+    chain_slot: usize,
+    /// Clocks into this pass through the pattern (random order counts them).
+    pass_clocks: usize,
+    /// The pattern the next pass will play, for the face.
+    next_pattern: usize,
+    /// Pattern was patched in the last block.
+    pattern_cv: bool,
     /// The chord sounding, its root and bass, and what it was voiced from.
     sounding: Sounding,
     /// The chord before it, which voice leading moves from.
@@ -587,6 +684,7 @@ impl ChordSequencer {
             PortDefinition::input_with_default("clock", "Clock", SignalType::Gate, 0.0).describe("Each rising edge advances to the next chord; patch a Clock gate here"),
             PortDefinition::input_with_default("reset", "Reset", SignalType::Gate, 0.0).describe("A rising edge jumps back to step 1"),
             PortDefinition::input_with_default("run", "Run", SignalType::Gate, 1.0).describe("Steps only advance while high; runs when unpatched"),
+            PortDefinition::input_with_default("pattern", "Pattern", SignalType::Control, 0.0).describe("Picks the pattern for each pass in place of the Chain: 0 to 0.25 is A, then B, C and D"),
             PortDefinition::output("pitch", "Pitch", SignalType::Control).describe("Poly V/Oct, one channel per note of the chord, lowest first"),
             PortDefinition::output("gate", "Gate", SignalType::Gate).describe("Poly gate, one channel per note, rising together unless Strum staggers them; patch into a voice's envelope"),
             PortDefinition::output("velocity", "Velocity", SignalType::Control).describe("Poly velocity of the step, 0 to 1, each channel tapered by Strum Taper"),
@@ -597,7 +695,7 @@ impl ChordSequencer {
 
         let mut parameters = vec![
             ParameterDefinition::new("steps", "Steps", 1.0, 16.0, 4.0, ParameterDisplay::stepped(""))
-                .describe("How many chords play before the sequence loops"),
+                .describe("How many chords each pattern plays before the next pass"),
             ParameterDefinition::choice("direction", "Direction", &["Fwd", "Bwd", "P-P", "Rnd"], 0)
                 .describe("Playback order: forward, backward, ping-pong or random"),
             ParameterDefinition::new("gate_length", "Gate Length", 1.0, 100.0, 100.0, ParameterDisplay::linear("%"))
@@ -622,38 +720,23 @@ impl ChordSequencer {
                 .describe("Softens the notes struck later in a strum, down to nothing at 100%, as a pick digs into the first strings and brushes the last; below 0 they grow louder instead"),
         ];
 
-        // A progression to start from: Cmaj7, Am7, Fmaj7, G7, the bass
-        // walking down from C2. The rest are C major
-        let starts: [(f32, usize); 4] = [(36.0, 3), (33.0, 4), (29.0, 3), (31.0, 2)];
         for step in 0..MAX_STEPS {
-            let (root, kind) = starts.get(step).copied().unwrap_or((36.0, 0));
+            parameters.extend(ChordField::ALL.map(|field| step_parameter(field.names().1[step], field.names().0[step], field, step)));
+        }
+        // The Chain and patterns B to D, after everything the sequencer had
+        // before it had patterns
+        for slot in 0..CHAIN_SLOTS {
             parameters.push(
-                ParameterDefinition::new(ROOT.1[step], ROOT.0[step], 0.0, 127.0, root, ParameterDisplay::stepped(""))
-                    .describe("The chord's root as a MIDI note; the Root output plays it in this octave"),
-            );
-            parameters.push(ParameterDefinition::choice(TYPE.1[step], TYPE.0[step], &TYPE_LABELS, kind).describe("The kind of chord"));
-            parameters.push(
-                ParameterDefinition::choice(BASS.1[step], BASS.0[step], &BASS_LABELS, 0)
-                    .describe("A note to put under the chord, as in D/F#, or the root"),
-            );
-            parameters.push(ParameterDefinition::toggle(GATE.1[step], GATE.0[step], true).describe("Plays this chord when on; a rest when off"));
-            parameters.push(
-                ParameterDefinition::new(VELOCITY.1[step], VELOCITY.0[step], 0.0, 127.0, 100.0, ParameterDisplay::stepped(""))
-                    .describe("Velocity for this chord, 0 to 127"),
-            );
-            parameters.push(
-                ParameterDefinition::toggle(TIE.1[step], TIE.0[step], false)
-                    .describe("Holds this chord into the next step, which changes to its own chord without a new attack"),
-            );
-            parameters.push(
-                ParameterDefinition::choice(TOP.1[step], TOP.0[step], &TOP_LABELS, 0)
-                    .describe("A chord tone to put on top of the voicing, as an arranger writes a pad's top line; Auto leaves it to the voicing"),
-            );
-            parameters.push(
-                ParameterDefinition::choice(STRUM.1[step], STRUM.0[step], &["Auto", "Up", "Down"], 0)
-                    .describe("Which way this chord is strummed: from the lowest note (Up) or the highest (Down); Auto follows Strum Dir"),
+                ParameterDefinition::choice(CHAIN_IDS[slot], CHAIN_NAMES[slot], &CHAIN_CHOICES, usize::from(slot == 0))
+                    .describe("A pattern in the chain, which plays its patterns a pass each, in order, then repeats"),
             );
         }
+        let (names, ids) = &*PATTERN_PARAM_NAMES;
+        for (index, (&name, &id)) in names.iter().zip(ids).enumerate() {
+            let field = ChordField::ALL[index % ChordField::ALL.len()];
+            parameters.push(step_parameter(id, name, field, index / ChordField::ALL.len() % MAX_STEPS));
+        }
+        debug_assert_eq!(parameters.len(), Self::PARAM_COUNT);
 
         Self {
             current_step: 0,
@@ -668,14 +751,19 @@ impl ChordSequencer {
             held: [0; MAX_VOICES],
             legato: false,
             strokes: 0,
-            stroke_step: 0,
+            stroke_velocity: Self::step_velocity_param(0),
             stroke_down: false,
-            struck: std::array::from_fn(|channel| (0, channel)),
+            struck: std::array::from_fn(|channel| (Self::step_velocity_param(0), channel)),
             tied: false,
             timer: StepTimer::new(),
             eoc_timer: 0,
             random_state: 12345,
             sample_rate: 44100.0,
+            pattern: 0,
+            chain_slot: 0,
+            pass_clocks: 0,
+            next_pattern: 0,
+            pattern_cv: false,
             sounding: Sounding::SILENT,
             before: None,
             audition: None,
@@ -690,6 +778,7 @@ impl ChordSequencer {
     const PORT_CLOCK: usize = 0;
     const PORT_RESET: usize = 1;
     const PORT_RUN: usize = 2;
+    const PORT_PATTERN: usize = 3;
     pub const PORT_PITCH: usize = 0;
     pub const PORT_GATE: usize = 1;
     pub const PORT_VELOCITY: usize = 2;
@@ -737,21 +826,79 @@ impl ChordSequencer {
         Self::step_root_param(step) + 7
     }
 
+    /// The first of the eight Chain slots, after pattern A's steps.
+    pub const PARAM_CHAIN: usize = Self::STEP_PARAMS + MAX_STEPS * Self::PER_STEP;
+    /// Patterns B to D's steps, after the Chain.
+    const PARAM_PATTERNS: usize = Self::PARAM_CHAIN + CHAIN_SLOTS;
+    pub const PARAM_COUNT: usize = Self::PARAM_PATTERNS + (PATTERNS - 1) * MAX_STEPS * Self::PER_STEP;
+
+    /// The parameter holding one of a step's fields (both 0-based).
+    pub const fn step_param(pattern: usize, step: usize, field: ChordField) -> usize {
+        let start = if pattern == 0 { Self::STEP_PARAMS } else { Self::PARAM_PATTERNS + (pattern - 1) * MAX_STEPS * Self::PER_STEP };
+        start + step * Self::PER_STEP + field as usize
+    }
+
+    /// The name of the parameter holding a step's field: "Step 3 Root" in
+    /// pattern A, "Step B3 Root" in B.
+    pub fn step_param_name(pattern: usize, step: usize, field: ChordField) -> &'static str {
+        match pattern {
+            0 => field.names().0[step],
+            _ => PATTERN_PARAM_NAMES.0[((pattern - 1) * MAX_STEPS + step) * Self::PER_STEP + field as usize],
+        }
+    }
+
+    /// The patterns the Chain plays, in order, and how many.
+    pub fn chain(params: &[f32]) -> ([usize; CHAIN_SLOTS], usize) {
+        chain_from(&params[Self::PARAM_CHAIN..Self::PARAM_CHAIN + CHAIN_SLOTS])
+    }
+
+    /// The pattern for the Chain slot playing, or for the Pattern CV.
+    fn pick(&mut self, params: &[f32], cv: Option<f32>) -> usize {
+        match cv {
+            Some(cv) => TriggerSequencer::pattern_for_cv(cv),
+            None => {
+                let (chain, len) = Self::chain(params);
+                self.chain_slot %= len;
+                chain[self.chain_slot]
+            }
+        }
+    }
+
+    /// The pattern the next pass will play.
+    fn coming_pattern(&self, params: &[f32], cv: Option<f32>) -> usize {
+        match cv {
+            Some(cv) => TriggerSequencer::pattern_for_cv(cv),
+            None => {
+                let (chain, len) = Self::chain(params);
+                if self.reset_pending { chain[0] } else { chain[(self.chain_slot + 1) % len] }
+            }
+        }
+    }
+
     /// The readout: the step playing, then each channel's MIDI note (-1
     /// past the last channel).
     pub const READOUT_STEP: usize = 0;
     pub const READOUT_NOTES: usize = 1;
+    /// Where it is in its chain, after the notes: the pattern, then the
+    /// next, as the Step Sequencer reports them (see [`PatternPosition`]).
+    pub const READOUT_PATTERN: usize = Self::READOUT_NOTES + MAX_VOICES;
 
     const GATE_THRESHOLD: f32 = 0.5;
     const EOC_PULSE_SAMPLES: usize = 44;
 
-    /// A step's chord, as its parameters write it.
+    /// A step's chord in pattern A, as its parameters write it.
     pub fn spec(params: &[f32], step: usize) -> ChordSpec {
-        let bass = params[Self::step_bass_param(step)].round() as i32;
-        let top = params[Self::step_top_param(step)].round() as i32;
+        Self::spec_in(params, 0, step)
+    }
+
+    /// A step's chord in any pattern, as its parameters write it.
+    pub fn spec_in(params: &[f32], pattern: usize, step: usize) -> ChordSpec {
+        let field = |field| params[Self::step_param(pattern, step, field)];
+        let bass = field(ChordField::Bass).round() as i32;
+        let top = field(ChordField::Top).round() as i32;
         ChordSpec {
-            root: params[Self::step_root_param(step)].round().clamp(0.0, 127.0) as i32,
-            kind: (params[Self::step_type_param(step)].round().max(0.0) as usize).min(CHORD_TYPES.len() - 1),
+            root: field(ChordField::Root).round().clamp(0.0, 127.0) as i32,
+            kind: (field(ChordField::Type).round().max(0.0) as usize).min(CHORD_TYPES.len() - 1),
             bass: (1..=12).contains(&bass).then(|| bass - 1),
             top: (1..=12).contains(&top).then(|| top - 1),
         }
@@ -973,8 +1120,8 @@ impl DspModule for ChordSequencer {
         // playing, or to how chords are voiced, is heard at once, voiced
         // from the same chord before it. A rest keeps the chord it holds
         let (settings, bass_voice) = Self::settings(params, channels);
-        let step_spec = Self::spec(params, self.current_step);
-        let step_on = params[Self::step_gate_param(self.current_step)] > 0.5;
+        let step_spec = Self::spec_in(params, self.pattern, self.current_step);
+        let step_on = params[Self::step_param(self.pattern, self.current_step, ChordField::Gate)] > 0.5;
         if self.sounding.channels.len == 0 || step_on && step_spec != self.sounding.spec {
             self.voice(params, step_spec, channels);
         } else if settings != self.sounding.settings || bass_voice != self.sounding.bass_voice {
@@ -984,6 +1131,8 @@ impl DspModule for ChordSequencer {
         let clock_in = inputs.get(Self::PORT_CLOCK);
         let reset_in = inputs.get(Self::PORT_RESET);
         let run_in = inputs.get(Self::PORT_RUN);
+        let pattern_in = connected_input(inputs, Self::PORT_PATTERN);
+        self.pattern_cv = pattern_in.is_some();
 
         for i in 0..context.block_size {
             let clock_value = clock_in.and_then(|buf| buf.samples.get(i).copied()).unwrap_or(0.0);
@@ -997,6 +1146,7 @@ impl DspModule for ChordSequencer {
             let reset_rising = reset_high && !self.prev_reset;
             self.prev_reset = reset_high;
             let is_running = run_value > Self::GATE_THRESHOLD;
+            let cv = pattern_in.map(|buf| buf.samples.get(i).copied().unwrap_or(0.0));
 
             if reset_rising {
                 self.current_step = direction.start_step(num_steps);
@@ -1016,21 +1166,47 @@ impl DspModule for ChordSequencer {
             if clock_rising && is_running {
                 // The first chord after a reset starts afresh in root
                 // position, so a progression that's reset plays the same
-                // voicings each time round
+                // voicings each time round. It starts the chain's first
+                // pattern, or the one the Pattern CV picks
                 let fresh = self.reset_pending;
-                let hit_end = if self.reset_pending {
+                let end_of_chain = if self.reset_pending {
                     self.reset_pending = false;
                     self.current_step = direction.start_step(num_steps);
+                    self.chain_slot = 0;
+                    self.pass_clocks = 0;
+                    self.pattern = self.pick(params, cv);
                     false
                 } else {
-                    self.advance_step(num_steps, direction)
+                    let hit_end = self.advance_step(num_steps, direction);
+                    // A pass through the pattern ends where the sequence
+                    // wraps or turns; in random order, after Steps clocks.
+                    // Then the Chain's next pattern plays, or the CV's
+                    self.pass_clocks += 1;
+                    let pass_over = match direction {
+                        SequenceDirection::Random => self.pass_clocks >= num_steps,
+                        _ => hit_end,
+                    };
+                    let mut chain_over = false;
+                    if pass_over {
+                        self.pass_clocks = 0;
+                        self.chain_slot += 1;
+                        if self.chain_slot >= Self::chain(params).1 {
+                            self.chain_slot = 0;
+                            chain_over = true;
+                        }
+                        self.pattern = self.pick(params, cv);
+                    }
+                    // With the Pattern CV choosing, every pass is the whole
+                    // sequence
+                    hit_end && (chain_over || cv.is_some())
                 };
 
                 // The hand moves on every clock, rests, ties and steps that
                 // name their own stroke included, so Alt keeps time as a
                 // rhythm guitarist's does
                 let step = self.current_step;
-                let down = match StrumDirection::from_step_param(params[Self::step_strum_param(step)]).unwrap_or(strum_direction) {
+                let field = |field| params[Self::step_param(self.pattern, step, field)];
+                let down = match StrumDirection::from_step_param(field(ChordField::Strum)).unwrap_or(strum_direction) {
                     StrumDirection::Up => false,
                     StrumDirection::Down => true,
                     StrumDirection::Alternate => self.strokes % 2 == 1,
@@ -1040,8 +1216,8 @@ impl DspModule for ChordSequencer {
                 // A chord that plays is voiced from the one sounding, then
                 // strummed: each channel keeps its note until its turn. A rest
                 // leaves the pitches alone, so the release ends where it began
-                if params[Self::step_gate_param(step)] > 0.5 {
-                    let tie = params[Self::step_tie_param(step)] > 0.5;
+                if field(ChordField::Gate) > 0.5 {
+                    let tie = field(ChordField::Tie) > 0.5;
                     for channel in 0..channels {
                         self.held[channel] = self.playing(channel);
                     }
@@ -1053,9 +1229,9 @@ impl DspModule for ChordSequencer {
                     self.gate_len = self.gate_samples(gate_length, tie);
                     self.tied = tie;
                     self.before = (!fresh && self.sounding.chord.len > 0).then_some(self.sounding.chord);
-                    self.voice(params, Self::spec(params, step), channels);
+                    self.voice(params, Self::spec_in(params, self.pattern, step), channels);
                     let spacing = self.strum_spacing(strum_ms, channels);
-                    self.stroke_step = step;
+                    self.stroke_velocity = Self::step_param(self.pattern, step, ChordField::Velocity);
                     self.stroke_down = down;
                     for channel in 0..channels {
                         let turn = if down { channels - 1 - channel } else { channel };
@@ -1067,7 +1243,9 @@ impl DspModule for ChordSequencer {
                     self.tied = false;
                 }
 
-                if hit_end && direction != SequenceDirection::Random {
+                // EOC once the whole chain has played (never in random
+                // order, which has no end)
+                if end_of_chain && direction != SequenceDirection::Random {
                     self.eoc_timer = Self::EOC_PULSE_SAMPLES;
                 }
             }
@@ -1086,7 +1264,7 @@ impl DspModule for ChordSequencer {
                     retrigger = self.gate_high[channel] && !self.legato;
                     self.gate_timers[channel] = self.gate_len;
                     let turn = if self.stroke_down { channels - 1 - channel } else { channel };
-                    self.struck[channel] = (self.stroke_step, turn);
+                    self.struck[channel] = (self.stroke_velocity, turn);
                 }
                 let sequenced = self.gate_timers[channel] > 0 && !retrigger;
                 // An audition's gates are held while the hand is down, over
@@ -1112,8 +1290,8 @@ impl DspModule for ChordSequencer {
                 let velocity = match self.auditioned(channel) {
                     Some((audition, turn)) => audition.velocity * taper_scale(turn, audition.notes().len(), taper),
                     None => {
-                        let (step, turn) = self.struck[channel];
-                        params[Self::step_velocity_param(step)] / 127.0 * taper_scale(turn, channels, taper)
+                        let (velocity, turn) = self.struck[channel];
+                        params[velocity] / 127.0 * taper_scale(turn, channels, taper)
                     }
                 };
                 outputs[Self::PORT_VELOCITY].channel_mut(channel)[i] = velocity;
@@ -1138,6 +1316,9 @@ impl DspModule for ChordSequencer {
             self.eoc_timer = self.eoc_timer.saturating_sub(1);
             self.timer.tick();
         }
+
+        let last_cv = pattern_in.and_then(|buf| buf.samples.get(context.block_size.saturating_sub(1)).copied());
+        self.next_pattern = self.coming_pattern(params, last_cv);
     }
 
     fn reset(&mut self) {
@@ -1152,9 +1333,9 @@ impl DspModule for ChordSequencer {
         self.strum_wait = [None; MAX_VOICES];
         self.legato = false;
         self.strokes = 0;
-        self.stroke_step = 0;
+        self.stroke_velocity = Self::step_velocity_param(0);
         self.stroke_down = false;
-        self.struck = std::array::from_fn(|channel| (0, channel));
+        self.struck = std::array::from_fn(|channel| (Self::step_velocity_param(0), channel));
         self.tied = false;
         self.timer.forget();
         self.eoc_timer = 0;
@@ -1163,15 +1344,26 @@ impl DspModule for ChordSequencer {
         self.audition = None;
         self.auditioning = false;
         self.audition_age = 0;
+        self.pattern = 0;
+        self.chain_slot = 0;
+        self.pass_clocks = 0;
     }
 
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
         let mut readout = Readout::default();
         readout.values[Self::READOUT_STEP] = self.current_step as f32;
         let shown = self.notes_shown();
-        for (i, value) in readout.values[Self::READOUT_NOTES..].iter_mut().enumerate() {
+        for (i, value) in readout.values[Self::READOUT_NOTES..Self::READOUT_PATTERN].iter_mut().enumerate() {
             *value = if i < shown { self.playing(i) as f32 } else { -1.0 };
         }
+        let position = PatternPosition {
+            pattern: self.pattern,
+            chain_slot: self.chain_slot,
+            started: !self.reset_pending,
+            next_pattern: self.next_pattern,
+            pattern_cv: self.pattern_cv,
+        };
+        position.write(&mut readout, Self::READOUT_PATTERN);
         Some(readout)
     }
 
@@ -1261,6 +1453,11 @@ mod tests {
     /// Runs the sequencer at 1 kHz for `ms`, with a 1 ms clock pulse at each
     /// time in `clocks`, `block` samples at a time.
     fn run_with(seq: &mut ChordSequencer, params: &[f32], ms: usize, clocks: &[usize], block: usize) -> Run {
+        run_cv(seq, params, ms, clocks, block, None)
+    }
+
+    /// As [`run_with`], with a Pattern CV patched when there is one.
+    fn run_cv(seq: &mut ChordSequencer, params: &[f32], ms: usize, clocks: &[usize], block: usize, cv: Option<&[f32]>) -> Run {
         seq.prepare(1000.0, block);
         let mut run = Run {
             notes: vec![Vec::new(); MAX_VOICES],
@@ -1279,7 +1476,17 @@ mod tests {
             for &t in clocks.iter().filter(|&&t| (start..start + block).contains(&t)) {
                 clock.samples[t - start] = 1.0;
             }
-            seq.process(&[&clock], &mut outputs, params, &ProcessContext::new(1000.0, block));
+            let pattern = match cv {
+                Some(cv) => {
+                    let mut buf = SignalBuffer::control(block);
+                    buf.samples.copy_from_slice(&cv[start..start + block]);
+                    buf
+                }
+                None => SignalBuffer::unconnected(block, SignalType::Control),
+            };
+            let (reset, mut running) = (SignalBuffer::control(block), SignalBuffer::control(block));
+            running.samples.fill(1.0);
+            seq.process(&[&clock, &reset, &running, &pattern], &mut outputs, params, &ProcessContext::new(1000.0, block));
             run.channels = outputs[ChordSequencer::PORT_PITCH].channels();
             run.mono_channels = outputs[ChordSequencer::PORT_ROOT].channels().max(outputs[ChordSequencer::PORT_BASS].channels());
             for channel in 0..run.channels {
@@ -1309,9 +1516,16 @@ mod tests {
         assert_eq!(seq.info().category, ModuleCategory::Utility);
         assert!(seq.polyphonic());
         let ids: Vec<_> = seq.ports().iter().map(|p| p.id).collect();
-        assert_eq!(ids, ["clock", "reset", "run", "pitch", "gate", "velocity", "root", "bass", "eoc"]);
+        assert_eq!(ids, ["clock", "reset", "run", "pattern", "pitch", "gate", "velocity", "root", "bass", "eoc"]);
         let params = seq.parameters();
-        assert_eq!(params.len(), 12 + 8 * MAX_STEPS);
+        // Pattern A's steps, then the Chain, then patterns B to D
+        assert_eq!(params.len(), 12 + 8 * MAX_STEPS + CHAIN_SLOTS + 3 * 8 * MAX_STEPS);
+        assert_eq!(params.len(), ChordSequencer::PARAM_COUNT);
+        assert_eq!(params[ChordSequencer::PARAM_CHAIN].name, "Chain 1");
+        assert_eq!(params[ChordSequencer::PARAM_CHAIN].default, 1.0, "the chain starts as just A");
+        assert_eq!(params[ChordSequencer::step_param(1, 2, ChordField::Root)].name, "Step B3 Root");
+        assert_eq!(params[ChordSequencer::step_param(3, 15, ChordField::Strum)].id, "step_d16_strum");
+        assert_eq!(params[ChordSequencer::step_param(2, 0, ChordField::Type)].default, 3.0, "every pattern starts on Cmaj7");
         assert_eq!(params[ChordSequencer::PARAM_BASS_VOICE].id, "bass_voice");
         assert_eq!(params[ChordSequencer::PARAM_ROOTLESS].id, "rootless");
         assert_eq!(params[ChordSequencer::PARAM_STRUM].id, "strum");
@@ -1323,7 +1537,19 @@ mod tests {
         assert_eq!(params[ChordSequencer::step_tie_param(15)].id, "step_16_tie");
         assert_eq!(params[ChordSequencer::step_top_param(4)].id, "step_5_top");
         assert_eq!(params[ChordSequencer::step_strum_param(2)].id, "step_3_strum");
-        assert_eq!(params.last().unwrap().id, "step_16_strum");
+        assert_eq!(params[ChordSequencer::PARAM_CHAIN - 1].id, "step_16_strum");
+        assert_eq!(params.last().unwrap().id, "step_d16_strum");
+        for pattern in 0..PATTERNS {
+            let letter = ["", "b", "c", "d"][pattern];
+            for step in 0..MAX_STEPS {
+                for field in ChordField::ALL {
+                    let param = &params[ChordSequencer::step_param(pattern, step, field)];
+                    assert_eq!(param.name, ChordSequencer::step_param_name(pattern, step, field));
+                    let in_a = params[ChordSequencer::step_param(0, step, field)].id;
+                    assert_eq!(param.id, in_a.replacen("step_", &format!("step_{letter}"), 1));
+                }
+            }
+        }
         assert_eq!(TYPE_LABELS.len(), CHORD_TYPES.len());
         for (label, kind) in TYPE_LABELS.iter().zip(&CHORD_TYPES) {
             assert_eq!(*label, kind.label);
@@ -2119,5 +2345,133 @@ mod tests {
     fn is_send() {
         fn assert_send<T: Send>() {}
         assert_send::<ChordSequencer>();
+    }
+
+    /// Writes a pattern's chords, as `params_with` writes A's.
+    fn fill(params: &mut [f32], pattern: usize, chords: &[(i32, usize)]) {
+        for (step, &(root, kind)) in chords.iter().enumerate() {
+            params[ChordSequencer::step_param(pattern, step, ChordField::Root)] = root as f32;
+            params[ChordSequencer::step_param(pattern, step, ChordField::Type)] = kind as f32;
+        }
+    }
+
+    fn set_chain(params: &mut [f32], patterns: &str) {
+        for slot in 0..CHAIN_SLOTS {
+            params[ChordSequencer::PARAM_CHAIN + slot] = 0.0;
+        }
+        for (slot, letter) in patterns.chars().enumerate() {
+            params[ChordSequencer::PARAM_CHAIN + slot] = ("ABCD".find(letter).unwrap() + 1) as f32;
+        }
+    }
+
+    /// The root at each clock.
+    fn roots_at(run: &Run, clocks: &[usize]) -> Vec<i32> {
+        clocks.iter().map(|&t| run.root[t] as i32).collect()
+    }
+
+    /// A clock every 100 ms.
+    fn every_100(count: usize) -> Vec<usize> {
+        (0..count).map(|n| n * 100).collect()
+    }
+
+    #[test]
+    fn a_chain_plays_its_patterns_in_order() {
+        // A verse in A, a chorus in B, the chain A A B
+        let mut params = params_with(&[(36, MAJ), (41, MAJ)]);
+        fill(&mut params, 1, &[(43, MAJ), (45, MIN)]);
+        set_chain(&mut params, "AAB");
+        let clocks = every_100(12);
+        let played = run(&params, 1200, &clocks);
+        assert_eq!(roots_at(&played, &clocks), [36, 41, 36, 41, 43, 45, 36, 41, 36, 41, 43, 45]);
+        // EOC once the whole chain has played, on the clock that starts it again
+        assert_eq!(rises(&played.eoc), [600]);
+    }
+
+    #[test]
+    fn a_patch_from_before_patterns_plays_only_a() {
+        // Patterns B to D aren't in an old patch, so they load as their
+        // defaults, and the Chain is just A
+        let params = params_with(&[(36, MAJ), (41, MAJ), (43, MAJ)]);
+        let clocks = every_100(6);
+        let played = run(&params, 600, &clocks);
+        assert_eq!(roots_at(&played, &clocks), [36, 41, 43, 36, 41, 43]);
+        assert_eq!(rises(&played.eoc), [300]);
+    }
+
+    #[test]
+    fn pattern_cv_picks_the_pattern_at_each_pass() {
+        let mut params = params_with(&[(36, MAJ), (41, MAJ)]);
+        fill(&mut params, 1, &[(43, MAJ), (45, MIN)]);
+        fill(&mut params, 2, &[(38, MIN), (31, MAJ)]);
+        set_chain(&mut params, "AB");
+        // The CV moves to C (0.6) halfway through the first pass, and the
+        // pattern only changes where the next pass starts
+        let mut cv = vec![0.1; 600];
+        cv[150..].fill(0.6);
+        let clocks = every_100(6);
+        let played = run_cv(&mut ChordSequencer::new(), &params, 600, &clocks, 600, Some(&cv));
+        assert_eq!(roots_at(&played, &clocks), [36, 41, 38, 31, 38, 31]);
+        // Every pass ends the sequence, with no chain to play through
+        assert_eq!(rises(&played.eoc), [200, 400]);
+    }
+
+    #[test]
+    fn a_pattern_is_struck_as_hard_as_its_own_steps() {
+        let mut params = params_with(&[(36, MAJ)]);
+        fill(&mut params, 1, &[(43, MAJ)]);
+        params[ChordSequencer::step_param(1, 0, ChordField::Velocity)] = 50.0;
+        set_chain(&mut params, "AB");
+        let played = run(&params, 200, &every_100(2));
+        assert!((played.velocities[0][50] - 100.0 / 127.0).abs() < 1e-6);
+        assert!((played.velocities[0][150] - 50.0 / 127.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_tie_carries_into_the_next_patterns_first_chord() {
+        let mut params = params_with(&[(36, MAJ), (41, MAJ)]);
+        fill(&mut params, 1, &[(43, MAJ), (45, MIN)]);
+        params[ChordSequencer::step_tie_param(1)] = 1.0;
+        set_chain(&mut params, "AB");
+        let played = run(&params, 400, &every_100(4));
+        // A's last chord ties into B's first: its notes move without a new attack
+        assert_eq!(rises(&played.gates[0]), [0, 101, 301]);
+        assert_eq!(played.root[250], 43.0);
+    }
+
+    #[test]
+    fn reset_starts_the_chain_over() {
+        let mut params = params_with(&[(36, MAJ), (41, MAJ)]);
+        fill(&mut params, 1, &[(43, MAJ), (45, MIN)]);
+        set_chain(&mut params, "AB");
+        let mut seq = ChordSequencer::new();
+        run_with(&mut seq, &params, 300, &every_100(3), 300);
+        assert_eq!((seq.pattern, seq.current_step()), (1, 0));
+        // A reset, then the next clock plays A's first chord
+        let mut reset = SignalBuffer::control(1);
+        reset.samples[0] = 1.0;
+        let mut outputs: Vec<SignalBuffer> = (0..6).map(|_| SignalBuffer::polyphonic(1, SignalType::Control)).collect();
+        seq.process(&[&SignalBuffer::control(1), &reset], &mut outputs, &params, &ProcessContext::new(1000.0, 1));
+        let played = run_with(&mut seq, &params, 100, &[50], 100);
+        assert_eq!(played.root[60], 36.0);
+        assert_eq!(seq.pattern, 0);
+    }
+
+    #[test]
+    fn the_readout_says_where_the_chain_is() {
+        let mut params = params_with(&[(36, MAJ), (41, MAJ)]);
+        set_chain(&mut params, "AB");
+        let mut seq = ChordSequencer::new();
+        let position = |seq: &ChordSequencer, params: &[f32]| PatternPosition::read(&seq.readout(params).unwrap(), ChordSequencer::READOUT_PATTERN);
+        run_with(&mut seq, &params, 1, &[], 1);
+        assert!(!position(&seq, &params).started);
+        run_with(&mut seq, &params, 300, &[0, 100, 200], 300);
+        let now = position(&seq, &params);
+        assert_eq!((now.pattern, now.chain_slot, now.next_pattern, now.started, now.pattern_cv), (1, 1, 0, true, false));
+        // Eight voices fill the notes without reaching the position
+        params[ChordSequencer::PARAM_VOICES] = 8.0;
+        run_with(&mut seq, &params, 100, &[0], 100);
+        let readout = seq.readout(&params).unwrap();
+        assert!(readout.values[ChordSequencer::READOUT_NOTES..ChordSequencer::READOUT_PATTERN].iter().all(|&n| n >= 0.0));
+        assert_eq!(PatternPosition::read(&readout, ChordSequencer::READOUT_PATTERN).pattern, 1);
     }
 }

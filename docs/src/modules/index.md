@@ -76,7 +76,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Oscilloscope](./visualization/oscilloscope.md) | `util.oscilloscope` | Draw up to two signals as waveforms |
 | [Dancer](./visualization/dancer.md) | `util.dancer` | A stick figure who dances to the patch, on the beat and as hard as the music is loud |
 | [Step Sequencer](./utilities/sequencer.md) | `seq.step` | 16 steps of pitch, gate and velocity, in four chained patterns |
-| [Chord Sequencer](./utilities/chord-sequencer.md) | `seq.chord` | 16 chords, each a root, a type and a slash bass, voice-led and played on polyphonic cables |
+| [Chord Sequencer](./utilities/chord-sequencer.md) | `seq.chord` | 16 chords, each a root, a type and a slash bass, voice-led and played on polyphonic cables, in four patterns played in a chain |
 | [Trigger Sequencer](./utilities/trigger-sequencer.md) | `seq.trigger` | Eight lanes of drum hits in four chained patterns, with accents, probability and ratchets |
 | [Arranger](./utilities/arranger.md) | `seq.arranger` | A song's timeline: named sections of bars, moving eight lanes of automation by jumps, ramps and hits |
 | [MIDI Monitor](./midi/midi-monitor.md) | `util.midi_monitor` | Show incoming MIDI messages |
