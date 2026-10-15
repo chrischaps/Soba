@@ -21,9 +21,11 @@ use super::templates::SynthNodeTemplate;
 /// A Sampler's file being heard from its face (see [`crate::engine::cue`]).
 #[derive(Clone, Debug)]
 pub struct SamplerCue {
-    /// The Sampler it's heard from.
-    pub node_id: NodeId,
-    /// The same Sampler in the engine, which reports where the cue is.
+    /// The Sampler it's heard from: `None` while it's a file dragged over
+    /// empty canvas, until it's dropped there and the new Sampler takes it.
+    pub node_id: Option<NodeId>,
+    /// The same Sampler in the engine, which reports where the cue is, or
+    /// [`crate::engine::CANVAS_CUE`] for one begun over empty canvas.
     pub engine_id: EngineNodeId,
     /// The file it plays: the node naming another stops it.
     pub key: String,

@@ -90,9 +90,9 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let drop_here = user_state.file_drop_target == Some(Some(node_id));
     // A file dragged over, once it's read, stands in for the one it has
     let hovered = user_state.hovered_file.as_ref().filter(|_| drop_here).and_then(|hovered| Some((hovered.key.as_str(), hovered.sample()?)));
-    let hovered_cue = user_state.cue.as_ref().filter(|cue| cue.hovered && cue.node_id == node_id);
+    let hovered_cue = user_state.cue.as_ref().filter(|cue| cue.hovered && cue.node_id == Some(node_id));
     let loaded = loaded.filter(|_| hovered.is_none());
-    let cue = user_state.cue.as_ref().filter(|cue| cue.node_id == node_id && loaded.is_some());
+    let cue = user_state.cue.as_ref().filter(|cue| cue.node_id == Some(node_id) && loaded.is_some());
 
     // Sliced by Onsets, it's cut where its hits begin, or where markers were moved to
     let sensitivity = value_of("Sensitivity").unwrap_or(DEFAULT_SENSITIVITY);

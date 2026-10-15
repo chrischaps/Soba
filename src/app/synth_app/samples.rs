@@ -449,7 +449,7 @@ fn copy_sample(key: &str, folder: &Path) -> std::io::Result<PathBuf> {
 /// points. Windows sends the window no mouse moves during a drag, so egui's
 /// pointer is stale; ask the system where the cursor is instead, unless a
 /// capture script is dragging it.
-fn drop_pointer(ctx: &egui::Context, scripted: bool) -> Option<egui::Pos2> {
+pub(super) fn drop_pointer(ctx: &egui::Context, scripted: bool) -> Option<egui::Pos2> {
     #[cfg(windows)]
     if !scripted {
         use windows_sys::Win32::Foundation::POINT;

@@ -17,6 +17,10 @@ use crate::dsp::SampleData;
 
 use super::commands::NodeId;
 
+/// The node a cue reports against when it has none: a file dragged over
+/// empty canvas, heard before it's dropped to make a Sampler.
+pub const CANVAS_CUE: NodeId = NodeId::MAX;
+
 /// How loud a cue plays: 6 dB down, so a file normalized to full scale
 /// sits under the patch's peaks rather than over them.
 pub const CUE_LEVEL: f32 = 0.5;

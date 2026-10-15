@@ -28,7 +28,7 @@ pub use channels::{
     MAX_PLANS_IN_FLIGHT,
 };
 pub use commands::{AudioMessage, ChannelPeaks, EngineCommand, EngineEvent, NodeId, PortIndex, ScopeFrame};
-pub use cue::{Cue, CUE_LEVEL};
+pub use cue::{Cue, CANVAS_CUE, CUE_LEVEL};
 pub use graph_plan::GraphPlan;
 pub use latency::{LatencyGauge, RoundTrip};
 pub use recorder::{RecordTap, Recording, RecordingSummary};

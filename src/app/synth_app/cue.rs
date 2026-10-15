@@ -13,7 +13,7 @@ use egui_node_graph2::NodeId;
 use web_time::Instant;
 
 use crate::dsp::SampleData;
-use crate::engine::{Cue, NodeId as EngineNodeId};
+use crate::engine::{Cue, NodeId as EngineNodeId, CANVAS_CUE};
 use crate::graph::{SamplerCue, SynthGraphState, SynthValueType};
 use super::SynthApp;
 
@@ -35,11 +35,24 @@ impl SynthApp {
     /// Plays a recording from a Sampler's face, at its Tune and Fine,
     /// replacing any cue playing. `hovered` if it's a file dragged over it.
     pub(super) fn start_cue(&mut self, node_id: NodeId, key: String, sample: Arc<SampleData>, from: f32, to: f32, hovered: bool) {
-        let semitones = self.knob(node_id, "Tune").unwrap_or(0.0).round() + self.knob(node_id, "Fine").unwrap_or(0.0) / 100.0;
+        let semitones = self.semitones(node_id);
         let Some(engine_id) = self.user_state.get_engine_node_id(node_id) else { return };
         let Some(handle) = self.ui_handle.as_mut() else { return };
         handle.cue(Some(Cue { node_id: engine_id, sample, from, to, semitones }));
-        self.user_state.cue = Some(SamplerCue { node_id, engine_id, key, from, place: from, heard: Instant::now(), begun: false, hovered });
+        self.user_state.cue = Some(SamplerCue { node_id: Some(node_id), engine_id, key, from, place: from, heard: Instant::now(), begun: false, hovered });
+    }
+
+    /// Plays a file dragged over empty canvas, all of it and untuned, as a
+    /// new Sampler would if it were dropped there, replacing any cue playing.
+    pub(super) fn start_canvas_cue(&mut self, key: String, sample: Arc<SampleData>) {
+        let Some(handle) = self.ui_handle.as_mut() else { return };
+        handle.cue(Some(Cue { node_id: CANVAS_CUE, sample, from: 0.0, to: 1.0, semitones: 0.0 }));
+        self.user_state.cue = Some(SamplerCue { node_id: None, engine_id: CANVAS_CUE, key, from: 0.0, place: 0.0, heard: Instant::now(), begun: false, hovered: true });
+    }
+
+    /// How far a Sampler transposes what it plays, by its Tune and Fine.
+    pub(super) fn semitones(&self, node_id: NodeId) -> f32 {
+        self.knob(node_id, "Tune").unwrap_or(0.0).round() + self.knob(node_id, "Fine").unwrap_or(0.0) / 100.0
     }
 
     /// The rate the engine plays at, if there's an engine.
@@ -85,8 +98,15 @@ impl SynthApp {
     /// has stopped reporting, and keeps its playhead moving.
     pub(super) fn tend_cue(&mut self, ctx: &egui::Context) {
         let Some(cue) = self.user_state.cue.as_ref() else { return };
-        let still_there = self.graph_state.graph.nodes.get(cue.node_id).is_some_and(|node| cue.hovered || node.user_data.file.as_deref() == Some(&cue.key))
-            && self.user_state.get_engine_node_id(cue.node_id) == Some(cue.engine_id);
+        let still_there = match cue.node_id {
+            // Over empty canvas, it plays while the file is dragged
+            None => cue.hovered,
+            Some(node_id) => {
+                self.graph_state.graph.nodes.get(node_id).is_some_and(|node| cue.hovered || node.user_data.file.as_deref() == Some(&cue.key))
+                    // Begun over the canvas, it reports as it did then
+                    && (cue.engine_id == CANVAS_CUE || self.user_state.get_engine_node_id(node_id) == Some(cue.engine_id))
+            }
+        };
         if !still_there || cue.heard.elapsed() > UNHEARD {
             self.stop_cue();
             return;

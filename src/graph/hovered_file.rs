@@ -6,7 +6,8 @@
 //! here rather than on the [shelf](super::sample_shelf), which lets go each
 //! frame of what no node plays. Over a Sampler or Chopper it's heard (see
 //! [`crate::engine::cue`]) and drawn on the face in place of the file the
-//! node has; dropped there, what was read goes on the shelf as it is.
+//! node has; over empty canvas, heard and drawn on the ghost of the Sampler
+//! a drop there would make. Dropped, what was read goes on the shelf as it is.
 
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 #[cfg(test)]
@@ -24,8 +25,9 @@ use crate::persistence::sample_files;
 pub struct HoveredFile {
     /// Its sample key: the path it would be loaded from.
     pub key: String,
-    /// The Sampler (or Chopper) it was last heard on, while it's still over it.
-    pub heard_on: Option<NodeId>,
+    /// Where it was last heard, while it's still there: over a Sampler (or
+    /// Chopper), or `Some(None)` over empty canvas.
+    pub heard_on: Option<Option<NodeId>>,
     /// Read on a thread; `None` once it's come.
     reading: Option<Receiver<Result<ShelvedSample, String>>>,
     /// What came: the recording, or why it couldn't be read.
