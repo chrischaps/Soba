@@ -16626,7 +16626,7 @@
           "module_id": "mod.lfo",
           "position": [
             338.0,
-            383.0
+            418.0
           ],
           "parameters": [
             {
@@ -17489,7 +17489,7 @@
               "module_id": "util.attenuverter",
               "position": [
                 0.0,
-                380.0
+                464.0
               ],
               "parameters": [
                 {
@@ -19584,7 +19584,7 @@
               "module_id": "util.vca",
               "position": [
                 320.0,
-                620.0
+                704.0
               ],
               "parameters": [
                 {
@@ -19604,7 +19604,7 @@
               "module_id": "mod.adsr",
               "position": [
                 320.0,
-                860.0
+                944.0
               ],
               "parameters": [
                 {
@@ -24935,7 +24935,7 @@
           "module_id": "util.mix",
           "position": [
             802.0,
-            391.0
+            432.0
           ],
           "parameters": [
             {

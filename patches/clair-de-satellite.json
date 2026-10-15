@@ -13425,7 +13425,7 @@
               "module_id": "util.vca",
               "position": [
                 320.0,
-                620.0
+                704.0
               ],
               "parameters": [
                 {
@@ -13445,7 +13445,7 @@
               "module_id": "mod.adsr",
               "position": [
                 320.0,
-                860.0
+                944.0
               ],
               "parameters": [
                 {
@@ -15682,7 +15682,7 @@
           "module_id": "mod.adsr",
           "position": [
             551.0,
-            364.0
+            464.0
           ],
           "parameters": [
             {
@@ -17782,7 +17782,7 @@
           "module_id": "util.attenuverter",
           "position": [
             551.0,
-            247.0
+            281.0
           ],
           "parameters": [
             {
@@ -17882,7 +17882,7 @@
           "module_id": "mod.adsr",
           "position": [
             1325.0,
-            364.0
+            464.0
           ],
           "parameters": [
             {
@@ -17965,7 +17965,7 @@
           "module_id": "util.mix",
           "position": [
             1067.0,
-            452.0
+            486.0
           ],
           "parameters": [
             {
@@ -20079,7 +20079,7 @@
           "module_id": "filter.svf",
           "position": [
             963.0,
-            364.0
+            464.0
           ],
           "parameters": [
             {
@@ -25774,7 +25774,7 @@
           "module_id": "fx.compressor",
           "position": [
             1604.0,
-            247.0
+            281.0
           ],
           "parameters": [
             {
@@ -25857,7 +25857,7 @@
           "module_id": "fx.compressor",
           "position": [
             2018.0,
-            247.0
+            281.0
           ],
           "parameters": [
             {
@@ -26628,7 +26628,7 @@
         0.0
       ],
       "outputs_position": [
-        2508.0,
+        2556.0,
         0.0
       ],
       "nodes": [
@@ -28418,7 +28418,7 @@
           "module_id": "source.sampler",
           "position": [
             544.0,
-            606.0
+            807.0
           ],
           "parameters": [
             {
@@ -28493,7 +28493,7 @@
           "id": 94,
           "module_id": "osc.sine",
           "position": [
-            1630.0,
+            1678.0,
             0.0
           ],
           "parameters": [
@@ -28553,7 +28553,7 @@
           "id": 95,
           "module_id": "fx.chorus",
           "position": [
-            1630.0,
+            1678.0,
             572.0
           ],
           "parameters": [
@@ -28598,7 +28598,7 @@
           "id": 96,
           "module_id": "util.mix",
           "position": [
-            1940.0,
+            1988.0,
             0.0
           ],
           "parameters": [
@@ -28628,8 +28628,8 @@
           "id": 97,
           "module_id": "filter.svf",
           "position": [
-            1940.0,
-            247.0
+            1988.0,
+            281.0
           ],
           "parameters": [
             {
@@ -28658,7 +28658,7 @@
           "id": 98,
           "module_id": "fx.vocoder",
           "position": [
-            2198.0,
+            2246.0,
             0.0
           ],
           "parameters": [
@@ -28843,7 +28843,7 @@
           "module_id": "fx.compressor",
           "position": [
             802.0,
-            247.0
+            281.0
           ],
           "parameters": [
             {
