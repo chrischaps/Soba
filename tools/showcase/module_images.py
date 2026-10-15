@@ -180,7 +180,11 @@ MODULES = {
     "delay": Module("delay", "fx.delay", 1.0, 320, """
         -2.6 play
     """, palette=False),
-    "reverb": Module("reverb", "fx.reverb", 1.0, 395, "-1.0 play"),
+    # A snare every other second into a 3 s room: a second after the hit
+    # the dot has run a third of the way down the slope
+    "reverb": Module("reverb", "fx.reverb", 1.0, 320, """
+        -3.0 play
+    """, palette=False),
     # Pink noise through a warm low shelf, a cut in the middle and an airy top,
     # the pointer on the mid band's dot: its wings light, and the header reads it
     "eq": Module("eq", "fx.eq", 1.0, 440, """

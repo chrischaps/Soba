@@ -13,7 +13,7 @@
 //! ```
 
 use crate::dsp::{
-    module_trait::{DspModule, ModuleCategory, ModuleInfo},
+    module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     context::ProcessContext,
     denormal::flush,
     parameter::ParameterDefinition,
@@ -189,6 +189,9 @@ pub struct Reverb {
     width_smooth: SmoothedValue,
     /// Smoothed modulation depth.
     mod_smooth: SmoothedValue,
+    /// The tail's level over the last block (dB, RMS of the eight lines),
+    /// for the display.
+    tail_db: f32,
     /// Port definitions.
     ports: Vec<PortDefinition>,
     /// Parameter definitions.
@@ -203,14 +206,7 @@ impl Reverb {
         // Step s spans DIFFUSION / 2^s of the shortest line, in eight slots.
         // Channels take the slots in a different order on every step, so no
         // channel is always the longest path.
-        let mut diffuser_taps = [[0.0; LINES]; DIFFUSER_STEPS];
-        for (step, taps) in diffuser_taps.iter_mut().enumerate() {
-            let span = DIFFUSION / (1 << step) as f32;
-            for (channel, tap) in taps.iter_mut().enumerate() {
-                let slot = (channel * 5 + step * 3) % LINES;
-                *tap = span * (slot as f32 + DIFFUSER_JITTER[step][channel]) / LINES as f32;
-            }
-        }
+        let diffuser_taps = Self::diffuser_taps();
 
         let mut reverb = Self {
             sample_rate,
@@ -229,6 +225,7 @@ impl Reverb {
             predelay_smooth: SmoothedValue::with_default_smoothing(0.0, sample_rate),
             mix_smooth: SmoothedValue::with_default_smoothing(0.3, sample_rate),
             width_smooth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
+            tail_db: -120.0,
             mod_smooth: SmoothedValue::with_default_smoothing(0.25, sample_rate),
             ports: vec![
                 // Input ports
@@ -282,11 +279,43 @@ impl Reverb {
     const PARAM_WIDTH: usize = 5;
     const PARAM_MOD: usize = 6;
 
+    /// Readout slots: the tail's level (dB), then each feedback line's
+    /// modulation phase (0 to 1).
+    pub const READOUT_TAIL_DB: usize = 0;
+    pub const READOUT_MOD_PHASE: usize = 1;
+    /// How many feedback lines (and modulation phases) there are.
+    pub const LINES: usize = LINES;
+
+    /// Every diffuser tap, step by step and channel by channel, as a fraction
+    /// of the shortest feedback line. Channels take the slots in a different
+    /// order on every step, so no channel is always the longest path.
+    pub fn diffuser_taps() -> [[f32; LINES]; DIFFUSER_STEPS] {
+        let mut diffuser_taps = [[0.0; LINES]; DIFFUSER_STEPS];
+        for (step, taps) in diffuser_taps.iter_mut().enumerate() {
+            let span = DIFFUSION / (1 << step) as f32;
+            for (channel, tap) in taps.iter_mut().enumerate() {
+                let slot = (channel * 5 + step * 3) % LINES;
+                *tap = span * (slot as f32 + DIFFUSER_JITTER[step][channel]) / LINES as f32;
+            }
+        }
+        diffuser_taps
+    }
+
+    /// The shortest feedback line for a Size setting, in milliseconds.
+    pub fn room_ms(size: f32) -> f32 {
+        MIN_ROOM_MS * (MAX_ROOM_MS / MIN_ROOM_MS).powf(size.clamp(0.0, 1.0))
+    }
+
+    /// How long the highs (at 4 kHz) take to fall 60 dB, in seconds, for a
+    /// Decay and Damping.
+    pub fn hf_decay(decay: f32, damping: f32) -> f32 {
+        decay * MIN_HF_RATIO.powf(damping.clamp(0.0, 1.0))
+    }
+
     /// Length of the shortest feedback line for a Size setting, in samples.
     #[inline]
     fn room_samples(size: f32, sample_rate: f32) -> f32 {
-        let ms = MIN_ROOM_MS * (MAX_ROOM_MS / MIN_ROOM_MS).powf(size.clamp(0.0, 1.0));
-        ms * 0.001 * sample_rate
+        Self::room_ms(size) * 0.001 * sample_rate
     }
 
     /// Gain per pass through a loop of `delay_samples` so that a signal
@@ -312,7 +341,7 @@ impl Reverb {
     /// evenly instead of the short lines ringing brighter.
     fn update_loop(&mut self, room: f32, decay: f32, damping: f32) {
         let decay = decay.max(0.01);
-        let hf_decay = decay * MIN_HF_RATIO.powf(damping.clamp(0.0, 1.0));
+        let hf_decay = Self::hf_decay(decay, damping);
         let w = std::f32::consts::TAU * DAMPING_REF_HZ.min(0.4 * self.sample_rate) / self.sample_rate;
         for line in 0..LINES {
             let delay = room * LINE_RATIOS[line];
@@ -444,6 +473,7 @@ impl DspModule for Reverb {
         let out_right = &mut out_right_slice[Self::PORT_OUT_R - 1];
 
         let ms_to_samples = 0.001 * self.sample_rate;
+        let mut tail_energy = 0.0f32;
 
         for i in 0..context.block_size {
             let size = self.size_smooth.next();
@@ -516,6 +546,7 @@ impl DspModule for Reverb {
                 self.damp_state[c] = state;
                 feedback[c] = state;
             }
+            tail_energy += late.iter().map(|v| v * v).sum::<f32>();
             householder(&mut feedback);
             for c in 0..LINES {
                 self.lines[c].push(feedback[c] + x[c]);
@@ -538,6 +569,18 @@ impl DspModule for Reverb {
             out_left.samples[i] = dry_left * (1.0 - mix) + (mid + side) * mix;
             out_right.samples[i] = dry_right * (1.0 - mix) + (mid - side) * mix;
         }
+
+        let mean = tail_energy / (context.block_size.max(1) * LINES) as f32;
+        self.tail_db = 10.0 * mean.max(1e-12).log10();
+    }
+
+    fn readout(&self, _params: &[f32]) -> Option<Readout> {
+        let mut readout = Readout::default();
+        readout.values[Self::READOUT_TAIL_DB] = self.tail_db;
+        for (line, (cos, sin)) in self.lfo.iter().enumerate() {
+            readout.values[Self::READOUT_MOD_PHASE + line] = sin.atan2(*cos) / std::f32::consts::TAU + 0.5;
+        }
+        Some(readout)
     }
 
     fn reset(&mut self) {
@@ -931,5 +974,29 @@ mod tests {
         assert_eq!(module.info().name, "Reverb");
         assert_eq!(module.ports().len(), 4);
         assert_eq!(module.parameters().len(), 7);
+    }
+
+    #[test]
+    fn test_readout_follows_the_tail_down() {
+        // After a hit, the tail's level falls 60 dB per Decay time (here 1 s,
+        // undamped so the whole tail dies together)
+        let params = params(0.5, 1.0, 0.0, 0.0);
+        let mut reverb = Reverb::new();
+        reverb.prepare(SR, BLOCK);
+        let ctx = ProcessContext::new(SR, BLOCK);
+        let silence = SignalBuffer::audio(BLOCK);
+        let mut impulse = SignalBuffer::audio(BLOCK);
+        impulse.samples[0] = 1.0;
+        let mut outputs = vec![SignalBuffer::audio(BLOCK), SignalBuffer::audio(BLOCK)];
+        let mut level_at = Vec::new();
+        for block in 0..(0.8 * SR) as usize / BLOCK {
+            reverb.process(&[if block == 0 { &impulse } else { &silence }], &mut outputs, &params, &ctx);
+            level_at.push(reverb.readout(&params).unwrap().values[Reverb::READOUT_TAIL_DB]);
+        }
+        let at = |seconds: f32| level_at[(seconds * SR) as usize / BLOCK];
+        let fell = at(0.2) - at(0.7);
+        assert!((fell - 30.0).abs() < 6.0, "fell {fell} dB in half a decay");
+        let phases = reverb.readout(&params).unwrap().values;
+        assert!(phases[Reverb::READOUT_MOD_PHASE..Reverb::READOUT_MOD_PHASE + Reverb::LINES].iter().all(|p| (0.0..=1.0).contains(p)));
     }
 }

@@ -3,7 +3,7 @@
 **Module ID** `fx.reverb` · **Category** Effect
 
 ![Reverb Module](../../images/module-reverb.png)
-*The room on the top row, its place in the mix below*
+*A snare into a 3-second room, a second after the hit: the dot has run a third of the way down the slope*
 
 The Reverb puts a sound in a space: a dense wash of reflections that builds, blooms and dies away. It reaches from a small, splashy room to a tail that rings for half a minute.
 
@@ -20,6 +20,19 @@ The Reverb is an eight-line **feedback delay network** (FDN).
 5. The lines **drift** slowly in length (the **Mod** knob). This keeps resonances from settling in and adds a gentle chorus to the tail.
 
 Simpler reverbs built from a few fixed comb filters tend to ring at the comb lengths, and sound metallic on snares and claps. The FDN's tail has no repeating period, so sharp transients spread into an even wash.
+
+## The display
+
+The display draws the room's decay. Time runs to the right from the moment a sound goes in, stretched so the first few milliseconds have room beside a long tail. Level falls from 0 dB at the top to −60 dB at the bottom.
+
+- **Pre-delay.** Nothing happens for the **PreD** time, marked by a faint line.
+- **Early reflections.** The spray of hairlines at the start is every path through the diffuser at this **Size**, brighter where more of them arrive together. A small room packs them tight; a large one spreads them out before they merge into the tail.
+- **The tail.** Two slopes fall from the top. The darker one is the lows, reaching −60 dB at the **Decay** time. The brighter one is the highs, dying sooner the more **Damp** takes them.
+- **The room ringing.** While the tail sounds, a dot rides down the slope at the level it has fallen to, and the tail still to come glows. Each new hit sends the dot back to the top.
+- **Mod.** With **Mod** up, eight faint motes drift along the top, one per delay line, as their lengths sway.
+- **Words.** The top left gives the pre-delay, or the size when there is none. The top right gives the decay time.
+
+**Width** and **Mix** aren't drawn: they place the reverb in the mix rather than shape the room.
 
 ## Inputs
 

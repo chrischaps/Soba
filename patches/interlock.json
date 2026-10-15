@@ -1602,7 +1602,7 @@
       "module_id": "output.audio",
       "position": [
         2342.0,
-        400.0
+        464.0
       ],
       "parameters": [
         {
@@ -1929,7 +1929,7 @@
       ],
       "size": [
         706.0,
-        686.0
+        750.0
       ],
       "color": "cyan"
     }

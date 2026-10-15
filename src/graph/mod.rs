@@ -51,6 +51,7 @@ mod module_ui;
 mod node_data;
 pub mod port_mapping;
 mod responses;
+mod reverb_display;
 pub mod hovered_file;
 pub mod resample;
 pub mod sample_shelf;

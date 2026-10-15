@@ -5,50 +5,129 @@
     {
       "id": 1,
       "module_id": "util.clock",
-      "position": [-300.0, 40.0],
+      "position": [
+        0.0,
+        0.0
+      ],
       "parameters": [
-        {"name": "Tempo", "type": "Number", "value": 80.0},
-        {"name": "Division", "type": "Select", "value": 1}
+        {
+          "name": "Tempo",
+          "type": "Number",
+          "value": 30.0
+        }
       ]
     },
     {
       "id": 2,
       "module_id": "source.drum",
-      "position": [0.0, 40.0],
+      "position": [
+        0.0,
+        190.0
+      ],
       "parameters": [
-        {"name": "Type", "type": "Select", "value": 1},
-        {"name": "Tone", "type": "Number", "value": 0.6},
-        {"name": "Snap", "type": "Number", "value": 0.7}
+        {
+          "name": "Type",
+          "type": "Select",
+          "value": 1
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.4
+        },
+        {
+          "name": "Level",
+          "type": "Number",
+          "value": 0.9
+        }
       ]
     },
     {
-      "id": 5,
+      "id": 3,
       "module_id": "fx.reverb",
-      "position": [400.0, 40.0],
+      "position": [
+        330.0,
+        150.0
+      ],
       "parameters": [
-        {"name": "Size", "type": "Number", "value": 0.75},
-        {"name": "Decay", "type": "Number", "value": 4.0},
-        {"name": "Damping", "type": "Number", "value": 0.4},
-        {"name": "Pre-Delay", "type": "Number", "value": 20.0},
-        {"name": "Mix", "type": "Number", "value": 0.4},
-        {"name": "Width", "type": "Number", "value": 1.0},
-        {"name": "Mod", "type": "Number", "value": 0.3}
+        {
+          "name": "Size",
+          "type": "Number",
+          "value": 0.65
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 3.0
+        },
+        {
+          "name": "Damping",
+          "type": "Number",
+          "value": 0.5
+        },
+        {
+          "name": "Pre-Delay",
+          "type": "Number",
+          "value": 25.0
+        },
+        {
+          "name": "Mix",
+          "type": "Number",
+          "value": 0.5
+        },
+        {
+          "name": "Width",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Mod",
+          "type": "Number",
+          "value": 0.4
+        }
       ]
     },
     {
-      "id": 6,
+      "id": 4,
       "module_id": "output.audio",
-      "position": [1000.0, 40.0],
+      "position": [
+        720.0,
+        170.0
+      ],
       "parameters": [
-        {"name": "Volume", "type": "Number", "value": 0.7}
+        {
+          "name": "Volume",
+          "type": "Number",
+          "value": 0.6
+        }
       ]
     }
   ],
   "connections": [
-    {"from_node": 1, "from_port": "Gate", "to_node": 2, "to_port": "Trig"},
-    {"from_node": 2, "from_port": "Out", "to_node": 5, "to_port": "In L"},
-    {"from_node": 5, "from_port": "Out L", "to_node": 6, "to_port": "Left"},
-    {"from_node": 5, "from_port": "Out R", "to_node": 6, "to_port": "Right"}
+    {
+      "from_node": 1,
+      "from_port": "Gate",
+      "to_node": 2,
+      "to_port": "Trig"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Out",
+      "to_node": 3,
+      "to_port": "In L"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Out L",
+      "to_node": 4,
+      "to_port": "Left"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Out R",
+      "to_node": 4,
+      "to_port": "Right"
+    }
   ],
   "midi_mappings": [],
   "frames": [],

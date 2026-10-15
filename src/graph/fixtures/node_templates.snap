@@ -2405,6 +2405,7 @@ knob Mod                "Mod" KnobOnly
 knob Pre-Delay          "PreD" KnobOnly
 knob Width              "Width" KnobOnly
 knob Mix                "Mix" KnobOnly
+display ReverbTail
 
 == fx.eq "3-Band EQ" finder="3-Band EQ" Effect
 in   In                 Audio    ConnectionOnly       inline=true  port

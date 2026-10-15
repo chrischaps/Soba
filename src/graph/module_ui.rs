@@ -437,6 +437,7 @@ static MODULE_UI: &[ModuleUi] = &[
             knob("Mix"),
         ],
         knobs_per_row: 4,
+        display: NodeDisplay::ReverbTail,
         ..ModuleUi::DEFAULT
     },
     ModuleUi {

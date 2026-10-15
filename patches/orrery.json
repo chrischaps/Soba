@@ -2387,7 +2387,7 @@
       "module_id": "fx.tape",
       "position": [
         3549.0,
-        1763.0
+        1827.0
       ],
       "parameters": [
         {
@@ -2442,7 +2442,7 @@
       "module_id": "output.audio",
       "position": [
         3549.0,
-        2223.0
+        2287.0
       ],
       "parameters": [
         {
@@ -3321,7 +3321,7 @@
       ],
       "size": [
         1544.0,
-        1217.0
+        1281.0
       ],
       "color": "green"
     }

@@ -9058,7 +9058,7 @@
       "module_id": "output.audio",
       "position": [
         5669.0,
-        2045.0
+        2109.0
       ],
       "parameters": [
         {
@@ -9083,7 +9083,7 @@
       "module_id": "util.oscilloscope",
       "position": [
         5669.0,
-        2338.0
+        2402.0
       ],
       "parameters": [
         {
