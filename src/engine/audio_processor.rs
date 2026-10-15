@@ -488,7 +488,7 @@ impl AudioProcessor {
     fn retire_samples(&mut self) {
         let Self { plan, engine_handle, .. } = self;
         plan.take_retired_samples(|sample| engine_handle.retire_sample(sample));
-        plan.take_finished_takes(|node_id, take, sample| engine_handle.send_take(node_id, take, sample));
+        plan.take_finished_takes(|node_id, take| engine_handle.send_take(node_id, take));
     }
 
     /// Copies the next pieces of loops being loaded and snapshotted, within
@@ -817,8 +817,8 @@ mod tests {
             ui.send_command(EngineCommand::SetParameter { node_id: 2, param_index: Sampler::PARAM_REC_BUTTON, value: 0.0 });
             run(&mut ui, 10);
         }
-        let (node_id, take, sample) = ui.take_finished_take().expect("the take comes back");
-        assert_eq!((node_id, take), (2, 1));
+        let (node_id, crate::dsp::FinishedTake { count: take, sample, beats }) = ui.take_finished_take().expect("the take comes back");
+        assert_eq!((node_id, take, beats), (2, 1, None));
         assert_eq!(sample.frames(), 11 * 256, "from one press to the next");
         assert!(sample.left().iter().any(|&s| s.abs() > 0.5), "the sine");
 

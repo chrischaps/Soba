@@ -48,7 +48,7 @@ use crate::persistence::sample_files;
 use super::hovered_file;
 use super::sample_shelf::ShelvedSample;
 use super::sampler_slices::SliceMarkers;
-use super::sampler_take::{self, RecBlock, RecView, REC_BUTTON};
+use super::sampler_take::{self, RecView, REC_BUTTON};
 use super::sampler_tidy;
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
@@ -134,19 +134,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     // Recording: what it's doing, and whether Rec can start a take now
     let rec = RecView::read(readout.as_ref(), value_of("Rec Threshold").unwrap_or(NO_THRESHOLD_DB));
     let live = rec.state == RecState::Recording;
-    let patched = |name: &str| node.get_input(name).is_ok_and(|input| graph.connection(input).is_some());
-    let in_patched = patched("In L") || patched("In R");
-    let blocked = if !in_patched {
-        Some(RecBlock::NoInput)
-    } else if patched("Rec") {
-        Some(RecBlock::Jack)
-    } else if !user_state.is_playing {
-        Some(RecBlock::Stopped)
-    } else if !rec.room {
-        Some(RecBlock::NoRoom)
-    } else {
-        None
-    };
+    let (in_patched, blocked) = sampler_take::rec_block(graph, node_id, user_state, &rec);
     // While a take comes in, the panel is its: the old recording waits
     let shown = loaded.filter(|_| !live);
     let mut lit = [0.0f32; MAX_SLICES];
@@ -571,7 +559,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let rec_rect = Rect::from_min_size(Pos2::new(button.left() - 22.0 * z, row.top() + 1.0 * z), Vec2::new(18.0 * z, row_height - 2.0 * z));
     let held = value_of(REC_BUTTON).is_some_and(|v| v >= 0.5);
     let tidies = node.get_input(sampler_take::TIDY_TAKES).is_ok_and(|input| graph.get_input(input).value.actual_value() >= 0.5);
-    responses.extend(sampler_take::rec_button(ui, rec_rect, node_id, user_state, &rec, held, tidies, blocked, z));
+    responses.extend(sampler_take::rec_button(ui, rec_rect, node_id, user_state, &rec, held, Sampler::PARAM_REC_BUTTON, Some(tidies), blocked, z));
     responses
 }
 

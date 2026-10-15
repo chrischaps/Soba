@@ -1,5 +1,6 @@
 //! The Sampler's face while it records: its Rec button, the take drawn as
-//! it comes in, and a Sampler waiting to start one.
+//! it comes in, and a Sampler waiting to start one. The Chopper records
+//! with the same recorder, and shows it the same way.
 //!
 //! A take draws in red, growing from the left across a span that doubles
 //! whenever the take outgrows it (or across its bars, when it's in bars),
@@ -23,7 +24,7 @@ use crate::dsp::Readout;
 use crate::modules::sampler::{RecState, Sampler, NO_THRESHOLD_DB};
 
 use super::state::ScopeData;
-use super::{SynthGraphState, SynthResponse};
+use super::{SynthGraph, SynthGraphState, SynthResponse};
 
 /// How long a press from the face holds Rec down, at least: long enough
 /// for the audio thread to see it.
@@ -96,6 +97,27 @@ impl RecBlock {
             RecBlock::NoRoom => "Getting ready to record…",
         }
     }
+}
+
+/// Whether a node has something patched into In, and why its Rec can't
+/// record right now, if it can't.
+pub fn rec_block(graph: &SynthGraph, node_id: NodeId, user_state: &SynthGraphState, view: &RecView) -> (bool, Option<RecBlock>) {
+    let patched = |name: &str| {
+        graph.nodes.get(node_id).is_some_and(|node| node.get_input(name).is_ok_and(|input| graph.connection(input).is_some()))
+    };
+    let in_patched = patched("In L") || patched("In R");
+    let blocked = if !in_patched {
+        Some(RecBlock::NoInput)
+    } else if patched("Rec") {
+        Some(RecBlock::Jack)
+    } else if !user_state.is_playing {
+        Some(RecBlock::Stopped)
+    } else if !view.room {
+        Some(RecBlock::NoRoom)
+    } else {
+        None
+    };
+    (in_patched, blocked)
 }
 
 /// Draws a take as it comes in, across `plot`.
@@ -236,8 +258,9 @@ pub fn draw_tidied(painter: &egui::Painter, plot: Rect, said: &str, age: f32, z:
 }
 
 /// The Rec button, in `rect`: pressed from the face, it holds the Rec
-/// Button parameter down for a moment. Right-click turns Tidy takes on or
-/// off (`tidies`), and learns a MIDI footswitch for it.
+/// Button parameter (the module's `param_index`) down for a moment.
+/// Right-click turns Tidy takes on or off (`tidies`, where the module has
+/// it), and learns a MIDI footswitch for it.
 #[allow(clippy::too_many_arguments)]
 pub fn rec_button(
     ui: &mut egui::Ui,
@@ -246,10 +269,13 @@ pub fn rec_button(
     user_state: &SynthGraphState,
     view: &RecView,
     down: bool,
-    tidies: bool,
+    param_index: usize,
+    tidies: Option<bool>,
     blocked: Option<RecBlock>,
     z: f32,
 ) -> Vec<SynthResponse> {
+    let tidy_menu = tidies.is_some();
+    let tidies = tidies.unwrap_or(false);
     let mut responses = Vec::new();
     let red = theme::accent::ERROR;
     let id = ui.id().with(("sampler_rec", node_id));
@@ -310,7 +336,6 @@ pub fn rec_button(
     }
 
     // A learned MIDI footswitch shows as a purple badge
-    let param_index = Sampler::PARAM_REC_BUTTON;
     let mapping = engine_node_id.and_then(|eid| user_state.get_midi_mapping(eid, param_index));
     let learning = engine_node_id.is_some_and(|eid| user_state.is_midi_learn_target(eid, param_index));
     if mapping.is_some() || learning {
@@ -337,17 +362,20 @@ pub fn rec_button(
             tip
         }
     };
-    let button = button.on_hover_text(format!("{tip}\nRight-click to tidy takes as they're kept, or learn a MIDI footswitch"));
+    let menu = if tidy_menu { "Right-click to tidy takes as they're kept, or learn a MIDI footswitch" } else { "Right-click to learn a MIDI footswitch" };
+    let button = button.on_hover_text(format!("{tip}\n{menu}"));
     button.context_menu(|ui| {
-        let mut on = tidies;
-        let tidy = ui.checkbox(&mut on, "Tidy takes").on_hover_text(
-            "Trim each take to its sound and set it to −16 dBFS RMS as it's kept, into one file. A take in bars keeps its length. Undo brings back the take as it came in",
-        );
-        if tidy.changed() {
-            responses.push(SynthResponse::ParameterChanged { node_id, param_name: TIDY_TAKES.to_string(), value: if on { 1.0 } else { 0.0 } });
-            ui.close_menu();
+        if tidy_menu {
+            let mut on = tidies;
+            let tidy = ui.checkbox(&mut on, "Tidy takes").on_hover_text(
+                "Trim each take to its sound and set it to −16 dBFS RMS as it's kept, into one file. A take in bars keeps its length. Undo brings back the take as it came in",
+            );
+            if tidy.changed() {
+                responses.push(SynthResponse::ParameterChanged { node_id, param_name: TIDY_TAKES.to_string(), value: if on { 1.0 } else { 0.0 } });
+                ui.close_menu();
+            }
+            ui.separator();
         }
-        ui.separator();
         let Some(eid) = engine_node_id else { return };
         if learning {
             if ui.button("Cancel MIDI Learn").clicked() {

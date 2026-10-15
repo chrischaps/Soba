@@ -56,6 +56,18 @@ pub struct Readout {
     pub values: [f32; MAX_READOUT],
 }
 
+/// A take a module has just recorded, and now plays: shared, for the UI to
+/// keep with the patch.
+#[derive(Clone, Debug)]
+pub struct FinishedTake {
+    /// The module's count of takes so far, this one included.
+    pub count: u32,
+    pub sample: Arc<SampleData>,
+    /// How many beats long it is, to the nearest, when a Clock was running
+    /// as it ended: exactly its bars' worth, for a take in bars.
+    pub beats: Option<u32>,
+}
+
 /// The ports whose sound a module's display shows as spectra: a filter's
 /// audio in, and its outputs. The first output with a cable from it is
 /// the one tapped, or the first output if none has one.
@@ -480,10 +492,9 @@ pub trait DspModule: Send + 'static {
         Some(room)
     }
 
-    /// A take the module finished since the last call, and now plays, with
-    /// its count of takes so far: shared, for the UI to keep. Asked after
-    /// every callback.
-    fn take_finished_take(&mut self) -> Option<(u32, Arc<SampleData>)> {
+    /// A take the module finished since the last call, and now plays:
+    /// shared, for the UI to keep. Asked after every callback.
+    fn take_finished_take(&mut self) -> Option<FinishedTake> {
         None
     }
 

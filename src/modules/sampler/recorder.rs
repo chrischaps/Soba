@@ -1,4 +1,5 @@
-//! Recording straight into the Sampler: its In jacks and Rec.
+//! Recording straight into the Sampler, or the Chopper: their In jacks and
+//! Rec.
 //!
 //! # Room
 //!
@@ -22,6 +23,9 @@
 //!   Rec pressed just after a bar line counts as on it.
 //!
 //! It stops on Rec, the gate falling, the bars running out, or the room.
+//! A take that ends while a Clock runs is measured in its beats, so the
+//! Chopper can loop it at the patch's tempo: a take in bars is exactly
+//! their beats.
 //!
 //! # Timing
 //!
@@ -34,7 +38,7 @@
 
 use std::sync::Arc;
 
-use crate::dsp::{context::ProcessContext, signal::SignalBuffer, SampleData};
+use crate::dsp::{context::ProcessContext, signal::SignalBuffer, FinishedTake, SampleData};
 
 /// The longest take, in seconds: the room the UI sets aside for one.
 pub const TAKE_ROOM_SECONDS: f32 = 60.0;
@@ -128,8 +132,8 @@ pub struct Recorder {
     room: Option<Arc<SampleData>>,
     /// Room it has let go of, for the Sampler to hand back.
     let_go: Option<Arc<SampleData>>,
-    /// The take just finished, and its count, for the UI to keep.
-    finished: Option<(u32, Arc<SampleData>)>,
+    /// The take just finished, for the UI to keep.
+    finished: Option<FinishedTake>,
     state: RecState,
     sample_rate: f32,
     /// Frames since the moment the take began.
@@ -146,6 +150,8 @@ pub struct Recorder {
     prev_gate: bool,
     /// The bar the last frame was in, while a Clock runs.
     prev_bar: Option<i64>,
+    /// Frames in a beat, while a Clock runs (the last it ran at, after).
+    beat_frames: Option<f64>,
     /// How loud the input is, for a take waiting for a sound.
     onset: f32,
     /// The input's peak, falling slowly, for the display.
@@ -176,6 +182,7 @@ impl Default for Recorder {
             prev_button: None,
             prev_gate: false,
             prev_bar: None,
+            beat_frames: None,
             onset: 0.0,
             meter: 0.0,
             takes: 0,
@@ -216,6 +223,12 @@ impl Recorder {
         self.room.as_ref().map_or(0, |room| room.room())
     }
 
+    /// How many beats long the take just finished is, if a Clock ran (see
+    /// [`FinishedTake::beats`]); `None` once the UI has it.
+    pub fn finished_beats(&self) -> Option<u32> {
+        self.finished.as_ref().and_then(|take| take.beats)
+    }
+
     /// Frames the take in hand holds.
     pub fn recorded(&self) -> usize {
         match self.state {
@@ -252,8 +265,8 @@ impl Recorder {
         self.let_go.take()
     }
 
-    /// The take finished since the last call, and its count.
-    pub fn take_finished(&mut self) -> Option<(u32, Arc<SampleData>)> {
+    /// The take finished since the last call.
+    pub fn take_finished(&mut self) -> Option<FinishedTake> {
         self.finished.take()
     }
 
@@ -294,6 +307,9 @@ impl Recorder {
         let beats = transport.beat_position.zip(transport.tempo_bpm.filter(|&bpm| bpm > 0.0));
         let per_bar = transport.time_sig_numerator.max(1) as f64;
         let bar = beats.map(|(_, bpm)| rate as f64 * 60.0 / bpm as f64 * per_bar);
+        if let Some(bar) = bar {
+            self.beat_frames = Some(bar / per_bar);
+        }
         // A take in bars, with a Clock to count them
         let clocked = bar.filter(|_| bars > 0).map(|bar| (bars as f64 * bar).round().max(1.0) as usize);
         let on_sound = controls.threshold_db > NO_THRESHOLD_DB + 0.05;
@@ -528,7 +544,8 @@ impl Recorder {
         self.takes = self.takes % TAKES_WRAP + 1;
         // Overwriting one the UI never took would drop it here; it always has
         debug_assert!(self.finished.is_none(), "a take the UI never heard of");
-        self.finished = Some((self.takes, Arc::clone(&take)));
+        let beats = self.beat_frames.map(|beat| ((take.frames() as f64 / beat).round() as u32).max(1));
+        self.finished = Some(FinishedTake { count: self.takes, sample: Arc::clone(&take), beats });
         Some(take)
     }
 
@@ -675,7 +692,7 @@ mod tests {
         fn take(&mut self) -> (u32, Arc<SampleData>) {
             let take = self.sampler.take_finished_take().expect("a take");
             assert!(self.sampler.take_finished_take().is_none());
-            take
+            (take.count, take.sample)
         }
     }
 
@@ -696,6 +713,7 @@ mod tests {
         rig.press(30016);
         rig.run_to(32000);
         assert_eq!(rig.state(), RecState::Idle);
+        assert_eq!(rig.sampler.recorder.finished_beats(), None, "no Clock to count them");
         let (count, take) = rig.take();
         assert_eq!(count, 1);
         assert_played(&take, 6400, 30016 - 6400);
@@ -715,8 +733,9 @@ mod tests {
         assert_eq!(rig.state(), RecState::Armed);
         rig.run_to(96000 + BLOCK);
         assert_eq!(rig.state(), RecState::Recording);
-        // Two bars on, and the round trip after them
+        // Two bars on, and the round trip after them: a bar, four beats
         rig.run_to(4 * 48000 + 512);
+        assert_eq!(rig.sampler.recorder.finished_beats(), Some(4));
         let (_, take) = rig.take();
         assert_played(&take, 96000, 96000);
     }

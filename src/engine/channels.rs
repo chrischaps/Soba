@@ -32,7 +32,7 @@ use rtrb::{Consumer, Producer, PushError, RingBuffer};
 use super::audio_graph::AudioGraph;
 use super::audio_processor::create_module_registry;
 use super::commands::{AudioMessage, EngineCommand, EngineEvent, NodeId, ScopeFrame};
-use crate::dsp::{SampleData, Snapshot};
+use crate::dsp::{FinishedTake, SampleData, Snapshot};
 use super::graph_plan::GraphPlan;
 use super::monitor_board::Monitors;
 use super::audio_input::InputFeed;
@@ -234,7 +234,7 @@ pub struct UiHandle {
     snapshot_rx: Consumer<(NodeId, Box<Snapshot>)>,
     /// Snapshots asked for and not yet back.
     snapshots_out: usize,
-    take_rx: Consumer<(NodeId, u32, Arc<SampleData>)>,
+    take_rx: Consumer<(NodeId, FinishedTake)>,
     event_rx: Consumer<EngineEvent>,
     scope_rx: Consumer<ScopeFrame>,
     /// Where each plan's taps, meters and readouts are read
@@ -460,10 +460,10 @@ impl UiHandle {
         self.snapshots_out
     }
 
-    /// A take a module (a Sampler) has just recorded, with its count of
-    /// takes so far, if one is waiting. The module plays it already: this
-    /// is shared, for the UI to keep.
-    pub fn take_finished_take(&mut self) -> Option<(NodeId, u32, Arc<SampleData>)> {
+    /// A take a module (a Sampler, a Chopper) has just recorded, if one is
+    /// waiting. The module plays it already: this is shared, for the UI to
+    /// keep.
+    pub fn take_finished_take(&mut self) -> Option<(NodeId, FinishedTake)> {
         self.take_rx.pop().ok()
     }
 
@@ -534,7 +534,7 @@ pub struct EngineHandle {
     retired_input_tx: Producer<InputFeed>,
     retired_sample_tx: Producer<Arc<SampleData>>,
     snapshot_tx: Producer<(NodeId, Box<Snapshot>)>,
-    take_tx: Producer<(NodeId, u32, Arc<SampleData>)>,
+    take_tx: Producer<(NodeId, FinishedTake)>,
     event_tx: Producer<EngineEvent>,
     scope_tx: Producer<ScopeFrame>,
     config: Arc<AudioConfig>,
@@ -614,10 +614,10 @@ impl EngineHandle {
     /// REAL-TIME SAFE: should the queue ever be full, the UI never hears
     /// of it, and the module plays it unkept; it's handed back to be
     /// dropped, rather than freed here.
-    pub fn send_take(&mut self, node_id: NodeId, take: u32, sample: Arc<SampleData>) {
-        if let Err(PushError::Full((_, _, sample))) = self.take_tx.push((node_id, take, sample)) {
+    pub fn send_take(&mut self, node_id: NodeId, take: FinishedTake) {
+        if let Err(PushError::Full((_, take))) = self.take_tx.push((node_id, take)) {
             debug_assert!(false, "take queue full");
-            self.retire_sample(sample);
+            self.retire_sample(take.sample);
         }
     }
 

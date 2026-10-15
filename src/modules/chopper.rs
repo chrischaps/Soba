@@ -29,6 +29,15 @@
 //! `101200` plays its own slice, once, forwards, unchanged; `-211205` is a
 //! rest that would play slice 5 backwards, twice. The step's Chance is a
 //! parameter of its own. See [`Step`].
+//!
+//! # Recording a take
+//!
+//! With something patched into In, Rec records a take into it, as the
+//! Sampler does and with the same recorder. A take in bars, with a Clock running,
+//! starts on the next bar and lasts exactly that long, so it's already a
+//! loop: it plays as soon as it ends, from its top, as many beats long as
+//! it was recorded, until the editor has set Beats to match. A free take
+//! made while a Clock runs is as many beats as it nearly is.
 
 use std::sync::{Arc, LazyLock};
 
@@ -41,11 +50,11 @@ use crate::dsp::{
     primitives::{Markers, Slices, MAX_SLICES, ONSETS},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
-    ParameterDisplay, SampleData, SignalType,
+    FinishedTake, ParameterDisplay, SampleData, SignalType,
 };
 use crate::dsp::onsets::DEFAULT_SENSITIVITY;
 
-use super::sampler::Sampler;
+use super::sampler::{Controls, Recorder, Sampler, NO_THRESHOLD_DB, TAKE_LENGTHS};
 use super::sequencer::StepTimer;
 
 /// The Chopper's module ID.
@@ -252,6 +261,10 @@ impl Voice {
 /// - **Reset** (Gate): the next pulse starts the loop from its top.
 /// - **Slice** (Control, 0–1 across the slices): picks the slice each step
 ///   plays as its turn comes, in place of its own.
+/// - **In L**, **In R** (Audio): what Rec records; one side patched records
+///   on both.
+/// - **Rec** (Gate): records while high; patched, it takes over from the
+///   button.
 ///
 /// # Outputs
 /// - **L**, **R** (Audio): a mono recording plays on both.
@@ -267,6 +280,9 @@ impl Voice {
 /// - **Sensitivity** (0–1): how strong a hit must be to get a marker, when
 ///   sliced by Onsets. The editor finds them; here it's only kept.
 /// - **Step 01–64**, **Chance 01–64**: the row (see [`Step`]).
+/// - **Take** (Free, 1–16 bars): with a Clock running, a take starts on the
+///   next bar and lasts that long.
+/// - **Rec Button**: the face's Rec, pressed to start a take and again to stop.
 pub struct Chopper {
     sample: Option<Arc<SampleData>>,
     markers: Markers,
@@ -298,6 +314,19 @@ pub struct Chopper {
     /// with a rising edge.
     gate_dip: bool,
     random_state: u32,
+    /// Records takes from In.
+    recorder: Recorder,
+    /// The take it plays, by count, until it's swapped for the same
+    /// recording made to measure.
+    holding_take: Option<u32>,
+    /// A take's beats, played in place of Beats until Beats moves (as the
+    /// editor sets it to match), with the Beats it was recorded under.
+    take_beats: Option<(f64, f32)>,
+    /// Beats, as last seen.
+    beats_param: f32,
+    /// The beat the loop's top falls on: a take plays from its top on the
+    /// beat it ended.
+    top_beat: f64,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
 }
@@ -306,6 +335,9 @@ impl Chopper {
     pub const PORT_CLOCK: usize = 0;
     pub const PORT_RESET: usize = 1;
     pub const PORT_SLICE: usize = 2;
+    pub const PORT_IN_L: usize = 3;
+    pub const PORT_IN_R: usize = 4;
+    pub const PORT_REC: usize = 5;
     pub const OUT_L: usize = 0;
     pub const OUT_R: usize = 1;
     pub const OUT_GATE: usize = 2;
@@ -319,7 +351,10 @@ impl Chopper {
     pub const PARAM_SENSITIVITY: usize = 4;
     pub const PARAM_STEPS: usize = 5;
     pub const PARAM_CHANCE: usize = Self::PARAM_STEPS + MAX_STEPS;
-    pub const PARAM_COUNT: usize = Self::PARAM_CHANCE + MAX_STEPS;
+    // Recording, after the row, so patches from before it load unchanged
+    pub const PARAM_TAKE: usize = Self::PARAM_CHANCE + MAX_STEPS;
+    pub const PARAM_REC_BUTTON: usize = Self::PARAM_TAKE + 1;
+    pub const PARAM_COUNT: usize = Self::PARAM_REC_BUTTON + 1;
 
     /// Where the readout holds the playhead: its place and level, packed as
     /// the Sampler packs them ([`Sampler::pack_playhead`]).
@@ -330,6 +365,13 @@ impl Chopper {
     pub const READOUT_SLICE: usize = 2;
     /// Where the loop is, 0 to 1, or -1 waiting for a pulse.
     pub const READOUT_PHASE: usize = 3;
+    /// The recorder, where the Sampler shows it, so the face reads both alike.
+    pub const READOUT_REC_STATE: usize = Sampler::READOUT_REC_STATE;
+    pub const READOUT_REC_SECONDS: usize = Sampler::READOUT_REC_SECONDS;
+    pub const READOUT_TAKES: usize = Sampler::READOUT_TAKES;
+    pub const READOUT_ROOM: usize = Sampler::READOUT_ROOM;
+    pub const READOUT_REC_SCALE: usize = Sampler::READOUT_REC_SCALE;
+    pub const READOUT_REC_LEVEL: usize = Sampler::READOUT_REC_LEVEL;
 
     const GATE_THRESHOLD: f32 = 0.5;
     const SEED: u32 = 0x2545_F491;
@@ -378,6 +420,14 @@ impl Chopper {
                     .describe("How often this step swaps its slice for a random one"),
             );
         }
+        parameters.push(
+            ParameterDefinition::choice("take", "Take", TAKE_LENGTHS, 1)
+                .describe("Free records until Rec is pressed again. In bars, with a Clock running, a take starts on the next bar and lasts exactly that long, and Beats is set to match, so it loops in time"),
+        );
+        parameters.push(
+            ParameterDefinition::new("rec_button", "Rec Button", 0.0, 1.0, 0.0, ParameterDisplay::on_off())
+                .describe("The Rec button on the face: pressed to start a take, and again to stop it"),
+        );
         debug_assert_eq!(parameters.len(), Self::PARAM_COUNT);
 
         Self {
@@ -400,6 +450,11 @@ impl Chopper {
             gate: 0,
             gate_dip: false,
             random_state: Self::SEED,
+            recorder: Recorder::default(),
+            holding_take: None,
+            take_beats: None,
+            beats_param: 4.0,
+            top_beat: 0.0,
             ports: vec![
                 PortDefinition::input_with_default("clock", "Clock", SignalType::Gate, 0.0)
                     .describe("Each rising edge is a pulse, worth what Pulse says; patch the Clock gate that drives the sequencers"),
@@ -407,6 +462,11 @@ impl Chopper {
                     .describe("A rising edge starts over: the next pulse plays the loop from its top"),
                 PortDefinition::input_with_default("slice", "Slice", SignalType::Control, 0.0)
                     .describe("Picks the slice each step plays as its turn comes, 0 to 1 across them, in place of its own: an Arranger lane or a Sample & Hold here rearranges the break"),
+                PortDefinition::input_with_default("in_l", "In L", SignalType::Audio, 0.0)
+                    .describe("What Rec records: an Audio Input to record yourself, or the patch's own sound to resample it and chop it up. One side patched records on both"),
+                PortDefinition::input_with_default("in_r", "In R", SignalType::Audio, 0.0).describe("The right side of what Rec records"),
+                PortDefinition::input_with_default("rec", "Rec", SignalType::Gate, 0.0)
+                    .describe("Records while high: the take starts as it rises (or on the next bar, with Take in bars) and ends as it falls. Patched, it takes over from the button"),
                 PortDefinition::output("out_l", "L", SignalType::Audio).describe("Left; a mono recording plays the same on both sides"),
                 PortDefinition::output("out_r", "R", SignalType::Audio).describe("Right"),
                 PortDefinition::output("gate", "Gate", SignalType::Gate)
@@ -478,10 +538,48 @@ impl Chopper {
         }
     }
 
+    /// Plays a take just recorded from now on, as a file loaded would be:
+    /// from its top, `beats` long if a Clock measured it.
+    fn play_take(&mut self, take: Arc<SampleData>, beats: Option<u32>, beat_now: Option<f64>) {
+        if let Some(old) = self.load_sample(Some(take)) {
+            self.retire(old);
+        }
+        self.holding_take = Some(self.recorder.takes());
+        self.take_beats = beats.map(|beats| (Self::beats(beats as f32), self.beats_param));
+        // The beat it ended on (a round trip late) is where its top comes round
+        if let Some(beat) = beat_now {
+            self.top_beat = beat.round();
+        }
+        self.last_hit = None;
+    }
+
+    /// How long the loop is, in beats: a take's own, until Beats moves.
+    fn loop_beats(&mut self, beats_param: f32) -> f64 {
+        self.beats_param = beats_param;
+        match self.take_beats {
+            Some((beats, under)) if under == beats_param => beats,
+            _ => {
+                self.take_beats = None;
+                Self::beats(beats_param)
+            }
+        }
+    }
+
+    /// The beat it's on, counted from the first pulse after a reset, by
+    /// the pulse's measured length (waiting at its end for a late one); or
+    /// `None` before that pulse.
+    fn beat(&self, pulse_beats: f64, context: &ProcessContext) -> Option<f64> {
+        let pulses = self.pulses?;
+        let pulse = self.pulse_samples(pulse_beats, context);
+        let into = self.timer.since_clock().map_or(0.0, |s| (s as f64 / pulse.max(1.0)).min(0.9999));
+        Some((pulses as f64 + into) * pulse_beats)
+    }
+
     /// Starts over: the next pulse plays the loop from its top, as it
     /// first did.
     fn rewind(&mut self) {
         self.pulses = None;
+        self.top_beat = 0.0;
         self.last_hit = None;
         self.timer.forget_gap();
         self.gate = 0;
@@ -606,6 +704,9 @@ impl DspModule for Chopper {
         self.level.set_sample_rate(sample_rate);
         // A pulse measured at another rate is the wrong number of samples
         self.timer.forget();
+        // Off the audio thread: room for another rate can go here
+        self.recorder.prepare(sample_rate);
+        drop(self.recorder.take_let_go());
     }
 
     fn process(
@@ -624,7 +725,25 @@ impl DspModule for Chopper {
         let read = |buffer: Option<&SignalBuffer>, i: usize| buffer.map_or(0.0, |b| b.samples.get(i).copied().unwrap_or(0.0));
 
         let pulse_beats = Self::pulse_beats(params[Self::PARAM_PULSE]);
-        let loop_beats = Self::beats(params[Self::PARAM_BEATS]);
+        let mut loop_beats = self.loop_beats(params[Self::PARAM_BEATS]);
+
+        // Recording: a take that ends is the loop from now on
+        let controls = Controls {
+            left: connected_input(inputs, Self::PORT_IN_L),
+            right: connected_input(inputs, Self::PORT_IN_R),
+            gate: connected_input(inputs, Self::PORT_REC),
+            button: params.get(Self::PARAM_REC_BUTTON).is_some_and(|&v| v >= 0.5),
+            threshold_db: NO_THRESHOLD_DB,
+            length: params.get(Self::PARAM_TAKE).copied().unwrap_or(0.0),
+        };
+        if let Some(take) = self.recorder.run(&controls, context) {
+            let beats = self.recorder.finished_beats();
+            self.play_take(take, beats, self.beat(pulse_beats, context));
+            loop_beats = self.loop_beats(params[Self::PARAM_BEATS]);
+        }
+        if let Some(room) = self.recorder.take_let_go() {
+            self.retire(room);
+        }
         let slices = Self::slices(params[Self::PARAM_SLICES], self.markers.as_slice());
         self.level.set_target(params[Self::PARAM_LEVEL].clamp(0.0, 1.0));
         let end_fade = (FADE_SECONDS * self.sample_rate) as f64;
@@ -644,13 +763,11 @@ impl DspModule for Chopper {
             }
             self.prev_clock = clock_high;
 
-            // Where the loop is: the pulses counted, and how far into the
-            // next, by the pulse's measured length (waiting at its end for
-            // a late one)
-            if let Some(pulses) = self.pulses {
+            // Where the loop is: the beats since its top came round (a take
+            // that ends just before the beat waits for it)
+            let since_top = self.beat(pulse_beats, context).map(|beat| beat - self.top_beat).filter(|&beat| beat >= 0.0);
+            if let Some(beat) = since_top {
                 let pulse = self.pulse_samples(pulse_beats, context);
-                let into = self.timer.since_clock().map_or(0.0, |s| (s as f64 / pulse.max(1.0)).min(0.9999));
-                let beat = (pulses as f64 + into) * pulse_beats;
                 let pass = (beat / loop_beats).floor();
                 let phase = (beat / loop_beats - pass).clamp(0.0, 1.0);
                 self.phase = Some(phase as f32);
@@ -710,6 +827,11 @@ impl DspModule for Chopper {
         if self.outgoing.is_some() {
             self.retire_outgoing_if_unused();
         }
+        // A take under way ends with the transport, and plays from the top
+        if let Some(take) = self.recorder.stop() {
+            let beats = self.recorder.finished_beats();
+            self.play_take(take, beats, None);
+        }
     }
 
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
@@ -724,10 +846,24 @@ impl DspModule for Chopper {
         readout.values[Self::READOUT_STEP] = self.shown_step.map_or(0.0, |s| (s + 1) as f32);
         readout.values[Self::READOUT_SLICE] = self.shown_slice.map_or(0.0, |s| (s + 1) as f32);
         readout.values[Self::READOUT_PHASE] = self.phase.unwrap_or(-1.0);
+        let recorder = &self.recorder;
+        let rate = self.sample_rate.max(1.0);
+        readout.values[Self::READOUT_REC_STATE] = recorder.state().code();
+        readout.values[Self::READOUT_REC_SECONDS] = recorder.recorded() as f32 / rate;
+        readout.values[Self::READOUT_TAKES] = recorder.takes() as f32;
+        readout.values[Self::READOUT_ROOM] = recorder.room() as f32 / rate;
+        readout.values[Self::READOUT_REC_SCALE] = recorder.scale_seconds();
+        readout.values[Self::READOUT_REC_LEVEL] = recorder.meter();
         Some(readout)
     }
 
+    fn take_scope_data(&mut self) -> Option<(&[f32], &[f32], bool)> {
+        self.recorder.take_overview().map(|(highs, lows)| (highs, lows, false))
+    }
+
     fn load_sample(&mut self, sample: Option<Arc<SampleData>>) -> Option<Arc<SampleData>> {
+        self.holding_take = None;
+        self.take_beats = None;
         // Still fading out of an older recording: let those voices go now
         if let Some(older) = self.outgoing.take() {
             for voice in &mut self.voices {
@@ -761,12 +897,32 @@ impl DspModule for Chopper {
     fn set_markers(&mut self, markers: Markers) {
         self.markers = markers;
     }
+
+    fn give_room(&mut self, room: Arc<SampleData>) -> Option<Arc<SampleData>> {
+        self.recorder.give_room(room)
+    }
+
+    fn take_finished_take(&mut self) -> Option<FinishedTake> {
+        self.recorder.take_finished()
+    }
+
+    fn settle_take(&mut self, take: u32, sample: Arc<SampleData>) -> Option<Arc<SampleData>> {
+        let same = self.holding_take == Some(take)
+            && self.sample.as_ref().is_some_and(|held| held.frames() == sample.frames() && held.sample_rate() == sample.sample_rate());
+        if !same {
+            return Some(sample);
+        }
+        // The same sound, frame for frame: voices read on where they are
+        self.holding_take = None;
+        self.sample.replace(sample)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::dsp::analysis::peak;
+    use crate::dsp::context::TransportState;
     use std::f32::consts::TAU;
 
     const SAMPLE_RATE: f32 = 48000.0;
@@ -880,7 +1036,8 @@ mod tests {
         assert_eq!(chopper.info().id, CHOPPER_ID);
         assert_eq!(chopper.info().category, ModuleCategory::Source);
         let names: Vec<&str> = chopper.ports().iter().map(|p| p.name).collect();
-        assert_eq!(names, ["Clock", "Reset", "Slice", "L", "R", "Gate"]);
+        // Recording's after the rest, so patches from before it load unchanged
+        assert_eq!(names, ["Clock", "Reset", "Slice", "In L", "In R", "Rec", "L", "R", "Gate"]);
         assert_eq!(chopper.parameters().len(), Chopper::PARAM_COUNT);
         let params = chopper.parameters();
         assert_eq!(params[Chopper::PARAM_PULSE].name, "Pulse");
@@ -889,7 +1046,9 @@ mod tests {
         assert_eq!(params[Chopper::step_param(0)].name, "Step 01");
         assert_eq!(params[Chopper::step_param(63)].name, "Step 64");
         assert_eq!(params[Chopper::chance_param(0)].name, "Chance 01");
-        assert_eq!(params[Chopper::PARAM_COUNT - 1].name, "Chance 64");
+        assert_eq!(params[Chopper::chance_param(63)].name, "Chance 64");
+        assert_eq!(params[Chopper::PARAM_TAKE].name, "Take");
+        assert_eq!(params[Chopper::PARAM_COUNT - 1].name, "Rec Button");
     }
 
     #[test]
@@ -1124,6 +1283,95 @@ mod tests {
         let old = chopper.take_retired_sample().expect("handed back");
         assert_eq!(old.frames(), ramp().frames());
         assert!(chopper.take_retired_sample().is_none());
+    }
+
+    /// What a player played at frame `p`: the frame itself, small enough
+    /// to be read back exactly.
+    fn played(p: usize) -> f32 {
+        p as f32 / 1_000_000.0
+    }
+
+    /// Runs from sample `from` to `to` (whole blocks) with a Clock at 120
+    /// BPM from sample 0, sixteenths at Clock and the transport with it,
+    /// `played` at In L, and Rec pressed on the face for the block at each
+    /// of `presses`. Returns L.
+    fn record(chopper: &mut Chopper, params: &mut [f32], from: usize, to: usize, presses: &[usize]) -> Vec<f32> {
+        let unpatched = SignalBuffer::unconnected(BLOCK, SignalType::Control);
+        let mut clock = SignalBuffer::gate(BLOCK);
+        let mut in_l = SignalBuffer::audio(BLOCK);
+        let mut outputs = vec![SignalBuffer::audio(BLOCK), SignalBuffer::audio(BLOCK), SignalBuffer::gate(BLOCK)];
+        let mut left = Vec::new();
+        let mut start = from;
+        while start < to {
+            for i in 0..BLOCK {
+                let t = start + i;
+                clock.samples[i] = if t % SIXTEENTH < SIXTEENTH / 2 { 1.0 } else { 0.0 };
+                in_l.samples[i] = played(t);
+            }
+            params[Chopper::PARAM_REC_BUTTON] = if presses.contains(&start) { 1.0 } else { 0.0 };
+            let transport = TransportState { beat_position: Some(start as f64 * 2.0 / SAMPLE_RATE as f64), ..TransportState::playing_at(120.0) };
+            let ctx = ProcessContext::with_transport(SAMPLE_RATE, BLOCK, transport);
+            let inputs = [&clock, &unpatched, &unpatched, &in_l, &unpatched, &unpatched];
+            chopper.process(&inputs, &mut outputs, params, &ctx);
+            left.extend_from_slice(&outputs[0].samples);
+            start += BLOCK;
+        }
+        left
+    }
+
+    #[test]
+    fn test_a_take_in_bars_becomes_the_loop_from_its_top() {
+        const BAR: usize = 96000;
+        let mut chopper = chopper(ramp());
+        let room = Arc::new(SampleData::with_room(5 * SAMPLE_RATE as usize, SAMPLE_RATE));
+        assert!(chopper.give_room(room).is_none(), "taken");
+        // Two bars, from the next: Beats is still the old break's 4
+        let mut params = params(&[(Chopper::PARAM_TAKE, 2.0)]);
+        let pressed = 118 * BLOCK;
+        let _ = record(&mut chopper, &mut params, 0, 3 * BAR, &[pressed]);
+        let take = chopper.take_finished_take().expect("a take");
+        assert_eq!(take.beats, Some(8), "two bars of 4/4");
+        assert_eq!(take.sample.frames(), 2 * BAR);
+        assert_eq!(take.sample.left()[0], played(BAR), "from the bar line");
+
+        // It plays at once, from its top on the bar it ended, as eight beats
+        // before Beats says so, and goes round
+        let heard = record(&mut chopper, &mut params, 3 * BAR, 6 * BAR, &[]);
+        for n in [3000, 50_000, 150_000, 2 * BAR + 3000, 2 * BAR + 50_000] {
+            let expected = played(BAR + n % (2 * BAR));
+            assert!((heard[n] - expected).abs() < 1e-4, "{n}: {} for {expected}", heard[n]);
+        }
+
+        // The editor sets Beats to match: the same loop
+        params[Chopper::PARAM_BEATS] = 8.0;
+        let heard = record(&mut chopper, &mut params, 6 * BAR, 7 * BAR, &[]);
+        assert!((heard[3000] - played(BAR + BAR + 3000)).abs() < 1e-4);
+
+        // Beats turned by hand is the loop's length again
+        params[Chopper::PARAM_BEATS] = 4.0;
+        assert_eq!(chopper.loop_beats(params[Chopper::PARAM_BEATS]), 4.0);
+    }
+
+    #[test]
+    fn test_without_a_clock_a_take_has_no_beats() {
+        let mut chopper = Chopper::new();
+        chopper.prepare(SAMPLE_RATE, BLOCK);
+        assert!(chopper.give_room(Arc::new(SampleData::with_room(48000, SAMPLE_RATE))).is_none());
+        let mut params = params(&[]);
+        let unpatched = SignalBuffer::unconnected(BLOCK, SignalType::Control);
+        let mut in_l = SignalBuffer::audio(BLOCK);
+        in_l.fill(0.25);
+        let mut outputs = vec![SignalBuffer::audio(BLOCK), SignalBuffer::audio(BLOCK), SignalBuffer::gate(BLOCK)];
+        let ctx = ProcessContext::new(SAMPLE_RATE, BLOCK);
+        for block in 0..40 {
+            params[Chopper::PARAM_REC_BUTTON] = if block == 1 || block == 30 { 1.0 } else { 0.0 };
+            chopper.process(&[&unpatched, &unpatched, &unpatched, &in_l, &unpatched, &unpatched], &mut outputs, &params, &ctx);
+        }
+        let take = chopper.take_finished_take().expect("a take, in bars or not: there's no Clock to count them");
+        assert_eq!(take.beats, None);
+        assert_eq!(take.sample.frames(), 29 * BLOCK);
+        assert_eq!(chopper.sample().map(|s| s.frames()), Some(29 * BLOCK), "it plays the take");
+        assert_eq!(chopper.readout(&params).unwrap().values[Chopper::READOUT_ROOM], 0.0, "the room is the take now");
     }
 
     #[test]

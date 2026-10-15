@@ -34,10 +34,10 @@ use crate::dsp::{
     primitives::{Markers, Slices, ONSETS},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
-    ParameterDisplay, SampleData, SignalType, MAX_CHANNELS, MAX_READOUT,
+    FinishedTake, ParameterDisplay, SampleData, SignalType, MAX_CHANNELS, MAX_READOUT,
 };
 use crate::dsp::onsets::DEFAULT_SENSITIVITY;
-use recorder::{Controls, Recorder};
+pub(crate) use recorder::{Controls, Recorder};
 pub use recorder::{RecState, LATE_TAP_SECONDS, NO_THRESHOLD_DB, PRE_ROLL_SECONDS, TAKE_COLUMNS, TAKE_LENGTHS, TAKE_ROOM_SECONDS};
 
 /// The Sampler's module ID.
@@ -799,7 +799,7 @@ impl DspModule for Sampler {
         self.recorder.give_room(room)
     }
 
-    fn take_finished_take(&mut self) -> Option<(u32, Arc<SampleData>)> {
+    fn take_finished_take(&mut self) -> Option<FinishedTake> {
         self.recorder.take_finished()
     }
 

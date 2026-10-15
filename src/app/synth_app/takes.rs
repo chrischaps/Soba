@@ -1,4 +1,5 @@
-//! Takes in the editor: keeping what a Sampler records with the patch.
+//! Takes in the editor: keeping what a Sampler or a Chopper records with
+//! the patch.
 //!
 //! A Sampler records into room set aside here, off the audio thread: a
 //! minute of stereo, handed to each Sampler with something patched into
@@ -14,6 +15,9 @@
 //! Sampler is handed the same recording made to measure, which it swaps
 //! for the room without a break.
 //!
+//! A Chopper's Beats is set to the take's, in the same undo step, when a
+//! Clock measured it: a take in bars is then a loop in time.
+//!
 //! With Tidy Takes on, the take is then trimmed and its level set, into a
 //! file of its own, as a second undo step (see `tidy_take`).
 //!
@@ -26,8 +30,9 @@ use std::time::Duration;
 use egui_node_graph2::NodeId;
 use web_time::Instant;
 
-use crate::dsp::SampleData;
+use crate::dsp::{FinishedTake, SampleData};
 use crate::engine::{EngineCommand, NodeId as EngineNodeId};
+use crate::modules::chopper::CHOPPER_ID;
 use crate::modules::sampler::{Sampler, SAMPLER_ID, TAKE_ROOM_SECONDS};
 use crate::persistence::sample_files::{self, Decoded};
 use super::slicing::value_of;
@@ -57,7 +62,7 @@ impl SynthApp {
                 takes.push(take);
             }
         }
-        for (engine_id, count, room) in takes {
+        for (engine_id, FinishedTake { count, sample: room, beats }) in takes {
             let measured = room.to_measure();
             // The room is the Sampler's until it's swapped for the copy
             drop(room);
@@ -70,12 +75,16 @@ impl SynthApp {
                     if let Some(node) = self.graph_state.graph.nodes.get_mut(node_id) {
                         node.user_data.file = Some(key.clone());
                     }
+                    let looped = beats.and_then(|beats| self.loop_take(node_id, beats));
                     self.history.name_next(format!("Record {name}"));
                     let rate = self.ui_handle.as_ref().map(|handle| handle.graph().sample_rate());
                     if let Some(sample) = rate.and_then(|rate| self.user_state.samples.playing(&key, rate)) {
                         self.send_command(EngineCommand::SettleTake { node_id: engine_id, take: count, sample });
                     }
-                    self.status_message = Some(format!("Recorded {name}, {seconds:.1} s"));
+                    self.status_message = Some(match looped {
+                        Some(beats) => format!("Recorded {name}, {seconds:.1} s: a loop of {beats} beats"),
+                        None => format!("Recorded {name}, {seconds:.1} s"),
+                    });
                     self.tidy_kept_take(node_id, &name, seconds);
                 }
                 Err(e) => self.status_message = Some(format!("Couldn't keep the take: {e}. The Sampler plays it until it's given another file")),
@@ -103,6 +112,17 @@ impl SynthApp {
             Ok(None) => format!("Recorded {name}, {seconds:.1} s: already tidy"),
             Err(e) => format!("Recorded {name}, {seconds:.1} s, but couldn't tidy it: {e}"),
         });
+    }
+
+    /// Sets a Chopper's Beats to a take `beats` long, so it loops in time,
+    /// as it already plays it. Returns the Beats set, for a Chopper.
+    fn loop_take(&mut self, node_id: NodeId, beats: u32) -> Option<u32> {
+        let graph = &mut self.graph_state.graph;
+        let node = graph.nodes.get(node_id).filter(|node| node.user_data.module_id == CHOPPER_ID)?;
+        let (_, input) = node.inputs.iter().find(|(name, _)| name == "Beats")?;
+        let beats = beats.clamp(1, 64);
+        graph.inputs[*input].value.set_actual_value(beats as f32);
+        Some(beats)
     }
 
     /// Keeps a take on the shelf, and on disk beside the patch where there
@@ -144,8 +164,8 @@ impl SynthApp {
         }
     }
 
-    /// Hands room to record into to each Sampler with something patched
-    /// into In that has none, once it's on the audio thread.
+    /// Hands room to record into to each Sampler or Chopper with something
+    /// patched into In that has none, once it's on the audio thread.
     fn give_rooms(&mut self) {
         let Some(handle) = self.ui_handle.as_ref() else { return };
         let graph = handle.graph();
@@ -156,7 +176,7 @@ impl SynthApp {
             .graph
             .nodes
             .iter()
-            .filter(|(_, node)| node.user_data.module_id == SAMPLER_ID)
+            .filter(|(_, node)| [SAMPLER_ID, CHOPPER_ID].contains(&node.user_data.module_id))
             .filter(|(_, node)| {
                 ["In L", "In R"]
                     .iter()
@@ -301,6 +321,64 @@ mod tests {
         press_rec(&mut app);
         pump(&mut app, 0.2);
         assert_eq!(file(&app).map(|key| sample_files::file_name(&key).to_string()).as_deref(), Some("Take 2.wav"));
+
+        app.send_command(EngineCommand::SetPlaying(false));
+        pump(&mut app, 0.05);
+        std::fs::remove_dir_all(&folder).ok();
+    }
+
+    /// A take in bars into a Chopper, with a Clock running: kept as a
+    /// Sampler's is, it's the break, and Beats is set to its length in the
+    /// same undo step.
+    #[test]
+    #[ignore = "needs an audio device; run with --ignored"]
+    fn a_take_in_bars_is_a_choppers_loop() {
+        let mut app = SynthApp::new(false);
+        if app.audio_engine.is_err() {
+            eprintln!("no audio device: skipped");
+            return;
+        }
+        let folder = std::env::temp_dir().join(format!("soba-chopper-takes-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let path = folder.join("Break.json");
+
+        // 240 BPM, so a bar is a second; two bars of a sine into a Chopper
+        let mut patch = Patch::new("Break");
+        let mut clock = NodeData::new(1, "util.clock", (0.0, 0.0));
+        clock.parameters.push(NamedParameter::new("Tempo", ParameterValue::Number(240.0)));
+        patch.nodes.push(clock);
+        patch.nodes.push(NodeData::new(2, "osc.sine", (0.0, 300.0)));
+        let mut chopper = NodeData::new(3, CHOPPER_ID, (250.0, 0.0));
+        chopper.parameters.push(NamedParameter::new("Take", ParameterValue::Select(2)));
+        patch.nodes.push(chopper);
+        patch.connections.push(ConnectionData::new(1, "Gate", 3, "Clock"));
+        patch.connections.push(ConnectionData::new(2, "Out", 3, "In L"));
+        save_to_file(&patch, &path).unwrap();
+        app.open_file(&path);
+        app.is_playing = true;
+        app.user_state.is_playing = true;
+        app.send_command(EngineCommand::SetPlaying(true));
+        pump(&mut app, 0.3);
+        let (node_id, _) = app.graph_state.graph.nodes.iter().find(|(_, n)| n.user_data.module_id == CHOPPER_ID).expect("a Chopper");
+        let beats = |app: &SynthApp| value_of(&app.graph_state.graph, node_id, "Beats");
+        assert_eq!(beats(&app), Some(4.0));
+
+        // Rec, then the next bar and two more
+        app.play_parameter(node_id, "Rec Button", 1.0);
+        pump(&mut app, 0.08);
+        app.play_parameter(node_id, "Rec Button", 0.0);
+        pump(&mut app, 3.4);
+        let key = app.graph_state.graph.nodes[node_id].user_data.file.clone().expect("the Chopper names its take");
+        let take = sample_files::read_file(Path::new(&key)).unwrap().sample;
+        assert!((take.seconds() - 2.0).abs() < 0.01, "two bars: {}", take.seconds());
+        assert_eq!(beats(&app), Some(8.0), "Beats follows the take");
+
+        // One undo step: the empty Chopper as it was, at 4 beats
+        assert_eq!(app.history.undo_label(), Some("Record Take 1.wav"));
+        app.undo();
+        pump(&mut app, 0.1);
+        assert_eq!(app.graph_state.graph.nodes[node_id].user_data.file, None);
+        assert_eq!(beats(&app), Some(4.0));
 
         app.send_command(EngineCommand::SetPlaying(false));
         pump(&mut app, 0.05);

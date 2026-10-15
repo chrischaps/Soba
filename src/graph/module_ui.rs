@@ -161,7 +161,7 @@ static MODULE_UI: &[ModuleUi] = &[
         knobs: &[knob("Beats"), knob("Slices"), knob_as("Sensitivity", "Sens"), knob("Level")],
         labels: &[("Pulse", "Pulse")],
         // The row of steps edits these
-        hidden: &["Step *", "Chance *"],
+        hidden: &["Step *", "Chance *", "Rec Button"],
         monitor: &["Gate"],
         display: NodeDisplay::ChopperRow,
         knobs_per_row: 4,

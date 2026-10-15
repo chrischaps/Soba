@@ -24,7 +24,9 @@
 //! [`super::sampler_slices`]). Alt-click a slice to hear just that slice,
 //! or let go of a marker with Alt held to hear the slice it now begins.
 //! Under it all: ▶ to hear the whole break, its name and the tempo it
-//! plays at unchanged, and Open….
+//! plays at unchanged, Rec, and Open…. Rec records what's patched into In
+//! as the Sampler's does, the take drawn in red across the panel as it
+//! comes in (see [`super::sampler_take`]); once it ends, it's the break.
 
 use eframe::egui::{self, ecolor::Hsva, Color32, CursorIcon, FontId, Id, Pos2, Rect, Sense, Shape, Stroke, Vec2};
 use egui_node_graph2::{InputId, NodeId};
@@ -33,12 +35,13 @@ use crate::app::theme;
 use crate::dsp::onsets::DEFAULT_SENSITIVITY;
 use crate::dsp::primitives::{Markers, Slices};
 use crate::modules::chopper::{Chopper, Step, MAX_PITCH, MAX_REPEAT, MAX_STEPS};
-use crate::modules::sampler::Sampler;
+use crate::modules::sampler::{RecState, Sampler, NO_THRESHOLD_DB};
 use crate::persistence::sample_files;
 
 use super::hovered_file;
 use super::sample_shelf::ShelvedSample;
 use super::sampler_slices::SliceMarkers;
+use super::sampler_take::{self, RecView};
 use super::{SynthGraph, SynthGraphState, SynthResponse};
 
 /// How close (in points) the pointer must be to grab a marker.
@@ -162,6 +165,14 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     };
     let playing = Playing::read(user_state, node_id);
 
+    // Recording: what it's doing, and whether Rec can start a take now
+    let engine_id = user_state.get_engine_node_id(node_id);
+    let rec = RecView::read(engine_id.and_then(|id| user_state.readouts.get(&id)), NO_THRESHOLD_DB);
+    let live = rec.state == RecState::Recording;
+    let (in_patched, blocked) = sampler_take::rec_block(graph, node_id, user_state, &rec);
+    // While a take comes in, the panel is its: the old break waits
+    let shown = loaded.filter(|_| !live);
+
     // As wide as the knob row below: four 44-pt columns
     let gap = ui.spacing().item_spacing.x;
     let width = 4.0 * 44.0 * z + 3.0 * gap - 8.0 * z;
@@ -186,7 +197,12 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let wave = ui.interact(wave_rect, Id::new((node_id, "chopper-wave")), Sense::click_and_drag());
     let _ = response;
 
-    match loaded {
+    match shown {
+        _ if live => {
+            let scope = engine_id.and_then(|id| user_state.get_scope_data(id));
+            sampler_take::draw_take(&painter, plot, &rec, scope, &format!("REC  {:.1} s", rec.seconds), z);
+            ui.ctx().request_repaint();
+        }
         Some(sample) => {
             // The slice heard glows
             if let (Some(slice), Some(_)) = (playing.slice.filter(|&s| s < count), playing.playhead) {
@@ -267,11 +283,19 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             let (hint, hint_color) = match (key, problem) {
                 (Some(key), Some(problem)) if sample_files::is_loading(problem) => (format!("Loading {}…", sample_files::file_name(key)), theme::text::SECONDARY),
                 (Some(key), Some(problem)) => (format!("{}: {problem}", sample_files::file_name(key)), theme::accent::WARNING),
+                _ if in_patched => ("Press Rec to record a break".to_string(), if drop_here { blue } else { theme::text::SECONDARY }),
                 _ => ("Drop a break here".to_string(), if drop_here { blue } else { theme::text::SECONDARY }),
             };
+            let under = if in_patched && problem.is_none() { "or drop a loop here, or click to open one" } else { "an audio loop, or click to open one" };
             painter.text(outline.center() - Vec2::new(0.0, 5.0 * z), egui::Align2::CENTER_CENTER, hint, FontId::proportional(9.0 * z), hint_color);
-            painter.text(outline.center() + Vec2::new(0.0, 7.0 * z), egui::Align2::CENTER_CENTER, "an audio loop, or click to open one", small.clone(), theme::text::DISABLED);
+            painter.text(outline.center() + Vec2::new(0.0, 7.0 * z), egui::Align2::CENTER_CENTER, under, small.clone(), theme::text::DISABLED);
         }
+    }
+
+    // Waiting to record, for the next bar
+    if matches!(rec.state, RecState::Armed | RecState::Waiting) {
+        sampler_take::draw_waiting(&painter, wave_rect, plot, &rec, ui.input(|i| i.time), z);
+        ui.ctx().request_repaint();
     }
 
     if drop_here {
@@ -285,15 +309,17 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     // The markers, sliced by Onsets: drag to move, off the panel to take away
     let pointer = wave.hover_pos().or(wave.interact_pointer_pos());
     let slice_dragging = slice_markers.as_ref().is_some_and(|markers| markers.dragging(ui));
-    let slice_hot = match (&slice_markers, loaded, pointer, slice_dragging) {
+    let slice_hot = match (&slice_markers, shown, pointer, slice_dragging) {
         (Some(markers), Some(_), Some(p), false) => markers.nearest(p.x, x_at, GRAB * z).map(|(m, _)| m),
         _ => None,
     };
-    if let (Some(markers), Some(_)) = (&slice_markers, loaded) {
+    if let (Some(markers), Some(_)) = (&slice_markers, shown) {
         markers.draw(ui, &painter, wave_rect, plot, x_at, slice_hot, z);
     }
     let alt = ui.input(|i| i.modifiers.alt);
-    if loaded.is_some() {
+    if live {
+        wave.clone().on_hover_text("Recording what's patched into In: press Rec to stop, and the take is the break from the top");
+    } else if loaded.is_some() {
         if let (Some(markers), true) = (&slice_markers, wave.drag_started()) {
             let pressed = ui.input(|i| i.pointer.press_origin()).or(wave.interact_pointer_pos());
             if let Some((m, _)) = pressed.and_then(|p| markers.nearest(p.x, x_at, GRAB * z)) {
@@ -480,7 +506,11 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     } else {
         theme::text::DISABLED
     };
-    let room = button.left() - 4.0 * z - name_left;
+    // Rec, beside Open…
+    let rec_rect = Rect::from_min_size(Pos2::new(button.left() - 22.0 * z, line.top() + 1.0 * z), Vec2::new(18.0 * z, line_height - 2.0 * z));
+    let held = params.value(Chopper::PARAM_REC_BUTTON) >= 0.5;
+    responses.extend(sampler_take::rec_button(ui, rec_rect, node_id, user_state, &rec, held, Chopper::PARAM_REC_BUTTON, None, blocked, z));
+    let room = rec_rect.left() - 4.0 * z - name_left;
     let label = match loaded {
         // Its own tempo: where it plays back unchanged, as long as Beats says
         Some(sample) => {

@@ -30,7 +30,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::dsp::{Audition, DspModule, OutputLevels, ProcessContext, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
+use crate::dsp::{Audition, DspModule, FinishedTake, OutputLevels, ProcessContext, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
 use crate::dsp::primitives::Markers;
 use crate::engine::commands::{ChannelPeaks, NodeId, PortIndex};
 use crate::engine::monitor_board::MonitorWriter;
@@ -301,14 +301,14 @@ impl GraphPlan {
         }
     }
 
-    /// Calls `f` with every take a module finished since the last call:
-    /// its node, its count of takes, and the recording, shared.
+    /// Calls `f` with every take a module finished since the last call,
+    /// and its node.
     ///
     /// REAL-TIME SAFE.
-    pub fn take_finished_takes(&mut self, mut f: impl FnMut(NodeId, u32, Arc<SampleData>)) {
+    pub fn take_finished_takes(&mut self, mut f: impl FnMut(NodeId, FinishedTake)) {
         for node in &mut self.nodes {
-            if let Some((take, sample)) = node.module.as_mut().and_then(|module| module.take_finished_take()) {
-                f(node.node_id, take, sample);
+            if let Some(take) = node.module.as_mut().and_then(|module| module.take_finished_take()) {
+                f(node.node_id, take);
             }
         }
     }

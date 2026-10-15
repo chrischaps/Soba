@@ -107,6 +107,9 @@ display SamplerWave
 in   Clock              Gate     ConnectionOnly       inline=true  port
 in   Reset              Gate     ConnectionOnly       inline=true  port
 in   Slice              Control  ConnectionOnly       inline=true  port
+in   In L               Audio    ConnectionOnly       inline=true  port
+in   In R               Audio    ConnectionOnly       inline=true  port
+in   Rec                Gate     ConnectionOnly       inline=true  port
 in   Pulse              Control  ConstantOnly         inline=true  select 4 ["1", "1/2", "1/4", "1/8", "1/16"] "Pulse"
 in   Beats              Control  ConstantOnly         inline=false num 4 [1..64] beats stepped
 in   Slices             Control  ConstantOnly         inline=false num 16 [2..65] slices stepped
@@ -240,6 +243,8 @@ in   Chance 61          Control  ConstantOnly         inline=false num 0 [0..100
 in   Chance 62          Control  ConstantOnly         inline=false num 0 [0..100] %
 in   Chance 63          Control  ConstantOnly         inline=false num 0 [0..100] %
 in   Chance 64          Control  ConstantOnly         inline=false num 0 [0..100] %
+in   Take               Control  ConstantOnly         inline=true  select 1 ["Free", "1 bar", "2 bars", "4 bars", "8 bars", "16 bars"] "Take"
+in   Rec Button         Control  ConstantOnly         inline=false toggle false ""
 out  L                  Audio
 out  R                  Audio
 out  Gate               Gate
