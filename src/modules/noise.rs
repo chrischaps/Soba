@@ -308,6 +308,12 @@ impl DspModule for Noise {
         self.random_to = self.rng.bipolar();
         self.random_phase = 0.0;
     }
+
+    /// Starts again from the seeded stream, Random's first target included.
+    fn seed(&mut self, seed: u64) {
+        self.rng = Pcg32::new(seed);
+        self.reset();
+    }
 }
 
 #[cfg(test)]

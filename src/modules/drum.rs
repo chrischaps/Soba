@@ -957,6 +957,10 @@ impl DspModule for Drum {
         self.prev_choke = false;
     }
 
+    fn seed(&mut self, seed: u64) {
+        self.rng = Pcg32::new(seed);
+    }
+
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
         let seconds = |samples: u64| samples as f32 / self.sample_rate;
         let mut readout = Readout::default();

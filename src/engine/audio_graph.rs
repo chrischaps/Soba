@@ -282,13 +282,31 @@ impl AudioGraph {
             return false;
         }
 
-        let module = match self.registry.as_ref().and_then(|r| r.create(module_id)) {
+        let mut module = match self.registry.as_ref().and_then(|r| r.create(module_id)) {
             Some(m) => m,
             None => return false,
         };
 
+        // Its own noise, the same each time a graph numbers it the same;
+        // a patch reseeds it by its number in the file (see seed_module)
+        module.seed(node_id);
         self.add_module_instance(node_id, module);
         true
+    }
+
+    /// Starts a module's random numbers from `seed` (see
+    /// [`DspModule::seed`]). Only a module not yet handed to a plan can be
+    /// seeded: one that has started playing keeps its noise going.
+    ///
+    /// Returns false if there is no such module or it has started playing.
+    pub fn seed_module(&mut self, node_id: NodeId, seed: u64) -> bool {
+        match self.nodes.get_mut(&node_id).and_then(|spec| spec.fresh.as_mut()) {
+            Some(module) => {
+                module.seed(seed);
+                true
+            }
+            None => false,
+        }
     }
 
     /// Adds a pre-created module instance to the graph, preparing it.
@@ -757,6 +775,7 @@ impl AudioGraph {
             EngineCommand::GiveRoom { node_id, room } => self.give_room(node_id, room),
             EngineCommand::SettleTake { node_id, take, sample } => self.settle_take(node_id, take, sample),
             EngineCommand::SetMarkers { node_id, markers } => self.set_markers(node_id, markers),
+            EngineCommand::SeedModule { node_id, seed } => self.seed_module(node_id, seed),
             // Played on the running module, not kept in the graph
             EngineCommand::Audition { node_id, .. } => self.nodes.contains_key(&node_id),
         }

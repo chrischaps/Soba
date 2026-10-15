@@ -133,6 +133,14 @@ impl<M: DspModule> DspModule for Poly<M> {
         }
     }
 
+    /// Each voice gets its own seed, so no two voices of one module, nor
+    /// voices of two modules, play the same noise.
+    fn seed(&mut self, seed: u64) {
+        for (channel, voice) in (0..).zip(&mut self.voices) {
+            voice.seed(seed.wrapping_mul(MAX_CHANNELS as u64).wrapping_add(channel));
+        }
+    }
+
     fn serialize_state(&self) -> Option<Vec<u8>> {
         self.voices[0].serialize_state()
     }

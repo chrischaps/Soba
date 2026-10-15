@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use web_time::Instant;
 
 use crate::dsp::Readout;
-use crate::engine::{ChannelPeaks, NodeId as EngineNodeId};
+use crate::engine::{ChannelPeaks, EngineCommand, NodeId as EngineNodeId};
 use crate::engine::midi_engine::MidiEvent;
 use crate::widgets::{LevelMeter, ModuleMeters};
 use super::annotation_ui::{self, View};
@@ -101,6 +101,11 @@ pub struct SynthGraphState {
 
     /// Counter for generating unique engine node IDs.
     next_engine_node_id: EngineNodeId,
+
+    /// The seeds of modules loaded from a patch, by engine ID: their IDs in
+    /// the file. Every other module is seeded by its engine ID. Kept after
+    /// the module goes, for undo to bring it back with the same noise.
+    seeds: HashMap<EngineNodeId, u64>,
 
     /// Last validation error message for display in UI.
     validation_message: Option<String>,
@@ -301,6 +306,7 @@ impl Default for SynthGraphState {
             selected_node: None,
             node_id_map: HashMap::new(),
             next_engine_node_id: 0,
+            seeds: HashMap::new(),
             validation_message: None,
             validation_message_time: None,
             context_menu_pos: None,
@@ -382,6 +388,29 @@ impl SynthGraphState {
     pub fn assign_engine_node_id(&mut self, graph_node_id: NodeId, engine_node_id: EngineNodeId) {
         self.next_engine_node_id = self.next_engine_node_id.max(engine_node_id + 1);
         self.node_id_map.insert(graph_node_id, engine_node_id);
+    }
+
+    /// Makes room to seed a patch's modules by their IDs in it, as the
+    /// render tool does, so the editor plays the same noise. Engine IDs
+    /// handed out from now on are all above those IDs, so a module added
+    /// later never draws a loaded module's noise. Call it before allocating
+    /// the loaded modules' engine IDs, then [`set_seed`](Self::set_seed).
+    pub fn make_room_for_seeds(&mut self, patch_ids: impl IntoIterator<Item = u64>) {
+        if let Some(highest) = patch_ids.into_iter().max() {
+            self.next_engine_node_id = self.next_engine_node_id.max(highest + 1);
+        }
+    }
+
+    /// Seeds a module loaded from a patch by its ID in the file.
+    pub fn set_seed(&mut self, engine_node_id: EngineNodeId, patch_id: u64) {
+        self.seeds.insert(engine_node_id, patch_id);
+    }
+
+    /// The command that seeds a module: by its ID in the patch it was
+    /// loaded from, or else by its engine ID.
+    pub fn seed_command(&self, engine_node_id: EngineNodeId) -> EngineCommand {
+        let seed = self.seeds.get(&engine_node_id).copied().unwrap_or(engine_node_id);
+        EngineCommand::SeedModule { node_id: engine_node_id, seed }
     }
 
     /// A new group's ID, from the same count as engine node IDs, so a patch

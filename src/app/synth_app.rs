@@ -2969,6 +2969,7 @@ impl SynthApp {
             self.graph_state.node_order.push(part.graph_id);
         }
 
+        self.user_state.make_room_for_seeds(staged.nodes.iter().map(|node| node.patch_id));
         for node in &staged.nodes {
             let pos = egui::pos2(node.position.0, node.position.1);
             self.graph_state.node_positions.insert(node.graph_id, pos);
@@ -2978,11 +2979,14 @@ impl SynthApp {
             // IDs in the patch file. MIDI mappings are remapped below.
             let engine_node_id = self.user_state.allocate_engine_node_id(node.graph_id);
 
-            // Create the module in the audio engine. Parameter values follow
-            // with the next parameter sync.
+            // Create the module in the audio engine, seeded by its ID in the
+            // file so its noise is the render tool's. Parameter values
+            // follow with the next parameter sync.
             for cmd in engine_sync::add_module(&self.graph_state.graph, node.graph_id, engine_node_id) {
                 self.send_command(cmd);
             }
+            self.user_state.set_seed(engine_node_id, node.patch_id);
+            self.send_command(self.user_state.seed_command(engine_node_id));
         }
 
         // Samplers' files, found from where the patch is

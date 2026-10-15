@@ -460,6 +460,7 @@ impl Step {
                     data.file = file.clone();
                     user_state.assign_engine_node_id(node_id, engine_id);
                     commands.extend(engine_sync::add_module(&editor.graph, node_id, engine_id));
+                    commands.push(user_state.seed_command(engine_id));
 
                     // Every value goes to the new module, since it starts at defaults
                     let all = 0..state.params().len();

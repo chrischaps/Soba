@@ -33,6 +33,17 @@ pub enum EngineCommand {
         module_id: &'static str,
     },
 
+    /// Start a module's random numbers from `seed`, before it first plays.
+    /// A patch seeds each module by its ID in the file, so it plays the same
+    /// noise in the editor, in a capture and in the render tool; a module
+    /// that isn't seeded draws from its node ID.
+    SeedModule {
+        /// The module to seed, just added.
+        node_id: NodeId,
+        /// Where its random numbers start.
+        seed: u64,
+    },
+
     /// Remove a module from the audio graph.
     RemoveModule {
         /// The node to remove.

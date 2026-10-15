@@ -675,6 +675,37 @@ mod tests {
         assert_eq!(peak(&out.right), 0.0, "a faded Mix input leaked on load");
     }
 
+    #[test]
+    fn test_a_modules_noise_follows_its_id_in_the_patch() {
+        // A Noise and a snare (hit by a Clock) in a patch, with `extra`
+        // modules ahead of them in the file to move their engine IDs along
+        let render = |noise_id: u64, extra: u64| {
+            let mut patch = Patch::new("hiss");
+            patch.nodes.extend((0..extra).map(|n| NodeData::new(100 + n, "osc.sine", (0.0, 0.0))));
+            patch.nodes.push(NodeData::new(noise_id, "source.noise", (0.0, 0.0)));
+            patch.nodes.push(NodeData::new(200, "util.clock", (0.0, 0.0)));
+            let mut drum = NodeData::new(201, "source.drum", (0.0, 0.0));
+            drum.parameters = vec![NamedParameter::new("Type", ParameterValue::Select(1))];
+            patch.nodes.extend([drum, NodeData::new(202, "output.audio", (0.0, 0.0))]);
+            patch.connections.push(ConnectionData::new(noise_id, "White", 202, "Left"));
+            patch.connections.push(ConnectionData::new(200, "Gate", 201, "Trig"));
+            patch.connections.push(ConnectionData::new(201, "Out", 202, "Right"));
+            let (mut r, compiled) = OfflineRenderer::from_patch(&patch, 48000.0, 256).unwrap();
+            assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+            r.apply(EngineCommand::SetPlaying(true));
+            r.render_seconds(0.5)
+        };
+        let first = render(7, 0);
+        assert!(peak(&first.left) > 0.1 && peak(&first.right) > 0.1, "both make noise");
+
+        // However many modules come before them, they play the same noise...
+        let numbered_later = render(7, 3);
+        assert_eq!(first.left, numbered_later.left);
+        assert_eq!(first.right, numbered_later.right);
+        // ...and a Noise with another ID plays other noise
+        assert_ne!(first.left, render(8, 0).left);
+    }
+
     /// Rising edges through `threshold`, in seconds.
     fn onsets(samples: &[f32], threshold: f32, sample_rate: f32) -> Vec<f32> {
         samples

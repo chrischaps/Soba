@@ -465,6 +465,12 @@ pub trait DspModule: Send + 'static {
     /// REAL-TIME SAFE: the markers come by value.
     fn set_markers(&mut self, _markers: Markers) {}
 
+    /// Starts the module's random numbers from `seed`, so a patch plays the
+    /// same noise wherever it runs: in the editor, in a capture or in the
+    /// render tool. The graph seeds each module as it's added, before it
+    /// first plays. Modules without randomness ignore it.
+    fn seed(&mut self, _seed: u64) {}
+
     /// Work a module does a piece at a time between blocks, whether or not
     /// the transport runs: a Looper copying in a loop it was given. Uses up
     /// to `budget` frames of copying, taking off what it used. Called on

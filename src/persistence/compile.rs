@@ -86,6 +86,8 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
             node_id: engine_node_id,
             module_id: node.template.module_id(),
         });
+        // Its noise by its ID in the file, as the editor seeds it
+        compiled.commands.push(EngineCommand::SeedModule { node_id: engine_node_id, seed: node.patch_id });
 
         // Send every parameter the way the editor's initial parameter sync does
         let skip = port_mapping::live_input_parameter_count(node.template.module_id());
