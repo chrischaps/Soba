@@ -135,6 +135,8 @@ The filter closes as the note opens and opens again as it releases, for "backwar
 
 A struck string rings longer when it's struck harder. With a short decay and no sustain, velocity into **Decay** gives a full-strength note twice the knob's decay and the softest one the knob's own. For a gentler spread, run velocity through an [Attenuverter](../utilities/attenuverter.md) first. Pitch CV into **Decay** through an Attenuverter turned below zero makes high notes shorter, the way a piano's are.
 
+[Afterglow](../../recipes/afterglow.md)'s arpeggio does this, with an Attenuverter's **Offset** at −0.5 so that only notes played harder than half ring longer. Its gate closes partway through the decay, so velocity goes to **Release** too.
+
 ### A last chord that rings
 
 ```text

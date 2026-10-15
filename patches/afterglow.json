@@ -1541,6 +1541,26 @@
           "value": 1
         }
       ]
+    },
+    {
+      "id": 20,
+      "module_id": "util.attenuverter",
+      "position": [
+        600.0,
+        680.0
+      ],
+      "parameters": [
+        {
+          "name": "Amount",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Offset",
+          "type": "Number",
+          "value": -0.5
+        }
+      ]
     }
   ],
   "connections": [
@@ -1573,6 +1593,24 @@
       "from_port": "Velocity",
       "to_node": 6,
       "to_port": "Velocity"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Velocity",
+      "to_node": 20,
+      "to_port": "In"
+    },
+    {
+      "from_node": 20,
+      "from_port": "Out",
+      "to_node": 6,
+      "to_port": "Decay"
+    },
+    {
+      "from_node": 20,
+      "from_port": "Out",
+      "to_node": 6,
+      "to_port": "Release"
     },
     {
       "from_node": 3,

@@ -14,6 +14,7 @@ A patch that plays itself and sounds finished: a soft, plucked arpeggio rolls th
 - **Transposing with a second sequencer.** Pitch inputs add up, so one sequencer can shift another's notes. Here the Chord Sequencer's **Root** moves the arpeggio over four chords.
 - **Clocking from end of cycle.** A sequencer's **EOC** output can clock a second sequencer, so the second one moves once per bar.
 - **Chords on one cable.** The Chord Sequencer sends each chord down a polyphonic cable, voiced and voice-led, with the bass underneath. One pad voice plays the whole progression.
+- **Accents that ring.** Velocity stretches the pluck's decay and release, so the loud notes ring on a little after they're struck, as a harder-plucked string does.
 - **Chords without a third.** Sus2 shapes are neither major nor minor, so the same arpeggio shape works on any root.
 - **Two voices, one space.** A bright lead and a dark pad share one chorus, delay and reverb, so they sound as if they're in the same room.
 - **A mix on tape.** A Tape module last in the chain softens the peaks and lets the pitch sway a little, for the warmth of a record rather than a computer.
@@ -28,6 +29,7 @@ A patch that plays itself and sounds finished: a soft, plucked arpeggio rolls th
 | [Oscillator](../modules/sources/oscillator.md) 1 | **Wave** Saw, **Voices** 2, **Detune** 12%, **Exp FM** 1.0 oct |
 | [Ladder Filter](../modules/filters/ladder-filter.md) | **Cutoff** 900 Hz, **Res** 35%, **Drive** 2.2x |
 | [ADSR Envelope](../modules/modulation/adsr.md) 1 | **Atk** 2 ms, **Dec** 350 ms, **Sus** 0%, **Rel** 350 ms, **Vel** 60% |
+| [Attenuverter](../modules/utilities/attenuverter.md) (ring) | **Amount** +1.0, **Offset** −0.5 |
 | [LFO](../modules/modulation/lfo.md) | **Rate** 0.04 Hz, **Wave** Sine, **Bipolar** on |
 | [Mix](../modules/utilities/mix.md) (filter sweep) | **Level 1** 100%, **Level 2** 70% |
 | [VCA](../modules/utilities/vca.md) 1 | Defaults |
@@ -73,6 +75,16 @@ The arpeggio's shape has no third. Without one, a chord is neither major nor min
 ```
 
 Two slightly detuned saws go through the ladder filter's 24 dB lowpass. A fast envelope opens both the VCA and the filter, so each note starts bright and dulls as it fades, like a plucked string. Each step has its own velocity. The loud ones fall on steps 1, 4, 7, 11 and 14, a 3-3-4-3-3 pattern that pushes against the even sixteenths, so the line grooves instead of ticking.
+
+```text
+[Step Sequencer Velocity] ──> [Attenuverter In]
+[Attenuverter Out] ──> [ADSR 1 Decay]
+                   ──> [ADSR 1 Release]
+```
+
+Velocity also sets how long each note rings. A string plucked harder swings wider and takes longer to settle, so the accents should ring on where the soft notes are gone. The ADSR's **Decay** and **Release** jacks [stretch their stages in octaves of time](../modules/modulation/adsr.md#stage-cv): +1 doubles the knob's time, and 0 leaves it alone. The Attenuverter turns a step's velocity into that many octaves. With **Offset** at −0.5, a velocity of 64 (half) adds nothing, so the soft steps ring for the knobs' 350 ms as before. The loudest step, 112, rings about 30% longer, and every step in between rings a little longer the harder it's played.
+
+Velocity goes to both jacks because the gate is shorter than the decay. At 60% of a sixteenth, each note's gate closes after about 100 ms, partway through **Decay**, and the rest of the note is **Release**. Velocity in **Decay** alone would only shape the first 100 ms. Watch the ADSR's display: the **D** and **R** are tinted while their jacks are patched, and the curve widens on the accents.
 
 The Mix adds a very slow LFO to the envelope before both reach **Cutoff**. Over 25 seconds the whole arpeggio gets darker and then brighter again. One cycle of the LFO lasts nearly ten bars, so each pass through the progression sounds a little different.
 
@@ -135,6 +147,8 @@ To hear what the tape adds, select it and press **Ctrl+B** to bypass it, then pr
 **Triplet shimmer.** Set the delay's **Sync** to 1/8T. The echoes now land in threes against the sixteenths.
 
 **Glassier.** Switch Oscillator 1's **Wave** to Tri and raise the Ladder Filter's **Cutoff** to 2 kHz. The pluck goes from felt to glass.
+
+**Struck harder.** Set the Attenuverter's **Offset** to 0. Every note now rings longer, and the accents nearly twice the knobs' time, so they hang over the notes after them and the line turns legato on its loud steps. Set **Offset** to −0.9 for the opposite: the accents ring for the knobs' time and the soft notes are about a fifth shorter, like strings damped by the side of the hand.
 
 **A worn cassette.** On the Tape, set **Speed** to 7½ ips, **Age** to 45%, **Hiss** to 25% and **Wow** to 55%. The arpeggio sways like a tape that's been played every day for a summer.
 
