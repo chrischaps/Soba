@@ -27,7 +27,7 @@ Rhythm guitar played on an electric piano. A Chord Sequencer strums G, D/F♯, E
 | Electric Piano (from the [Library](../concepts/groups.md#the-library)) | As it comes |
 | [Trigger Sequencer](../modules/utilities/trigger-sequencer.md) | **Steps** 16. Lane 1 (the stomp) on steps 1, 5, 9 and 13. Lane 2 (the shaker) on every step at ×2, velocity 60% on the odd steps and 82% on the even ones |
 | [Drum](../modules/sources/drum.md) (the stomp) | **Type** Kick, **Tune** +5 st, **Decay** 25%, **Tone** 45%, **Snap** 30%, **Level** 90% |
-| [Drum](../modules/sources/drum.md) (the shaker) | **Type** Closed Hat, **Decay** 35%, **Tone** 70%, **Snap** 90%, **Level** 100% |
+| [Drum](../modules/sources/drum.md) (the shaker) | **Type** Shaker, **Decay** 40%, **Tone** 70%, **Snap** 60%, **Level** 100% |
 | [Chorus](../modules/effects/chorus.md) | **Rate** 0.35 Hz, **Depth** 25%, **Delay** 10 ms, **Mix** 25% |
 | [Mixer](../modules/utilities/mixer.md) | Ch 1 and 2 (the piano) hard left and right at 100%, Ch 3 (the stomp) in the centre at 80%, Ch 4 (the shaker) R 35 at 100% |
 | [Reverb](../modules/effects/reverb.md) | **Size** 45%, **Decay** 1.6 s, **Damp** 55%, **PreD** 12 ms, **Mix** 22%, **Mod** 20% |
@@ -88,7 +88,7 @@ The roots are written where a guitar's bass strings play them: G2, F♯2 (under 
 [Clock Gate]  ──> [Trigger Sequencer Clock]
 [Clock Reset] ──> [Trigger Sequencer Reset]
 [Trigger Sequencer Gate 1 / Vel 1] ──> [Drum (Kick) Trig / Accent]
-[Trigger Sequencer Gate 2 / Vel 2] ──> [Drum (Closed Hat) Trig / Accent]
+[Trigger Sequencer Gate 2 / Vel 2] ──> [Drum (Shaker) Trig / Accent]
 ```
 
 Someone on the porch keeps time with their heel, and someone else plays a shaker. The Trigger Sequencer takes the same eighth-note Clock as the Chord Sequencer, and its 16 steps are the same two bars, so each pad sits under one stroke of the hand. The Clock's **Reset** goes to both sequencers, so they start the loop together every time **Run** is ticked.
@@ -103,7 +103,7 @@ The second bar is the same, with the downbeat stomp at 74.
 
 **The stomp** is a heel on wooden boards: a Kick tuned up five semitones, to about 64 Hz, with a short **Decay**. **Snap** at 30% makes the pitch fall less, so the hit is a round thump, and it leaves a little knock of wood in it. **Tone** at 45% adds enough drive for the thump to be heard on small speakers. It lands on 1 and 3, and its velocity, through the Drum's **Accent**, makes the first beat of the bar a little heavier than the third.
 
-**The shaker** is the Closed Hat with its **Snap** at 90%, so it's nearly all hiss and hardly any metal. Each step is a ×2 [ratchet](../modules/utilities/trigger-sequencer.md#ratchets), two grains evenly spaced across the eighth, so an eighth-note lane plays sixteenths. Its velocity follows the strum: 60% under a downstroke and 82% under an upstroke. A shaker player's wrist pushes against the guitarist's, so the offbeats lift where the piano's strokes are lightest. The shaker keeps going through the tied steps, where the hand moves without striking.
+**The shaker** is the Drum's Shaker: a band of hiss around 7 kHz whose grains swell in over a few milliseconds, as the beads arrive, rather than striking like a hat. **Snap** at 60% lets the beads rattle a little inside each grain. Each step is a ×2 [ratchet](../modules/utilities/trigger-sequencer.md#ratchets), two grains evenly spaced across the eighth, so an eighth-note lane plays sixteenths. Its velocity follows the strum: 60% under a downstroke and 82% under an upstroke. The softer grains swell in more slowly too, as a looser wrist does. A shaker player's wrist pushes against the guitarist's, so the offbeats lift where the piano's strokes are lightest. The shaker keeps going through the tied steps, where the hand moves without striking.
 
 ### The room
 
@@ -111,7 +111,7 @@ The second bar is the same, with the downbeat stomp at 74.
 [Electric Piano Out] ──> [Chorus In L]
 [Chorus Out L/R]     ──> [Mixer Ch 1 / Ch 2]   (panned hard left and right)
 [Drum (Kick) Out]    ──> [Mixer Ch 3]
-[Drum (Closed Hat) Out] ──> [Mixer Ch 4]
+[Drum (Shaker) Out]  ──> [Mixer Ch 4]
 [Mixer Out L/R]      ──> [Reverb In L/R]
 [Reverb Out L/R]     ──> [Tape In L/R]
 [Tape Out L/R]       ──> [Audio Output Left/Right]

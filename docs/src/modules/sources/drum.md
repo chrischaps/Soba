@@ -5,7 +5,7 @@
 ![Drum Module](../../images/module-drum.png)
 *A kick just after a hit. The orange line is its pitch, falling two and a half octaves to 48 Hz in the first few milliseconds. The blue curve is its level, lit up to the playhead.*
 
-Drum is one analog drum voice. Its **Type** turns it into a kick, snare, tom, clap, closed hat, open hat, cymbal, rim or cowbell, each built the way an 808 or 909 builds that sound: a few oscillators, a noise source, filters and decays. Send it a trigger and it plays one hit.
+Drum is one analog drum voice. Its **Type** turns it into a kick, snare, tom, clap, closed hat, open hat, cymbal, rim, cowbell or shaker, each built the way an 808 or 909 builds that sound: a few oscillators, a noise source, filters and decays. Send it a trigger and it plays one hit.
 
 The same five knobs serve every type, and each means what it would on that drum's own panel. **Tune** sets the pitch of a kick and the metal of a hat. **Snap** sets a kick's beater and a snare's wires. The names never change, so a MIDI mapping keeps working when you change the Type.
 
@@ -26,8 +26,11 @@ Each type has its own pitch, its own range of decay, and its own meaning for Ton
 | **Cymbal** | The same squares through a low and a high band, a bright splash over a long wash | The same | 0.6 – 5 s | From the low band to the high | Sizzle against metal |
 | **Rim** | Two tones, 1667 and 455 Hz, and a crack of noise | 1667 Hz | 15 – 200 ms | Drive | The crack |
 | **Cowbell** | Two squares a sixth apart, through a bandpass | 540 and 800 Hz | 0.1 – 1.2 s | The bandpass, dark to bright | The clank of the strike over the ring |
+| **Shaker** | A band of noise that swells in over 3 ms, as the beads arrive, rather than striking | 6.7 kHz band | 40 – 200 ms | Where the band sits, from 5 to 9 kHz | The rattle: the beads landing unevenly inside each grain |
 
 The hats' six squares run all the time, as the 808's do. They are never caught at the same place twice, so no two hits sound exactly alike.
+
+Every other type starts at full level the instant it's struck. The Shaker's grain swells in, because the beads in a shaker don't all hit the wall at once. **Accent** shapes that as a wrist does: a full shake swells in over 3 ms, and a soft one over as much as 8 ms, as well as being quieter and darker.
 
 ## Inputs
 
@@ -49,7 +52,7 @@ The hats' six squares run all the time, as the 808's do. They are never caught a
 
 | Control | Range | Default | Description |
 |---------|-------|---------|-------------|
-| **Type** | Kick … Cowbell | Kick | Which drum. The knobs keep their settings when it changes |
+| **Type** | Kick … Shaker | Kick | Which drum. The knobs keep their settings when it changes |
 | **Tune** | ±24 st | 0 st | Pitch in semitones from the drum's own |
 | **Decay** | 0 – 100% | 50% | How long it rings, over the type's own range |
 | **Tone** | 0 – 100% | 50% | Dark to bright, as the table describes |
@@ -80,7 +83,7 @@ A voice struck again while it's still ringing starts the new hit at once. It let
 
 The display draws the hit the knobs will play next. The blue curve is its level. Time runs on a warped axis that is wide at the start, so a kick's 10 ms drop and a cymbal's five-second wash both fit, with faint marks at 10 ms, 100 ms and each second. The ring time is at the top right.
 
-The orange line is pitch. For a kick, snare, tom or rim it is the fall from the strike to the drum's resting pitch, which is printed at the top left. For the hats, cymbal and cowbell it is one line per square wave, each fading as the ring dies. For a clap it marks the band the noise rings in.
+The orange line is pitch. For a kick, snare, tom or rim it is the fall from the strike to the drum's resting pitch, which is printed at the top left. For the hats, cymbal and cowbell it is one line per square wave, each fading as the ring dies. For a clap or a shaker it marks the band the noise rings in, and the shaker's level curve rises from nothing as its grain swells in.
 
 When the drum is hit, the fill flashes, and a playhead travels along the curve, lighting it as it goes. The lit curve is as tall as the hit's Accent, so ghost notes and backbeats read at a glance. A choked hit drops to nothing where the choke caught it. Hover the display for the numbers.
 

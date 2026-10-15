@@ -136,8 +136,8 @@ pub fn drum_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user
         painter.add(Shape::line(trace, Stroke::new(1.0 * z, orange.gamma_multiply(0.8))));
     } else {
         let partials: Vec<f32> = match kind {
-            // The band the hands ring in
-            DrumType::Clap => vec![voicing.pitch_hz],
+            // The band the hands or the beads ring in
+            _ if kind.is_band() => vec![voicing.pitch_hz],
             _ => kind.partials().iter().map(|ratio| voicing.pitch_hz * ratio).collect(),
         };
         for hz in partials {
@@ -179,7 +179,7 @@ pub fn drum_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user
     let small = egui::FontId::proportional(8.0 * z);
     let label = match voicing.pitch_at(f32::INFINITY) {
         Some(hz) => format!("{} Hz", hz.round()),
-        None if kind == DrumType::Clap => format!("{} Hz band", voicing.pitch_hz.round()),
+        None if kind.is_band() => format!("{} Hz band", voicing.pitch_hz.round()),
         None => format!("{} squares", kind.partials().len()),
     };
     painter.text(rect.left_top() + Vec2::new(4.0 * z, 2.0 * z), egui::Align2::LEFT_TOP, label, small.clone(), orange.gamma_multiply(0.8));
@@ -189,6 +189,9 @@ pub fn drum_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user
         let pitch = match (voicing.pitch_at(0.0), voicing.pitch_at(f32::INFINITY)) {
             (Some(start), Some(rest)) => format!("Pitch falls from {} to {} Hz", start.round(), rest.round()),
             _ if kind == DrumType::Clap => format!("Four bursts of noise in a band at {} Hz, then a tail", voicing.pitch_hz.round()),
+            _ if kind == DrumType::Shaker => {
+                format!("Beads in a band at {} Hz, swelling in over {}", voicing.pitch_hz.round(), duration(3.0 * voicing.swell))
+            }
             _ => {
                 let hz: Vec<String> = kind.partials().iter().map(|r| format!("{}", (voicing.pitch_hz * r).round())).collect();
                 format!("Squares at {} Hz", hz.join(", "))

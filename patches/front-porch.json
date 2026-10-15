@@ -3958,7 +3958,7 @@
         {
           "name": "Type",
           "type": "Select",
-          "value": 4
+          "value": 9
         },
         {
           "name": "Tune",
@@ -3968,7 +3968,7 @@
         {
           "name": "Decay",
           "type": "Number",
-          "value": 0.35
+          "value": 0.4
         },
         {
           "name": "Tone",
@@ -3978,7 +3978,7 @@
         {
           "name": "Snap",
           "type": "Number",
-          "value": 0.9
+          "value": 0.6
         },
         {
           "name": "Level",

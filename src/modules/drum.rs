@@ -1,6 +1,6 @@
 //! Drum voice module.
 //!
-//! One analog-style voice that plays any of nine drums, the way an 808 or a
+//! One analog-style voice that plays any of ten drums, the way an 808 or a
 //! 909 makes each of its sounds from a few oscillators, a noise source,
 //! filters and decays. Every type reads the same five knobs (Tune, Decay,
 //! Tone, Snap, Level), each meaning what it would on that drum's own panel,
@@ -27,7 +27,7 @@ use crate::dsp::{
 
 /// The drums, in the Type menu's order. Saved patches store the index, so
 /// new types go at the end.
-pub const DRUM_TYPES: &[&str] = &["Kick", "Snare", "Tom", "Clap", "Closed Hat", "Open Hat", "Cymbal", "Rim", "Cowbell"];
+pub const DRUM_TYPES: &[&str] = &["Kick", "Snare", "Tom", "Clap", "Closed Hat", "Open Hat", "Cymbal", "Rim", "Cowbell", "Shaker"];
 
 /// Which drum a voice plays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,11 +41,12 @@ pub enum DrumType {
     Cymbal,
     Rim,
     Cowbell,
+    Shaker,
 }
 
 impl DrumType {
     /// Every type, in menu order.
-    pub const ALL: [DrumType; 9] = [
+    pub const ALL: [DrumType; 10] = [
         DrumType::Kick,
         DrumType::Snare,
         DrumType::Tom,
@@ -55,6 +56,7 @@ impl DrumType {
         DrumType::Cymbal,
         DrumType::Rim,
         DrumType::Cowbell,
+        DrumType::Shaker,
     ];
 
     /// The type a Type parameter value selects.
@@ -81,6 +83,11 @@ impl DrumType {
     pub fn is_swept(self) -> bool {
         matches!(self, DrumType::Kick | DrumType::Snare | DrumType::Tom | DrumType::Rim)
     }
+
+    /// Whether it's noise in one band, whose centre is its pitch.
+    pub fn is_band(self) -> bool {
+        matches!(self, DrumType::Clap | DrumType::Shaker)
+    }
 }
 
 /// The 808's six cymbal and hi-hat squares (205.3, 304.4, 369.6, 522.7,
@@ -96,6 +103,19 @@ const COWBELL_HZ: f32 = 540.0;
 /// Where a clap's four noise bursts start, in seconds. A little uneven, as
 /// a few hands never quite clap together. The last starts the tail.
 pub const CLAP_BURSTS: [f32; 4] = [0.0, 0.0105, 0.0195, 0.0300];
+
+/// The centre of a Shaker's band at Tune 0 and Tone 50%: Tone moves it
+/// from 5 to 9 kHz.
+const SHAKER_HZ: f32 = 6708.0;
+const SHAKER_TONE_SPAN: f32 = 1.8;
+
+/// How long a Shaker's grain takes to swell in, in seconds, at full Accent
+/// and at none: a looser wrist lets the beads arrive more slowly.
+const SHAKER_ATTACK: (f32, f32) = (0.003, 0.008);
+
+/// How far apart a Shaker's beads land, in seconds: each one moves the
+/// grain's level, by as much as Snap allows.
+const BEAD_GAP: (f32, f32) = (0.0006, 0.0022);
 
 /// The Snare's second drumhead mode, as a ratio of its first.
 const SNARE_MODE_RATIO: f32 = 1.78;
@@ -190,6 +210,9 @@ pub struct Voicing {
     pub body: Decay,
     pub noise: Decay,
     pub click: Decay,
+    /// Time constant of a swell into the hit, in seconds, or 0 for a hit
+    /// that starts at full level. The decays are scaled by `1 - e^(-t/swell)`.
+    pub swell: f32,
     /// Saturation of a sine body: 0 is clean.
     pub drive: f32,
     /// The Tone and Snap the hit uses, after Accent.
@@ -217,6 +240,7 @@ impl Voicing {
             body: Decay::default(),
             noise: Decay::default(),
             click: Decay::default(),
+            swell: 0.0,
             drive: 0.0,
             tone,
             snap,
@@ -279,6 +303,14 @@ impl Voicing {
                 v.click = Decay::new(0.3 + 0.7 * snap, 0.05);
                 v.body = Decay::new(0.45, span(decay, 0.1, 1.2));
             }
+            DrumType::Shaker => {
+                // Tune and Tone both move the band the beads hiss in
+                v.pitch_hz = SHAKER_HZ * transpose * SHAKER_TONE_SPAN.powf(tone - 0.5);
+                v.body = Decay::new(1.0, span(decay, 0.04, 0.2));
+                // Nearly at full level after three time constants
+                let (sharpest, softest) = SHAKER_ATTACK;
+                v.swell = (sharpest + (softest - sharpest) * (1.0 - accent)) / 3.0;
+            }
         }
         v
     }
@@ -297,6 +329,7 @@ impl Voicing {
             DrumType::Cymbal => 0.82,
             DrumType::Rim => 0.53,
             DrumType::Cowbell => 0.69,
+            DrumType::Shaker => 1.0,
         }
     }
 
@@ -305,7 +338,8 @@ impl Voicing {
         if t < 0.0 {
             return 0.0;
         }
-        match self.kind {
+        let rise = if self.swell > 0.0 { 1.0 - (-t / self.swell).exp() } else { 1.0 };
+        rise * match self.kind {
             DrumType::Clap => {
                 // Each burst strikes afresh; the tail starts with the last
                 let last = CLAP_BURSTS.iter().rev().find(|&&start| t >= start).copied().unwrap_or(0.0);
@@ -440,8 +474,8 @@ fn saturate(x: f32, drive: f32) -> f32 {
     }
 }
 
-/// A drum voice: kick, snare, tom, clap, closed and open hat, cymbal, rim
-/// and cowbell.
+/// A drum voice: kick, snare, tom, clap, closed and open hat, cymbal, rim,
+/// cowbell and shaker.
 ///
 /// # Ports
 ///
@@ -486,6 +520,14 @@ pub struct Drum {
     /// Octaves above the resting pitch, falling.
     sweep: f32,
     sweep_step: f32,
+    /// How far the hit has still to swell in: 1 at the strike, falling to 0.
+    swell: f32,
+    swell_step: f32,
+    /// A shaker grain's level as its beads land: where it is, where the
+    /// last bead sent it, and the samples until the next.
+    rattle: f32,
+    rattle_target: f32,
+    bead_in: u32,
     /// Which clap burst comes next, and the sample it starts on.
     next_burst: usize,
     burst_samples: [u64; 4],
@@ -535,6 +577,11 @@ impl Drum {
             click_step: 0.0,
             sweep: 0.0,
             sweep_step: 0.0,
+            swell: 0.0,
+            swell_step: 0.0,
+            rattle: 1.0,
+            rattle_target: 1.0,
+            bead_in: 0,
             next_burst: CLAP_BURSTS.len(),
             burst_samples: [0; 4],
             phase: [0.0; 2],
@@ -635,6 +682,15 @@ impl Drum {
         self.click_step = voicing.click.coefficient(rate);
         self.sweep = voicing.sweep_octaves;
         self.sweep_step = (-1.0 / (voicing.sweep_tau * rate)).exp();
+        if voicing.swell > 0.0 {
+            self.swell = 1.0;
+            self.swell_step = (-1.0 / (voicing.swell * rate)).exp();
+        } else {
+            self.swell = 0.0;
+        }
+        self.rattle = 1.0;
+        self.rattle_target = 1.0;
+        self.bead_in = 0;
         self.phase = [0.0; 2];
 
         let tone = voicing.tone;
@@ -658,6 +714,11 @@ impl Drum {
             DrumType::Cymbal => [SvfTuning::new(4200.0 * (pitch / METAL_HZ), 0.9, rate), SvfTuning::new(7500.0, 0.7, rate)],
             DrumType::Rim => [SvfTuning::new(300.0, 0.7, rate), SvfTuning::new(5000.0, 1.0, rate)],
             DrumType::Cowbell => [SvfTuning::new(pitch * 1.7 * (2.0 * (tone - 0.5)).exp2(), 1.6, rate), SvfTuning::default()],
+            // A band of hiss, its low side steepened by a highpass
+            DrumType::Shaker => {
+                let centre = pitch.min(0.4 * rate);
+                [SvfTuning::new(centre, 1.3, rate), SvfTuning::new(0.55 * centre, 0.7, rate)]
+            }
         };
         self.tuning = filters;
         let air_hz = match voicing.kind {
@@ -741,18 +802,34 @@ impl Drum {
                 ring * self.body + crack * self.click
             }
             DrumType::Cowbell => first.tick(self.squares.next(), first_tuning).band * (self.body + self.click),
+            DrumType::Shaker => {
+                // Each bead that lands moves the grain's level a little,
+                // more of it with Snap: the rattle inside the swell
+                if self.bead_in == 0 {
+                    let (soonest, latest) = BEAD_GAP;
+                    let gap = soonest + (latest - soonest) * (0.5 + 0.5 * self.rng.bipolar());
+                    self.bead_in = (gap * self.sample_rate).max(1.0) as u32;
+                    self.rattle_target = 1.0 - 0.85 * v.snap * (0.5 + 0.5 * self.rng.bipolar());
+                }
+                self.bead_in -= 1;
+                self.rattle += 0.08 * (self.rattle_target - self.rattle);
+                let hiss = second.tick(first.tick(white, first_tuning).band, second_tuning).high;
+                hiss * self.rattle * self.body
+            }
         };
 
         self.body *= self.body_step;
         self.noise *= self.noise_step;
         self.click *= self.click_step;
         self.sweep *= self.sweep_step;
-        out
+        let rise = 1.0 - self.swell;
+        self.swell *= self.swell_step;
+        out * rise
     }
 
     /// The envelope now, before the gain.
     fn envelope(&self) -> f32 {
-        (self.body + self.noise + self.click) * self.choke
+        (self.body + self.noise + self.click) * (1.0 - self.swell) * self.choke
     }
 }
 
@@ -768,7 +845,7 @@ impl DspModule for Drum {
             id: "source.drum",
             name: "Drum",
             category: ModuleCategory::Source,
-            description: "An analog-style drum voice: kick, snare, tom, clap, hats, cymbal, rim or cowbell",
+            description: "An analog-style drum voice: kick, snare, tom, clap, hats, cymbal, rim, cowbell or shaker",
         };
         &INFO
     }
@@ -864,6 +941,10 @@ impl DspModule for Drum {
         self.noise = 0.0;
         self.click = 0.0;
         self.sweep = 0.0;
+        self.swell = 0.0;
+        self.rattle = 1.0;
+        self.rattle_target = 1.0;
+        self.bead_in = 0;
         self.next_burst = CLAP_BURSTS.len();
         self.phase = [0.0; 2];
         self.filter = [Svf::default(); 2];
@@ -1179,6 +1260,59 @@ mod tests {
         }
         // And the tail rings on after the last
         assert!(rms(&out[ms(60.0)..ms(80.0)]) > 0.01);
+    }
+
+    /// Where a hit's level peaks, in samples, from its RMS over 0.25 ms windows.
+    fn loudest_at(out: &[f32]) -> usize {
+        let window = ms(0.25);
+        (0..out.len() / window).map(|w| (w * window, rms(&out[w * window..(w + 1) * window]))).fold((0, 0.0), |a, b| if b.1 > a.1 { b } else { a }).0
+    }
+
+    #[test]
+    fn test_a_shaker_grain_swells_in() {
+        // A hat is loudest at once; a shaker's beads take a few ms to arrive
+        let drum = || Drum { rng: Pcg32::new(3), ..Drum::new() };
+        let hat = play(&mut drum(), &params(DrumType::ClosedHat), 0.1, &[0], &[], None);
+        let shaker = play(&mut drum(), &params(DrumType::Shaker), 0.1, &[0], &[], None);
+        assert!(loudest_at(&hat) < ms(1.0), "the hat peaks at {} samples", loudest_at(&hat));
+        let peak_at = loudest_at(&shaker);
+        assert!((ms(1.5)..ms(8.0)).contains(&peak_at), "the shaker peaks {} ms in", peak_at as f32 * 1000.0 / SAMPLE_RATE);
+        let opening = rms(&shaker[..ms(0.5)]);
+        assert!(opening < 0.5 * rms(&shaker[peak_at..peak_at + ms(1.0)]), "the shaker starts at {opening}");
+    }
+
+    #[test]
+    fn test_a_softer_shake_swells_in_more_slowly() {
+        let full = Voicing::new(DrumType::Shaker, Strike { accent: 1.0, ..Strike::default() });
+        let soft = Voicing::new(DrumType::Shaker, Strike { accent: 0.3, ..Strike::default() });
+        assert!((3.0 * full.swell - 0.003).abs() < 1e-6);
+        assert!(soft.swell > 1.5 * full.swell);
+        // So a soft grain is further from its peak 2 ms in
+        let rise = |v: &Voicing| v.amplitude_at(0.002) / v.amplitude_at(0.01);
+        assert!(rise(&soft) < rise(&full));
+    }
+
+    #[test]
+    fn test_shaker_snap_rattles_the_grain() {
+        // The grain's level, in 1 ms steps, wavers more with Snap than without
+        let roughness = |snap: f32| {
+            let mut params = params(DrumType::Shaker);
+            params[Drum::PARAM_SNAP] = snap;
+            params[Drum::PARAM_DECAY] = 1.0;
+            let out = play(&mut Drum { rng: Pcg32::new(5), ..Drum::new() }, &params, 0.1, &[0], &[], None);
+            let levels: Vec<f32> = out[ms(10.0)..ms(60.0)].chunks(ms(1.0)).map(rms).collect();
+            let steps: Vec<f32> = levels.windows(2).map(|w| (w[1] / w[0]).ln().abs()).collect();
+            steps.iter().sum::<f32>() / steps.len() as f32
+        };
+        let (smooth, rattling) = (roughness(0.0), roughness(1.0));
+        assert!(rattling > 1.5 * smooth, "snap 0 wavers {smooth}, snap 1 {rattling}");
+    }
+
+    #[test]
+    fn test_shaker_tone_moves_the_band_from_5_to_9_khz() {
+        let band = |tone: f32| Voicing::new(DrumType::Shaker, Strike { tone, ..Strike::default() }).pitch_hz;
+        assert!((band(0.0) - 5000.0).abs() < 10.0, "{}", band(0.0));
+        assert!((band(1.0) - 9000.0).abs() < 20.0, "{}", band(1.0));
     }
 
     #[test]
