@@ -397,28 +397,30 @@ def from_one_sine(s):
     # is 5923 x 4957, so it fits at the 0.2 minimum zoom.
     c = (960.0, 508.0)
     whole = (2962, 2479)
-    motif = (888, 2391)
-    opening = (500, 2198)
+    # The left column below Harmony moved down 80 when the Chord Sequencer
+    # grew its pattern tabs (#240)
+    motif = (888, 2471)
+    opening = (500, 2278)
     # (start, glide seconds, centre, zoom, what)
     shots = [
         (-1.0, 0.05, opening, 1.5, "the sine and its sequencer, alone, with the note that explains them"),
-        (3.0, 13.0, (860, 2248), 1.25, "a slow drift along the motif"),
+        (3.0, 13.0, (860, 2328), 1.25, "a slow drift along the motif"),
         (u(3), 12.0, (1895, 2429), 0.43, "back out: the pad, sparkles and harmony arrive"),
         (u(5) - 1.0, 3.0, (3100, 734), 0.64, "Pulse: arp and bass"),
         (u(7) - 0.5, 3.0, (2990, 2033), 0.88, "the bells and sparkles"),
         (u(8) + 1.0, 3.0, (2808, 2995), 1.1, "the riser"),
-        (u(9) - 0.6, 1.4, (1623, 4474), 0.56, "Groove: the kit"),
+        (u(9) - 0.6, 1.4, (1623, 4554), 0.56, "Groove: the kit"),
         (u(11), 4.0, (5002, 2206), 0.9, "the desk"),
-        (u(13) - 1.0, 3.0, (1150, 2391), 0.95, "Lift: the lead takes the motif"),
+        (u(13) - 1.0, 3.0, (1150, 2471), 0.95, "Lift: the lead takes the motif"),
         (u(15), 6.0, whole, 0.2, "the whole rack"),
-        (u(17) - 1.0, 4.0, (1640, 2225), 1.25, "Memory: the Looper plays the opening back"),
+        (u(17) - 1.0, 4.0, (1640, 2305), 1.25, "Memory: the Looper plays the opening back"),
         (u(18) + 4.0, 5.0, (1048, 805), 0.9, "the three Arrangers: Desk's faders, Cues, and Tape bending the Wow"),
         (u(19) + 4.5, 4.0, (5366, 2330), 1.4, "Build: on tape, the mix bending as the reels turn"),
         (u(20) + 4.0, round(SONG_UNIT - 4.0, 3), whole, 0.2, "the build pulls back to the whole rack, landing on the drop"),
         (u(22), 8.0, (2962, 2398), 0.21, "Everything: a breath closer, every module still in frame"),
         (u(23) + 3.0, 5.0, (3100, 1080), 0.95, "the bass, driven harder as the song brightens"),
         (u(25) - 1.0, 3.0, motif, 0.88, "Second wave: the sine over the groove, its ghost beneath"),
-        (u(27), 4.0, (1623, 3974), 0.48, "the pad breathing over the kick"),
+        (u(27), 4.0, (1623, 4054), 0.48, "the pad breathing over the kick"),
         (u(29), 6.0, whole, 0.2, "Return"),
         (u(31), 12.0, opening, 1.5, "back to the one sine"),
     ]

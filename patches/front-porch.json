@@ -927,7 +927,7 @@
       "module_id": "seq.trigger",
       "position": [
         40.0,
-        778.0
+        862.0
       ],
       "parameters": [
         {
@@ -3912,7 +3912,7 @@
       "module_id": "source.drum",
       "position": [
         410.0,
-        798.0
+        882.0
       ],
       "parameters": [
         {
@@ -3952,7 +3952,7 @@
       "module_id": "source.drum",
       "position": [
         720.0,
-        798.0
+        882.0
       ],
       "parameters": [
         {
@@ -4272,7 +4272,7 @@
       ],
       "size": [
         597.0,
-        681.0
+        765.0
       ],
       "color": "amber"
     },
@@ -4304,7 +4304,7 @@
       "title": "The porch",
       "position": [
         16.0,
-        720.0
+        804.0
       ],
       "size": [
         1010.0,
@@ -4334,7 +4334,7 @@
       "text": "The porch counts the same eighths as the hand: a pad under every stroke. A heel comes down on 1 and 3. The shaker plays two grains a stroke, a ×2 ratchet, soft under a downstroke and a little harder under an upstroke, so it leans against the strum.",
       "position": [
         1060.0,
-        798.0
+        882.0
       ],
       "width": 400.0
     }
