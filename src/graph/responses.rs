@@ -126,10 +126,12 @@ pub enum SynthResponse {
     SaveGroup(egui_node_graph2::NodeId),
     /// Ask for a file for a Sampler to play.
     OpenSample(egui_node_graph2::NodeId),
-    /// Place a new Sampler beside a node, patched from `source`, and record.
+    /// Place a new Sampler beside a node, patched from `source`, and record:
+    /// `bars` long from the next bar line, or until Rec again if 0.
     RecordInto {
         node_id: egui_node_graph2::NodeId,
         source: super::resample::Source,
+        bars: u32,
     },
     /// A Sampler's slice markers, moved, added or taken away by hand: the
     /// whole list, kept on the node. Undo takes it back as a step named `label`.

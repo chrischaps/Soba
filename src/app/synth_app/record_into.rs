@@ -1,7 +1,8 @@
 //! Recording into a new Sampler from a right-click (see
 //! [`crate::graph::resample`]): a Sampler placed beside the module, patched
 //! from it, listening at −40 dB, and its Rec pressed as soon as it holds
-//! room to record into, so the next sound is the take.
+//! room to record into, so the next sound is the take. A take in bars
+//! (with a Clock running) waits for the bar line instead, at −∞, and loops.
 //!
 //! Placing and patching it is one undo step. The press isn't one, as a
 //! press on the face isn't: it's played, like a footswitch.
@@ -15,7 +16,8 @@ use web_time::Instant;
 use crate::graph::resample::Source;
 use crate::graph::sampler_take::{MIN_PRESS_SECONDS, REC_BUTTON};
 use crate::graph::SynthNodeTemplate;
-use crate::modules::sampler::{Sampler, SAMPLER_ID};
+use crate::graph::resample::bar_name;
+use crate::modules::sampler::{Sampler, LOOP_MODES, NO_THRESHOLD_DB, SAMPLER_ID, TAKE_LENGTHS};
 use super::super::editing;
 use super::super::engine_sync;
 use super::framing::Target;
@@ -43,10 +45,12 @@ pub(super) struct Arming {
 
 impl SynthApp {
     /// Places a Sampler beside `node_id`, patched from its `source`,
-    /// listening at −40 dB, and presses its Rec once it can record. Starts
+    /// listening at −40 dB, and presses its Rec once it can record; or, for
+    /// a take `bars` long, with Take in bars, Thresh at −∞ (the bar line is
+    /// the cue, not the sound) and Loop on Forward. Starts
     /// the transport if it's stopped, since a stopped patch hears nothing,
     /// and brings the two into view if the Sampler landed out of it.
-    pub(super) fn record_into_new_sampler(&mut self, node_id: NodeId, source: &Source) {
+    pub(super) fn record_into_new_sampler(&mut self, node_id: NodeId, source: &Source, bars: u32) {
         let Some(&from) = self.graph_state.node_positions.get(node_id) else { return };
         let Some(template) = SynthNodeTemplate::from_module_id(SAMPLER_ID) else { return };
         let size = self.sampler_size() * self.graph_state.pan_zoom.zoom;
@@ -61,8 +65,16 @@ impl SynthApp {
                 graph.add_connection(output, input, 0);
             }
         }
-        if let Ok(threshold) = graph[sampler].get_input("Rec Threshold") {
-            graph.inputs[threshold].value.set_actual_value(LISTEN_DB);
+        let take = (bars > 0).then(|| TAKE_LENGTHS.iter().position(|&name| name == bar_name(bars))).flatten();
+        let choice = |names: &[&str], name: &str| names.iter().position(|&n| n == name).unwrap_or(0) as f32;
+        let settings = match take {
+            Some(take) => vec![("Rec Threshold", NO_THRESHOLD_DB), ("Take", take as f32), ("Loop", choice(LOOP_MODES, "Forward"))],
+            None => vec![("Rec Threshold", LISTEN_DB)],
+        };
+        for (name, value) in settings {
+            if let Ok(input) = graph[sampler].get_input(name) {
+                graph.inputs[input].value.set_actual_value(value);
+            }
         }
         commands.extend(engine_sync::sync_cables(&self.graph_state.graph, &mut self.user_state));
         for command in commands {
@@ -78,8 +90,11 @@ impl SynthApp {
         if started {
             self.set_playing(true);
         }
-        let waiting = "Waiting for a sound: the take starts on it, and Rec stops it";
-        self.status_message = Some(if started { format!("Playing. {waiting}") } else { waiting.to_string() });
+        let waiting = match take {
+            Some(_) => format!("Waiting for the next bar: the take lasts {} and loops", bar_name(bars)),
+            None => "Waiting for a sound: the take starts on it, and Rec stops it".to_string(),
+        };
+        self.status_message = Some(if started { format!("Playing. {waiting}") } else { waiting });
     }
 
     /// Brings a new Sampler and what it records into view, if it landed
@@ -225,7 +240,7 @@ mod tests {
         pump(&mut app, 0.05);
 
         let send = crate::graph::resample::source_of(&app.graph_state.graph, mixer, "Send R").unwrap();
-        app.record_into_new_sampler(mixer, &send);
+        app.record_into_new_sampler(mixer, &send, 0);
         pump(&mut app, 0.05);
         let sampler = node(&app, SAMPLER_ID);
         assert_eq!(patched_from(&app, sampler, "In L"), Some((mixer, "Send L".into())));
@@ -251,6 +266,36 @@ mod tests {
         std::fs::remove_dir_all(&folder).ok();
     }
 
+    #[test]
+    fn test_a_take_in_bars_waits_for_the_bar_and_loops() {
+        let mut app = SynthApp::new(false);
+        let folder = opened(&mut app, "bars", &["util.clock", "osc.sine"]);
+        let sine = node(&app, "osc.sine");
+        pump(&mut app, 0.05);
+
+        let out = crate::graph::resample::source_of(&app.graph_state.graph, sine, "Out").unwrap();
+        app.record_into_new_sampler(sine, &out, 2);
+        pump(&mut app, 0.05);
+        let sampler = node(&app, SAMPLER_ID);
+        let graph = &app.graph_state.graph;
+        let value = |name: &str| graph.get_input(graph[sampler].get_input(name).unwrap()).value.actual_value();
+        assert_eq!(TAKE_LENGTHS[value("Take") as usize], "2 bars");
+        assert_eq!(LOOP_MODES[value("Loop") as usize], "Forward");
+        assert_eq!(value("Rec Threshold"), NO_THRESHOLD_DB, "the bar line is the cue, not the sound");
+        assert!(app.status_message.as_deref().is_some_and(|m| m.contains("next bar")), "{:?}", app.status_message);
+
+        // Free, beside it, listens as before
+        app.record_into_new_sampler(sine, &out, 0);
+        pump(&mut app, 0.05);
+        let graph = &app.graph_state.graph;
+        let free = app.graph_state.selected_nodes[0];
+        let value = |name: &str| graph.get_input(graph[free].get_input(name).unwrap()).value.actual_value();
+        assert_eq!(TAKE_LENGTHS[value("Take") as usize], "Free");
+        assert_eq!(LOOP_MODES[value("Loop") as usize], "Off");
+        assert_eq!(value("Rec Threshold"), LISTEN_DB);
+        std::fs::remove_dir_all(&folder).ok();
+    }
+
     /// On the real audio device: a sine resampled from its menu, recorded
     /// from the moment the Sampler can, then stopped from the face. The
     /// patch has no output module, so it makes no sound.
@@ -268,7 +313,7 @@ mod tests {
         assert!(!app.is_playing);
 
         let out = crate::graph::resample::source_of(&app.graph_state.graph, sine, "Out").unwrap();
-        app.record_into_new_sampler(sine, &out);
+        app.record_into_new_sampler(sine, &out, 0);
         assert!(app.is_playing, "a stopped patch hears nothing, so it plays");
         pump(&mut app, 0.5);
         let sampler = node(&app, SAMPLER_ID);
@@ -284,6 +329,36 @@ mod tests {
         pump(&mut app, 0.3);
         assert_eq!(state(&app), RecState::Idle);
         let key = app.graph_state.graph[sampler].user_data.file.clone().expect("the take");
+        assert!(key.ends_with("Take 1.wav"), "{key}");
+
+        app.send_command(EngineCommand::SetPlaying(false));
+        pump(&mut app, 0.05);
+        std::fs::remove_dir_all(&folder).ok();
+    }
+
+    /// On the real audio device: a bar of a sine, resampled with a Clock
+    /// running, comes in and stops on its own, with no press to end it.
+    #[test]
+    #[ignore = "needs an audio device; run with --ignored"]
+    fn a_take_in_bars_stops_itself() {
+        let mut app = SynthApp::new(false);
+        if app.audio_engine.is_err() {
+            eprintln!("no audio device: skipped");
+            return;
+        }
+        let folder = opened(&mut app, "bar-take", &["util.clock", "osc.sine"]);
+        let sine = node(&app, "osc.sine");
+        pump(&mut app, 0.1);
+
+        let out = crate::graph::resample::source_of(&app.graph_state.graph, sine, "Out").unwrap();
+        app.record_into_new_sampler(sine, &out, 1);
+        let sampler = node(&app, SAMPLER_ID);
+        // Up to a bar to the line, a bar of take, at the Clock's 120 BPM
+        let end = Instant::now() + Duration::from_secs(6);
+        while app.graph_state.graph[sampler].user_data.file.is_none() && Instant::now() < end {
+            pump(&mut app, 0.1);
+        }
+        let key = app.graph_state.graph[sampler].user_data.file.clone().expect("a take, ended by the bars");
         assert!(key.ends_with("Take 1.wav"), "{key}");
 
         app.send_command(EngineCommand::SetPlaying(false));

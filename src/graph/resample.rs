@@ -4,6 +4,10 @@
 //! **Resample into a new Sampler**. The app places the Sampler beside the
 //! module, patched from it and listening, and presses its Rec, so the next
 //! sound is the take.
+//!
+//! With a Clock in the patch, it offers whole bars too (*1 bar*, *2 bars*,
+//! *4 bars*): the take starts on the next bar line instead of the next sound,
+//! stops itself, and lands looped, ready for a key or a gate.
 
 use egui_node_graph2::NodeId;
 
@@ -33,6 +37,26 @@ impl Source {
             None => &self.left,
         }
     }
+}
+
+/// The bar counts the menu offers when a Clock runs. Longer takes (8 and 16
+/// bars) are on the Sampler's own Take.
+pub const BAR_TAKES: [u32; 3] = [1, 2, 4];
+
+/// What the Clock module is called, by ID.
+const CLOCK_ID: &str = "util.clock";
+
+/// Whether a take in bars has a Clock to count them: one in the patch whose
+/// Run is on, or patched (it may be switched on by then).
+pub fn has_clock(graph: &SynthGraph) -> bool {
+    graph.nodes.iter().filter(|(_, node)| node.user_data.module_id == CLOCK_ID).any(|(_, node)| {
+        node.get_input("Run").ok().is_none_or(|run| graph.connection(run).is_some() || graph.get_input(run).value.actual_value() > 0.5)
+    })
+}
+
+/// A bar count's words: "1 bar", "2 bars".
+pub fn bar_name(bars: u32) -> String {
+    if bars == 1 { "1 bar".into() } else { format!("{bars} bars") }
 }
 
 /// The other side of a stereo output, by its name, and whether `name` is
@@ -90,34 +114,56 @@ pub fn label(graph: &SynthGraph, node_id: NodeId) -> &'static str {
 
 const HINT: &str = "A Sampler beside it, patched from it and listening: the take starts on the next sound, and Rec stops it";
 
+const BARS_HINT: &str = "A Sampler beside it, patched from it: the take starts on the next bar line, lasts this long and loops";
+
+/// The take's lengths, as a submenu's items when a Clock runs: Free, then
+/// whole bars. Returns the bars chosen (0 for Free). Without a Clock, the
+/// item is Free alone.
+fn length_items(ui: &mut egui::Ui, label: &str, clocked: bool) -> Option<u32> {
+    if !clocked {
+        return ui.button(label).on_hover_text(HINT).clicked().then_some(0);
+    }
+    let mut chosen = None;
+    ui.menu_button(label, |ui| {
+        if ui.button("Free").on_hover_text(HINT).clicked() {
+            chosen = Some(0);
+        }
+        for bars in BAR_TAKES {
+            if ui.button(bar_name(bars)).on_hover_text(BARS_HINT).clicked() {
+                chosen = Some(bars);
+            }
+        }
+    });
+    chosen
+}
+
 /// A module menu's item: one for a module with one thing to record, or a
-/// submenu naming each. Returns what was chosen.
+/// submenu naming each; with a Clock, each offers its lengths. Returns
+/// what was chosen.
 pub fn module_items(ui: &mut egui::Ui, graph: &SynthGraph, node_id: NodeId) -> Option<SynthResponse> {
     let sources = sources(graph, node_id);
     let label = label(graph, node_id);
-    let choose = |source: &Source| SynthResponse::RecordInto { node_id, source: source.clone() };
-    match sources.as_slice() {
+    let clocked = has_clock(graph);
+    let choose = |source: &Source, bars: u32| SynthResponse::RecordInto { node_id, source: source.clone(), bars };
+    let chosen = match sources.as_slice() {
         [] => None,
-        [source] => {
-            let clicked = ui.button(label).on_hover_text(HINT).clicked();
-            clicked.then(|| {
-                ui.close_menu();
-                choose(source)
-            })
-        }
+        [source] => length_items(ui, label, clocked).map(|bars| choose(source, bars)),
         _ => {
             let mut chosen = None;
             ui.menu_button(label, |ui| {
                 for source in &sources {
-                    if ui.button(source.name()).on_hover_text(HINT).clicked() {
-                        chosen = Some(choose(source));
-                        ui.close_menu();
+                    if let Some(bars) = length_items(ui, source.name(), clocked) {
+                        chosen = Some(choose(source, bars));
                     }
                 }
             });
             chosen
         }
+    };
+    if chosen.is_some() {
+        ui.close_menu();
     }
+    chosen
 }
 
 /// An audio output label's item, recording the pair it's a side of.
@@ -127,10 +173,9 @@ pub fn port_item(ui: &mut egui::Ui, graph: &SynthGraph, node_id: NodeId, source:
         Some(right) if source.left != "L" => format!("{label} ({} and {right})", source.left),
         _ => label.to_string(),
     };
-    ui.button(named).on_hover_text(HINT).clicked().then(|| {
-        ui.close_menu();
-        SynthResponse::RecordInto { node_id, source: source.clone() }
-    })
+    let bars = length_items(ui, &named, has_clock(graph))?;
+    ui.close_menu();
+    Some(SynthResponse::RecordInto { node_id, source: source.clone(), bars })
 }
 
 #[cfg(test)]
@@ -185,5 +230,25 @@ mod tests {
         let mixer = add(&mut graph, "util.mixer");
         assert_eq!(source_of(&graph, mixer, "Send R"), Some(pair("Send L", "Send R")));
         assert_eq!(source_of(&graph, mixer, "Out L"), Some(pair("Out L", "Out R")));
+    }
+
+    #[test]
+    fn test_bars_are_offered_while_a_clock_will_run() {
+        let mut graph = SynthGraph::default();
+        add(&mut graph, "util.mixer");
+        assert!(!has_clock(&graph), "no Clock, nothing to count bars");
+        let clock = add(&mut graph, CLOCK_ID);
+        assert!(has_clock(&graph));
+        let run = graph[clock].get_input("Run").unwrap();
+        graph.inputs[run].value.set_actual_value(0.0);
+        assert!(!has_clock(&graph), "a Clock switched off never reaches the bar");
+    }
+
+    #[test]
+    fn test_bar_counts_read_as_the_take_knob_does() {
+        use crate::modules::sampler::TAKE_LENGTHS;
+        for bars in BAR_TAKES {
+            assert!(TAKE_LENGTHS.contains(&bar_name(bars).as_str()), "{bars}");
+        }
     }
 }

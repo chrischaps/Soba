@@ -379,7 +379,7 @@ enum NodeMenuAction {
     Jack(egui_node_graph2::NodeId, crate::graph::groups::Side, String, crate::graph::groups::JackEdit),
     SaveToLibrary(egui_node_graph2::NodeId),
     OpenSample(egui_node_graph2::NodeId),
-    RecordInto(egui_node_graph2::NodeId, crate::graph::resample::Source),
+    RecordInto(egui_node_graph2::NodeId, crate::graph::resample::Source, u32),
 }
 
 impl SynthApp {
@@ -2167,8 +2167,8 @@ impl SynthApp {
                         NodeResponse::User(crate::graph::SynthResponse::OpenSample(node_id)) => {
                             node_menu_actions.push(NodeMenuAction::OpenSample(node_id));
                         }
-                        NodeResponse::User(crate::graph::SynthResponse::RecordInto { node_id, source }) => {
-                            node_menu_actions.push(NodeMenuAction::RecordInto(node_id, source));
+                        NodeResponse::User(crate::graph::SynthResponse::RecordInto { node_id, source, bars }) => {
+                            node_menu_actions.push(NodeMenuAction::RecordInto(node_id, source, bars));
                         }
                         _ => {
                             // Other responses not yet handled
@@ -2712,7 +2712,7 @@ impl SynthApp {
             NodeMenuAction::Jack(node_id, side, port, edit) => self.edit_jack(node_id, side, &port, edit),
             NodeMenuAction::SaveToLibrary(node_id) => self.save_to_library(node_id),
             NodeMenuAction::OpenSample(node_id) => self.open_sample_dialog(node_id),
-            NodeMenuAction::RecordInto(node_id, source) => self.record_into_new_sampler(node_id, &source),
+            NodeMenuAction::RecordInto(node_id, source, bars) => self.record_into_new_sampler(node_id, &source, bars),
         }
     }
 
