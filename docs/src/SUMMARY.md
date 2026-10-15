@@ -60,6 +60,7 @@
   - [Arranger](./modules/utilities/arranger.md)
   - [MIDI Monitor](./modules/midi/midi-monitor.md)
   - [Audio Output](./modules/output/audio-output.md)
+  - [Link Out](./modules/output/link-out.md)
 
 # Recipes
 
@@ -74,6 +75,7 @@
 - [Backbeat](./recipes/backbeat.md)
 - [Drum Machine](./recipes/drum-machine.md)
 - [Roll Call](./recipes/roll-call.md)
+- [Pinwheel](./recipes/pinwheel.md)
 - [Afterglow](./recipes/afterglow.md)
 - [Front Porch](./recipes/front-porch.md)
 - [Soba Speaks](./recipes/soba-speaks.md)

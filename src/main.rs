@@ -59,6 +59,9 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
 
+    // Sends any Link Out's lanes to Seoul; idle while the patch has none
+    soba::link::sender::start();
+
     eframe::run_native(
         "Soba",
         options,

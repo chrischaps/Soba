@@ -296,6 +296,8 @@ pub enum NodeDisplay {
     SlopeShape,
     /// Dancer: a stick figure dancing on a stage, as big as its Size.
     Dancer,
+    /// Link Out: a lamp per lane, what it sends, and whether Seoul hears.
+    LinkLanes,
     /// Slicer: the row of steps, each drawn as the slice it cuts, and a
     /// dot riding the one playing.
     SlicerRow,
@@ -2093,6 +2095,10 @@ impl NodeDataTrait for SynthNodeData {
 
         if self.display == NodeDisplay::SlopeShape {
             super::slope_display::slope_display(ui, node_id, graph, user_state, zoom);
+        }
+
+        if self.display == NodeDisplay::LinkLanes {
+            super::link_display::link_display(ui, node_id, graph, user_state, zoom);
         }
 
         if self.display == NodeDisplay::TapeReels {

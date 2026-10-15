@@ -2994,3 +2994,19 @@ in   Limiter            Control  ConstantOnly         inline=true  toggle true "
 in   Character          Control  ConstantOnly         inline=true  toggle false "Character"
 knob Volume             "Vol" KnobOnly
 display OutputMeter
+
+== output.link "Link Out" finder="Link Out" Output
+in   CV 1               Control  ConnectionOnly       inline=true  port
+in   CV 2               Control  ConnectionOnly       inline=true  port
+in   CV 3               Control  ConnectionOnly       inline=true  port
+in   CV 4               Control  ConnectionOnly       inline=true  port
+in   CV 5               Control  ConnectionOnly       inline=true  port
+in   CV 6               Control  ConnectionOnly       inline=true  port
+in   CV 7               Control  ConnectionOnly       inline=true  port
+in   CV 8               Control  ConnectionOnly       inline=true  port
+in   Gate 1             Gate     ConnectionOnly       inline=true  port
+in   Gate 2             Gate     ConnectionOnly       inline=true  port
+in   Gate 3             Gate     ConnectionOnly       inline=true  port
+in   Gate 4             Gate     ConnectionOnly       inline=true  port
+in   Port               Control  ConstantOnly         inline=true  select 0 ["9137", "9138", "9139", "9140"] "Port"
+display LinkLanes

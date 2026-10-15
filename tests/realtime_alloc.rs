@@ -87,8 +87,8 @@ fn ports(module_id: &str) -> (Vec<usize>, Vec<usize>) {
     (inputs, outputs)
 }
 
-/// The patch size the guard plays.
-const PATCH_SIZE: usize = 37;
+/// The patch size the guard plays: every module, the first few twice.
+const PATCH_SIZE: usize = 44;
 
 /// Adds `count` modules, cycling through every built-in module in
 /// registration order, chained output-to-input, with every port monitored.
@@ -173,6 +173,21 @@ fn audio_callback_never_allocates() {
         from_port: port("source.sampler", "L"),
         to_node: node_of(&nodes, "util.dancer"),
         to_port: port("util.dancer", "Audio"),
+    });
+
+    // A Link Out sending an LFO and the Clock's gate to Seoul
+    let link = node_of(&nodes, "output.link");
+    ui.send_command(EngineCommand::Connect {
+        from_node: node_of(&nodes, "mod.lfo"),
+        from_port: 0,
+        to_node: link,
+        to_port: port("output.link", "CV 1"),
+    });
+    ui.send_command(EngineCommand::Connect {
+        from_node: clock,
+        from_port: port("util.clock", "Gate"),
+        to_node: link,
+        to_port: port("output.link", "Gate 1"),
     });
 
     // A Chopper on the same Clock, cut at markers, given a new loop (and

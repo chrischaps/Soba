@@ -1,6 +1,6 @@
 # Module Overview
 
-Soba has 40 modules in six categories. Each category has its own header color, so you can tell what a module is for at a glance across a crowded patch. The categories match the right-click menu and the quick-add palette, and the modules are listed here in the order the menu shows them.
+Soba has 42 modules in six categories. Each category has its own header color, so you can tell what a module is for at a glance across a crowded patch. The categories match the right-click menu and the quick-add palette, and the modules are listed here in the order the menu shows them.
 
 The **ID** is the name a patch file uses to refer to the module.
 
@@ -83,11 +83,12 @@ The **ID** is the name a patch file uses to refer to the module.
 
 ### Output
 
-<span class="swatch bar output"></span>Purple header. Where the patch meets your speakers.
+<span class="swatch bar output"></span>Purple header. Where the patch leaves Soba: for your speakers, or for Seoul's visuals.
 
 | Module | ID | What it does |
 |--------|----|--------------|
 | [Audio Output](./output/audio-output.md) | `output.audio` | Stereo master output with volume, DC blocking and a peak limiter |
+| [Link Out](./output/link-out.md) | `output.link` | Send eight CV lanes, four gates and the Clock to the Seoul visualizer, to play its pictures from the patch |
 
 Header colors describe what a module *is*. The colors of its jacks and cables describe the *signals* it handles, which is a separate palette: see [Signal Types](../concepts/signal-types.md).
 
@@ -156,3 +157,4 @@ Drive a voice from a sequence instead of a keyboard:
 | See a signal | [Oscilloscope](./visualization/oscilloscope.md), [MIDI Monitor](./midi/midi-monitor.md) |
 | Watch the music dance | [Dancer](./visualization/dancer.md) |
 | Hear the result | [Audio Output](./output/audio-output.md) |
+| Play visuals from the patch | [Link Out](./output/link-out.md), with Seoul |

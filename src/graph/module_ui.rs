@@ -544,6 +544,11 @@ static MODULE_UI: &[ModuleUi] = &[
         display: NodeDisplay::OutputMeter,
         ..ModuleUi::DEFAULT
     },
+    ModuleUi {
+        module_id: "output.link",
+        display: NodeDisplay::LinkLanes,
+        ..ModuleUi::DEFAULT
+    },
 ];
 
 /// Every entry in the table.

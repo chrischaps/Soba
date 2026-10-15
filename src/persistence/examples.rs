@@ -181,6 +181,13 @@ pub const EXAMPLES: &[Example] = &[
         json: include_str!("../../patches/roll-call.json"),
     },
     Example {
+        name: "Pinwheel",
+        shelf: Shelf::Recipe,
+        file_name: "pinwheel.json",
+        description: "Plays Seoul's visuals as well as its drums: a Link Out sends three LFOs, a kick envelope, the bar and the drums' gates to Seoul's Obangsaek pinwheel",
+        json: include_str!("../../patches/pinwheel.json"),
+    },
+    Example {
         name: "Afterglow",
         shelf: Shelf::Recipe,
         file_name: "afterglow.json",

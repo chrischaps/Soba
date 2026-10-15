@@ -10,7 +10,7 @@ use rtrb::Consumer;
 
 use crate::dsp::denormal::DenormalGuard;
 use crate::dsp::{InputAudio, MidiEvent, ModuleRegistry, Poly, ProcessContext, Snapshot, SnapshotOutcome};
-use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Chorus, Clock, ClockDivider, Compressor, Dancer, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, Logic, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Oscillator, Slicer, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
+use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Chorus, Clock, ClockDivider, Compressor, Dancer, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, LinkOut, Logic, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Oscillator, Slicer, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
 
 use super::audio_input::InputFeed;
 use super::channels::{EngineHandle, MAX_SNAPSHOTS};
@@ -72,6 +72,7 @@ pub fn create_module_registry() -> ModuleRegistry {
     registry.register::<Compressor>();
     registry.register::<MidiMonitor>();
     registry.register::<AudioOutput>();
+    registry.register::<LinkOut>();
     registry
 }
 
@@ -613,6 +614,7 @@ mod tests {
         assert!(registry.contains("util.sample_hold"));
         assert!(registry.contains("util.oscilloscope"));
         assert!(registry.contains("util.dancer"));
+        assert!(registry.contains("output.link"));
         assert!(registry.contains("seq.step"));
         assert!(registry.contains("fx.delay"));
         assert!(registry.contains("fx.reverb"));
@@ -638,7 +640,7 @@ mod tests {
         assert!(registry.contains("seq.chord"));
         assert!(registry.contains("fx.vocoder"));
         assert!(registry.contains("source.chopper"));
-        assert_eq!(registry.len(), 41);
+        assert_eq!(registry.len(), 42);
     }
 
     #[test]
