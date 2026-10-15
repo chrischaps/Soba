@@ -1963,6 +1963,8 @@ impl SynthApp {
                     Vec::default(),
                 );
                 ui.set_clip_rect(view_clip);
+                let dt = ctx.input(|i| i.stable_dt).min(0.1);
+                self.user_state.cable_spotlight.end_frame(graph_response.hovered_cable, dt);
                 self.note_miniatures();
                 if let Some(dive) = &dive {
                     self.paint_dive(ui, layer, &[(grid_start, grid_end), (graph_start, next_shape())], dive);

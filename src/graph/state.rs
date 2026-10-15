@@ -3,7 +3,7 @@
 //! Contains the user state passed to egui_node_graph2 callbacks.
 
 use egui::{Color32, Pos2, Vec2};
-use egui_node_graph2::{Backdrop, ConnectionSignalTrait, FlowGlyph, GraphEditorState, NodeId, SignalTrace};
+use egui_node_graph2::{Backdrop, ConnectionSignalTrait, FlowGlyph, GraphEditorState, InputId, NodeId, SignalTrace};
 use std::collections::{HashMap, HashSet, VecDeque};
 use web_time::Instant;
 
@@ -148,6 +148,9 @@ pub struct SynthGraphState {
 
     /// How knobs are drawn.
     pub knob_style: crate::widgets::KnobStyle,
+
+    /// The cable picked out from the rest, and the knob it feeds (#220).
+    pub cable_spotlight: super::cable_spotlight::CableSpotlight,
 
     /// Recent MIDI events for display in MIDI Monitor modules.
     pub midi_events: VecDeque<DisplayMidiEvent>,
@@ -310,6 +313,7 @@ impl Default for SynthGraphState {
             flow_glyph: FlowGlyph::default(),
             cable_through: CABLE_THROUGH,
             knob_style: crate::widgets::KnobStyle::default(),
+            cable_spotlight: Default::default(),
             midi_events: VecDeque::new(),
             midi_first_event_time: None,
             midi_notes: VecDeque::new(),
@@ -715,6 +719,10 @@ impl ConnectionSignalTrait for SynthGraphState {
 
     fn cable_through_node(&self) -> f32 {
         self.cable_through
+    }
+
+    fn cable_spotlight(&self) -> Option<(InputId, f32)> {
+        self.cable_spotlight.cable()
     }
 
     fn node_shown(&self, node_id: NodeId) -> bool {

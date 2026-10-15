@@ -148,6 +148,10 @@ pub struct KnobConfig {
     /// here, with a bead at its end, over a faint swath of where the CV has
     /// been lately, and read under the dial while the knob isn't in hand.
     pub modulated: Option<f32>,
+    /// How strongly, from 0 to 1, the knob is picked out as the one the
+    /// hovered cable carries CV to: its bead swells and glows, or, with no
+    /// bead to show, a ring lights around the dial.
+    pub spotlight: f32,
 }
 
 impl Default for KnobConfig {
@@ -167,6 +171,7 @@ impl Default for KnobConfig {
             accent: theme::accent::PRIMARY,
             style: KnobStyle::default(),
             modulated: None,
+            spotlight: 0.0,
         }
     }
 }
@@ -760,10 +765,17 @@ fn paint_hybrid(painter: &egui::Painter, f: &Face) {
 /// takes it, over a faint swath of where it's been lately. The knob itself
 /// stays where it was set
 fn paint_modulation(painter: &egui::Painter, center: Pos2, config: &KnobConfig, from: f32, swath: Option<Swath>) {
+    let s = config.size / 36.0;
+    let spot = config.spotlight.clamp(0.0, 1.0);
     let Some(to) = config.modulated else {
+        // Patched, but with no bead to light: a ring round the dial
+        if spot > 0.0 {
+            let radius = config.size / 2.0 - 0.6 * s;
+            painter.circle_stroke(center, radius, Stroke::new(3.0 * s, theme::signal::CONTROL.gamma_multiply(0.18 * spot)));
+            painter.circle_stroke(center, radius, Stroke::new(1.2 * s, theme::signal::CONTROL.gamma_multiply(0.8 * spot)));
+        }
         return;
     };
-    let s = config.size / 36.0;
     let (from, to) = (from.clamp(0.0, 1.0), config.travel(to).clamp(0.0, 1.0));
     let radius = config.size / 2.0 - 0.6 * s;
     let angle = |t: f32| Face::START + t * Face::SWEEP;
@@ -775,8 +787,11 @@ fn paint_modulation(painter: &egui::Painter, center: Pos2, config: &KnobConfig, 
         stroke_arc(painter, center, radius, angle(from.min(to)), angle(from.max(to)), 1.2 * s, color.gamma_multiply(0.7));
     }
     let bead = polar(center, angle(to), radius);
-    painter.circle_filled(bead, 2.6 * s, color.gamma_multiply(0.25));
-    painter.circle_filled(bead, 1.5 * s, color);
+    if spot > 0.0 {
+        painter.circle_filled(bead, 6.0 * s * spot, color.gamma_multiply(0.22 * spot));
+    }
+    painter.circle_filled(bead, (2.6 + 1.0 * spot) * s, color.gamma_multiply(0.25 + 0.3 * spot));
+    painter.circle_filled(bead, (1.5 + 0.5 * spot) * s, mix(color, Color32::WHITE, 0.35 * spot));
 }
 
 /// How long the swath takes to let go of where the CV has been: each end

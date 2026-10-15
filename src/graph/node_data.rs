@@ -723,6 +723,7 @@ impl SynthNodeData {
         _midi_config: &KnobMidiConfig,
         accent: Color32,
         style: KnobStyle,
+        spotlight: f32,
     ) -> Option<egui::Response> {
         // Dim the knob if it's connected (externally controlled)
         let alpha = if is_connected { 0.5 } else { 1.0 };
@@ -745,6 +746,7 @@ impl SynthNodeData {
                     accent,
                     style,
                     modulated: modulated.map(|m| m.clamp(spec.min, spec.max)),
+                    spotlight,
                     ..Default::default()
                 };
                 let original_val = *val;
@@ -884,6 +886,18 @@ impl SynthNodeData {
                     .and_then(|(_, jack)| super::port_mapping::input_port_index(graph, node_id, *jack))
                     .and_then(|port| user_state.get_input_value(engine_node_id?, port));
 
+                // The jack whose cable carries the knob's CV, if one's
+                // plugged in: hovering either lights the other (#220)
+                let fed_by = if is_connected {
+                    Some(*input_id)
+                } else {
+                    super::knob_cv::jack(self.module_id, &knob_param.param_name)
+                        .and_then(|jack| node.inputs.iter().find(|(name, _)| name == jack))
+                        .map(|(_, jack)| *jack)
+                        .filter(|jack| graph.iter_connections().any(|(input, _)| input == *jack))
+                };
+                let spotlight = fed_by.map_or(0.0, |jack| user_state.cable_spotlight.knob(jack));
+
                 // Get MIDI mapping info for this parameter
                 let midi_mapping = engine_node_id.and_then(|eid|
                     user_state.get_midi_mapping(eid, current_param_index));
@@ -1012,6 +1026,7 @@ impl SynthNodeData {
                             &midi_config,
                             self.category.color(),
                             user_state.knob_style,
+                            spotlight,
                         )
                     }).inner
                 });
@@ -1028,6 +1043,9 @@ impl SynthNodeData {
                         egui::Sense::click(),
                     ),
                 };
+                if let Some(jack) = fed_by.filter(|_| interact_response.hovered() || interact_response.dragged()) {
+                    user_state.cable_spotlight.hover_knob(jack);
+                }
                 let hint = Hint::knob(self.module_id, &knob_param.param_name);
                 let interact_response = hints::attach(interact_response, self.face_hint(hint, &knob_param.param_name, place));
                 let named = if label.is_empty() { knob_param.param_name.as_str() } else { label };
