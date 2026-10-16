@@ -77,14 +77,15 @@ struct Window {
 #[test]
 #[ignore = "slow: renders a few minutes of music; run with --release"]
 fn the_beat_is_danced_on_in_every_example_with_one() {
-    let heard: Vec<(&str, Vec<Window>)> = thread::scope(|scope| {
+    let heard: Vec<(&str, (Option<(f32, f32)>, Vec<Window>))> = thread::scope(|scope| {
         let jobs: Vec<_> = SONGS.iter().map(|&(file, bpm, drums, seconds)| scope.spawn(move || (file, hear(file, bpm, drums, seconds)))).collect();
         jobs.into_iter().map(|job| job.join().unwrap()).collect()
     });
 
     let mut failures = Vec::new();
-    for (file, windows) in &heard {
-        println!("{file}");
+    for (file, (claim, windows)) in &heard {
+        let claim = claim.map_or("no beat claimed".to_string(), |(at, s)| format!("claims {:.0} BPM at {at:.1} s", 60.0 / s));
+        println!("{file}: {claim}");
         for (i, window) in windows.iter().enumerate() {
             let median = window.median.map_or("    -".to_string(), |m| format!("{:+5.0}", m * 1000.0));
             let heard = window.heard.map_or("    -".to_string(), |s| format!("{:5.0}", 60.0 / s));
@@ -103,8 +104,9 @@ fn the_beat_is_danced_on_in_every_example_with_one() {
 }
 
 /// Renders an example and plays it to a tracker, measuring each window's
-/// beats from when the drums come in.
-fn hear(file: &str, bpm: f32, drums: f32, seconds: f32) -> Vec<Window> {
+/// beats from when the drums come in. And when it first claims a beat, and
+/// how long that beat is, in seconds.
+fn hear(file: &str, bpm: f32, drums: f32, seconds: f32) -> (Option<(f32, f32)>, Vec<Window>) {
     let example = EXAMPLES.iter().find(|e| e.file_name == file).unwrap_or_else(|| panic!("no example {file}"));
     let patch = example.patch().unwrap();
     let (mut renderer, compiled) = OfflineRenderer::from_patch(&patch, SAMPLE_RATE, 256).unwrap();
@@ -120,12 +122,16 @@ fn hear(file: &str, bpm: f32, drums: f32, seconds: f32) -> Vec<Window> {
     let mut counted: Vec<(f32, f32)> = Vec::new();
     let mut heard: Vec<Option<f32>> = Vec::new();
     let mut last: Option<f64> = None;
+    let mut claim = None;
     for (n, (l, r)) in audio.left.iter().zip(&audio.right).enumerate() {
         tracker.hear(0.5 * (l + r));
         if n % read_every != read_every - 1 {
             continue;
         }
         heard.push(tracker.beat().map(|(_, seconds)| seconds));
+        if claim.is_none() {
+            claim = tracker.beat().map(|(_, seconds)| ((n + 1) as f32 / SAMPLE_RATE, seconds));
+        }
         let now = tracker.beat().map(|(position, _)| position);
         if let (Some(before), Some(after)) = (last, now) {
             if after.floor() > before.floor() {
@@ -155,5 +161,5 @@ fn hear(file: &str, bpm: f32, drums: f32, seconds: f32) -> Vec<Window> {
         });
         from += WINDOW_SECONDS;
     }
-    windows
+    (claim, windows)
 }
