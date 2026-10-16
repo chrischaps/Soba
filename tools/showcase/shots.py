@@ -733,7 +733,7 @@ def orrery(s):
     tour.inside(orbit(36) + 9.4, orbit(44) - 0.6, "fx.chorus", 1.2, "String Machine", "sun")
     tour.leave(orbit(44) - 0.3)
     tour.leave(orbit(44) + 0.3)
-    tour.hop(orbit(44) + 0.9, desk, 0.55, 3.0, "the desk", None)
+    tour.hop(orbit(44) + 0.9, clear(desk, 0.55), 0.55, 3.0, "the voices and the desk", None)
     tour.look(orbit(44) + 4.2, clear(tour.centre_of(178), 0.9), 0.9, orbit(48) - orbit(44) - 6.4, "along the desk to the tape", None)
 
     # Noon: the Day passes halfway, and the drums step up to the groove
@@ -772,7 +772,7 @@ def orrery(s):
     tour.leave(orbit(93) - 0.3)
     tour.hop(orbit(93) + 0.3, (1644, 2007), 0.62, 3.0, "the voices, the Comet over the band", ["comet", "bass", "drums-kit"])
     tour.look(orbit(93) + 3.6, (1700, 2000), 0.72, 6.0, "the voices", ["comet", "bass", "drums-kit"])
-    tour.hop(orbit(98), desk, 0.55, 3.0, "the desk", None)
+    tour.hop(orbit(98), clear(desk, 0.55), 0.55, 3.0, "the voices and the desk", None)
     tour.look(orbit(98) + 3.3, clear(tour.middle([177, 178]), 0.95), 0.95, orbit(102) - orbit(98) - 3.3, "the hall and the tape", None)
 
     # The third eclipse: the Twins snap back into step
