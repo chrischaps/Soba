@@ -14,7 +14,7 @@ From left to right:
 | **Transport** | **▶ Play** starts the patch; **⏹ Stop** stops it. The app opens stopped. **● Rec** records what you hear: see [Recording](#recording). |
 | **File** | **📄 New**, **📂 Open**, **🕘 Recent**, **📚 Examples**, **💾 Save**, **💾 Save As** |
 | **Edit** | **↩ Undo** and **↪ Redo**. Hover either to see which edit it will undo or redo. |
-| **〰 Cables** | How signal flow is drawn along cables: **Chevrons**, **Dots** or **Comets**. **Under modules and labels** sets how much of a cable shows through a module, frame title or note it passes behind (5% at first) |
+| **〰 Cables** | How signal flow is drawn along cables: **Chevrons**, **Dots** or **Comets**. **Under modules and labels** sets how much of a cable shows through a module, frame title or note it passes behind (5% at first). **Patch under a probe** sets how far the patch is turned down while you [probe a cable](#probing-a-cable) |
 | **◉ Knobs** | How knobs are drawn: **LED ring**, **Hybrid**, **Arc**, **Machined** or **Classic** |
 | **❓ Help** | **📖 Manual** opens this manual, and **⌨ Keyboard Shortcuts** (`F1`) lists the [shortcuts](#keyboard-shortcuts). **Check for Updates…**, **Check for Updates Automatically**, and **Roll Back** after an update: see [Updates](installation.md#updates) |
 | **Output** | The audio device to play through |
@@ -114,7 +114,7 @@ While the patch plays, cables show what their signal has been doing over the las
 
 ### Probing a cable
 
-To hear what a cable carries on its own, hold `Alt` over it while the patch plays. You'll hear the LFO before it reaches the filter, or the dry voice before the reverb. A small scope beside the pointer shows the signal's waveform and names the output it comes from. The probe plays on top of the patch at the same fixed level as a Sampler's ▶. It never comes out louder than that. While you probe, the rest of the patch is turned down beneath it: by 20 dB under an audio cable, which all but solos it, and by 6 dB under a control or gate cable, so you can still hear the music the signal moves. Neither the probe nor the ducking goes into a recording. The probe fades in, and when you let go of `Alt` or move off the cable it fades out and the patch comes back up.
+To hear what a cable carries on its own, hold `Alt` over it while the patch plays. You'll hear the LFO before it reaches the filter, or the dry voice before the reverb. A small scope beside the pointer shows the signal's waveform and names the output it comes from. The probe plays on top of the patch at the same fixed level as a Sampler's ▶. It never comes out louder than that. While you probe, the rest of the patch is turned down beneath it: by 20 dB under an audio cable, which all but solos it, and by 6 dB under a control or gate cable, so you can still hear the music the signal moves. **〰 Cables ▸ Patch under a probe** sets each amount, from **Off** to **Solo**, and Soba remembers them. Neither the probe nor the ducking goes into a recording. The probe fades in, and when you let go of `Alt` or move off the cable it fades out and the patch comes back up.
 
 - **Audio** cables play as they are. On a polyphonic cable, all the voices are summed.
 - **Control** cables play as a quiet sine whose pitch follows the value: A3 at 0, two octaves higher at 1, and two octaves lower at -1. You hear an LFO as a siren and a stepped sequence as a tune.

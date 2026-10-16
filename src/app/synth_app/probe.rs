@@ -14,7 +14,7 @@ use egui_node_graph2::InputId;
 
 use crate::app::theme;
 use crate::dsp::SignalType;
-use crate::engine::{NodeId as EngineNodeId, Probe, ProbeScope, SCOPE_WINDOW};
+use crate::engine::{NodeId as EngineNodeId, Probe, ProbeDuck, ProbeScope, SCOPE_WINDOW};
 use crate::graph::groups::{self, GroupIndex};
 use crate::widgets::{oscilloscope_display, OscilloscopeConfig};
 use super::SynthApp;
@@ -26,6 +26,14 @@ const AUDIO_SPAN: usize = SCOPE_WINDOW / 2;
 /// The scope's size, and how far it sits from the pointer.
 const SCOPE_SIZE: Vec2 = Vec2::new(176.0, 72.0);
 const FROM_POINTER: Vec2 = Vec2::new(18.0, 20.0);
+
+/// Where the ducking is kept between launches.
+const DUCK_AUDIO_KEY: &str = "probe_duck_audio";
+const DUCK_SIGNAL_KEY: &str = "probe_duck_signal";
+
+/// The deepest the ducking sliders go, in dB. All the way there, the
+/// patch is silenced and the cable soloed.
+const DUCK_DB_RANGE: f32 = 40.0;
 
 /// The cable being probed.
 pub(super) struct CableProbe {
@@ -39,11 +47,22 @@ pub(super) struct CableProbe {
     since: usize,
     /// The scope's samples, read each frame.
     window: Box<[f32; SCOPE_WINDOW]>,
+    /// How far the patch is turned down beneath it, set in the Cables menu,
+    /// and what the engine was last told.
+    duck: ProbeDuck,
+    told: ProbeDuck,
 }
 
 impl Default for CableProbe {
     fn default() -> Self {
-        Self { scope: Arc::new(ProbeScope::new()), heard: None, since: 0, window: Box::new([0.0; SCOPE_WINDOW]) }
+        Self {
+            scope: Arc::new(ProbeScope::new()),
+            heard: None,
+            since: 0,
+            window: Box::new([0.0; SCOPE_WINDOW]),
+            duck: ProbeDuck::default(),
+            told: ProbeDuck::default(),
+        }
     }
 }
 
@@ -74,16 +93,23 @@ impl SynthApp {
         let same = |a: &Option<(InputId, Carried)>, b: &Option<(InputId, Carried)>| {
             a.as_ref().map(|(_, c)| (c.node, c.output_index)) == b.as_ref().map(|(_, c)| (c.node, c.output_index))
         };
-        if !same(&self.probe.heard, &wanted) {
+        let moved = !same(&self.probe.heard, &wanted);
+        if moved {
             self.probe.since = self.probe.scope.written();
+        }
+        // A new cable, or the ducking changed while one is heard
+        if moved || (wanted.is_some() && self.probe.duck != self.probe.told) {
             if let Some(handle) = self.ui_handle.as_mut() {
                 let scope = self.probe.scope.clone();
+                let duck = self.probe.duck;
                 handle.probe(wanted.as_ref().map(|(_, carried)| Probe {
                     node_id: carried.node,
                     output_index: carried.output_index,
                     scope,
+                    duck,
                 }));
             }
+            self.probe.told = self.probe.duck;
         }
         self.probe.heard = wanted;
 
@@ -119,6 +145,25 @@ impl SynthApp {
 }
 
 impl CableProbe {
+    /// The ducking chosen last time, if there was one.
+    pub(super) fn load(&mut self, storage: &dyn eframe::Storage) {
+        let read = |key| storage.get_string(key).and_then(|v| v.parse::<f32>().ok()).map(|v| v.clamp(0.0, 1.0));
+        self.duck.audio = read(DUCK_AUDIO_KEY).unwrap_or(self.duck.audio);
+        self.duck.signal = read(DUCK_SIGNAL_KEY).unwrap_or(self.duck.signal);
+    }
+
+    pub(super) fn store(&self, storage: &mut dyn eframe::Storage) {
+        storage.set_string(DUCK_AUDIO_KEY, self.duck.audio.to_string());
+        storage.set_string(DUCK_SIGNAL_KEY, self.duck.signal.to_string());
+    }
+
+    /// The Cables menu's ducking: how far the patch is turned down beneath
+    /// an audio cable, and beneath a control or gate cable, in dB.
+    pub(super) fn duck_menu(&mut self, ui: &mut egui::Ui) {
+        ui.label(egui::RichText::new("Patch under a probe (Alt)").color(theme::text::SECONDARY));
+        duck_slider(ui, &mut self.duck.audio, "audio", "How far the rest of the patch is turned down while you hear an audio cable");
+        duck_slider(ui, &mut self.duck.signal, "control and gate", "How far the rest of the patch is turned down while you hear a control or gate cable");
+    }
     /// Draws what's heard beside the pointer: a small scope in the cable's
     /// colour, captioned with the output it comes from.
     fn draw(&mut self, ctx: &egui::Context, pointer: Pos2) {
@@ -174,5 +219,110 @@ impl CableProbe {
                         oscilloscope_display(ui, samples, &[], &config);
                     });
             });
+    }
+}
+
+/// One of the ducking sliders, in whole dB from Off to Solo.
+fn duck_slider(ui: &mut egui::Ui, amount: &mut f32, name: &str, hint: &str) {
+    let mut db = duck_to_db(*amount);
+    let slider = egui::Slider::new(&mut db, 0.0..=DUCK_DB_RANGE)
+        .step_by(1.0)
+        .text(name)
+        .custom_formatter(|db, _| duck_label(db as f32))
+        .custom_parser(parse_duck);
+    if ui.add(slider).on_hover_text(hint).changed() {
+        *amount = db_to_duck(db);
+    }
+}
+
+/// How far the patch is turned down, 0 to 1, as dB: all the way is the
+/// slider's end.
+fn duck_to_db(duck: f32) -> f32 {
+    if duck >= 1.0 {
+        DUCK_DB_RANGE
+    } else {
+        (-20.0 * (1.0 - duck).log10()).clamp(0.0, DUCK_DB_RANGE)
+    }
+}
+
+/// ...and back: the slider's end silences the patch.
+fn db_to_duck(db: f32) -> f32 {
+    if db >= DUCK_DB_RANGE {
+        1.0
+    } else {
+        1.0 - 10f32.powf(-db.max(0.0) / 20.0)
+    }
+}
+
+fn duck_label(db: f32) -> String {
+    if db >= DUCK_DB_RANGE {
+        "Solo".to_string()
+    } else if db < 0.5 {
+        "Off".to_string()
+    } else {
+        format!("\u{2212}{db:.0} dB")
+    }
+}
+
+/// What's typed into a ducking slider: "Off", "Solo", or dB with or
+/// without the sign and unit.
+fn parse_duck(text: &str) -> Option<f64> {
+    let text = text.trim();
+    if text.eq_ignore_ascii_case("off") {
+        Some(0.0)
+    } else if text.eq_ignore_ascii_case("solo") {
+        Some(DUCK_DB_RANGE as f64)
+    } else {
+        let number = text.trim_end_matches(['d', 'D', 'b', 'B']).trim().trim_start_matches(['-', '\u{2212}']);
+        number.parse::<f64>().ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ducking_reads_in_db_and_its_ends_are_off_and_solo() {
+        let duck = ProbeDuck::default();
+        assert_eq!(duck_label(duck_to_db(duck.audio)), "\u{2212}20 dB");
+        assert_eq!(duck_label(duck_to_db(duck.signal)), "\u{2212}6 dB");
+        assert_eq!(duck_label(duck_to_db(0.0)), "Off");
+        assert_eq!(duck_label(duck_to_db(1.0)), "Solo");
+        assert_eq!(db_to_duck(DUCK_DB_RANGE), 1.0);
+        assert_eq!(db_to_duck(0.0), 0.0);
+        for db in [3.0, 12.0, 20.0, 39.0] {
+            assert!((duck_to_db(db_to_duck(db)) - db).abs() < 1e-3, "{db}");
+        }
+        assert_eq!(parse_duck("\u{2212}20 dB"), Some(20.0));
+        assert_eq!(parse_duck("12"), Some(12.0));
+        assert_eq!(parse_duck("solo"), Some(DUCK_DB_RANGE as f64));
+    }
+
+    #[test]
+    fn ducking_is_remembered() {
+        #[derive(Default)]
+        struct Memory(std::collections::HashMap<String, String>);
+        impl eframe::Storage for Memory {
+            fn get_string(&self, key: &str) -> Option<String> {
+                self.0.get(key).cloned()
+            }
+            fn set_string(&mut self, key: &str, value: String) {
+                self.0.insert(key.to_string(), value);
+            }
+            fn flush(&mut self) {}
+        }
+
+        // Nothing kept yet: the defaults
+        let mut storage = Memory::default();
+        let mut probe = CableProbe::default();
+        probe.load(&storage);
+        assert_eq!(probe.duck, ProbeDuck::default());
+
+        probe.duck = ProbeDuck { audio: 1.0, signal: 0.25 };
+        probe.store(&mut storage);
+        let mut next = CableProbe::default();
+        next.load(&storage);
+        assert_eq!(next.duck, probe.duck);
     }
 }

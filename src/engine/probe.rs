@@ -47,6 +47,24 @@ pub struct Probe {
     /// handle for as long as the app runs, so the audio thread letting go
     /// of this one never frees it.
     pub scope: Arc<ProbeScope>,
+    /// How far the patch is turned down beneath it.
+    pub duck: ProbeDuck,
+}
+
+/// How far the patch is turned down beneath a probe, 0 (not at all) to 1
+/// (silent), by the kind of cable heard. Set in the app's Cables menu.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ProbeDuck {
+    /// Beneath an audio cable.
+    pub audio: f32,
+    /// Beneath a control or gate cable.
+    pub signal: f32,
+}
+
+impl Default for ProbeDuck {
+    fn default() -> Self {
+        Self { audio: AUDIO_DUCK, signal: SIGNAL_DUCK }
+    }
 }
 
 impl std::fmt::Debug for Probe {
@@ -164,8 +182,8 @@ const CLICK_LEVEL: f32 = 0.9;
 const HELD_HZ: f32 = 440.0;
 const HELD_LEVEL: f32 = 0.08;
 
-/// How far the patch is turned down beneath an audio probe: 20 dB, so the
-/// cable is all but soloed.
+/// How far the patch is turned down beneath an audio probe at first: 20 dB,
+/// so the cable is all but soloed.
 const AUDIO_DUCK: f32 = 0.9;
 
 /// ...and beneath a control or gate probe: 6 dB, so the music is still
@@ -260,8 +278,12 @@ impl ProbePlayer {
             _ => false,
         };
         if same {
-            // Back onto the cable still fading: it just comes up again
+            // Back onto the cable still fading, it just comes up again, or
+            // the same cable ducking by another amount
             self.next = None;
+            if let (Some(heard), Some(probe)) = (&mut self.probe, &probe) {
+                heard.duck = probe.duck;
+            }
         } else if self.probe.is_none() {
             self.adopt(probe);
         } else {
@@ -317,9 +339,10 @@ impl ProbePlayer {
         if let (Some(probe), Some(_)) = (&self.probe, buffer) {
             probe.scope.set_kind(kind);
             self.depth = match kind {
-                SignalType::Audio | SignalType::Bus => AUDIO_DUCK,
-                _ => SIGNAL_DUCK,
-            };
+                SignalType::Audio | SignalType::Bus => probe.duck.audio,
+                _ => probe.duck.signal,
+            }
+            .clamp(0.0, 1.0);
         }
         // The patch stays down while a cable is heard or moved between, and
         // comes back once it's let go of
@@ -469,7 +492,7 @@ mod tests {
     }
 
     fn probe(scope: &Arc<ProbeScope>) -> Option<Probe> {
-        Some(Probe { node_id: 9, output_index: 0, scope: scope.clone() })
+        Some(Probe { node_id: 9, output_index: 0, scope: scope.clone(), duck: ProbeDuck::default() })
     }
 
     /// `blocks` blocks of the player's sound from `plan`, refilled by `fill`
@@ -617,6 +640,25 @@ mod tests {
     }
 
     #[test]
+    fn test_the_duck_follows_the_setting_on_the_same_cable() {
+        let scope = Arc::new(ProbeScope::new());
+        let plan = plan_with(SignalBuffer::audio(BLOCK));
+        let mut player = ProbePlayer::default();
+        let ducking = |audio| Some(Probe { node_id: 9, output_index: 0, scope: scope.clone(), duck: ProbeDuck { audio, signal: 0.5 } });
+        player.probe(ducking(0.0));
+        let level = under(&mut player, &plan, 10);
+        assert!(level.iter().all(|&l| l == 1.0), "no ducking at all");
+
+        // Turned all the way down while heard: the patch goes, smoothly,
+        // and the probe keeps playing rather than fading out and in again
+        player.probe(ducking(1.0));
+        let level = under(&mut player, &plan, 10);
+        assert!(level.windows(2).all(|w| (w[1] - w[0]).abs() < 0.001));
+        assert_eq!(*level.last().unwrap(), 0.0);
+        assert!(player.next.is_none() && player.envelope == 1.0);
+    }
+
+    #[test]
     fn test_moving_between_cables_keeps_the_patch_down() {
         let scope = Arc::new(ProbeScope::new());
         let mut plan = plan_with(SignalBuffer::audio(BLOCK));
@@ -625,7 +667,7 @@ mod tests {
         let mut player = ProbePlayer::default();
         player.probe(probe(&scope));
         under(&mut player, &plan, 10);
-        player.probe(Some(Probe { node_id: 10, output_index: 0, scope: scope.clone() }));
+        player.probe(Some(Probe { node_id: 10, output_index: 0, scope: scope.clone(), duck: ProbeDuck::default() }));
         let level = under(&mut player, &plan, 10);
         assert!(level.iter().all(|&l| (l - (1.0 - AUDIO_DUCK)).abs() < 1e-5), "no swell between cables");
     }
@@ -652,7 +694,7 @@ mod tests {
         plan.nodes.push(crate::engine::graph_plan::PlanNode::bare(10, 1..2));
         player.probe(probe(&scope));
         let mut heard = hear(&mut player, &mut plan, 5, |_, s| s.fill(0.5));
-        player.probe(Some(Probe { node_id: 10, output_index: 0, scope: scope.clone() }));
+        player.probe(Some(Probe { node_id: 10, output_index: 0, scope: scope.clone(), duck: ProbeDuck::default() }));
         heard.extend(hear(&mut player, &mut plan, 10, |_, s| s.fill(0.5)));
         let largest = heard.windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f32::max);
         assert!(largest < 0.01, "{largest}");

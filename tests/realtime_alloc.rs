@@ -336,7 +336,7 @@ fn audio_callback_never_allocates() {
         if round % 30 == 7 {
             let probe = (round % 90 != 7).then(|| {
                 let (node_id, _) = nodes[round / 30 % nodes.len()];
-                Probe { node_id, output_index: round / 7 % 2, scope: scope.clone() }
+                Probe { node_id, output_index: round / 7 % 2, scope: scope.clone(), duck: Default::default() }
             });
             ui.probe(probe);
         }
