@@ -114,7 +114,7 @@ While the patch plays, cables show what their signal has been doing over the las
 
 ### Probing a cable
 
-To hear what a cable carries on its own, hold `Alt` over it while the patch plays. You'll hear the LFO before it reaches the filter, or the dry voice before the reverb. A small scope beside the pointer shows the signal's waveform and names the output it comes from. The probe plays on top of the patch at the same fixed level as a Sampler's ▶. It never comes out louder than that, and it isn't recorded. It fades in, and it fades out when you let go of `Alt` or move off the cable.
+To hear what a cable carries on its own, hold `Alt` over it while the patch plays. You'll hear the LFO before it reaches the filter, or the dry voice before the reverb. A small scope beside the pointer shows the signal's waveform and names the output it comes from. The probe plays on top of the patch at the same fixed level as a Sampler's ▶. It never comes out louder than that. While you probe, the rest of the patch is turned down beneath it: by 20 dB under an audio cable, which all but solos it, and by 6 dB under a control or gate cable, so you can still hear the music the signal moves. Neither the probe nor the ducking goes into a recording. The probe fades in, and when you let go of `Alt` or move off the cable it fades out and the patch comes back up.
 
 - **Audio** cables play as they are. On a polyphonic cable, all the voices are summed.
 - **Control** cables play as a quiet sine whose pitch follows the value: A3 at 0, two octaves higher at 1, and two octaves lower at -1. You hear an LFO as a siren and a stepped sequence as a tune.

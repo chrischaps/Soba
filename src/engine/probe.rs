@@ -17,7 +17,10 @@
 //!   well as its start.
 //!
 //! Whatever it plays is soft-limited under [`CUE_LEVEL`], so a probe can't
-//! come out louder than a cue. Starting, stopping and moving to another
+//! come out louder than a cue. The patch is turned down beneath it (heard,
+//! not recorded): almost to nothing under an audio cable, which all but
+//! solos it, and only by half under a control or gate cable, whose sine or
+//! clicks make sense against the music they move. Starting, stopping and moving to another
 //! cable fade, so none of them click: a move fades the old cable out before
 //! the new one comes in.
 //!
@@ -161,6 +164,20 @@ const CLICK_LEVEL: f32 = 0.9;
 const HELD_HZ: f32 = 440.0;
 const HELD_LEVEL: f32 = 0.08;
 
+/// How far the patch is turned down beneath an audio probe: 20 dB, so the
+/// cable is all but soloed.
+const AUDIO_DUCK: f32 = 0.9;
+
+/// ...and beneath a control or gate probe: 6 dB, so the music is still
+/// there to hear the modulation against.
+const SIGNAL_DUCK: f32 = 0.5;
+
+/// How long the patch takes to go down, and to come back up. Slower than
+/// the probe's own fades, so moving from cable to cable doesn't let the
+/// patch swell up in between.
+const DUCK_SECONDS: f32 = 0.030;
+const UNDUCK_SECONDS: f32 = 0.120;
+
 /// Where the soft limit starts to bend.
 const KNEE: f32 = 0.6;
 
@@ -188,6 +205,12 @@ pub struct ProbePlayer {
     source: Option<usize>,
     /// This callback's sound, mono, ready to mix in.
     heard: Box<[f32]>,
+    /// How loud the patch plays beneath it, frame by frame, 0 to 1.
+    under: Box<[f32]>,
+    /// How far the patch is turned down now, and how far for the kind of
+    /// cable heard.
+    duck: f32,
+    depth: f32,
     /// How much of `heard` this callback has filled.
     filled: usize,
     /// The fade, 0 to 1.
@@ -212,6 +235,9 @@ impl Default for ProbePlayer {
             next: None,
             source: None,
             heard: vec![0.0; MAX_FRAMES].into_boxed_slice(),
+            under: vec![1.0; MAX_FRAMES].into_boxed_slice(),
+            duck: 0.0,
+            depth: AUDIO_DUCK,
             filled: 0,
             envelope: 0.0,
             phase: 0.0,
@@ -243,9 +269,10 @@ impl ProbePlayer {
         }
     }
 
-    /// Whether a cable is being heard, or fading.
+    /// Whether a cable is being heard, or fading, or the patch is still
+    /// coming back up after one.
     pub fn is_probing(&self) -> bool {
-        self.probe.is_some()
+        self.probe.is_some() || self.duck > 0.0
     }
 
     fn adopt(&mut self, probe: Option<Probe>) {
@@ -275,10 +302,12 @@ impl ProbePlayer {
     ///
     /// REAL-TIME SAFE.
     pub fn listen(&mut self, plan: &GraphPlan, frames: usize, sample_rate: f32) {
-        if self.probe.is_none() {
+        if self.probe.is_none() && self.duck == 0.0 {
             return;
         }
         let frames = frames.min(MAX_FRAMES - self.filled);
+        let duck_down = 1.0 / (DUCK_SECONDS * sample_rate).max(1.0);
+        let duck_up = 1.0 / (UNDUCK_SECONDS * sample_rate).max(1.0);
         let rise = 1.0 / (ATTACK_SECONDS * sample_rate).max(1.0);
         let fall = 1.0 / (RELEASE_SECONDS * sample_rate).max(1.0);
         let glide = 1.0 - (-1.0 / (GLIDE_SECONDS * sample_rate)).exp();
@@ -287,10 +316,25 @@ impl ProbePlayer {
         let kind = buffer.map_or(SignalType::Audio, |buffer| buffer.signal_type);
         if let (Some(probe), Some(_)) = (&self.probe, buffer) {
             probe.scope.set_kind(kind);
+            self.depth = match kind {
+                SignalType::Audio | SignalType::Bus => AUDIO_DUCK,
+                _ => SIGNAL_DUCK,
+            };
         }
+        // The patch stays down while a cable is heard or moved between, and
+        // comes back once it's let go of
+        let ducking = self.probe.is_some() && !matches!(self.next, Some(None));
+        let duck_to = if ducking { self.depth } else { 0.0 };
         let slow = matches!(kind, SignalType::Control | SignalType::Gate);
 
         for n in 0..frames {
+            self.duck = if self.duck < duck_to {
+                (self.duck + duck_down).min(duck_to)
+            } else {
+                (self.duck - duck_up).max(duck_to)
+            };
+            self.under[self.filled + n] = 1.0 - self.duck;
+
             // Fading towards another cable, or out
             let leaving = self.next.is_some() || buffer.is_none();
             if leaving {
@@ -303,6 +347,7 @@ impl ProbePlayer {
                         self.adopt(next);
                         self.source = None;
                         self.heard[self.filled + n..self.filled + frames].fill(0.0);
+                        self.under[self.filled + n..self.filled + frames].fill(1.0 - self.duck);
                         self.filled += frames;
                         return;
                     }
@@ -363,17 +408,18 @@ impl ProbePlayer {
         }
     }
 
-    /// Adds this callback's sound into `output` (interleaved, `channels`
-    /// wide), on every channel.
+    /// Turns the patch in `output` (interleaved, `channels` wide) down
+    /// beneath the probe and adds the probe's sound, on every channel.
     ///
     /// REAL-TIME SAFE.
     pub fn mix(&mut self, output: &mut [f32], channels: usize) {
         if channels == 0 || self.filled == 0 {
             return;
         }
-        for (frame, &sound) in output.chunks_exact_mut(channels).zip(&self.heard[..self.filled]) {
+        let sounds = self.heard[..self.filled].iter().zip(&self.under[..self.filled]);
+        for (frame, (&sound, &under)) in output.chunks_exact_mut(channels).zip(sounds) {
             for sample in frame.iter_mut() {
-                *sample = (*sample + sound).clamp(-1.0, 1.0);
+                *sample = (*sample * under + sound).clamp(-1.0, 1.0);
             }
         }
         self.filled = 0;
@@ -384,6 +430,7 @@ impl ProbePlayer {
     /// moved goes at once.
     pub fn idle(&mut self) {
         self.filled = 0;
+        self.duck = 0.0;
         if let Some(next) = self.next.take() {
             self.adopt(next);
         }
@@ -527,6 +574,62 @@ mod tests {
         assert!(heard.iter().fold(0.0f32, |a, s| a.max(s.abs())) > 0.3, "the sixth voice's note clicks");
     }
 
+    /// The patch's level beneath the probe, `blocks` blocks of a patch that
+    /// plays a steady 0.4, as a fraction of it.
+    fn under(player: &mut ProbePlayer, plan: &GraphPlan, blocks: usize) -> Vec<f32> {
+        let mut level = Vec::new();
+        for _ in 0..blocks {
+            player.begin(plan);
+            player.listen(plan, BLOCK, RATE);
+            let mut output = vec![0.4; BLOCK * 2];
+            player.mix(&mut output, 2);
+            level.extend(output.iter().step_by(2).map(|s| s / 0.4));
+        }
+        level
+    }
+
+    #[test]
+    fn test_the_patch_ducks_deep_under_audio_and_less_under_cv() {
+        let scope = Arc::new(ProbeScope::new());
+        // A silent audio cable, so what's left is the patch
+        let plan = plan_with(SignalBuffer::audio(BLOCK));
+        let mut player = ProbePlayer::default();
+        player.probe(probe(&scope));
+        let level = under(&mut player, &plan, 10);
+        assert!((level.last().unwrap() - (1.0 - AUDIO_DUCK)).abs() < 1e-5, "{}", level.last().unwrap());
+        assert!(level.windows(2).all(|w| (w[1] - w[0]).abs() < 0.001), "it goes down smoothly");
+
+        // Let go: the patch comes back up, smoothly, and then the probe's done
+        player.probe(None);
+        let level = under(&mut player, &plan, 20);
+        assert!(level.windows(2).all(|w| (w[1] - w[0]).abs() < 0.001));
+        assert_eq!(*level.last().unwrap(), 1.0);
+        assert!(!player.is_probing());
+
+        // A control or gate cable: only halfway down
+        for cable in [SignalBuffer::control(BLOCK), SignalBuffer::gate(BLOCK)] {
+            let plan = plan_with(cable);
+            let mut player = ProbePlayer::default();
+            player.probe(probe(&scope));
+            under(&mut player, &plan, 10);
+            assert!((player.duck - SIGNAL_DUCK).abs() < 1e-5, "{}", player.duck);
+        }
+    }
+
+    #[test]
+    fn test_moving_between_cables_keeps_the_patch_down() {
+        let scope = Arc::new(ProbeScope::new());
+        let mut plan = plan_with(SignalBuffer::audio(BLOCK));
+        plan.outputs.push(SignalBuffer::audio(BLOCK));
+        plan.nodes.push(crate::engine::graph_plan::PlanNode::bare(10, 1..2));
+        let mut player = ProbePlayer::default();
+        player.probe(probe(&scope));
+        under(&mut player, &plan, 10);
+        player.probe(Some(Probe { node_id: 10, output_index: 0, scope: scope.clone() }));
+        let level = under(&mut player, &plan, 10);
+        assert!(level.iter().all(|&l| (l - (1.0 - AUDIO_DUCK)).abs() < 1e-5), "no swell between cables");
+    }
+
     #[test]
     fn test_letting_go_and_moving_fade_without_a_click() {
         let scope = Arc::new(ProbeScope::new());
@@ -535,7 +638,7 @@ mod tests {
         player.probe(probe(&scope));
         let mut heard = hear(&mut player, &mut plan, 5, sine(440.0));
         player.probe(None);
-        heard.extend(hear(&mut player, &mut plan, 5, sine(440.0)));
+        heard.extend(hear(&mut player, &mut plan, 15, sine(440.0)));
         let largest = heard.windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f32::max);
         // A 440 Hz sine at the cue level moves at most about 0.03 a sample
         assert!(largest < 0.04, "{largest}");
@@ -565,7 +668,7 @@ mod tests {
         hear(&mut player, &mut plan, 5, |_, s| s.fill(0.5));
         // Its sound went with it; the probe lets go after its fade
         let mut empty = GraphPlan::empty(BLOCK);
-        hear(&mut player, &mut empty, 3, |_, _| {});
+        hear(&mut player, &mut empty, 15, |_, _| {});
         assert!(!player.is_probing());
     }
 }
