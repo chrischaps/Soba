@@ -51,7 +51,9 @@
 //! when the drums come back near it, on the beat it was on. Nor is it taken
 //! over by what plays across it meanwhile, a tresillo or a dotted-quarter
 //! delay three against two of the beat; or by any tempo too faint to claim
-//! a beat of its own.
+//! a beat of its own. Nor, before it doubts the beat, is it pulled off it
+//! by a stray hit: the clock follows the comb only as far as several beats
+//! agree on where it puts the beat.
 //!
 //! Everything is allocated up front: it runs on the audio thread.
 
@@ -159,6 +161,15 @@ const MOST_PULL: f64 = 0.25;
 /// same way would otherwise settle on a steady miss.
 const TRIM: f32 = 0.001;
 const MOST_TRIM: f32 = 0.02;
+/// The pull is only as strong as the comb's tooth is the beat: as many of
+/// its beats agree on it. Under [`FEW_AGREE`], one or two hits make up most
+/// of what it catches, and it doesn't pull at all; past [`MANY_AGREE`] it
+/// pulls in full. Drums agree on the beat's tooth eight or nine beats out of the
+/// comb's twelve; when they drop out for a breakdown, the tooth by the clock
+/// may be a bell that happened to land near it, and the clock would follow it
+/// off for the few seconds before it doubts the beat and coasts (#291).
+const FEW_AGREE: f32 = 2.0;
+const MANY_AGREE: f32 = 4.0;
 /// Within this much of a beat of the comb, the clock is on the beat.
 const LOCKED: f64 = 0.1;
 /// The trim waits until the clock has been on the beat this many beats.
@@ -403,7 +414,7 @@ impl BeatTracker {
         let sure = self.sure as f32 * FRAME_SECONDS >= SURE_SECONDS;
         let doubtful = self.doubt as f32 * FRAME_SECONDS >= SURE_SECONDS;
         let claim = |frames: f32| {
-            let (phase, _) = self.phase(frames, None);
+            let (phase, ..) = self.phase(frames, None);
             Some(Beat { frames, trim: 0.0, position: phase as f64, step: 0.0, pace: 1.0 / frames as f64, settled: 0.0, lean: 0.0, heading: None, rival: 0.0, coasting: None })
         };
         let beat = match (self.beat, chosen) {
@@ -564,20 +575,30 @@ impl BeatTracker {
     /// and its snare still lands on the beat, so the lean has its say: past
     /// [`TURN`] it turns half a beat, and leaning the other way, a jump to
     /// the and has to catch that much more.
-    fn phase(&self, frames: f32, near: Option<(f64, f32)>) -> (f32, (f32, f32)) {
+    ///
+    /// And how many beats agree on the tooth it chose: its catch, beat by
+    /// beat, counted as an effective number of beats that hit as hard as one
+    /// another. Twelve beats of steady drums count nearly as many as the fade
+    /// allows, a single hit one.
+    fn phase(&self, frames: f32, near: Option<(f64, f32)>) -> (f32, (f32, f32), f32) {
         let teeth = (frames.ceil() as usize).min(COMB_MOST);
         let mut caught = [0.0f32; COMB_MOST];
-        for (since, caught) in caught.iter_mut().enumerate().take(teeth) {
+        let mut squares = [0.0f32; COMB_MOST];
+        for (since, (caught, squares)) in caught.iter_mut().zip(&mut squares).enumerate().take(teeth) {
             let mut weight = 1.0;
             for n in 0..COMB_BEATS {
                 let back = since as f32 + n as f32 * frames;
                 if back + 2.0 >= HISTORY as f32 {
                     break;
                 }
-                *caught += weight * self.strength_back(back);
+                let one = weight * self.strength_back(back);
+                *caught += one;
+                *squares += one * one;
                 weight *= COMB_FADE;
             }
         }
+        // (Σ c)² / Σ c², the beats' catches c: n beats of equal catch count n
+        let agreeing = |since: usize| caught[since] * caught[since] / squares[since].max(1e-12);
         let most = |range: &mut dyn Iterator<Item = isize>| {
             range.map(|k| k.rem_euclid(teeth as isize) as usize).fold(None, |best: Option<usize>, k| match best {
                 Some(b) if caught[b] >= caught[k] => Some(b),
@@ -622,7 +643,7 @@ impl BeatTracker {
                 (if toward(anywhere, opposite).0 > TURN { opposite } else { anywhere }, (0.0, 0.0))
             }
         };
-        (((since as f32 + LATENCY_FRAMES) / frames).fract(), heard)
+        (((since as f32 + LATENCY_FRAMES) / frames).fract(), heard, agreeing(since))
     }
 
     /// How much backbeat there is `since` frames back, with beats of
@@ -656,10 +677,12 @@ impl BeatTracker {
         // the one by the clock: that one moves as the clock does
         let near = beat.heading.unwrap_or(predicted.fract());
         let lean = if beat.heading.is_some() { f32::NEG_INFINITY } else { beat.lean };
-        let (target, (toward, clear)) = self.phase(frames, Some((near, lean)));
+        let (target, (toward, clear), agreeing) = self.phase(frames, Some((near, lean)));
         let target = target as f64;
         let error = (target - predicted.fract() + 0.5).rem_euclid(1.0) - 0.5;
-        let step = (1.0 + (PULL * error).clamp(-MOST_PULL, MOST_PULL)) / length as f64;
+        // A tooth only one or two hits agree on is a stray, not the beat
+        let trust = ((agreeing - FEW_AGREE) / (MANY_AGREE - FEW_AGREE)).clamp(0.0, 1.0) as f64;
+        let step = (1.0 + (trust * PULL * error).clamp(-MOST_PULL, MOST_PULL)) / length as f64;
         // Running late (a positive error) means the beat is shorter than
         // heard. Only once settled on the beat, though: catching up with a
         // beat found afresh is the pull's job, and trimming through it,
@@ -939,21 +962,21 @@ pub(crate) mod tests {
         // plays a tresillo, three against two of the beat, as Canopy's
         // kalimba does in its Clearing; or at no steady spacing at all, so
         // there's no beat to hear and it coasts. Before it doubts the beat,
-        // that bell can pull it a little way off, so only the tresillo is
-        // held to the beat while the drums are out
+        // the clock is pulled only toward a tooth more than a stray bell or
+        // two agrees on, so neither pulls it off the beat (#291)
         let tresillo: fn(usize) -> [f32; 3] = |_| [0.0, 6.0, 12.0];
         let scattered: fn(usize) -> [f32; 3] = |bar| {
             let jitter = |by: f32| (bar as f32 * by) % 3.0;
             [1.3 + jitter(2.37), 6.1 + jitter(1.61), 11.4 + jitter(0.83)]
         };
-        for (name, bells, off) in [("tresillo", tresillo, 0.025), ("scattered", scattered, f32::INFINITY)] {
+        for (name, bells) in [("tresillo", tresillo), ("scattered", scattered)] {
             let (music, beats) = broken_beat(46.0, 22.0..30.0, bells);
             let heard = listen(&music);
             let at = |seconds: f32| (seconds / FRAME_SECONDS) as usize;
             assert!(heard[at(20.0)..].iter().all(Option::is_some), "{name}: the beat is held through the breakdown");
             // When the drums come back, its beats land on the beat rather
             // than the and
-            for (from, to, off) in [(22.0, 31.0, off), (36.0, 46.0, 0.012)] {
+            for (from, to, off) in [(22.0, 31.0, 0.025), (36.0, 46.0, 0.012)] {
                 let misses = misses(&heard[..at(to)], &beats, to - from);
                 assert!(misses.len() as f32 >= 0.9 * (to - from) * 116.0 / 60.0, "{name}, {from}–{to} s: {misses:?}");
                 assert!(misses.iter().all(|miss| miss.abs() < off), "{name}, {from}–{to} s: {misses:?}");
@@ -1018,4 +1041,3 @@ pub(crate) mod tests {
         assert_eq!(tracker.memory.correlation[0], 0.0);
     }
 }
-
