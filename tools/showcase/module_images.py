@@ -85,6 +85,9 @@ MODULES = {
     """),
     # Cut Up's break in sixteen slices, playing
     "chopper": Module("chopper", "source.chopper", 1.0, 484, "-3.0 play", palette=False),
+    # Canopy's sung syllables as a cloud of a Dmaj9 chord: four clouds of
+    # sparks, scattered by Spray around Position and across the field
+    "cloud": Module("cloud", "source.cloud", 1.0, 400, "-3.0 play", palette=False),
     # A drum loop on input 1, Channel on 1: Follow scrolls past the Threshold line
     "audio-input": Module("audio-input", "source.audio_input", 1.0, 400, """
         -4.0 input patches/samples/soba-break.wav

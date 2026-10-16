@@ -10,6 +10,7 @@ pub mod chopper;
 pub mod chord_sequencer;
 pub mod chorus;
 pub mod clock;
+pub mod cloud;
 pub mod compressor;
 pub mod dancer;
 pub mod delay;
@@ -48,10 +49,11 @@ pub mod trigger_sequencer;
 pub mod vca;
 pub mod vocoder;
 
-/// Whether a module plays a WAV file its node names: the Sampler, and the
-/// Chopper. The editor loads, slices and drops files on both alike.
+/// Whether a module plays a WAV file its node names: the Sampler, the
+/// Chopper and the Cloud. The editor loads, slices and drops files on them
+/// alike (the Cloud has no Slices, so it's never sliced).
 pub fn plays_a_sample(module_id: &str) -> bool {
-    module_id == sampler::SAMPLER_ID || module_id == chopper::CHOPPER_ID
+    module_id == sampler::SAMPLER_ID || module_id == chopper::CHOPPER_ID || module_id == cloud::CLOUD_ID
 }
 
 // Re-export commonly used types
@@ -62,6 +64,7 @@ pub use chopper::Chopper;
 pub use chord_sequencer::ChordSequencer;
 pub use chorus::Chorus;
 pub use clock::Clock;
+pub use cloud::Cloud;
 pub use compressor::Compressor;
 pub use dancer::Dancer;
 pub use delay::StereoDelay;

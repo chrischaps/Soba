@@ -1,0 +1,3059 @@
+{
+  "name": "Choir of One",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "util.clock",
+      "position": [
+        40,
+        74
+      ],
+      "parameters": [
+        {
+          "name": "Tempo",
+          "type": "Number",
+          "value": 60.0
+        },
+        {
+          "name": "Gate Length",
+          "type": "Number",
+          "value": 50.0
+        },
+        {
+          "name": "Division",
+          "type": "Select",
+          "value": 2
+        },
+        {
+          "name": "Run",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Source",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Swing",
+          "type": "Number",
+          "value": 50.0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "module_id": "util.divider",
+      "position": [
+        258,
+        74
+      ],
+      "parameters": [
+        {
+          "name": "Divide",
+          "type": "Number",
+          "value": 8.0
+        },
+        {
+          "name": "Offset",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Length",
+          "type": "Number",
+          "value": 7.0
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "module_id": "seq.chord",
+      "position": [
+        40,
+        420
+      ],
+      "parameters": [
+        {
+          "name": "Steps",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Direction",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Gate Length",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Voicing",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Voice Leading",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Voices",
+          "type": "Number",
+          "value": 4.0
+        },
+        {
+          "name": "Range",
+          "type": "Number",
+          "value": 2.0
+        },
+        {
+          "name": "Bass Voice",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Rootless",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Strum",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Strum Dir",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Strum Taper",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Step 1 Root",
+          "type": "Number",
+          "value": 38.0
+        },
+        {
+          "name": "Step 1 Type",
+          "type": "Select",
+          "value": 13
+        },
+        {
+          "name": "Step 1 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 1 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 1 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 1 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 1 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 1 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 2 Root",
+          "type": "Number",
+          "value": 35.0
+        },
+        {
+          "name": "Step 2 Type",
+          "type": "Select",
+          "value": 14
+        },
+        {
+          "name": "Step 2 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 2 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 2 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 2 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 2 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 2 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 3 Root",
+          "type": "Number",
+          "value": 31.0
+        },
+        {
+          "name": "Step 3 Type",
+          "type": "Select",
+          "value": 13
+        },
+        {
+          "name": "Step 3 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 3 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 3 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 3 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 3 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 3 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 4 Root",
+          "type": "Number",
+          "value": 33.0
+        },
+        {
+          "name": "Step 4 Type",
+          "type": "Select",
+          "value": 9
+        },
+        {
+          "name": "Step 4 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 4 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 4 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 4 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 4 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 4 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 5 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 5 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 5 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 5 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 5 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 5 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 5 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 5 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 6 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 6 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 6 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 6 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 6 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 6 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 6 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 6 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 7 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 7 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 7 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 7 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 7 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 7 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 7 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 7 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 8 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 8 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 8 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 8 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 8 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 8 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 8 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 8 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 9 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 9 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 9 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 9 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 9 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 9 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 9 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 9 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 10 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 10 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 10 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 10 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 10 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 10 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 10 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 10 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 11 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 11 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 11 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 11 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 11 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 11 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 11 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 11 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 12 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 12 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 12 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 12 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 12 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 12 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 12 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 12 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 13 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 13 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 13 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 13 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 13 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 13 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 13 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 13 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 14 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 14 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 14 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 14 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 14 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 14 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 14 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 14 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 15 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 15 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 15 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 15 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 15 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 15 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 15 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 15 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 16 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step 16 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 16 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 16 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step 16 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step 16 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step 16 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step 16 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Chain 1",
+          "type": "Select",
+          "value": 1
+        },
+        {
+          "name": "Chain 2",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Chain 3",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Chain 4",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Chain 5",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Chain 6",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Chain 7",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Chain 8",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B1 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B1 Type",
+          "type": "Select",
+          "value": 3
+        },
+        {
+          "name": "Step B1 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B1 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B1 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B1 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B1 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B1 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B2 Root",
+          "type": "Number",
+          "value": 33.0
+        },
+        {
+          "name": "Step B2 Type",
+          "type": "Select",
+          "value": 4
+        },
+        {
+          "name": "Step B2 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B2 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B2 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B2 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B2 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B2 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B3 Root",
+          "type": "Number",
+          "value": 29.0
+        },
+        {
+          "name": "Step B3 Type",
+          "type": "Select",
+          "value": 3
+        },
+        {
+          "name": "Step B3 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B3 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B3 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B3 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B3 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B3 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B4 Root",
+          "type": "Number",
+          "value": 31.0
+        },
+        {
+          "name": "Step B4 Type",
+          "type": "Select",
+          "value": 2
+        },
+        {
+          "name": "Step B4 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B4 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B4 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B4 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B4 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B4 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B5 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B5 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B5 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B5 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B5 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B5 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B5 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B5 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B6 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B6 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B6 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B6 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B6 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B6 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B6 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B6 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B7 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B7 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B7 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B7 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B7 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B7 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B7 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B7 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B8 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B8 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B8 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B8 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B8 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B8 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B8 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B8 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B9 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B9 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B9 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B9 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B9 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B9 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B9 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B9 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B10 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B10 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B10 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B10 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B10 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B10 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B10 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B10 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B11 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B11 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B11 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B11 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B11 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B11 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B11 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B11 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B12 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B12 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B12 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B12 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B12 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B12 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B12 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B12 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B13 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B13 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B13 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B13 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B13 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B13 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B13 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B13 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B14 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B14 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B14 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B14 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B14 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B14 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B14 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B14 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B15 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B15 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B15 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B15 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B15 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B15 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B15 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B15 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B16 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step B16 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B16 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B16 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step B16 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step B16 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step B16 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step B16 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C1 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C1 Type",
+          "type": "Select",
+          "value": 3
+        },
+        {
+          "name": "Step C1 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C1 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C1 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C1 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C1 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C1 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C2 Root",
+          "type": "Number",
+          "value": 33.0
+        },
+        {
+          "name": "Step C2 Type",
+          "type": "Select",
+          "value": 4
+        },
+        {
+          "name": "Step C2 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C2 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C2 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C2 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C2 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C2 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C3 Root",
+          "type": "Number",
+          "value": 29.0
+        },
+        {
+          "name": "Step C3 Type",
+          "type": "Select",
+          "value": 3
+        },
+        {
+          "name": "Step C3 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C3 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C3 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C3 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C3 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C3 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C4 Root",
+          "type": "Number",
+          "value": 31.0
+        },
+        {
+          "name": "Step C4 Type",
+          "type": "Select",
+          "value": 2
+        },
+        {
+          "name": "Step C4 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C4 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C4 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C4 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C4 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C4 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C5 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C5 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C5 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C5 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C5 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C5 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C5 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C5 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C6 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C6 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C6 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C6 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C6 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C6 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C6 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C6 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C7 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C7 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C7 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C7 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C7 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C7 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C7 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C7 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C8 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C8 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C8 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C8 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C8 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C8 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C8 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C8 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C9 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C9 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C9 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C9 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C9 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C9 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C9 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C9 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C10 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C10 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C10 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C10 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C10 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C10 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C10 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C10 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C11 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C11 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C11 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C11 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C11 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C11 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C11 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C11 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C12 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C12 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C12 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C12 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C12 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C12 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C12 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C12 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C13 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C13 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C13 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C13 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C13 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C13 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C13 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C13 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C14 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C14 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C14 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C14 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C14 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C14 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C14 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C14 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C15 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C15 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C15 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C15 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C15 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C15 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C15 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C15 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C16 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step C16 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C16 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C16 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step C16 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step C16 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step C16 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step C16 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D1 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D1 Type",
+          "type": "Select",
+          "value": 3
+        },
+        {
+          "name": "Step D1 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D1 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D1 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D1 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D1 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D1 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D2 Root",
+          "type": "Number",
+          "value": 33.0
+        },
+        {
+          "name": "Step D2 Type",
+          "type": "Select",
+          "value": 4
+        },
+        {
+          "name": "Step D2 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D2 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D2 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D2 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D2 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D2 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D3 Root",
+          "type": "Number",
+          "value": 29.0
+        },
+        {
+          "name": "Step D3 Type",
+          "type": "Select",
+          "value": 3
+        },
+        {
+          "name": "Step D3 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D3 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D3 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D3 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D3 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D3 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D4 Root",
+          "type": "Number",
+          "value": 31.0
+        },
+        {
+          "name": "Step D4 Type",
+          "type": "Select",
+          "value": 2
+        },
+        {
+          "name": "Step D4 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D4 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D4 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D4 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D4 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D4 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D5 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D5 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D5 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D5 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D5 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D5 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D5 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D5 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D6 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D6 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D6 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D6 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D6 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D6 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D6 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D6 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D7 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D7 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D7 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D7 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D7 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D7 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D7 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D7 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D8 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D8 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D8 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D8 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D8 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D8 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D8 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D8 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D9 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D9 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D9 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D9 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D9 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D9 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D9 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D9 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D10 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D10 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D10 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D10 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D10 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D10 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D10 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D10 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D11 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D11 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D11 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D11 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D11 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D11 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D11 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D11 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D12 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D12 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D12 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D12 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D12 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D12 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D12 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D12 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D13 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D13 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D13 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D13 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D13 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D13 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D13 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D13 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D14 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D14 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D14 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D14 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D14 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D14 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D14 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D14 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D15 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D15 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D15 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D15 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D15 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D15 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D15 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D15 Strum",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D16 Root",
+          "type": "Number",
+          "value": 36.0
+        },
+        {
+          "name": "Step D16 Type",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D16 Bass",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D16 Gate",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Step D16 Velocity",
+          "type": "Number",
+          "value": 100.0
+        },
+        {
+          "name": "Step D16 Tie",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Step D16 Top",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Step D16 Strum",
+          "type": "Select",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "module_id": "mod.lfo",
+      "position": [
+        610,
+        74
+      ],
+      "parameters": [
+        {
+          "name": "Rate",
+          "type": "Number",
+          "value": 0.025
+        },
+        {
+          "name": "Waveform",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Phase",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Bipolar",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Tempo Sync",
+          "type": "Select",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "module_id": "util.attenuverter",
+      "position": [
+        610,
+        420
+      ],
+      "parameters": [
+        {
+          "name": "Amount",
+          "type": "Number",
+          "value": 0.32
+        },
+        {
+          "name": "Offset",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Range",
+          "type": "Select",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "module_id": "source.cloud",
+      "position": [
+        890,
+        74
+      ],
+      "parameters": [
+        {
+          "name": "Freeze",
+          "type": "Toggle",
+          "value": false
+        },
+        {
+          "name": "Position",
+          "type": "Number",
+          "value": 0.5
+        },
+        {
+          "name": "Size",
+          "type": "Number",
+          "value": 240.0
+        },
+        {
+          "name": "Density",
+          "type": "Number",
+          "value": 14.0
+        },
+        {
+          "name": "Pitch",
+          "type": "Number",
+          "value": 0.0
+        },
+        {
+          "name": "Spray",
+          "type": "Number",
+          "value": 0.12
+        },
+        {
+          "name": "Spread",
+          "type": "Number",
+          "value": 0.7
+        },
+        {
+          "name": "Level",
+          "type": "Number",
+          "value": 0.8
+        }
+      ],
+      "file": "samples/canopy-chops.wav"
+    },
+    {
+      "id": 7,
+      "module_id": "fx.reverb",
+      "position": [
+        1220,
+        74
+      ],
+      "parameters": [
+        {
+          "name": "Size",
+          "type": "Number",
+          "value": 0.9
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 7.0
+        },
+        {
+          "name": "Damping",
+          "type": "Number",
+          "value": 0.5
+        },
+        {
+          "name": "Pre-Delay",
+          "type": "Number",
+          "value": 40.0
+        },
+        {
+          "name": "Mix",
+          "type": "Number",
+          "value": 0.4
+        },
+        {
+          "name": "Width",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Mod",
+          "type": "Number",
+          "value": 0.4
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "module_id": "output.audio",
+      "position": [
+        1500,
+        74
+      ],
+      "parameters": [
+        {
+          "name": "Volume",
+          "type": "Number",
+          "value": 0.8
+        },
+        {
+          "name": "Limiter",
+          "type": "Toggle",
+          "value": true
+        },
+        {
+          "name": "Character",
+          "type": "Toggle",
+          "value": false
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from_node": 1,
+      "from_port": "Gate",
+      "to_node": 2,
+      "to_port": "Clock"
+    },
+    {
+      "from_node": 1,
+      "from_port": "Reset",
+      "to_node": 2,
+      "to_port": "Reset"
+    },
+    {
+      "from_node": 1,
+      "from_port": "Reset",
+      "to_node": 3,
+      "to_port": "Reset"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Trig",
+      "to_node": 3,
+      "to_port": "Clock"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Pitch",
+      "to_node": 6,
+      "to_port": "Pitch"
+    },
+    {
+      "from_node": 4,
+      "from_port": "Out",
+      "to_node": 5,
+      "to_port": "In"
+    },
+    {
+      "from_node": 5,
+      "from_port": "Out",
+      "to_node": 6,
+      "to_port": "Position"
+    },
+    {
+      "from_node": 6,
+      "from_port": "L",
+      "to_node": 7,
+      "to_port": "In L"
+    },
+    {
+      "from_node": 6,
+      "from_port": "R",
+      "to_node": 7,
+      "to_port": "In R"
+    },
+    {
+      "from_node": 7,
+      "from_port": "Out L",
+      "to_node": 8,
+      "to_port": "Left"
+    },
+    {
+      "from_node": 7,
+      "from_port": "Out R",
+      "to_node": 8,
+      "to_port": "Right"
+    }
+  ],
+  "midi_mappings": [],
+  "frames": [
+    {
+      "title": "The chords",
+      "position": [
+        16.0,
+        16.0
+      ],
+      "size": [
+        560.0,
+        1080.0
+      ],
+      "color": "amber"
+    },
+    {
+      "title": "The drift",
+      "position": [
+        586.0,
+        16.0
+      ],
+      "size": [
+        270.0,
+        1080.0
+      ],
+      "color": "violet"
+    },
+    {
+      "title": "One voice, many",
+      "position": [
+        866.0,
+        16.0
+      ],
+      "size": [
+        330.0,
+        1080.0
+      ],
+      "color": "rose"
+    },
+    {
+      "title": "The room",
+      "position": [
+        1206.0,
+        16.0
+      ],
+      "size": [
+        560.0,
+        520.0
+      ],
+      "color": "teal"
+    }
+  ],
+  "notes": [
+    {
+      "text": "Four voices down one **Pitch** cable, and the Cloud grows a cloud for each: a choir out of one sung line. A chord every two bars.",
+      "position": [
+        380.0,
+        430.0
+      ],
+      "width": 180.0
+    },
+    {
+      "text": "Twelve syllables, all sung on C5. A slow LFO drifts **Position** through them, so the choir's vowel keeps changing. Turn **Spray** up to blur them together, or **Size** down to a few ms for a shimmer.",
+      "position": [
+        890.0,
+        760.0
+      ],
+      "width": 290.0
+    }
+  ]
+}

@@ -10,7 +10,7 @@ use rtrb::Consumer;
 
 use crate::dsp::denormal::DenormalGuard;
 use crate::dsp::{InputAudio, MidiEvent, ModuleRegistry, Poly, ProcessContext, Snapshot, SnapshotOutcome};
-use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Chorus, Clock, ClockDivider, Compressor, Dancer, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, LinkOut, Logic, MidiOut, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Scenes, Oscillator, Slicer, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
+use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Cloud, Chorus, Clock, ClockDivider, Compressor, Dancer, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, LinkOut, Logic, MidiOut, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Scenes, Oscillator, Slicer, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
 
 use super::audio_input::InputFeed;
 use super::channels::{EngineHandle, MAX_SNAPSHOTS};
@@ -37,6 +37,7 @@ pub fn create_module_registry() -> ModuleRegistry {
     registry.register::<Poly<Drum>>();
     registry.register::<Sampler>();
     registry.register::<Chopper>();
+    registry.register::<Cloud>();
     registry.register::<AudioInput>();
     registry.register::<KeyboardInput>();
     registry.register::<MidiNote>();
@@ -666,7 +667,8 @@ mod tests {
         assert!(registry.contains("source.chopper"));
         assert!(registry.contains("util.scenes"));
         assert!(registry.contains("output.midi"));
-        assert_eq!(registry.len(), 44);
+        assert!(registry.contains("source.cloud"));
+        assert_eq!(registry.len(), 45);
     }
 
     #[test]

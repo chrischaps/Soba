@@ -256,6 +256,30 @@ knob Level              "Level" KnobOnly
 monitor [2]
 display ChopperRow
 
+== source.cloud "Cloud" finder="Cloud" Source
+in   In L               Audio    ConnectionOnly       inline=true  port
+in   In R               Audio    ConnectionOnly       inline=true  port
+in   Freeze             Gate     ConnectionOrConstant inline=true  toggle false ""
+in   Gate               Gate     ConnectionOnly       inline=true  port
+in   Trig               Gate     ConnectionOnly       inline=true  port
+in   Position           Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Size               Control  ConnectionOrConstant inline=true  num 120 [2..2000] ms log
+in   Density            Control  ConnectionOrConstant inline=true  num 16 [0.5..200] /s log
+in   Pitch              Control  ConnectionOrConstant inline=true  num 0 [-24..24] st
+in   Spray              Control  ConstantOnly         inline=false num 0.1 [0..1]
+in   Spread             Control  ConstantOnly         inline=false num 0.5 [0..1]
+in   Level              Control  ConstantOnly         inline=false num 0.8 [0..1]
+out  L                  Audio
+out  R                  Audio
+knob Position           "Pos" Modulatable
+knob Size               "Size" Modulatable
+knob Density            "Dens" Modulatable
+knob Spray              "Spray" KnobOnly
+knob Pitch              "Pitch" Modulatable
+knob Spread             "Spread" KnobOnly
+knob Level              "Level" KnobOnly
+display CloudSparks
+
 == source.audio_input "Audio Input" finder="Audio Input" Source
 in   Gain               Control  ConstantOnly         inline=false num 0 [-24..24] dB
 in   Threshold          Control  ConstantOnly         inline=false num -30 [-60..0] dB

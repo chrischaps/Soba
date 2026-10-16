@@ -64,6 +64,7 @@ pub mod resample;
 pub mod sample_shelf;
 mod sampler_display;
 mod chopper_display;
+mod cloud_display;
 mod sampler_slices;
 pub mod sampler_take;
 mod sampler_tidy;

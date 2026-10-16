@@ -230,6 +230,13 @@ pub const EXAMPLES: &[Example] = &[
         json: include_str!("../../patches/cut-up.json"),
     },
     Example {
+        name: "Choir of One",
+        shelf: Shelf::Recipe,
+        file_name: "choir-of-one.json",
+        description: "Plays itself: one voice's sung syllables become a choir. A Chord Sequencer's four voices on one cable each grow a Cloud of grains at their own pitch, and a slow LFO drifts through the syllables so the vowel keeps changing",
+        json: include_str!("../../patches/choir-of-one.json"),
+    },
+    Example {
         name: "Breakdown",
         shelf: Shelf::Recipe,
         file_name: "breakdown.json",

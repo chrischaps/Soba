@@ -24,6 +24,7 @@
   - [Drum](./modules/sources/drum.md)
   - [Sampler](./modules/sources/sampler.md)
   - [Chopper](./modules/sources/chopper.md)
+  - [Cloud](./modules/sources/cloud.md)
   - [Audio Input](./modules/sources/audio-input.md)
   - [Keyboard](./modules/midi/keyboard.md)
   - [MIDI Note](./modules/midi/midi-note.md)
@@ -84,6 +85,7 @@
 - [Held Vowels](./recipes/held-vowels.md)
 - [Interlock](./recipes/interlock.md)
 - [Cut-Up](./recipes/cut-up.md)
+- [Choir of One](./recipes/choir-of-one.md)
 - [Breakdown](./recipes/breakdown.md)
 
 # Songs

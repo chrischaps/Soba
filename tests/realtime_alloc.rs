@@ -28,7 +28,7 @@ use soba::engine::{
 };
 use soba::modules::looper::{LoopState, Looper};
 use soba::dsp::primitives::{Markers, ONSETS};
-use soba::modules::{Chopper, MidiOut, Mixer};
+use soba::modules::{Chopper, Cloud, MidiOut, Mixer};
 
 struct CountingAllocator;
 
@@ -227,6 +227,19 @@ fn audio_callback_never_allocates() {
     ui.send_command(EngineCommand::LoadSample { node_id: chopper, sample: tone(110.0) });
     ui.send_command(EngineCommand::SetMarkers { node_id: chopper, markers: Markers::between(&[0.2, 0.45, 0.7], 0.0, 1.0) });
 
+    // A Cloud at its densest, pitched up through its grains' lowpasses,
+    // playing a file that's replaced mid-grain now and then, and the live
+    // input (patched in and out), frozen and let go
+    let cloud = node_of(&nodes, "source.cloud");
+    let cloud_param = |param_index: usize, value: f32| EngineCommand::SetParameter { node_id: cloud, param_index, value };
+    ui.send_command(cloud_param(Cloud::PARAM_DENSITY, 200.0));
+    ui.send_command(cloud_param(Cloud::PARAM_SIZE, 60.0));
+    ui.send_command(cloud_param(Cloud::PARAM_PITCH, 19.0));
+    ui.send_command(cloud_param(Cloud::PARAM_SPRAY, 1.0));
+    ui.send_command(EngineCommand::LoadSample { node_id: cloud, sample: tone(330.0) });
+    let audio_input = node_of(&nodes, "source.audio_input");
+    let cloud_in = || EngineCommand::Connect { from_node: audio_input, from_port: 0, to_node: cloud, to_port: port("source.cloud", "In L") };
+
     // A Looper fed by the live input (with a round trip to take off its
     // overdubs), pressed through its cycle by its footswitches
     let looper = node_of(&nodes, "util.looper");
@@ -340,6 +353,16 @@ fn audio_callback_never_allocates() {
             ui.send_command(EngineCommand::LoadSample { node_id: chopper, sample: tone(110.0 + round as f32) });
             let place = (round % 9) as f32 / 10.0 + 0.05;
             ui.send_command(EngineCommand::SetMarkers { node_id: chopper, markers: Markers::between(&[place, 0.5, 0.96], 0.0, 1.0) });
+        }
+        if round % 43 == 13 {
+            ui.send_command(EngineCommand::LoadSample { node_id: cloud, sample: tone(330.0 + round as f32) });
+        }
+        match round % 200 {
+            50 => ui.send_command(cloud_in()),
+            110 => ui.send_command(cloud_param(Cloud::PARAM_FREEZE, 1.0)),
+            140 => ui.send_command(cloud_param(Cloud::PARAM_FREEZE, 0.0)),
+            170 => ui.send_command(EngineCommand::Disconnect { node_id: cloud, port: port("source.cloud", "In L"), is_input: true }),
+            _ => {}
         }
         if round % 40 == 35 {
             ui.request_snapshot(looper, Box::new(Snapshot::with_capacity(48000 * 4)));

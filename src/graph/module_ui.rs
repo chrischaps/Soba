@@ -168,6 +168,22 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
+        module_id: "source.cloud",
+        // Where and how long, then how many and how scattered; how high, how wide, how loud
+        knobs: &[
+            modulatable("Position", "Pos"),
+            modulatable("Size", "Size"),
+            modulatable("Density", "Dens"),
+            knob("Spray"),
+            modulatable("Pitch", "Pitch"),
+            knob("Spread"),
+            knob("Level"),
+        ],
+        display: NodeDisplay::CloudSparks,
+        knobs_per_row: 4,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
         module_id: "source.audio_input",
         knobs: &[knob("Gain"), knob_as("Threshold", "Thresh"), knob("Attack"), knob("Release")],
         monitor: &["Follow", "Gate"],

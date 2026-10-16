@@ -55,6 +55,10 @@ pub fn law(module_id: &str, param: &str) -> Option<CvLaw> {
         ("source.drum", "Tune") => Add { scale: 12.0 },  // drum.rs: semitones + 12 cv
         ("source.drum", "Decay") => Add { scale: 1.0 },
         ("source.sampler", "Start" | "Speed") => Add { scale: 1.0 },
+        // cloud.rs: Position + cv, Size and Density * 2^cv, semitones + 12 cv
+        ("source.cloud", "Position") => Add { scale: 1.0 },
+        ("source.cloud", "Size" | "Density") => Octaves,
+        ("source.cloud", "Pitch") => Add { scale: 12.0 },
         // filter.rs and ladder.rs: octaves in the log domain, times the depth knob
         ("filter.svf" | "filter.ladder", "Cutoff") => OctavesBy("Cutoff CV"),
         ("filter.svf" | "filter.ladder", "Resonance") => Add { scale: 0.5 },

@@ -1,6 +1,6 @@
 # Module Overview
 
-Soba has 42 modules in six categories. Each category has its own header color, so you can tell what a module is for at a glance across a crowded patch. The categories match the right-click menu and the quick-add palette, and the modules are listed here in the order the menu shows them.
+Soba has 43 modules in six categories. Each category has its own header color, so you can tell what a module is for at a glance across a crowded patch. The categories match the right-click menu and the quick-add palette, and the modules are listed here in the order the menu shows them.
 
 The **ID** is the name a patch file uses to refer to the module.
 
@@ -8,7 +8,7 @@ The **ID** is the name a patch file uses to refer to the module.
 
 ### Source
 
-<span class="swatch bar source"></span>Blue header. Modules that start a sound or a note: the oscillator, the noise source, the drum voice, the sampler and the chopper, the audio input, and the modules that turn your playing into pitch and gate signals.
+<span class="swatch bar source"></span>Blue header. Modules that start a sound or a note: the oscillator, the noise source, the drum voice, the sampler, the chopper and the cloud, the audio input, and the modules that turn your playing into pitch and gate signals.
 
 | Module | ID | What it does |
 |--------|----|--------------|
@@ -17,6 +17,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Drum](./sources/drum.md) | `source.drum` | An analog-style drum voice: kick, snare, tom, clap, hats, cymbal, rim, cowbell or shaker, with accent and choke |
 | [Sampler](./sources/sampler.md) | `source.sampler` | Plays a WAV, MP3, FLAC or Ogg file: one-shots from a gate, an instrument across the keyboard, or its slices by note |
 | [Chopper](./sources/chopper.md) | `source.chopper` | Plays a sliced break in time with the Clock, at any tempo, rearranged step by step |
+| [Cloud](./sources/cloud.md) | `source.cloud` | Granular: clouds of small grains from a file or live audio, with Freeze, and a cloud per voice of a chord |
 | [Audio Input](./sources/audio-input.md) | `source.audio_input` | A microphone, guitar or line input, with an envelope follower and a gate |
 | [Keyboard](./midi/keyboard.md) | `input.keyboard` | Play notes from your computer keyboard |
 | [MIDI Note](./midi/midi-note.md) | `input.midi_note` | One voice of pitch, gate, velocity and aftertouch from a MIDI controller |
@@ -145,6 +146,7 @@ Drive a voice from a sequence instead of a keyboard:
 | Tame or flip a modulation signal | [Attenuverter](./utilities/attenuverter.md) |
 | Play a pattern | [Clock](./modulation/clock.md) into the [Step Sequencer](./utilities/sequencer.md) |
 | Play a drum break in time, at any tempo, and rearrange it | [Clock](./modulation/clock.md) into the [Chopper](./sources/chopper.md) |
+| Stretch a moment of sound into a texture, or a voice into a choir | The [Cloud](./sources/cloud.md), with a [Chord Sequencer](./utilities/chord-sequencer.md)'s Pitch for chords |
 | Program a drum kit, with fills | [Clock](./modulation/clock.md) into the [Trigger Sequencer](./utilities/trigger-sequencer.md), a lane for each [Drum](./sources/drum.md) |
 | Turn a verse into a breakdown with one knob | A [Scenes](./utilities/scenes.md) module with a scene of each, its **Morph** on a slow LFO or an Arranger lane |
 | Arrange a whole song: parts that enter, fade and leave | [Clock](./modulation/clock.md) into the [Arranger](./utilities/arranger.md), a lane on each [Mixer](./utilities/mixer.md) **Level** |
