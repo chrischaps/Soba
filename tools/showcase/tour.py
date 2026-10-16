@@ -326,7 +326,8 @@ class Tour:
         `learn`, and leaves the view as it found it.
 
         `follow` maps a group's name to the sequencers inside it (as capture
-        scripts name them, "seq.step#2") whose Follow is switched on while
+        scripts name them: "seq.trigger", or "seq.step@104" by its id in the
+        patch file) whose Follow is switched on while
         it's open, so their grids show the pattern playing. The pointer
         leaves the window after."""
         follow = follow or {}

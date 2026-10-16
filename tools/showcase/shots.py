@@ -653,9 +653,9 @@ def orrery_tour(s, aims):
     """A Tour of Orrery, every group opened once before recording starts."""
     tour = Tour(s, ROOT / "patches/orrery.json", editor=EDITORS[(s.size, s.ppp)], bases=FILMS / "orrery" / aims, dry=s.dry)
     # The Drums and the Bass turn their patterns over by CV: Follow shows it.
-    # (A capture counts a kind across the patch: the Twins hold two Step
-    # Sequencers before the Bass)
-    end = tour.previsit(-46.0, follow={"Drums": ["seq.trigger"], "Bass": ["seq.step#3"]})
+    # The Bass's sequencer is named by its id in the patch: as the third of
+    # its kind (#3) it would depend on the Twins' two coming first
+    end = tour.previsit(-46.0, follow={"Drums": ["seq.trigger"], "Bass": ["seq.step@104"]})
     assert end < -1.0, f"the previsit runs to {end:.1f} s: start it earlier"
     return tour
 

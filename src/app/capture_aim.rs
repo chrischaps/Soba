@@ -8,6 +8,7 @@
 //! move by 0 -60 2.0                    # from where the pointer is
 //! move source.sampler file 0.3         # the middle of a face's button
 //! move osc.sine#2 knob:Detune 0.3      # a knob's dial
+//! move seq.step@104 follow 0.3         # the module with id 104 in the patch file
 //! move fx.delay knob:Sync 0.3          # an input's toggle or dropdown
 //! move seq.chord step:2 0.3            # a numbered part: steps, cells, sections
 //! move vca in:CV 0.3                   # a jack: in:, out:, or port: for either
@@ -17,7 +18,9 @@
 //! ```
 //!
 //! A module is named as `param` names it: its registry id, `#n` for the nth
-//! of its kind. Knobs (and toggles and dropdowns) are `knob:<parameter>`,
+//! of its kind across the whole patch, or `@id` for the one with that id in
+//! the patch file. `#n` counts in graph order, groups and all, so a tour
+//! that means one module in a busy patch names it by id. Knobs (and toggles and dropdowns) are `knob:<parameter>`,
 //! and a module with a bypass switch has `bypass`; the other names a face
 //! marks are listed in [`marks::FACE`]. A name the module can't have fails
 //! as the script loads.
@@ -32,7 +35,7 @@ use egui_node_graph2::{drawn_port_rect, AnyParameterId, NodeId};
 
 use crate::dsp::bypass::can_bypass;
 use crate::graph::annotations::{Annotation, Annotations};
-use crate::graph::{annotation_ui, catalog, marks, SynthGraph};
+use crate::graph::{annotation_ui, catalog, marks, SynthGraph, SynthGraphState};
 
 /// How a frame is named where a module would be: `frame:<title>`.
 const FRAME: &str = "frame:";
@@ -48,13 +51,30 @@ pub enum Spot {
     Part(Part),
 }
 
-/// A part of the `nth` module of a kind, or of a frame when `module` is
-/// `frame:<title>`.
+/// A part of a module, or of a frame when `module` is `frame:<title>`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Part {
     pub module: String,
-    pub nth: usize,
+    pub which: Which,
     pub at: PartAt,
+}
+
+/// Which module of a kind a script means.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Which {
+    /// The nth of its kind in the patch, from 0, in graph order (`#n`).
+    Nth(usize),
+    /// The one with this id in the patch file it was loaded from (`@id`).
+    Id(u64),
+}
+
+impl std::fmt::Display for Which {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Which::Nth(n) => write!(f, "#{}", n + 1),
+            Which::Id(id) => write!(f, "@{id}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,7 +90,7 @@ impl std::fmt::Display for Part {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.frame() {
             Some(_) => write!(f, "{}", self.module)?,
-            None => write!(f, "{} #{}", self.module, self.nth + 1)?,
+            None => write!(f, "{}{}", self.module, self.which)?,
         }
         match &self.at {
             PartAt::Named(name) => write!(f, " {name}"),
@@ -86,11 +106,35 @@ impl Part {
     }
 }
 
-/// A module named as `kind` or `kind#n`, counted from 1, as (kind, index).
-pub fn module_ref(target: &str) -> Result<(String, usize), &'static str> {
+/// A module named as `kind`, `kind#n` (counted from 1) or `kind@id`.
+pub fn module_ref(target: &str) -> Result<(String, Which), &'static str> {
+    if let Some((m, id)) = target.split_once('@') {
+        return Ok((m.to_string(), Which::Id(id.parse().map_err(|_| "bad @id")?)));
+    }
     match target.split_once('#') {
-        Some((m, n)) => Ok((m.to_string(), n.parse::<usize>().map_err(|_| "bad #n")?.max(1) - 1)),
-        None => Ok((target.to_string(), 0)),
+        Some((m, n)) => Ok((m.to_string(), Which::Nth(n.parse::<usize>().map_err(|_| "bad #n")?.max(1) - 1))),
+        None => Ok((target.to_string(), Which::Nth(0))),
+    }
+}
+
+/// The module a script names: of kind `module`, and the nth of them or the
+/// one loaded with that id. An id names one module, so one of another kind
+/// is a mistake in the script, and says so.
+pub fn find_module(graph: &SynthGraph, state: &SynthGraphState, module: &str, which: Which) -> Result<NodeId, String> {
+    let mut kind = graph.nodes.iter().filter(|(_, n)| n.user_data.module_id == module);
+    match which {
+        Which::Nth(nth) => kind.nth(nth).map(|(id, _)| id).ok_or_else(|| format!("finds no {module}{which} in the patch")),
+        Which::Id(patch_id) => {
+            let (node_id, node) = graph
+                .nodes
+                .iter()
+                .find(|(id, _)| state.patch_id(*id) == Some(patch_id))
+                .ok_or_else(|| format!("finds no module with id {patch_id} in the patch"))?;
+            if node.user_data.module_id != module {
+                return Err(format!("finds module {patch_id} is a {}, not a {module}", node.user_data.module_id));
+            }
+            Ok(node_id)
+        }
     }
 }
 
@@ -122,9 +166,9 @@ pub fn parse_spot(words: &[&str]) -> Result<(Spot, Vec<f64>), &'static str> {
             [x, y, rest @ ..] => (PartAt::Offset(Vec2::new(*x as f32, *y as f32)), rest.to_vec()),
             _ => (PartAt::Named("title".into()), n),
         };
-        return Ok((Spot::Part(Part { module: format!("{FRAME}{title}"), nth: 0, at }), rest));
+        return Ok((Spot::Part(Part { module: format!("{FRAME}{title}"), which: Which::Nth(0), at }), rest));
     }
-    let (module, nth) = module_ref(first)?;
+    let (module, which) = module_ref(first)?;
     // A part's name may have spaces, as an input's does: the words up to
     // the numbers
     let rest = &words[1..];
@@ -137,7 +181,7 @@ pub fn parse_spot(words: &[&str]) -> Result<(Spot, Vec<f64>), &'static str> {
     } else {
         (PartAt::Named(name), n)
     };
-    Ok((Spot::Part(Part { module, nth, at }), rest))
+    Ok((Spot::Part(Part { module, which, at }), rest))
 }
 
 /// Checks a part against what a module of its kind has, so a misspelt
@@ -175,21 +219,15 @@ pub fn check(part: &Part) -> Result<(), String> {
 }
 
 /// Where a part is on screen now: the middle of where it was last drawn.
-pub fn locate(ctx: &egui::Context, graph: &SynthGraph, annotations: &Annotations, zoom: f32, part: &Part) -> Result<Pos2, String> {
+pub fn locate(ctx: &egui::Context, graph: &SynthGraph, state: &SynthGraphState, zoom: f32, part: &Part) -> Result<Pos2, String> {
     if let Some(title) = part.frame() {
-        return locate_frame(annotations, zoom, title, &part.at);
+        return locate_frame(&state.annotations, zoom, title, &part.at);
     }
-    let node_id = graph
-        .nodes
-        .iter()
-        .filter(|(_, n)| n.user_data.module_id == part.module)
-        .nth(part.nth)
-        .map(|(id, _)| id)
-        .ok_or_else(|| format!("finds no {} #{} in the patch", part.module, part.nth + 1))?;
-    let module = annotation_ui::module_rect(ctx, node_id)
-        .ok_or_else(|| format!("finds {} #{} isn't on show", part.module, part.nth + 1))?;
+    let (module, which) = (&part.module, part.which);
+    let node_id = find_module(graph, state, module, which)?;
+    let rect = annotation_ui::module_rect(ctx, node_id).ok_or_else(|| format!("finds {module}{which} isn't on show"))?;
     let name = match &part.at {
-        PartAt::Offset(v) => return Ok(module.min + *v * zoom),
+        PartAt::Offset(v) => return Ok(rect.min + *v * zoom),
         PartAt::Named(name) => name,
     };
     let rect = match jack(graph, node_id, name) {
@@ -197,7 +235,7 @@ pub fn locate(ctx: &egui::Context, graph: &SynthGraph, annotations: &Annotations
         None => marks::marked(ctx, node_id, name),
     };
     rect.map(|r| r.center()).ok_or_else(|| {
-        format!("finds no {name} drawn on {} #{}: it shows {}", part.module, part.nth + 1, marks::names(ctx, node_id).join(", "))
+        format!("finds no {name} drawn on {module}{which}: it shows {}", marks::names(ctx, node_id).join(", "))
     })
 }
 
@@ -243,7 +281,7 @@ mod tests {
     }
 
     fn part(module: &str, nth: usize, at: PartAt) -> Spot {
-        Spot::Part(Part { module: module.into(), nth, at })
+        Spot::Part(Part { module: module.into(), which: Which::Nth(nth), at })
     }
 
     #[test]
@@ -253,6 +291,10 @@ mod tests {
         let named = |name: &str| PartAt::Named(name.into());
         assert_eq!(spot("source.sampler file 0.3"), Ok((part("source.sampler", 0, named("file")), vec![0.3])));
         assert_eq!(spot("osc.sine#2 knob:Detune"), Ok((part("osc.sine", 1, named("knob:Detune")), vec![])));
+        // By its id in the patch file
+        let by_id = Spot::Part(Part { module: "seq.step".into(), which: Which::Id(104), at: named("follow") });
+        assert_eq!(spot("seq.step@104 follow 0.3"), Ok((by_id, vec![0.3])));
+        assert!(spot("seq.step@x follow").is_err());
         // Names with spaces, up to the numbers
         assert_eq!(spot("util.clock knob:Gate Length 1"), Ok((part("util.clock", 0, named("knob:Gate Length")), vec![1.0])));
         assert_eq!(spot("fx.eq 234 135.5 0.3"), Ok((part("fx.eq", 0, PartAt::Offset(Vec2::new(234.0, 135.5))), vec![0.3])));
@@ -269,8 +311,29 @@ mod tests {
     }
 
     #[test]
+    fn a_module_is_found_by_its_id_in_the_patch_file() {
+        use crate::persistence::{graph_io::stage_patch, patch::load_from_file};
+        // Orrery's Bass sequencer is the third of its kind, inside a group
+        let patch = load_from_file(std::path::Path::new("patches/orrery.json")).unwrap();
+        let staged = stage_patch(&patch).unwrap();
+        let mut state = SynthGraphState::default();
+        state.make_room_for_seeds(staged.nodes.iter().map(|n| n.patch_id));
+        for node in &staged.nodes {
+            let engine_id = state.allocate_engine_node_id(node.graph_id);
+            state.set_seed(engine_id, node.patch_id);
+        }
+        let graph = &staged.graph;
+        let bass = staged.nodes.iter().find(|n| n.patch_id == 104).unwrap().graph_id;
+        assert_eq!(find_module(graph, &state, "seq.step", Which::Id(104)), Ok(bass));
+        assert_eq!(find_module(graph, &state, "seq.step", Which::Nth(2)), Ok(bass), "#3 counts the Twins' two first");
+        let err = find_module(graph, &state, "seq.trigger", Which::Id(104)).unwrap_err();
+        assert!(err.contains("is a seq.step"), "{err}");
+        assert!(find_module(graph, &state, "seq.step", Which::Id(99_999)).is_err());
+    }
+
+    #[test]
     fn a_part_the_module_cant_have_fails() {
-        let named = |module: &str, name: &str| Part { module: module.into(), nth: 0, at: PartAt::Named(name.into()) };
+        let named = |module: &str, name: &str| Part { module: module.into(), which: Which::Nth(0), at: PartAt::Named(name.into()) };
         assert!(check(&named("source.sampler", "file")).is_ok());
         assert!(check(&named("source.sampler", "FILE")).is_ok(), "names match without case");
         assert!(check(&named("osc.sine", "knob:Detune")).is_ok());
@@ -286,6 +349,6 @@ mod tests {
         assert!(check(&named("osc.sine", "bypass")).is_err(), "an oscillator has no bypass switch");
         assert!(check(&named("osc.sine", "out:Nope")).is_err());
         assert!(check(&named("osc.nope", "knob:Detune")).is_err());
-        assert!(check(&Part { module: "fx.eq".into(), nth: 0, at: PartAt::Offset(Vec2::ZERO) }).is_ok());
+        assert!(check(&Part { module: "fx.eq".into(), which: Which::Nth(0), at: PartAt::Offset(Vec2::ZERO) }).is_ok());
     }
 }

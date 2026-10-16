@@ -562,9 +562,9 @@ impl SynthApp {
             return;
         }
         let mut actions = capture.take_actions();
-        let graph = &self.graph_state.graph;
-        actions.extend(capture.param_values(|module, nth, input| {
-            find_input(graph, module, nth, input).map(|id| graph.get_input(id).value.actual_value())
+        let (graph, state) = (&self.graph_state.graph, &self.user_state);
+        actions.extend(capture.param_values(|module, which, input| {
+            find_input(graph, state, module, which, input).ok().map(|id| graph.get_input(id).value.actual_value())
         }));
 
         let mut midi = Vec::new();
@@ -601,10 +601,10 @@ impl SynthApp {
                         eprintln!("capture: no group to leave");
                     }
                 }
-                CaptureAction::SetParam { module, nth, input, value } => {
-                    match find_input(&self.graph_state.graph, &module, nth, &input) {
-                        Some(id) => self.graph_state.graph.inputs[id].value.set_actual_value(value),
-                        None => eprintln!("capture: no input {} on {} #{}", input, module, nth + 1),
+                CaptureAction::SetParam { module, which, input, value } => {
+                    match find_input(&self.graph_state.graph, &self.user_state, &module, which, &input) {
+                        Ok(id) => self.graph_state.graph.inputs[id].value.set_actual_value(value),
+                        Err(e) => eprintln!("capture: param {e}"),
                     }
                 }
             }
@@ -3856,11 +3856,18 @@ impl SynthApp {
     }
 }
 
-/// The `nth` module of a kind (by registry id, in graph order) and its input
-/// named `input`, for capture scripts.
-fn find_input(graph: &crate::graph::SynthGraph, module: &str, nth: usize, input: &str) -> Option<egui_node_graph2::InputId> {
-    let node = graph.nodes.values().filter(|n| n.user_data.module_id == module).nth(nth)?;
-    node.inputs.iter().find(|(name, _)| name.eq_ignore_ascii_case(input)).map(|(_, id)| *id)
+/// The input named `input` on the module a capture script names (see
+/// [`capture_aim::find_module`](super::capture_aim::find_module)).
+fn find_input(
+    graph: &crate::graph::SynthGraph,
+    state: &SynthGraphState,
+    module: &str,
+    which: super::capture_aim::Which,
+    input: &str,
+) -> Result<egui_node_graph2::InputId, String> {
+    let node_id = super::capture_aim::find_module(graph, state, module, which)?;
+    let node = &graph.nodes[node_id];
+    node.inputs.iter().find(|(name, _)| name.eq_ignore_ascii_case(input)).map(|(_, id)| *id).ok_or_else(|| format!("finds no input {input} on {module}{which}"))
 }
 
 /// Tooltip for the Undo and Redo buttons, e.g. "Undo Move Oscillator (Ctrl+Z)".
@@ -4353,8 +4360,8 @@ impl eframe::App for SynthApp {
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         if let Some(capture) = self.capture.as_mut() {
             let (graph, zoom) = (&self.graph_state.graph, self.graph_state.pan_zoom.zoom);
-            let annotations = &self.user_state.annotations;
-            capture.prepare_input(ctx, raw_input, |part| super::capture_aim::locate(ctx, graph, annotations, zoom, part));
+            let state = &self.user_state;
+            capture.prepare_input(ctx, raw_input, |part| super::capture_aim::locate(ctx, graph, state, zoom, part));
         }
         // The wheel over an Arranger's timeline zooms and pans it, not the canvas
         crate::graph::claim_arranger_wheel(ctx, raw_input);

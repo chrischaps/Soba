@@ -51,7 +51,8 @@
 //! 1.0  chord 60,64,67 90 3.0
 //! 1.0  midi start                   # MIDI Start, Stop or Continue
 //! 1.0  midiclock 120 8.0            # MIDI clock ticks at 120 BPM for 8 s
-//! 2.0  param osc.sine Detune 12 1.5 # module (#n for the nth), input, value, ramp
+//! 2.0  param osc.sine Detune 12 1.5 # module (#n for the nth, @id for its id
+//!                                   # in the file), input, value, ramp
 //! 2.0  param filter.svf#2 Cutoff 800
 //! 3.0  cursor on                    # draw a pointer over the picture
 //! 3.0  move 400 300 0.6             # glide the pointer
@@ -113,7 +114,7 @@ use std::process::{Child, Command, Stdio};
 use eframe::egui;
 use egui::{Pos2, Rect, Vec2};
 
-use super::capture_aim::{self, Part, Spot};
+use super::capture_aim::{self, Part, Spot, Which};
 use crate::dsp::InputAudio;
 use crate::engine::{read_wav_at, MidiEvent, StereoBuffer, BLOCK_SIZE};
 
@@ -206,7 +207,7 @@ enum Cue {
     Note { note: u8, velocity: u8, on: bool },
     /// Any other MIDI message, such as a clock tick.
     Midi(MidiEvent),
-    Param { module: String, nth: usize, input: String, value: f32, dur: f64 },
+    Param { module: String, which: Which, input: String, value: f32, dur: f64 },
     Cursor(bool),
     Move { to: Spot, dur: f64 },
     /// The pointer leaves the window.
@@ -246,7 +247,7 @@ pub enum CaptureAction {
     /// A MIDI event, `offset` samples into the audio the engine renders next.
     Midi { event: MidiEvent, offset: u32 },
     /// Set a module's input to a value in real units.
-    SetParam { module: String, nth: usize, input: String, value: f32 },
+    SetParam { module: String, which: Which, input: String, value: f32 },
     /// Audio Input modules are now hearing this file.
     InputFile(String),
     /// Write where each module is drawn, in patch space, to this file.
@@ -322,7 +323,7 @@ fn ease(x: f32) -> f32 {
 #[derive(Debug, Clone)]
 struct Ramp {
     module: String,
-    nth: usize,
+    which: Which,
     input: String,
     /// Filled in from the parameter's value when the ramp starts.
     from: Option<f32>,
@@ -693,9 +694,9 @@ impl Capture {
                 Cue::Text(text) => raw.events.push(egui::Event::Text(text)),
                 // Kept apart, for `fire_midi`
                 Cue::Note { .. } | Cue::Midi(_) => {}
-                Cue::Param { module, nth, input, value, dur } => self.ramps.push(Ramp {
+                Cue::Param { module, which, input, value, dur } => self.ramps.push(Ramp {
                     module,
-                    nth,
+                    which,
                     input,
                     from: None,
                     to: value,
@@ -905,11 +906,11 @@ impl Capture {
 
     /// The parameter values the script sets this frame, given a way to read
     /// a parameter's current value.
-    pub fn param_values(&mut self, mut current: impl FnMut(&str, usize, &str) -> Option<f32>) -> Vec<CaptureAction> {
+    pub fn param_values(&mut self, mut current: impl FnMut(&str, Which, &str) -> Option<f32>) -> Vec<CaptureAction> {
         let t = self.time() + self.dt();
         let mut out = Vec::new();
         self.ramps.retain_mut(|ramp| {
-            let from = *ramp.from.get_or_insert_with(|| current(&ramp.module, ramp.nth, &ramp.input).unwrap_or(ramp.to));
+            let from = *ramp.from.get_or_insert_with(|| current(&ramp.module, ramp.which, &ramp.input).unwrap_or(ramp.to));
             let p = if ramp.dur <= 0.0 { 1.0 } else { ease(((t - ramp.start) / ramp.dur).clamp(0.0, 1.0) as f32) };
             // Wide ranges of positive values (frequencies, times) turn evenly
             // in log space, as a knob with a log taper would
@@ -920,7 +921,7 @@ impl Capture {
             };
             out.push(CaptureAction::SetParam {
                 module: ramp.module.clone(),
-                nth: ramp.nth,
+                which: ramp.which,
                 input: ramp.input.clone(),
                 value,
             });
@@ -1272,11 +1273,11 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
             }
             "param" => {
                 let target = words.get(2).ok_or_else(|| err("missing module"))?;
-                let (module, nth) = capture_aim::module_ref(target).map_err(err)?;
+                let (module, which) = capture_aim::module_ref(target).map_err(err)?;
                 // Input names may contain spaces: everything up to the value
                 let value_at = (3..words.len()).find(|&i| words[i].parse::<f64>().is_ok()).ok_or_else(|| err("missing value"))?;
                 let input = words[3..value_at].join(" ");
-                cues.push((t, Cue::Param { module, nth, input, value: num(value_at)? as f32, dur: opt(value_at + 1)? }));
+                cues.push((t, Cue::Param { module, which, input, value: num(value_at)? as f32, dur: opt(value_at + 1)? }));
             }
             "cursor" => cues.push((t, Cue::Cursor(words.get(2) != Some(&"off")))),
             "move" if words.get(2) == Some(&"off") && words.len() == 3 => cues.push((t, Cue::PointerOff)),
@@ -1359,8 +1360,8 @@ mod tests {
         let times: Vec<f64> = cues.iter().map(|c| c.0).collect();
         assert_eq!(times, vec![0.0, 0.5, 0.5, 1.0, 1.5, 1.5, 1.5, 3.0, 4.0]);
         match &cues[7].1 {
-            Cue::Param { module, nth, input, value, dur } => {
-                assert_eq!((module.as_str(), *nth, input.as_str(), *value, *dur), ("filter.svf", 1, "Cut Off", 800.0, 1.0));
+            Cue::Param { module, which, input, value, dur } => {
+                assert_eq!((module.as_str(), *which, input.as_str(), *value, *dur), ("filter.svf", Which::Nth(1), "Cut Off", 800.0, 1.0));
             }
             other => panic!("expected a param cue, got {:?}", other),
         }

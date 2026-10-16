@@ -406,6 +406,12 @@ impl SynthGraphState {
         self.seeds.insert(engine_node_id, patch_id);
     }
 
+    /// A module's ID in the patch it was loaded from, if it was loaded from
+    /// one: what a capture script names it by as `kind@id`.
+    pub fn patch_id(&self, graph_node_id: NodeId) -> Option<u64> {
+        self.seeds.get(&self.get_engine_node_id(graph_node_id)?).copied()
+    }
+
     /// The command that seeds a module: by its ID in the patch it was
     /// loaded from, or else by its engine ID.
     pub fn seed_command(&self, engine_node_id: EngineNodeId) -> EngineCommand {

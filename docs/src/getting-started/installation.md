@@ -165,7 +165,7 @@ cargo run --release --bin render -- patches/fm-synthesis.json out.wav --seconds 
 | `--block-size N` | 256 | Samples processed per block |
 | `--audition` | off | Plays a short phrase into the patch's Keyboard, MIDI Note and Poly MIDI modules |
 | `--input FILE.wav` | none | What [Audio Input](../modules/sources/audio-input.md) modules hear, in place of an input device. It must be at the render's sample rate |
-| `--cue FILE.txt` | none | Parameter changes to play into the patch as it renders, one per line: `<seconds> param <module>[#n] <parameter> <value>`, as in a capture script. Press a [Looper](../modules/utilities/looper.md)'s footswitches this way |
+| `--cue FILE.txt` | none | Parameter changes to play into the patch as it renders, one per line: `<seconds> param <module>[#n\|@id] <parameter> <value>`, as in a capture script: `#n` is the nth of its kind, `@id` the module with that id in the patch file. Press a [Looper](../modules/utilities/looper.md)'s footswitches this way |
 | `--compare FILE.wav` | none | An earlier render to measure against: prints how far peak, true peak, RMS, loudness and range have moved since |
 
 A patch that waits for a player renders silence unless something inside it plays notes (a Clock or Step Sequencer, say) or you add `--audition`. Audio Input modules render silence unless you give them a file with `--input`. [Samplers](../modules/sources/sampler.md) find their files relative to the patch, as the app does.

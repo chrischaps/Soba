@@ -251,7 +251,7 @@ fn reading(value: Option<f64>, signed: bool) -> String {
 }
 
 /// Reads a cue script into engine commands at their frames: `<seconds>
-/// param <module>[#n] <parameter name> <value>`.
+/// param <module>[#n|@id] <parameter name> <value>`.
 fn parse_cues(text: &str, patch: &Patch, compiled: &CompiledPatch, sample_rate: f32) -> Result<Vec<(u64, EngineCommand)>, String> {
     let registry = create_module_registry();
     let mut commands = Vec::new();
@@ -267,19 +267,22 @@ fn parse_cues(text: &str, patch: &Patch, compiled: &CompiledPatch, sample_rate: 
         let err = |msg: &str| format!("cue line {}: {} ({})", line_no + 1, msg, line.trim());
         let seconds: f64 = words[0].parse().map_err(|_| err("not a time"))?;
         if words.get(1) != Some(&"param") || words.len() < 5 {
-            return Err(err("expected <seconds> param <module>[#n] <parameter> <value>"));
+            return Err(err("expected <seconds> param <module>[#n|@id] <parameter> <value>"));
         }
-        let (module, nth) = match words[2].split_once('#') {
-            Some((m, n)) => (m, n.parse::<usize>().map_err(|_| err("bad #n"))?.max(1) - 1),
-            None => (words[2], 0),
+        // `kind#n` is the nth of its kind, `kind@id` the one with that id in the file
+        let (module, which) = match (words[2].split_once('@'), words[2].split_once('#')) {
+            (Some((m, id)), _) => (m, Err(id.parse::<u64>().map_err(|_| err("bad @id"))?)),
+            (None, Some((m, n))) => (m, Ok(n.parse::<usize>().map_err(|_| err("bad #n"))?.max(1) - 1)),
+            (None, None) => (words[2], Ok(0)),
         };
         let value: f32 = words[words.len() - 1].parse().map_err(|_| err("not a value"))?;
         let name = words[3..words.len() - 1].join(" ");
-        let node = patch
-            .all_nodes()
-            .into_iter()
-            .filter(|n| n.module_id == module)
-            .nth(nth)
+        let mut kind = patch.all_nodes().into_iter().filter(|n| n.module_id == module);
+        let found = match which {
+            Ok(nth) => kind.nth(nth),
+            Err(id) => kind.find(|n| n.id == id),
+        };
+        let node = found
             .and_then(|n| compiled.node_ids.get(&n.id).copied())
             .ok_or_else(|| err("no such module in the patch"))?;
         let param_index = registry
