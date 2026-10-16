@@ -161,6 +161,12 @@ const TRIM: f32 = 0.001;
 const MOST_TRIM: f32 = 0.02;
 /// Within this much of a beat of the comb, the clock is on the beat.
 const LOCKED: f64 = 0.1;
+/// The trim waits until the clock has been on the beat this many beats.
+/// Catching up with a beat found afresh, the pull closes the last
+/// [`LOCKED`] of the error over a few beats, and a trim integrating that
+/// tail would wind up against an error that's going away anyway (#290).
+/// After four beats, what's left of it winds the trim up by about 0.15%.
+const SETTLE_BEATS: f64 = 4.0;
 /// How long the beat takes to settle on a new tempo, in seconds.
 const TEMPO_SECONDS: f32 = 1.0;
 /// How long the pace it coasts at is averaged over, on the beat, in seconds.
@@ -225,6 +231,8 @@ struct Beat {
     /// How far a frame has moved it on average while on the beat: the pace
     /// it coasts at, pull and all.
     pace: f64,
+    /// How many beats it has been on the beat for, without a break.
+    settled: f64,
     /// How much more backbeat lies half a beat from the clock's tooth than
     /// on it, as a log, learned while the clock is on that tooth.
     lean: f32,
@@ -396,7 +404,7 @@ impl BeatTracker {
         let doubtful = self.doubt as f32 * FRAME_SECONDS >= SURE_SECONDS;
         let claim = |frames: f32| {
             let (phase, _) = self.phase(frames, None);
-            Some(Beat { frames, trim: 0.0, position: phase as f64, step: 0.0, pace: 1.0 / frames as f64, lean: 0.0, heading: None, rival: 0.0, coasting: None })
+            Some(Beat { frames, trim: 0.0, position: phase as f64, step: 0.0, pace: 1.0 / frames as f64, settled: 0.0, lean: 0.0, heading: None, rival: 0.0, coasting: None })
         };
         let beat = match (self.beat, chosen) {
             (None, Some((frames, ..))) if heard_enough && sure => claim(frames),
@@ -410,7 +418,7 @@ impl BeatTracker {
                 // old one, and how it trimmed and leaned there, say nothing
                 // about them, so it finds them afresh, as a claim does, and
                 // catches up
-                let beat = if taking_over { Beat { heading: Some(self.phase(frames, None).0 as f64), trim: 0.0, lean: 0.0, ..beat } } else { beat };
+                let beat = if taking_over { Beat { heading: Some(self.phase(frames, None).0 as f64), trim: 0.0, settled: 0.0, lean: 0.0, ..beat } } else { beat };
                 Some(self.follow(beat, frames))
             }
             (Some(beat), _) if beat.may_coast() => Some(beat.coast()),
@@ -653,9 +661,11 @@ impl BeatTracker {
         let error = (target - predicted.fract() + 0.5).rem_euclid(1.0) - 0.5;
         let step = (1.0 + (PULL * error).clamp(-MOST_PULL, MOST_PULL)) / length as f64;
         // Running late (a positive error) means the beat is shorter than
-        // heard. Only near the beat, though: catching up with a beat found
-        // afresh is the pull's job, and trimming through it would overshoot
-        let trim = if error.abs() < LOCKED { (beat.trim + TRIM * error as f32).clamp(-MOST_TRIM, MOST_TRIM) } else { beat.trim };
+        // heard. Only once settled on the beat, though: catching up with a
+        // beat found afresh is the pull's job, and trimming through it,
+        // even its last stretch, would overshoot
+        let settled = if error.abs() < LOCKED { beat.settled + step } else { 0.0 };
+        let trim = if error.abs() < LOCKED && settled >= SETTLE_BEATS { (beat.trim + TRIM * error as f32).clamp(-MOST_TRIM, MOST_TRIM) } else { beat.trim };
         let pace = if error.abs() < LOCKED { beat.pace + (step - beat.pace) * (FRAME_SECONDS / PACE_SECONDS) as f64 } else { beat.pace };
         let (lean, heading) = match beat.heading {
             // Turning: on the beat there, what it leaned toward is under it
@@ -665,7 +675,7 @@ impl BeatTracker {
             _ if error.abs() < LOCKED => (beat.lean + (toward - beat.lean) * clear * (FRAME_SECONDS / LEAN_SECONDS), None),
             _ => (beat.lean, None),
         };
-        Beat { frames, trim, position: beat.position + step, step, pace, lean, heading, rival: beat.rival, coasting: None }
+        Beat { frames, trim, position: beat.position + step, step, pace, settled, lean, heading, rival: beat.rival, coasting: None }
     }
 }
 
@@ -777,6 +787,25 @@ pub(crate) mod tests {
         let misses = misses(&heard, &kicks, 4.0);
         assert!(misses.len() >= 7, "{misses:?}");
         assert!(misses.iter().all(|miss| miss.abs() < 0.005), "{misses:?}");
+    }
+
+    #[test]
+    fn test_catching_up_with_the_beat_doesnt_wind_up_the_trim() {
+        // The kicks keep the tempo the tracker hears, so there's next to
+        // nothing to trim: after a claim, catching up with them is the
+        // pull's job, and a trim that integrated the error it closes would
+        // carry the clock past them and hold it late (#290)
+        for bpm in [96.0, 100.0, 124.0] {
+            let (music, _) = four_to_the_floor(bpm, 20.0);
+            let mut tracker = BeatTracker::new();
+            tracker.prepare(RATE);
+            let mut most = 0.0f32;
+            for &x in &music {
+                tracker.hear(x);
+                most = most.max(tracker.beat.map_or(0.0, |beat| beat.trim.abs()));
+            }
+            assert!(most < 0.003, "at {bpm} BPM the trim wound up to {most}");
+        }
     }
 
     #[test]
