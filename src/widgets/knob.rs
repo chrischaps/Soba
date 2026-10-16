@@ -301,6 +301,16 @@ impl KnobConfig {
         (!self.logarithmic && min < 0.0 && max > 0.0).then(|| -min / (max - min))
     }
 
+    /// The value at `travel` (0 to 1) round the knob: the inverse of
+    /// [`Self::travel`].
+    pub fn value_at_travel(&self, travel: f32) -> f32 {
+        if self.logarithmic {
+            return self.value_at(travel);
+        }
+        let (min, max) = (*self.range.start(), *self.range.end());
+        (min + travel * (max - min)).clamp(min, max)
+    }
+
     /// The value at `travel` (0 to 1) round a logarithmic knob.
     fn value_at(&self, travel: f32) -> f32 {
         let (min, max) = (*self.range.start(), *self.range.end());

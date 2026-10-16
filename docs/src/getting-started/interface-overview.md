@@ -152,6 +152,15 @@ The clipboard holds modules as patch text, so you can paste between two Soba win
 
 Filters and effects can be bypassed: their audio inputs pass straight to their outputs, as if the module weren't there. Click the power switch at the left of the header, choose **Bypass** from the module menu, or select modules and press `Ctrl + B`. A bypassed module's header fades to gray and its controls dim. Switching takes a 20 ms crossfade, so it never clicks, and a bypassed module uses no CPU.
 
+### Mutate
+
+Select a module or a group and press `Ctrl + M`. Each of its knobs moves a small random step, and pressing it again wanders further. Hold it, and the knobs glide out further the longer you hold, from a nudge to a big jump; let go when you like what you hear. It's a way to explore by listening: mutate a Library group until it's yours.
+
+- **What moves:** every knob of the selected modules, and of every module inside a selected group. `Ctrl + Alt + M` moves their whole-number knobs, switches and dropdowns too.
+- **What doesn't:** a knob a cable drives, the Audio Output, and any knob that sets how loud something is (a level, gain, makeup, drive or feedback), so a variation is never louder than the patch was.
+- **Keeping one:** a strip of chips under the selection holds the knobs as they were and the last eight variations, each drawn as a tick per knob, as high as the knob is turned. Click one to go back to it.
+- **Undo:** each variation, and each click on the strip, is one step.
+
 ## Frames and notes
 
 A patch can explain itself. A **frame** is a titled, tinted backdrop behind a group of modules, like a section printed on a synth's front panel: *Voice*, *Modulation*, *Echoes*. A **note** is a card of text on the canvas. Neither makes a sound. Every example patch uses them, so you can read how it works while you play it.
@@ -338,6 +347,8 @@ Recent files, the autosave, your cable style and the window's size and position 
 |----------|--------|
 | `Shift` + drag | Fine knob adjustment |
 | Double-click a knob | Reset it to its default |
+| `Ctrl + M` | Mutate the selected modules' knobs: hold it to go further |
+| `Ctrl + Alt + M` | Mutate their switches and dropdowns too |
 
 ### Groups
 

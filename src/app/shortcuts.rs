@@ -54,6 +54,8 @@ pub const SHEET: &[Group] = &[
         rows: &[
             ("`Shift` + drag", "Fine knob adjustment"),
             ("Double-click a knob", "Reset it to its default"),
+            ("`Ctrl + M`", "Mutate the selected modules' knobs: hold it to go further"),
+            ("`Ctrl + Alt + M`", "Mutate their switches and dropdowns too"),
         ],
     },
     Group {

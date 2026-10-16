@@ -11,6 +11,7 @@ pub mod engine_sync;
 mod input_device;
 pub mod library;
 mod long_press;
+mod mutate;
 mod notice;
 mod palette;
 mod recording;

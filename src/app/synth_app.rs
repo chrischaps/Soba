@@ -56,6 +56,7 @@ mod file_hover;
 mod framing;
 mod grouping;
 mod loops;
+mod mutating;
 mod probe;
 mod record_into;
 mod samples;
@@ -349,6 +350,8 @@ pub struct SynthApp {
     add_menu: AddMenu,
     /// The cable heard while Alt is held over it
     probe: probe::CableProbe,
+    /// Ctrl+M: the variation being held, and the strip of the last few
+    mutating: mutating::Mutating,
     /// Patch files the visitor picked, which the browser hands over later.
     #[cfg(target_arch = "wasm32")]
     uploads: (std::sync::mpsc::Sender<web::Upload>, std::sync::mpsc::Receiver<web::Upload>),
@@ -535,6 +538,7 @@ impl SynthApp {
             long_press: LongPress::default(),
             add_menu: AddMenu::default(),
             probe: Default::default(),
+            mutating: Default::default(),
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
         };
@@ -2769,6 +2773,7 @@ impl SynthApp {
         // A loaded patch starts its own history, with nothing unsaved, and
         // its Loopers hold the loops it was saved with
         self.history.reset(&self.graph_state, &self.user_state);
+        self.forget_mutations();
         self.mark_saved();
         self.opened_loops();
 
@@ -2804,6 +2809,7 @@ impl SynthApp {
     fn new_patch(&mut self) {
         self.clear_graph();
         self.history.reset(&self.graph_state, &self.user_state);
+        self.forget_mutations();
         self.mark_saved();
         self.opened_loops();
         self.load_warnings.clear();
@@ -4111,6 +4117,7 @@ impl eframe::App for SynthApp {
             self.handle_group_shortcuts(ctx);
             self.handle_editing_shortcuts(ctx);
             self.handle_framing_shortcut(ctx);
+            self.handle_mutate_key(ctx);
         }
 
         // Handle musical keyboard input (QWERTY to notes)
@@ -4278,6 +4285,7 @@ impl eframe::App for SynthApp {
             let held: Vec<i32> = self.pressed_keys.iter().map(|(note, _)| *note).collect();
             self.shortcuts.show(ctx, &held);
         }
+        self.show_variations(ctx);
 
         // "Save changes?" and crash recovery, over everything else
         self.show_prompts(ctx);
@@ -4298,7 +4306,8 @@ impl eframe::App for SynthApp {
         // Typing a frame's title or a note is one step too, once it's done
         let gesture_held = ctx.input(|i| i.pointer.any_down())
             || self.user_state.annotations.is_editing()
-            || self.user_state.renaming.is_some();
+            || self.user_state.renaming.is_some()
+            || self.mutating.holding();
         self.history.record(&self.graph_state, &self.user_state, gesture_held, Instant::now());
 
         // How late live input is, for Loopers to take off their overdubs
