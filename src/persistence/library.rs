@@ -164,6 +164,13 @@ pub const LIBRARY: &[LibraryGroup] = &[
         description: "An LFO sweeps a mono sound from side to side. Tempo locks the sweep to the Clock",
         json: include_str!("../../library/auto-pan.json"),
     },
+    LibraryGroup {
+        name: "Slicer",
+        file_name: "slicer.json",
+        section: Section::Effects,
+        description: "The Slicer pedal rebuilt from stock modules, to open and see how it works: a synced LFO clocks a row of steps that open a VCA and a step filter",
+        json: include_str!("../../library/slicer.json"),
+    },
 ];
 
 #[cfg(test)]
@@ -385,6 +392,54 @@ mod tests {
         }
     }
 
+    /// Sixteen sixteenths of a steady tone at -12 dBFS through `slicer` (the
+    /// group's node or the module's), free-running at 120 BPM: each step's
+    /// RMS.
+    fn step_levels(mut patch: Patch, slicer: u64) -> Vec<f32> {
+        let tone = NodeData::new(9100, "osc.sine", (0.0, 0.0));
+        let mut quieter = NodeData::new(9102, "util.vca", (0.0, 0.0));
+        quieter.parameters = vec![crate::persistence::NamedParameter::new("Level", ParameterValue::Number(0.25))];
+        let mut out = NodeData::new(9101, "output.audio", (0.0, 0.0));
+        out.parameters = vec![
+            crate::persistence::NamedParameter::new("Volume", ParameterValue::Number(1.0)),
+            crate::persistence::NamedParameter::new("Limiter", ParameterValue::Toggle(false)),
+        ];
+        let (in_port, out_port) = if patch.groups.is_empty() { ("In L", "Out L") } else { ("In", "Out") };
+        patch.nodes.extend([tone, quieter, out]);
+        patch.connections.extend([
+            ConnectionData::new(9100, "Out", 9102, "In"),
+            ConnectionData::new(9102, "Out", slicer, in_port),
+            ConnectionData::new(slicer, out_port, 9101, "Mono"),
+        ]);
+        let (mut renderer, compiled) = OfflineRenderer::from_patch(&patch, 48_000.0, 256).unwrap();
+        assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+        let audio = renderer.render(16 * 6000);
+        audio.left.chunks(6000).map(rms).collect()
+    }
+
+    #[test]
+    fn slicer_group_slices_as_the_slicer_does() {
+        // Both at their defaults play the Trance row: each step as loud, and
+        // the rests as quiet, in the group as in the module it rebuilds
+        let entry = LIBRARY.iter().find(|g| g.name == "Slicer").unwrap();
+        let group = entry.patch().unwrap();
+        let id = group.groups[0].id;
+        let mut module = Patch::new("Slicer module");
+        module.nodes.push(NodeData::new(1, "fx.slicer", (0.0, 0.0)));
+        let (built, original) = (step_levels(group, id), step_levels(module, 1));
+        for (step, (b, o)) in built.iter().zip(&original).enumerate() {
+            let (b_db, o_db) = (amp_to_db(*b), amp_to_db(*o));
+            if o_db < -60.0 {
+                assert!(b_db < -60.0, "step {}: a rest lets {b_db:.1} dB through", step + 1);
+            } else {
+                // The Sequencer times its first gate before it has measured
+                // a step, so the first slice comes out a little short
+                let within = if step == 0 { 1.5 } else { 0.5 };
+                assert!((b_db - o_db).abs() < within, "step {}: group {b_db:.1} dB, module {o_db:.1} dB", step + 1);
+            }
+        }
+    }
+
     /// The first `seconds` of one middle C played at `velocity`, alone.
     fn one_note(entry: &LibraryGroup, velocity: u8, seconds: f32) -> Vec<f32> {
         let sample_rate = 48_000.0;
@@ -402,6 +457,32 @@ mod tests {
         let audible = spectrum.magnitudes.iter().enumerate().map(|(bin, m)| (bin as f64 * spectrum.bin_hz, m * m)).filter(|&(hz, _)| hz >= 40.0);
         let weighted: f64 = audible.clone().map(|(hz, p)| hz * p).sum();
         weighted / audible.map(|(_, p)| p).sum::<f64>()
+    }
+
+    #[test]
+    fn slicer_group_steps_the_filter() {
+        // With Filter turned down, each slice strikes the lowpass open and it
+        // closes through the step: the slice starts brighter than it ends
+        let entry = LIBRARY.iter().find(|g| g.name == "Slicer").unwrap();
+        let mut patch = entry.patch().unwrap();
+        let id = patch.groups[0].id;
+        let filter = patch.groups[0].nodes.iter_mut().find(|n| n.module_id == "filter.svf").unwrap();
+        filter.parameters.iter_mut().find(|p| p.name == "Cutoff").unwrap().value = ParameterValue::Number(150.0);
+        let mut saw = NodeData::new(9100, "osc.sine", (0.0, 0.0));
+        saw.parameters = vec![crate::persistence::NamedParameter::new("Waveform", ParameterValue::Select(1))];
+        let mut quieter = NodeData::new(9102, "util.vca", (0.0, 0.0));
+        quieter.parameters = vec![crate::persistence::NamedParameter::new("Level", ParameterValue::Number(0.25))];
+        patch.nodes.extend([saw, quieter, NodeData::new(9101, "output.audio", (0.0, 0.0))]);
+        patch.connections.extend([
+            ConnectionData::new(9100, "Out", 9102, "In"),
+            ConnectionData::new(9102, "Out", id, "In"),
+            ConnectionData::new(id, "Out", 9101, "Mono"),
+        ]);
+        let (mut renderer, _) = OfflineRenderer::from_patch(&patch, 48_000.0, 256).unwrap();
+        // Step 4, an accent: the sixteenth from 18000 samples, open for 55% of it
+        let left = renderer.render(4 * 6000).left;
+        let (early, late) = (centroid(&left[18_100..19_300]), centroid(&left[20_100..21_300]));
+        assert!(early > 1.5 * late, "the slice centres on {early:.0} Hz as it opens, {late:.0} Hz later");
     }
 
     #[test]
