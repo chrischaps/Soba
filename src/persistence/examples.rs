@@ -244,6 +244,13 @@ pub const EXAMPLES: &[Example] = &[
         json: include_str!("../../patches/breakdown.json"),
     },
     Example {
+        name: "Sympathetic Strings",
+        shelf: Shelf::Recipe,
+        file_name: "sympathetic-strings.json",
+        description: "Plays itself: no oscillators, only drums and what they ring. A shaker keeps a chord of four Resonator strings humming, a rim strikes a tuned glass, and a lane plucks a pentatonic line on a fifth string",
+        json: include_str!("../../patches/sympathetic-strings.json"),
+    },
+    Example {
         name: "From One Sine",
         shelf: Shelf::Song,
         file_name: "from-one-sine.json",

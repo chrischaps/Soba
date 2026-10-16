@@ -1,6 +1,6 @@
 # Module Overview
 
-Soba has 43 modules in six categories. Each category has its own header color, so you can tell what a module is for at a glance across a crowded patch. The categories match the right-click menu and the quick-add palette, and the modules are listed here in the order the menu shows them.
+Soba has 44 modules in six categories. Each category has its own header color, so you can tell what a module is for at a glance across a crowded patch. The categories match the right-click menu and the quick-add palette, and the modules are listed here in the order the menu shows them.
 
 The **ID** is the name a patch file uses to refer to the module.
 
@@ -8,13 +8,14 @@ The **ID** is the name a patch file uses to refer to the module.
 
 ### Source
 
-<span class="swatch bar source"></span>Blue header. Modules that start a sound or a note: the oscillator, the noise source, the drum voice, the sampler, the chopper and the cloud, the audio input, and the modules that turn your playing into pitch and gate signals.
+<span class="swatch bar source"></span>Blue header. Modules that start a sound or a note: the oscillator, the noise source, the drum voice, the resonator, the sampler, the chopper and the cloud, the audio input, and the modules that turn your playing into pitch and gate signals.
 
 | Module | ID | What it does |
 |--------|----|--------------|
 | [Oscillator](./sources/oscillator.md) | `osc.sine` | Band-limited VCO with a tune section, hard sync, through-zero FM, a sub-oscillator and unison |
 | [Noise](./sources/noise.md) | `source.noise` | White, pink and brown noise, and a smooth random voltage |
 | [Drum](./sources/drum.md) | `source.drum` | An analog-style drum voice: kick, snare, tom, clap, hats, cymbal, rim, cowbell or shaker, with accent and choke |
+| [Resonator](./sources/resonator.md) | `source.resonator` | A physical model: a plucked string, or a struck bell, bar, glass or block of wood, played by a gate or by any sound |
 | [Sampler](./sources/sampler.md) | `source.sampler` | Plays a WAV, MP3, FLAC or Ogg file: one-shots from a gate, an instrument across the keyboard, or its slices by note |
 | [Chopper](./sources/chopper.md) | `source.chopper` | Plays a sliced break in time with the Clock, at any tempo, rearranged step by step |
 | [Cloud](./sources/cloud.md) | `source.cloud` | Granular: clouds of small grains from a file or live audio, with Freeze, and a cloud per voice of a chord |
@@ -97,7 +98,7 @@ Header colors describe what a module *is*. The colors of its jacks and cables de
 
 ## Polyphonic modules
 
-The Oscillator, Noise, Drum, both filters, the ADSR Envelope, Slope, the VCA, the Attenuverter, Mix, Sample & Hold and the Quantizer run one voice per channel when a polyphonic cable reaches them. Everything else treats a polyphonic cable as one signal. Poly MIDI and the Chord Sequencer are where polyphonic cables start. See [Polyphony](../concepts/polyphony.md).
+The Oscillator, Noise, Drum, Resonator, both filters, the ADSR Envelope, Slope, the VCA, the Attenuverter, Mix, Sample & Hold and the Quantizer run one voice per channel when a polyphonic cable reaches them. Everything else treats a polyphonic cable as one signal. Poly MIDI and the Chord Sequencer are where polyphonic cables start. See [Polyphony](../concepts/polyphony.md).
 
 ## Common signal chains
 
@@ -147,6 +148,7 @@ Drive a voice from a sequence instead of a keyboard:
 | Play a pattern | [Clock](./modulation/clock.md) into the [Step Sequencer](./utilities/sequencer.md) |
 | Play a drum break in time, at any tempo, and rearrange it | [Clock](./modulation/clock.md) into the [Chopper](./sources/chopper.md) |
 | Stretch a moment of sound into a texture, or a voice into a choir | The [Cloud](./sources/cloud.md), with a [Chord Sequencer](./utilities/chord-sequencer.md)'s Pitch for chords |
+| Pluck a string, strike a bell, or make a drum ring a chord | The [Resonator](./sources/resonator.md), a [Drum](./sources/drum.md) into its **In** and a [Chord Sequencer](./utilities/chord-sequencer.md)'s Pitch on its **V/Oct** |
 | Program a drum kit, with fills | [Clock](./modulation/clock.md) into the [Trigger Sequencer](./utilities/trigger-sequencer.md), a lane for each [Drum](./sources/drum.md) |
 | Turn a verse into a breakdown with one knob | A [Scenes](./utilities/scenes.md) module with a scene of each, its **Morph** on a slow LFO or an Arranger lane |
 | Arrange a whole song: parts that enter, fade and leave | [Clock](./modulation/clock.md) into the [Arranger](./utilities/arranger.md), a lane on each [Mixer](./utilities/mixer.md) **Level** |

@@ -212,7 +212,7 @@ fn wave_points(wave: OscWaveform, pulse_width: f32, plot: Rect, cycles: f32, off
 }
 
 /// The nearest note to a pitch: "C4", "F#2".
-fn note_name(hz: f32) -> String {
+pub(super) fn note_name(hz: f32) -> String {
     let semis = (12.0 * (hz / Oscillator::C4_HZ).log2()).round() as i32;
     format!("{}{}", NOTE_NAMES[semis.rem_euclid(12) as usize], 4 + semis.div_euclid(12))
 }

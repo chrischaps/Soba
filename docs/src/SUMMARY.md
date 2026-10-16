@@ -22,6 +22,7 @@
   - [Oscillator](./modules/sources/oscillator.md)
   - [Noise](./modules/sources/noise.md)
   - [Drum](./modules/sources/drum.md)
+  - [Resonator](./modules/sources/resonator.md)
   - [Sampler](./modules/sources/sampler.md)
   - [Chopper](./modules/sources/chopper.md)
   - [Cloud](./modules/sources/cloud.md)
@@ -87,6 +88,7 @@
 - [Cut-Up](./recipes/cut-up.md)
 - [Choir of One](./recipes/choir-of-one.md)
 - [Breakdown](./recipes/breakdown.md)
+- [Sympathetic Strings](./recipes/sympathetic-strings.md)
 
 # Songs
 

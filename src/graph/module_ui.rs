@@ -128,6 +128,22 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
+        module_id: "source.resonator",
+        // The note and how long it rings, then how it's played and where
+        knobs: &[
+            knob("Tune"),
+            modulatable("Decay", "Decay"),
+            modulatable("Damping", "Damp"),
+            modulatable("Brightness", "Bright"),
+            knob_as("Position", "Pos"),
+            knob("Inharm"),
+            knob("Level"),
+        ],
+        display: NodeDisplay::ResonatorRings,
+        knobs_per_row: 4,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
         module_id: "source.sampler",
         // What plays (the markers on the waveform), then how notes play
         // it (Slices beside Root, the key slice 1 is on), then the envelope

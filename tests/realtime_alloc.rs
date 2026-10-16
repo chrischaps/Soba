@@ -28,7 +28,7 @@ use soba::engine::{
 };
 use soba::modules::looper::{LoopState, Looper};
 use soba::dsp::primitives::{Markers, ONSETS};
-use soba::modules::{Chopper, Cloud, MidiOut, Mixer};
+use soba::modules::{Chopper, Cloud, MidiOut, Mixer, Resonator};
 
 struct CountingAllocator;
 
@@ -89,7 +89,7 @@ fn ports(module_id: &str) -> (Vec<usize>, Vec<usize>) {
 }
 
 /// The patch size the guard plays: every module, the first few twice.
-const PATCH_SIZE: usize = 48;
+const PATCH_SIZE: usize = 49;
 
 /// Adds `count` modules, cycling through every built-in module in
 /// registration order, chained output-to-input, with every port monitored.
@@ -240,6 +240,18 @@ fn audio_callback_never_allocates() {
     let audio_input = node_of(&nodes, "source.audio_input");
     let cloud_in = || EngineCommand::Connect { from_node: audio_input, from_port: 0, to_node: cloud, to_port: port("source.cloud", "In L") };
 
+    // A Resonator plucked by the Clock, rung by a Drum at the same time,
+    // at its longest and brightest, its pitch on an LFO; it swaps between
+    // String and Body and through the materials as it plays
+    let resonator = node_of(&nodes, "source.resonator");
+    let resonator_param = |param_index: usize, value: f32| EngineCommand::SetParameter { node_id: resonator, param_index, value };
+    ui.send_command(EngineCommand::Connect { from_node: clock, from_port: port("util.clock", "Gate"), to_node: resonator, to_port: port("source.resonator", "Gate") });
+    ui.send_command(EngineCommand::Connect { from_node: node_of(&nodes, "source.drum"), from_port: 0, to_node: resonator, to_port: port("source.resonator", "In") });
+    ui.send_command(EngineCommand::Connect { from_node: node_of(&nodes, "mod.lfo"), from_port: 0, to_node: resonator, to_port: port("source.resonator", "V/Oct") });
+    ui.send_command(resonator_param(Resonator::PARAM_DECAY, 1.0));
+    ui.send_command(resonator_param(Resonator::PARAM_DAMPING, 0.0));
+    ui.send_command(resonator_param(Resonator::PARAM_BRIGHTNESS, 1.0));
+
     // A Looper fed by the live input (with a round trip to take off its
     // overdubs), pressed through its cycle by its footswitches
     let looper = node_of(&nodes, "util.looper");
@@ -363,6 +375,10 @@ fn audio_callback_never_allocates() {
             140 => ui.send_command(cloud_param(Cloud::PARAM_FREEZE, 0.0)),
             170 => ui.send_command(EngineCommand::Disconnect { node_id: cloud, port: port("source.cloud", "In L"), is_input: true }),
             _ => {}
+        }
+        if round % 37 == 5 {
+            ui.send_command(resonator_param(Resonator::PARAM_MODE, ((round / 37) % 2) as f32));
+            ui.send_command(resonator_param(Resonator::PARAM_MATERIAL, ((round / 74) % 4) as f32));
         }
         if round % 40 == 35 {
             ui.request_snapshot(looper, Box::new(Snapshot::with_capacity(48000 * 4)));

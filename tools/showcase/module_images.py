@@ -83,6 +83,17 @@ MODULES = {
         -1.0 play
         -0.06 note 36 100 0.05
     """),
+    # A bell struck by a MIDI note 0.4 s before: its hum still a wide ring,
+    # its high partials already shrunk to their dots
+    "resonator": Module("resonator", "source.resonator", 1.0, 400, """
+        -1.0 play
+        -0.4 note 60 110 0.1
+    """, palette=False),
+    # A string 80 ms after its pluck: still ragged with the top it's losing
+    "resonator-string": Module("resonator-string", "source.resonator", 1.0, 400, """
+        -1.0 play
+        -0.08 note 48 110 0.05
+    """, palette=False),
     # Cut Up's break in sixteen slices, playing
     "chopper": Module("chopper", "source.chopper", 1.0, 484, "-3.0 play", palette=False),
     # Canopy's sung syllables as a cloud of a Dmaj9 chord: four clouds of

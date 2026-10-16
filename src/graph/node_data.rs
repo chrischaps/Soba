@@ -280,6 +280,9 @@ pub enum NodeDisplay {
     LogicLamps,
     /// Drum: the hit's envelope and pitch, lit as each hit plays.
     DrumHit,
+    /// Resonator: the string drawn as it swings, or the body's modes as
+    /// rings that fade as each dies away.
+    ResonatorRings,
     /// Sampler: the recording's waveform, its markers, and a playhead for
     /// every voice playing it.
     SamplerWave,
@@ -2152,6 +2155,10 @@ impl NodeDataTrait for SynthNodeData {
             if let Some((slot, action)) = super::scenes_display::scenes_display(ui, node_id, graph, user_state, zoom) {
                 responses.push(NodeResponse::User(SynthResponse::Scene { node_id, slot, action }));
             }
+        }
+
+        if self.display == NodeDisplay::ResonatorRings {
+            super::resonator_display::resonator_display(ui, node_id, graph, user_state, zoom);
         }
 
         if self.display == NodeDisplay::DrumHit {

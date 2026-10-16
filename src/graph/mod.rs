@@ -23,6 +23,7 @@ mod midi_out_display;
 mod display_frame;
 mod distortion_display;
 mod drum_display;
+mod resonator_display;
 mod envelope_cv;
 mod envelope_display;
 mod eq_display;

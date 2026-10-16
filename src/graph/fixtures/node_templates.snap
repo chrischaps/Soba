@@ -58,6 +58,30 @@ knob Snap               "Snap" KnobOnly
 knob Level              "Level" KnobOnly
 display DrumHit
 
+== source.resonator "Resonator" finder="Resonator" Source
+in   Gate               Gate     ConnectionOnly       inline=true  port
+in   V/Oct              Control  ConnectionOnly       inline=true  port
+in   Strike             Control  ConnectionOnly       inline=true  port
+in   In                 Audio    ConnectionOnly       inline=true  port
+in   Mode               Control  ConstantOnly         inline=true  select 0 ["String", "Body"] "Mode"
+in   Material           Control  ConstantOnly         inline=true  select 0 ["Bell", "Bar", "Glass", "Wood"] "Material"
+in   Decay              Control  ConnectionOrConstant inline=true  num 0.6 [0..1] %
+in   Damping            Control  ConnectionOrConstant inline=true  num 0.4 [0..1] %
+in   Brightness         Control  ConnectionOrConstant inline=true  num 0.6 [0..1] %
+in   Tune               Control  ConstantOnly         inline=false num 0 [-24..24] st
+in   Position           Control  ConstantOnly         inline=false num 0.3 [0..1] %
+in   Inharm             Control  ConstantOnly         inline=false num 0.5 [0..1] %
+in   Level              Control  ConstantOnly         inline=false num 0.8 [0..1]
+out  Out                Audio
+knob Tune               "Tune" KnobOnly
+knob Decay              "Decay" Modulatable
+knob Damping            "Damp" Modulatable
+knob Brightness         "Bright" Modulatable
+knob Position           "Pos" KnobOnly
+knob Inharm             "Inharm" KnobOnly
+knob Level              "Level" KnobOnly
+display ResonatorRings
+
 == source.sampler "Sampler" finder="Sampler" Source
 in   Gate               Gate     ConnectionOnly       inline=true  port
 in   V/Oct              Control  ConnectionOnly       inline=true  port
