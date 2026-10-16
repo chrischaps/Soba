@@ -464,8 +464,24 @@ fn restore_parameters(graph: &mut SynthGraph, node_id: NodeId, node_data: &NodeD
             continue;
         };
 
+        // A choice this build doesn't offer (a Clock's Link Source, in a
+        // build without Link) stays at its default, rather than becoming
+        // whichever choice is last
+        let value = &mut graph.inputs[input_id].value;
+        if let SynthValueType::Select { options, .. } = value {
+            if saved.value.as_f32().round() as usize >= options.len() {
+                warnings.push(format!(
+                    "{}: '{}' choice {} isn't in this build, so it was left at its default",
+                    node_data.module_id,
+                    saved.name,
+                    saved.value.as_f32().round()
+                ));
+                continue;
+            }
+        }
+
         // Clamped to the parameter's current range
-        graph.inputs[input_id].value.set_actual_value(saved.value.as_f32());
+        value.set_actual_value(saved.value.as_f32());
     }
 }
 
@@ -670,6 +686,28 @@ mod tests {
         assert_eq!(param(&saved, "input.midi_note", "Channel"), 3.0);
         assert_eq!(param(&saved, "input.midi_note", "Octave"), 1.0);
         assert!(node(&saved, "input.midi_note").parameters.iter().all(|p| p.name != "Note"));
+    }
+
+    #[test]
+    fn test_a_link_clock_keeps_its_own_time_in_a_build_without_link() {
+        use crate::persistence::{NamedParameter, ParameterValue};
+
+        let mut patch = Patch::new("linked");
+        let mut clock = NodeData::new(1, "util.clock", (0.0, 0.0));
+        clock.parameters = vec![NamedParameter::new("Source", ParameterValue::Select(2))];
+        patch.nodes.push(clock);
+
+        let (saved, warnings) = reload(&patch, 0);
+        if cfg!(feature = "ableton-link") {
+            assert!(warnings.is_empty(), "{:?}", warnings);
+            assert_eq!(param(&saved, "util.clock", "Source"), 2.0);
+        } else {
+            // Internal, not MIDI (the last choice), which would wait silent
+            // for a clock that never comes. And the load says so
+            assert_eq!(param(&saved, "util.clock", "Source"), 0.0);
+            assert_eq!(warnings.len(), 1, "{:?}", warnings);
+            assert!(warnings[0].contains("Source"), "{:?}", warnings);
+        }
     }
 
     #[test]

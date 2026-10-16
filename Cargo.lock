@@ -797,6 +797,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmake"
+version = "0.1.58"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0f78a02292a74a88ac736019ab962ece0bc380e3f977bf72e376c5d78ff0678"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "codespan-reporting"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3285,6 +3294,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
+name = "rusty_link"
+version = "0.4.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4169045a50ee3c874ee11128b8f06a46947776b23e3ee5f4bca293b6f3bb6f07"
+dependencies = [
+ "bindgen",
+ "cmake",
+]
+
+[[package]]
 name = "same-file"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3561,6 +3580,7 @@ dependencies = [
  "opus-decoder",
  "rfd",
  "rtrb",
+ "rusty_link",
  "semver",
  "serde",
  "serde_json",

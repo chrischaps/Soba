@@ -36,6 +36,14 @@ Set the Clock's **Source** to **MIDI** and it follows a MIDI clock master: a DAW
 
 The whole patch then plays in the master's time: sequencers step on its grid, LFOs sweep with its bars, and the Delay echoes on its eighth notes. See [Following MIDI clock](../modules/modulation/clock.md#following-midi-clock) for setting it up.
 
+Set **Source** to **Link** instead, and the Clock joins an [Ableton Link](https://www.ableton.com/link/) session on the network. There's no master: Live, Bitwig, phone apps and other copies of Soba all share one tempo and one bar line, and any of them can change the tempo or start and stop the others. The Clock:
+
+- **plays at the session's tempo**, and its **BPM** knob turns to match when another app changes it. Turning the knob changes the tempo for everyone;
+- **lines up its bars** with the session's, so beat 1 is everyone's beat 1;
+- **starts and stops with the session**. Ticking its **Run** starts every app in it, on the next bar if others are already there.
+
+Where MIDI clock carries the master's time down a cable, Link has every app keep the same time from the network's shared clock. Each app allows for its own audio delay, so they agree on when a beat reaches the speakers, not just when it's computed. See [Playing in a Link session](../modules/modulation/clock.md#playing-in-a-link-session).
+
 ## Precision
 
 The Clock counts its beat precisely enough that every pulse lands within a sample of where it belongs, even after ten minutes, so a slow phrase clock and a fast sixteenth clock started together stay together.

@@ -11,6 +11,10 @@ default-run = "soba"
 # Low-latency audio through an interface's ASIO driver (Windows). Needs LLVM
 # (libclang) to build; see docs/src/getting-started/installation.md
 asio = ["cpal/asio", "dep:image"]
+# The Clock's Link source: tempo, beat and start/stop shared with Ableton
+# Link peers on the network. The Link SDK is GPLv2+, so builds with it are
+# too. Needs CMake and LLVM (libclang); see docs/src/getting-started/installation.md
+ableton-link = ["dep:rusty_link"]
 
 [dependencies]
 eframe = { version = "0.30", features = ["persistence"] }
@@ -41,6 +45,8 @@ ureq = "2.12"
 semver = { version = "1", features = ["serde"] }
 sha2 = "0.10"
 zip = { version = "2.4", default-features = false, features = ["deflate"] }
+# Ableton Link, through the SDK's C wrapper (the ableton-link feature)
+rusty_link = { version = "0.4.9", optional = true }
 
 # The browser build (`trunk build`, see index.html): sound through WebAudio,
 # files through downloads and uploads, and the examples' samples fetched

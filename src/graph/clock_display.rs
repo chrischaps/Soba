@@ -6,7 +6,9 @@
 //! on that line mark where the pulses fall; with Swing, the late ones are
 //! drawn in orange, pushed along towards the next pulse. Beside
 //! them a badge says where the time comes from: INT for the Clock's own
-//! Tempo, MIDI for a clock master, lit while its ticks are coming in.
+//! Tempo, MIDI for a clock master, lit while its ticks are coming in, and
+//! LINK for an Ableton Link session, lit with a count of its peers while
+//! anyone else is in it.
 //!
 //! Knobs whose job another control has taken over are drawn still and
 //! dimmed, reading what's actually in charge: an LFO's Rate shows its
@@ -29,6 +31,10 @@ use super::{SynthGraph, SynthGraphState, SynthValueType};
 
 /// Beats in the bar the lamps show.
 const BEATS_PER_BAR: usize = 4;
+
+/// The LINK badge's colour: a teal of its own, apart from the signal
+/// colours, as the session is no cable.
+const LINK_TEAL: Color32 = Color32::from_rgb(72, 196, 184);
 
 /// The value of the Select parameter `name` on a node, if it has one.
 fn selected(graph: &SynthGraph, node_id: NodeId, name: &str) -> Option<usize> {
@@ -66,6 +72,11 @@ fn pulses_in_bar(division: f32, swing: f32) -> impl Iterator<Item = (f32, bool)>
 /// Whether a Clock node follows MIDI.
 fn follows_midi(graph: &SynthGraph, node_id: NodeId) -> bool {
     selected(graph, node_id, "Source") == Some(1)
+}
+
+/// Whether a Clock node plays in a Link session.
+pub fn follows_link(graph: &SynthGraph, node_id: NodeId) -> bool {
+    selected(graph, node_id, "Source") == Some(2)
 }
 
 /// The latest readout from a node's module.
@@ -117,6 +128,12 @@ pub fn knob_takeover(
                 locked: true,
             })
         }
+        // The session's tempo, which a peer may have set; turning the knob
+        // proposes a new one
+        ("util.clock", "Tempo") if follows_link(graph, node_id) => {
+            let tempo = readout.map(|r| r.values[Clock::READOUT_TEMPO]).filter(|&bpm| bpm > 0.0)?;
+            Some(KnobTakeover { value: None, text: format!("{tempo:.1} BPM"), locked: false })
+        }
         ("seq.arranger", "Steps") => super::arranger_follow::steps_takeover(graph, user_state, node_id),
         // At ×4 the Amount knob reads the gain it gives, not its position
         ("util.attenuverter", "Amount") => {
@@ -135,10 +152,12 @@ pub fn knob_takeover(
 pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphState, zoom: f32) {
     let z = zoom;
     let midi = follows_midi(graph, node_id);
+    let link = follows_link(graph, node_id);
     let readout = readout(user_state, node_id).copied().unwrap_or_default();
     let beat = readout.values[Clock::READOUT_BEAT].max(0.0);
     let running = readout.values[Clock::READOUT_RUNNING] > 0.5 && user_state.is_playing;
     let receiving = readout.values[Clock::READOUT_RECEIVING] > 0.5 && user_state.is_playing;
+    let peers = readout.values[Clock::READOUT_PEERS].round() as usize;
 
     // Separator, as the other displays have, as wide as the display: the
     // node is no wider than its rows, which may be narrower than the space
@@ -162,7 +181,16 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
 
     // --- The source badge ---
     let badge = Rect::from_min_size(rect.left_top() + Vec2::new(0.0, 3.0 * z), Vec2::new(34.0 * z, 16.0 * z));
-    let (label, ink, fill, stroke) = if midi {
+    let together = link && peers > 0 && user_state.is_playing;
+    let (label, ink, fill, stroke) = if link {
+        // Lit while anyone else is in the session
+        let teal = LINK_TEAL;
+        if together {
+            ("LINK", Color32::WHITE, teal.gamma_multiply(0.85), teal)
+        } else {
+            ("LINK", teal, Color32::TRANSPARENT, teal.gamma_multiply(0.6))
+        }
+    } else if midi {
         let purple = theme::signal::MIDI;
         if receiving {
             ("MIDI", Color32::WHITE, purple.gamma_multiply(0.85), purple)
@@ -180,6 +208,19 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
         egui::FontId::new(9.0 * z, egui::FontFamily::Name(theme::TITLE_FAMILY.into())),
         ink,
     );
+
+    // How many others are in the session, in a bubble on the badge's corner
+    if together {
+        let centre = Pos2::new(badge.right() - 1.0 * z, badge.top() + 1.5 * z);
+        painter.circle(centre, 5.5 * z, theme::background::MAIN, Stroke::new(1.0 * z, LINK_TEAL));
+        painter.text(
+            centre,
+            egui::Align2::CENTER_CENTER,
+            if peers > 9 { "9+".to_string() } else { peers.to_string() },
+            egui::FontId::new(7.0 * z, egui::FontFamily::Name(theme::TITLE_FAMILY.into())),
+            LINK_TEAL,
+        );
+    }
 
     // --- The bar: four lamps and the sweep under them ---
     let lamps = Rect::from_min_max(Pos2::new(badge.right() + 8.0 * z, rect.top() + 2.0 * z), Pos2::new(rect.right(), rect.bottom() - 6.0 * z));
@@ -227,7 +268,14 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
         painter.circle_filled(Pos2::new(x, sweep_y), radius * z, ink);
     }
 
+    let peer_text = match peers {
+        0 => "no one else yet".to_string(),
+        1 => "1 peer".to_string(),
+        n => format!("{n} peers"),
+    };
     let state = match (midi, running, receiving) {
+        _ if link && running => format!("Playing in a Link session at {:.1} BPM, with {peer_text}", readout.values[Clock::READOUT_TEMPO]),
+        _ if link => format!("In a Link session, stopped, with {peer_text}. Run starts every peer"),
         (true, true, _) => "Following MIDI clock".to_string(),
         (true, false, true) => "The MIDI clock master is stopped".to_string(),
         (true, false, false) => "Waiting for MIDI clock on the MIDI input".to_string(),

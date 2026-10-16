@@ -144,6 +144,29 @@ Then choose **ASIO** at the top of the **Output** menu. See [Audio Input](../mod
 
 Steinberg licenses the ASIO SDK under the GPLv3 (or its own proprietary terms). Soba's source is MIT, but a binary built with ASIO includes the SDK, so if you share one, the GPLv3 applies to it. The low-latency download is such a binary: it's distributed under the GPLv3, with the GPL, Steinberg's licence for the SDK and a notice in its zip and installer. The exact SDK it was built from (ASIO SDK 2.3.4, pinned by its checksum in `release.yml`) is attached to the same release as `asio-sdk-source.zip`. The other downloads leave ASIO out and stay MIT.
 
+### Build with Ableton Link (optional)
+
+[Ableton Link](https://www.ableton.com/link/) lets the Clock play in time with other apps on the network: see [Playing in a Link session](../modules/modulation/clock.md#playing-in-a-link-session). It's a build option, off by default, because Ableton licenses the Link SDK under the GPLv2 (or its own commercial terms).
+
+1. **Install CMake**, which builds the Link SDK, and **LLVM**, which reads its headers (see step 2 above for pointing the build at LLVM). On Windows:
+
+   ```bash
+   winget install Kitware.CMake
+   winget install LLVM.LLVM
+   ```
+
+   On macOS, `brew install cmake llvm`. On Linux, your distribution's `cmake`, `clang` and `libclang-dev` packages.
+
+2. **Build with the `ableton-link` feature:**
+
+   ```bash
+   cargo run --release --features ableton-link
+   ```
+
+   It goes with ASIO too: `--features asio,ableton-link`.
+
+Soba's source is MIT, but a binary built with Link includes the SDK, so if you share one, the GPL applies to it. Builds without the feature leave Link out and stay MIT. The browser version can't use Link.
+
 ## Command line
 
 Pass a patch file to open it instead of First Sound:

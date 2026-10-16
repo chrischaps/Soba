@@ -2,6 +2,8 @@
 //!
 //! Core library for the modular audio synthesizer.
 
+#[cfg(feature = "ableton-link")]
+pub mod ableton_link;
 pub mod app;
 pub mod dsp;
 pub mod engine;

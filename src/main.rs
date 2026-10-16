@@ -61,6 +61,9 @@ fn main() -> eframe::Result<()> {
 
     // Sends any Link Out's lanes to Seoul; idle while the patch has none
     soba::link::sender::start();
+    // The Ableton Link session, on the network only while a Clock follows it
+    #[cfg(feature = "ableton-link")]
+    soba::ableton_link::start();
 
     eframe::run_native(
         "Soba",

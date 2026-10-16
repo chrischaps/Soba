@@ -55,6 +55,8 @@ mod dive;
 mod file_hover;
 mod framing;
 mod grouping;
+#[cfg(feature = "ableton-link")]
+mod link_follow;
 mod loops;
 mod mutating;
 mod probe;
@@ -1868,7 +1870,10 @@ impl SynthApp {
                     }
                     crate::engine::EngineEvent::Readout { node_id, readout } => {
                         // A Clock's tempo and beat, for its node
-                        self.user_state.readouts.insert(node_id, readout);
+                        let _previous = self.user_state.readouts.insert(node_id, readout);
+                        // A Link Clock's peers may have moved its knob and switch
+                        #[cfg(feature = "ableton-link")]
+                        link_follow::follow_peers(&mut self.graph_state.graph, &mut self.history, &self.user_state, node_id, _previous);
                     }
                     crate::engine::EngineEvent::Cue { node_id, place } => {
                         // Where a Sampler's file heard from its face has got to

@@ -97,3 +97,5 @@ cargo test   # 800+ tests, including the audio-thread allocation guard
 ## License
 
 Soba is MIT ([`LICENSE`](LICENSE)). The low-latency Windows download (*with ASIO*) is distributed under the GPLv3 instead, because it includes Steinberg's ASIO SDK, which Steinberg licenses under the GPLv3. Its source is this repository at the release's tag, built with `--features asio` against ASIO SDK 2.3.4. Every other download is MIT.
+
+Ableton Link, which lets the Clock play in time with other apps on the network, is likewise a build option (`--features ableton-link`), because the Link SDK is GPLv2+. A binary built with it falls under the GPL; builds without it leave Link out.

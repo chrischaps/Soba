@@ -9,13 +9,13 @@ The Clock is the patch's metronome. It sends a steady stream of gate pulses at a
 
 It also sets the **patch tempo and beat**. Tempo-synced modules follow it without a cable: the [Delay](../effects/delay.md) with its **Sync** set to a note length, and the [LFO](./lfo.md) with its **Tempo** set to a division. See [Tempo and Sync](../../concepts/tempo-and-sync.md).
 
-The Clock can keep its own time, or follow the **MIDI clock** of a DAW, drum machine or another synth, so the patch plays in time with them.
+The Clock can keep its own time, follow the **MIDI clock** of a DAW, drum machine or another synth, or join an **Ableton Link** session, so the patch plays in time with them.
 
 ## The display
 
 Four lamps show the beats of the bar. The lamp of the beat playing flashes as the beat lands and fades through it, and the downbeat flashes brightest. A thin line under the lamps sweeps across the bar, with a dot where each pulse falls. With **Swing** turned up, the late pulses are drawn in orange, pushed along towards the next one. When the Clock stops, the beat it stopped on keeps a faint outline.
 
-Beside the lamps, a badge shows where the time comes from: **INT** for the Clock's own **BPM**, or **MIDI** when it follows a MIDI clock. The MIDI badge fills in while clock ticks are coming in. Hover over the display to see what the Clock is doing.
+Beside the lamps, a badge shows where the time comes from: **INT** for the Clock's own **BPM**, **MIDI** when it follows a MIDI clock, or **LINK** when it plays in a Link session. The MIDI badge fills in while clock ticks are coming in. The LINK badge fills in while anyone else is in the session, with a bubble on its corner counting them. Hover over the display to see what the Clock is doing.
 
 ## Inputs
 
@@ -30,7 +30,7 @@ Beside the lamps, a badge shows where the time comes from: **INT** for the Clock
 |------|-------------|-------------|
 | **Gate** | Gate (Green) | One pulse per division. The jack lights while the gate is high |
 | **Run** | Gate (Green) | High while the Clock runs. Patch it into a sequencer's **Run** so it stops when the Clock does |
-| **Reset** | Gate (Green) | A 5 ms pulse when the Clock starts from the top: when **Run** is ticked, or a MIDI **Start** arrives. Patch it into a sequencer's **Reset** |
+| **Reset** | Gate (Green) | A 5 ms pulse when the Clock starts from the top: when **Run** is ticked, a MIDI **Start** arrives, or a Link session starts playing. Patch it into a sequencer's **Reset** |
 
 ## Parameters
 
@@ -40,7 +40,7 @@ Beside the lamps, a badge shows where the time comes from: **INT** for the Clock
 | **Gate** | 1 – 99% | 50% | How much of each pulse the gate stays high |
 | **Div** | 1, 1/2, 1/4, 1/8, 1/16 | 1/4 | Dropdown on the node. Pulse rate relative to the beat |
 | **Run** | On / Off | On | Checkbox on the node. Off holds the gate low and pauses the clock; on starts it from the top |
-| **Source** | Internal / MIDI | Internal | Dropdown on the node. Internal keeps time at **BPM**; MIDI follows the MIDI clock on the MIDI input |
+| **Source** | Internal / MIDI / Link | Internal | Dropdown on the node. Internal keeps time at **BPM**; MIDI follows the MIDI clock on the MIDI input; Link plays in an Ableton Link session (builds with Link only) |
 | **Swing** | 50 – 75% | 50% | Delays every second pulse. 50% is straight; see [Swing](#swing) |
 
 ## Divisions
@@ -129,6 +129,19 @@ Set **Source** to **MIDI** to slave the Clock to a MIDI clock master, such as a 
 The **Gate** follows the master's beat too, so Div 1/16 pulses on every sixteenth of the DAW's grid. Patch **Run** and **Reset** into a sequencer to have it start, stop and restart with the DAW's transport.
 
 Soba's own **Play** button still has to be on: while Soba is stopped, it doesn't listen.
+
+## Playing in a Link session
+
+[Ableton Link](https://www.ableton.com/link/) keeps apps on the same network in time with each other, with no cables and no master to set up: Live, Bitwig, Reason, Traktor, dozens of phone apps, and other copies of Soba. Set **Source** to **Link** and the Clock joins the session. Every app in it plays at one tempo, with its bars lined up.
+
+- **Tempo.** The Clock plays at the session's tempo, and the **BPM** knob follows it: when another app changes the tempo, the knob turns to match. Turn the knob yourself and the whole session changes tempo with you. The **Tempo** jack does nothing while the Clock follows Link.
+- **Bars.** The Clock's downbeats land on the session's: beat 1 of Soba's bar is beat 1 of Live's. Bars are four beats long.
+- **Start and stop.** Link shares the transport too (*Start Stop Sync*, which other apps may have to switch on). Tick **Run** and every app in the session starts. With others in the session, the start waits for the next bar so it lands in phase. When another app starts or stops, the Clock does too, and its **Run** box follows. Starting fires **Reset**, so patched sequencers start from step 1 on the downbeat.
+- **Joining.** A Clock that joins a session already playing takes the session's tempo and plays along. One that has the session to itself sets it from its own **BPM** and **Run**.
+
+The badge reads **LINK**, and fills in with a count of the other apps while there are any. Soba joins the network only while a Clock follows Link, and leaves a second after the last one stops (or Soba is stopped).
+
+Link is in the desktop app when it's built with Link: see [Build with Ableton Link](../../getting-started/installation.md#build-with-ableton-link-optional). The browser version can't join a session and doesn't offer it. A patch saved with **Source** on **Link** and opened in a build without Link keeps its own time at **BPM**.
 
 ## Patch examples
 

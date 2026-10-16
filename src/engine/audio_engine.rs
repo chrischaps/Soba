@@ -916,6 +916,9 @@ impl AudioEngine {
                 state.callbacks.fetch_add(1, Ordering::Relaxed);
                 let time = info.timestamp();
                 state.output_latency.record(time.playback.checked_duration_since(time.callback));
+                // Link times are when sound reaches the speakers
+                #[cfg(feature = "ableton-link")]
+                crate::ableton_link::set_output_latency(time.playback.checked_duration_since(time.callback));
                 // REAL-TIME SAFE: the lock is only ever taken here, or by
                 // the engine while no stream is running, so try_lock never
                 // fails in practice. If it did, output silence rather than
