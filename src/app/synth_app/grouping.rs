@@ -605,7 +605,7 @@ impl SynthApp {
                                 }
                             }
                             ui.add_space(6.0);
-                            ui.label(RichText::new("Esc to go back out").color(theme::text::DISABLED).small());
+                            ui.label(RichText::new("Esc to go back out").color(theme::text::QUIET).small());
                         });
                     });
             });

@@ -864,7 +864,7 @@ fn sections(
         Some(bar) => (bar.to_string(), theme::text::PRIMARY),
         None => ("–".to_string(), theme::text::DISABLED),
     };
-    painter.text(Pos2::new(left, block.top() + 2.0 * z), Align2::LEFT_TOP, "BAR", font.clone(), theme::text::DISABLED);
+    painter.text(Pos2::new(left, block.top() + 2.0 * z), Align2::LEFT_TOP, "BAR", font.clone(), theme::text::QUIET);
     painter.text(Pos2::new(left, block.top() + 12.0 * z), Align2::LEFT_TOP, number, big, number_ink);
     painter.text(Pos2::new(left, block.top() + 30.0 * z), Align2::LEFT_TOP, format!("of {}", song.bars), font.clone(), theme::text::SECONDARY);
     // The section playing, under the bar count
@@ -906,13 +906,13 @@ fn sections(
                 tl.vline(x, egui::Rangef::new(ruler.bottom() - tall * z, ruler.bottom()), Stroke::new(1.0, theme::background::GRID_MAJOR));
                 // Clear of the next section's number
                 if every.is_some_and(|k| bar % k == 0) && x1 - x >= 16.0 * z {
-                    tl.text(Pos2::new(x + 2.0 * z, ruler.top()), Align2::LEFT_TOP, (start + bar + 1).to_string(), number_font.clone(), theme::text::DISABLED.gamma_multiply(0.6));
+                    tl.text(Pos2::new(x + 2.0 * z, ruler.top()), Align2::LEFT_TOP, (start + bar + 1).to_string(), number_font.clone(), theme::text::QUIET.gamma_multiply(0.8));
                 }
             }
         }
         tl.vline(x0, egui::Rangef::new(ruler.top() + 1.0 * z, ruler.bottom()), Stroke::new(1.0, theme::text::DISABLED));
         if x1 - x0 >= 14.0 * z {
-            tl.text(Pos2::new(x0 + 2.0 * z, ruler.top()), Align2::LEFT_TOP, (start + 1).to_string(), number_font.clone(), theme::text::DISABLED);
+            tl.text(Pos2::new(x0 + 2.0 * z, ruler.top()), Align2::LEFT_TOP, (start + 1).to_string(), number_font.clone(), theme::text::QUIET);
         }
     }
 
@@ -1184,7 +1184,7 @@ fn lane_rows(
     } else {
         let font = FontId::proportional(9.5 * z);
         let number = FontId::monospace(8.0 * z);
-        painter.text(Pos2::new(name_rect.left() + 1.0 * z, name_rect.top() + 2.0 * z), Align2::LEFT_TOP, (lane + 1).to_string(), number, theme::text::DISABLED);
+        painter.text(Pos2::new(name_rect.left() + 1.0 * z, name_rect.top() + 2.0 * z), Align2::LEFT_TOP, (lane + 1).to_string(), number, theme::text::QUIET);
         let text = fit(&painter, name.as_deref().unwrap_or("–"), &font, name_rect.width() - 2.0 * z);
         let ink = if given { theme::text::PRIMARY } else if name.is_some() { theme::text::SECONDARY } else { theme::text::DISABLED };
         painter.text(Pos2::new(name_rect.left() + 1.0 * z, name_rect.center().y + 3.0 * z), Align2::LEFT_CENTER, text, font, ink);

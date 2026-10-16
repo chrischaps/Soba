@@ -143,10 +143,10 @@ pub fn show_toast(ctx: &egui::Context, toast: &Toast) -> (Option<ToastAction>, f
         |ui| {
             ui.label(RichText::new(name).color(theme::text::SECONDARY));
             if let Some(folder) = summary.path.parent() {
-                ui.label(RichText::new(format!("in {}", short_path(folder))).small().color(theme::text::DISABLED));
+                ui.label(RichText::new(format!("in {}", short_path(folder))).small().color(theme::text::QUIET));
             }
             if toast.patch.is_some() {
-                ui.label(RichText::new("The patch is saved beside it.").small().color(theme::text::DISABLED));
+                ui.label(RichText::new("The patch is saved beside it.").small().color(theme::text::QUIET));
             }
             if summary.dropped_frames > 0 {
                 let seconds = summary.dropped_frames as f64 / summary.sample_rate.max(1) as f64;

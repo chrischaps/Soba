@@ -82,7 +82,7 @@ pub fn input_display(
             egui::Align2::CENTER_CENTER,
             label,
             small.clone(),
-            theme::text::DISABLED,
+            theme::text::QUIET,
         );
     }
     let meter_area = Rect::from_x_y_ranges(rect.left()..=rect.left() + 14.0 * z, rect.top()..=meter_bottom);
@@ -155,7 +155,7 @@ pub fn input_display(
                 egui::Align2::LEFT_TOP,
                 truncate(name, 26),
                 small.clone(),
-                theme::text::DISABLED,
+                theme::text::QUIET,
             );
         }
         None => {
@@ -164,7 +164,7 @@ pub fn input_display(
                 egui::Align2::CENTER_CENTER,
                 "No input: choose one under Input",
                 small.clone(),
-                theme::text::DISABLED,
+                theme::text::QUIET,
             );
         }
     }

@@ -364,7 +364,7 @@ fn piano(ui: &mut egui::Ui, held: &[i32]) {
             Align2::CENTER_BOTTOM,
             name,
             FontId::proportional(10.0),
-            theme::text::DISABLED,
+            theme::text::QUIET,
         );
     }
     ui.add_space(4.0);
@@ -372,7 +372,7 @@ fn piano(ui: &mut egui::Ui, held: &[i32]) {
         egui::Label::new(
             RichText::new("The letter rows and the numbers above them play every Keyboard module, and Poly MIDI too")
                 .small()
-                .color(theme::text::DISABLED),
+                .color(theme::text::QUIET),
         )
         .wrap(),
     );

@@ -250,11 +250,11 @@ pub fn mixer_strips(
 
     // --- Column titles ---
     let header_y = rect.top() + HEADER * 0.5 * z;
-    painter.text(at(LANE_X + 4.0, HEADER * 0.5), egui::Align2::LEFT_CENTER, "L", small.clone(), theme::text::DISABLED);
-    painter.text(at(LANE_X + LANE_W - 4.0, HEADER * 0.5), egui::Align2::RIGHT_CENTER, "R", small.clone(), theme::text::DISABLED);
+    painter.text(at(LANE_X + 4.0, HEADER * 0.5), egui::Align2::LEFT_CENTER, "L", small.clone(), theme::text::QUIET);
+    painter.text(at(LANE_X + LANE_W - 4.0, HEADER * 0.5), egui::Align2::RIGHT_CENTER, "R", small.clone(), theme::text::QUIET);
     for (k, (_, title)) in STRIP_KNOBS.iter().enumerate() {
         let x = at(KNOBS_X + k as f32 * KNOB_COLUMN + KNOB_CENTRE, 0.0).x;
-        painter.text(Pos2::new(x, header_y), egui::Align2::CENTER_CENTER, *title, small.clone(), theme::text::DISABLED);
+        painter.text(Pos2::new(x, header_y), egui::Align2::CENTER_CENTER, *title, small.clone(), theme::text::QUIET);
     }
 
     // --- The channel rows ---

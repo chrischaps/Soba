@@ -3588,7 +3588,7 @@ impl SynthApp {
                     #[cfg(not(target_arch = "wasm32"))]
                     self.version_label(ui);
                     #[cfg(target_arch = "wasm32")]
-                    ui.label(RichText::new(concat!("Soba v", env!("CARGO_PKG_VERSION"))).color(theme::text::DISABLED).small());
+                    ui.label(RichText::new(concat!("Soba v", env!("CARGO_PKG_VERSION"))).color(theme::text::QUIET).small());
                 }
             });
         });

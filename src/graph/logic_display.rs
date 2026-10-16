@@ -91,7 +91,7 @@ pub fn logic_display(
             egui::Align2::LEFT_TOP,
             "= Above",
             egui::FontId::proportional(7.0 * z),
-            theme::text::DISABLED,
+            theme::text::QUIET,
         );
         b_hover.on_hover_text("Nothing is patched into B, so B is Above: AND passes A only while CV is over the Threshold");
     }
@@ -104,7 +104,7 @@ pub fn logic_display(
     if level.height() > 0.0 {
         painter.rect_filled(level, 2.0 * z, if above { green } else { orange.gamma_multiply(0.6) });
     }
-    painter.text(Pos2::new(column.center().x, rect.bottom() + 1.0 * z), egui::Align2::CENTER_BOTTOM, "CV", small.clone(), theme::text::DISABLED);
+    painter.text(Pos2::new(column.center().x, rect.bottom() + 1.0 * z), egui::Align2::CENTER_BOTTOM, "CV", small.clone(), theme::text::QUIET);
 
     // The Threshold, a line across the column, draggable
     let line_y = y_at(threshold);

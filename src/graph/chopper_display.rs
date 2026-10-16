@@ -296,7 +296,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             };
             let under = if in_patched && problem.is_none() { "or drop a loop here, or click to open one" } else { "an audio loop, or click to open one" };
             painter.text(outline.center() - Vec2::new(0.0, 5.0 * z), egui::Align2::CENTER_CENTER, hint, FontId::proportional(9.0 * z), hint_color);
-            painter.text(outline.center() + Vec2::new(0.0, 7.0 * z), egui::Align2::CENTER_CENTER, under, small.clone(), theme::text::DISABLED);
+            painter.text(outline.center() + Vec2::new(0.0, 7.0 * z), egui::Align2::CENTER_CENTER, under, small.clone(), theme::text::QUIET);
         }
     }
 

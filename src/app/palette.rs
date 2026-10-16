@@ -304,7 +304,7 @@ impl QuickAdd {
                 self.scroll_to_highlight = true;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new(count.to_string()).small().color(theme::text::DISABLED));
+                ui.label(egui::RichText::new(count.to_string()).small().color(theme::text::QUIET));
             });
         });
         let rect = ui.min_rect();
@@ -408,7 +408,7 @@ fn result_row(ui: &mut egui::Ui, found: &Found, highlighted: bool, show_category
             Align2::RIGHT_CENTER,
             found.entry.category(),
             FontId::proportional(11.0),
-            if highlighted { color } else { theme::text::DISABLED },
+            if highlighted { color } else { theme::text::QUIET },
         );
     }
     response
@@ -422,7 +422,7 @@ fn footer(ui: &mut egui::Ui, entry: &Entry) {
     ui.add_space(6.0);
     ui.label(egui::RichText::new(entry.description()).small().color(theme::text::SECONDARY));
     ui.add_space(2.0);
-    ui.label(egui::RichText::new("Arrows or Tab to choose  ·  Enter to add  ·  Esc to close").small().color(theme::text::DISABLED));
+    ui.label(egui::RichText::new("Arrows or Tab to choose  ·  Enter to add  ·  Esc to close").small().color(theme::text::QUIET));
 }
 
 #[cfg(test)]

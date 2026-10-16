@@ -134,7 +134,12 @@ pub mod text {
     /// Secondary text - dimmed
     pub const SECONDARY: Color32 = Color32::from_rgb(160, 160, 175);
 
-    /// Disabled text
+    /// Quiet text: information that steps back without fading out, such as bar and lane
+    /// numbers, column titles, units and hints. About 4.5:1 on a node body (#329)
+    pub const QUIET: Color32 = Color32::from_rgb(140, 140, 155);
+
+    /// Disabled text: controls that can't be used and things that are off or absent.
+    /// Too faint (about 2.6:1) for anything that must be read
     pub const DISABLED: Color32 = Color32::from_rgb(100, 100, 115);
 
     /// Accent/highlight text
@@ -360,5 +365,28 @@ mod tests {
     fn grid_spacing_is_reasonable() {
         assert!(GRID_SPACING >= 10.0);
         assert!(GRID_SPACING <= 50.0);
+    }
+
+    /// WCAG contrast ratio of two opaque colours
+    fn contrast(a: Color32, b: Color32) -> f32 {
+        let luminance = |c: Color32| {
+            let linear = |v: u8| {
+                let v = v as f32 / 255.0;
+                if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+            };
+            0.2126 * linear(c.r()) + 0.7152 * linear(c.g()) + 0.0722 * linear(c.b())
+        };
+        let (a, b) = (luminance(a), luminance(b));
+        (a.max(b) + 0.05) / (a.min(b) + 0.05)
+    }
+
+    #[test]
+    fn quiet_text_is_readable_where_it_is_drawn() {
+        for back in [node::BODY_FILL, background::PANEL, background::MAIN] {
+            assert!(contrast(text::QUIET, back) >= 4.5, "{back:?}: {:.2}", contrast(text::QUIET, back));
+        }
+        // ...and still sits between disabled and secondary
+        assert!(contrast(text::DISABLED, node::BODY_FILL) < contrast(text::QUIET, node::BODY_FILL));
+        assert!(contrast(text::QUIET, node::BODY_FILL) < contrast(text::SECONDARY, node::BODY_FILL));
     }
 }

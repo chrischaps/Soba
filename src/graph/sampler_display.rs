@@ -301,7 +301,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
                 egui::Align2::CENTER_CENTER,
                 "or click to open one",
                 small.clone(),
-                theme::text::DISABLED,
+                theme::text::QUIET,
             );
         }
     }

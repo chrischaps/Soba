@@ -21,7 +21,7 @@ pub fn show(ui: &mut egui::Ui) {
         ui.add(egui::Image::new(&texture).fit_to_exact_size(egui::vec2(LOGO_WIDTH, LOGO_WIDTH * size.y / size.x)));
         ui.label(
             RichText::new("ASIO is a registered trademark of\nSteinberg Media Technologies GmbH")
-                .color(theme::text::DISABLED)
+                .color(theme::text::QUIET)
                 .small(),
         );
     });

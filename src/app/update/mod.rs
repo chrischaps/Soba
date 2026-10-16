@@ -411,7 +411,7 @@ impl Updater {
             ui.label(RichText::new(text).color(theme::text::SECONDARY));
         };
         let small = |ui: &mut egui::Ui, text: &str| {
-            ui.label(RichText::new(text).small().color(theme::text::DISABLED));
+            ui.label(RichText::new(text).small().color(theme::text::QUIET));
         };
         let response = notice.show(
             ctx,
@@ -444,7 +444,7 @@ impl Updater {
                             }
                         });
                         ui.add_space(2.0);
-                        let skip = ui.add(egui::Label::new(RichText::new("Skip this version").small().color(theme::text::DISABLED)).sense(egui::Sense::click()));
+                        let skip = ui.add(egui::Label::new(RichText::new("Skip this version").small().color(theme::text::QUIET)).sense(egui::Sense::click()));
                         if skip.on_hover_text("Don't offer this version again; a newer one will still be offered").clicked() {
                             click = Some(Click::Skip);
                         }
@@ -552,14 +552,14 @@ impl Updater {
                 } else {
                     format!("Since yours ({})", release::CURRENT)
                 };
-                ui.label(RichText::new(since).small().color(theme::text::DISABLED));
+                ui.label(RichText::new(since).small().color(theme::text::QUIET));
                 ui.add_space(6.0);
                 egui::ScrollArea::vertical().max_height(screen.height() * 0.6).auto_shrink([false, true]).show(ui, |ui| {
                     for (release, (_, blocks)) in self.newer.iter().zip(&self.notes) {
                         ui.horizontal(|ui| {
                             let family = egui::FontFamily::Name(theme::TITLE_FAMILY.into());
                             ui.label(RichText::new(format!("Soba {}", release.version)).font(egui::FontId::new(20.0, family)).color(theme::text::PRIMARY));
-                            ui.label(RichText::new(&release.date).small().color(theme::text::DISABLED));
+                            ui.label(RichText::new(&release.date).small().color(theme::text::QUIET));
                         });
                         if !release.subtitle().is_empty() {
                             ui.label(RichText::new(capitalised(release.subtitle())).color(theme::accent::PRIMARY));

@@ -399,7 +399,7 @@ impl SynthApp {
                 if n > 0 {
                     ui.add_space(4.0);
                 }
-                ui.label(RichText::new(section.name().to_uppercase()).small().color(theme::text::DISABLED));
+                ui.label(RichText::new(section.name().to_uppercase()).small().color(theme::text::QUIET));
                 for saved in self.library_modules.iter().filter(|m| m.library_group().is_some_and(|g| g.section == section)) {
                     let text = RichText::new(&saved.name).color(theme::module::GROUP);
                     if row(ui, text, &saved.summary, finger, held).clicked() {
@@ -440,7 +440,7 @@ fn footer(ui: &mut egui::Ui, held: Option<&str>) {
     let top = ui.cursor().top();
     match held {
         Some(hint) => ui.label(RichText::new(hint).small().color(theme::text::SECONDARY)),
-        None => ui.label(RichText::new("Tap to add  ·  hold to read").small().color(theme::text::DISABLED)),
+        None => ui.label(RichText::new("Tap to add  ·  hold to read").small().color(theme::text::QUIET)),
     };
     let line = ui.text_style_height(&egui::TextStyle::Small) + ui.spacing().item_spacing.y;
     ui.add_space((3.0 * line - (ui.cursor().top() - top)).max(0.0));

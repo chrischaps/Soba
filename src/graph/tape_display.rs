@@ -167,7 +167,7 @@ pub fn tape_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user
         egui::Align2::CENTER_CENTER,
         "ips",
         egui::FontId::proportional(8.0 * z),
-        theme::text::DISABLED,
+        theme::text::QUIET,
     );
 
     let stopping = if !braking {

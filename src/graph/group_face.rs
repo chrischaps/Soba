@@ -285,7 +285,7 @@ pub fn body(
             NodeKind::Outputs(_) if node.inputs.is_empty() => "No output jacks",
             _ => return responses,
         };
-        ui.label(RichText::new(none).small().color(theme::text::DISABLED));
+        ui.label(RichText::new(none).small().color(theme::text::QUIET));
         return responses;
     };
     ui.add_space(4.0 * zoom);
@@ -571,6 +571,6 @@ fn rename_field(
             responses.push(NodeResponse::User(SynthResponse::RenameGroup { node_id, name }));
         }
     }
-    ui.label(RichText::new("Enter to name it, Esc to keep the name").small().color(theme::text::DISABLED));
+    ui.label(RichText::new("Enter to name it, Esc to keep the name").small().color(theme::text::QUIET));
     ui.add_space(4.0 * zoom);
 }
