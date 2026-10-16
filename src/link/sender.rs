@@ -28,8 +28,11 @@ pub const TICK: Duration = Duration::from_millis(5);
 /// How often the bus is looked at while no Link Out runs.
 const IDLE_TICK: Duration = Duration::from_millis(50);
 /// A lane, or a port, not written for this long has been left behind. A
-/// block is 10 ms or so, and a device can stall for a few.
-const STALE: Duration = Duration::from_millis(100);
+/// block is 10 ms or so, but a busy machine or a device with a long period
+/// can stall for many, and a held gate taken for dropped would rise again
+/// when it came back: a false hit. Well inside Seoul's 500 ms, so a
+/// deleted Link Out still drops the link.
+const STALE: Duration = Duration::from_millis(250);
 /// How often `/soba/hello` goes out.
 const HELLO_EVERY: Duration = Duration::from_secs(1);
 /// How long a refused send says no one is listening.

@@ -46,14 +46,14 @@ Left running, the Day rises again and a second day begins. The Tide is 80 bars r
 
 ## Modules
 
-There are 174 modules of 26 kinds. The ones that do the work:
+There are 177 modules of 27 kinds. The ones that do the work:
 
 | Module | Role |
 |--------|------|
 | [Clock](../modules/modulation/clock.md) | **BPM** 112, **Div** 1/16 |
 | [Clock Divider](../modules/utilities/divider.md) ×10 | Eighths, dotted eighths, bars and phrases; the Comet's five-eighth clock; the last bar of every eight, for fills; and two pairs of gears (bars at ÷5 and ÷7, sixteenths at ÷5 and ÷7) |
 | [LFO](../modules/modulation/lfo.md) ×7 | The orbits: the Day (triangle), the Sundial (saw) that sets the Day's dusk, the Tide (80 bars), the Breath (13 bars, which moves the bass), Moon A and B; and the Comet's vibrato |
-| [Logic](../modules/utilities/logic.md) ×18 | Who is up: one for each voice's height, two for the drums' steps, and the eclipses |
+| [Logic](../modules/utilities/logic.md) ×20 | Who is up: one for each voice's height, two for the drums' steps, and the eclipses; two more let only the drums you hear through to Seoul |
 | [Sample & Hold](../modules/utilities/sample-hold.md) ×5 | The orbits read once a phrase, and the Moon's and Comet's notes |
 | [Quantizer](../modules/utilities/quantizer.md) ×4 | The Moon's and Comet's scale, and two used as steady voltages to set the slowest LFO rates |
 | [Chord Sequencer](../modules/utilities/chord-sequencer.md) | Em9, Cmaj9, G6, Dadd9, Em9, Am9, Cmaj7, Bsus4: a chord every four bars, for the pad and the bass's root |
@@ -68,6 +68,7 @@ There are 174 modules of 26 kinds. The ones that do the work:
 | [Mixer](../modules/utilities/mixer.md) ×4 | Sky, Earth, Pulse and Air, on one chain |
 | [Tape](../modules/effects/tape.md) | A little wow, saturation and age over the whole mix |
 | [Audio Output](../modules/output/audio-output.md) | **Vol** 60%, **Limiter** and **Character** on |
+| [Link Out](../modules/output/link-out.md) | The orbits and the drums, sent to the Seoul visualizer |
 
 The rest are the voices' own oscillators, envelopes, VCAs and filters, and the Attenuverters and Mixes that scale the orbits.
 
@@ -94,6 +95,25 @@ The bass, heartbeat and drums need the Day *and* the Tide, so each of their Logi
 ### The drums climb
 
 The Trigger Sequencer's **Pattern** input picks A, B, C or D from four quarters of its range. Three gates add up into it: past the kit's height, the drums step to B (+0.3); past halfway, to C (+0.25); and in the last bar of every eight, while the Day is past halfway, the fill (+0.3) takes them to D.
+
+### To Seoul
+
+At the top right, a [Link Out](../modules/output/link-out.md) sends the orrery to [Seoul](https://github.com/chrischaps/Seoul), a music visualizer, so the picture follows the song's own orbits rather than guessing at them from the sound. It follows Seoul's lane convention, so any of Seoul's link-aware presets plays along:
+
+| Lane | From | In Seoul |
+|------|------|----------|
+| **CV 1** | The Day | Energy: the picture brightens toward noon and dims at dusk |
+| **CV 2** | The Breath | Color, turning every 13 bars |
+| **CV 3** | The Tide | Motion, which slows while the rhythm rests |
+| **CV 4**, **CV 5** | Moon A and Moon B | The melody's two orbits, for presets that read them (Obangsaek's white and black) |
+| **Gate 1** | The heartbeat and kick, while the heartbeat is up | The kick |
+| **Gate 2** | The clap, while the kit is up | The snare |
+| **Gate 3** | The closed hats, while the kit is up | The hats |
+| **Gate 4** | Each eclipse | A bloom, in Obangsaek |
+
+The Drums group runs its sequencer the whole song and leaves the faders to decide when it's heard, so its gates fire in the silence too. That's why gates 1 to 3 come through Logic **AND**s with the same "who is up" gates the faders follow: Seoul sees only the drums you hear. The Drums group has **Clap** and **Hats** outputs for them, beside its **Kick**.
+
+Link Out makes no sound, so the mix is exactly as it was. Try Seoul's **Han River** (fountains on the kick, fireworks on the clap) or **Hongsalmun** (a stride on every kick), and watch the city go dark through the Tide.
 
 ## Variations
 

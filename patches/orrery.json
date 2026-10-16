@@ -2461,6 +2461,51 @@
           "value": true
         }
       ]
+    },
+    {
+      "id": 197,
+      "module_id": "output.link",
+      "position": [
+        3239.0,
+        64.0
+      ],
+      "parameters": [
+        {
+          "name": "Port",
+          "type": "Select",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "id": 198,
+      "module_id": "util.logic",
+      "position": [
+        3033.0,
+        64.0
+      ],
+      "parameters": [
+        {
+          "name": "Threshold",
+          "type": "Number",
+          "value": 0.5
+        }
+      ]
+    },
+    {
+      "id": 199,
+      "module_id": "util.logic",
+      "position": [
+        3033.0,
+        440.0
+      ],
+      "parameters": [
+        {
+          "name": "Threshold",
+          "type": "Number",
+          "value": 0.5
+        }
+      ]
     }
   ],
   "connections": [
@@ -3261,6 +3306,84 @@
       "from_port": "Twin 2",
       "to_node": 169,
       "to_port": "Level 3"
+    },
+    {
+      "from_node": 19,
+      "from_port": "Out",
+      "to_node": 197,
+      "to_port": "CV 1"
+    },
+    {
+      "from_node": 22,
+      "from_port": "Out",
+      "to_node": 197,
+      "to_port": "CV 2"
+    },
+    {
+      "from_node": 20,
+      "from_port": "Out",
+      "to_node": 197,
+      "to_port": "CV 3"
+    },
+    {
+      "from_node": 70,
+      "from_port": "Out",
+      "to_node": 197,
+      "to_port": "CV 4"
+    },
+    {
+      "from_node": 71,
+      "from_port": "Out",
+      "to_node": 197,
+      "to_port": "CV 5"
+    },
+    {
+      "from_node": 39,
+      "from_port": "AND",
+      "to_node": 197,
+      "to_port": "Gate 1"
+    },
+    {
+      "from_node": 192,
+      "from_port": "Clap",
+      "to_node": 198,
+      "to_port": "A"
+    },
+    {
+      "from_node": 34,
+      "from_port": "AND",
+      "to_node": 198,
+      "to_port": "B"
+    },
+    {
+      "from_node": 192,
+      "from_port": "Hats",
+      "to_node": 199,
+      "to_port": "A"
+    },
+    {
+      "from_node": 34,
+      "from_port": "AND",
+      "to_node": 199,
+      "to_port": "B"
+    },
+    {
+      "from_node": 198,
+      "from_port": "AND",
+      "to_node": 197,
+      "to_port": "Gate 2"
+    },
+    {
+      "from_node": 199,
+      "from_port": "AND",
+      "to_node": 197,
+      "to_port": "Gate 3"
+    },
+    {
+      "from_node": 10,
+      "from_port": "AND",
+      "to_node": 197,
+      "to_port": "Gate 4"
     }
   ],
   "midi_mappings": [],
@@ -3309,7 +3432,7 @@
       ],
       "size": [
         1089.0,
-        1103.0
+        1150.0
       ],
       "color": "violet"
     },
@@ -3324,6 +3447,18 @@
         1281.0
       ],
       "color": "green"
+    },
+    {
+      "title": "To Seoul",
+      "position": [
+        3009.0,
+        0.0
+      ],
+      "size": [
+        430.0,
+        860.0
+      ],
+      "color": "rose"
     }
   ],
   "notes": [
@@ -13932,6 +14067,14 @@
           "type": "Gate"
         },
         {
+          "name": "Clap",
+          "type": "Gate"
+        },
+        {
+          "name": "Hats",
+          "type": "Gate"
+        },
+        {
           "name": "Kit",
           "type": "Audio"
         },
@@ -17502,6 +17645,18 @@
         {
           "from_node": 117,
           "from_port": "Gate 2",
+          "to_node": 192,
+          "to_port": "Clap"
+        },
+        {
+          "from_node": 117,
+          "from_port": "Gate 3",
+          "to_node": 192,
+          "to_port": "Hats"
+        },
+        {
+          "from_node": 117,
+          "from_port": "Gate 2",
           "to_node": 123,
           "to_port": "Trig"
         },
@@ -17704,7 +17859,7 @@
       "name": "Eclipse",
       "position": [
         1959.0,
-        2268.0
+        2310.0
       ],
       "inputs": [
         {
