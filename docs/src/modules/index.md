@@ -79,6 +79,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Chord Sequencer](./utilities/chord-sequencer.md) | `seq.chord` | 16 chords, each a root, a type and a slash bass, voice-led and played on polyphonic cables, in four patterns played in a chain |
 | [Trigger Sequencer](./utilities/trigger-sequencer.md) | `seq.trigger` | Eight lanes of drum hits in four chained patterns, with accents, probability and ratchets |
 | [Arranger](./utilities/arranger.md) | `seq.arranger` | A song's timeline: named sections of bars, moving eight lanes of automation by jumps, ramps and hits |
+| [Scenes](./utilities/scenes.md) | `util.scenes` | Keeps the knobs as scenes A to H, and glides every knob between two of them with one Morph knob |
 | [MIDI Monitor](./midi/midi-monitor.md) | `util.midi_monitor` | Show incoming MIDI messages |
 
 ### Output
@@ -144,6 +145,7 @@ Drive a voice from a sequence instead of a keyboard:
 | Play a pattern | [Clock](./modulation/clock.md) into the [Step Sequencer](./utilities/sequencer.md) |
 | Play a drum break in time, at any tempo, and rearrange it | [Clock](./modulation/clock.md) into the [Chopper](./sources/chopper.md) |
 | Program a drum kit, with fills | [Clock](./modulation/clock.md) into the [Trigger Sequencer](./utilities/trigger-sequencer.md), a lane for each [Drum](./sources/drum.md) |
+| Turn a verse into a breakdown with one knob | A [Scenes](./utilities/scenes.md) module with a scene of each, its **Morph** on a slow LFO or an Arranger lane |
 | Arrange a whole song: parts that enter, fade and leave | [Clock](./modulation/clock.md) into the [Arranger](./utilities/arranger.md), a lane on each [Mixer](./utilities/mixer.md) **Level** |
 | Make random changes | [Noise](./sources/noise.md) into [Sample & Hold](./utilities/sample-hold.md) for steps, or its **Random** output for glides |
 | Keep random notes in key | [Quantizer](./utilities/quantizer.md) |

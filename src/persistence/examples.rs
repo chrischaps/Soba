@@ -230,6 +230,13 @@ pub const EXAMPLES: &[Example] = &[
         json: include_str!("../../patches/cut-up.json"),
     },
     Example {
+        name: "Breakdown",
+        shelf: Shelf::Recipe,
+        file_name: "breakdown.json",
+        description: "Plays itself: an acid line and its breakdown kept as two scenes on a Scenes module, and a slow LFO gliding Morph between them. The filter rings, the echoes bloom and the hats wash out, every knob at once",
+        json: include_str!("../../patches/breakdown.json"),
+    },
+    Example {
         name: "From One Sine",
         shelf: Shelf::Song,
         file_name: "from-one-sine.json",

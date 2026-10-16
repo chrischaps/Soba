@@ -56,6 +56,7 @@ pub const SHEET: &[Group] = &[
             ("Double-click a knob", "Reset it to its default"),
             ("`Ctrl + M`", "Mutate the selected modules' knobs: hold it to go further"),
             ("`Ctrl + Alt + M`", "Mutate their switches and dropdowns too"),
+            ("`Ctrl + Shift + M`", "Keep the knobs as the next free scene of a Scenes module"),
         ],
     },
     Group {

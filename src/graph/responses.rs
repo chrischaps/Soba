@@ -133,6 +133,13 @@ pub enum SynthResponse {
         source: super::resample::Source,
         bars: u32,
     },
+    /// A scene stored, recalled or cleared from a Scenes module's pads, by
+    /// slot. Each is an undo step.
+    Scene {
+        node_id: egui_node_graph2::NodeId,
+        slot: usize,
+        action: SceneAction,
+    },
     /// A Sampler's slice markers, moved, added or taken away by hand: the
     /// whole list, kept on the node. Undo takes it back as a step named `label`.
     SetSliceMarkers {
@@ -272,4 +279,15 @@ mod tests {
 
         assert_eq!(original, cloned);
     }
+}
+
+/// What a click on a Scenes pad does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SceneAction {
+    /// Keep the knobs as they stand in the slot.
+    Store,
+    /// Set the knobs to the slot's scene.
+    Recall,
+    /// Empty the slot.
+    Clear,
 }

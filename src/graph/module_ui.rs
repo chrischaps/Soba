@@ -400,6 +400,12 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
+        module_id: "util.scenes",
+        knobs: &[knob("Morph")],
+        display: NodeDisplay::ScenePads,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
         module_id: "fx.delay",
         knobs: &[
             // CV swings Time by ±50% and adds to Feedback, around the knobs

@@ -160,6 +160,7 @@ Select a module or a group and press `Ctrl + M`. Each of its knobs moves a small
 - **What doesn't:** a knob a cable drives, the Audio Output, and any knob that sets how loud something is (a level, gain, makeup, drive or feedback), so a variation is never louder than the patch was.
 - **Keeping one:** a strip of chips under the selection holds the knobs as they were and the last eight variations, each drawn as a tick per knob, as high as the knob is turned. Click one to go back to it.
 - **Undo:** each variation, and each click on the strip, is one step.
+- **Keeping it for good:** `Ctrl + Shift + M` keeps the knobs as they stand in the next free scene of a [Scenes](../modules/utilities/scenes.md) module: the one in the selection's group, or the patch's.
 
 ## Frames and notes
 
@@ -349,6 +350,7 @@ Recent files, the autosave, your cable style and the window's size and position 
 | Double-click a knob | Reset it to its default |
 | `Ctrl + M` | Mutate the selected modules' knobs: hold it to go further |
 | `Ctrl + Alt + M` | Mutate their switches and dropdowns too |
+| `Ctrl + Shift + M` | Keep the knobs as the next free scene of a Scenes module |
 
 ### Groups
 

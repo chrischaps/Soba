@@ -58,6 +58,7 @@
   - [Chord Sequencer](./modules/utilities/chord-sequencer.md)
   - [Trigger Sequencer](./modules/utilities/trigger-sequencer.md)
   - [Arranger](./modules/utilities/arranger.md)
+  - [Scenes](./modules/utilities/scenes.md)
   - [MIDI Monitor](./modules/midi/midi-monitor.md)
   - [Audio Output](./modules/output/audio-output.md)
   - [Link Out](./modules/output/link-out.md)
@@ -82,6 +83,7 @@
 - [Held Vowels](./recipes/held-vowels.md)
 - [Interlock](./recipes/interlock.md)
 - [Cut-Up](./recipes/cut-up.md)
+- [Breakdown](./recipes/breakdown.md)
 
 # Songs
 

@@ -27,6 +27,7 @@ use crate::dsp::onsets::HandMarkers;
 use crate::engine::{EngineCommand, NodeId as EngineNodeId};
 use crate::graph::annotations::{self, Annotation, AnnotationId};
 use crate::graph::groups::{self, GroupId, Jack, NodeKind, Side};
+use crate::graph::scenes::SceneBank;
 use crate::graph::{port_mapping, SynthGraph, SynthGraphEditorState, SynthGraphState, SynthNodeTemplate};
 use super::{editing, engine_sync};
 
@@ -80,6 +81,8 @@ enum Body {
         labels: BTreeMap<String, String>,
         /// Slice markers placed by hand.
         slice_markers: Option<HandMarkers>,
+        /// A Scenes module's scenes.
+        scenes: SceneBank,
     },
     /// A group's own node.
     Group { name: String, inputs: Vec<Jack>, outputs: Vec<Jack> },
@@ -110,9 +113,9 @@ impl NodeState {
         self.parent == other.parent
             && match (&self.body, &other.body) {
                 (
-                    Body::Module { template: t1, bypassed: b1, pins: p1, face_labels: n1, file: f1, labels: l1, slice_markers: m1, .. },
-                    Body::Module { template: t2, bypassed: b2, pins: p2, face_labels: n2, file: f2, labels: l2, slice_markers: m2, .. },
-                ) => t1 == t2 && b1 == b2 && p1 == p2 && n1 == n2 && f1 == f2 && l1 == l2 && m1 == m2,
+                    Body::Module { template: t1, bypassed: b1, pins: p1, face_labels: n1, file: f1, labels: l1, slice_markers: m1, scenes: s1, .. },
+                    Body::Module { template: t2, bypassed: b2, pins: p2, face_labels: n2, file: f2, labels: l2, slice_markers: m2, scenes: s2, .. },
+                ) => t1 == t2 && b1 == b2 && p1 == p2 && n1 == n2 && f1 == f2 && l1 == l2 && m1 == m2 && s1 == s2,
                 (a, b) => a == b,
             }
     }
@@ -209,6 +212,7 @@ impl Snapshot {
                         file: data.file.clone(),
                         labels: data.labels.clone(),
                         slice_markers: data.slice_markers.clone(),
+                        scenes: data.scenes.clone(),
                     }
                 }
                 NodeKind::Group(_) => Body::Group {
@@ -448,7 +452,7 @@ impl Step {
             let Some(state) = &diff.after else { continue };
             let position = anchor.zoomed(state.position, zoom);
             let node_id = match (&state.body, diff.key) {
-                (Body::Module { template, bypassed, pins, face_labels, file, labels, slice_markers, .. }, NodeKey::Module(engine_id)) => {
+                (Body::Module { template, bypassed, pins, face_labels, file, labels, slice_markers, scenes, .. }, NodeKey::Module(engine_id)) => {
                     let node_id = editing::place_node(editor, user_state, *template, position);
                     let data = &mut editor.graph[node_id].user_data;
                     data.bypassed = *bypassed;
@@ -456,6 +460,7 @@ impl Step {
                     data.face_labels = face_labels.clone();
                     data.labels = labels.clone();
                     data.slice_markers = slice_markers.clone();
+                    data.scenes = scenes.clone();
                     // Its recording follows from the file, as the app syncs samples
                     data.file = file.clone();
                     user_state.assign_engine_node_id(node_id, engine_id);
@@ -496,13 +501,14 @@ impl Step {
                 }
             }
             match &after.body {
-                Body::Module { pins, face_labels, file, labels, slice_markers, .. } => {
+                Body::Module { pins, face_labels, file, labels, slice_markers, scenes, .. } => {
                     let data = &mut editor.graph[node_id].user_data;
                     data.pins = pins.clone();
                     data.face_labels = face_labels.clone();
                     data.file = file.clone();
                     data.labels = labels.clone();
                     data.slice_markers = slice_markers.clone();
+                    data.scenes = scenes.clone();
                 }
                 Body::Group { name, inputs, outputs } => {
                     groups::rename(&mut editor.graph, node_id, name);

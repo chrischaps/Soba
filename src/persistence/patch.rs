@@ -214,6 +214,10 @@ pub struct NodeData {
     /// the Sensitivity they were placed at. Only written when there are.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slice_markers: Option<crate::dsp::onsets::HandMarkers>,
+    /// A Scenes module's scenes, by slot letter: each knob's value by
+    /// module ID and parameter name. Only written when there are some.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub scenes: crate::graph::scenes::SceneBank,
 }
 
 impl NodeData {
@@ -230,6 +234,7 @@ impl NodeData {
             file: None,
             labels: BTreeMap::new(),
             slice_markers: None,
+            scenes: Default::default(),
         }
     }
 }
@@ -485,6 +490,7 @@ pub fn migrate_v2_to_v3(old: PatchV2) -> Patch {
                 file: None,
                 labels: BTreeMap::new(),
                 slice_markers: None,
+            scenes: Default::default(),
             }
         })
         .collect();
@@ -742,6 +748,7 @@ mod tests {
             file: None,
             labels: BTreeMap::new(),
             slice_markers: None,
+            scenes: Default::default(),
         });
         patch.connections.push(ConnectionData::new(1, "Out", 2, "In"));
 

@@ -95,6 +95,21 @@ impl StagedPatch {
     }
 }
 
+/// Points the scenes of a patch's Scenes modules, which name modules by
+/// their IDs in the patch, at the engine IDs `engine_id` gave them. Call it
+/// once a staged or merged patch's modules have theirs.
+pub fn remap_scenes(graph: &mut SynthGraph, nodes: &[StagedNode], engine_id: impl Fn(NodeId) -> Option<EngineNodeId>) {
+    let ids: HashMap<u64, EngineNodeId> =
+        nodes.iter().filter_map(|n| Some((n.patch_id, engine_id(n.graph_id)?))).collect();
+    for node in nodes {
+        if let Some(data) = graph.nodes.get_mut(node.graph_id).map(|n| &mut n.user_data) {
+            if !data.scenes.is_empty() {
+                crate::graph::scenes::remap(&mut data.scenes, |id| ids.get(&id).copied());
+            }
+        }
+    }
+}
+
 /// Gives every group in `graph` a new ID from `allocate`: the ones a
 /// staging made up are only good within the staged graph.
 pub fn renumber_groups(graph: &mut SynthGraph, mut allocate: impl FnMut() -> GroupId) {
@@ -279,6 +294,8 @@ impl Builder<'_> {
             user_data.file = node_data.file.clone();
             user_data.labels = node_data.labels.clone();
             user_data.slice_markers = node_data.slice_markers.clone();
+            // Still under the patch's module IDs, until they get engine IDs
+            user_data.scenes = node_data.scenes.clone();
 
             here.insert(node_data.id, graph_id);
             self.modules.insert(node_data.id, graph_id);
@@ -576,6 +593,7 @@ pub fn capture_level(
                 node_data.file = data.file.clone();
                 node_data.labels = data.labels.clone();
                 node_data.slice_markers = data.slice_markers.clone();
+                node_data.scenes = data.scenes.clone();
                 node_data.parameters = node
                     .inputs
                     .iter()
@@ -646,10 +664,11 @@ mod tests {
     /// Loads a patch the way the editor does (engine IDs handed out in node
     /// order from `first_engine_id`, MIDI mappings remapped), then saves it.
     fn reload(patch: &Patch, first_engine_id: EngineNodeId) -> (Patch, Vec<String>) {
-        let staged = stage_patch(patch).unwrap();
+        let mut staged = stage_patch(patch).unwrap();
         let engine_ids: HashMap<NodeId, EngineNodeId> =
             staged.nodes.iter().zip(first_engine_id..).map(|(n, id)| (n.graph_id, id)).collect();
         let engine_id = |graph_id| engine_ids.get(&graph_id).copied();
+        remap_scenes(&mut staged.graph, &staged.nodes, engine_id);
         let mappings = staged.remap_midi_mappings(engine_id);
         let position = |graph_id| staged.nodes.iter().find(|n| n.graph_id == graph_id).unwrap().position;
         let saved = capture_patch(&patch.name, &staged.graph, engine_id, position, &mappings);
@@ -726,6 +745,30 @@ mod tests {
         // Only modules with names mention them
         let json = serde_json::to_string(&saved).unwrap();
         assert_eq!(json.matches("\"labels\"").count(), 1);
+        assert_eq!(patch_from_json(&json).unwrap(), saved);
+    }
+
+    #[test]
+    fn test_scenes_survive_a_round_trip_under_new_ids() {
+        use std::collections::BTreeMap;
+
+        let mut patch = Patch::new("scened");
+        let mut scenes = NodeData::new(5, "util.scenes", (0.0, 0.0));
+        let cutoff = |hz: f32| BTreeMap::from([("Cutoff".to_string(), hz)]);
+        scenes.scenes.insert("A".into(), BTreeMap::from([(7, cutoff(300.0)), (99, cutoff(1.0))]));
+        scenes.scenes.insert("C".into(), BTreeMap::from([(7, cutoff(4000.0))]));
+        patch.nodes.extend([NodeData::new(7, "filter.svf", (0.0, 0.0)), scenes]);
+
+        // The filter loads as 40, the Scenes as 41
+        let (saved, warnings) = reload(&patch, 40);
+        assert!(warnings.is_empty(), "{:?}", warnings);
+        let bank = &node(&saved, "util.scenes").scenes;
+        assert_eq!(bank.keys().collect::<Vec<_>>(), ["A", "C"]);
+        // ...naming the filter by its new ID, and letting go of a module that isn't there
+        assert_eq!(bank["A"].keys().collect::<Vec<_>>(), [&40]);
+        assert_eq!(bank["C"][&40]["Cutoff"], 4000.0);
+        let json = serde_json::to_string(&saved).unwrap();
+        assert_eq!(json.matches("\"scenes\"").count(), 1);
         assert_eq!(patch_from_json(&json).unwrap(), saved);
     }
 

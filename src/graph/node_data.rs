@@ -327,6 +327,9 @@ pub enum NodeDisplay {
     /// Arranger: the song's sections beside its own jacks, each lane's
     /// level beside its CV and Gate, and a playhead through them all.
     Timeline,
+    /// Scenes: a pad per scene, the From and To pads lit as Morph glides
+    /// between them, and Morph riding a line from one to the other.
+    ScenePads,
 }
 
 impl NodeDisplay {
@@ -387,6 +390,8 @@ pub struct SynthNodeData {
     /// Slice markers placed by hand (a Sampler's, sliced by Onsets), if
     /// they've been moved from where they were found.
     pub slice_markers: Option<crate::dsp::onsets::HandMarkers>,
+    /// The scenes a Scenes module keeps, by slot letter.
+    pub scenes: super::scenes::SceneBank,
 }
 
 /// How much of the node body shows through while it's bypassed.
@@ -431,6 +436,7 @@ impl SynthNodeData {
             file: None,
             labels: BTreeMap::new(),
             slice_markers: None,
+            scenes: Default::default(),
         }
     }
 
@@ -2132,6 +2138,12 @@ impl NodeDataTrait for SynthNodeData {
         if self.display == NodeDisplay::EqCurve {
             let changes = super::eq_display::eq_display(ui, node_id, graph, user_state, zoom);
             responses.extend(changes.into_iter().map(NodeResponse::User));
+        }
+
+        if self.display == NodeDisplay::ScenePads {
+            if let Some((slot, action)) = super::scenes_display::scenes_display(ui, node_id, graph, user_state, zoom) {
+                responses.push(NodeResponse::User(SynthResponse::Scene { node_id, slot, action }));
+            }
         }
 
         if self.display == NodeDisplay::DrumHit {

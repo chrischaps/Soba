@@ -274,6 +274,9 @@ pub fn paste(
         }
     }
 
+    // Pasted Scenes keep the pasted modules, under their new IDs
+    crate::persistence::graph_io::remap_scenes(&mut editor.graph, &merged.nodes, |n| user_state.get_engine_node_id(n));
+
     // The patch's cables only join its own nodes
     commands.extend(engine_sync::sync_cables(&editor.graph, user_state));
     Ok(Pasted { nodes, annotations, commands, warnings: merged.warnings })

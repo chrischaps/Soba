@@ -59,6 +59,7 @@ mod grouping;
 mod link_follow;
 mod loops;
 mod mutating;
+mod scenes;
 mod probe;
 mod record_into;
 mod samples;
@@ -354,6 +355,8 @@ pub struct SynthApp {
     probe: probe::CableProbe,
     /// Ctrl+M: the variation being held, and the strip of the last few
     mutating: mutating::Mutating,
+    /// Where each Scenes module's Morph was when its knobs last followed it.
+    gliding: scenes::Gliding,
     /// Patch files the visitor picked, which the browser hands over later.
     #[cfg(target_arch = "wasm32")]
     uploads: (std::sync::mpsc::Sender<web::Upload>, std::sync::mpsc::Receiver<web::Upload>),
@@ -541,6 +544,7 @@ impl SynthApp {
             add_menu: AddMenu::default(),
             probe: Default::default(),
             mutating: Default::default(),
+            gliding: Default::default(),
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
         };
@@ -2079,6 +2083,9 @@ impl SynthApp {
                         NodeResponse::User(crate::graph::SynthResponse::DownloadSample(response_node_id)) => {
                             self.download_sample(response_node_id);
                         }
+                        NodeResponse::User(crate::graph::SynthResponse::Scene { node_id: response_node_id, slot, action }) => {
+                            self.scene_pad(response_node_id, slot, action);
+                        }
                         NodeResponse::User(crate::graph::SynthResponse::SetSliceMarkers { node_id: response_node_id, label, markers }) => {
                             self.set_slice_markers(response_node_id, label, markers);
                         }
@@ -2743,6 +2750,9 @@ impl SynthApp {
             self.send_command(self.user_state.seed_command(engine_node_id));
         }
 
+        // Scenes name the modules by their new IDs
+        crate::persistence::graph_io::remap_scenes(&mut self.graph_state.graph, &staged.nodes, |n| self.user_state.get_engine_node_id(n));
+
         // Samplers' files, found from where the patch is
         let sample_warnings = self.resolve_samples(&staged.nodes, base);
         staged.warnings.extend(sample_warnings);
@@ -2779,6 +2789,7 @@ impl SynthApp {
         // its Loopers hold the loops it was saved with
         self.history.reset(&self.graph_state, &self.user_state);
         self.forget_mutations();
+        self.forget_glides();
         self.mark_saved();
         self.opened_loops();
 
@@ -2815,6 +2826,7 @@ impl SynthApp {
         self.clear_graph();
         self.history.reset(&self.graph_state, &self.user_state);
         self.forget_mutations();
+        self.forget_glides();
         self.mark_saved();
         self.opened_loops();
         self.load_warnings.clear();
@@ -4122,6 +4134,8 @@ impl eframe::App for SynthApp {
             self.handle_group_shortcuts(ctx);
             self.handle_editing_shortcuts(ctx);
             self.handle_framing_shortcut(ctx);
+            // Before Mutate's Ctrl+M, which Ctrl+Shift+M would also match
+            self.handle_scene_key(ctx);
             self.handle_mutate_key(ctx);
         }
 
@@ -4172,6 +4186,9 @@ impl eframe::App for SynthApp {
 
         // Followers take their leaders' sections, in the same undo step
         self.follow_arrangers();
+
+        // Scenes' knobs follow their Morph
+        self.glide_scenes(ctx);
 
         // Sync parameter values to the audio engine
         self.sync_parameters();

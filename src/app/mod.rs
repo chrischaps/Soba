@@ -6,7 +6,7 @@
 mod asio_badge;
 pub mod capture;
 mod capture_aim;
-mod editing;
+pub(crate) mod editing;
 pub mod engine_sync;
 mod input_device;
 pub mod library;
