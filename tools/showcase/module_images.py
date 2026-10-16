@@ -167,6 +167,9 @@ MODULES = {
     """),
     # A line cliché, Am9 to E7, on Dm9
     "chord-sequencer": Module("chord-sequencer", "seq.chord", 1.0, 479, "-11.0 play"),
+    # A Chord Sequencer's five-voice chord lit on the keys, an LFO on CC 2
+    # and the clock's beat lamps going round
+    "midi-out": Module("midi-out", "output.midi", 1.0, 420, "-5.3 play"),
     # Roll Call's pattern B, its snare roll ratcheting, C next
     "trigger-sequencer": Module("patches/roll-call.json", "seq.trigger", 1.0, 720, """
         -7.57 play

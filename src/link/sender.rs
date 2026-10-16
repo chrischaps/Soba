@@ -20,6 +20,8 @@ use std::net::{Ipv4Addr, UdpSocket};
 use std::sync::Once;
 use std::time::{Duration, Instant};
 
+use super::midi::MIDI;
+use super::midi_sender::{raise_priority, Midir, MidiSender};
 use super::osc::{Arg, BundleWriter};
 use super::{LinkBus, LinkStatus, SlotReading, BUS, CV_LANES, GATE_LANES, PORTS, VERSION};
 
@@ -38,13 +40,31 @@ const HELLO_EVERY: Duration = Duration::from_secs(1);
 /// How long a refused send says no one is listening.
 const REFUSED_FOR: Duration = Duration::from_millis(1500);
 
-/// Starts the sender thread for [`BUS`], once however often it's called.
+/// Starts the link's sender thread, once however often it's called: OSC
+/// to Seoul from [`BUS`], and MIDI to devices from the MIDI bus. One thread
+/// carries both protocols, each waking it when it next has work.
 pub fn start() {
     static STARTED: Once = Once::new();
     STARTED.call_once(|| {
-        let spawned = std::thread::Builder::new().name("soba-link".into()).spawn(|| Sender::new(&BUS, PORTS).run());
+        let mut osc = Sender::new(&BUS, PORTS);
+        let mut midi = MidiSender::new(&MIDI, Box::new(Midir));
+        let spawned = std::thread::Builder::new().name("soba-link".into()).spawn(move || {
+            raise_priority();
+            let mut osc_due = Instant::now();
+            let mut midi_due = osc_due;
+            loop {
+                let now = Instant::now();
+                if now >= osc_due {
+                    osc_due = osc.poll(now, osc_due);
+                }
+                if now >= midi_due {
+                    midi_due = midi.tick(now);
+                }
+                std::thread::sleep(osc_due.min(midi_due).saturating_duration_since(Instant::now()));
+            }
+        });
         if let Err(error) = spawned {
-            eprintln!("Link Out: couldn't start the sender: {error}");
+            eprintln!("Link: couldn't start the sender: {error}");
         }
     });
 }
@@ -63,19 +83,17 @@ impl Sender {
         Self { bus, ports, states: Default::default(), writer: BundleWriter::new() }
     }
 
-    /// Sends forever, every [`TICK`] while any port is in use.
-    pub fn run(mut self) -> ! {
-        let mut next = Instant::now();
-        loop {
-            let now = Instant::now();
-            let busy = self.tick(now);
-            // Ticks keep to a schedule, so sending doesn't stretch them; one
-            // that has fallen behind (the machine was asleep) starts afresh
-            next += if busy { TICK } else { IDLE_TICK };
-            if next < now {
-                next = now + TICK;
-            }
-            std::thread::sleep(next.saturating_duration_since(Instant::now()));
+    /// Sends each port in use its bundle, and says when to again: a
+    /// [`TICK`] after `scheduled` while any port is, so sending doesn't
+    /// stretch the ticks.
+    pub fn poll(&mut self, now: Instant, scheduled: Instant) -> Instant {
+        let busy = self.tick(now);
+        let next = scheduled + if busy { TICK } else { IDLE_TICK };
+        // One that has fallen behind (the machine was asleep) starts afresh
+        if next < now {
+            now + TICK
+        } else {
+            next
         }
     }
 

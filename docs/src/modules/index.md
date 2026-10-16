@@ -84,12 +84,13 @@ The **ID** is the name a patch file uses to refer to the module.
 
 ### Output
 
-<span class="swatch bar output"></span>Purple header. Where the patch leaves Soba: for your speakers, or for Seoul's visuals.
+<span class="swatch bar output"></span>Purple header. Where the patch leaves Soba: for your speakers, for other instruments, or for Seoul's visuals.
 
 | Module | ID | What it does |
 |--------|----|--------------|
 | [Audio Output](./output/audio-output.md) | `output.audio` | Stereo master output with volume, DC blocking and a peak limiter |
 | [Link Out](./output/link-out.md) | `output.link` | Send eight CV lanes, four gates and the Clock to the Seoul visualizer, to play its pictures from the patch |
+| [MIDI Out](./output/midi-out.md) | `output.midi` | Play hardware and other apps: gates and pitch as notes (poly cables as chords), four CCs, and the Clock as MIDI clock |
 
 Header colors describe what a module *is*. The colors of its jacks and cables describe the *signals* it handles, which is a separate palette: see [Signal Types](../concepts/signal-types.md).
 
@@ -160,3 +161,4 @@ Drive a voice from a sequence instead of a keyboard:
 | Watch the music dance | [Dancer](./visualization/dancer.md) |
 | Hear the result | [Audio Output](./output/audio-output.md) |
 | Play visuals from the patch | [Link Out](./output/link-out.md), with Seoul |
+| Play a hardware synth or a DAW, or lead its tempo | [MIDI Out](./output/midi-out.md) |

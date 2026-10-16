@@ -59,7 +59,8 @@ fn main() -> eframe::Result<()> {
         ..Default::default()
     };
 
-    // Sends any Link Out's lanes to Seoul; idle while the patch has none
+    // Sends any Link Out's lanes to Seoul and any MIDI Out's notes to its
+    // device; idle while the patch has neither
     soba::link::sender::start();
     // The Ableton Link session, on the network only while a Clock follows it
     #[cfg(feature = "ableton-link")]

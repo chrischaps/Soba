@@ -19,6 +19,7 @@ mod dancer_moves;
 mod delay_display;
 mod divider_display;
 mod link_display;
+mod midi_out_display;
 mod display_frame;
 mod distortion_display;
 mod drum_display;

@@ -91,6 +91,8 @@ const CABLE_THROUGH_KEY: &str = "cable_through";
 
 /// Storage key for how knobs are drawn (Knobs menu)
 const KNOB_STYLE_KEY: &str = "knob_style";
+/// The device each MIDI Out port plays, a line per port.
+const MIDI_OUT_PORTS_KEY: &str = "midi_out_ports";
 /// Where the audio system chosen under Output is remembered.
 const AUDIO_SYSTEM_KEY: &str = "audio_system";
 /// Where the buffer size chosen under Output is remembered, in frames
@@ -3320,6 +3322,9 @@ impl SynthApp {
             .and_then(|s| s.get_string(recording::FOLDER_KEY))
             .filter(|folder| !folder.is_empty())
             .map(PathBuf::from);
+        if let Some(ports) = storage.and_then(|s| s.get_string(MIDI_OUT_PORTS_KEY)) {
+            crate::link::midi::MIDI.restore(&ports);
+        }
         if let Some(style) = storage.and_then(|s| s.get_string(KNOB_STYLE_KEY)) {
             self.user_state.knob_style = KnobStyle::ALL
                 .into_iter()
@@ -4011,6 +4016,10 @@ impl eframe::App for SynthApp {
         // Process events from the audio engine
         self.process_engine_events();
         self.recover_from_driver_reset();
+        // MIDI Out sends each note as the sound beside it is heard
+        if let Ok(engine) = &self.audio_engine {
+            crate::link::midi::MIDI.set_latency(engine.output_latency());
+        }
         let now = ctx.input(|i| i.time);
         self.user_state.tick_signal_history(now, &self.graph_state.graph);
 
@@ -4412,6 +4421,7 @@ impl eframe::App for SynthApp {
         storage.set_string(CABLE_THROUGH_KEY, self.user_state.cable_through.to_string());
         self.probe.store(storage);
         storage.set_string(KNOB_STYLE_KEY, self.user_state.knob_style.name().to_string());
+        storage.set_string(MIDI_OUT_PORTS_KEY, crate::link::midi::MIDI.setting());
         if let Ok(engine) = &self.audio_engine {
             storage.set_string(AUDIO_SYSTEM_KEY, engine.audio_system().key().to_string());
             storage.set_string(BUFFER_FRAMES_KEY, engine.buffer_request().map(|f| f.to_string()).unwrap_or_default());

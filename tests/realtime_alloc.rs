@@ -28,7 +28,7 @@ use soba::engine::{
 };
 use soba::modules::looper::{LoopState, Looper};
 use soba::dsp::primitives::{Markers, ONSETS};
-use soba::modules::{Chopper, Mixer};
+use soba::modules::{Chopper, MidiOut, Mixer};
 
 struct CountingAllocator;
 
@@ -141,6 +141,9 @@ fn audio_callback_never_allocates() {
     let (mut midi, midi_input) = rtrb::RingBuffer::new(512);
     processor.set_midi_input(midi_input);
 
+    // MIDI Outs get a ring to write to, as in the app. Nothing drains it
+    // here, so it fills, and writing to a full ring is tried too
+    soba::link::midi::MIDI.start_draining();
     let nodes = build_big_patch(&mut ui, PATCH_SIZE);
     assert!(nodes.len() >= 30);
 
@@ -190,6 +193,23 @@ fn audio_callback_never_allocates() {
         to_node: link,
         to_port: port("output.link", "Gate 1"),
     });
+
+    // A MIDI Out playing the Clock's gate, an LFO as a CC, and the Clock
+    // as MIDI clock
+    let midi_out = node_of(&nodes, "output.midi");
+    ui.send_command(EngineCommand::Connect {
+        from_node: clock,
+        from_port: port("util.clock", "Gate"),
+        to_node: midi_out,
+        to_port: port("output.midi", "Gate"),
+    });
+    ui.send_command(EngineCommand::Connect {
+        from_node: node_of(&nodes, "mod.lfo"),
+        from_port: 0,
+        to_node: midi_out,
+        to_port: port("output.midi", "CC 1"),
+    });
+    ui.send_command(EngineCommand::SetParameter { node_id: midi_out, param_index: MidiOut::PARAM_SEND_CLOCK, value: 1.0 });
 
     // A Chopper on the same Clock, cut at markers, given a new loop (and
     // new markers) every so often, mid-slice or not

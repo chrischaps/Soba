@@ -44,6 +44,16 @@ Set **Source** to **Link** instead, and the Clock joins an [Ableton Link](https:
 
 Where MIDI clock carries the master's time down a cable, Link has every app keep the same time from the network's shared clock. Each app allows for its own audio delay, so they agree on when a beat reaches the speakers, not just when it's computed. See [Playing in a Link session](../modules/modulation/clock.md#playing-in-a-link-session).
 
+## Leading other gear
+
+It works the other way round too. Turn on **Clock** in a [MIDI Out](../modules/output/midi-out.md) and the patch's Clock becomes the master: a DAW, a drum machine or an arpeggiator set to follow MIDI clock plays in Soba's time. MIDI Out:
+
+- **sends Start** when the Clock starts from the top, or on the first downbeat after a count-in;
+- **sends 24 ticks per beat**, each placed on the beat to the sample, and sent as the audio beside it reaches your speakers, so the other gear and Soba's own sounds line up;
+- **sends Stop** when the Clock stops, and **Continue**, after a Song Position saying where, when it plays on from there.
+
+A follower measures the tempo from the ticks' spacing, so change the Clock's BPM and it follows. Don't send clock back to the gear the Clock follows: two clocks can't lead one another. A Clock playing in a Link session can lead MIDI gear, though. The same MIDI Out can also play the device's notes.
+
 ## Precision
 
 The Clock counts its beat precisely enough that every pulse lands within a sample of where it belongs, even after ten minutes, so a slow phrase clock and a fast sixteenth clock started together stay together.

@@ -21,7 +21,13 @@
 //! touches a socket. On the desktop a sender thread ([`sender`]) reads the
 //! bus every 5 ms and sends what it finds. While no Link Out runs on a port,
 //! nothing is sent to it, and Seoul sees the link drop.
+//!
+//! The same thread carries MIDI out ([`midi`]): a second protocol on the
+//! one transport, for MIDI Out modules playing hardware and other apps.
 
+pub mod midi;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod midi_sender;
 pub mod osc;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod sender;

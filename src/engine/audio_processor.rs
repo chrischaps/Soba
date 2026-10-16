@@ -10,7 +10,7 @@ use rtrb::Consumer;
 
 use crate::dsp::denormal::DenormalGuard;
 use crate::dsp::{InputAudio, MidiEvent, ModuleRegistry, Poly, ProcessContext, Snapshot, SnapshotOutcome};
-use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Chorus, Clock, ClockDivider, Compressor, Dancer, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, LinkOut, Logic, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Scenes, Oscillator, Slicer, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
+use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Chorus, Clock, ClockDivider, Compressor, Dancer, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, LinkOut, Logic, MidiOut, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Reverb, SampleHold, Sampler, Scenes, Oscillator, Slicer, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
 
 use super::audio_input::InputFeed;
 use super::channels::{EngineHandle, MAX_SNAPSHOTS};
@@ -75,6 +75,7 @@ pub fn create_module_registry() -> ModuleRegistry {
     registry.register::<MidiMonitor>();
     registry.register::<AudioOutput>();
     registry.register::<LinkOut>();
+    registry.register::<MidiOut>();
     registry
 }
 
@@ -280,7 +281,7 @@ impl AudioProcessor {
             feed.begin(num_frames);
         }
         let latency = if self.input.feed.is_some() { self.engine_handle.input_latency() } else { 0 };
-        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Live(&mut self.input), latency);
+        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Live(&mut self.input), latency, Some(start_time));
         self.record(output, channels);
         self.probe.mix(output, channels);
         self.play_cue(output, channels);
@@ -328,7 +329,7 @@ impl AudioProcessor {
         }
 
         // Input given with the picture is already in time with it
-        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0);
+        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0, None);
         self.record(output, channels);
         self.probe.mix(output, channels);
         self.play_cue(output, channels);
@@ -341,7 +342,8 @@ impl AudioProcessor {
     /// Runs the graph over a buffer in plan-sized blocks, each with the MIDI
     /// that falls inside it and the next block of `input` (`latency` frames
     /// late), and writes the output module's audio into it. The probe
-    /// listens to each block as it's made.
+    /// listens to each block as it's made. Played live, the buffer leaves
+    /// for the device at `sent_at`, and each block its frames after.
     #[allow(clippy::too_many_arguments)]
     fn render(
         plan: &mut GraphPlan,
@@ -352,6 +354,7 @@ impl AudioProcessor {
         mut midi: &mut [MidiEvent],
         mut input: RenderInput<'_>,
         latency: usize,
+        sent_at: Option<Instant>,
     ) {
         let block = plan.max_block_size().max(1);
         probe.begin(plan);
@@ -363,10 +366,13 @@ impl AudioProcessor {
                 RenderInput::Live(input) => input.next_block(frames),
                 RenderInput::Given(given) => given.slice(start, frames),
             };
-            let context = ProcessContext::new(sample_rate, frames)
+            let mut context = ProcessContext::new(sample_rate, frames)
                 .with_midi(chunk_midi)
                 .with_input(chunk_input)
                 .with_input_latency(latency);
+            if let Some(at) = sent_at {
+                context = context.sent_at(at + std::time::Duration::from_secs_f64(start as f64 / sample_rate as f64));
+            }
             plan.process(&context);
             probe.listen(plan, frames, sample_rate);
             Self::write_output(plan, chunk, channels, frames);
@@ -659,7 +665,8 @@ mod tests {
         assert!(registry.contains("fx.vocoder"));
         assert!(registry.contains("source.chopper"));
         assert!(registry.contains("util.scenes"));
-        assert_eq!(registry.len(), 43);
+        assert!(registry.contains("output.midi"));
+        assert_eq!(registry.len(), 44);
     }
 
     #[test]

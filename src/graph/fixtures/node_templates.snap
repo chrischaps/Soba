@@ -3017,3 +3017,24 @@ in   Gate 3             Gate     ConnectionOnly       inline=true  port
 in   Gate 4             Gate     ConnectionOnly       inline=true  port
 in   Port               Control  ConstantOnly         inline=true  select 0 ["9137", "9138", "9139", "9140"] "Port"
 display LinkLanes
+
+== output.midi "MIDI Out" finder="MIDI Out" Output
+in   Pitch              Control  ConnectionOnly       inline=true  port
+in   Gate               Gate     ConnectionOnly       inline=true  port
+in   Velocity           Control  ConnectionOnly       inline=true  port
+in   CC 1               Control  ConnectionOnly       inline=true  port
+in   CC 2               Control  ConnectionOnly       inline=true  port
+in   CC 3               Control  ConnectionOnly       inline=true  port
+in   CC 4               Control  ConnectionOnly       inline=true  port
+in   Port               Control  ConstantOnly         inline=true  select 0 ["A", "B", "C", "D"] "Port"
+in   Channel            Control  ConstantOnly         inline=true  select 0 ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] "Ch"
+in   CC 1 #             Control  ConstantOnly         inline=false num 1 [0..127]  stepped
+in   CC 2 #             Control  ConstantOnly         inline=false num 74 [0..127]  stepped
+in   CC 3 #             Control  ConstantOnly         inline=false num 71 [0..127]  stepped
+in   CC 4 #             Control  ConstantOnly         inline=false num 10 [0..127]  stepped
+in   Send Clock         Control  ConstantOnly         inline=true  toggle false "Clock"
+knob CC 1 #             "CC 1" KnobOnly
+knob CC 2 #             "CC 2" KnobOnly
+knob CC 3 #             "CC 3" KnobOnly
+knob CC 4 #             "CC 4" KnobOnly
+display MidiOutKeys

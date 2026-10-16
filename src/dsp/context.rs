@@ -3,6 +3,7 @@
 //! Provides runtime information that modules need during audio processing.
 
 use super::signal::MidiEvent;
+use web_time::Instant;
 
 /// Transport state information for synchronization.
 ///
@@ -143,6 +144,11 @@ pub struct ProcessContext<'a> {
     /// playing along with the patch is heard this long after the moment
     /// they played to, which a Looper takes back off its overdubs.
     pub input_latency: usize,
+    /// When this block's first sample leaves for the output device: the
+    /// audio callback's start, plus the block's place in the callback's
+    /// buffer. The device plays it its own delay after that. `None` where
+    /// blocks aren't played as they're made (an offline render, a test).
+    pub sent_at: Option<Instant>,
 }
 
 impl<'a> ProcessContext<'a> {
@@ -155,6 +161,7 @@ impl<'a> ProcessContext<'a> {
             midi: &[],
             input: InputAudio::default(),
             input_latency: 0,
+            sent_at: None,
         }
     }
 
@@ -167,6 +174,7 @@ impl<'a> ProcessContext<'a> {
             midi: &[],
             input: InputAudio::default(),
             input_latency: 0,
+            sent_at: None,
         }
     }
 
@@ -190,6 +198,11 @@ impl<'a> ProcessContext<'a> {
     /// [`input_latency`](Self::input_latency)).
     pub fn with_input_latency(self, frames: usize) -> Self {
         Self { input_latency: frames, ..self }
+    }
+
+    /// The same context, its first sample leaving for the device at `at`.
+    pub fn sent_at(self, at: Instant) -> Self {
+        Self { sent_at: Some(at), ..self }
     }
 
     /// Returns the duration of the current block in seconds.

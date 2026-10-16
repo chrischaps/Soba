@@ -298,6 +298,8 @@ pub enum NodeDisplay {
     Dancer,
     /// Link Out: a lamp per lane, what it sends, and whether Seoul hears.
     LinkLanes,
+    /// MIDI Out: its device, a keyboard of the notes it holds, its CCs and clock.
+    MidiOutKeys,
     /// Slicer: the row of steps, each drawn as the slice it cuts, and a
     /// dot riding the one playing.
     SlicerRow,
@@ -2105,6 +2107,10 @@ impl NodeDataTrait for SynthNodeData {
 
         if self.display == NodeDisplay::LinkLanes {
             super::link_display::link_display(ui, node_id, graph, user_state, zoom);
+        }
+
+        if self.display == NodeDisplay::MidiOutKeys {
+            super::midi_out_display::midi_out_display(ui, node_id, graph, user_state, zoom);
         }
 
         if self.display == NodeDisplay::TapeReels {

@@ -62,6 +62,7 @@
   - [MIDI Monitor](./modules/midi/midi-monitor.md)
   - [Audio Output](./modules/output/audio-output.md)
   - [Link Out](./modules/output/link-out.md)
+  - [MIDI Out](./modules/output/midi-out.md)
 
 # Recipes
 
