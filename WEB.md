@@ -17,9 +17,46 @@ trunk build --release       # into dist/
 | `play/` | The full app on First Sound, with the last session's settings and any autosave |
 | `play/?patch=lush-pad` | An **embed**: just the canvas and a Play bar, for an iframe. Any example's file name works |
 | `play/?open=lush-pad` | That example in the full app (the embed's **Open in Soba** link) |
+| `play/#p=1.…` | A **patch link**: the patch inside the address, in the full app, stopped with a Play prompt (see below) |
 
 An embed keeps nothing: it doesn't restore or autosave a session, so playing
 with a recipe never leaves an autosave for the full app to offer back.
+
+## Patch links
+
+**Share** (on the desktop too) copies a link that holds the whole patch:
+its compact JSON, deflated and written in base64url into the address's
+fragment, `play/#p=1.<data>` (`persistence/patch_link.rs`). A fragment never
+reaches the server, so the static docs host is all it needs, and nothing
+is stored anywhere. The `1.` is the link format's version: a newer one
+opened by an older page says to reload, and every later build keeps
+reading version 1.
+
+- **Opening one** happens before the session is restored, and the fragment
+  is taken out of the address (`history.replaceState`), so reloading picks
+  up the session rather than opening the link again over it. The patch
+  starts stopped with a note offering **Play**, and opens with nothing
+  unsaved, so it's never autosaved over the visitor's own work until they
+  change it. A crash's autosave is still offered as usual. A link pasted
+  into the address bar of a tab that's already open only changes the
+  fragment, which doesn't reload the page: `index.html` notes the
+  `hashchange` and the app opens it, asking first about unsaved changes.
+  Pasting a link onto the canvas does the same, on the desktop too.
+- **Samples:** the examples' samples are named by key
+  (`example:samples/…`) and fetched as an example's are. A patch that plays
+  the user's own files (from disk, dropped in or recorded in the tab) can't
+  go by link: Share names the files and offers Save As, which on the web
+  downloads the zip with them.
+- **Length:** a link is the address plus about 1.1 K characters for First
+  Sound. Measured over the examples (`cargo test --lib patch_link --
+  --nocapture` lists them): the recipes and short songs come to 1.1–6.5 K,
+  From One Sine 16 K, Orrery 20 K, Clair de Satellite 29 K and Canopy 34 K.
+  Browsers take addresses of megabytes; it's chats that may cut the longest
+  short, which Share's note mentions over 30 K. Every example round-trips
+  exactly, layout included, so nothing is dropped to save space.
+
+Not yet: a hosted gallery of shared patches with listen-first previews
+rendered by the `render` bin.
 
 This page is the spike report for issue #90: what stood in the way, what
 was done about each, and how steady the sound is.

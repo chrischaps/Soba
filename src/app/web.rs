@@ -60,6 +60,34 @@ pub fn query_param(key: &str) -> Option<String> {
     web_sys::UrlSearchParams::new_with_str(&search).ok()?.get(key)
 }
 
+/// The page address's fragment (`#p=1.…`), with its `#`.
+pub fn fragment() -> Option<String> {
+    web_sys::window()?.location().hash().ok().filter(|hash| !hash.is_empty())
+}
+
+/// Takes the fragment out of the page's address, without reloading it, so
+/// reloading the page picks up the session rather than opening the link
+/// again over it.
+pub fn forget_fragment() {
+    let Some(window) = web_sys::window() else { return };
+    let location = window.location();
+    let (Ok(path), Ok(search)) = (location.pathname(), location.search()) else { return };
+    if let Ok(history) = window.history() {
+        let _ = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(&format!("{path}{search}")));
+    }
+}
+
+/// The fragment the address took since it was last asked, if it changed:
+/// a link pasted into the address bar of the tab that's already open,
+/// which a browser doesn't reload for. `index.html` notes it.
+pub fn take_new_fragment() -> Option<String> {
+    let window = web_sys::window()?;
+    let key = wasm_bindgen::JsValue::from_str("sobaNewHash");
+    let hash = js_sys::Reflect::get(&window, &key).ok()?.as_string()?;
+    let _ = js_sys::Reflect::delete_property(&window, &key);
+    Some(hash)
+}
+
 /// The full app's address, without the query that makes a page an embed.
 pub fn full_app_url() -> Option<String> {
     let location = web_sys::window()?.location();

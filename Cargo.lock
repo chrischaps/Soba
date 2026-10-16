@@ -3567,6 +3567,7 @@ dependencies = [
 name = "soba"
 version = "0.7.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "cpal",
  "dirs",
@@ -3577,6 +3578,7 @@ dependencies = [
  "image",
  "js-sys",
  "midir",
+ "miniz_oxide",
  "opus-decoder",
  "rfd",
  "rtrb",

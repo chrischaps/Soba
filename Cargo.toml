@@ -37,6 +37,9 @@ triple_buffer = "9.0.0"
 symphonia = { version = "0.5", default-features = false, features = ["mp3", "vorbis", "flac", "ogg"] }
 # Opus in Ogg, which symphonia 0.5 can split into packets but not decode
 opus-decoder = "0.1.1"
+# Patch links (persistence/patch_link.rs): the patch deflated into the URL
+miniz_oxide = "0.8"
+base64 = "0.22"
 
 # Updates (src/app/update): one request to GitHub's releases API, then the
 # release's zip, checked against its SHA256SUMS before it's unpacked
@@ -55,7 +58,7 @@ cpal = { version = "0.18", features = ["wasm-bindgen"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-web-sys = { version = "0.3", features = ["Window", "Document", "Location", "Element", "HtmlCanvasElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "Url", "UrlSearchParams", "Navigator", "Response", "console"] }
+web-sys = { version = "0.3", features = ["Window", "Document", "Location", "Element", "HtmlCanvasElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "Url", "UrlSearchParams", "Navigator", "Response", "History", "console"] }
 
 # The app icon in the Windows executable (build.rs)
 [build-dependencies]

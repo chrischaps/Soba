@@ -12,7 +12,7 @@ From left to right:
 | Group | Controls |
 |-------|----------|
 | **Transport** | **▶ Play** starts the patch; **⏹ Stop** stops it. The app opens stopped. **● Rec** records what you hear: see [Recording](#recording). |
-| **File** | **📄 New**, **📂 Open**, **🕘 Recent**, **📚 Examples**, **💾 Save**, **💾 Save As** |
+| **File** | **📄 New**, **📂 Open**, **🕘 Recent**, **📚 Examples**, **💾 Save**, **💾 Save As**, **🔗 Share**: see [Sharing a patch by link](#sharing-a-patch-by-link) |
 | **Edit** | **↩ Undo** and **↪ Redo**. Hover either to see which edit it will undo or redo. |
 | **〰 Cables** | How signal flow is drawn along cables: **Chevrons**, **Dots** or **Comets**. **Under modules and labels** sets how much of a cable shows through a module, frame title or note it passes behind (5% at first). **Patch under a probe** sets how far the patch is turned down while you [probe a cable](#probing-a-cable) |
 | **◉ Knobs** | How knobs are drawn: **LED ring**, **Hybrid**, **Arc**, **Machined** or **Classic** |
@@ -286,6 +286,14 @@ The **📚 Examples** menu holds ready-made patches on two shelves. **Recipes** 
 A [Sampler](../modules/sources/sampler.md) keeps the path to its sound file in the patch. A file beside or below the patch is saved by a path relative to it, so the patch's folder can be moved or shared whole. **Save As** copies samples from anywhere else into a `<patch name> samples` folder beside the patch, asking first if they come to more than 50 MB. A patch whose sample has gone missing still opens, with the missing file among the load warnings.
 
 A [Looper](../modules/utilities/looper.md)'s loop is kept the same way. Saving the patch writes each loop that changed as a WAV into a `<patch name> loops` folder beside it, asking first if they come to more than 50 MB, and opening the patch brings each loop back, stopped and ready to play. A loop whose file has gone missing is a load warning, and its Looper opens empty. See [Keeping the loop](../modules/utilities/looper.md#keeping-the-loop).
+
+### Sharing a patch by link
+
+**🔗 Share** copies a link to the patch you have open. Whoever opens it gets the patch in their browser, in [Soba's web version](https://docs.chaps.dev/soba/play/), with nothing to install: the same modules, cables, knobs, frames and notes, stopped until they press **▶ Play**. What they change stays with them. The whole patch is inside the link itself, after the `#`, so it isn't stored anywhere or sent to a server.
+
+A link carries the patch and the samples that come with Soba's examples, and nothing else. If a Sampler plays a file of your own, Share says which files, and offers **Save As** instead, to send the patch as a folder with its samples (in the browser, Save downloads it as a zip with them).
+
+Most patches make links of a few thousand characters. The biggest songs come to 30,000 or so, which some chat apps cut short; email or a document carries them whole. Pasting a Soba link onto the canvas opens it too, asking first if there are unsaved changes.
 
 ### Recent patches
 

@@ -10,6 +10,7 @@ pub mod graph_io;
 pub mod library;
 mod opus;
 pub mod patch;
+pub mod patch_link;
 pub mod sample_files;
 pub mod stored_zip;
 #[cfg(target_arch = "wasm32")]

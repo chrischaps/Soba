@@ -60,6 +60,7 @@ mod link_follow;
 mod loops;
 mod mutating;
 mod scenes;
+mod share;
 mod probe;
 mod record_into;
 mod samples;
@@ -267,6 +268,8 @@ pub struct SynthApp {
     recordings_folder: Option<PathBuf>,
     /// The note about the last finished take.
     record_toast: Option<Toast>,
+    /// The note about a link to the patch: copied, refused, or opened.
+    share_note: Option<share::ShareNote>,
 
     // --- Loops ---
     /// Each Looper's loop as the patch last saved it, by engine node.
@@ -511,6 +514,7 @@ impl SynthApp {
             recording: None,
             recordings_folder: None,
             record_toast: None,
+            share_note: None,
             kept_loops: HashMap::new(),
             loop_files: std::collections::HashSet::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -1489,6 +1493,10 @@ impl SynthApp {
                         actions.save_as_patch = true;
                         ui.close_menu();
                     }
+                    if ui.button("🔗 Share").on_hover_text(SHARE_HINT).clicked() {
+                        actions.share_patch = true;
+                        ui.close_menu();
+                    }
                 });
             } else {
                 if ui.button("📄 New").on_hover_text("Start an empty patch (Ctrl+N)").clicked() {
@@ -1526,6 +1534,10 @@ impl SynthApp {
 
                 if ui.button("💾 Save As").on_hover_text("Save to a new file (Ctrl+Shift+S)").clicked() {
                     actions.save_as_patch = true;
+                }
+
+                if ui.button("🔗 Share").on_hover_text(SHARE_HINT).clicked() {
+                    actions.share_patch = true;
                 }
             }
 
@@ -2543,6 +2555,11 @@ impl SynthApp {
 
     /// Pastes modules from clipboard text at the cursor.
     fn paste_modules(&mut self, ctx: &egui::Context, text: &str) {
+        // A link to a patch opens it, as following the link would
+        if let Some(fragment) = crate::persistence::patch_link::fragment_of(text) {
+            self.request(ctx, Discard::OpenLink(fragment.to_string()));
+            return;
+        }
         let Ok(patch) = crate::persistence::patch_from_json(text) else {
             self.status_message = Some("Nothing to paste: the clipboard doesn't hold modules".to_string());
             return;
@@ -3228,6 +3245,11 @@ impl SynthApp {
             Discard::Open => self.show_load_dialog(ctx),
             Discard::OpenFile(path) => self.open_file(&path),
             Discard::OpenExample(example) => self.open_example(example),
+            Discard::OpenLink(fragment) => {
+                if let Err(e) = self.open_from_link(&fragment) {
+                    self.link_refused(ctx, e);
+                }
+            }
             Discard::Quit => {
                 self.finish_recording_now();
                 #[cfg(not(target_arch = "wasm32"))]
@@ -3955,6 +3977,9 @@ enum AudioStatus {
     Waiting,
 }
 
+/// What the Share button's tooltip says.
+const SHARE_HINT: &str = "Copy a link that plays this patch in a browser, with nothing to install";
+
 /// Actions collected from the toolbar for deferred execution
 #[derive(Default)]
 struct ToolbarActions {
@@ -3973,6 +3998,7 @@ struct ToolbarActions {
     refresh_devices: bool,
     save_patch: bool,
     save_as_patch: bool,
+    share_patch: bool,
     load_patch: bool,
     open_example: Option<&'static Example>,
     open_recent: Option<PathBuf>,
@@ -4010,6 +4036,12 @@ impl eframe::App for SynthApp {
         // A patch file the browser has finished uploading
         #[cfg(target_arch = "wasm32")]
         self.collect_upload();
+        // A patch link pasted into the address bar of this tab
+        #[cfg(target_arch = "wasm32")]
+        if let Some(fragment) = web::take_new_fragment().filter(|f| crate::persistence::patch_link::holds_patch(f)) {
+            web::forget_fragment();
+            self.request(ctx, Discard::OpenLink(fragment));
+        }
         #[cfg(target_arch = "wasm32")]
         self.tidy_tab_files();
 
@@ -4251,6 +4283,9 @@ impl eframe::App for SynthApp {
         if toolbar_actions.save_as_patch || keyboard_save_as {
             self.show_save_dialog();
         }
+        if toolbar_actions.share_patch {
+            self.share_patch(ctx);
+        }
         if toolbar_actions.load_patch || keyboard_load {
             self.request(ctx, Discard::Open);
         }
@@ -4305,6 +4340,16 @@ impl eframe::App for SynthApp {
                 Some(ToastAction::Dismiss) => self.record_toast = None,
                 None => {}
             }
+        }
+        // A link copied, refused or opened
+        let (above_share, share_action) = self.show_share_note(ctx, corner);
+        corner = above_share;
+        match share_action {
+            Some(share::ShareAction::SaveAs) => {
+                self.show_save_dialog();
+            }
+            Some(share::ShareAction::Play) => self.set_playing(true),
+            None => {}
         }
         // New versions: the daily check, and its note above the take's
         #[cfg(not(target_arch = "wasm32"))]

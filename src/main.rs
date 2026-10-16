@@ -114,8 +114,20 @@ fn main() {
                     soba::app::theme::install_fonts(&cc.egui_ctx);
                     let mut app = SynthApp::new(false);
                     let (patch, open) = (web::query_param("patch"), web::query_param("open"));
-                    if !app.open_from_address(patch.as_deref(), open.as_deref()) {
+                    // A shared patch (`#p=1.…`, see persistence/patch_link.rs),
+                    // taken out of the address so a reload picks up the
+                    // session instead of opening the link again over it
+                    let link = web::fragment().filter(|f| soba::persistence::patch_link::holds_patch(f));
+                    let refused = link.as_deref().and_then(|link| {
+                        web::forget_fragment();
+                        app.open_from_link(link).err()
+                    });
+                    let opened = (link.is_some() && refused.is_none()) || app.open_from_address(patch.as_deref(), open.as_deref());
+                    if !opened {
                         app.open_on_launch(None);
+                    }
+                    if let Some(why) = refused {
+                        app.link_refused(&cc.egui_ctx, why);
                     }
                     // An embed is the page's patch, not a session to pick up
                     if patch.is_none() {

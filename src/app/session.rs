@@ -36,6 +36,8 @@ pub enum Discard {
     Open,
     OpenFile(PathBuf),
     OpenExample(&'static Example),
+    /// Open the patch a link holds: its fragment, `p=1.…`.
+    OpenLink(String),
     Quit,
     /// Restart into a downloaded update.
     #[cfg(not(target_arch = "wasm32"))]

@@ -97,6 +97,11 @@
             if (e.key === "F1") e.preventDefault();
         }, { capture: true });
 
+        // A patch link pasted into this tab's address bar changes only the
+        // fragment, which doesn't reload the page: the app picks it up and
+        // opens it, asking first if there are unsaved changes
+        window.addEventListener("hashchange", () => { window.sobaNewHash = location.hash; });
+
         // Files kept only in the tab (takes, trims, files dropped in) are
         // kept in IndexedDB too, so a reload, or an autosave recovered,
         // finds them again (src/persistence/tab_store.rs). Every open copy
