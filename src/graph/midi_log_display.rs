@@ -80,6 +80,29 @@ fn format_midi_event(event: &MidiEvent) -> (String, Color32) {
     }
 }
 
+/// Where the log's pieces go, in screen points at the view's zoom.
+struct LogLayout {
+    row_height: f32,
+    /// The timestamps' column, right-aligned
+    stamp_width: f32,
+    /// Between a timestamp and its event
+    gap: f32,
+    /// The whole panel
+    size: egui::Vec2,
+}
+
+/// The log's layout in `font`, measured as if fonts scaled smoothly, so the
+/// node grows in step with the view as it zooms rather than in whole-pixel
+/// jumps (#255, #325).
+fn log_layout(ui: &egui::Ui, font: &egui::FontId, zoom: f32) -> LogLayout {
+    use super::steady_text::{row_height, text_width};
+    let row_height = row_height(ui, font) + 2.0 * zoom;
+    let gap = 6.0 * zoom;
+    let stamp_width = text_width(ui, "000.0s", font);
+    let width = (stamp_width + gap + text_width(ui, MIDI_LOG_WIDEST, font)).max(180.0 * zoom);
+    LogLayout { row_height, stamp_width, gap, size: egui::vec2(width, MIDI_LOG_ROWS as f32 * row_height) }
+}
+
 /// Draws the event log.
 pub fn midi_log_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphState, zoom: f32) {
     // Get filter settings from the node's input parameters
@@ -146,17 +169,8 @@ pub fn midi_log_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     // pitch: rows can't crowd into each other, and the node keeps its
     // size as events arrive
     let font = egui::FontId::monospace(egui::TextStyle::Small.resolve(ui.style()).size);
-    let row_height = ui.fonts(|f| f.row_height(&font)) + 2.0 * zoom;
-    let gap = 6.0 * zoom;
-    let (stamp_width, width) = ui.fonts(|f| {
-        let measure = |text: &str| f.layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE).size().x;
-        let stamp = measure("000.0s");
-        (stamp, (stamp + gap + measure(MIDI_LOG_WIDEST)).max(180.0 * zoom))
-    });
-    let (rect, _) = ui.allocate_exact_size(
-        egui::vec2(width, MIDI_LOG_ROWS as f32 * row_height),
-        egui::Sense::hover(),
-    );
+    let LogLayout { row_height, stamp_width, gap, size } = log_layout(ui, &font, zoom);
+    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     let painter = ui.painter_at(rect);
     let weak = ui.visuals().weak_text_color();
 
@@ -181,5 +195,42 @@ pub fn midi_log_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
             weak,
         );
         painter.text(egui::pos2(rect.left() + stamp_width + gap, y), egui::Align2::LEFT_CENTER, text, font.clone(), color);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The log panel grows exactly with the view: no step as the font
+    /// it's drawn in crosses a whole pixel.
+    #[test]
+    fn the_log_keeps_its_size_as_the_view_zooms() {
+        let ctx = egui::Context::default();
+        crate::app::theme::install_fonts(&ctx);
+        let mut seen = Vec::new();
+        // Twice, so the fonts are loaded the second time through
+        for _ in 0..2 {
+            let input = egui::RawInput { viewport_id: egui::ViewportId::ROOT, ..Default::default() };
+            ctx.set_pixels_per_point(1.25);
+            let _ = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let small = egui::TextStyle::Small.resolve(ui.style()).size;
+                    seen.clear();
+                    for step in 0..60 {
+                        let zoom = 0.3 * (2.0f32 / 0.3).powf(step as f32 / 59.0);
+                        let layout = log_layout(ui, &egui::FontId::monospace(small * zoom), zoom);
+                        seen.push((zoom, layout.size, layout.stamp_width));
+                    }
+                });
+            });
+        }
+        // As laid out at the smallest zoom, in patch units
+        let (first, size, stamp) = seen[0];
+        let (size, stamp) = (size / first, stamp / first);
+        for (zoom, at, at_stamp) in &seen {
+            assert!((*at / *zoom - size).length() < 0.01, "size {:?} at zoom {zoom}", *at / *zoom);
+            assert!((at_stamp / zoom - stamp).abs() < 0.01, "stamps {at_stamp} at zoom {zoom}");
+        }
     }
 }
