@@ -9,7 +9,7 @@ use baseview::gl::GlConfig;
 use baseview::{Size, WindowOpenOptions, WindowScalePolicy};
 use egui_baseview::EguiWindow;
 use rtrb::RingBuffer;
-use soba::app::{theme, SynthApp};
+use soba::app::SynthApp;
 
 fn main() {
     let frames: u32 = std::env::args().nth(1).and_then(|n| n.parse().ok()).unwrap_or(300);
@@ -26,7 +26,7 @@ fn main() {
         },
         Default::default(),
         (app, 0u32),
-        |ctx, _queue, _state| theme::install_fonts(ctx),
+        |ctx, _queue, _state| soba_plugin::prepare_context(ctx),
         move |ctx, queue, (app, drawn)| {
             ctx.request_repaint();
             app.draw_frame(ctx);

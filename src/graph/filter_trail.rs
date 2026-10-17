@@ -53,8 +53,9 @@ pub struct Trail {
     since: f32,
     /// Rows kept since the last one with anything in it.
     dark_rows: usize,
-    /// The texture the display last drew it with.
-    texture: RefCell<Option<TextureHandle>>,
+    /// The texture the display last drew it with, and the context it
+    /// belongs to: the plugin draws in a new one each time its editor opens.
+    texture: RefCell<Option<(egui::Context, TextureHandle)>>,
 }
 
 impl Default for Trail {
@@ -164,10 +165,10 @@ impl Trail {
         let image = self.image(height, green, blue);
         let mut texture = self.texture.borrow_mut();
         match texture.as_mut() {
-            Some(texture) => texture.set(image, TextureOptions::LINEAR),
-            None => *texture = Some(painter.ctx().load_texture("filter trail", image, TextureOptions::LINEAR)),
+            Some((ctx, texture)) if ctx == painter.ctx() => texture.set(image, TextureOptions::LINEAR),
+            _ => *texture = Some((painter.ctx().clone(), painter.ctx().load_texture("filter trail", image, TextureOptions::LINEAR))),
         }
-        let Some(texture) = texture.as_ref() else { return };
+        let Some((_, texture)) = texture.as_ref() else { return };
         // A column a band: the bands share the plot's width evenly, as the texels do
         let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
         painter.image(texture.id(), rect, uv, Color32::WHITE);

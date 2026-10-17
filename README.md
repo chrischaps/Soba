@@ -54,9 +54,9 @@ cargo run --release -- patches/lush-pad.json  # or open a patch
 
 The example patches are in [`patches/`](patches) and in the app's **Examples** menu, on two shelves: **Recipes**, each built around one idea, and **Songs**, whole pieces that play themselves from start to end. Press **Play**, then hold a few keys on the computer keyboard (`Z` to `M` is a white-key octave, with the sharps on the row above).
 
-### In a DAW (CLAP)
+### In a DAW (CLAP and VST3)
 
-Soba also builds as a CLAP instrument, for Bitwig, REAPER and other DAWs that load CLAP. The node graph is the plugin's window, the track's notes play it, a Clock can follow the DAW's tempo and transport, and the patch is saved with the project. `python tools/plugin_bundle.py --install` builds it and puts it where DAWs look: see [The plugin](https://docs.chaps.dev/soba/getting-started/installation.html#the-plugin-clap).
+Soba also builds as a CLAP instrument, for Bitwig, REAPER and other DAWs that load CLAP, and as a VST3 (`--vst3`) for Ardour and DAWs without CLAP. The node graph is the plugin's window, the track's notes play it, a Clock can follow the DAW's tempo and transport, and the patch is saved with the project. `python tools/plugin_bundle.py --install` builds it and puts it where DAWs look: see [The plugin](https://docs.chaps.dev/soba/getting-started/installation.html#the-plugin-clap-and-vst3).
 
 ### Render a patch offline
 
@@ -103,3 +103,5 @@ cargo test   # 800+ tests, including the audio-thread allocation guard
 Soba is MIT ([`LICENSE`](LICENSE)). The low-latency Windows download (*with ASIO*) is distributed under the GPLv3 instead, because it includes Steinberg's ASIO SDK, which Steinberg licenses under the GPLv3. Its source is this repository at the release's tag, built with `--features asio` against ASIO SDK 2.3.4. Every other download is MIT.
 
 Ableton Link, which lets the Clock play in time with other apps on the network, is likewise a build option (`--features ableton-link`), because the Link SDK is GPLv2+. A binary built with it falls under the GPL; builds without it leave Link out.
+
+The VST3 plugin (`plugin/`, built with its `vst3` feature) is GPLv3 for the same reason: nih-plug's VST3 wrapper is built on `vst3-sys`, which is GPLv3. The CLAP plugin is built without it and is MIT.

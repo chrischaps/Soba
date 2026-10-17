@@ -64,7 +64,7 @@ fn plugin() -> (SynthApp, Player, egui::Context) {
     let (app, processor) = SynthApp::hosted(RATE, heard);
     let player = Player::new(processor, ui_midi, RATE, MAX_FRAMES);
     let ctx = egui::Context::default();
-    soba::app::theme::install_fonts(&ctx);
+    soba_plugin::prepare_context(&ctx);
     (app, player, ctx)
 }
 
@@ -180,6 +180,22 @@ fn plays_host_midi_without_allocating() {
     assert_eq!(allocations, 0, "the plugin's audio thread allocated");
     assert!(before_note < 1e-4, "the pad sounded before any note: {before_note}");
     assert!(after_note > 0.01, "the pad didn't play the host's chord: {after_note}");
+}
+
+#[test]
+fn draws_in_a_new_context_each_time_the_editor_opens() {
+    // The runner's context, then the editor's, closed and opened again: each
+    // a context of its own, as the plugin makes them
+    let (mut app, _player, runner) = plugin();
+    frame(&mut app, &runner, 0.0);
+    for opening in 0..3 {
+        let editor = egui::Context::default();
+        soba_plugin::prepare_context(&editor);
+        for n in 0..3 {
+            frame(&mut app, &editor, 1.0 + opening as f64 + n as f64 * 0.02);
+        }
+        frame(&mut app, &runner, 1.5 + opening as f64);
+    }
 }
 
 #[test]

@@ -17,8 +17,6 @@ use std::sync::{Arc, Weak};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use soba::app::theme;
-
 use crate::{Shared, SobaParams};
 
 /// How often the app's frames run without the editor.
@@ -43,7 +41,7 @@ pub fn start(shared: &Arc<Shared>, params: &Arc<SobaParams>) -> Runner {
         .name("soba-plugin-runner".into())
         .spawn(move || {
             let ctx = egui::Context::default();
-            theme::install_fonts(&ctx);
+            crate::prepare_context(&ctx);
             let started = Instant::now();
             while let Err(RecvTimeoutError::Timeout) = stopped.recv_timeout(FRAME_EVERY) {
                 frame(&ctx, &shared, &params, started);

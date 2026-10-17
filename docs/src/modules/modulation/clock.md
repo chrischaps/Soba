@@ -145,7 +145,7 @@ Link is in the desktop app when it's built with Link: see [Build with Ableton Li
 
 ## Playing in a DAW
 
-In the [plugin](../../getting-started/installation.md#the-plugin-clap), **Source** offers **Host** where the app offers Link. Set it and the Clock plays in the DAW's time:
+In the [plugin](../../getting-started/installation.md#the-plugin-clap-and-vst3), **Source** offers **Host** where the app offers Link. Set it and the Clock plays in the DAW's time:
 
 - **Tempo.** The Clock plays at the DAW's tempo, tempo changes and all. The **BPM** knob shows it and can't be turned. The **Tempo** jack does nothing while the Clock follows the host.
 - **Beat.** The Clock's beat is the DAW's: beat 1 of a Soba bar is beat 1 of the song's, wherever playback starts.

@@ -13,10 +13,14 @@ crate-type = ["cdylib", "lib"]
 [features]
 # Process allocations end the plugin in debug builds (nih-plug's guard)
 assert_process_allocs = ["nih_plug/assert_process_allocs"]
+# A VST3 plugin too, for DAWs without CLAP (Ardour, Cubase). nih-plug's VST3
+# wrapper is built on vst3-sys, which is GPLv3, so a build with this feature
+# is GPLv3 as well. Without it the plugin is CLAP only and stays MIT
+vst3 = ["nih_plug/vst3"]
 
 [dependencies]
 soba = { path = ".." }
-# CLAP only: the VST3 wrapper is GPL (see the issue), so it's left out
+# CLAP, and VST3 with the vst3 feature (its wrapper is GPL)
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "de421011f41a6d10fc8c7a6084e4f4dee0143683", default-features = false }
 # nih_plug_egui pins egui 0.31; this is the same glue on the egui Soba uses
 # (0.30), at the baseview nih-plug's own editors use

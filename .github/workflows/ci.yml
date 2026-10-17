@@ -49,6 +49,11 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: cargo test -p soba-plugin
 
+      # ...and its VST3 build (the vst3 feature) still compiles
+      - name: Check the VST3 plugin
+        if: matrix.os == 'windows-latest'
+        run: cargo check -p soba-plugin --features vst3
+
       # ASIO is an opt-in Windows build: check it still compiles. The runner
       # has LLVM for bindgen; the build fetches Steinberg's ASIO SDK. Its
       # PowerShell unzip fails under pwsh's module path, so that's cleared

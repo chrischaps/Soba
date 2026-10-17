@@ -13,8 +13,6 @@ use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use soba::app::theme;
-
 use crate::{Shared, SobaParams};
 
 /// The editor's size, in logical pixels: the app's own window's.
@@ -87,7 +85,7 @@ impl Editor for SobaEditor {
             },
             Default::default(),
             (),
-            |ctx, _queue, _state| theme::install_fonts(ctx),
+            |ctx, _queue, _state| crate::prepare_context(ctx),
             move |ctx, _queue, _state| {
                 // The app asks for repaints as it needs them, but a host
                 // may show the window before it's mapped: draw regardless

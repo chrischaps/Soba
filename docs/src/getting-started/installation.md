@@ -167,9 +167,9 @@ Steinberg licenses the ASIO SDK under the GPLv3 (or its own proprietary terms). 
 
 Soba's source is MIT, but a binary built with Link includes the SDK, so if you share one, the GPL applies to it. Builds without the feature leave Link out and stay MIT. The browser version can't use Link.
 
-## The plugin (CLAP)
+## The plugin (CLAP and VST3)
 
-Soba also runs inside a DAW, as a [CLAP](https://cleveraudio.org/) instrument on a track. Bitwig Studio, REAPER, FL Studio and Studio One load CLAP plugins. The plugin is the whole app: the node graph is its window, and the patch plays whatever the track sends it.
+Soba also runs inside a DAW, as an instrument on a track. It's a [CLAP](https://cleveraudio.org/) plugin, for Bitwig Studio, REAPER, FL Studio and Studio One, and it can be built as a VST3 for DAWs without CLAP, such as Ardour and Cubase. The plugin is the whole app: the node graph is its window, and the patch plays whatever the track sends it.
 
 - **Notes and CCs** from the track reach **MIDI Note** and **Poly MIDI** modules, the MIDI Monitor and MIDI Learn, as a MIDI device's do in the app.
 - **Tempo and transport.** Set a Clock's **Source** to **Host** and it plays at the DAW's tempo, on its beat, starting and stopping with it (see [Playing in a DAW](../modules/modulation/clock.md#playing-in-a-daw)).
@@ -187,7 +187,17 @@ python tools/plugin_bundle.py --install  # ...and copies it where DAWs look
 
 `--install` puts it in your own CLAP folder: `%LOCALAPPDATA%\Programs\Common\CLAP` on Windows, `~/Library/Audio/Plug-Ins/CLAP` on macOS, `~/.clap` on Linux. Then rescan plugins in the DAW and add **Soba** to an instrument track.
 
-The plugin leaves out VST3 for now: its SDK is GPL, so a VST3 build would be too.
+### VST3, for Ardour and other DAWs without CLAP
+
+```bash
+python tools/plugin_bundle.py --vst3 --install   # dist/Soba.vst3 as well, installed beside the .clap
+```
+
+The VST3 goes in your own VST3 folder: `%LOCALAPPDATA%\Programs\Common\VST3` on Windows, `~/Library/Audio/Plug-Ins/VST3` on macOS, `~/.vst3` on Linux. A DAW that only looks in the shared folder won't find it there. In Ardour, add the folder under **Edit ▸ Preferences ▸ Plugins ▸ VST**, in the VST3 paths, then rescan. Or copy `Soba.vst3` into `C:\Program Files\Common Files\VST3` (that needs an administrator).
+
+The VST3 is the same plugin: the same editor, Host clock, macros and saved patch.
+
+Its licence differs. Soba's plugin wraps VST3 with nih-plug, whose VST3 support is built on `vst3-sys`, a GPLv3 library. So a VST3 build of Soba falls under the GPLv3, as the ASIO download does. The `.clap` is built without it and stays MIT. Steinberg's own VST3 SDK went MIT in 2025, but Soba doesn't use it directly.
 
 ## Command line
 

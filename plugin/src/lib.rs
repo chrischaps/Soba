@@ -1,4 +1,5 @@
-//! Soba as a CLAP instrument.
+//! Soba as a CLAP instrument, and a VST3 one in builds with the `vst3`
+//! feature (GPLv3, as nih-plug's VST3 wrapper is).
 //!
 //! The DAW plays the patch: its buffers, MIDI and transport come in, and the
 //! node graph is the plugin's editor. Inside, it's the app as it is, made
@@ -48,6 +49,15 @@ pub struct Shared {
     pending_state: Mutex<Option<String>>,
     /// Whether the editor is drawing the app's frames (the runner rests).
     editor_open: AtomicBool,
+}
+
+/// Readies an egui context for the app: its fonts, and the theme's styles
+/// and colours. The app styles the first context it draws in by itself; the
+/// plugin draws in several (one per opening of the editor, and the runner's),
+/// so each is readied as it's made.
+pub fn prepare_context(ctx: &egui::Context) {
+    soba::app::theme::install_fonts(ctx);
+    soba::app::theme::apply_theme(ctx);
 }
 
 impl Shared {
@@ -212,3 +222,12 @@ impl ClapPlugin for Soba {
 }
 
 nih_export_clap!(Soba);
+
+#[cfg(feature = "vst3")]
+impl Vst3Plugin for Soba {
+    const VST3_CLASS_ID: [u8; 16] = *b"SobaChapsDevSynt";
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[Vst3SubCategory::Instrument, Vst3SubCategory::Synth, Vst3SubCategory::Stereo];
+}
+
+#[cfg(feature = "vst3")]
+nih_export_vst3!(Soba);
