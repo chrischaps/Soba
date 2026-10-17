@@ -1150,6 +1150,38 @@ impl SynthApp {
         }
     }
 
+    /// When the system's default output moves (headphones plugged in or
+    /// pulled out) under a stream that follows it, or comes back after
+    /// there was none, moves the stream there (#337).
+    fn follow_default_output(&mut self, ctx: &egui::Context) {
+        let Ok(engine) = self.audio_engine.as_mut() else { return };
+        let moved = engine.default_changed();
+        if !moved && !engine.default_returned() {
+            if engine.awaiting_default() {
+                // Look again even when nothing else redraws
+                ctx.request_repaint_after(std::time::Duration::from_secs(1));
+            }
+            return;
+        }
+        self.end_take_for_device_change();
+        let Ok(engine) = self.audio_engine.as_mut() else { return };
+        let rate = engine.sample_rate();
+        let input = engine.input_index();
+        let result = engine.follow_default();
+        let rate_changed = engine.sample_rate() != rate;
+        self.after_output_change();
+        match result {
+            Ok(name) => self.raise_notice(format!("Output moved to {}", name)),
+            // Gone again already: wait for the next one
+            Err(e) if moved => self.audio_error_message = Some(e.to_string()),
+            Err(_) => {}
+        }
+        // The input converts to the output's rate
+        if input.is_some() && rate_changed {
+            self.select_input(input);
+        }
+    }
+
     /// Ends a recording before the output changes: a take has one rate and
     /// channel count. Stopping the stream hands its tap back, so it
     /// finishes cleanly.
@@ -4084,6 +4116,7 @@ impl SynthApp {
         // Process events from the audio engine
         self.process_engine_events();
         self.recover_from_driver_reset();
+        self.follow_default_output(ctx);
         // MIDI Out sends each note as the sound beside it is heard
         if let Ok(engine) = &self.audio_engine {
             crate::link::midi::MIDI.set_latency(engine.output_latency());

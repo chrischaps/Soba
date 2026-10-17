@@ -15,6 +15,7 @@ use cpal::{BufferSize, Device, FromSample, Host, SampleFormat, SizedSample, Stre
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use web_time::Instant;
 
 use super::audio_input::{input_channel_converting, input_channel_same_clock, InputFeed, InputMonitor, InputSender};
 use super::audio_processor::AudioProcessor;
@@ -165,6 +166,9 @@ fn web_buffer() -> BufferSize {
 /// The buffer sizes, in frames, offered on systems that let Soba choose.
 pub const BUFFER_CHOICES: [u32; 5] = [32, 64, 128, 256, 512];
 
+/// How often to look for a default output to come back, while there's none.
+const DEFAULT_POLL: Duration = Duration::from_secs(1);
+
 /// An input device's stream, while it's open.
 struct OpenInput {
     /// Kept alive to keep recording; dropping it closes the device.
@@ -204,6 +208,9 @@ struct AudioState {
     stream_failed: AtomicBool,
     /// Why the stream stopped: one of the `STOPPED_*` reasons.
     stopped: AtomicU8,
+    /// Whether the stream plays to whatever the system's default output is,
+    /// rather than to a device chosen by name.
+    follows_default: AtomicBool,
     /// Glitches the output device reported, which the stream recovers from.
     xruns: AtomicU64,
     /// The output device's own delay, from callback to playback.
@@ -217,6 +224,22 @@ const STOPPED_LOST: u8 = 1;
 /// The driver asked for the stream to be rebuilt: its buffer size or sample
 /// rate was changed from its own control panel.
 const STOPPED_RESET: u8 = 2;
+/// The system's default output changed (headphones plugged in, say) under a
+/// stream that follows it. The stream stays on the old device, so it's
+/// rebuilt on the new one, at the settings it had.
+const STOPPED_DEFAULT_CHANGED: u8 = 3;
+
+/// Why a stream that hit `kind` stopped. Windows Audio reports the default
+/// output changing as an invalidated stream, the way an ASIO driver reports
+/// a reset, and the default going away with none to take its place as an
+/// unavailable device.
+fn stop_reason(kind: cpal::ErrorKind, follows_default: bool) -> u8 {
+    match kind {
+        cpal::ErrorKind::StreamInvalidated if follows_default => STOPPED_DEFAULT_CHANGED,
+        cpal::ErrorKind::StreamInvalidated => STOPPED_RESET,
+        _ => STOPPED_LOST,
+    }
+}
 
 impl AudioState {
     /// Takes in an error from a stream's error callback: a glitch is
@@ -227,16 +250,15 @@ impl AudioState {
             return;
         }
         eprintln!("Audio stream error: {}", err);
-        let reason = match err.kind() {
-            cpal::ErrorKind::StreamInvalidated => STOPPED_RESET,
-            _ => STOPPED_LOST,
-        };
+        let reason = stop_reason(err.kind(), self.follows_default.load(Ordering::Relaxed));
         self.stopped.store(reason, Ordering::Relaxed);
         self.stream_failed.store(true, Ordering::Relaxed);
     }
 
-    /// Readies the state for a new stream.
-    fn reset(&self) {
+    /// Readies the state for a new stream, which plays to the system's
+    /// default output if `follows_default`.
+    fn reset(&self, follows_default: bool) {
+        self.follows_default.store(follows_default, Ordering::Relaxed);
         self.stream_failed.store(false, Ordering::Relaxed);
         self.stopped.store(STOPPED_NOT, Ordering::Relaxed);
         self.output_latency.clear();
@@ -249,6 +271,7 @@ impl AudioState {
             callbacks: AtomicU64::new(0),
             stream_failed: AtomicBool::new(false),
             stopped: AtomicU8::new(STOPPED_NOT),
+            follows_default: AtomicBool::new(false),
             xruns: AtomicU64::new(0),
             output_latency: LatencyGauge::default(),
         }
@@ -280,6 +303,12 @@ pub struct AudioEngine {
     wanted: bool,
     /// The input device's stream, while one is open.
     input: Option<OpenInput>,
+    /// Whether `device` is the system's default output, whichever device
+    /// that is at the time, rather than one chosen from the list.
+    follows_default: bool,
+    /// When [`default_returned`](Self::default_returned) last asked the
+    /// system for a default output, while there was none.
+    last_default_poll: Option<Instant>,
 }
 
 impl AudioEngine {
@@ -309,6 +338,8 @@ impl AudioEngine {
             processor: None,
             wanted: false,
             input: None,
+            follows_default: system == AudioSystem::System,
+            last_default_poll: None,
         })
     }
 
@@ -352,6 +383,7 @@ impl AudioEngine {
         self.host = host;
         self.asio_devices = asio_devices;
         self.device = device;
+        self.follows_default = system == AudioSystem::System;
         self.config = config;
         self.format = format;
         if restart {
@@ -429,6 +461,56 @@ impl AudioEngine {
         self.restart_stream()
     }
 
+    /// Whether the system's default output changed under a stream that
+    /// follows it, so it should be rebuilt there with
+    /// [`follow_default`](Self::follow_default).
+    pub fn default_changed(&self) -> bool {
+        self.state.stopped.load(Ordering::Relaxed) == STOPPED_DEFAULT_CHANGED
+    }
+
+    /// Whether a stream that follows the default output has lost it, and
+    /// waits for one to come back: see [`default_returned`](Self::default_returned).
+    pub fn awaiting_default(&self) -> bool {
+        let lost = self.state.stopped.load(Ordering::Relaxed) == STOPPED_LOST || self.stream.is_none();
+        self.follows_default && self.wanted && lost
+    }
+
+    /// Whether the default output went away and a default has since come
+    /// back (a device plugged in, or another made the default), so the
+    /// stream should be rebuilt there with [`follow_default`](Self::follow_default).
+    /// It asks the system about once a second.
+    pub fn default_returned(&mut self) -> bool {
+        if !self.awaiting_default() {
+            self.last_default_poll = None;
+            return false;
+        }
+        let now = Instant::now();
+        if self.last_default_poll.is_some_and(|at| now - at < DEFAULT_POLL) {
+            return false;
+        }
+        self.last_default_poll = Some(now);
+        self.host.default_output_device().is_some()
+    }
+
+    /// Rebuilds the stream on the system's default output, at its own rate
+    /// and layout, keeping the buffer size asked for. An open input stays
+    /// open, as it's another device, but if the output's
+    /// [`sample_rate`](Self::sample_rate) changed it needs opening again to
+    /// convert to the new one. Returns the new device's name.
+    pub fn follow_default(&mut self) -> Result<String, AudioError> {
+        self.drop_stream();
+        // Until a stream starts there, it's waiting for a default
+        self.state.stopped.store(STOPPED_LOST, Ordering::Relaxed);
+        let device = self.host.default_output_device().ok_or(AudioError::NoOutputDevice)?;
+        let (config, format) = output_config(&device, self.system, self.buffer_request)?;
+        self.device = device;
+        self.config = config;
+        self.format = format;
+        self.last_default_poll = None;
+        self.restart_stream()?;
+        Ok(self.current_device_name())
+    }
+
     /// Starts the stream again on the current device: the processor's, or
     /// the test tone without one.
     fn restart_stream(&mut self) -> Result<(), AudioError> {
@@ -500,6 +582,7 @@ impl AudioEngine {
         }
         self.drop_stream();
         self.device = device;
+        self.follows_default = false;
         self.config = config;
         self.format = format;
         if was_running {
@@ -717,7 +800,7 @@ impl AudioEngine {
 
         let state = Arc::clone(&self.state);
         let error_state = Arc::clone(&self.state);
-        self.state.reset();
+        self.state.reset(self.follows_default);
         let sample_rate = self.config.sample_rate as f32;
         let channels = self.config.channels as usize;
 
@@ -889,7 +972,7 @@ impl AudioEngine {
         &mut self,
         processor: Arc<Mutex<AudioProcessor>>,
     ) -> Result<(), AudioError> {
-        self.state.reset();
+        self.state.reset(self.follows_default);
         let stream = match self.build_output_stream(Arc::clone(&processor)) {
             // Some drivers only run at certain sizes: let this one choose
             Err(e) if matches!(self.config.buffer_size, BufferSize::Fixed(_)) && e.kind() == cpal::ErrorKind::UnsupportedConfig => {
@@ -1126,6 +1209,18 @@ mod tests {
     //     assert!(!engine.is_running());
     // }
 
+    /// Only a stream that follows the default output takes an invalidated
+    /// stream for the default moving: one on a chosen device (or an ASIO
+    /// driver) was reset by its driver (#337).
+    #[test]
+    fn an_invalidated_stream_is_a_moved_default_only_when_it_follows_one() {
+        use cpal::ErrorKind;
+        assert_eq!(stop_reason(ErrorKind::StreamInvalidated, true), STOPPED_DEFAULT_CHANGED);
+        assert_eq!(stop_reason(ErrorKind::StreamInvalidated, false), STOPPED_RESET);
+        assert_eq!(stop_reason(ErrorKind::DeviceNotAvailable, true), STOPPED_LOST);
+        assert_eq!(stop_reason(ErrorKind::DeviceNotAvailable, false), STOPPED_LOST);
+    }
+
     /// Choosing the device again restarts the stream after a rebuild failed,
     /// and only `stop` forgets it was wanted (#312). Needs an output device:
     /// `cargo test --lib reselecting -- --ignored`
@@ -1143,5 +1238,28 @@ mod tests {
         engine.stop().unwrap();
         engine.select_device(index).unwrap();
         assert!(!engine.is_running() && !engine.stream_lost());
+    }
+
+    /// A stream on the default output moves to the default again, keeping
+    /// the buffer asked for, and one on a chosen device doesn't follow it
+    /// (#337). Needs an output device: `cargo test --lib follow -- --ignored`
+    #[test]
+    #[ignore]
+    fn following_the_default_rebuilds_the_stream_there() {
+        let mut engine = AudioEngine::new().expect("an output device");
+        assert!(engine.follows_default);
+        engine.start().unwrap();
+        // As the default going away with none to take its place leaves it
+        engine.drop_stream();
+        assert!(engine.awaiting_default() && engine.default_returned());
+        // Asked once a second, not every frame
+        assert!(!engine.default_returned());
+        engine.follow_default().unwrap();
+        assert!(engine.is_running() && !engine.awaiting_default() && !engine.default_changed());
+        let index = engine.current_device_index().expect("the device is listed");
+        engine.select_device(index).unwrap();
+        engine.drop_stream();
+        assert!(!engine.awaiting_default());
+        engine.stop().unwrap();
     }
 }

@@ -257,7 +257,7 @@ To run the test suite, use `cargo test`.
 
 ## Troubleshooting
 
-**No sound.** Check that **▶ Play** is pressed: the app opens stopped. Then check the **Output** device menu in the toolbar. It lists every output device, with the system default marked **(Default)**; pick the one you're listening on. **🔄 Refresh** at the bottom of the menu picks up a device you plugged in after starting.
+**No sound.** Check that **▶ Play** is pressed: the app opens stopped. Then check the **Output** device menu in the toolbar. It lists every output device, with the system default marked **(Default)**; pick the one you're listening on. **🔄 Refresh** at the bottom of the menu picks up a device you plugged in after starting. Until you pick one, Soba plays to whatever Windows has as its default, and follows it: plug in headphones and the sound moves to them, with **Output moved to …** in the status bar. If the default goes away with nothing to take its place, the sound comes back on its own once a device does.
 
 **"Audio unavailable" in the toolbar.** Soba couldn't open an output device. Make sure one is connected and that no other application holds it exclusively, then restart.
 
