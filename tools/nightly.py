@@ -5,6 +5,9 @@
     python tools/nightly.py --only layout,images
     python tools/nightly.py --ref <commit>     check that commit instead: files no issues, pushes nothing
     python tools/nightly.py --no-issues        report only
+    python tools/nightly.py --only perf --rebaseline
+                                               take tonight's timings as the new
+                                               baseline, even if they're slower
 
 Steps, in order (--only picks some):
 
@@ -12,6 +15,10 @@ Steps, in order (--only picks some):
     loudness   the ignored example_loudness test: every example at length
     idle       the ignored idle test: every example, stopped, asks for no
                frames, so left open it costs next to nothing (#307)
+    perf       render --bench on a few heavy examples, best of three: fails
+               if any renders more than 15% slower than the stored baseline,
+               the timings of the last run it passed (#347). The renders
+               run at normal priority, one core at a time
     layout     check_layout.py: every example's modules inside their frames
     zoom       zoom_check.py: zoom_jitter.py --max 0.5 on each patch that
                something it holds has changed since it last passed, several at
@@ -36,21 +43,46 @@ A failing step opens an issue labelled nightly-failure ("Nightly: <step>
 fails on master"), or comments on the one already open; a step that passes
 again closes it. The report and each step's log go to target/nightly/<stamp>/
 in the main checkout. Exits 1 if any step failed.
+
+The perf baseline is soba-nightly-perf.json in the git directory, beside the
+lock: timings belong to the machine that took them, so it isn't committed.
+The first run has nothing to compare with and writes it. A run that passes
+replaces it, so the gate catches a step slower, not a slow creep; a change
+that is slower on purpose is taken with --rebaseline. A --ref run compares
+but never writes it.
 """
 
 import datetime
+import json
 import os
+import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-STEPS = ["tests", "loudness", "idle", "layout", "zoom", "images"]
+STEPS = ["tests", "loudness", "idle", "perf", "layout", "zoom", "images"]
 CAPTURE_STEPS = {"layout", "zoom", "images"}
 LABEL = "nightly-failure"
 STEP_TIMEOUT = 3 * 60 * 60
 LOG_TAIL = 40
 WINDOWS = os.name == "nt"
+
+# The examples perf times, and how each is played: the heaviest songs, and a
+# patch that waits for a player
+PERF_PATCHES = [
+    ("canopy", []),
+    ("clair-de-satellite", []),
+    ("orrery", []),
+    ("lush-pad", ["--audition"]),
+    ("afterglow", []),
+]
+PERF_SECONDS = 20
+PERF_RUNS = 3
+# How much slower than the baseline a render may be. Run to run, one render
+# of canopy varies by about a fifth; the best of three by much less
+PERF_TOLERANCE = 0.15
+BENCH_LINE = re.compile(r"^bench: ([0-9.]+) s ")
 
 
 def run(*args, check=True, cwd=None):
@@ -129,12 +161,17 @@ def kill_tree(proc):
         proc.kill()
 
 
-def step_run(args, log, cwd, env):
-    """Runs one command at low priority, appending its output to log. Returns its exit code."""
+def step_run(args, log, cwd, env, low=True):
+    """Runs one command at low priority (unless not low), appending its output to log. Returns its exit code."""
     with open(log, "a", encoding="utf-8", errors="replace") as out:
         out.write(f"$ {' '.join(str(a) for a in args)}\n")
         out.flush()
-        extra = {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS} if WINDOWS else {"preexec_fn": lambda: os.nice(10)}
+        if not low:
+            extra = {}
+        elif WINDOWS:
+            extra = {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS}
+        else:
+            extra = {"preexec_fn": lambda: os.nice(10)}
         proc = subprocess.Popen([str(a) for a in args], cwd=cwd, env=env, stdout=out, stderr=subprocess.STDOUT, **extra)
         try:
             code = proc.wait(timeout=STEP_TIMEOUT)
@@ -196,7 +233,62 @@ def push_pictures(worktree, short, log):
     return f"re-shot {', '.join(names)}, but the push was rejected three times; nothing pushed"
 
 
-def run_steps(steps, worktree, logs, push):
+def bench_examples(worktree, log, env):
+    """Times each of PERF_PATCHES with render --bench: {name: seconds}, or None if the build fails."""
+    if step_run(["cargo", "build", "--release", "--bin", "render"], log, worktree, env) != 0:
+        return None
+    render = worktree / "target" / "release" / ("render.exe" if WINDOWS else "render")
+    out = worktree / "target" / "perf"
+    out.mkdir(parents=True, exist_ok=True)
+    timings = {}
+    # At normal priority: below it, anything else running slows a render by
+    # a quarter. A render is one thread, so the machine keeps its other cores
+    for name, flags in PERF_PATCHES:
+        before = log.stat().st_size
+        step_run([render, Path("patches") / f"{name}.json", out / f"{name}.wav", "--seconds", PERF_SECONDS,
+                  "--bench", "--runs", PERF_RUNS, *flags], log, worktree, env, low=False)
+        with open(log, encoding="utf-8", errors="replace") as text:
+            text.seek(before)
+            found = [m.group(1) for m in map(BENCH_LINE.match, text.read().splitlines()) if m]
+        if found:
+            timings[name] = float(found[-1])
+    return timings
+
+
+def judge_perf(timings, baseline_path, log):
+    """Compares timings with the baseline. Returns (passed, note), and writes how each moved to log."""
+    try:
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        baseline = {}
+    base = baseline.get("seconds", {})
+    since = baseline.get("commit", "?")[:7]
+    slower, missing, lines = [], [], []
+    for name, _ in PERF_PATCHES:
+        now = timings.get(name)
+        if now is None:
+            missing.append(name)
+            lines.append(f"{name:20} no bench line: see above")
+        elif name in base:
+            change = now / base[name] - 1
+            lines.append(f"{name:20} {now:8.3f} s   was {base[name]:8.3f} s at {since}   {change:+.0%}")
+            if change > PERF_TOLERANCE:
+                slower.append(f"{name} {change:+.0%}")
+        else:
+            lines.append(f"{name:20} {now:8.3f} s   (no baseline)")
+    with open(log, "a", encoding="utf-8") as out:
+        out.write("\n".join(lines) + "\n")
+    notes = []
+    if slower:
+        notes.append(f"slower than at {since}: {', '.join(slower)}")
+    if missing:
+        notes.append(f"didn't render: {', '.join(missing)}")
+    if not base:
+        notes.append("no baseline yet")
+    return not slower and not missing, "; ".join(notes)
+
+
+def run_steps(steps, worktree, logs, push, perf_baseline=None, rebaseline=False):
     """Each step's result: (passed, minutes, note)."""
     results = {}
     env = quiet_env()
@@ -226,6 +318,19 @@ def run_steps(steps, worktree, logs, push):
         elif step == "idle":
             passed = step_run(["cargo", "test", "--release", "--lib", "a_stopped_example_asks_for_no_frames", "--",
                                "--ignored", "--nocapture"], log, worktree, env) == 0
+        elif step == "perf":
+            timings = bench_examples(worktree, log, env)
+            if timings is None:
+                passed, note = False, "render didn't build"
+            else:
+                passed, note = judge_perf(timings, perf_baseline, log)
+                if rebaseline and len(timings) == len(PERF_PATCHES):
+                    passed, note = True, "; ".join(filter(None, ["rebaselined", note]))
+                # Only a run of master keeps its timings, and only one with every example timed
+                if push and passed and len(timings) == len(PERF_PATCHES):
+                    sha = run("git", "rev-parse", "HEAD", cwd=worktree).stdout.strip()
+                    perf_baseline.write_text(json.dumps({"commit": sha, "seconds": timings}, indent=2) + "\n",
+                                             encoding="utf-8")
         elif step == "layout":
             passed = step_run([python, showcase / "check_layout.py"], log, worktree, env) == 0
         elif step == "zoom":
@@ -293,6 +398,7 @@ def main():
     args = sys.argv[1:]
     force = "--force" in args
     issues = "--no-issues" not in args
+    rebaseline = "--rebaseline" in args
     steps, ref = STEPS, None
     for flag in ("--only", "--ref"):
         if flag in args:
@@ -329,7 +435,8 @@ def main():
         worktree = prepare_worktree(checkout, sha)
         print(f"nightly: {sha[:7]} in {worktree}: {', '.join(steps)} (logs in {logs})", flush=True)
 
-        results = run_steps(steps, worktree, logs, push=issues and ref is None)
+        results = run_steps(steps, worktree, logs, push=issues and ref is None,
+                            perf_baseline=git_dir / "soba-nightly-perf.json", rebaseline=rebaseline)
         report = logs / "report.md"
         write_report(report, sha, results)
         if issues and ref is None:

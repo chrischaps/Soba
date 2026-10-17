@@ -1,7 +1,7 @@
 //! Render a patch to a WAV file without opening the app.
 //!
 //! ```text
-//! cargo run --release --bin render -- <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--audition] [--input in.wav] [--cue cues.txt] [--compare before.wav]
+//! cargo run --release --bin render -- <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--audition] [--input in.wav] [--cue cues.txt] [--compare before.wav] [--bench [--runs N]]
 //! ```
 //!
 //! Prints the peak, true peak (ITU-R BS.1770-4) and RMS level of each
@@ -11,6 +11,12 @@
 //! the Audio Output's limiter: the peak going in, the most it turned the
 //! output down, and for how much of the render. `--compare` reads an earlier
 //! render and prints how far each of those has moved since.
+//!
+//! `--bench` times the render: processing only, not loading the patch or
+//! measuring the result. It renders `--runs` times (3 unless given) and
+//! reports the fastest, since a busy machine only ever slows a run down: the
+//! realtime factor, and the nodes that took longest, in nanoseconds per
+//! sample. `tools/nightly.py` reads its `bench:` line.
 //!
 //! Patches that need live input (Keyboard, MIDI Note, Poly MIDI) render
 //! silence unless something in the patch triggers them, such as a Clock or
@@ -33,12 +39,12 @@ use std::process::ExitCode;
 
 use soba::dsp::analysis::{amp_to_db, peak, rms};
 use soba::dsp::loudness::{loudness, true_peak, Loudness};
-use soba::engine::{create_module_registry, read_wav, read_wav_at, EngineCommand, LimiterReport, OfflineRenderer, BLOCK_SIZE};
+use soba::engine::{create_module_registry, Bench, NodeId, StereoBuffer, read_wav, read_wav_at, EngineCommand, LimiterReport, OfflineRenderer, BLOCK_SIZE};
 use soba::persistence::sample_files::SampleBase;
 use soba::persistence::{load_from_file, CompiledPatch, Patch};
 
 const USAGE: &str =
-    "usage: render <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--block-size N] [--audition] [--input in.wav] [--cue cues.txt] [--compare before.wav]";
+    "usage: render <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--block-size N] [--audition] [--input in.wav] [--cue cues.txt] [--compare before.wav] [--bench [--runs N]]";
 
 struct Args {
     patch: PathBuf,
@@ -53,7 +59,13 @@ struct Args {
     cue: Option<PathBuf>,
     /// An earlier render to measure this one against.
     compare: Option<PathBuf>,
+    /// Time the render, best of `runs`.
+    bench: bool,
+    runs: usize,
 }
+
+/// How many of the heaviest nodes `--bench` lists.
+const BENCH_NODES: usize = 5;
 
 fn parse_args() -> Result<Args, String> {
     let mut positional = Vec::new();
@@ -64,6 +76,8 @@ fn parse_args() -> Result<Args, String> {
     let mut input = None;
     let mut cue = None;
     let mut compare = None;
+    let mut bench = false;
+    let mut runs = None;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -80,6 +94,8 @@ fn parse_args() -> Result<Args, String> {
             "--input" => input = Some(PathBuf::from(value("--input")?)),
             "--cue" => cue = Some(PathBuf::from(value("--cue")?)),
             "--compare" => compare = Some(PathBuf::from(value("--compare")?)),
+            "--bench" => bench = true,
+            "--runs" => runs = Some(value("--runs")?.parse().map_err(|e| format!("--runs: {}", e))?),
             "-h" | "--help" => return Err(USAGE.to_string()),
             flag if flag.starts_with("--") => return Err(format!("unknown option {}\n{}", flag, USAGE)),
             _ => positional.push(PathBuf::from(arg)),
@@ -87,7 +103,7 @@ fn parse_args() -> Result<Args, String> {
     }
 
     match <[PathBuf; 2]>::try_from(positional) {
-        Ok([patch, out]) if seconds > 0.0 && block_size > 0 => Ok(Args {
+        Ok([patch, out]) if seconds > 0.0 && block_size > 0 && runs != Some(0) => Ok(Args {
             patch,
             out,
             seconds,
@@ -97,6 +113,8 @@ fn parse_args() -> Result<Args, String> {
             input,
             cue,
             compare,
+            bench,
+            runs: runs.unwrap_or(if bench { 3 } else { 1 }),
         }),
         _ => Err(USAGE.to_string()),
     }
@@ -104,36 +122,27 @@ fn parse_args() -> Result<Args, String> {
 
 fn run(args: Args) -> Result<(), String> {
     let patch = load_from_file(&args.patch).map_err(|e| format!("{}: {}", args.patch.display(), e))?;
-    let (mut renderer, compiled) =
-        OfflineRenderer::from_patch(&patch, args.sample_rate as f32, args.block_size)
-            .map_err(|e| e.to_string())?;
-    for warning in &compiled.warnings {
-        eprintln!("warning: {}", warning);
-    }
-    // Samples saved relative to the patch are beside it
-    let folder = args.patch.parent().unwrap_or(std::path::Path::new("."));
-    for warning in renderer.load_samples(&compiled, SampleBase::Folder(folder)) {
-        eprintln!("warning: {}", warning);
-    }
-    if let Some(path) = &args.input {
-        let (input, rate) = read_wav_at(path, args.sample_rate).map_err(|e| format!("{}: {}", path.display(), e))?;
-        if rate != args.sample_rate {
-            eprintln!("note: {} is {} Hz, resampled to {} Hz", path.display(), rate, args.sample_rate);
-        }
-        renderer.set_audio_input(input);
+    let cues = match &args.cue {
+        Some(path) => Some(std::fs::read_to_string(path).map_err(|e| format!("{}: {}", path.display(), e))?),
+        None => None,
+    };
+    if cues.is_some() && args.audition {
+        return Err("--cue and --audition can't be used together".to_string());
     }
 
-    let audio = if let Some(path) = &args.cue {
-        if args.audition {
-            return Err("--cue and --audition can't be used together".to_string());
+    // Every run renders the same: the fastest is the one least slowed down
+    let mut fastest: Option<Bench> = None;
+    let mut last = None;
+    for run in 0..args.runs {
+        let (renderer, compiled, audio) = render(&args, &patch, cues.as_deref(), run == 0)?;
+        let bench = renderer.bench();
+        if fastest.as_ref().zip(bench.as_ref()).is_none_or(|(best, now)| now.process < best.process) {
+            fastest = bench;
         }
-        let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {}", path.display(), e))?;
-        let commands = parse_cues(&text, &patch, &compiled, args.sample_rate as f32)?;
-        renderer.render_with_commands(args.seconds, commands)
-    } else if args.audition {
-        renderer.render_audition(&patch, &compiled, args.seconds)
-    } else {
-        renderer.render_seconds(args.seconds)
+        last = Some((renderer, compiled, audio));
+    }
+    let Some((renderer, compiled, audio)) = last else {
+        return Err(USAGE.to_string());
     };
 
     let spec = hound::WavSpec {
@@ -160,14 +169,21 @@ fn run(args: Args) -> Result<(), String> {
     let levels = Levels::of(&audio.left, &audio.right, args.sample_rate);
     levels.print();
     print_limiter(&renderer.limiter());
-    for &fault in renderer.faults() {
-        let node = compiled.node_ids.iter().find(|&(_, &engine)| engine == fault).map(|(&id, _)| id);
+    // An engine node as the patch knows it: its module and its id in the file
+    let describe = |engine: NodeId| {
+        let node = compiled.node_ids.iter().find(|&(_, &e)| e == engine).map(|(&id, _)| id);
         let module = node.and_then(|id| patch.all_nodes().into_iter().find(|n| n.id == id)).map(|n| n.module_id.clone());
-        println!(
-            "fault: {} (node {}) made a NaN or infinity and was reset",
+        format!(
+            "{} (node {})",
             module.as_deref().unwrap_or("a module"),
             node.map_or("?".to_string(), |id| id.to_string())
-        );
+        )
+    };
+    for &fault in renderer.faults() {
+        println!("fault: {} made a NaN or infinity and was reset", describe(fault));
+    }
+    if let Some(bench) = &fastest {
+        print_bench(bench, args.sample_rate, args.runs, describe);
     }
     if let Some(path) = &args.compare {
         let (before, rate) = read_wav(path).map_err(|e| format!("{}: {}", path.display(), e))?;
@@ -178,6 +194,52 @@ fn run(args: Args) -> Result<(), String> {
         return Err("render contains NaN or infinite samples".to_string());
     }
     Ok(())
+}
+
+/// Builds the patch and renders it once. Warnings are printed on the
+/// first run only, since every run gives the same ones.
+fn render(
+    args: &Args,
+    patch: &Patch,
+    cues: Option<&str>,
+    first: bool,
+) -> Result<(OfflineRenderer, CompiledPatch, StereoBuffer), String> {
+    let warn = |message: String| {
+        if first {
+            eprintln!("{}", message);
+        }
+    };
+    let (mut renderer, compiled) =
+        OfflineRenderer::from_patch(patch, args.sample_rate as f32, args.block_size)
+            .map_err(|e| e.to_string())?;
+    for warning in &compiled.warnings {
+        warn(format!("warning: {}", warning));
+    }
+    // Samples saved relative to the patch are beside it
+    let folder = args.patch.parent().unwrap_or(std::path::Path::new("."));
+    for warning in renderer.load_samples(&compiled, SampleBase::Folder(folder)) {
+        warn(format!("warning: {}", warning));
+    }
+    if let Some(path) = &args.input {
+        let (input, rate) = read_wav_at(path, args.sample_rate).map_err(|e| format!("{}: {}", path.display(), e))?;
+        if rate != args.sample_rate {
+            warn(format!("note: {} is {} Hz, resampled to {} Hz", path.display(), rate, args.sample_rate));
+        }
+        renderer.set_audio_input(input);
+    }
+
+    if args.bench {
+        renderer.time();
+    }
+    let audio = if let Some(text) = cues {
+        let commands = parse_cues(text, patch, &compiled, args.sample_rate as f32)?;
+        renderer.render_with_commands(args.seconds, commands)
+    } else if args.audition {
+        renderer.render_audition(patch, &compiled, args.seconds)
+    } else {
+        renderer.render_seconds(args.seconds)
+    };
+    Ok((renderer, compiled, audio))
 }
 
 /// What a render's levels are measured as.
@@ -247,6 +309,30 @@ fn print_limiter(report: &LimiterReport) {
         report.time_limiting() * 100.0,
         LimiterReport::LIMITING_DB
     );
+}
+
+/// The fastest run's timing: the whole render, then the heaviest nodes.
+fn print_bench(bench: &Bench, sample_rate: u32, runs: usize, describe: impl Fn(NodeId) -> String) {
+    let frames = bench.frames.max(1);
+    let audio = frames as f64 / sample_rate as f64;
+    let process = bench.process.as_secs_f64();
+    // nightly.py reads this line: keep its shape
+    println!(
+        "bench: {:.4} s for {:.2} s of audio, {:.1}x realtime (best of {})",
+        process,
+        audio,
+        audio / process.max(f64::MIN_POSITIVE),
+        runs
+    );
+    let total: u64 = bench.nodes().iter().map(|&(_, ns)| ns).sum();
+    for (node, ns) in bench.nodes().into_iter().take(BENCH_NODES) {
+        println!(
+            "  {:<32} {:>7.1} ns/sample  {:>3.0}%",
+            describe(node),
+            ns as f64 / frames as f64,
+            ns as f64 / total.max(1) as f64 * 100.0
+        );
+    }
 }
 
 /// A loudness reading to a tenth, `signed` for a change, or `--` where

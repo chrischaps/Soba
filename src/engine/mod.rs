@@ -39,7 +39,7 @@ pub use probe::{Probe, ProbeDuck, ProbeScope, SCOPE_WINDOW};
 pub use latency::{LatencyGauge, RoundTrip};
 pub use recorder::{RecordTap, Recording, RecordingSummary};
 pub use spectrum_tap::SpectrumTap;
-pub use offline::{read_wav, read_wav_at, LimiterReport, OfflineRenderer, StereoBuffer, AUDITION};
+pub use offline::{read_wav, read_wav_at, Bench, LimiterReport, OfflineRenderer, StereoBuffer, AUDITION};
 pub use midi_engine::{
     MidiDeviceInfo, MidiEngine, MidiError, MidiEvent, MidiReceivers, TimestampedMidiEvent,
 };

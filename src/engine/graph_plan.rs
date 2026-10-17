@@ -30,6 +30,8 @@
 use std::ops::Range;
 use std::sync::Arc;
 
+use web_time::Instant;
+
 use crate::dsp::{Audition, DspModule, FinishedTake, OutputLevels, ProcessContext, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
 use crate::dsp::finite::all_finite;
 use crate::dsp::primitives::Markers;
@@ -435,6 +437,19 @@ impl GraphPlan {
     ///
     /// REAL-TIME SAFE: no allocation, locking or searching.
     pub fn process(&mut self, context: &ProcessContext) {
+        self.run(context, None);
+    }
+
+    /// [`process`](Self::process), adding how long each node took, in
+    /// nanoseconds, to its entry in `nanos` (one per node, in processing
+    /// order: see [`processing_order`](Self::processing_order)). For
+    /// `render --bench`: the clock reads cost more than some modules do.
+    pub fn process_timed(&mut self, context: &ProcessContext, nanos: &mut [u64]) {
+        debug_assert_eq!(nanos.len(), self.nodes.len());
+        self.run(context, Some(nanos));
+    }
+
+    fn run(&mut self, context: &ProcessContext, mut nanos: Option<&mut [u64]>) {
         debug_assert!(context.block_size <= self.max_block_size);
         self.set_block_len(context.block_size.min(self.max_block_size));
 
@@ -453,7 +468,8 @@ impl GraphPlan {
         for line in late.iter_mut() {
             line.read(*max_block_size);
         }
-        for node in nodes.iter_mut() {
+        for (index, node) in nodes.iter_mut().enumerate() {
+            let started = nanos.is_some().then(Instant::now);
             // Inputs come from earlier nodes, whose buffers all precede ours
             let (upstream, rest) = outputs.split_at_mut(node.outputs.start);
             let own = &mut rest[..node.outputs.len()];
@@ -518,6 +534,9 @@ impl GraphPlan {
                 node.faulted = true;
             }
             watch_spectrum(&node.spectrum, inputs, own, context.sample_rate);
+            if let (Some(nanos), Some(started)) = (nanos.as_deref_mut(), started) {
+                nanos[index] += started.elapsed().as_nanos() as u64;
+            }
         }
 
         // Every source has played: keep their blocks for next time

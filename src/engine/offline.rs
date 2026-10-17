@@ -7,7 +7,11 @@
 
 use crate::dsp::denormal::DenormalGuard;
 use crate::dsp::{InputAudio, MidiEvent, MidiMessage, ProcessContext};
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+
+use web_time::Instant;
 
 use crate::persistence::sample_files::{self, SampleBase};
 use crate::persistence::{compile_patch, CompiledPatch, Patch, PatchError};
@@ -43,6 +47,39 @@ pub struct OfflineRenderer {
     /// Every module that made a NaN or infinity (and was reset), in the
     /// order they first did.
     faults: Vec<NodeId>,
+    /// How long processing has taken, once [`time`](Self::time) is on.
+    bench: Option<Bench>,
+}
+
+/// How long a render spent processing the graph: the whole of it and each
+/// node's share. Loading, analysis and copying the output out aren't in it.
+#[derive(Debug, Default, Clone)]
+pub struct Bench {
+    /// Time spent in [`GraphPlan::process`].
+    pub process: Duration,
+    /// Frames processed while timing.
+    pub frames: u64,
+    /// Nanoseconds each node spent processing, for nodes in an earlier plan.
+    by_node: HashMap<NodeId, u64>,
+    /// The same for the current plan's nodes, in its processing order.
+    current: Vec<u64>,
+}
+
+impl Bench {
+    /// Each node's processing time in nanoseconds, the heaviest first.
+    pub fn nodes(&self) -> Vec<(NodeId, u64)> {
+        let mut nodes: Vec<_> = self.by_node.iter().map(|(&id, &ns)| (id, ns)).collect();
+        nodes.sort_unstable_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+        nodes
+    }
+
+    /// Folds the current plan's times into `by_node`.
+    fn settle(&mut self, plan: &GraphPlan) {
+        for (node_id, ns) in plan.processing_order().zip(self.current.drain(..)) {
+            *self.by_node.entry(node_id).or_default() += ns;
+        }
+        self.current.resize(plan.len(), 0);
+    }
 }
 
 /// What the Audio Output's limiter has done over a render: how hard the
@@ -96,7 +133,22 @@ impl OfflineRenderer {
             block_input: StereoBuffer { left: vec![0.0; block_size], right: vec![0.0; block_size] },
             limiter: LimiterReport::default(),
             faults: Vec::new(),
+            bench: None,
         }
+    }
+
+    /// Starts timing processing, from nothing: see [`bench`](Self::bench).
+    /// Each node is timed too, which costs a little itself.
+    pub fn time(&mut self) {
+        self.bench = Some(Bench { current: vec![0; self.plan.len()], ..Bench::default() });
+    }
+
+    /// How long processing took since [`time`](Self::time) was called, or
+    /// `None` if it wasn't.
+    pub fn bench(&self) -> Option<Bench> {
+        let mut bench = self.bench.clone()?;
+        bench.settle(&self.plan);
+        Some(bench)
     }
 
     /// Creates a renderer and builds `patch` in it.
@@ -169,6 +221,10 @@ impl OfflineRenderer {
     /// Installs a new plan if the graph changed, carrying running modules over.
     fn sync_plan(&mut self) {
         if let Some(mut plan) = self.graph.take_plan() {
+            if let Some(bench) = &mut self.bench {
+                bench.settle(&self.plan);
+                bench.current = vec![0; plan.len()];
+            }
             plan.take_over(&mut self.plan);
             self.plan = plan;
         }
@@ -279,7 +335,16 @@ impl OfflineRenderer {
             self.take_block_midi();
             self.take_block_input();
             let input = InputAudio { left: &self.block_input.left, right: &self.block_input.right };
-            self.plan.process(&self.context.with_midi(&self.block_midi).with_input(input));
+            let context = self.context.with_midi(&self.block_midi).with_input(input);
+            match &mut self.bench {
+                Some(bench) => {
+                    let started = Instant::now();
+                    self.plan.process_timed(&context, &mut bench.current);
+                    bench.process += started.elapsed();
+                    bench.frames += self.context.block_size as u64;
+                }
+                None => self.plan.process(&context),
+            }
             self.position += self.context.block_size as u64;
             self.note_limiter();
             let faults = &mut self.faults;
@@ -464,6 +529,28 @@ mod tests {
         patch.nodes.push(NodeData::new(2, "output.audio", (200.0, 0.0)));
         patch.connections.push(ConnectionData::new(1, "Out", 2, "Mono"));
         patch
+    }
+
+    #[test]
+    fn a_timed_render_times_every_node_and_sounds_the_same() {
+        let patch = osc_patch(0);
+        let (mut plain, compiled) = OfflineRenderer::from_patch(&patch, 48_000.0, 256).unwrap();
+        let (mut timed, _) = OfflineRenderer::from_patch(&patch, 48_000.0, 256).unwrap();
+        assert!(timed.bench().is_none());
+        timed.time();
+        let heard = timed.render(1000);
+        assert_eq!(heard.left, plain.render(1000).left);
+
+        let bench = timed.bench().unwrap();
+        // Whole blocks: 1000 frames is four of 256
+        assert_eq!(bench.frames, 1024);
+        assert!(bench.process > Duration::ZERO);
+        let nodes = bench.nodes();
+        assert_eq!(nodes.len(), compiled.node_ids.len());
+        assert!(nodes.windows(2).all(|pair| pair[0].1 >= pair[1].1), "heaviest first");
+        // The oscillator does more than nothing
+        let osc = compiled.node_ids[&1];
+        assert!(nodes.iter().any(|&(id, ns)| id == osc && ns > 0));
     }
 
     /// `player` (Keyboard or MIDI Note) playing a sine, gated straight into a VCA.

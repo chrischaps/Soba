@@ -222,6 +222,8 @@ cargo run --release --bin render -- patches/fm-synthesis.json out.wav --seconds 
 | `--input FILE.wav` | none | What [Audio Input](../modules/sources/audio-input.md) modules hear, in place of an input device. It must be at the render's sample rate |
 | `--cue FILE.txt` | none | Parameter changes to play into the patch as it renders, one per line: `<seconds> param <module>[#n\|@id] <parameter> <value>`, as in a capture script: `#n` is the nth of its kind, `@id` the module with that id in the patch file. Press a [Looper](../modules/utilities/looper.md)'s footswitches this way |
 | `--compare FILE.wav` | none | An earlier render to measure against: prints how far peak, true peak, RMS, loudness and range have moved since |
+| `--bench` | off | Times the render: how long processing took, how many times faster than real time that is, and the five modules that took longest |
+| `--runs N` | 3 with `--bench` | Renders this many times and reports the fastest |
 
 A patch that waits for a player renders silence unless something inside it plays notes (a Clock or Step Sequencer, say) or you add `--audition`. Audio Input modules render silence unless you give them a file with `--input`. [Samplers](../modules/sources/sampler.md) find their files relative to the patch, as the app does.
 
@@ -244,6 +246,21 @@ against before.wav:
 **Loudness** is integrated loudness after ITU-R BS.1770-4, the measure streaming services normalize to. It weights the mix the way the ear does, so it's the number to compare when you want to know whether a change made a patch sound louder. RMS overweights the bass: above, it says the darker pad lost 1 dB, but the ear hears the treble it lost and puts it at 1.3. **Range** is the EBU loudness range, the spread between the quiet and loud passages. It reads `--` on renders shorter than three seconds.
 
 **Limiter** is how hard the patch drives the [Audio Output](../modules/output/audio-output.md)'s limiter: the highest peak going into it, which can be over 0 dBFS, the most it turned the output down, and for how much of the render it took off more than 1 dB. The limiter is there to catch accidents. A patch whose peaks stay under −1 dBFS leaves it idle, as every example does. The examples also sit within a decibel or so of −16 LUFS, so switching between them doesn't jump in volume; aim there to match them.
+
+### Timing a render
+
+`--bench` measures how heavy a patch is to run. It times only the processing, not loading the patch or measuring the result, and renders three times, keeping the fastest. A busy machine can only slow a run down, never speed it up, so the fastest is the closest to the patch's own cost:
+
+```text
+bench: 1.3546 s for 20.00 s of audio, 14.8x realtime (best of 3)
+  osc.sine (node 2)                  576.9 ns/sample   41%
+  filter.svf (node 3)                347.7 ns/sample   25%
+  fx.reverb (node 6)                 291.1 ns/sample   21%
+  fx.chorus (node 5)                  66.4 ns/sample    5%
+  util.vca (node 4)                   32.4 ns/sample    2%
+```
+
+That is Lush Pad, auditioned. **Realtime** is how much faster than playback it rendered: below 1x it couldn't keep up live. Below it are the modules that took longest, by their module and their id in the patch file, in nanoseconds per sample and as a share of the whole. Lush Pad's oscillator plays every held voice, so it takes the most. Timing each module costs a little in itself, so the whole runs a few percent slower than it would without `--bench`.
 
 ## Microphone access
 

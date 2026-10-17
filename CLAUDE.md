@@ -140,7 +140,7 @@ Understand:
 Check what you touched, not the whole suite. The rest runs elsewhere and doesn't wait for you (#272):
 
 - **On every push, GitHub CI** runs the full `cargo test` (against `Cargo.lock`, `--locked`), `cargo clippy` with warnings denied, and the ASIO, wasm and macOS builds. A failure on master opens a `ci-failure` issue.
-- **Every night, `tools/nightly.py`** runs the slow checks that need this machine's windows: the loudness of every example, `check_layout.py`, `zoom_check.py` (`zoom_jitter.py` on every patch something it holds has changed), and the recipe, manual and module pictures. It re-shoots stale pictures and pushes them as a `[Docs]` commit of their own. A failing step opens a `nightly-failure` issue.
+- **Every night, `tools/nightly.py`** runs the slow checks that need this machine's windows: the loudness of every example, `render --bench` on five heavy examples (failing on a render 15% slower than the last run that passed; `--only perf --rebaseline` accepts one slower on purpose), `check_layout.py`, `zoom_check.py` (`zoom_jitter.py` on every patch something it holds has changed), and the recipe, manual and module pictures. It re-shoots stale pictures and pushes them as a `[Docs]` commit of their own. A failing step opens a `nightly-failure` issue.
 
 So the full `cargo test`, the layout and zoom checks and the picture re-shoots are no longer part of a ticket. At minimum:
 
@@ -211,6 +211,8 @@ cargo run --release
 cargo run --release --bin render -- patch.json out.wav --seconds 5
 # ...and how far each has moved since an earlier render: the before/after check
 cargo run --release --bin render -- patch.json after.wav --seconds 5 --compare before.wav
+# ...timed: processing only, best of 3 (--runs N), with the five heaviest nodes in ns/sample
+cargo run --release --bin render -- patches/canopy.json out.wav --seconds 20 --bench
 # ...playing a short phrase into Keyboard/MIDI nodes (for patches that need a player)
 cargo run --release --bin render -- patches/lush-pad.json out.wav --audition
 # ...feeding a WAV to Audio Input modules (a capture script's `input file.wav` cue does the same)
@@ -223,7 +225,7 @@ cargo test --release --test example_loudness -- --ignored --nocapture
 # The slow checks against origin/master, in ../Modular-nightly at low priority: loudness, layout,
 # zoom and the pictures (stale ones re-shot and pushed). Failures open nightly-failure issues
 python tools/nightly.py                      # skips if master passed last time; --force runs anyway
-python tools/nightly.py --only layout,zoom   # some of: tests, loudness, idle, layout, zoom, images
+python tools/nightly.py --only layout,zoom   # some of: tests, loudness, idle, perf, layout, zoom, images
 python tools/nightly.py --ref HEAD --only layout   # your commit instead: no issues, no push
 powershell -File tools/nightly_schedule.ps1  # run it every night at 03:00 (-At, -Unregister)
 # The real input device, end to end (needs a mic; the patch is muted)
