@@ -2928,7 +2928,7 @@ impl SynthApp {
 
             // Samples from elsewhere go beside the patch, so its folder
             // holds everything, and the loops go there too
-            let copy_problem = self.gather_samples(&path);
+            let copy_problem = self.gather_samples(&path, samples::WhenLarge::Ask);
             let (patch, loop_problems) = self.patch_with_loops(name, &path);
             match save_to_file(&patch, &path) {
                 Ok(()) => {
@@ -3203,11 +3203,17 @@ impl SynthApp {
                 .and_then(|s| s.to_str())
                 .unwrap_or("Untitled");
 
+            // Samples dropped in since the last save go beside it too (#324)
+            #[cfg(not(target_arch = "wasm32"))]
+            let copy_problem = self.gather_samples(&path, samples::WhenLarge::Warn);
+            #[cfg(target_arch = "wasm32")]
+            let copy_problem: Option<String> = None;
             let (patch, loop_problems) = self.patch_with_loops(name, &path);
             match save_to_file(&patch, &path) {
                 Ok(()) => {
-                    if !loop_problems.is_empty() {
-                        self.load_warnings = loop_problems;
+                    let problems: Vec<String> = copy_problem.into_iter().chain(loop_problems).collect();
+                    if !problems.is_empty() {
+                        self.load_warnings = problems;
                     }
                     self.status_message = Some(format!("Saved: {}", path.display()));
                     self.saved_as(&path);

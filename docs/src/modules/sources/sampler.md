@@ -225,7 +225,7 @@ A patch saves each Sampler's file as a path:
 - **Beside or below the patch**, the path is relative: `samples/kick.wav`. Move or zip the patch's folder and it still finds its samples.
 - **Elsewhere**, the path is absolute: `C:/Music/choir.wav`.
 
-**Save As** copies samples from outside the patch's folder into a folder beside it named `<patch name> samples`, and points the patch at the copies. The patch's folder then holds everything it needs to be shared. If the samples come to more than 50 MB, it asks first. Saving an example works the same way, so its samples come with the copy.
+**Save As** copies samples from outside the patch's folder into a folder beside it named `<patch name> samples`, and points the patch at the copies. The patch's folder then holds everything it needs to be shared. If the samples come to more than 50 MB, it asks first. Saving an example works the same way, so its samples come with the copy. **Save** does the same for a sample you've brought in since, from your Downloads say. If those come to more than 50 MB, it leaves them where they are and says so, rather than asking at every save; **Save As** offers to copy them.
 
 A patch whose sample is missing still opens. The Sampler keeps the path but plays nothing, and the status bar lists the missing file with the other load warnings. Open the file again to fix it.
 

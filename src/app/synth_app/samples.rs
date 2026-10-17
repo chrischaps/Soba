@@ -14,8 +14,8 @@
 //! new to the patch (opened, pasted, brought back by undo), or when a
 //! change of rate has emptied it.
 //!
-//! Patch files keep paths relative to themselves where they can, so Save As
-//! copies samples from elsewhere into a folder beside the patch.
+//! Patch files keep paths relative to themselves where they can, so Save and
+//! Save As copy samples from elsewhere into a folder beside the patch.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -37,9 +37,21 @@ use crate::persistence::{Patch, StagedNode};
 use super::super::editing;
 use super::SynthApp;
 
-/// Past this much, Save As asks before copying samples beside the patch.
+/// Past this much, saving asks before copying samples beside the patch.
 #[cfg(not(target_arch = "wasm32"))]
 const ASK_BEFORE_COPYING_BYTES: u64 = 50 * 1024 * 1024;
+
+/// What [`SynthApp::gather_samples`] does when the samples to copy come to
+/// more than [`ASK_BEFORE_COPYING_BYTES`].
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum WhenLarge {
+    /// Ask whether to copy them: Save As, which is asking things already.
+    Ask,
+    /// Leave them where they are and say so: Save, which would otherwise
+    /// ask again on every Ctrl+S once the answer was no.
+    Warn,
+}
 
 impl SynthApp {
     /// Asks for a sound file and loads it into a Sampler.
@@ -256,13 +268,15 @@ impl SynthApp {
         patch
     }
 
-    /// Before a Save As to `path`, copies the samples from outside the
+    /// Before a save to `path`, copies the samples from outside the
     /// patch's folder (and any that ship with an example) into
     /// `<patch name> samples` beside it, and points their Samplers at the
-    /// copies, so the folder can be moved or shared whole. Asks first if
-    /// they come to more than 50 MB. Returns a problem to report, if any.
+    /// copies, so the folder can be moved or shared whole. A sample dropped
+    /// in after the first save is gathered by the next Save. If they come to
+    /// more than 50 MB, `large` says whether to ask or just warn. Returns a
+    /// problem to report, if any.
     #[cfg(not(target_arch = "wasm32"))]
-    pub(super) fn gather_samples(&mut self, path: &Path) -> Option<String> {
+    pub(super) fn gather_samples(&mut self, path: &Path, large: WhenLarge) -> Option<String> {
         let folder = path.parent().unwrap_or(Path::new(""));
         let mut outside: Vec<String> = self
             .graph_state
@@ -284,6 +298,15 @@ impl SynthApp {
         };
         let total: u64 = outside.iter().map(|key| size(key)).sum();
         let destination = sample_files::samples_folder(path);
+        if total > ASK_BEFORE_COPYING_BYTES && large == WhenLarge::Warn {
+            return Some(format!(
+                "{} sample{} from other folders, {:.0} MB in all, {} outside the patch's folder. Save As offers to copy them beside it",
+                outside.len(),
+                if outside.len() == 1 { "" } else { "s" },
+                total as f64 / (1024.0 * 1024.0),
+                if outside.len() == 1 { "stays" } else { "stay" },
+            ));
+        }
         if total > ASK_BEFORE_COPYING_BYTES {
             let answer = rfd::MessageDialog::new()
                 .set_title("Copy samples beside the patch?")
@@ -468,4 +491,60 @@ pub(super) fn drop_pointer(ctx: &egui::Context, scripted: bool) -> Option<egui::
     }
     let _ = scripted;
     ctx.input(|i| i.pointer.hover_pos())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::persistence::{load_from_file, save_to_file, NodeData};
+
+    /// A folder of its own for one test's files.
+    fn folder(test: &str) -> PathBuf {
+        let folder = std::env::temp_dir().join(format!("soba-{test}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(&folder).unwrap();
+        folder
+    }
+
+    /// A short silent WAV at `path`.
+    fn write_wav(path: &Path) {
+        let spec = hound::WavSpec { channels: 1, sample_rate: 48_000, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+        let mut wav = hound::WavWriter::create(path, spec).unwrap();
+        for _ in 0..480 {
+            wav.write_sample(0i16).unwrap();
+        }
+        wav.finalize().unwrap();
+    }
+
+    #[test]
+    fn save_gathers_a_sample_dropped_in_after_the_first_save() {
+        let root = folder("quick-save-gathers");
+        let downloads = root.join("Downloads");
+        let song = root.join("Song");
+        std::fs::create_dir_all(&downloads).unwrap();
+        std::fs::create_dir_all(&song).unwrap();
+        let kick = downloads.join("kick.wav");
+        write_wav(&kick);
+
+        // Saved once with nothing to gather, then a Sampler plays a file from elsewhere
+        let path = song.join("Song.json");
+        let mut patch = Patch::new("Song");
+        let mut sampler = NodeData::new(1, SAMPLER_ID, (0.0, 0.0));
+        sampler.file = Some(kick.to_string_lossy().into_owned());
+        patch.nodes.push(sampler);
+        save_to_file(&patch, &path).unwrap();
+        let mut app = SynthApp::new(false);
+        app.open_file(&path);
+        assert_eq!(app.quick_save_path(), Some(path.clone()));
+
+        assert!(app.quick_save());
+        let copy = sample_files::samples_folder(&path).join("kick.wav");
+        assert!(copy.is_file(), "the sample is copied beside the patch");
+        let saved = load_from_file(&path).unwrap();
+        let file = saved.nodes[0].file.clone().unwrap();
+        assert!(!Path::new(&file).is_absolute(), "and the patch names the copy relative to itself: {file}");
+        assert!(app.load_warnings.is_empty(), "{:?}", app.load_warnings);
+        assert!(kick.is_file(), "the original stays where it was");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
