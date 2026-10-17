@@ -48,7 +48,7 @@ use crate::persistence::sample_files;
 use super::hovered_file;
 use super::sample_shelf::ShelvedSample;
 use super::sampler_slices::SliceMarkers;
-use super::sampler_take::{self, RecView, REC_BUTTON};
+use super::sampler_take::{self, RecButton, RecView, REC_BUTTON};
 use super::sampler_tidy;
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
@@ -278,8 +278,8 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             crate::app::pace::animate(ui.ctx());
         }
         None if hovered.is_some() => {
-            if let Some((key, sample)) = hovered {
-                hovered_file::draw(&painter, rect, plot, sample, key, (lo, hi), hovered_cue, z);
+            if let Some(file) = hovered {
+                hovered_file::draw(&painter, rect, plot, file, (lo, hi), hovered_cue, z);
             }
         }
         None => {
@@ -373,7 +373,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         painter.extend(Shape::dashed_line(&line, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.6)), 2.0 * z, 2.0 * z));
     }
     if let (Some(markers), Some(_)) = (&slice_markers, shown) {
-        markers.draw(ui, &painter, rect, plot, x_at, slice_hot, z);
+        markers.draw(ui, &painter, rect, plot, slice_hot, z);
     }
     if shown.is_some() {
         for (m, &place) in marker_places.iter().enumerate() {
@@ -537,7 +537,8 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             let length = duration(sample.source.seconds());
             let menu = Rect::from_x_y_ranges(name_left - 2.0 * z..=row.right() - button_width - 26.0 * z, row.top() + 1.0 * z..=row.bottom() - 1.0 * z);
             let in_tab = key.is_some_and(|key| key.starts_with(sample_files::DROPPED_PREFIX));
-            responses.extend(sampler_tidy::name_button(ui, menu, node_id, name, &length, name_color, sample, in_tab, z));
+            let label = sampler_tidy::NameLabel { name, length: &length, color: name_color };
+            responses.extend(sampler_tidy::name_button(ui, menu, node_id, &label, sample, in_tab, z));
         }
         None => {
             let label = match loaded {
@@ -561,7 +562,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let rec_rect = Rect::from_min_size(Pos2::new(button.left() - 22.0 * z, row.top() + 1.0 * z), Vec2::new(18.0 * z, row_height - 2.0 * z));
     let held = value_of(REC_BUTTON).is_some_and(|v| v >= 0.5);
     let tidies = node.get_input(sampler_take::TIDY_TAKES).is_ok_and(|input| graph.get_input(input).value.actual_value() >= 0.5);
-    responses.extend(sampler_take::rec_button(ui, rec_rect, node_id, user_state, &rec, held, Sampler::PARAM_REC_BUTTON, Some(tidies), blocked, z));
+    responses.extend(sampler_take::rec_button(ui, rec_rect, node_id, user_state, &rec, RecButton { down: held, param_index: Sampler::PARAM_REC_BUTTON, tidies: Some(tidies), blocked }, z));
     responses
 }
 

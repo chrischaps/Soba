@@ -412,7 +412,8 @@ fn frame_ui(
     let screen = view.rect_to_screen(frame.rect);
     let band = Rect::from_min_size(screen.min, vec2(screen.width(), FRAME_TITLE_BAND * zoom));
     let hovered = title.hovered() || title.dragged() || resizing;
-    paint_frame(ui, body_slot, backdrop.labels, through, &frame, screen, band, zoom, selected, hovered, editing);
+    let look = FrameLook { screen, band, zoom, selected, hovered, editing };
+    paint_frame(ui, body_slot, backdrop.labels, through, &frame, look);
 
     if editing {
         title_editor(ui, annotations, id, band, zoom, title_ink(frame.tint));
@@ -421,20 +422,19 @@ fn frame_ui(
     over
 }
 
-#[allow(clippy::too_many_arguments)]
-fn paint_frame(
-    ui: &Ui,
-    slot: egui::layers::ShapeIdx,
-    labels: &mut Vec<Shape>,
-    through: f32,
-    frame: &Frame,
+/// Where a frame is drawn on screen this frame, and how it's lit.
+#[derive(Clone, Copy)]
+struct FrameLook {
     screen: Rect,
     band: Rect,
     zoom: f32,
     selected: bool,
     hovered: bool,
     editing: bool,
-) {
+}
+
+fn paint_frame(ui: &Ui, slot: egui::layers::ShapeIdx, labels: &mut Vec<Shape>, through: f32, frame: &Frame, look: FrameLook) {
+    let FrameLook { screen, band, zoom, selected, hovered, editing } = look;
     let tint = frame.tint.color();
     let rounding = FRAME_ROUNDING * zoom;
     let mut shapes = Vec::new();

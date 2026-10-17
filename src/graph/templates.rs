@@ -457,6 +457,9 @@ mod tests {
                 .collect();
             let expected: Vec<&str> = spec.parameters.iter().map(|p| p.name).collect();
             assert_eq!(params, expected, "{id}: parameter order");
+            for (index, input_id) in port_mapping::parameter_inputs(&graph, node_id).into_iter().enumerate() {
+                assert_eq!(port_mapping::parameter_index(&graph, node_id, input_id), Some(index), "{id}: parameter {index}");
+            }
 
             for (_, input_id) in &node.inputs {
                 if let Some(index) = port_mapping::input_port_index(&graph, node_id, *input_id) {
@@ -477,6 +480,25 @@ mod tests {
                 let index = port_mapping::output_port_index(&graph, node_id, *output_id).unwrap();
                 let port = &spec.ports[index];
                 assert!(port.is_output() && port.name == name, "{id}: output '{name}' maps to '{}'", port.name);
+            }
+        }
+    }
+
+    #[test]
+    fn test_knob_rows_hold_only_numbers() {
+        // The knob row draws a knob or nothing: a toggle or a dropdown there
+        // would vanish
+        for template in AllNodeTemplates.all_kinds() {
+            let (graph, node_id) = build(template);
+            let node = &graph.nodes[node_id];
+            for knob in &node.user_data.knob_params {
+                let (_, input_id) = node.inputs.iter().find(|(name, _)| *name == knob.param_name).unwrap();
+                assert!(
+                    matches!(graph.get_input(*input_id).value, SynthValueType::Number { .. }),
+                    "{}: the {} knob isn't a number",
+                    template.module_id(),
+                    knob.param_name
+                );
             }
         }
     }

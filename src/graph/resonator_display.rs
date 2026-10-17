@@ -82,15 +82,17 @@ pub fn resonator_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
     let plot = Rect::from_min_max(rect.min + Vec2::new(pad + 4.0 * z, pad + 10.0 * z), rect.max - Vec2::new(pad + 4.0 * z, pad + 2.0 * z));
     let flash = if since >= 0.0 && live { (-since / FLASH).exp() } else { 0.0 };
     let orange = theme::signal::CONTROL;
+    let ink = Ink { blue, orange, flash };
 
     match mode {
         Mode::String => {
             let shape: &[f32] = &values[Resonator::READOUT_SHAPE..][..STRING_POINTS];
-            draw_string(&painter, plot, if live { shape } else { &[] }, level, flash, position, blue, orange, z);
+            draw_string(&painter, plot, if live { shape } else { &[] }, level, position, ink, z);
         }
         Mode::Body => {
             let amps: &[f32] = &values[Resonator::READOUT_SHAPE..][..MODE_COUNT];
-            draw_modes(&painter, plot, if live { amps } else { &[] }, hz, material, brightness, position, inharm, flash, blue, orange, z);
+            let struck = Struck { material, brightness, position, inharm };
+            draw_modes(&painter, plot, if live { amps } else { &[] }, hz, &struck, ink, z);
         }
     }
     if level > 1e-4 {
@@ -127,8 +129,24 @@ fn readout_matches(readout_mode: f32, mode: Mode) -> bool {
     (readout_mode > 0.5) == (mode == Mode::Body)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn draw_string(painter: &egui::Painter, plot: Rect, shape: &[f32], level: f32, flash: f32, position: f32, blue: Color32, orange: Color32, z: f32) {
+/// The display's two colours, and how brightly the last strike flashes them.
+#[derive(Clone, Copy)]
+struct Ink {
+    blue: Color32,
+    orange: Color32,
+    flash: f32,
+}
+
+/// A body, as its knobs set it, and where it's struck.
+struct Struck {
+    material: Material,
+    brightness: f32,
+    position: f32,
+    inharm: f32,
+}
+
+fn draw_string(painter: &egui::Painter, plot: Rect, shape: &[f32], level: f32, position: f32, ink: Ink, z: f32) {
+    let Ink { blue, orange, flash } = ink;
     let mid = plot.center().y;
     let half = 0.46 * plot.height();
     let x_at = |u: f32| plot.left() + u * plot.width();
@@ -186,21 +204,9 @@ fn draw_string(painter: &egui::Painter, plot: Rect, shape: &[f32], level: f32, f
     painter.line_segment([Pos2::new(x, plot.bottom() - 4.0 * z), Pos2::new(x, plot.bottom())], Stroke::new(1.2 * z, orange.gamma_multiply(0.7 + 0.3 * flash)));
 }
 
-#[allow(clippy::too_many_arguments)]
-fn draw_modes(
-    painter: &egui::Painter,
-    plot: Rect,
-    amps: &[f32],
-    hz: f32,
-    material: Material,
-    brightness: f32,
-    position: f32,
-    inharm: f32,
-    flash: f32,
-    blue: Color32,
-    orange: Color32,
-    z: f32,
-) {
+fn draw_modes(painter: &egui::Painter, plot: Rect, amps: &[f32], hz: f32, struck: &Struck, ink: Ink, z: f32) {
+    let &Struck { material, brightness, position, inharm } = struck;
+    let Ink { blue, orange, flash } = ink;
     let ratios = resonator::mode_ratios(material, inharm);
     let strikes = resonator::mode_amplitudes(&ratios, position, brightness);
     let loudest = strikes.iter().copied().fold(1e-6, f32::max);

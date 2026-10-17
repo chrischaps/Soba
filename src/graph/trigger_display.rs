@@ -238,30 +238,43 @@ pub fn output_row(
     let pattern = shown_pattern(ui.ctx(), node_id, position.map(|p| p.pattern));
     let mut edits = Vec::new();
     match row {
-        Row::Accent => accent_row(ui, rect, node_id, &params, pattern, position, lit(user_state, node_id, Seq::OUT_ACCENT), &mut edits),
+        Row::Accent => accent_row(ui, rect, node_id, &params, pattern, Live { position, lit: lit(user_state, node_id, Seq::OUT_ACCENT) }, &mut edits),
         Row::Gate(lane) => {
             let name = lane_name(graph, node_id, lane);
             let lit = lit(user_state, node_id, 1 + 2 * lane);
-            lane_rows(ui, rect, node_id, &params, pattern, lane, name, position, lit, &mut edits);
+            lane_rows(ui, rect, node_id, &params, LaneAt { pattern, lane, name }, Live { position, lit }, &mut edits);
         }
         Row::Vel => {}
     }
     Some(edits)
 }
 
-/// The accent row: the pattern being edited at the left, then an accent
-/// mark (>) on each accented step.
-#[allow(clippy::too_many_arguments)]
-fn accent_row(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    node_id: NodeId,
-    params: &Params,
-    pattern: usize,
+/// Where the sequencer is, and whether a row's output is high.
+#[derive(Clone, Copy)]
+struct Live {
     position: Option<Position>,
     lit: bool,
-    edits: &mut Vec<SynthResponse>,
-) {
+}
+
+/// A lane in the pattern being edited, and its name, if it's been given one.
+struct LaneAt {
+    pattern: usize,
+    lane: usize,
+    name: Option<String>,
+}
+
+/// One step of a lane, and what the lane's called.
+struct StepAt<'a> {
+    pattern: usize,
+    lane: usize,
+    step: usize,
+    lane_label: &'a str,
+}
+
+/// The accent row: the pattern being edited at the left, then an accent
+/// mark (>) on each accented step.
+fn accent_row(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, pattern: usize, live: Live, edits: &mut Vec<SynthResponse>) {
+    let Live { position, lit } = live;
     let z = rect.height() / ROW;
     let painter = ui.painter().clone();
     let orange = theme::signal::CONTROL;
@@ -316,19 +329,9 @@ fn accent_row(
 
 /// A lane, over its Gate and Vel rows: its name, then a pad and a velocity
 /// bar for each step.
-#[allow(clippy::too_many_arguments)]
-fn lane_rows(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    node_id: NodeId,
-    params: &Params,
-    pattern: usize,
-    lane: usize,
-    name: Option<String>,
-    position: Option<Position>,
-    lit: bool,
-    edits: &mut Vec<SynthResponse>,
-) {
+fn lane_rows(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, at: LaneAt, live: Live, edits: &mut Vec<SynthResponse>) {
+    let LaneAt { pattern, lane, name } = at;
+    let Live { position, lit } = live;
     let z = rect.height() / ROW;
     let pitch = rect.height() + ui.spacing().item_spacing.y;
     let painter = ui.painter().clone();
@@ -458,7 +461,7 @@ fn lane_rows(
             format!("{what}: off\nClick to add · drag up or down to add it at a velocity")
         };
         let response = response.on_hover_text(hint);
-        response.context_menu(|ui| step_menu(ui, node_id, params, pattern, lane, step, s, &what, &lane_label, edits));
+        response.context_menu(|ui| step_menu(ui, node_id, params, &StepAt { pattern, lane, step, lane_label: &lane_label }, s, &what, edits));
     }
 }
 
@@ -471,19 +474,8 @@ fn length_edit(node_id: NodeId, params: &Params, lane: usize, lane_label: &str, 
 }
 
 /// A step's right-click menu: its velocity, chance and ratchet.
-#[allow(clippy::too_many_arguments)]
-fn step_menu(
-    ui: &mut egui::Ui,
-    node_id: NodeId,
-    params: &Params,
-    pattern: usize,
-    lane: usize,
-    step: usize,
-    s: Step,
-    what: &str,
-    lane_label: &str,
-    edits: &mut Vec<SynthResponse>,
-) {
+fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s: Step, what: &str, edits: &mut Vec<SynthResponse>) {
+    let &StepAt { pattern, lane, step, lane_label } = at;
     ui.label(egui::RichText::new(what).strong());
     ui.separator();
     let set = |label: String, next: Step, edits: &mut Vec<SynthResponse>| {

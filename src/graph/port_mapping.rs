@@ -55,6 +55,16 @@ pub fn input_port_index(graph: &SynthGraph, node_id: NodeId, input_id: InputId) 
     None
 }
 
+/// Gets the `DspModule` parameter index for an editor input, or `None` if the
+/// input is connection-only (`ConnectionOnly`) or not on this node.
+pub fn parameter_index(graph: &SynthGraph, node_id: NodeId, input_id: InputId) -> Option<usize> {
+    let node = graph.nodes.get(node_id)?;
+    node.inputs
+        .iter()
+        .filter(|(_, id)| is_parameter(graph.get_input(*id).kind))
+        .position(|(_, id)| *id == input_id)
+}
+
 /// Gets the `DspModule` port index for an editor output.
 pub fn output_port_index(graph: &SynthGraph, node_id: NodeId, output_id: OutputId) -> Option<usize> {
     let node = graph.nodes.get(node_id)?;

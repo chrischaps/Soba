@@ -44,7 +44,7 @@ use crate::persistence::sample_files;
 use super::hovered_file;
 use super::sample_shelf::ShelvedSample;
 use super::sampler_slices::SliceMarkers;
-use super::sampler_take::{self, RecView};
+use super::sampler_take::{self, RecButton, RecView};
 use super::steady_text;
 use super::{SynthGraph, SynthGraphState, SynthResponse};
 
@@ -278,8 +278,8 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             }
         }
         None if hovered.is_some() => {
-            if let Some((key, sample)) = hovered {
-                hovered_file::draw(&painter, wave_rect, plot, sample, key, (0.0, 1.0), hovered_cue, z);
+            if let Some(file) = hovered {
+                hovered_file::draw(&painter, wave_rect, plot, file, (0.0, 1.0), hovered_cue, z);
             }
         }
         None => {
@@ -323,7 +323,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         _ => None,
     };
     if let (Some(markers), Some(_)) = (&slice_markers, shown) {
-        markers.draw(ui, &painter, wave_rect, plot, x_at, slice_hot, z);
+        markers.draw(ui, &painter, wave_rect, plot, slice_hot, z);
     }
     let alt = ui.input(|i| i.modifiers.alt);
     if live {
@@ -419,7 +419,8 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         let slice = step.slice_of(index, count);
         let cell = Rect::from_min_size(Pos2::new(cell_x(index), line_top(index / count)), Vec2::new(cell_width, line_height)).shrink2(Vec2::new(0.5 * z, 0.0));
         let here = playing.step == Some(index) && playing.phase.is_some();
-        draw_step(&painter, cell, step, slice, count, chance, here, z);
+        let at = StepAt { index, step, chance, slice, count };
+        draw_step(&painter, cell, &at, here, z);
 
         let response = ui.interact(cell, Id::new((node_id, "chopper-step", index)), Sense::click_and_drag()).on_hover_cursor(CursorIcon::PointingHand);
         let what = format!("Step {}", index + 1);
@@ -466,7 +467,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             if step.plays { "rest" } else { "play" },
         );
         let response = response.on_hover_text(hint);
-        response.context_menu(|ui| step_menu(ui, node_id, &params, index, step, chance, count, steps, &mut edits));
+        response.context_menu(|ui| step_menu(ui, node_id, &params, &at, steps, &mut edits));
     }
 
     // Where the loop is, in time, under the line of the pass it's in
@@ -525,7 +526,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     // Rec, beside Open…
     let rec_rect = Rect::from_min_size(Pos2::new(button.left() - 22.0 * z, line.top() + 1.0 * z), Vec2::new(18.0 * z, line_height - 2.0 * z));
     let held = params.value(Chopper::PARAM_REC_BUTTON) >= 0.5;
-    responses.extend(sampler_take::rec_button(ui, rec_rect, node_id, user_state, &rec, held, Chopper::PARAM_REC_BUTTON, None, blocked, z));
+    responses.extend(sampler_take::rec_button(ui, rec_rect, node_id, user_state, &rec, RecButton { down: held, param_index: Chopper::PARAM_REC_BUTTON, tidies: None, blocked }, z));
     let room = rec_rect.left() - 4.0 * z - name_left;
     let label = match loaded {
         // Its own tempo: where it plays back unchanged, as long as Beats says
@@ -585,9 +586,19 @@ fn describe(step: Step, slice: usize, chance: f32) -> String {
     text
 }
 
+/// One step of the row: how it plays, the slice that comes to, and how many
+/// slices there are.
+struct StepAt {
+    index: usize,
+    step: Step,
+    chance: f32,
+    slice: usize,
+    count: usize,
+}
+
 /// Draws one step: its slice's hue, and marks for how it plays it.
-#[allow(clippy::too_many_arguments)]
-fn draw_step(painter: &egui::Painter, cell: Rect, step: Step, slice: usize, count: usize, chance: f32, here: bool, z: f32) {
+fn draw_step(painter: &egui::Painter, cell: Rect, at: &StepAt, here: bool, z: f32) {
+    let &StepAt { step, chance, slice, count, .. } = at;
     let hue = slice_color(slice, count);
     let round = 2.0 * z.min(cell.width() / 4.0);
     if !step.plays {
@@ -632,8 +643,8 @@ fn draw_step(painter: &egui::Painter, cell: Rect, step: Step, slice: usize, coun
 }
 
 /// A step's right-click menu: everything about how it plays.
-#[allow(clippy::too_many_arguments)]
-fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, index: usize, step: Step, chance: f32, count: usize, steps: usize, edits: &mut Vec<SynthResponse>) {
+fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, steps: usize, edits: &mut Vec<SynthResponse>) {
+    let &StepAt { index, step, chance, count, .. } = at;
     let what = format!("Step {}", index + 1);
     ui.label(egui::RichText::new(&what).strong());
     ui.separator();

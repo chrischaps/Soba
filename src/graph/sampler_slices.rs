@@ -68,9 +68,10 @@ impl SliceMarkers<'_> {
     }
 
     /// Draws the markers, `hot` lit, and the one being dragged where the
-    /// pointer is (dashed, if letting go would take it away).
-    #[allow(clippy::too_many_arguments)]
-    pub fn draw(&self, ui: &egui::Ui, painter: &egui::Painter, rect: Rect, plot: Rect, x_at: impl Fn(f32) -> f32, hot: Option<usize>, z: f32) {
+    /// pointer is (dashed, if letting go would take it away). A place runs
+    /// across `plot`, 0 at its left.
+    pub fn draw(&self, ui: &egui::Ui, painter: &egui::Painter, rect: Rect, plot: Rect, hot: Option<usize>, z: f32) {
+        let x_at = |place: f32| plot.left() + place.clamp(0.0, 1.0) * plot.width();
         for (m, &place) in self.places.iter().enumerate() {
             let cuts = self.cutting.as_slice().contains(&place);
             let lit = hot == Some(m);

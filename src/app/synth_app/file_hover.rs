@@ -94,7 +94,7 @@ impl SynthApp {
         match hovered.sample() {
             Some(sample) => {
                 let cue = self.user_state.cue.as_ref().filter(|cue| cue.hovered && cue.node_id.is_none());
-                hovered_file::draw(&painter, panel, plot, sample, &hovered.key, (0.0, 1.0), cue, z);
+                hovered_file::draw(&painter, panel, plot, (&hovered.key, sample), (0.0, 1.0), cue, z);
             }
             // Still being read: an empty panel, as a Sampler's is before it's loaded
             None => {

@@ -495,7 +495,8 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
         ui.painter().hline(ui.cursor().left()..=ui.cursor().left() + width, top, Stroke::new(1.0 * z, theme::module::UTILITY.gamma_multiply(0.25)));
         ui.add_space(6.0 * z);
         let low = 12 * (pattern.settings.range - 1);
-        keyboard_strip(ui, node_id, width, low, &sounding, pattern.bass_voice, gate_high || readout.is_none(), z);
+        let chord = Sounding { notes: &sounding, bass_voice: pattern.bass_voice, lit: gate_high || readout.is_none() };
+        keyboard_strip(ui, node_id, width, low, &chord, z);
         ui.add_space(5.0 * z);
 
         let mut cells = Vec::with_capacity(pattern.steps);
@@ -789,8 +790,16 @@ fn key_position(note: i32, low: i32) -> Option<(f32, bool)> {
 
 /// The keyboard strip: four octaves from the C `low`, the chord's keys lit,
 /// and a dot for each voice gliding to the key it plays now.
-#[allow(clippy::too_many_arguments)]
-fn keyboard_strip(ui: &mut egui::Ui, node_id: NodeId, width: f32, low: i32, notes: &[i32], bass_voice: bool, lit: bool, z: f32) {
+/// The chord the strip shows: its notes, whether the lowest is a bass voice,
+/// and whether it's sounding now.
+struct Sounding<'a> {
+    notes: &'a [i32],
+    bass_voice: bool,
+    lit: bool,
+}
+
+fn keyboard_strip(ui: &mut egui::Ui, node_id: NodeId, width: f32, low: i32, chord: &Sounding, z: f32) {
+    let &Sounding { notes, bass_voice, lit } = chord;
     let height = 28.0 * z;
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), Sense::hover());
     let painter = ui.painter_at(rect.expand(1.0));

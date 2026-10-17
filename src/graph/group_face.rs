@@ -17,7 +17,7 @@ use crate::app::theme;
 use super::groups::{Control, FaceControl, JackAction, JackEdit, NodeKind, Preview, Side};
 use super::hints;
 use super::steady_text;
-use super::node_data::KnobPlace;
+use super::node_data::{KnobCellCtx, KnobPlace};
 use super::{SynthGraph, SynthGraphState, SynthNodeData, SynthResponse, SynthValueType};
 
 type Responses = Vec<NodeResponse<SynthResponse, SynthNodeData>>;
@@ -332,7 +332,8 @@ pub fn body(
                         continue;
                     };
                     let place = KnobPlace::Face { depth: knob.depth, outer };
-                    module.user_data.knob_cell(ui, knob.node, param, graph, user_state, zoom, &mut responses, place);
+                    let mut cx = KnobCellCtx { node_id: knob.node, graph, user_state, zoom, place, responses: &mut responses };
+                    module.user_data.knob_cell(ui, param, &mut cx);
                 }
             });
         }

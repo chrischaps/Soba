@@ -494,8 +494,8 @@ fn overview_rect(timeline: Rect, z: f32) -> Rect {
 /// The view is `owner`'s, which a follower shares with its leader. It's
 /// kept under the follower's own name as well, so a follower unpatched
 /// carries on from the view it had.
-#[allow(clippy::too_many_arguments)]
-fn update_view(ui: &egui::Ui, node_id: NodeId, owner: NodeId, song: &Song, timeline: Rect, z: f32, position: Option<Position>, selected: usize) -> View {
+fn update_view(ui: &egui::Ui, node_id: NodeId, owner: NodeId, song: &Song, timeline: Rect, z: f32, song_now: Now) -> View {
+    let Now { position, selected } = song_now;
     let ctx = ui.ctx().clone();
     let (now, dt) = ctx.input(|input| (input.time, input.stable_dt.min(0.1)));
     let mut view = stored_view(&ctx, owner, song);
@@ -773,10 +773,11 @@ pub fn output_row(
     let timeline = Rect::from_min_max(Pos2::new(block.left() + LABEL * z, block.top()), block.max);
     let position = position(user_state, node_id).filter(|p| p.started && p.section < song.count());
     let selected = selected(ui.ctx(), node_id).min(song.count() - 1);
+    let now = Now { position, selected };
     // The song's first row works out the view for every row
     let owner = view_owner(user_state, node_id);
     let view = match row {
-        Row::Sections => update_view(ui, node_id, owner, &song, timeline, z, position, selected),
+        Row::Sections => update_view(ui, node_id, owner, &song, timeline, z, now),
         _ => stored_view(ui.ctx(), owner, &song),
     };
     claim(ui, node_id, timeline, view.zoomed());
@@ -785,10 +786,11 @@ pub fn output_row(
     let gap = ui.spacing().item_spacing.y;
     let clip = Rect::from_x_y_ranges(timeline.x_range(), timeline.y_range().expand(gap)).intersect(ui.clip_rect());
     let frame = Frame { block, timeline, clip, view };
+    let cx = Ctx { node_id, graph, user_state, params: &params, song: &song };
     let mut edits = Vec::new();
     match row {
-        Row::Sections => sections(ui, node_id, graph, user_state, &params, &song, &layout, &frame, position, selected, &mut edits),
-        Row::Lane(lane) => lane_rows(ui, node_id, graph, user_state, &params, &song, &layout, &frame, lane, position, selected, &mut edits),
+        Row::Sections => sections(ui, cx, &layout, &frame, now, &mut edits),
+        Row::Lane(lane) => lane_rows(ui, cx, &layout, &frame, lane, now, &mut edits),
         _ => {}
     }
 
@@ -801,6 +803,23 @@ pub fn output_row(
         ui.painter().with_clip_rect(clip).vline(x, span, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(strength)));
     }
     Some(edits)
+}
+
+/// The Arranger whose rows are being drawn: its parameters and its song.
+#[derive(Clone, Copy)]
+struct Ctx<'a> {
+    node_id: NodeId,
+    graph: &'a SynthGraph,
+    user_state: &'a SynthGraphState,
+    params: &'a Params<'a>,
+    song: &'a Song,
+}
+
+/// Where the song is this frame: the section playing, and the one picked.
+#[derive(Clone, Copy)]
+struct Now {
+    position: Option<Position>,
+    selected: usize,
 }
 
 /// Where a row's part of the timeline is drawn.
@@ -818,20 +837,9 @@ struct Frame {
 
 /// The song's rows: the overview strip and a bar ruler, then a block for
 /// each section.
-#[allow(clippy::too_many_arguments)]
-fn sections(
-    ui: &mut egui::Ui,
-    node_id: NodeId,
-    graph: &SynthGraph,
-    user_state: &SynthGraphState,
-    params: &Params,
-    song: &Song,
-    layout: &Layout,
-    frame: &Frame,
-    position: Option<Position>,
-    selected: usize,
-    edits: &mut Vec<SynthResponse>,
-) {
+fn sections(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, now: Now, edits: &mut Vec<SynthResponse>) {
+    let Ctx { node_id, graph, user_state, song, .. } = cx;
+    let Now { position, selected } = now;
     let z = user_state.zoom;
     let Frame { block, timeline, clip, view } = *frame;
     let painter = ui.painter().clone();
@@ -866,7 +874,7 @@ fn sections(
         painter.text(Pos2::new(left, block.top() + 44.0 * z), Align2::LEFT_TOP, text, font.clone(), green);
     }
 
-    overview(&tl, song, layout, &view, timeline, z, position, selected);
+    overview(&tl, song, layout, &view, timeline, z, now);
 
     // The ruler: a tick a bar if they'd be far enough apart, a taller one
     // between a section's passes, and a number where each section starts,
@@ -1023,7 +1031,7 @@ fn sections(
         ));
         response.context_menu(|ui| {
             select(ui.ctx(), node_id, section);
-            section_menu(ui, node_id, graph, user_state, params, song, section, edits);
+            section_menu(ui, cx, section, edits);
         });
 
         if is_renaming {
@@ -1049,8 +1057,8 @@ fn sections(
 
 /// The overview strip: the whole song in little, the section playing lit,
 /// and the part in view framed while zoomed in.
-#[allow(clippy::too_many_arguments)]
-fn overview(painter: &egui::Painter, song: &Song, layout: &Layout, view: &View, timeline: Rect, z: f32, position: Option<Position>, selected: usize) {
+fn overview(painter: &egui::Painter, song: &Song, layout: &Layout, view: &View, timeline: Rect, z: f32, now: Now) {
+    let Now { position, selected } = now;
     let strip = overview_rect(timeline, z);
     let (w0, w1) = (layout.edges[0], layout.edges[song.count()]);
     let to_strip = |x: f32| strip.left() + (x - w0) / (w1 - w0).max(1e-6) * strip.width();
@@ -1132,21 +1140,9 @@ fn rename_field(ui: &mut egui::Ui, node_id: NodeId, rect: Rect, z: f32) -> Optio
 
 /// A lane, over its CV and Gate rows: its name, then its level through the
 /// song, with a cell per section to drag.
-#[allow(clippy::too_many_arguments)]
-fn lane_rows(
-    ui: &mut egui::Ui,
-    node_id: NodeId,
-    graph: &SynthGraph,
-    user_state: &SynthGraphState,
-    params: &Params,
-    song: &Song,
-    layout: &Layout,
-    frame: &Frame,
-    lane: usize,
-    position: Option<Position>,
-    selected: usize,
-    edits: &mut Vec<SynthResponse>,
-) {
+fn lane_rows(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, lane: usize, now: Now, edits: &mut Vec<SynthResponse>) {
+    let Ctx { node_id, graph, user_state, params, song } = cx;
+    let Now { position, selected } = now;
     let z = user_state.zoom;
     let Frame { block, timeline, clip, .. } = *frame;
     let painter = ui.painter().clone();
@@ -1180,7 +1176,7 @@ fn lane_rows(
         let existing = graph.nodes.get(node_id).and_then(|n| n.user_data.labels.get(&key).cloned()).unwrap_or_default();
         ui.ctx().data_mut(|data| data.insert_temp(renaming_id(node_id), Renaming::start(key.clone(), existing)));
     }
-    name_response.context_menu(|ui| lane_menu(ui, node_id, params, song, lane, &lane_label, glide, edits));
+    name_response.context_menu(|ui| lane_menu(ui, cx, lane, &lane_label, glide, edits));
 
     // The level's room, and the gate strip under it
     let tl = painter.with_clip_rect(clip);
@@ -1319,14 +1315,14 @@ fn lane_rows(
         ));
         response.context_menu(|ui| {
             select(ui.ctx(), node_id, section);
-            cue_menu(ui, node_id, params, section, lane, cue, &what, edits);
+            cue_menu(ui, cx, section, lane, cue, &what, edits);
         });
     }
 }
 
 /// A cue's right-click menu: how the lane moves, and to what.
-#[allow(clippy::too_many_arguments)]
-fn cue_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, section: usize, lane: usize, cue: Cue, what: &str, edits: &mut Vec<SynthResponse>) {
+fn cue_menu(ui: &mut egui::Ui, cx: Ctx, section: usize, lane: usize, cue: Cue, what: &str, edits: &mut Vec<SynthResponse>) {
+    let Ctx { node_id, params, .. } = cx;
     ui.label(egui::RichText::new(what).strong());
     ui.separator();
     let set = |next: Cue, edits: &mut Vec<SynthResponse>| {
@@ -1424,8 +1420,8 @@ fn curve_icon(ui: &mut egui::Ui, curve: Curve, chosen: bool) -> egui::Response {
 }
 
 /// A lane's right-click menu: its glide, and clearing it.
-#[allow(clippy::too_many_arguments)]
-fn lane_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, song: &Song, lane: usize, lane_label: &str, glide: f32, edits: &mut Vec<SynthResponse>) {
+fn lane_menu(ui: &mut egui::Ui, cx: Ctx, lane: usize, lane_label: &str, glide: f32, edits: &mut Vec<SynthResponse>) {
+    let Ctx { node_id, params, song, .. } = cx;
     ui.label(egui::RichText::new(lane_label).strong());
     ui.separator();
     ui.horizontal(|ui| {
@@ -1447,17 +1443,8 @@ fn lane_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, song: &Song, l
 }
 
 /// A section's right-click menu.
-#[allow(clippy::too_many_arguments)]
-fn section_menu(
-    ui: &mut egui::Ui,
-    node_id: NodeId,
-    graph: &SynthGraph,
-    user_state: &SynthGraphState,
-    params: &Params,
-    song: &Song,
-    section: usize,
-    edits: &mut Vec<SynthResponse>,
-) {
+fn section_menu(ui: &mut egui::Ui, cx: Ctx, section: usize, edits: &mut Vec<SynthResponse>) {
+    let Ctx { node_id, graph, user_state, .. } = cx;
     let name = section_name(graph, node_id, section);
     ui.label(egui::RichText::new(format!("Section {}: {name}", section + 1)).strong());
     ui.separator();
@@ -1466,7 +1453,7 @@ fn section_menu(
             ui.label(follows_text(graph, leader));
             ui.label(egui::RichText::new(follows_hint(graph, leader)).small().color(theme::text::SECONDARY));
         }
-        None => section_controls(ui, node_id, graph, user_state, params, song, section, edits, true),
+        None => section_controls(ui, cx, section, edits, true),
     }
 }
 
@@ -1533,7 +1520,7 @@ pub fn section_bar(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_
                 ui.add_space(6.0 * zoom);
                 bar_text(ui, follows, zoom).on_hover_text(follows_hint(graph, leader));
             }
-            None => section_controls(ui, node_id, graph, user_state, &params, &song, section, &mut edits, false),
+            None => section_controls(ui, Ctx { node_id, graph, user_state, params: &params, song: &song }, section, &mut edits, false),
         }
     });
     edits
@@ -1585,18 +1572,8 @@ fn name_field(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, width: f32
 }
 
 /// A section's length and the buttons for it, in the bar or its menu.
-#[allow(clippy::too_many_arguments)]
-fn section_controls(
-    ui: &mut egui::Ui,
-    node_id: NodeId,
-    graph: &SynthGraph,
-    user_state: &SynthGraphState,
-    params: &Params,
-    song: &Song,
-    section: usize,
-    edits: &mut Vec<SynthResponse>,
-    menu: bool,
-) {
+fn section_controls(ui: &mut egui::Ui, cx: Ctx, section: usize, edits: &mut Vec<SynthResponse>, menu: bool) {
+    let Ctx { node_id, graph, user_state, params, song } = cx;
     let name = section_name(graph, node_id, section);
     let length = song.sections[section].1;
     let mut bars = length as u32;
@@ -2191,7 +2168,7 @@ mod tests {
         let input = egui::RawInput { time: Some(time), ..Default::default() };
         let _ = ctx.run(input, |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                views = nodes.iter().map(|&node| update_view(ui, node, view_owner(user_state, node), song, timeline(), 1.0, None, 0)).collect();
+                views = nodes.iter().map(|&node| update_view(ui, node, view_owner(user_state, node), song, timeline(), 1.0, Now { position: None, selected: 0 })).collect();
             });
         });
         views

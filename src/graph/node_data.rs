@@ -16,7 +16,7 @@ use eframe::egui::{self, Color32, RichText};
 use egui_node_graph2::{ConnectionSignalTrait, NodeDataTrait, NodeResponse, UserResponseTrait};
 
 use crate::dsp::ModuleCategory;
-use crate::widgets::{knob, led, KnobStyle, KnobConfig, LedConfig};
+use crate::widgets::{knob, led, KnobConfig, LedConfig};
 use super::groups::{GroupId, NodeKind, Side};
 use super::hints::{self, Hint};
 use super::step_grid::step_sequencer_display;
@@ -331,9 +331,32 @@ pub struct SynthNodeData {
 /// How much of the node body shows through while it's bypassed.
 const BYPASSED_OPACITY: f32 = 0.4;
 
-/// Configuration for MIDI mapping display on a knob.
-///
-/// This struct is used to pass MIDI mapping state to the knob rendering function.
+/// What a knob cell draws in and answers to: its module, the graph around
+/// it, the view's zoom, whether it's on the module or a group's face, and
+/// where its edits go.
+pub(super) struct KnobCellCtx<'a> {
+    pub node_id: egui_node_graph2::NodeId,
+    pub graph: &'a super::SynthGraph,
+    pub user_state: &'a mut super::SynthGraphState,
+    pub zoom: f32,
+    pub place: KnobPlace,
+    pub responses: &'a mut Vec<NodeResponse<SynthResponse, SynthNodeData>>,
+}
+
+impl<'a> KnobCellCtx<'a> {
+    /// A knob on its own module.
+    pub fn module(
+        node_id: egui_node_graph2::NodeId,
+        graph: &'a super::SynthGraph,
+        user_state: &'a mut super::SynthGraphState,
+        zoom: f32,
+        responses: &'a mut Vec<NodeResponse<SynthResponse, SynthNodeData>>,
+    ) -> Self {
+        Self { node_id, graph, user_state, zoom, place: KnobPlace::Module, responses }
+    }
+}
+
+/// A knob's MIDI mapping: what its badge shows and its menu offers.
 #[derive(Default)]
 struct KnobMidiConfig {
     /// Whether this knob has a MIDI CC mapping.
@@ -579,110 +602,23 @@ impl SynthNodeData {
         }
     }
 
-    /// Render an interactive knob widget for a parameter value.
-    ///
-    /// When the knob is changed, emits a ParameterChanged response.
-    /// If `is_connected` is true, the knob is dimmed and changes are ignored
-    /// (the value is controlled externally).
-    /// If `signal_value` is Some, the knob displays that value instead of the stored value,
-    /// and if `value_text` is Some, it reads that instead of its value.
-    /// Returns the response of the control drawn, if it is one (a knob or a
-    /// checkbox), so the caller can hang the right-click menu on it.
-    #[allow(clippy::too_many_arguments)]
-    fn render_knob_for_value(
+    /// A knob for a number parameter. It shows `shown` in place of its
+    /// value while something else sets it, and a `locked` knob is greyed and
+    /// can't be turned. Returns the knob's response, and the value the hand
+    /// turned it to, if it did.
+    fn number_knob(
         ui: &mut egui::Ui,
-        value: &SynthValueType,
-        label: &str,
-        size: f32,
-        is_connected: bool,
-        node_id: egui_node_graph2::NodeId,
-        param_name: &str,
-        responses: &mut Vec<NodeResponse<SynthResponse, Self>>,
-        signal_value: Option<f32>,
-        modulated: Option<f32>,
-        value_text: Option<String>,
-        _midi_config: &KnobMidiConfig,
-        accent: Color32,
-        style: KnobStyle,
-        spotlight: f32,
-    ) -> Option<egui::Response> {
-        // Dim the knob if it's connected (externally controlled)
-        let alpha = if is_connected { 0.5 } else { 1.0 };
-
-        match value {
-            SynthValueType::Port => None,
-            SynthValueType::Number { value: val, spec } => {
-                // Range, default, unit and curve all come from the DSP definition
-                let config = KnobConfig {
-                    size,
-                    range: spec.min..=spec.max,
-                    default: spec.default,
-                    format: spec.format(),
-                    logarithmic: spec.logarithmic,
-                    stepped: spec.stepped,
-                    // An untitled knob sits under a column title instead
-                    label: (!label.is_empty()).then(|| label.to_string()),
-                    show_value: true,
-                    value_text,
-                    accent,
-                    style,
-                    modulated: modulated.map(|m| m.clamp(spec.min, spec.max)),
-                    spotlight,
-                    ..Default::default()
-                };
-                let original_val = *val;
-                // Use signal value if connected and available, otherwise use stored value
-                let mut display_val = signal_value
-                    .map(|sv| sv.clamp(spec.min, spec.max))
-                    .unwrap_or(original_val);
-                let response = ui.scope(|ui| {
-                    ui.style_mut().visuals.widgets.inactive.fg_stroke.color =
-                        ui.style().visuals.widgets.inactive.fg_stroke.color.gamma_multiply(alpha);
-                    if is_connected {
-                        ui.disable();
-                    }
-                    knob(ui, &mut display_val, &config)
-                }).inner;
-                // Emit response if value changed and not connected
-                let tolerance = (spec.max - spec.min).abs() * 1e-6;
-                if !is_connected && (display_val - original_val).abs() > tolerance {
-                    responses.push(NodeResponse::User(SynthResponse::ParameterChanged {
-                        node_id,
-                        param_name: param_name.to_string(),
-                        value: display_val,
-                    }));
-                }
-                Some(response)
-            }
-            SynthValueType::Toggle { value: val, .. } => {
-                let original_val = *val;
-                let mut display_val = original_val;
-                let response = ui.vertical(|ui| {
-                    if is_connected {
-                        ui.disable();
-                    }
-                    let response = ui.checkbox(&mut display_val, "");
-                    ui.label(RichText::new(label).small());
-                    response
-                }).inner;
-                if !is_connected && display_val != original_val {
-                    responses.push(NodeResponse::User(SynthResponse::ParameterChanged {
-                        node_id,
-                        param_name: param_name.to_string(),
-                        value: if display_val { 1.0 } else { 0.0 },
-                    }));
-                }
-                Some(response)
-            }
-            SynthValueType::Select { value: val, options, .. } => {
-                // Display-only for now - selections are better handled inline
-                ui.vertical(|ui| {
-                    ui.label(RichText::new(options.get(*val).map(|s| s.as_str()).unwrap_or("?")).small());
-                    ui.label(RichText::new(label).small().weak());
-                });
-                None
-            }
-        }
+        value: f32,
+        spec: &super::value_types::NumberSpec,
+        shown: Option<f32>,
+        locked: bool,
+        config: &KnobConfig,
+    ) -> (egui::Response, Option<f32>) {
+        let mut display_val = shown.map(|shown| shown.clamp(spec.min, spec.max)).unwrap_or(value);
+        let response = ui.add_enabled_ui(!locked, |ui| knob(ui, &mut display_val, config)).inner;
+        let tolerance = (spec.max - spec.min).abs() * 1e-6;
+        let turned = (!locked && (display_val - value).abs() > tolerance).then_some(display_val);
+        (response, turned)
     }
 }
 
@@ -690,35 +626,19 @@ impl SynthNodeData {
     /// One knob of the module's knob row, with its MIDI badge or signal dot
     /// and its right-click menu: on the module itself, or on the face of a
     /// group it's pinned to.
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn knob_cell(
-        &self,
-        ui: &mut egui::Ui,
-        node_id: egui_node_graph2::NodeId,
-        knob_param: &KnobParam,
-        graph: &egui_node_graph2::Graph<Self, super::SynthDataType, SynthValueType>,
-        user_state: &mut super::SynthGraphState,
-        zoom: f32,
-        responses: &mut Vec<NodeResponse<SynthResponse, Self>>,
-        place: KnobPlace,
-    ) {
+    pub(super) fn knob_cell(&self, ui: &mut egui::Ui, knob_param: &KnobParam, cx: &mut KnobCellCtx) {
+        let (node_id, graph, zoom, place) = (cx.node_id, cx.graph, cx.zoom, cx.place);
+        let user_state = &mut *cx.user_state;
+        let responses = &mut *cx.responses;
         let engine_node_id = user_state.get_engine_node_id(node_id);
         let knob_size = 36.0 * zoom;
         // Find the corresponding input parameter by name
         if let Some(node) = graph.nodes.get(node_id) {
             if let Some((_name, input_id)) = node.inputs.iter().find(|(name, _)| *name == knob_param.param_name) {
                 let input = graph.get_input(*input_id);
-
-                // Calculate param_index by finding the position among editable parameters
-                let current_param_index = node.inputs.iter()
-                    .take_while(|(name, _)| *name != knob_param.param_name)
-                    .filter(|(_, id)| {
-                        let inp = graph.get_input(*id);
-                        matches!(inp.kind,
-                            egui_node_graph2::InputParamKind::ConstantOnly |
-                            egui_node_graph2::InputParamKind::ConnectionOrConstant)
-                    })
-                    .count();
+                let Some(current_param_index) = super::port_mapping::parameter_index(graph, node_id, *input_id) else {
+                    return;
+                };
 
                 // Check if this param has an input port and if it's connected
                 // iter_connections returns (InputId, OutputId) - input port and the output it's connected to
@@ -735,26 +655,10 @@ impl SynthNodeData {
                 // Should the knob be disabled? Only for Exposed mode, not for Modulatable
                 let should_disable = takeover.as_ref().is_some_and(|takeover| takeover.locked) || (is_connected && knob_param.disable_when_connected());
 
-                // Get input port index for this parameter (for looking up signal value)
-                let input_port_index = if knob_param.has_input_port() {
-                    // Count ConnectionOrConstant and ConnectionOnly inputs before this one
-                    node.inputs.iter()
-                        .take_while(|(name, _)| *name != knob_param.param_name)
-                        .filter(|(_, id)| {
-                            let inp = graph.get_input(*id);
-                            matches!(inp.kind,
-                                egui_node_graph2::InputParamKind::ConnectionOnly |
-                                egui_node_graph2::InputParamKind::ConnectionOrConstant)
-                        })
-                        .count()
-                } else {
-                    0
-                };
-
                 // Get signal feedback value from audio engine (if connected and available)
                 let signal_value = if is_connected {
-                    engine_node_id.and_then(|eid|
-                        user_state.get_input_value(eid, input_port_index))
+                    super::port_mapping::input_port_index(graph, node_id, *input_id)
+                        .and_then(|port| user_state.get_input_value(engine_node_id?, port))
                 } else {
                     None
                 };
@@ -896,23 +800,37 @@ impl SynthNodeData {
                         } else {
                             None // Modulatable: show base knob value, not CV signal
                         };
-                        Self::render_knob_for_value(
-                            ui,
-                            &input.value,
-                            label,
-                            knob_size,
-                            should_disable,
-                            node_id,
-                            &knob_param.param_name,
-                            responses,
-                            display_signal,
-                            modulated,
-                            takeover.map(|takeover| takeover.text),
-                            &midi_config,
-                            self.category.color(),
-                            user_state.knob_style,
+                        // Knob rows hold only continuous parameters (templates.rs)
+                        let SynthValueType::Number { value, spec } = &input.value else {
+                            return None;
+                        };
+                        // Range, default, unit and curve all come from the DSP definition
+                        let config = KnobConfig {
+                            size: knob_size,
+                            range: spec.min..=spec.max,
+                            default: spec.default,
+                            format: spec.format(),
+                            logarithmic: spec.logarithmic,
+                            stepped: spec.stepped,
+                            // An untitled knob sits under a column title instead
+                            label: (!label.is_empty()).then(|| label.to_string()),
+                            show_value: true,
+                            value_text: takeover.map(|takeover| takeover.text),
+                            accent: self.category.color(),
+                            style: user_state.knob_style,
+                            modulated: modulated.map(|m| m.clamp(spec.min, spec.max)),
                             spotlight,
-                        )
+                            ..Default::default()
+                        };
+                        let (response, turned) = Self::number_knob(ui, *value, spec, display_signal, should_disable, &config);
+                        if let Some(value) = turned {
+                            responses.push(NodeResponse::User(SynthResponse::ParameterChanged {
+                                node_id,
+                                param_name: knob_param.param_name.clone(),
+                                value,
+                            }));
+                        }
+                        Some(response)
                     }).inner
                 });
 
@@ -1106,7 +1024,6 @@ impl SynthNodeData {
     /// A dropdown's or toggle's right-click menu, among the module's inputs
     /// or on a group's face: its jack on the group, if it has a jack,
     /// pinning, and why there's no MIDI Learn.
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn switch_menu(
         &self,
         response: &egui::Response,
@@ -1578,7 +1495,7 @@ impl NodeDataTrait for SynthNodeData {
             for row in self.knob_params.chunks(per_row) {
             ui.horizontal(|ui| {
                 for knob_param in row {
-                    self.knob_cell(ui, node_id, knob_param, graph, user_state, zoom, &mut responses, KnobPlace::Module);
+                    self.knob_cell(ui, knob_param, &mut KnobCellCtx::module(node_id, graph, user_state, zoom, &mut responses));
                 }
                 });
             }

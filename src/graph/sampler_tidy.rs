@@ -33,21 +33,18 @@ pub fn previewing(ui: &egui::Ui, node_id: NodeId) -> Option<Tidy> {
     ui.data(|d| d.get_temp(preview_id(node_id)))
 }
 
+/// What the name button reads: the file's name and length, in `color`.
+pub struct NameLabel<'a> {
+    pub name: &'a str,
+    pub length: &'a str,
+    pub color: Color32,
+}
+
 /// The file's name and length on the row under the waveform, as a button
 /// that opens the menu. The name is cut short to leave room for the rest.
 /// A file `in_tab`, kept only in the browser's tab, can be downloaded too.
-#[allow(clippy::too_many_arguments)]
-pub fn name_button(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    node_id: NodeId,
-    name: &str,
-    length: &str,
-    color: Color32,
-    sample: &ShelvedSample,
-    in_tab: bool,
-    z: f32,
-) -> Vec<SynthResponse> {
+pub fn name_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, label: &NameLabel, sample: &ShelvedSample, in_tab: bool, z: f32) -> Vec<SynthResponse> {
+    let &NameLabel { name, length, color } = label;
     let mut responses = Vec::new();
     let id = popup_id(node_id);
     let open = ui.memory(|m| m.is_popup_open(id));

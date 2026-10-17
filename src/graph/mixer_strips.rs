@@ -24,7 +24,7 @@ use crate::modules::mixer::{heard, voice_pan, Mixer, STRIPS};
 use crate::widgets::{column_meter, PeakBallistics};
 
 use super::hints::{self, Hint};
-use super::node_data::{defer_output_label, KnobPlace, SynthNodeData};
+use super::node_data::{defer_output_label, KnobCellCtx, SynthNodeData};
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
 /// Each channel's colour, for its number, its lane and its lights. Four
@@ -274,7 +274,8 @@ pub fn mixer_strips(
         // The jacks' labels, lit when patched
         for (k, name) in [format!("Ch {n}"), format!("Level {n}"), format!("Pan {n}"), format!("Send {n}")].iter().enumerate() {
             let signal = if k == 0 { SignalType::Audio } else { SignalType::Control };
-            jack_caption(ui, &painter, data, node_id, name, at(2.0, top + (k as f32 + 0.5) * JACK_PITCH), &tiny, signal, feeding(name).is_some(), 0.0);
+            let caption = Caption { name, signal, patched: feeding(name).is_some(), level: 0.0 };
+            jack_caption(ui, &painter, data, node_id, at(2.0, top + (k as f32 + 0.5) * JACK_PITCH), &tiny, caption);
         }
 
         // The number, in the channel's hue
@@ -289,7 +290,8 @@ pub fn mixer_strips(
 
         // The lane: this channel's place in the stereo field
         let lane = Rect::from_min_size(Pos2::new(at(LANE_X, 0.0).x, mid - 11.0 * z), Vec2::new(LANE_W, 22.0) * z);
-        draw_lane(&painter, lane, strip, hue, is_heard, meter(s), user_state.is_playing, z);
+        let lights = Lights { hue, is_heard, meter: meter(s), playing: user_state.is_playing };
+        draw_lane(&painter, lane, strip, lights, z);
         let lane_response = ui.interact(lane, ui.id().with(("mixer_lane", node_id, s)), Sense::hover());
         lane_response.on_hover_text(format!(
             "Where channel {n} sits, left to right. A polyphonic channel has a light per voice, fanned out by its Width. With its Send up it blooms along the lane"
@@ -305,7 +307,8 @@ pub fn mixer_strips(
         let knob_top = top + (ROW - KNOB_CELL) * 0.5 + 1.0;
         for (k, (param, _)) in STRIP_KNOBS.iter().enumerate() {
             let cell = Rect::from_min_size(at(KNOBS_X + k as f32 * KNOB_COLUMN, knob_top), Vec2::new(KNOB_COLUMN, KNOB_CELL - 1.0) * z);
-            knob(data, ui, cell, node_id, graph, user_state, z, &mut responses, &format!("{param} {n}"), "");
+            let mut cx = KnobCellCtx::module(node_id, graph, user_state, z, &mut responses);
+            knob(data, ui, cell, &format!("{param} {n}"), "", &mut cx);
         }
 
         // Mute over solo
@@ -317,7 +320,8 @@ pub fn mixer_strips(
         } else {
             [format!("Mute channel {n}"), String::new()]
         };
-        if button(ui, &painter, mute, ("mixer_mute", node_id, s), "M", strip.muted, theme::accent::ERROR, &tips[0], z) {
+        let latch = Latch { text: "M", on: strip.muted, lit: theme::accent::ERROR, tip: &tips[0] };
+        if button(ui, &painter, mute, ("mixer_mute", node_id, s), latch, z) {
             responses.push(changed(node_id, format!("Mute {n}"), !strip.muted));
         }
         let solo_tip = if strip.soloed {
@@ -325,7 +329,8 @@ pub fn mixer_strips(
         } else {
             format!("Solo channel {n}: hear it alone (with any other soloed channel and the return)")
         };
-        if button(ui, &painter, solo, ("mixer_solo", node_id, s), "S", strip.soloed, theme::accent::WARNING, &solo_tip, z) {
+        let latch = Latch { text: "S", on: strip.soloed, lit: theme::accent::WARNING, tip: &solo_tip };
+        if button(ui, &painter, solo, ("mixer_solo", node_id, s), latch, z) {
             responses.push(changed(node_id, format!("Solo {n}"), !strip.soloed));
         }
     }
@@ -347,14 +352,15 @@ pub fn mixer_strips(
     .into_iter()
     .enumerate()
     {
-        jack_caption(ui, &painter, data, node_id, name, at(2.0, top + (k as f32 + 0.5) * JACK_PITCH), &tiny, signal, feeding(name).is_some(), level);
+        let caption = Caption { name, signal, patched: feeding(name).is_some(), level };
+        jack_caption(ui, &painter, data, node_id, at(2.0, top + (k as f32 + 0.5) * JACK_PITCH), &tiny, caption);
     }
 
     // Return and Master, titled, over the lane's column
     let knob_top = top + (BUS - 68.0) * 0.5;
     for (k, (param, title)) in [("Return", "Return"), ("Master", "Master")].into_iter().enumerate() {
         let cell = Rect::from_min_size(at(LANE_X + k as f32 * (KNOB_COLUMN + 6.0), knob_top), Vec2::new(KNOB_COLUMN, 68.0) * z);
-        knob(data, ui, cell, node_id, graph, user_state, z, &mut responses, param, title);
+        knob(data, ui, cell, param, title, &mut KnobCellCtx::module(node_id, graph, user_state, z, &mut responses));
     }
 
     // The stereo meter, under the strips' meters
@@ -388,21 +394,19 @@ pub fn mixer_strips(
     responses
 }
 
-/// A jack's short label on the left edge, in its signal's colour: bright
-/// while patched, or as bright as `level` says, for the bus row's inputs.
-#[allow(clippy::too_many_arguments)]
-fn jack_caption(
-    ui: &egui::Ui,
-    painter: &egui::Painter,
-    data: &SynthNodeData,
-    node_id: NodeId,
-    name: &str,
-    left_centre: Pos2,
-    font: &egui::FontId,
+/// A jack's short label: its name, its signal, whether it's patched, and
+/// how loud what comes in is (for the bus row's inputs; 0 for the rest).
+struct Caption<'a> {
+    name: &'a str,
     signal: SignalType,
     patched: bool,
     level: f32,
-) {
+}
+
+/// A jack's short label on the left edge, in its signal's colour: bright
+/// while patched, or as bright as its level says, for the bus row's inputs.
+fn jack_caption(ui: &egui::Ui, painter: &egui::Painter, data: &SynthNodeData, node_id: NodeId, left_centre: Pos2, font: &egui::FontId, caption: Caption) {
+    let Caption { name, signal, patched, level } = caption;
     let base = signal.color();
     let color = if patched {
         base.lerp_to_gamma(Color32::WHITE, 0.15 + 0.5 * level.clamp(0.0, 1.0))
@@ -417,41 +421,28 @@ fn jack_caption(
 }
 
 /// The knob for `param`, in `cell`, titled `title` (or untitled).
-#[allow(clippy::too_many_arguments)]
-fn knob(
-    data: &SynthNodeData,
-    ui: &mut egui::Ui,
-    cell: Rect,
-    node_id: NodeId,
-    graph: &SynthGraph,
-    user_state: &mut SynthGraphState,
-    zoom: f32,
-    responses: &mut Vec<NodeResponse<SynthResponse, SynthNodeData>>,
-    param: &str,
-    title: &str,
-) {
+fn knob(data: &SynthNodeData, ui: &mut egui::Ui, cell: Rect, param: &str, title: &str, cx: &mut KnobCellCtx) {
     let Some(knob) = data.knob_params.iter().find(|knob| knob.param_name == param) else {
         return;
     };
     let mut knob = knob.clone();
     knob.label = title.to_string();
     let mut cell_ui = ui.new_child(UiBuilder::new().max_rect(cell).id_salt(("mixer_knob", param)));
-    data.knob_cell(&mut cell_ui, node_id, &knob, graph, user_state, zoom, responses, KnobPlace::Module);
+    data.knob_cell(&mut cell_ui, &knob, cx);
+}
+
+/// A small latching button: its letter, whether it's latched, the colour
+/// it lights when it is, and its tooltip.
+struct Latch<'a> {
+    text: &'a str,
+    on: bool,
+    lit: Color32,
+    tip: &'a str,
 }
 
 /// A small latching button; true when clicked.
-#[allow(clippy::too_many_arguments)]
-fn button(
-    ui: &egui::Ui,
-    painter: &egui::Painter,
-    rect: Rect,
-    id: impl std::hash::Hash,
-    text: &str,
-    on: bool,
-    lit: Color32,
-    tip: &str,
-    z: f32,
-) -> bool {
+fn button(ui: &egui::Ui, painter: &egui::Painter, rect: Rect, id: impl std::hash::Hash, latch: Latch, z: f32) -> bool {
+    let Latch { text, on, lit, tip } = latch;
     let response = ui.interact(rect, ui.id().with(id), Sense::click());
     let hot = response.hovered();
     let (fill, stroke, ink) = if on {
@@ -468,18 +459,18 @@ fn button(
     clicked
 }
 
-/// Draws one channel's lane of the stereo field.
-#[allow(clippy::too_many_arguments)]
-fn draw_lane(
-    painter: &egui::Painter,
-    lane: Rect,
-    strip: &StripView,
+/// How a channel's lights shine: in its hue, as loud as its meter, grey if
+/// it can't be heard, and only where a voice sounds while the patch plays.
+struct Lights<'a> {
     hue: Color32,
     is_heard: bool,
-    meter: &PeakBallistics,
+    meter: &'a PeakBallistics,
     playing: bool,
-    z: f32,
-) {
+}
+
+/// Draws one channel's lane of the stereo field.
+fn draw_lane(painter: &egui::Painter, lane: Rect, strip: &StripView, lights: Lights, z: f32) {
+    let Lights { hue, is_heard, meter, playing } = lights;
     painter.rect(lane, 4.0 * z, theme::background::MAIN, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
     let inset = 7.0 * z;
     let (x_left, x_right) = (lane.left() + inset, lane.right() - inset);

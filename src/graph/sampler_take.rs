@@ -302,23 +302,23 @@ pub fn draw_tidied(painter: &egui::Painter, plot: Rect, said: &str, age: f32, z:
     true
 }
 
+/// A module's Rec button: whether it's held down (from the node or a
+/// footswitch), the parameter it presses, whether takes are tidied (where
+/// the module can), and what, if anything, stops it recording.
+#[derive(Clone, Copy)]
+pub struct RecButton {
+    pub down: bool,
+    pub param_index: usize,
+    pub tidies: Option<bool>,
+    pub blocked: Option<RecBlock>,
+}
+
 /// The Rec button, in `rect`: pressed from the face, it holds the Rec
 /// Button parameter (the module's `param_index`) down for a moment.
 /// Right-click turns Tidy takes on or off (`tidies`, where the module has
 /// it), and learns a MIDI footswitch for it.
-#[allow(clippy::too_many_arguments)]
-pub fn rec_button(
-    ui: &mut egui::Ui,
-    rect: Rect,
-    node_id: NodeId,
-    user_state: &SynthGraphState,
-    view: &RecView,
-    down: bool,
-    param_index: usize,
-    tidies: Option<bool>,
-    blocked: Option<RecBlock>,
-    z: f32,
-) -> Vec<SynthResponse> {
+pub fn rec_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, user_state: &SynthGraphState, view: &RecView, rec: RecButton, z: f32) -> Vec<SynthResponse> {
+    let RecButton { down, param_index, tidies, blocked } = rec;
     let tidy_menu = tidies.is_some();
     let tidies = tidies.unwrap_or(false);
     let mut responses = Vec::new();

@@ -300,7 +300,7 @@ pub fn looper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
             1 => theme::accent::SUCCESS,
             _ => theme::text::SECONDARY,
         };
-        draw_pedal(&painter, disc_center, disc, n, ink, lit, down, pedal.hovered(), z);
+        draw_pedal(&painter, disc_center, disc, n, PedalLook { ink, lit, down, hovered: pedal.hovered() }, z);
         painter.text(
             Pos2::new(cx, pedals_top + 25.0 * z),
             egui::Align2::CENTER_CENTER,
@@ -368,9 +368,19 @@ fn pedal_tip(pedal: usize) -> &'static str {
     }
 }
 
+/// How a pedal looks this frame: its colour, whether what it does is on,
+/// and whether it's pressed or under the mouse.
+#[derive(Clone, Copy)]
+struct PedalLook {
+    ink: Color32,
+    lit: bool,
+    down: bool,
+    hovered: bool,
+}
+
 /// A footswitch: a metal disc with its symbol, lit when it's doing its job.
-#[allow(clippy::too_many_arguments)]
-fn draw_pedal(painter: &egui::Painter, center: Pos2, radius: f32, pedal: usize, ink: Color32, lit: bool, down: bool, hovered: bool, z: f32) {
+fn draw_pedal(painter: &egui::Painter, center: Pos2, radius: f32, pedal: usize, look: PedalLook, z: f32) {
+    let PedalLook { ink, lit, down, hovered } = look;
     // A pressed pedal sinks a little
     let center = if down { center + Vec2::new(0.0, 0.8 * z) } else { center };
     if lit {
