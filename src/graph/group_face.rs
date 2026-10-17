@@ -407,9 +407,6 @@ fn switch_rows<'a>(
     face_width: f32,
 ) -> Vec<(Vec<&'a FaceControl>, f32)> {
     let gap = ui.spacing().item_spacing.x;
-    let least = (face_width - gap) / 2.0;
-    let font = egui::TextStyle::Button.resolve(ui.style());
-    let chrome = ui.spacing().icon_width + ui.spacing().icon_spacing + 2.0 * ui.spacing().button_padding.x;
     let wants = |control: &FaceControl| {
         let options = graph.nodes.get(control.node).and_then(|module| {
             let (_, input) = module.inputs.iter().find(|(name, _)| *name == control.param)?;
@@ -418,10 +415,7 @@ fn switch_rows<'a>(
                 _ => None,
             }
         });
-        let longest = options.unwrap_or_default().into_iter().map(|option| {
-            ui.fonts(|f| f.layout_no_wrap(option, font.clone(), Color32::WHITE).size().x)
-        });
-        (longest.fold(0.0, f32::max) + chrome).clamp(least, face_width)
+        chip_width(ui, &options.unwrap_or_default(), face_width)
     };
 
     let mut rows: Vec<(Vec<&FaceControl>, f32)> = Vec::new();
@@ -442,6 +436,16 @@ fn switch_rows<'a>(
             (row, width)
         })
         .collect()
+}
+
+/// How wide a chip offering `options` wants to be on a face `face_width`
+/// wide: as wide as its longest choice, at least half the face. Measured as
+/// the text would be if fonts scaled smoothly, so the chips sharing a row,
+/// and with them the face's height, don't change as the view zooms (#326).
+fn chip_width(ui: &egui::Ui, options: &[String], face_width: f32) -> f32 {
+    let least = (face_width - ui.spacing().item_spacing.x) / 2.0;
+    let longest = options.iter().map(|option| steady_text::dropdown_width(ui, option, 0.0));
+    longest.fold(least, f32::max).min(face_width)
 }
 
 /// A dropdown or toggle pinned to a group's face, `width` wide: its name in
@@ -573,4 +577,50 @@ fn rename_field(
     }
     ui.label(RichText::new("Enter to name it, Esc to keep the name").small().color(theme::text::QUIET));
     ui.add_space(4.0 * zoom);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A chip wants the same share of the face at every zoom, so the chips
+    /// sharing a row don't change as the view zooms (#326).
+    #[test]
+    fn a_chip_keeps_its_share_of_the_face_as_the_view_zooms() {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let options: Vec<String> = ["Major", "Pentatonic Minor", "Dorian"].map(String::from).into();
+        let mut seen = Vec::new();
+        for _ in 0..2 {
+            let input = egui::RawInput { viewport_id: egui::ViewportId::ROOT, ..Default::default() };
+            ctx.set_pixels_per_point(1.25);
+            let _ = ctx.run(input, |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    seen.clear();
+                    let style = ui.style().clone();
+                    for step in 0..60 {
+                        let zoom = 0.3 * (2.0f32 / 0.3).powf(step as f32 / 59.0);
+                        // The canvas scales the style as it zooms
+                        let mut zoomed = (*style).clone();
+                        for font in zoomed.text_styles.values_mut() {
+                            font.size *= zoom;
+                        }
+                        let spacing = &mut zoomed.spacing;
+                        spacing.item_spacing *= zoom;
+                        spacing.button_padding *= zoom;
+                        spacing.icon_width *= zoom;
+                        spacing.icon_spacing *= zoom;
+                        ui.set_style(zoomed);
+                        seen.push((zoom, chip_width(ui, &options, PREVIEW_WIDTH * zoom) / zoom));
+                    }
+                    ui.set_style(style);
+                });
+            });
+        }
+        let (_, first) = seen[0];
+        assert!(first > PREVIEW_WIDTH / 2.0, "the longest choice is wider than half the face: {first}");
+        for (zoom, width) in &seen {
+            assert!((width - first).abs() < 0.01 * first, "{width} at zoom {zoom}, {first} at the first");
+        }
+    }
 }
