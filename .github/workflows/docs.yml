@@ -1,52 +1,38 @@
 name: Deploy Docs
 
+# Deploys once CI on master is green, never from a red commit. Pushes land
+# close together (several sessions plus the nightly [Docs] commit), so one
+# deploy runs at a time and a newer one cancels an older one in flight. The
+# site records the Soba commit it was built from (soba/SOURCE): a run whose
+# commit is older than that never publishes, and a run with nothing new for
+# the site stops before building
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - 'docs/**'
-      # The app in the browser, published beside the manual at /soba/play/
-      - 'src/**'
-      - 'patches/**'
-      - 'assets/**'
-      - 'index.html'
-      - 'Trunk.toml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
   workflow_dispatch:
+
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - name: Checkout Soba
         uses: actions/checkout@v4
-
-      - name: Install mdBook
-        run: |
-          curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.40/mdbook-v0.4.40-x86_64-unknown-linux-gnu.tar.gz | tar -xz
-          sudo mv mdbook /usr/local/bin/
-
-      - name: Build docs
-        run: mdbook build docs
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      # trunk fetches wasm-bindgen and wasm-opt itself
-      - name: Install trunk
-        run: |
-          curl -sSL https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xz
-          sudo mv trunk /usr/local/bin/
-
-      - name: Build the app for the browser
-        run: trunk build --release
+          ref: ${{ env.SHA }}
+          # The whole history, to compare with the commit the site holds
+          fetch-depth: 0
 
       - name: Checkout docs site repo
         uses: actions/checkout@v4
@@ -55,15 +41,69 @@ jobs:
           ssh-key: ${{ secrets.DOCS_DEPLOY_KEY }}
           path: docs-site
 
+      # What the site shows: the manual, and the app in the browser published
+      # beside it at /soba/play/. A manual run rebuilds even when nothing changed
+      - name: Is there anything new to deploy?
+        id: check
+        run: |
+          deployed=$(cat docs-site/soba/SOURCE 2>/dev/null || true)
+          deploy=true
+          if [ -z "$deployed" ] || ! git cat-file -e "$deployed^{commit}" 2>/dev/null; then
+            echo "The site's commit is unknown here: deploying ${SHA::7}"
+          elif [ "$deployed" != "$SHA" ] && git merge-base --is-ancestor "$SHA" "$deployed"; then
+            echo "The site holds ${deployed::7}, newer than ${SHA::7}: not deploying"
+            deploy=false
+          elif [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && git diff --quiet "$deployed" "$SHA" -- \
+              docs src patches assets index.html Trunk.toml Cargo.toml Cargo.lock \
+              .github/workflows/docs.yml; then
+            echo "Nothing the site shows changed between ${deployed::7} and ${SHA::7}"
+            deploy=false
+          fi
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+
+      - name: Install mdBook
+        if: steps.check.outputs.deploy == 'true'
+        run: |
+          curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.40/mdbook-v0.4.40-x86_64-unknown-linux-gnu.tar.gz | tar -xz
+          sudo mv mdbook /usr/local/bin/
+
+      - name: Build docs
+        if: steps.check.outputs.deploy == 'true'
+        run: mdbook build docs
+
+      - name: Install Rust toolchain
+        if: steps.check.outputs.deploy == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        if: steps.check.outputs.deploy == 'true'
+        uses: Swatinem/rust-cache@v2
+
+      # trunk fetches wasm-bindgen and wasm-opt itself
+      - name: Install trunk
+        if: steps.check.outputs.deploy == 'true'
+        run: |
+          curl -sSL https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xz
+          sudo mv trunk /usr/local/bin/
+
+      - name: Build the app for the browser
+        if: steps.check.outputs.deploy == 'true'
+        run: trunk build --release
+
       - name: Copy built docs
+        if: steps.check.outputs.deploy == 'true'
         run: |
           rm -rf docs-site/soba
           cp -r docs/book docs-site/soba
           cp -r dist docs-site/soba/play
+          echo "$SHA" > docs-site/soba/SOURCE
 
       # Until the rename, the manual lived at /modular/. Each page there now
       # forwards to the same page under /soba/, keeping ?patch=… and #anchors
       - name: Forward the old addresses
+        if: steps.check.outputs.deploy == 'true'
         run: |
           rm -rf docs-site/modular
           cd docs-site/soba
@@ -75,11 +115,20 @@ jobs:
               "$target" "$target" "$target" "$target" "$target" > "../modular/$page"
           done
 
+      # The site repo may have moved on under this run (another project's
+      # deploy): replay this commit on top of it and push again
       - name: Push to docs site
+        if: steps.check.outputs.deploy == 'true'
         run: |
           cd docs-site
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git diff --quiet && git diff --staged --quiet || git commit -m "Update Soba docs"
-          git push
+          git diff --staged --quiet && exit 0
+          git commit -m "Update Soba docs to ${SHA::7}"
+          for attempt in 1 2 3 4 5; do
+            git push && exit 0
+            sleep $((attempt * 5))
+            git pull --rebase
+          done
+          exit 1
