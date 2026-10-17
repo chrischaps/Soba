@@ -1078,14 +1078,30 @@ impl SynthNodeData {
                     super::group_face::reset_name_field(ui.ctx(), super::group_face::face_name_id(node_id, &knob_param.param_name));
                 }
 
-                // Handle right-click context menu for MIDI Learn
-                if let Some(engine_id) = engine_node_id {
-                    let menu_response = interact_response.context_menu(|ui| {
-                        // The menu is as wide as its longest entry, not wrapped to the knob
-                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                        if place.is_face() {
-                            responses.extend(self.face_name_item(ui, node_id, &knob_param.param_name, named).map(NodeResponse::User));
+                // The right-click menu: the value, MIDI Learn and pinning
+                if interact_response.secondary_clicked() {
+                    super::knob_menu::reset_value_field(ui.ctx(), super::knob_menu::value_field_id(node_id, &knob_param.param_name));
+                }
+                let menu_response = interact_response.context_menu(|ui| {
+                    // The menu is as wide as its longest entry, not wrapped to the knob
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                    if place.is_face() {
+                        responses.extend(self.face_name_item(ui, node_id, &knob_param.param_name, named).map(NodeResponse::User));
+                    }
+                    // Its value, to type, and the way back to its default
+                    if let SynthValueType::Number { value, spec } = &input.value {
+                        let id = super::knob_menu::value_field_id(node_id, &knob_param.param_name);
+                        if let Some(value) = super::knob_menu::value_items(ui, id, spec, *value, !should_disable, !place.is_face()) {
+                            responses.push(NodeResponse::User(SynthResponse::ParameterChanged {
+                                node_id,
+                                param_name: knob_param.param_name.clone(),
+                                value,
+                            }));
                         }
+                    }
+                    // Learning a CC needs the module running in the engine
+                    if let Some(engine_id) = engine_node_id {
+                        ui.separator();
                         if is_learn_target {
                             // Already waiting for a CC: the way out
                             if ui.button("Cancel MIDI Learn").clicked() {
@@ -1151,15 +1167,15 @@ impl SynthNodeData {
                             .response
                             .on_hover_text("The DAW automates the macro, and the knob follows it");
                         }
-                        if self.parent.is_some() || place.is_face() {
-                            ui.separator();
-                        }
-                        responses.extend(self.pin_items(ui, node_id, &knob_param.param_name, place).map(NodeResponse::User));
-                    });
-                    // Set flag if context menu is open to prevent add-node menu
-                    if menu_response.is_some() {
-                        user_state.widget_context_menu_open = true;
                     }
+                    if self.parent.is_some() || place.is_face() {
+                        ui.separator();
+                    }
+                    responses.extend(self.pin_items(ui, node_id, &knob_param.param_name, place).map(NodeResponse::User));
+                });
+                // Set flag if context menu is open to prevent add-node menu
+                if menu_response.is_some() {
+                    user_state.widget_context_menu_open = true;
                 }
             }
         }

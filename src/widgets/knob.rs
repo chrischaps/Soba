@@ -335,6 +335,8 @@ const ZERO_LOG_RATIO: f32 = 100.0;
 /// - Drag up/down to change value
 /// - Shift+drag for fine control
 /// - Double-click to reset to default
+/// - With focus, arrow keys, Page Up/Down and Home (see [`super::knob_input`])
+/// - Alt+wheel over it to turn it
 pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
     let desired_size = Vec2::splat(config.size);
     // Scale label/value heights proportionally with knob size (base 36.0 -> 16.0 ratio)
@@ -392,6 +394,10 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
         }
     }
 
+    // Turned without dragging: by the keys while it has focus, or Alt+wheel
+    super::knob_input::keys(ui, &response, config, value);
+    super::knob_input::wheel(ui, &response, config, value);
+
     // Where the CV has been lately, kept between frames
     let swath_id = response.id.with("cv_swath");
     let swath = match config.modulated {
@@ -406,7 +412,8 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
             None
         }
     };
-    let hot = response.hovered() || response.dragged();
+    // Focus lights it as a hover does, so the keys' knob can be seen
+    let hot = response.hovered() || response.dragged() || response.has_focus();
 
     // Draw the knob
     if ui.is_rect_visible(rect) {

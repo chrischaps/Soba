@@ -23,11 +23,13 @@ pub struct Hint {
     /// On a group's face where it's been named: that name, and the module
     /// whose control it is.
     face: Option<(String, String)>,
+    /// A knob's, which says how to turn it other than by dragging.
+    knob: bool,
 }
 
 impl Hint {
     fn port(port: &PortDefinition) -> Self {
-        Self { name: port.name, description: port.description, signal: Some(port.signal_type), range: None, face: None }
+        Self { name: port.name, description: port.description, signal: Some(port.signal_type), range: None, face: None, knob: false }
     }
 
     fn parameter(def: &ParameterDefinition) -> Self {
@@ -39,7 +41,7 @@ impl Hint {
             let format = NumberSpec::from_definition(def).format();
             format!("{} to {}", format.format(def.min), format.format(def.max))
         });
-        Self { name: def.name, description: def.description, signal: None, range, face: None }
+        Self { name: def.name, description: def.description, signal: None, range, face: None, knob: false }
     }
 
     /// The tooltip for an editor input, by its name. A jack describes its
@@ -60,7 +62,7 @@ impl Hint {
 
     /// The tooltip for a knob, by its parameter's name.
     pub fn knob(module_id: &str, param_name: &str) -> Option<Self> {
-        find_parameter(catalog::module(module_id)?, param_name).map(Self::parameter)
+        find_parameter(catalog::module(module_id)?, param_name).map(|def| Self { knob: true, ..Self::parameter(def) })
     }
 
     /// The tooltip for a control a group's face calls `name`: it leads with
@@ -92,8 +94,14 @@ impl Hint {
         if let Some(range) = &self.range {
             ui.label(RichText::new(range).small().color(theme::text::SECONDARY));
         }
+        if self.knob {
+            ui.label(RichText::new(KNOB_TIP).small().color(theme::text::SECONDARY));
+        }
     }
 }
+
+/// The ways to turn a knob besides dragging it, under a knob's tooltip.
+const KNOB_TIP: &str = "Double-click resets. Alt+scroll turns it, as do the arrow keys once it's clicked. Right-click to type a value";
 
 fn find_parameter<'a>(spec: &'a ModuleSpec, name: &str) -> Option<&'a ParameterDefinition> {
     spec.parameters.iter().find(|p| p.name == name)

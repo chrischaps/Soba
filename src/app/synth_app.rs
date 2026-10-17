@@ -3788,7 +3788,7 @@ impl SynthApp {
         // while it's open. Any of these turns presses away; releases still
         // count, so a key held while one took over doesn't stick (#316)
         let taken = ctx.input(|i| i.modifiers.ctrl || i.modifiers.alt || i.modifiers.command)
-            || ctx.wants_keyboard_input()
+            || crate::widgets::typing(ctx)
             || self.quick_add.is_some()
             || chord_popover;
 
@@ -4148,13 +4148,13 @@ impl SynthApp {
         // F1 shows the shortcuts. Escape puts them away before it does
         // anything else, unless a text field or the palette has it
         if !prompt_open {
-            let free = !ctx.wants_keyboard_input() && self.quick_add.is_none();
+            let free = !crate::widgets::typing(ctx) && self.quick_add.is_none();
             self.shortcuts.handle_keys(ctx, free);
         }
 
         // Undo and redo, unless a text field has the keys (it has its own undo).
         // Redo is checked first: Ctrl+Z alone would also match Ctrl+Shift+Z.
-        if !ctx.wants_keyboard_input() && !prompt_open {
+        if !crate::widgets::typing(ctx) && !prompt_open {
             use egui::{Key, KeyboardShortcut, Modifiers};
             let (redo, undo) = ctx.input_mut(|i| {
                 let redo = i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z))
@@ -4207,7 +4207,7 @@ impl SynthApp {
 
         // Editing shortcuts act on the graph, so they wait while a text field
         // or the palette has the keys
-        if !ctx.wants_keyboard_input() && self.quick_add.is_none() && !prompt_open {
+        if !crate::widgets::typing(ctx) && self.quick_add.is_none() && !prompt_open {
             self.handle_group_shortcuts(ctx);
             self.handle_editing_shortcuts(ctx);
             self.handle_framing_shortcut(ctx);
@@ -4495,6 +4495,8 @@ impl eframe::App for SynthApp {
         }
         // The wheel over an Arranger's timeline zooms and pans it, not the canvas
         crate::graph::claim_arranger_wheel(ctx, raw_input);
+        // Alt+wheel over a knob turns it
+        crate::widgets::claim_knob_wheel(ctx, raw_input);
     }
 
     /// Stores recent files, and the patch while it has unsaved changes, so

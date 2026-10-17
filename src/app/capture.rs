@@ -71,6 +71,7 @@
 //! 3.5  rclick                       # right-click, for context menus
 //! 3.5  wheel -120                   # turn the mouse wheel (points, down < 0)
 //! 3.5  wheel 240 ctrl               # ...with Ctrl held, which zooms
+//! 3.5  wheel 120 alt                # ...with Alt, which turns a knob under it
 //! 4.0  view 120 -40 2.0             # pan the graph to an offset over 2 s
 //! 4.0  zoom 1.4 2.0                 # zoom the graph by a factor over 2 s
 //! 4.0  fit                          # frame the whole level, as F does
@@ -215,8 +216,8 @@ enum Cue {
     Button(bool),
     /// The secondary button, pressed or released.
     SecondaryButton(bool),
-    /// A turn of the mouse wheel, in points, with Ctrl held or not.
-    Wheel { delta: f32, ctrl: bool },
+    /// A turn of the mouse wheel, in points, with Ctrl or Alt held or neither.
+    Wheel { delta: f32, modifiers: egui::Modifiers },
     View { pan: Vec2, dur: f64 },
     Zoom { factor: f32, dur: f64 },
     Camera { offset: Vec2, scale: f32, dur: f64 },
@@ -757,8 +758,7 @@ impl Capture {
                         modifiers: egui::Modifiers::default(),
                     });
                 }
-                Cue::Wheel { delta, ctrl } => {
-                    let modifiers = if ctrl { egui::Modifiers::CTRL } else { egui::Modifiers::default() };
+                Cue::Wheel { delta, modifiers } => {
                     raw.events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, delta), modifiers });
                 }
                 Cue::View { pan, dur } => {
@@ -1307,7 +1307,14 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
                 cues.push((t + 0.05, Cue::Move { to, dur }));
                 cues.push((t + 0.1 + dur, Cue::Button(false)));
             }
-            "wheel" => cues.push((t, Cue::Wheel { delta: num(2)? as f32, ctrl: words.get(3) == Some(&"ctrl") })),
+            "wheel" => {
+                let modifiers = match words.get(3) {
+                    Some(&"ctrl") => egui::Modifiers::CTRL,
+                    Some(&"alt") => egui::Modifiers::ALT,
+                    _ => egui::Modifiers::default(),
+                };
+                cues.push((t, Cue::Wheel { delta: num(2)? as f32, modifiers }))
+            }
             "view" => cues.push((t, Cue::View { pan: Vec2::new(num(2)? as f32, num(3)? as f32), dur: opt(4)? })),
             "zoom" => cues.push((t, Cue::Zoom { factor: num(2)? as f32, dur: opt(3)? })),
             "camera" => cues.push((t, Cue::Camera {

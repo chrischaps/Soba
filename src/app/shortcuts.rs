@@ -54,6 +54,8 @@ pub const SHEET: &[Group] = &[
         rows: &[
             ("`Shift` + drag", "Fine knob adjustment"),
             ("Double-click a knob", "Reset it to its default"),
+            ("`Alt` + scroll over a knob", "Turn it, finely with `Shift` held too"),
+            ("Click a knob, then the arrow keys", "Nudge it: `Shift` finer, `Page Up` and `Page Down` further, `Home` to its default"),
             ("`Ctrl + M`", "Mutate the selected modules' knobs: hold it to go further"),
             ("`Ctrl + Alt + M`", "Mutate their switches and dropdowns too"),
             ("`Ctrl + Shift + M`", "Keep the knobs as the next free scene of a Scenes module"),

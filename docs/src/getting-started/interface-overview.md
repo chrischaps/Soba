@@ -82,7 +82,9 @@ Hover any jack's name or knob for a tooltip: what it does, its signal type in th
 |----|---------|
 | Change a value | Drag up or down |
 | Make fine adjustments | Hold `Shift` while dragging |
-| Return to the default | Double-click |
+| Nudge it | Hold `Alt` and scroll over it, or click it and press the arrow keys |
+| Set an exact value | Right-click, type into **Value** and press `Enter`: `440`, `1.2 kHz`, `250 ms`, `-6 dB`, `C#3` |
+| Return to the default | Double-click, press `Home` once you've clicked it, or right-click and **Reset** |
 | Map to a MIDI controller | Right-click, then **Learn MIDI CC** |
 | Let the DAW automate it (in the [plugin](installation.md#the-plugin-clap-and-vst3)) | Right-click, then **Map to Macro** |
 
@@ -357,6 +359,8 @@ Recent files, the autosave, your cable style and the window's size and position 
 |----------|--------|
 | `Shift` + drag | Fine knob adjustment |
 | Double-click a knob | Reset it to its default |
+| `Alt` + scroll over a knob | Turn it, finely with `Shift` held too |
+| Click a knob, then the arrow keys | Nudge it: `Shift` finer, `Page Up` and `Page Down` further, `Home` to its default |
 | `Ctrl + M` | Mutate the selected modules' knobs: hold it to go further |
 | `Ctrl + Alt + M` | Mutate their switches and dropdowns too |
 | `Ctrl + Shift + M` | Keep the knobs as the next free scene of a Scenes module |

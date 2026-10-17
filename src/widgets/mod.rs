@@ -5,6 +5,8 @@
 //! and the noise display. Most module faces live in `graph::*_display`.
 
 pub mod knob;
+pub mod knob_input;
+mod param_parse;
 pub mod fader;
 pub mod led;
 pub mod cpu_meter;
@@ -16,6 +18,7 @@ pub mod noise_display;
 
 // Re-export commonly used items
 pub use knob::{knob, mini_knob, KnobConfig, KnobStyle, ParamFormat};
+pub use knob_input::{claim_wheel as claim_knob_wheel, typing};
 pub use fader::{fader, horizontal_fader, FaderConfig};
 pub use led::{led, LedConfig};
 pub use cpu_meter::{cpu_meter, CpuMeterConfig, cpu_load_color};
