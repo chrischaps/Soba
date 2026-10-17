@@ -332,6 +332,9 @@ pub struct Oscillator {
     /// PWM has, at the end of the last block.
     live_hz: f32,
     live_pulse_width: f32,
+    /// The pitch in octaves above C4 that `live_hz` was worked out from, so
+    /// a steady pitch skips the `exp2`.
+    live_octaves: f32,
 }
 
 impl Oscillator {
@@ -409,6 +412,7 @@ impl Oscillator {
             down_right: Downsampler2x::new(),
             trace: Trace::new(),
             live_hz: Self::C4_HZ,
+            live_octaves: 0.0,
             live_pulse_width: 0.5,
         };
         osc.reset_phases();
@@ -537,6 +541,18 @@ impl DspModule for Oscillator {
         let inv_rate = 1.0 / (2.0 * self.sample_rate);
         let tuned_hz = Self::C4_HZ * self.pitch_smooth.target().exp2();
 
+        // Outputs nothing hears are left silent. Out is always worked out:
+        // the display draws it
+        let sub_heard = context.output_heard(Self::OUT_SUB);
+        let (left_heard, right_heard) = (context.output_heard(Self::OUT_LEFT), context.output_heard(Self::OUT_RIGHT));
+        let stereo = left_heard || right_heard;
+        // ...and their downsamplers start from silence when they're patched again
+        for (heard, down) in [(sub_heard, &mut self.down_sub), (left_heard, &mut self.down_left), (right_heard, &mut self.down_right)] {
+            if !heard {
+                down.reset();
+            }
+        }
+
         for i in 0..context.block_size {
             let pitch = self.pitch_smooth.next();
             let fm_depth = self.fm_depth_smooth.next();
@@ -544,7 +560,10 @@ impl DspModule for Oscillator {
             let pulse_width = (self.pulse_width_smooth.next() + input(Self::PORT_PWM, i) * 0.4).clamp(0.1, 0.9);
 
             let octaves = pitch + input(Self::PORT_V_OCT, i) + input(Self::PORT_EXP_FM, i) * exp_depth;
-            self.live_hz = Self::C4_HZ * octaves.exp2();
+            if octaves != self.live_octaves {
+                self.live_octaves = octaves;
+                self.live_hz = Self::C4_HZ * octaves.exp2();
+            }
             self.live_pulse_width = pulse_width;
             // Through-zero: the frequency may go negative and the phase run backwards
             let hz = self.live_hz * (1.0 + fm_depth * input(Self::PORT_FM, i));
@@ -574,8 +593,10 @@ impl DspModule for Oscillator {
                 for v in 0..n {
                     let s = self.voices[v].tick(wave, pulse_width, step * self.ratios[v], sync_here);
                     mono[k] += s;
-                    left[k] += s * self.gains_left[v];
-                    right[k] += s * self.gains_right[v];
+                    if stereo {
+                        left[k] += s * self.gains_left[v];
+                        right[k] += s * self.gains_right[v];
+                    }
                 }
                 sub[k] = self.sub.tick(step, sync_here);
                 if let Some(d) = self.sub.rose {
@@ -589,9 +610,15 @@ impl DspModule for Oscillator {
                 self.trace.cycle(ago, tuned_hz, self.sample_rate);
             }
             self.trace.push(out);
-            outputs[Self::OUT_SUB].samples[i] = self.down_sub.process(sub);
-            outputs[Self::OUT_LEFT].samples[i] = self.down_left.process(left) * norm;
-            outputs[Self::OUT_RIGHT].samples[i] = self.down_right.process(right) * norm;
+            if sub_heard {
+                outputs[Self::OUT_SUB].samples[i] = self.down_sub.process(sub);
+            }
+            if left_heard {
+                outputs[Self::OUT_LEFT].samples[i] = self.down_left.process(left) * norm;
+            }
+            if right_heard {
+                outputs[Self::OUT_RIGHT].samples[i] = self.down_right.process(right) * norm;
+            }
         }
     }
 
@@ -671,6 +698,29 @@ mod tests {
             done += block;
         }
         result
+    }
+
+    #[test]
+    fn unheard_outputs_are_left_silent_and_out_is_unchanged() {
+        // A unison, so Out L and Out R differ from Out
+        let params = with(with(defaults(), Oscillator::PARAM_VOICES, 5.0), Oscillator::PARAM_WAVEFORM, 1.0);
+        let all = render(&params, 1024);
+        let mut osc = Oscillator::new();
+        osc.prepare(SR, 256);
+        osc.reset();
+        let (mut out, mut sub, mut right) = (Vec::new(), Vec::new(), Vec::new());
+        for _ in 0..4 {
+            let mut outs = outputs(256);
+            // Out and Out R heard
+            osc.process(&[], &mut outs, &params, &ProcessContext::new(SR, 256).hearing(0b1001));
+            assert!(outs[Oscillator::OUT_LEFT].samples.iter().all(|&s| s == 0.0));
+            out.extend_from_slice(&outs[Oscillator::OUT_MONO].samples);
+            sub.extend_from_slice(&outs[Oscillator::OUT_SUB].samples);
+            right.extend_from_slice(&outs[Oscillator::OUT_RIGHT].samples);
+        }
+        assert_eq!(out, all[Oscillator::OUT_MONO]);
+        assert_eq!(right, all[Oscillator::OUT_RIGHT]);
+        assert!(sub.iter().all(|&s| s == 0.0));
     }
 
     fn render(params: &[f32], len: usize) -> Vec<Vec<f32>> {

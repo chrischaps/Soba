@@ -907,6 +907,8 @@ impl AudioGraph {
                 params: spec.parameters.clone(),
                 inputs,
                 outputs: start..plan.outputs.len(),
+                // Settled once every cable and tap is laid out
+                heard: 0,
                 bypassed: spec.bypassed,
                 wet: if spec.bypassed { 0.0 } else { 1.0 },
                 dry,
@@ -948,6 +950,29 @@ impl AudioGraph {
             if output_index < spec.output_count() {
                 plan.output_taps.push(OutputTap { node_id, output_index, buffer: base + output_index, peaks: None });
             }
+        }
+
+        // Which outputs anything hears: a cable, a tap or a display
+        let mut heard = vec![false; plan.outputs.len()];
+        for conn in &self.connections {
+            if let Some(buffer) = source_buffer(conn, &output_base) {
+                heard[buffer] = true;
+            }
+        }
+        for tap in &plan.output_taps {
+            heard[tap.buffer] = true;
+        }
+        for node in &mut plan.nodes {
+            if let Some(watch) = &node.spectrum {
+                heard[node.outputs.start + watch.output] = true;
+            }
+            node.heard = node
+                .outputs
+                .clone()
+                .enumerate()
+                .filter(|&(_, buffer)| heard[buffer])
+                // Past the 64th, every output counts as heard anyway
+                .fold(0, |mask, (index, _)| mask | 1u64.checked_shl(index as u32).unwrap_or(0));
         }
 
         // Hand over modules that haven't run yet
@@ -1891,6 +1916,28 @@ mod tests {
         install(&mut graph, &mut plan);
         plan.process(&ProcessContext::new(44100.0, 4));
         assert_eq!(plan.input_values().collect::<Vec<_>>(), vec![(2, 0, -0.5)]);
+    }
+
+    #[test]
+    fn test_modules_are_told_which_outputs_are_heard() {
+        let registry = crate::engine::create_module_registry();
+        let port = |module: &str, id: &str| registry.create(module).unwrap().ports().iter().position(|p| p.id == id).unwrap();
+        let mut graph = AudioGraph::with_registry(48000.0, 256, crate::engine::create_module_registry());
+        for (node_id, module_id) in [(1, "osc.sine"), (2, "filter.svf"), (3, "util.vca")] {
+            assert!(graph.handle_command(EngineCommand::AddModule { node_id, module_id }));
+        }
+        let heard = |graph: &mut AudioGraph| {
+            let plan = graph.compile();
+            [1, 2, 3].map(|id| plan.nodes.iter().find(|node| node.node_id == id).unwrap().heard)
+        };
+        // Nothing patched: only what a display watches, the filter's lowpass
+        let lowpass = graph.nodes[&2].output_index(port("filter.svf", "lowpass")).unwrap();
+        assert_eq!(heard(&mut graph), [0, 1 << lowpass, 0]);
+
+        // A cable from the oscillator's Out, and its Out R lit on the face
+        graph.connect(1, port("osc.sine", "out"), 2, port("filter.svf", "in"));
+        graph.monitor_output(1, 3);
+        assert_eq!(heard(&mut graph)[0], 0b1001);
     }
 
     #[test]

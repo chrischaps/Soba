@@ -152,6 +152,13 @@ pub struct ProcessContext<'a> {
     /// The DAW's transport, when Soba runs inside one as a plugin, for a
     /// Clock whose Source is Host. `None` everywhere else.
     pub host: Option<HostTransport>,
+    /// Which of the module's outputs anything hears: bit `i` is set when
+    /// output `i` (counted among the outputs) is patched to a module, shown
+    /// on the module's face or watched by its display. A module may leave an
+    /// unheard output silent rather than work it out. Every bit is set
+    /// outside a compiled graph, so a module tested on its own works out all
+    /// of them. See [`output_heard`](Self::output_heard).
+    pub heard_outputs: u64,
 }
 
 /// The DAW's transport at the first sample of a block, as the plugin's host
@@ -190,6 +197,7 @@ impl<'a> ProcessContext<'a> {
             input_latency: 0,
             sent_at: None,
             host: None,
+            heard_outputs: u64::MAX,
         }
     }
 
@@ -204,6 +212,7 @@ impl<'a> ProcessContext<'a> {
             input_latency: 0,
             sent_at: None,
             host: None,
+            heard_outputs: u64::MAX,
         }
     }
 
@@ -232,6 +241,19 @@ impl<'a> ProcessContext<'a> {
     /// The same context, inside a DAW whose transport is `host`.
     pub fn with_host(self, host: Option<HostTransport>) -> Self {
         Self { host, ..self }
+    }
+
+    /// The same context, for a module only the outputs in `mask` of which
+    /// are heard (see [`heard_outputs`](Self::heard_outputs)).
+    pub fn hearing(self, mask: u64) -> Self {
+        Self { heard_outputs: mask, ..self }
+    }
+
+    /// Whether anything hears output `index`. Outputs past the 64th always
+    /// count as heard.
+    #[inline]
+    pub fn output_heard(&self, index: usize) -> bool {
+        index >= 64 || self.heard_outputs & (1 << index) != 0
     }
 
     /// The same context, its first sample leaving for the device at `at`.
@@ -375,6 +397,7 @@ mod tests {
     #[test]
     fn test_process_context_default() {
         let ctx = ProcessContext::default();
+        assert!(ctx.output_heard(0) && ctx.output_heard(63) && ctx.output_heard(64));
         assert_eq!(ctx.sample_rate, 44100.0);
         assert_eq!(ctx.block_size, 256);
     }

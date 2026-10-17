@@ -80,6 +80,9 @@ pub(crate) struct PlanNode {
     pub(crate) inputs: Vec<InputSource>,
     /// This node's output buffers within `GraphPlan::outputs`.
     pub(crate) outputs: Range<usize>,
+    /// Which of them anything hears, a bit per output (see
+    /// [`ProcessContext::heard_outputs`]).
+    pub(crate) heard: u64,
     /// Whether the module is bypassed: where the crossfade is heading.
     pub(crate) bypassed: bool,
     /// How much of the module's own output is heard: 1 in the signal path,
@@ -105,6 +108,7 @@ impl PlanNode {
             params: Vec::new(),
             inputs: Vec::new(),
             outputs,
+            heard: u64::MAX,
             bypassed: false,
             wet: 1.0,
             dry: Vec::new(),
@@ -492,7 +496,8 @@ impl GraphPlan {
                 module.reset();
             }
 
-            module.process(inputs, own, &node.params, if node.hears_live { &live_context } else { context });
+            let context = if node.hears_live { &live_context } else { context };
+            module.process(inputs, own, &node.params, &context.hearing(node.heard));
 
             let target = if node.bypassed { 0.0 } else { 1.0 };
             if node.wet != target {
