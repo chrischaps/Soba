@@ -21,6 +21,43 @@ pub fn prewarp(cutoff_hz: f32, sample_rate: f32) -> f32 {
     (PI * fc / sample_rate).tan()
 }
 
+/// A filter's cutoff in Hz and its [`prewarp`]ed gain, worked out from a
+/// pitch in log2(Hz) only when that pitch moves.
+///
+/// The `exp2` and `tan` cost more than the rest of a filter's sample, and most
+/// of the time the cutoff sits still: the knob's smoother has settled and the
+/// Cutoff CV is unpatched or steady. Smoothers snap to their target, so a
+/// settled pitch repeats bit for bit and the comparison catches it.
+#[derive(Clone, Copy, Debug)]
+pub struct CutoffGain {
+    log_hz: f32,
+    sample_rate: f32,
+    hz: f32,
+    g: f32,
+}
+
+impl Default for CutoffGain {
+    fn default() -> Self {
+        // NaN equals nothing, so the first call works the gain out
+        Self { log_hz: f32::NAN, sample_rate: f32::NAN, hz: 0.0, g: 0.0 }
+    }
+}
+
+impl CutoffGain {
+    /// The cutoff for `log_hz` held to `min_hz..=max_hz`, and its gain
+    /// prewarped at `sample_rate`. The bounds must stay put for a given rate.
+    #[inline]
+    pub fn at(&mut self, log_hz: f32, min_hz: f32, max_hz: f32, sample_rate: f32) -> (f32, f32) {
+        if log_hz != self.log_hz || sample_rate != self.sample_rate {
+            self.hz = log_hz.exp2().clamp(min_hz, max_hz);
+            self.g = prewarp(self.hz, sample_rate);
+            self.log_hz = log_hz;
+            self.sample_rate = sample_rate;
+        }
+        (self.hz, self.g)
+    }
+}
+
 /// A trapezoidal integrator, the building block of TPT filters.
 ///
 /// For an input already scaled by the prewarped gain `g`, each tick outputs
@@ -93,6 +130,17 @@ mod tests {
         assert!((g - (PI * 1000.0 / 48000.0).tan()).abs() < 1e-7);
         assert!(prewarp(1e6, 48000.0).is_finite());
         assert_eq!(prewarp(-5.0, 48000.0), 0.0);
+    }
+
+    #[test]
+    fn test_cutoff_gain_matches_working_it_out() {
+        let mut cache = CutoffGain::default();
+        for log_hz in [10.0f32, 10.0, 3.0, 20.0, 10.0] {
+            for sr in [48000.0, 96000.0] {
+                let hz = log_hz.exp2().clamp(20.0, sr * 0.49);
+                assert_eq!(cache.at(log_hz, 20.0, sr * 0.49, sr), (hz, prewarp(hz, sr)));
+            }
+        }
     }
 
     #[test]

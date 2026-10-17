@@ -8,7 +8,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::{prewarp, Downsampler2x, NoiseFloor, SoftSaturator, TptIntegrator, Upsampler2x},
+    primitives::{CutoffGain, Downsampler2x, NoiseFloor, SoftSaturator, TptIntegrator, Upsampler2x},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     ParameterDisplay, SignalType,
@@ -165,6 +165,8 @@ pub struct LadderFilter {
     cv_depth_smooth: SmoothedValue,
     /// The cutoff and resonance it ran at, after CV, at the last sample.
     running: (f32, f32),
+    /// The cutoff after CV and its prewarped gain, kept while it holds still.
+    cutoff_gain: CutoffGain,
 }
 
 impl LadderFilter {
@@ -198,6 +200,7 @@ impl LadderFilter {
             drive_smooth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             cv_depth_smooth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             running: (1000.0, 0.5),
+            cutoff_gain: CutoffGain::default(),
         }
     }
 
@@ -347,13 +350,15 @@ impl DspModule for LadderFilter {
 
             // Cutoff CV is in octaves, scaled by its depth, added in the log domain
             let cv_depth = self.cv_depth_smooth.next();
-            let cutoff = (log_cutoff + sample(cutoff_cv, i) * cv_depth)
-                .exp2()
-                .clamp(Self::MIN_CUTOFF_HZ, max_cutoff);
+            let (cutoff, g) = self.cutoff_gain.at(
+                log_cutoff + sample(cutoff_cv, i) * cv_depth,
+                Self::MIN_CUTOFF_HZ,
+                max_cutoff,
+                oversampled_rate,
+            );
             let resonance = (base_resonance + sample(res_cv, i) * 0.5).clamp(0.0, 1.0);
             self.running = (cutoff, resonance);
 
-            let g = prewarp(cutoff, oversampled_rate);
             let k = Self::feedback(resonance);
             // Bass compensation: u = x − k·(y4 − c·x)
             let input_gain = drive * (1.0 + Self::BASS_COMPENSATION * k);
@@ -397,6 +402,7 @@ impl DspModule for LadderFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::primitives::prewarp;
     use crate::dsp::analysis::{amp_to_db, peak, rms, Spectrum};
     use std::f64::consts::PI;
 

@@ -34,4 +34,4 @@ pub use slices::{Markers, Slices, MAX_MARKERS, MAX_SLICES, ONSETS};
 pub use svf::{Svf, SvfCoeffs, SvfOut};
 pub use tape::{RecordHead, TapeTransport};
 pub use tape_stop::{StopHeads, TapeStop};
-pub use tpt::{prewarp, TptIntegrator, TptOnePole};
+pub use tpt::{prewarp, CutoffGain, TptIntegrator, TptOnePole};

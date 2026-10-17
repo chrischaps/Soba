@@ -8,7 +8,7 @@ use crate::dsp::{
     context::ProcessContext,
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::{fast_tanh, prewarp, NoiseFloor, SoftSaturator, TptIntegrator},
+    primitives::{fast_tanh, CutoffGain, NoiseFloor, SoftSaturator, TptIntegrator},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     SignalType,
@@ -86,6 +86,8 @@ pub struct SvfFilter {
     cv_depth_smooth: SmoothedValue,
     /// The cutoff and resonance it ran at, after CV, at the last sample.
     running: (f32, f32),
+    /// The cutoff after CV and its prewarped gain, kept while it holds still.
+    cutoff_gain: CutoffGain,
 }
 
 impl SvfFilter {
@@ -143,6 +145,7 @@ impl SvfFilter {
             drive_smooth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             cv_depth_smooth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             running: (1000.0, 0.5),
+            cutoff_gain: CutoffGain::default(),
         }
     }
 
@@ -300,9 +303,12 @@ impl DspModule for SvfFilter {
                 .map(|buf| buf.at(i))
                 .unwrap_or(0.0)
                 * cv_depth;
-            let cutoff = (log_cutoff + cutoff_mod)
-                .exp2()
-                .clamp(Self::MIN_CUTOFF_HZ, max_cutoff);
+            let (cutoff, g) = self.cutoff_gain.at(
+                log_cutoff + cutoff_mod,
+                Self::MIN_CUTOFF_HZ,
+                max_cutoff,
+                self.sample_rate,
+            );
 
             // Resonance CV: adds directly to base resonance
             let res_mod = res_cv
@@ -311,7 +317,6 @@ impl DspModule for SvfFilter {
             let resonance = (base_resonance + res_mod * 0.5).clamp(0.0, 1.0);
             self.running = (cutoff, resonance);
 
-            let g = prewarp(cutoff, self.sample_rate);
             let s1 = self.band_int.state();
             let s2 = self.low_int.state();
             // TPT SVF loop (Zavalishin), solved for the highpass at damping k
