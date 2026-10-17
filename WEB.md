@@ -19,6 +19,7 @@ trunk build --release       # into dist/
 | `/?open=lush-pad` | That example in the full app (the embed's **Open in Soba** link) |
 | `/?lesson=first-sound` | A lesson from the manual's Lessons page, in the full app |
 | `/#p=1.…` | A **patch link**: the patch inside the address, in the full app, stopped with a Play prompt (see below) |
+| `/s/<id>` | A **short patch link**: `404.html` turns it into `/#s=<id>`, and the app fetches the patch (see below) |
 
 ## Where it's published
 
@@ -78,10 +79,34 @@ reading version 1.
   short, which Share's note mentions over 30 K. Every example round-trips
   exactly, layout included, so nothing is dropped to save space.
 
-Not yet: short links (`soba.chaps.dev/s/<id>`), designed in
-[docs/SHORT_LINKS.md](docs/SHORT_LINKS.md) with a spike Worker in
-`packaging/shortlinks/`, and a hosted gallery of shared patches with
-listen-first previews rendered by the `render` bin.
+### Short links
+
+**Share** copies `soba.chaps.dev/s/<id>` when it can (#376, designed in
+[docs/SHORT_LINKS.md](docs/SHORT_LINKS.md)). The link service, a Cloudflare
+Worker with a D1 database in `packaging/shortlinks/`, keeps the long link's
+payload (`1.<data>`) under an ID worked out from the patch, at
+`soba-links.chaps.workers.dev`, an address nobody sees
+(`persistence/short_link.rs`).
+
+- **Sharing** posts the payload and copies the short link. The note says
+  the patch is kept on soba.chaps.dev and offers **Copy the long link
+  instead**. If the service doesn't answer in 4 seconds, or refuses, the
+  long link is copied with a quiet word, never an error.
+- **Opening one:** GitHub Pages serves `packaging/web/404.html` (copied in by
+  `docs.yml`) for `/s/<id>`, which has no file. It replaces the address with
+  `/#s=<id>`, and the app fetches the payload and opens it as a long
+  link, with the same fragment tidying, Play note and unsaved-changes
+  question. At launch nothing else opens meanwhile, and First Sound opens if
+  the patch can't be had. A short link pasted onto the canvas or into the
+  address bar works too, on the desktop as well (`ureq`, on a thread).
+- **The service:** `npx wrangler dev` in `packaging/shortlinks/` runs it
+  locally, and `npm test` sweeps every example through it.
+  `SOBA_LINKS_URL=http://127.0.0.1:8787 cargo test --lib short_link --
+  --ignored` checks the app's side against it. `npx wrangler deploy`
+  publishes it. That's done by hand, as it changes rarely.
+
+Not yet: a hosted gallery of shared patches with listen-first previews
+rendered by the `render` bin.
 
 This page is the spike report for issue #90: what stood in the way, what
 was done about each, and how steady the sound is.

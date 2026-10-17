@@ -110,6 +110,8 @@ jobs:
           cd app-site
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -r ../dist/. .
+          # Short patch links, /s/<id>, have no file: this hands them to the app
+          cp ../packaging/web/404.html .
           echo soba.chaps.dev > CNAME
           touch .nojekyll
           git config user.name "github-actions[bot]"

@@ -29,8 +29,7 @@ for (const [i, file] of files.entries()) {
   const again = await post(payload, `10.2.${run}.${i}`);
   const back = await fetch(`${API}/v1/patches/${id}`);
   const same = (await back.text()) === payload;
-  // 200 when an earlier run stored it already
-  check([200, 201].includes(first.status) && again.status === 200 && (await again.json()).id === id && same,
+  check(first.status === 200 && again.status === 200 && (await again.json()).id === id && same,
     `${file}: ${payload.length} chars -> ${url}`);
   check(back.headers.get("cache-control")?.includes("immutable"), `${file}: cached for good`);
 }
@@ -59,7 +58,7 @@ check(!foreign.headers.get("access-control-allow-origin"), "another site can't r
 const small = (n) => payloadOf(JSON.stringify({ name: `n${n}`, version: 1, nodes: [], connections: [] }));
 const statuses = [];
 for (let n = 0; n < 11; n++) statuses.push((await post(small(n), `10.4.${run}.1`)).status);
-check(statuses.slice(0, 10).every((s) => s === 200 || s === 201) && statuses[10] === 429, `rate limit: ${statuses.join(" ")}`);
+check(statuses.slice(0, 10).every((s) => s === 200) && statuses[10] === 429, `rate limit: ${statuses.join(" ")}`);
 
 console.log(failures ? `${failures} failed` : "all passed");
 process.exit(failures ? 1 : 0);

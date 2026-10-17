@@ -137,7 +137,16 @@ fn main() {
                         web::forget_fragment();
                         app.open_from_link(link).err()
                     });
-                    let opened = (link.is_some() && refused.is_none()) || app.open_from_address(patch.as_deref(), open.as_deref());
+                    // A short link (`#s=<id>`, from soba.chaps.dev/s/<id>) is
+                    // fetched: it opens when it comes, or First Sound if not
+                    let short = web::fragment().and_then(|f| soba::persistence::short_link::id_in_fragment(&f).map(str::to_string));
+                    if let Some(id) = short.as_deref().filter(|_| link.is_none()) {
+                        web::forget_fragment();
+                        app.open_short_link(&cc.egui_ctx, id, true);
+                    }
+                    let opened = (link.is_some() && refused.is_none())
+                        || short.is_some()
+                        || app.open_from_address(patch.as_deref(), open.as_deref());
                     if !opened {
                         app.open_on_launch(None);
                     }

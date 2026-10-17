@@ -2407,6 +2407,10 @@ impl SynthApp {
             self.request(ctx, Discard::OpenLink(fragment.to_string()));
             return;
         }
+        if let Some(id) = crate::persistence::short_link::id_of(text) {
+            self.open_short_link(ctx, id, false);
+            return;
+        }
         let Ok(patch) = crate::persistence::patch_from_json(text) else {
             self.status_message = Some("Nothing to paste: the clipboard doesn't hold modules".to_string());
             return;
@@ -3804,9 +3808,14 @@ impl SynthApp {
         self.collect_upload();
         // A patch link pasted into the address bar of this tab
         #[cfg(target_arch = "wasm32")]
-        if let Some(fragment) = web::take_new_fragment().filter(|f| crate::persistence::patch_link::holds_patch(f)) {
-            web::forget_fragment();
-            self.request(ctx, Discard::OpenLink(fragment));
+        if let Some(fragment) = web::take_new_fragment() {
+            if crate::persistence::patch_link::holds_patch(&fragment) {
+                web::forget_fragment();
+                self.request(ctx, Discard::OpenLink(fragment));
+            } else if let Some(id) = crate::persistence::short_link::id_in_fragment(&fragment) {
+                web::forget_fragment();
+                self.open_short_link(ctx, id, false);
+            }
         }
         #[cfg(target_arch = "wasm32")]
         self.tidy_tab_files();
@@ -3970,6 +3979,8 @@ impl SynthApp {
                 self.show_save_dialog();
             }
             Some(share::ShareAction::Play) => self.set_playing(true),
+            Some(share::ShareAction::OpenLink(fragment)) => self.request(ctx, Discard::OpenLink(fragment)),
+            Some(share::ShareAction::OpenOnLaunch) => self.open_on_launch(None),
             None => {}
         }
         // New versions: the daily check, and its note above the take's

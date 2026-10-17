@@ -8,6 +8,7 @@
 // cut to 8 characters (longer only if two patches ever share a prefix). So
 // sharing the same patch twice gives the same link and stores it once, and
 // what's stored never changes, which lets every GET be cached for good.
+// The answer is 200 either way, so it doesn't say which.
 //
 // The short link itself is soba.chaps.dev/s/<id>, a static page on GitHub
 // Pages that the app resolves through this API. The API's address is never
@@ -58,7 +59,7 @@ async function create(request, env, cors) {
 
   const hash = base62(await sha256(json.bytes));
   const known = await env.DB.prepare("SELECT id FROM patches WHERE hash = ?").bind(hash).first();
-  if (known) return created(known.id, 200, cors);
+  if (known) return created(known.id, cors);
 
   // Eight characters, unless another patch already holds them
   for (let length = ID_LENGTH; length <= hash.length; length++) {
@@ -66,7 +67,7 @@ async function create(request, env, cors) {
     const result = await env.DB.prepare(
       "INSERT INTO patches (id, hash, payload, bytes, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING",
     ).bind(id, hash, body, body.length, Date.now()).run();
-    if (result.meta.changes === 1) return created(id, 201, cors);
+    if (result.meta.changes === 1) return created(id, cors);
   }
   return text("the link service failed", 500, cors);
 }
@@ -135,9 +136,10 @@ function notAPatch(text) {
   return shaped ? null : "that isn't a Soba patch";
 }
 
-function created(id, status, cors) {
+/// The same answer whether the patch is new or was shared before, so a POST
+/// can't be used to ask whether someone shared a given patch.
+function created(id, cors) {
   return new Response(JSON.stringify({ id, url: LINK_BASE + id }), {
-    status,
     headers: { ...cors, "Content-Type": "application/json" },
   });
 }

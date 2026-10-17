@@ -12,6 +12,7 @@ mod opus;
 pub mod patch;
 pub mod patch_link;
 pub mod sample_files;
+pub mod short_link;
 pub mod stored_zip;
 #[cfg(target_arch = "wasm32")]
 pub mod tab_store;

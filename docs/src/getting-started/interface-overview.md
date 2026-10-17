@@ -294,11 +294,13 @@ A [Looper](../modules/utilities/looper.md)'s loop is kept the same way. Saving t
 
 ### Sharing a patch by link
 
-**🔗 Share** copies a link to the patch you have open. Whoever opens it gets the patch in their browser, in [Soba's web version](https://soba.chaps.dev/), with nothing to install: the same modules, cables, knobs, frames and notes, stopped until they press **▶ Play**. What they change stays with them. The whole patch is inside the link itself, after the `#`, so it isn't stored anywhere or sent to a server.
+**🔗 Share** copies a link to the patch you have open, short enough for a chat, a slide or a QR code: `https://soba.chaps.dev/s/fdb945uF`. Whoever opens it gets the patch in their browser, in [Soba's web version](https://soba.chaps.dev/), with nothing to install: the same modules, cables, knobs, frames and notes, stopped until they press **▶ Play**. What they change stays with them.
+
+To keep the link short, the patch is kept on soba.chaps.dev, where anyone with the link can open it. Sharing the same patch again gives the same link. If you'd rather nothing were kept, press **Copy the long link instead** in the note that says the link was copied. The long link holds the whole patch itself, after the `#`, so it's never sent to a server, and it works offline. When the link service can't be reached, Share copies the long link anyway, and says so.
 
 A link carries the patch and the samples that come with Soba's examples, and nothing else. If a Sampler plays a file of your own, Share says which files, and offers **Save As** instead, to send the patch as a folder with its samples (in the browser, Save downloads it as a zip with them).
 
-Most patches make links of a few thousand characters. The biggest songs come to 30,000 or so, which some chat apps cut short; email or a document carries them whole. Pasting a Soba link onto the canvas opens it too, asking first if there are unsaved changes.
+Long links come to a few thousand characters for most patches. The biggest songs come to 30,000 or so, which some chat apps cut short; email or a document carries them whole. Pasting a Soba link of either kind onto the canvas opens it too, asking first if there are unsaved changes.
 
 ### Recent patches
 

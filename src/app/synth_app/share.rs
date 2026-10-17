@@ -1,25 +1,44 @@
-//! Share: the open patch as one link that plays in the browser (see
-//! `persistence::patch_link`), and the browser's side of opening one.
+//! Share: the open patch as one link that plays in the browser, and the
+//! browser's side of opening one.
 //!
-//! The link is copied to the clipboard, and a note in the corner says so,
-//! or says why the patch can't go by link: it plays files of its own, and
-//! saving it as a file takes them along. A patch opened from a link starts
-//! stopped, with a note offering Play (browsers hold the sound until a
-//! click anyway), and nothing about it is unsaved, so it's never autosaved
-//! over the visitor's own work until they change it.
+//! Share asks the link service for a short link (`persistence::short_link`)
+//! and copies it, or copies the long one, which holds the whole patch
+//! (`persistence::patch_link`), when the service doesn't answer in time.
+//! A note in the corner says which, says that a short link's patch is kept
+//! on soba.chaps.dev, and offers the long link instead. Or it says why the
+//! patch can't go by link: it plays files of its own, and saving it as a
+//! file takes them along. A patch opened from a link starts stopped, with a
+//! note offering Play (browsers hold the sound until a click anyway), and
+//! nothing about it is unsaved, so it's never autosaved over the visitor's
+//! own work until they change it.
 
 use std::path::PathBuf;
+use std::sync::mpsc::{Receiver, TryRecvError};
+use std::time::Duration;
 
 use eframe::egui::{self, RichText};
 
 use crate::persistence::patch_link::{self, ShareError};
 use crate::persistence::sample_files::SampleBase;
+use crate::persistence::short_link::{self, Answer};
 use super::super::notice::Notice;
 use super::super::theme;
 use super::{SynthApp, WEB};
 
 /// How long the copied note stays up.
 const COPIED_SECONDS: f64 = 6.0;
+
+/// How long the note offering the long link instead stays up.
+const SHORT_COPIED_SECONDS: f64 = 12.0;
+
+/// How long Share waits for a short link before copying the long one.
+const MAKING_SECONDS: f64 = 4.0;
+
+/// How long opening a short link waits for its patch.
+const OPENING_SECONDS: f64 = 15.0;
+
+/// Waited for, and nothing came.
+const UNANSWERED: &str = "the link service didn't answer in time";
 
 /// The note in the corner about sharing.
 pub(super) struct ShareNote {
@@ -29,38 +48,58 @@ pub(super) struct ShareNote {
 }
 
 enum NoteKind {
-    /// The link is on the clipboard: how long it is, in characters.
-    Copied(usize),
+    /// Waiting for a short link to the patch named: the long one if none comes.
+    Making { answer: Receiver<Answer>, name: String, long: String },
+    /// A link is on the clipboard.
+    Copied(Copied),
     /// It plays these files of its own.
     OwnFiles(Vec<String>),
     /// Something went wrong: what, and why.
     Failed(&'static str, String),
+    /// Fetching the patch a short link names. At launch nothing else is
+    /// open yet, so First Sound opens if it can't be had.
+    Opening { answer: Receiver<Answer>, launch: bool },
     /// It was opened from a link, and is waiting to be played.
     Opened(String),
+}
+
+/// Which link was copied.
+enum Copied {
+    /// The short link, with the long one on offer.
+    Short { short: String, long: String },
+    /// The long link, asked for instead.
+    Long(String),
+    /// The long link, as the service didn't make a short one: why not.
+    Fallback(String, String),
 }
 
 /// What the note asked for.
 pub(super) enum ShareAction {
     SaveAs,
     Play,
+    /// Open this long link's fragment (`p=1.…`), asking first about unsaved changes.
+    OpenLink(String),
+    /// A link at launch couldn't be opened: open what launching would.
+    OpenOnLaunch,
 }
 
 impl SynthApp {
     /// Copies a link to the open patch, or says why there can't be one.
     pub(super) fn share_patch(&mut self, ctx: &egui::Context) {
         let patch = self.create_patch(&self.document.title());
+        let now = ctx.input(|i| i.time);
         let kind = match patch_link::fragment(&patch) {
             Ok(fragment) => {
-                let link = format!("{}#{fragment}", share_base());
-                let length = link.len();
-                ctx.copy_text(link);
-                self.status_message = Some(format!("Copied a link to {}", patch.name));
-                NoteKind::Copied(length)
+                let long = format!("{}#{fragment}", share_base());
+                let payload = fragment.strip_prefix("p=").unwrap_or(&fragment).to_string();
+                let wake = ctx.clone();
+                let answer = short_link::create(payload, move || wake.request_repaint());
+                NoteKind::Making { answer, name: patch.name, long }
             }
             Err(ShareError::OwnFiles(names)) => NoteKind::OwnFiles(names),
             Err(ShareError::Json(e)) => NoteKind::Failed("Couldn't make a link", e),
         };
-        self.share_note = Some(ShareNote { shown_at: ctx.input(|i| i.time), kind });
+        self.share_note = Some(ShareNote { shown_at: now, kind });
     }
 
     /// Opens the patch a link's fragment holds (`p=1.…`), stopped, or says
@@ -80,15 +119,68 @@ impl SynthApp {
         Ok(())
     }
 
+    /// Fetches the patch the short link `id` names, to open once it comes.
+    /// At `launch` nothing else is open, and First Sound opens if it fails.
+    pub fn open_short_link(&mut self, ctx: &egui::Context, id: &str, launch: bool) {
+        let wake = ctx.clone();
+        let answer = short_link::resolve(id.to_string(), move || wake.request_repaint());
+        self.status_message = Some("Opening a shared patch…".to_string());
+        self.share_note = Some(ShareNote { shown_at: ctx.input(|i| i.time), kind: NoteKind::Opening { answer, launch } });
+    }
+
     /// Says why a link couldn't be opened.
     pub fn link_refused(&mut self, ctx: &egui::Context, why: String) {
         let kind = NoteKind::Failed("Couldn't open the shared patch", why);
         self.share_note = Some(ShareNote { shown_at: ctx.input(|i| i.time), kind });
     }
 
+    /// Collects what the link service answered, or gives up waiting.
+    fn follow_link_service(&mut self, ctx: &egui::Context) -> Option<ShareAction> {
+        let note = self.share_note.as_ref()?;
+        let (answer, limit) = match &note.kind {
+            NoteKind::Making { answer, .. } => (answer, MAKING_SECONDS),
+            NoteKind::Opening { answer, .. } => (answer, OPENING_SECONDS),
+            _ => return None,
+        };
+        let now = ctx.input(|i| i.time);
+        let answer = match answer.try_recv() {
+            Ok(answer) => answer,
+            Err(TryRecvError::Empty) if now - note.shown_at < limit => {
+                // The service wakes the frame when it answers; this is for the limit
+                ctx.request_repaint_after(Duration::from_millis(250));
+                return None;
+            }
+            Err(_) => Err(UNANSWERED.to_string()),
+        };
+        let note = self.share_note.take()?;
+        match note.kind {
+            NoteKind::Making { name, long, .. } => {
+                let copied = match answer {
+                    Ok(id) => Copied::Short { short: short_link::link(&id), long },
+                    Err(why) => Copied::Fallback(long, why),
+                };
+                ctx.copy_text(copied.link().to_string());
+                self.status_message = Some(format!("Copied a link to {name}"));
+                self.share_note = Some(ShareNote { shown_at: now, kind: NoteKind::Copied(copied) });
+                None
+            }
+            NoteKind::Opening { launch, .. } => match answer {
+                Ok(payload) => Some(ShareAction::OpenLink(format!("p={payload}"))),
+                Err(why) => {
+                    self.link_refused(ctx, why);
+                    launch.then_some(ShareAction::OpenOnLaunch)
+                }
+            },
+            _ => None,
+        }
+    }
+
     /// Draws the share note, if one is up, above notes `below` tall. Returns
     /// the height of the notes now drawn, and what the note asked for.
     pub(super) fn show_share_note(&mut self, ctx: &egui::Context, below: f32) -> (f32, Option<ShareAction>) {
+        if let Some(action) = self.follow_link_service(ctx) {
+            return (below, Some(action));
+        }
         let Some(note) = &self.share_note else { return (below, None) };
         // Played already, by the toolbar or the space bar: it's done its job
         if matches!(note.kind, NoteKind::Opened(_)) && self.is_playing {
@@ -96,14 +188,42 @@ impl SynthApp {
             return (below, None);
         }
         let mut action = None;
+        let mut copy_long = None;
         let response = match &note.kind {
-            NoteKind::Copied(length) => Notice::new("share_note", theme::accent::SUCCESS, "Link copied")
-                .lifetime(note.shown_at, COPIED_SECONDS)
+            NoteKind::Making { .. } => Notice::new("share_note", theme::accent::PRIMARY, "Making a link…")
                 .above(below)
-                .show(ctx, |_| {}, |ui| {
-                    body(ui, "Paste it anywhere. Whoever opens it hears this patch in their browser, and can play with it, with nothing to install.");
-                    ui.label(RichText::new(describe_length(*length)).color(theme::text::DISABLED).small());
-                }),
+                .show(ctx, |ui| { ui.spinner(); }, |_| {}),
+            NoteKind::Opening { .. } => Notice::new("share_note", theme::accent::PRIMARY, "Opening a shared patch…")
+                .above(below)
+                .show(ctx, |ui| { ui.spinner(); }, |_| {}),
+            NoteKind::Copied(copied) => {
+                let seconds = if matches!(copied, Copied::Short { .. }) { SHORT_COPIED_SECONDS } else { COPIED_SECONDS };
+                Notice::new("share_note", theme::accent::SUCCESS, "Link copied")
+                    .lifetime(note.shown_at, seconds)
+                    .above(below)
+                    .show(ctx, |_| {}, |ui| {
+                        body(ui, "Paste it anywhere. Whoever opens it hears this patch in their browser, and can play with it, with nothing to install.");
+                        match copied {
+                            Copied::Short { short, long } => {
+                                ui.add_space(4.0);
+                                ui.label(RichText::new(short).monospace().color(theme::text::PRIMARY));
+                                ui.add_space(4.0);
+                                small(ui, "To keep the link short, the patch is kept on soba.chaps.dev, where anyone with the link can open it.");
+                                ui.add_space(4.0);
+                                let button = ui.button("Copy the long link instead");
+                                if button.on_hover_text("It holds the whole patch, so nothing is kept anywhere, and it works offline").clicked() {
+                                    copy_long = Some(long.clone());
+                                }
+                            }
+                            Copied::Long(long) => {
+                                small(ui, &format!("The long link holds the whole patch, so nothing is kept anywhere. {}", describe_length(long.len())));
+                            }
+                            Copied::Fallback(long, why) => {
+                                small(ui, &format!("This is the long link, which holds the whole patch: {why}. {}", describe_length(long.len())));
+                            }
+                        }
+                    })
+            }
             NoteKind::OwnFiles(names) => Notice::new("share_note", theme::accent::WARNING, "Can't share this by link")
                 .above(below)
                 .show(ctx, |_| {}, |ui| {
@@ -133,15 +253,29 @@ impl SynthApp {
                     }
                 }),
         };
-        if response.closed || response.expired || action.is_some() {
+        if let Some(long) = copy_long {
+            ctx.copy_text(long.clone());
+            let shown_at = ctx.input(|i| i.time);
+            self.share_note = Some(ShareNote { shown_at, kind: NoteKind::Copied(Copied::Long(long)) });
+        } else if response.closed || response.expired || action.is_some() {
             self.share_note = None;
         }
         (below + response.height, action)
     }
 }
 
-/// Where a link opens: this page, in the browser (so a local build shares
-/// links to itself), and the published app from the desktop.
+impl Copied {
+    /// The link on the clipboard.
+    fn link(&self) -> &str {
+        match self {
+            Copied::Short { short, .. } => short,
+            Copied::Long(long) | Copied::Fallback(long, _) => long,
+        }
+    }
+}
+
+/// Where a long link opens: this page, in the browser (so a local build
+/// shares links to itself), and the published app from the desktop.
 fn share_base() -> String {
     #[cfg(target_arch = "wasm32")]
     if let Some(page) = super::web::full_app_url() {
@@ -153,6 +287,11 @@ fn share_base() -> String {
 /// A line of a note's text.
 fn body(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text).color(theme::text::SECONDARY));
+}
+
+/// A quieter line, under the note's text.
+fn small(ui: &mut egui::Ui, text: &str) {
+    ui.label(RichText::new(text).color(theme::text::DISABLED).small());
 }
 
 /// How long a link is, and whether that's long for a chat to carry.
@@ -198,7 +337,7 @@ mod round {
         app.open_example(example("Sampled Keys"));
         let shared = app.create_patch("Sampled Keys");
         app.share_patch(&ctx);
-        assert!(matches!(app.share_note, Some(ShareNote { kind: NoteKind::Copied(_), .. })));
+        assert!(matches!(app.share_note, Some(ShareNote { kind: NoteKind::Making { .. }, .. })));
 
         let fragment = patch_link::fragment(&shared).unwrap();
         let mut friend = SynthApp::new(false);

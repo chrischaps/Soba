@@ -1,6 +1,6 @@
 # Short patch links
 
-*The design from #370, 2026-10-17. Not built yet: #376 builds it.*
+*The design from #370, 2026-10-17, built in #376. WEB.md says how it runs.*
 
 A patch link (#303) holds the whole patch in the address's fragment:
 `soba.chaps.dev/#p=1.<data>`. That runs from 1.1 K characters (First Sound)
@@ -35,8 +35,8 @@ https://soba.chaps.dev/s/BxdWNBJJ        33 characters, a 29×29 QR code
   So the app needs no new decoder, the version rule carries over unchanged, and
   any short link can always be turned back into a long one.
 
-The spike is `packaging/shortlinks/`: the Worker, its schema, and a test that
-runs against `npx wrangler dev`. It has only run locally, and nothing is deployed.
+The service is `packaging/shortlinks/`: the Worker, its schema, and a test that
+runs against `npx wrangler dev`. It's deployed at `soba-links.chaps.workers.dev`.
 Every example goes in and comes back out byte for byte. Sharing the same patch a
 second time gives the same ID, and each refusal below answers as it should.
 
