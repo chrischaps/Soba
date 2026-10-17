@@ -670,16 +670,25 @@ mod tests {
 
     const V2_FIXTURE: &str = include_str!("fixtures/patch_v2.json");
 
-    /// Loads a patch the way the editor does (engine IDs handed out in node
-    /// order from `first_engine_id`, MIDI mappings remapped), then saves it.
-    fn reload(patch: &Patch, first_engine_id: EngineNodeId) -> (Patch, Vec<String>) {
+    /// Loads a patch the way the editor does (groups and then modules given
+    /// IDs from one count starting at `first_engine_id`, modules in node
+    /// order, MIDI mappings remapped), then saves it.
+    pub(super) fn reload(patch: &Patch, first_engine_id: EngineNodeId) -> (Patch, Vec<String>) {
         let mut staged = stage_patch(patch).unwrap();
+        let mut next = first_engine_id;
+        renumber_groups(&mut staged.graph, || {
+            next += 1;
+            GroupId(next - 1)
+        });
         let engine_ids: HashMap<NodeId, EngineNodeId> =
-            staged.nodes.iter().zip(first_engine_id..).map(|(n, id)| (n.graph_id, id)).collect();
+            staged.nodes.iter().zip(next..).map(|(n, id)| (n.graph_id, id)).collect();
         let engine_id = |graph_id| engine_ids.get(&graph_id).copied();
         remap_scenes(&mut staged.graph, &staged.nodes, engine_id);
         let mappings = staged.remap_midi_mappings(engine_id);
-        let position = |graph_id| staged.nodes.iter().find(|n| n.graph_id == graph_id).unwrap().position;
+        let position = |graph_id| {
+            let module = staged.nodes.iter().find(|n| n.graph_id == graph_id).map(|n| n.position);
+            module.or_else(|| staged.parts.iter().find(|p| p.graph_id == graph_id).map(|p| p.position)).unwrap()
+        };
         let saved = capture_patch(&patch.name, &staged.graph, engine_id, position, &mappings);
         (saved, staged.warnings)
     }
@@ -1151,3 +1160,7 @@ mod tests {
         assert_eq!(saved.midi_mappings.len(), 2);
     }
 }
+
+#[cfg(test)]
+#[path = "format_fixtures.rs"]
+mod format_fixtures;
