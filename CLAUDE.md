@@ -41,10 +41,14 @@
 
 ## Module Categories (Color-Coded Headers)
 
-- **Blue**: Sources (Oscillators)
-- **Green**: Filters
-- **Orange**: Utilities (Envelopes, LFOs)
+- **Blue**: Sources (oscillators, noise, samplers)
+- **Teal**: Filters (filters, EQs)
+- **Orange**: Modulation (envelopes, LFOs, sequencers)
+- **Cyan**: Effects (delay, reverb)
+- **Gray**: Utilities (mixers, VCAs)
 - **Purple**: Output
+
+These are `ModuleCategory::color` (`src/dsp/module_trait.rs`). Signal colours live in `SignalType::color` and `theme::signal`: use those rather than a hand-typed near-copy, with `gamma_multiply` for a softer tone.
 
 ## Directory Structure
 

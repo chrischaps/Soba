@@ -6,6 +6,8 @@
 
 use eframe::egui::{self, Color32, Pos2, Rect, Response, Sense, Ui, Vec2};
 
+use crate::app::theme;
+
 /// Key layout constants - which semitones correspond to white/black keys.
 const WHITE_KEY_NOTES: [u8; 7] = [0, 2, 4, 5, 7, 9, 11]; // C D E F G A B
 const BLACK_KEY_NOTES: [u8; 5] = [1, 3, 6, 8, 10];       // C# D# F# G# A#
@@ -65,9 +67,9 @@ impl PianoConfig {
     /// Create a MIDI-style piano config (purple tint for active keys).
     pub fn midi() -> Self {
         Self {
-            white_key_active: Color32::from_rgb(180, 100, 200), // Purple tint
-            black_key_active: Color32::from_rgb(140, 80, 160),  // Darker purple
-            glow_color: Color32::from_rgb(180, 100, 200),       // Purple glow
+            white_key_active: theme::signal::MIDI,
+            black_key_active: darken(theme::signal::MIDI, 0.78),
+            glow_color: theme::signal::MIDI,
             ..Default::default()
         }
     }
@@ -161,6 +163,12 @@ impl PianoData {
 /// ```
 pub fn piano(ui: &mut Ui, data: &PianoData, config: &PianoConfig) -> Response {
     piano_keys(ui, data, config).0
+}
+
+/// `color` scaled toward black, for the deeper shade a black key takes.
+fn darken(color: Color32, by: f32) -> Color32 {
+    let f = |c: u8| (c as f32 * by) as u8;
+    Color32::from_rgb(f(color.r()), f(color.g()), f(color.b()))
 }
 
 /// The keyboard's white and black keys, each with its semitone (0-11).

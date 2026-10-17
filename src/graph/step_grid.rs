@@ -50,7 +50,8 @@ use super::step_ear::{StepEar, Strike};
 use super::trigger_display::{pattern_tabs, shown_pattern, PatternBar, Playing};
 use super::{SynthGraph, SynthGraphState, SynthNodeData, SynthResponse};
 
-const GATE_ON: Color32 = Color32::from_rgb(100, 200, 100);
+// A lit step fires a gate, so it wears the gate cable's colour
+const GATE_ON: Color32 = theme::signal::GATE;
 const GATE_OFF: Color32 = Color32::from_rgb(60, 60, 70);
 /// Points of upward drag per semitone, before zoom: an octave is 72.
 const DRAG_PER_SEMITONE: f32 = 6.0;

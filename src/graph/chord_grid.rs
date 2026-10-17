@@ -65,7 +65,8 @@ use super::step_grid::{drag_badge, dragged_pitch};
 use super::trigger_display::{pattern_tabs, shown_pattern, PatternBar, Playing};
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
-const GATE_ON: Color32 = Color32::from_rgb(100, 200, 100);
+// A lit step fires a gate, so it wears the gate cable's colour
+const GATE_ON: Color32 = theme::signal::GATE;
 const GATE_OFF: Color32 = Color32::from_rgb(60, 60, 70);
 const ON_TEXT: Color32 = Color32::from_rgb(18, 40, 20);
 const OFF_TEXT: Color32 = Color32::from_rgb(150, 150, 165);

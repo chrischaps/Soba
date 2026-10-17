@@ -897,9 +897,12 @@ impl SynthNodeData {
                                 // Blink effect for learn mode
                                 let time = ui.ctx().input(|i| i.time);
                                 let blink = ((time * 4.0).sin() > 0.0) as u8;
-                                Color32::from_rgba_unmultiplied(180, 100, 200, 128 + blink * 127)
+                                {
+                                    let m = crate::app::theme::signal::MIDI;
+                                    Color32::from_rgba_unmultiplied(m.r(), m.g(), m.b(), 128 + blink * 127)
+                                }
                             } else {
-                                Color32::from_rgb(180, 100, 200) // Purple for MIDI
+                                crate::app::theme::signal::MIDI
                             };
 
                             // In the corner beside the knob's top right, which the
@@ -930,9 +933,9 @@ impl SynthNodeData {
                         } else if show_connection_indicator {
                             // Orange color for Control signal (matches signal type color)
                             let indicator_color = if signal_value.is_some() {
-                                Color32::from_rgb(255, 165, 0) // Orange for active signal
+                                crate::app::theme::signal::CONTROL
                             } else {
-                                Color32::from_rgb(100, 200, 100) // Green for connected but no signal yet
+                                crate::app::theme::signal::CONTROL.gamma_multiply(0.45) // connected, no signal yet
                             };
                             // A small dot at the knob's top right, clear of the dial.
                             // It takes no room, so knobs in a row stay level
