@@ -1,0 +1,103 @@
+{
+  "name": "Your First Sequence",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "osc.sine",
+      "position": [
+        520.0,
+        40.0
+      ],
+      "parameters": [
+        {
+          "name": "Waveform",
+          "type": "Select",
+          "value": 2
+        },
+        {
+          "name": "Octave",
+          "type": "Number",
+          "value": -1.0
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "module_id": "util.vca",
+      "position": [
+        840.0,
+        60.0
+      ],
+      "parameters": []
+    },
+    {
+      "id": 3,
+      "module_id": "mod.adsr",
+      "position": [
+        820.0,
+        300.0
+      ],
+      "parameters": [
+        {
+          "name": "Attack",
+          "type": "Number",
+          "value": 0.003
+        },
+        {
+          "name": "Decay",
+          "type": "Number",
+          "value": 0.18
+        },
+        {
+          "name": "Sustain",
+          "type": "Number",
+          "value": 0.25
+        },
+        {
+          "name": "Release",
+          "type": "Number",
+          "value": 0.12
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "module_id": "output.audio",
+      "position": [
+        1100.0,
+        60.0
+      ],
+      "parameters": [
+        {
+          "name": "Volume",
+          "type": "Number",
+          "value": 0.6
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from_node": 1,
+      "from_port": "Out",
+      "to_node": 2,
+      "to_port": "In"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Out",
+      "to_node": 2,
+      "to_port": "CV"
+    },
+    {
+      "from_node": 2,
+      "from_port": "Out",
+      "to_node": 4,
+      "to_port": "Mono"
+    }
+  ],
+  "midi_mappings": [],
+  "frames": [],
+  "notes": []
+}

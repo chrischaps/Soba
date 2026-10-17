@@ -27,13 +27,18 @@ fn main() -> eframe::Result<()> {
             std::process::exit(2);
         }
     };
+    // A lesson to start, e.g. `soba --lesson first-sound` (see lessons/)
+    let lesson = args.iter().position(|a| a == "--lesson").and_then(|i| args.get(i + 1)).cloned();
     // A patch file to open, e.g. `soba patches/lush-pad.json`
     // (skipping the values that follow options)
     let patch_path = args
         .iter()
         .enumerate()
         .skip(1)
-        .find(|(i, arg)| !arg.starts_with("--") && !CaptureConfig::is_option(&args[i - 1]) && args[i - 1] != resume::OPTION)
+        .find(|(i, arg)| {
+            let after = &args[i - 1];
+            !arg.starts_with("--") && !CaptureConfig::is_option(after) && after != resume::OPTION && after != "--lesson"
+        })
         .map(|(_, arg)| PathBuf::from(arg));
     // Restarted after an update: the session the copy before handed over.
     // Taking it waits for that copy to close
@@ -89,6 +94,12 @@ fn main() -> eframe::Result<()> {
                     }
                 }
             }
+            // Last, so the lesson's patch is the one on show
+            if let Some(name) = &lesson {
+                if !app.open_lesson_named(&cc.egui_ctx, name) {
+                    eprintln!("no lesson called {name}: see lessons/");
+                }
+            }
             Ok(Box::new(app))
         }),
     )
@@ -132,6 +143,10 @@ fn main() {
                     // An embed is the page's patch, not a session to pick up
                     if patch.is_none() {
                         app.restore_session(cc.storage);
+                    }
+                    // `?lesson=first-sound` starts a lesson, over the session
+                    if let Some(name) = web::query_param("lesson").filter(|_| patch.is_none()) {
+                        app.open_lesson_named(&cc.egui_ctx, &name);
                     }
                     Ok(Box::new(app))
                 }),

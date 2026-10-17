@@ -1,0 +1,43 @@
+# Lesson 2: a lowpass filter between a saw and the output, and the Cable
+# Probe to hear what a cable carries.
+title Shaping with a Filter
+about Carve a bright saw with a lowpass filter, then hear what a cable carries
+patch shaping-with-a-filter.json
+
+say Here's a saw wave, an octave down, going straight out. Press **▶ Play** to hear it.
+wait play
+
+say A **filter** takes part of a sound away. Right-click the canvas between the two modules and choose **Filter › SVF Filter**.
+point canvas
+show rclick canvas
+wait add filter.svf
+
+say Send the saw into the filter: drag from the Oscillator's **Out** to the filter's **In**.
+point osc.sine out:Out
+point filter.svf in:In
+show drag osc.sine out:Out to filter.svf in:In
+wait connect osc.sine Out -> filter.svf In
+
+say Now take the filter's **LowPass** out to the Audio Output's **Mono**. Each input takes one cable, so this one replaces the cable that's there.
+point filter.svf out:LowPass
+point output.audio in:Mono
+show drag filter.svf out:LowPass to output.audio in:Mono
+wait connect filter.svf LowPass -> output.audio Mono
+
+say Drag the **Cutoff** knob down, below 400 Hz. The saw turns dark and muffled as the filter closes over its harmonics, and the display draws what's let through.
+point filter.svf knob:Cutoff
+show turn filter.svf knob:Cutoff down
+wait param filter.svf Cutoff < 400
+
+say Now turn **Res** up past 0.8. The filter rings at the cutoff, with a vocal, nasal edge. Sweep **Cutoff** again to hear it move.
+point filter.svf knob:Resonance
+show turn filter.svf knob:Resonance up
+wait param filter.svf Resonance > 0.8
+
+say Hold `Alt` and rest the pointer on the cable from the Oscillator into the filter. You hear what that cable carries, the bright saw before the filter, and see its wave.
+point osc.sine out:Out
+point filter.svf in:In
+wait probe 1.5
+
+say That's subtractive synthesis: start bright, then carve. Hold `Alt` over any cable, in any patch, to hear it.
+say Next, **Envelopes** turns a tone that never stops into notes.

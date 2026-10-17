@@ -58,6 +58,7 @@ mod framing;
 mod grouping;
 mod hosted;
 mod idle;
+mod lessons;
 #[cfg(feature = "ableton-link")]
 mod link_follow;
 mod loops;
@@ -263,6 +264,8 @@ pub struct SynthApp {
     window_title: String,
     /// Filming the app with `--capture`: the script, clock and outputs.
     capture: Option<Capture>,
+    /// The lesson being taken, from Help → Lessons (#305).
+    lesson: Option<super::lesson::LessonRun>,
 
     // --- Recording ---
     /// The take being recorded, or being finished after Stop.
@@ -526,6 +529,7 @@ impl SynthApp {
             allow_close: false,
             window_title: String::new(),
             capture: None,
+            lesson: None,
             recording: None,
             recordings_folder: None,
             record_toast: None,
@@ -1611,6 +1615,13 @@ impl SynthApp {
                     self.shortcuts.open = true;
                     ui.close_menu();
                 }
+                ui.menu_button("🎓 Lessons", |ui| {
+                    if let Some(lesson) = self.lessons_menu(ui) {
+                        actions.open_lesson = Some(lesson);
+                    }
+                })
+                .response
+                .on_hover_text("Short lessons you do in the app, from a first sound to groups");
                 #[cfg(not(target_arch = "wasm32"))]
                 if self.hosted.is_none() {
                     self.update_menu(ui, &mut actions);
@@ -3260,11 +3271,14 @@ impl SynthApp {
     /// Does something that replaces or closes the patch, once its unsaved
     /// changes are saved or let go.
     fn perform(&mut self, ctx: &egui::Context, action: Discard) {
+        // Whatever replaces the patch ends a lesson about it
+        self.lesson = None;
         match action {
             Discard::New => self.new_patch(),
             Discard::Open => self.show_load_dialog(ctx),
             Discard::OpenFile(path) => self.open_file(&path),
             Discard::OpenExample(example) => self.open_example(example),
+            Discard::OpenLesson(lesson) => self.open_lesson(lesson),
             Discard::OpenLink(fragment) => {
                 if let Err(e) = self.open_from_link(&fragment) {
                     self.link_refused(ctx, e);
@@ -4021,6 +4035,7 @@ struct ToolbarActions {
     share_patch: bool,
     load_patch: bool,
     open_example: Option<&'static Example>,
+    open_lesson: Option<&'static super::lesson::LessonFile>,
     open_recent: Option<PathBuf>,
     clear_recent: bool,
     new_patch: bool,
@@ -4319,6 +4334,9 @@ impl SynthApp {
         if let Some(example) = toolbar_actions.open_example {
             self.request(ctx, Discard::OpenExample(example));
         }
+        if let Some(lesson) = toolbar_actions.open_lesson {
+            self.request(ctx, Discard::OpenLesson(lesson));
+        }
         if let Some(path) = toolbar_actions.open_recent {
             self.request(ctx, Discard::OpenFile(path));
         }
@@ -4392,6 +4410,8 @@ impl SynthApp {
             self.shortcuts.show(ctx, &held);
         }
         self.show_variations(ctx);
+        // A lesson's caption, glows and ghost, over the editor
+        self.tend_lesson(ctx);
 
         // "Save changes?" and crash recovery, over everything else
         self.show_prompts(ctx);

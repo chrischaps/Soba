@@ -1011,19 +1011,7 @@ impl Capture {
             return;
         };
         let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("capture_cursor")));
-        let shape: Vec<Pos2> = [(0.0, 0.0), (0.0, 17.0), (4.2, 13.2), (7.2, 19.6), (9.6, 18.6), (6.7, 12.3), (12.2, 12.3)]
-            .iter()
-            .map(|&(x, y)| p + Vec2::new(x, y))
-            .collect();
-        let shadow: Vec<Pos2> = shape.iter().map(|q| *q + Vec2::new(1.0, 1.5)).collect();
-        painter.add(egui::Shape::convex_polygon(shadow, egui::Color32::from_black_alpha(90), egui::Stroke::NONE));
-        // The arrow isn't convex; a closed path fills it correctly
-        painter.add(egui::Shape::Path(egui::epaint::PathShape {
-            points: shape,
-            closed: true,
-            fill: egui::Color32::WHITE,
-            stroke: egui::epaint::PathStroke::new(1.2, egui::Color32::from_gray(20)),
-        }));
+        draw_pointer(&painter, p, 1.0);
         if self.button_down {
             painter.circle_stroke(p, 9.0, egui::Stroke::new(1.5, egui::Color32::from_white_alpha(120)));
         }
@@ -1140,6 +1128,24 @@ impl Capture {
         }
         true
     }
+}
+
+/// An arrow pointer with its tip at `p`, as a capture draws the script's
+/// and a lesson its ghost, faded to `opacity`.
+pub fn draw_pointer(painter: &egui::Painter, p: Pos2, opacity: f32) {
+    let shape: Vec<Pos2> = [(0.0, 0.0), (0.0, 17.0), (4.2, 13.2), (7.2, 19.6), (9.6, 18.6), (6.7, 12.3), (12.2, 12.3)]
+        .iter()
+        .map(|&(x, y)| p + Vec2::new(x, y))
+        .collect();
+    let shadow: Vec<Pos2> = shape.iter().map(|q| *q + Vec2::new(1.0, 1.5)).collect();
+    painter.add(egui::Shape::convex_polygon(shadow, egui::Color32::from_black_alpha(90).gamma_multiply(opacity), egui::Stroke::NONE));
+    // The arrow isn't convex; a closed path fills it correctly
+    painter.add(egui::Shape::Path(egui::epaint::PathShape {
+        points: shape,
+        closed: true,
+        fill: egui::Color32::WHITE.gamma_multiply(opacity),
+        stroke: egui::epaint::PathStroke::new(1.2, egui::Color32::from_gray(20).gamma_multiply(opacity)),
+    }));
 }
 
 /// The control a press at `at` just misses, if it missed one: something

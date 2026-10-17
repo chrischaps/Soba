@@ -30,7 +30,7 @@
 //! bar, where a right-click opens its menu; given an x y first, that far
 //! from its corner.
 
-use eframe::egui::{self, Pos2, Vec2};
+use eframe::egui::{self, Pos2, Rect, Vec2};
 use egui_node_graph2::{drawn_port_rect, AnyParameterId, NodeId};
 
 use crate::dsp::bypass::can_bypass;
@@ -220,21 +220,28 @@ pub fn check(part: &Part) -> Result<(), String> {
 
 /// Where a part is on screen now: the middle of where it was last drawn.
 pub fn locate(ctx: &egui::Context, graph: &SynthGraph, state: &SynthGraphState, zoom: f32, part: &Part) -> Result<Pos2, String> {
+    locate_rect(ctx, graph, state, zoom, part).map(|r| r.center())
+}
+
+/// Where a part was last drawn: a knob's, jack's or button's rectangle, or
+/// a point (an empty one) for a frame's title bar or a point on a module.
+pub fn locate_rect(ctx: &egui::Context, graph: &SynthGraph, state: &SynthGraphState, zoom: f32, part: &Part) -> Result<Rect, String> {
+    let point = |p: Pos2| Rect::from_center_size(p, Vec2::ZERO);
     if let Some(title) = part.frame() {
-        return locate_frame(&state.annotations, zoom, title, &part.at);
+        return locate_frame(&state.annotations, zoom, title, &part.at).map(point);
     }
     let (module, which) = (&part.module, part.which);
     let node_id = find_module(graph, state, module, which)?;
     let rect = annotation_ui::module_rect(ctx, node_id).ok_or_else(|| format!("finds {module}{which} isn't on show"))?;
     let name = match &part.at {
-        PartAt::Offset(v) => return Ok(rect.min + *v * zoom),
+        PartAt::Offset(v) => return Ok(point(rect.min + *v * zoom)),
         PartAt::Named(name) => name,
     };
     let rect = match jack(graph, node_id, name) {
         Some(param) => drawn_port_rect(ctx, param),
         None => marks::marked(ctx, node_id, name),
     };
-    rect.map(|r| r.center()).ok_or_else(|| {
+    rect.ok_or_else(|| {
         format!("finds no {name} drawn on {module}{which}: it shows {}", marks::names(ctx, node_id).join(", "))
     })
 }

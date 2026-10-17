@@ -145,6 +145,11 @@ impl SynthApp {
 }
 
 impl CableProbe {
+    /// Whether a cable is being heard.
+    pub(super) fn probing(&self) -> bool {
+        self.heard.is_some()
+    }
+
     /// The ducking chosen last time, if there was one.
     pub(super) fn load(&mut self, storage: &dyn eframe::Storage) {
         let read = |key| storage.get_string(key).and_then(|v| v.parse::<f32>().ok()).map(|v| v.clamp(0.0, 1.0));

@@ -7,6 +7,7 @@
 - [Installation](./getting-started/installation.md)
 - [Interface Overview](./getting-started/interface-overview.md)
 - [Your First Patch](./getting-started/your-first-patch.md)
+- [Lessons](./getting-started/lessons.md)
 
 # Core Concepts
 

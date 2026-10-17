@@ -47,6 +47,7 @@ If you're new to modular synthesis, read the Getting Started pages in order:
 1. [Installation](./getting-started/installation.md) gets the app running.
 2. [Interface Overview](./getting-started/interface-overview.md) shows you around the window.
 3. [Your First Patch](./getting-started/your-first-patch.md) builds a playable synthesizer from an empty canvas, one cable at a time.
+4. [Lessons](./getting-started/lessons.md) teach the same ideas inside the app: five short tutorials that show you each move, then wait while you make it.
 
 If you already know your way around a modular, open the **📚 Examples** menu, load a patch, and keep the [module reference](./modules/index.md) to hand. The [recipes](./recipes/basic-subtractive.md) explain how each example works, one idea at a time, and the [songs](./songs/from-one-sine.md) are whole pieces that play themselves from the first note to the last.
 

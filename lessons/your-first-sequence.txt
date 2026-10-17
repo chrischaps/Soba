@@ -1,0 +1,51 @@
+# Lesson 4: a Clock steps a Step Sequencer, which plays a voice.
+title Your First Sequence
+about A Clock and a Step Sequencer play a looping bass line
+patch your-first-sequence.json
+
+say Here's a voice, an Oscillator, a VCA and an envelope, with nothing to play it. A **Clock** keeps time: right-click the empty canvas on the left and add **Utility › Clock**.
+point canvas
+show rclick canvas
+wait add util.clock
+
+say A **Step Sequencer** plays a row of notes, one step for each tick. Add **Utility › Step Sequencer** below the Clock.
+point canvas
+show rclick canvas
+wait add seq.step
+
+say Patch the Clock's **Gate** into the sequencer's **Clock**. Each tick moves it on a step.
+point util.clock out:Gate
+point seq.step in:Clock
+show drag util.clock out:Gate to seq.step in:Clock
+wait connect util.clock Gate -> seq.step Clock
+
+say The sequencer's **Pitch** sets the note. Patch it into the Oscillator's **V/Oct**.
+point seq.step out:Pitch
+point osc.sine in:V/Oct
+show drag seq.step out:Pitch to osc.sine in:V/Oct
+wait connect seq.step Pitch -> osc.sine V/Oct
+
+say And its **Gate** plays each step: patch it into the envelope's **Gate**.
+point seq.step out:Gate
+point mod.adsr in:Gate
+show drag seq.step out:Gate to mod.adsr in:Gate
+wait connect seq.step Gate -> mod.adsr Gate
+
+say Press **▶ Play**.
+wait play
+
+say Eight steps, all on the same note, round and round. Drag a step up or down to change its note. Give a few of them new notes and the line becomes a tune.
+point seq.step step:3
+show turn seq.step step:3 up
+wait param seq.step Step * Pitch changed
+
+say Keep going until you like it. The step lit up is the one playing.
+wait listen 4
+
+say The Clock's **BPM** sets the pace. Turn it up past 140 and the line hurries along.
+point util.clock knob:Tempo
+show turn util.clock knob:Tempo up
+wait param util.clock Tempo > 140
+
+say A clock, a sequencer and a voice: the start of every groove. Try the envelope's **Dec**, or the Oscillator's **Wave**, while it plays.
+say Next, **Groups** folds modules away into one.

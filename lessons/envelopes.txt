@@ -1,0 +1,48 @@
+# Lesson 3: an ADSR Envelope through a VCA turns a held tone into notes.
+title Envelopes
+about Turn a tone that never stops into notes that start and end
+patch envelopes.json
+
+say A Keyboard plays an Oscillator through a VCA. Press **▶ Play**, then play the `Z` to `M` keys on your computer keyboard.
+wait play
+
+say The pitch follows the keys, but the tone never stops: nothing tells the VCA when a note ends. Right-click below the VCA and add **Modulation › ADSR Envelope**.
+point canvas
+show rclick canvas
+wait add mod.adsr
+
+say The Keyboard's **Gate** is on while a key is held. Patch it into the envelope's **Gate**. Green cables carry gates.
+point input.keyboard out:Gate
+point mod.adsr in:Gate
+show drag input.keyboard out:Gate to mod.adsr in:Gate
+wait connect input.keyboard Gate -> mod.adsr Gate
+
+say Now patch the envelope's **Out** into the VCA's **CV**, so the envelope sets how loud the sound is.
+point mod.adsr out:Out
+point util.vca in:CV
+show drag mod.adsr out:Out to util.vca in:CV
+wait connect mod.adsr Out -> util.vca CV
+
+say Play a few notes. Each one rises as its key goes down and fades when you let go, and the envelope draws the shape as it runs.
+wait notes 3
+
+say For a pluck, turn **Sus** right down, below 0.15. Now a note dies away even while you hold its key.
+point mod.adsr knob:Sustain
+show turn mod.adsr knob:Sustain down
+wait param mod.adsr Sustain < 0.15
+
+say Now a swell: turn **Atk** up past half a second, and play a long note to hear it bloom.
+point mod.adsr knob:Attack
+show turn mod.adsr knob:Attack up
+wait param mod.adsr Attack > 0.5
+
+say Last, **Rel**: past one second, and each note lingers after you let it go.
+point mod.adsr knob:Release
+show turn mod.adsr knob:Release up
+wait param mod.adsr Release > 1
+
+say Play a few slow notes and listen to them fade.
+wait notes 2
+
+say Attack, decay, sustain, release: four numbers that give a sound its shape in time. Every instrument has one.
+say Next, **Your First Sequence** plays the notes for you, in time.

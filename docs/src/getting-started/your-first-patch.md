@@ -2,6 +2,8 @@
 
 In this tutorial you build a playable synthesizer voice from an empty canvas: an oscillator for the tone, a keyboard to play it, an envelope and a VCA to shape each note, and a filter to color it. It takes about fifteen minutes, and each step adds one idea you'll use in every patch after this one.
 
+> **Rather learn by doing?** The same ground is covered by five short [Lessons](./lessons.md) that run inside Soba (**❓ Help › 🎓 Lessons**). Each one points at what to do next and waits until you've done it.
+
 ![The finished patch: Keyboard, Oscillator, SVF Filter, VCA, ADSR Envelope and Audio Output](../images/tutorial-complete-patch.png)
 *Where you'll end up.*
 

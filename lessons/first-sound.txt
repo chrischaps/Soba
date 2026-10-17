@@ -1,0 +1,41 @@
+# Lesson 1: from an empty canvas to a tone you can hear and change.
+# The format is in src/app/lesson.rs.
+title First Sound
+about An oscillator, an output and one cable: a sound from nothing
+
+say Every sound in Soba starts at a **source**. Right-click the empty canvas and choose **Source › Oscillator**.
+say Or press `Space`, type `osc` and press `Enter`.
+point canvas
+show rclick canvas
+wait add osc.sine
+
+say A sound needs a way out to your speakers. Right-click the canvas to the right of the Oscillator and choose **Output › Audio Output**.
+point canvas
+show rclick canvas
+wait add output.audio
+
+say Now the cable. Drag from the Oscillator's **Out** jack to the Audio Output's **Mono** jack. Blue cables carry sound.
+point osc.sine out:Out
+point output.audio in:Mono
+show drag osc.sine out:Out to output.audio in:Mono
+wait connect osc.sine Out -> output.audio Mono
+
+say Press **▶ Play** in the toolbar.
+wait play
+
+say That steady tone is a sine wave at middle C, and the Oscillator draws it as it plays. Listen for a moment.
+point osc.sine out:Out
+wait listen 3
+
+say A sine is the purest tone there is. Open the Oscillator's **Wave** menu and choose **Saw**.
+point osc.sine knob:Waveform
+show click osc.sine knob:Waveform
+wait param osc.sine Waveform = Saw
+
+say Brighter and buzzier: a saw holds every harmonic at once. Now drag the **Oct** knob up or down to move it an octave.
+point osc.sine knob:Octave
+show turn osc.sine knob:Octave up
+wait param osc.sine Octave changed
+
+say That's a patch: a source, a way out and a cable between them. Every patch you build grows from this one.
+say Next, **Shaping with a Filter** carves a bright saw into something darker.

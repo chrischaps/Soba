@@ -1,6 +1,6 @@
 """Re-shoots the manual's interface pictures: the window, its menus, the
-tutorial's finished patch and a chord played into the Chord Sequencer's
-popover, each played and posed by a capture script.
+tutorial's finished patch, a chord played into the Chord Sequencer's
+popover and a lesson under way, each played and posed by a capture script.
 
     python tools/showcase/manual_images.py [name ...]
     python tools/showcase/manual_images.py --check [name ...]
@@ -15,6 +15,11 @@ held, a menu opened, a key down) and what to keep of the window:
   around, as recipe_images.py crops
 - (x0, y0, x1, y1): a box in window points, for a menu or the palette,
   which the layout doesn't know about
+
+A picture of a lesson names it (lesson="shaping-with-a-filter"): the app
+starts it with --lesson, and its cues play the learner's moves, so the
+caption and the ghost pointer are the ones the lesson draws. Its patch is
+the one the lesson opens.
 
 Every picture is filmed at 2 pixels per point, scaled down with Lanczos to
 its width and saved as a 256-colour palette, as the recipe images are
@@ -143,6 +148,24 @@ PICTURES = {
             0.0 wait
         """,
     ),
+    # Shaping with a Filter, its third step: the filter added from the
+    # palette, and the ghost pointer partway through showing the cable from
+    # the Oscillator's Out to the filter's In
+    "lesson-shaping-with-a-filter": dict(
+        patch="lessons/shaping-with-a-filter.json",
+        lesson="shaping-with-a-filter",
+        crop=(220, 250, 1390, 930),
+        width=1400,
+        cues="""
+            -6.0 play
+            -5.6 move 860 560 0.3
+            -5.2 key Space 0.05
+            -5.0 type svf 0.05
+            -4.6 key Enter 0.05
+            -4.3 move off
+            0.0 wait
+        """,
+    ),
     "tutorial-complete-patch": dict(
         patch="tools/showcase/patches/first-patch.json",
         crop="patch",
@@ -176,7 +199,8 @@ def shoot(name, tmp):
     out = Path(tmp) / name
     out.mkdir()
     (out / "manual.txt").write_text(script(pic["cues"]))
-    subprocess.run([str(EXE), str(ROOT / pic["patch"]), "--capture", str(out / "manual.txt"), "--out", str(out),
+    lesson = ["--lesson", pic["lesson"]] if "lesson" in pic else []
+    subprocess.run([str(EXE), str(ROOT / pic["patch"]), *lesson, "--capture", str(out / "manual.txt"), "--out", str(out),
                     "--fps", "10", "--size", f"{size[0]}x{size[1]}", "--ppp", str(PPP)],
                    check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     image = Image.open(out / "shot.ppm").convert("RGB")
@@ -195,6 +219,14 @@ def shoot(name, tmp):
     return image.quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
 
 
+def lesson_inputs(name):
+    """A lesson picture's lesson, and the code that draws it."""
+    lesson = PICTURES[name].get("lesson")
+    if not lesson:
+        return []
+    return [ROOT / "lessons" / f"{lesson}.txt", ROOT / "src" / "app" / "lesson.rs", ROOT / "src" / "app" / "synth_app" / "lessons.rs"]
+
+
 def main(args):
     unknown = [n for n in picture_check.names_arg(args) if n not in PICTURES]
     if unknown:
@@ -203,7 +235,7 @@ def main(args):
     return picture_check.run(
         args, "manual_images.py", list(PICTURES),
         png=lambda name: IMAGES / f"{name}.png",
-        inputs=lambda name: picture_check.patch_inputs(ROOT / PICTURES[name]["patch"],
+        inputs=lambda name: picture_check.patch_inputs(ROOT / PICTURES[name]["patch"], extra=lesson_inputs(name),
                                                        every_module=PICTURES[name].get("every_module", False)),
         shoot=shoot, compare=changed, width=28)
 

@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::modules::looper::LOOPER_ID;
 use crate::persistence::{patch_from_json, Example, Patch, PatchError};
+use super::lesson::LessonFile;
 use super::theme;
 
 /// How often eframe stores recent files and the autosave.
@@ -36,6 +37,8 @@ pub enum Discard {
     Open,
     OpenFile(PathBuf),
     OpenExample(&'static Example),
+    /// Start a lesson, which opens its own patch.
+    OpenLesson(&'static LessonFile),
     /// Open the patch a link holds: its fragment, `p=1.…`.
     OpenLink(String),
     Quit,

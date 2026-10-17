@@ -16,7 +16,7 @@ From left to right:
 | **Edit** | **↩ Undo** and **↪ Redo**. Hover either to see which edit it will undo or redo. |
 | **〰 Cables** | How signal flow is drawn along cables: **Chevrons**, **Dots** or **Comets**. **Under modules and labels** sets how much of a cable shows through a module, frame title or note it passes behind (5% at first). **Patch under a probe** sets how far the patch is turned down while you [probe a cable](#probing-a-cable) |
 | **◉ Knobs** | How knobs are drawn: **LED ring**, **Hybrid**, **Arc**, **Machined** or **Classic** |
-| **❓ Help** | **📖 Manual** opens this manual, and **⌨ Keyboard Shortcuts** (`F1`) lists the [shortcuts](#keyboard-shortcuts). **Check for Updates…**, **Check for Updates Automatically**, and **Roll Back** after an update: see [Updates](installation.md#updates) |
+| **❓ Help** | **📖 Manual** opens this manual, and **⌨ Keyboard Shortcuts** (`F1`) lists the [shortcuts](#keyboard-shortcuts), and **🎓 Lessons** opens the [lessons](lessons.md) you take inside the app. **Check for Updates…**, **Check for Updates Automatically**, and **Roll Back** after an update: see [Updates](installation.md#updates) |
 | **Output** | The audio device to play through |
 | **Input** | The microphone, guitar or line input that [Audio Input](../modules/sources/audio-input.md) modules hear. It starts at **None**: nothing is opened until you choose a device. A filled dot (●) means it's open. |
 | **MIDI In** | The MIDI controller to listen to. A filled dot (●) means it's connected. |

@@ -1,0 +1,33 @@
+# Lesson 5: group the voice from Your First Patch, go inside it, come back.
+title Groups
+about Fold modules into one, go inside, and come back out
+patch groups.json
+
+say Here's the voice from **Your First Patch**: a Keyboard and an Audio Output, with four modules between them. Press **▶ Play**.
+wait play
+
+say Play a few notes on the `Z` to `M` keys.
+wait notes 2
+
+say Select the four modules in the middle: drag a box around them, starting on empty canvas, or `Ctrl`-click each one. Then press `Ctrl` + `G`, or right-click one of them and choose **Group**.
+point osc.sine
+point filter.svf
+point util.vca
+point mod.adsr
+show drag osc.sine -36 -36 to mod.adsr 200 240
+wait group
+
+say The four are one module now, with a jack for each cable that crosses its edge. Type a name for it and press `Enter`.
+say Then play a few notes: it sounds just the same. Groups cost nothing to run.
+wait notes 2
+
+say Double-click the group to go inside, or select it and press `Tab`.
+point group
+show dclick group
+wait enter
+
+say Inside are the four modules, with **Inputs** and **Outputs** at the edges, where the cables come in and go out. The trail at the top shows where you are. Press `Escape`, or click the first name in the trail, to come back out.
+wait leave
+
+say A group can hold groups, be saved to your library and dropped into another patch. Right-click it to see what else it can do.
+say That's all five lessons. The **📚 Examples** menu has whole patches to take apart, and the manual has a page for every module.
