@@ -6,10 +6,14 @@
 //! Notes reach MIDI Note modules on the audio thread, sample-accurately;
 //! nothing here changes what they play. The UI's copy of each event lights
 //! the pianos and the MIDI Monitor, and turns mapped knobs.
+//!
+//! Notes played on the UI itself (the computer keys, the piano) go to the
+//! audio thread on a ring of their own ([`UiNotes`]), with or without a
+//! MIDI device, and are heard here as MIDI in is.
 
 use rtrb::Consumer;
 
-use crate::engine::{MidiDeviceInfo, MidiEngine, MidiEvent, TimestampedMidiEvent};
+use crate::engine::{MidiDeviceInfo, MidiEngine, MidiEvent, TimestampedMidiEvent, UiNotes};
 use crate::persistence::MidiMapping;
 use super::midi_mappings::MidiMappings;
 
@@ -61,6 +65,11 @@ pub struct MidiSession {
     /// them, so they say for themselves whether the patch has changed.
     saved_mappings: MidiMappings,
     learning: Option<MidiLearnTarget>,
+    /// The ring the UI's own notes take to the audio thread.
+    notes: Option<UiNotes>,
+    /// Notes played on the UI since the last [`drain`](Self::drain), for
+    /// it to hear with the MIDI that came in.
+    played: Vec<MidiEvent>,
 }
 
 impl MidiSession {
@@ -121,16 +130,36 @@ impl MidiSession {
         &self.held
     }
 
-    /// Takes every event waiting, handing each to `each` (the MIDI
-    /// Monitor's log) as it's heard.
+    /// Has the UI's own notes ([`play_note`](Self::play_note)) sent on
+    /// `notes`, whose other end the audio processor has.
+    pub fn set_ui_notes(&mut self, notes: UiNotes) {
+        self.notes = Some(notes);
+    }
+
+    /// Plays `note` (0-127), or lets it go, from the UI: a computer key or
+    /// the piano. It goes to the audio thread on the UI's ring, and is
+    /// heard here with the next [`drain`](Self::drain), as MIDI in is.
+    pub fn play_note(&mut self, note: u8, on: bool) {
+        if let Some(notes) = self.notes.as_mut() {
+            self.played.push(notes.note(note, on));
+        }
+    }
+
+    /// Takes every event waiting, and the notes the UI played, handing
+    /// each to `each` (the MIDI Monitor's log) as it's heard.
     pub fn drain(&mut self, mut each: impl FnMut(MidiEvent)) -> Heard {
         let mut heard = Heard::default();
-        let Some(mut events) = self.events.take() else { return heard };
-        while let Ok(timestamped) = events.pop() {
-            each(timestamped.event);
-            self.hear(timestamped.event, &mut heard);
+        if let Some(mut events) = self.events.take() {
+            while let Ok(timestamped) = events.pop() {
+                each(timestamped.event);
+                self.hear(timestamped.event, &mut heard);
+            }
+            self.events = Some(events);
         }
-        self.events = Some(events);
+        for event in std::mem::take(&mut self.played) {
+            each(event);
+            self.hear(event, &mut heard);
+        }
         heard
     }
 
@@ -224,6 +253,30 @@ mod tests {
 
     fn cc(channel: u8, controller: u8, value: u8) -> MidiEvent {
         MidiEvent::ControlChange { channel, controller, value }
+    }
+
+    #[test]
+    fn notes_played_here_reach_the_audio_ring_and_are_heard_with_no_device() {
+        let mut session = MidiSession::default();
+        let (notes, mut audio) = crate::engine::ui_notes();
+        session.set_ui_notes(notes);
+        session.play_note(60, true);
+        session.play_note(64, true);
+        session.play_note(60, false);
+
+        let mut logged = Vec::new();
+        let heard = session.drain(|event| logged.push(event));
+        assert!(heard.notes_changed);
+        assert_eq!(logged.len(), 3, "the MIDI Monitor logs them");
+        assert_eq!(session.held(), [(64, crate::engine::UI_VELOCITY)]);
+        assert_eq!(session.drain(|_| {}), Heard::default(), "heard once");
+
+        let sent: Vec<_> = std::iter::from_fn(|| audio.pop().ok()).map(|e| e.event).collect();
+        assert!(matches!(sent[..], [
+            MidiEvent::NoteOn { channel: crate::engine::UI_CHANNEL, note: 60, .. },
+            MidiEvent::NoteOn { note: 64, .. },
+            MidiEvent::NoteOff { note: 60, .. },
+        ]));
     }
 
     fn hear(session: &mut MidiSession, events: &[MidiEvent]) -> Heard {

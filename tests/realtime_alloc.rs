@@ -19,7 +19,7 @@ use std::cell::Cell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use soba::dsp::{SampleData, Snapshot, SnapshotOutcome};
+use soba::dsp::{InputAudio, MidiEvent as DspMidiEvent, SampleData, Snapshot, SnapshotOutcome};
 
 use soba::engine::{
     Probe, ProbeScope, SCOPE_WINDOW,
@@ -536,6 +536,9 @@ fn poly_patch_never_allocates_with_eight_voices() {
     let mut processor = AudioProcessor::new(48000.0, 256, engine);
     let (mut midi, midi_input) = rtrb::RingBuffer::new(512);
     processor.set_midi_input(midi_input);
+    // The computer keys play along, on the UI's own ring
+    let (mut keys, keys_input) = soba::engine::ui_notes();
+    processor.set_ui_midi_input(keys_input);
 
     // Poly MIDI -> Slope (a glide per voice) -> osc -> SVF -> ladder -> VCA
     // (opened by an envelope) -> mixer -> chained mixer -> delay -> output.
@@ -616,6 +619,7 @@ fn poly_patch_never_allocates_with_eight_voices() {
             let event = MidiEvent::NoteOff { channel: 0, note: root.wrapping_sub(2) + k * 2, velocity: 0 };
             midi.push(TimestampedMidiEvent::now(event)).unwrap();
         }
+        keys.note(72 + (round % 12) as u8, round % 3 != 2);
         if round % 100 == 50 {
             ui.send_command(EngineCommand::SetParameter { node_id: 1, param_index: 1, value: 3.0 });
         }
@@ -635,7 +639,15 @@ fn poly_patch_never_allocates_with_eight_voices() {
         ui.flush();
         ui.drain_events().for_each(drop);
 
-        allocations += count_allocations(|| processor.process(&mut output[..frames * 2], 2));
+        if round % 2 == 0 {
+            allocations += count_allocations(|| processor.process(&mut output[..frames * 2], 2));
+        } else {
+            // As the plugin plays: the host's MIDI, with the keys before it
+            let mut host = [DspMidiEvent::note_on(10, 0, 48, 90), DspMidiEvent::note_off(frames as u32 - 1, 0, 48, 0)];
+            allocations += count_allocations(|| {
+                processor.process_offline(&mut output[..frames * 2], 2, &mut host, InputAudio::default())
+            });
+        }
     }
 
     assert!(processor.is_playing());

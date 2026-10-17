@@ -49,12 +49,16 @@ impl SynthApp {
     pub fn hosted(sample_rate: f32, midi: Consumer<TimestampedMidiEvent>) -> (Self, AudioProcessor) {
         crate::hosted::set_hosted();
         let (ui_handle, engine_handle) = EngineChannels::with_defaults().split();
-        let processor = AudioProcessor::new(sample_rate, crate::engine::BLOCK_SIZE, engine_handle);
+        let mut processor = AudioProcessor::new(sample_rate, crate::engine::BLOCK_SIZE, engine_handle);
 
         let mut app = Self::with_devices(Err(AudioError::NoOutputDevice), None);
         app.audio.error = None;
         app.ui_handle = Some(ui_handle);
         app.midi.events = Some(midi);
+        // The keys and the piano play along with the host's notes
+        let (notes, notes_input) = crate::engine::ui_notes();
+        app.midi.set_ui_notes(notes);
+        processor.set_ui_midi_input(notes_input);
         app.user_state.hosted = true;
         app.hosted = Some(Hosted { macros: [f32::NAN; MACRO_COUNT as usize] });
         // The DAW decides when it plays; the patch always runs

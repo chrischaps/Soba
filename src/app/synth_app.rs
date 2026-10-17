@@ -12,7 +12,7 @@ use egui_node_graph2::{FlowGlyph, GraphEditorState, NodeResponse, InputParamKind
 
 use crate::engine::{
     AudioEngine, AudioError, AudioProcessor, AudioSystem, EngineChannels, EngineCommand, InputMonitor, Recording, RoundTrip,
-    UiHandle, MidiEngine, MidiEvent, MidiReceivers,
+    UiHandle, MidiEngine, MidiReceivers,
 };
 use crate::graph::annotation_ui;
 use crate::graph::annotations::{Annotation, AnnotationId, Frame, Note, Tint, DEFAULT_NOTE_WIDTH};
@@ -355,7 +355,7 @@ impl SynthApp {
         midi: Option<Result<(MidiEngine, MidiReceivers), crate::engine::MidiError>>,
     ) -> Self {
         // Initialize MIDI engine
-        let (midi, midi_audio_consumer) = match midi {
+        let (mut midi, midi_audio_consumer) = match midi {
             None => (MidiSession::default(), None),
             Some(Ok((engine, MidiReceivers { audio, ui }))) => (MidiSession::new(Some(engine), Some(ui), None), Some(audio)),
             Some(Err(e)) => {
@@ -363,6 +363,9 @@ impl SynthApp {
                 (MidiSession::new(None, None, Some(e.to_string())), None)
             }
         };
+        // Notes played on the UI, which need no MIDI device
+        let (notes, notes_input) = crate::engine::ui_notes();
+        midi.set_ui_notes(notes);
 
         // Create engine channels for communication with audio thread
         let channels = EngineChannels::with_defaults();
@@ -375,6 +378,7 @@ impl SynthApp {
             if let Some(midi) = midi_audio_consumer {
                 processor.set_midi_input(midi);
             }
+            processor.set_ui_midi_input(notes_input);
 
             if let Err(e) = engine.start_with_processor(processor) {
                 eprintln!("Failed to start audio processor: {}", e);
@@ -3587,14 +3591,10 @@ impl SynthApp {
             keys_changed = true;
         }
 
-        if let (true, Some(engine)) = (play_midi, self.midi.engine.as_ref()) {
+        // On the UI's own ring, so they play with no MIDI device too
+        if play_midi {
             for (relative_note, pressed) in midi_notes {
-                let note = relative_to_midi(relative_note, 0);
-                engine.send(if pressed {
-                    MidiEvent::NoteOn { channel: 0, note, velocity: 100 }
-                } else {
-                    MidiEvent::NoteOff { channel: 0, note, velocity: 0 }
-                });
+                self.midi.play_note(relative_to_midi(relative_note, 0), pressed);
             }
         }
 

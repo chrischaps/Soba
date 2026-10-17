@@ -14,6 +14,7 @@ pub mod graph_plan;
 pub mod latency;
 pub mod midi_engine;
 pub mod midi_scheduler;
+pub mod ui_notes;
 #[cfg(target_arch = "wasm32")]
 pub mod web_midi;
 mod monitor_board;
@@ -44,3 +45,4 @@ pub use midi_engine::{
     MidiDeviceInfo, MidiEngine, MidiError, MidiEvent, MidiReceivers, TimestampedMidiEvent,
 };
 pub use midi_scheduler::{MidiScheduler, MAX_MIDI_EVENTS_PER_CALLBACK};
+pub use ui_notes::{ui_notes, UiNotes, UI_CHANNEL, UI_VELOCITY};

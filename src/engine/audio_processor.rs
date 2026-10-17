@@ -18,7 +18,7 @@ use super::cue::CuePlayer;
 use super::probe::ProbePlayer;
 use super::graph_plan::GraphPlan;
 use super::midi_engine::TimestampedMidiEvent;
-use super::midi_scheduler::{take_chunk, MidiScheduler};
+use super::midi_scheduler::{take_chunk, MidiScheduler, MAX_MIDI_EVENTS_PER_CALLBACK};
 use super::recorder::RecordTap;
 
 /// Creates a module registry with all built-in modules.
@@ -95,6 +95,9 @@ pub struct AudioProcessor {
     engine_handle: EngineHandle,
     /// Live MIDI input, placed at sample offsets for each callback.
     midi: MidiScheduler,
+    /// The caller's MIDI with the UI's notes before it, in
+    /// [`process_offline`](Self::process_offline). Allocated once.
+    offline_midi: Vec<MidiEvent>,
     /// Current sample rate.
     sample_rate: f32,
     /// Whether audio processing is active.
@@ -125,6 +128,11 @@ pub struct AudioProcessor {
 /// two-minute loop in about half a second.
 const BACKGROUND_FRAMES_PER_FRAME: usize = 256;
 
+/// The most MIDI events one [`process_offline`](AudioProcessor::process_offline)
+/// buffer holds once the UI's notes join the caller's: the plugin passes up
+/// to 1024 of the host's. UI notes that don't fit wait for the next buffer.
+const OFFLINE_MIDI_CAPACITY: usize = 1024 + MAX_MIDI_EVENTS_PER_CALLBACK;
+
 impl AudioProcessor {
     /// Creates a new audio processor.
     ///
@@ -141,6 +149,7 @@ impl AudioProcessor {
             plan: Box::new(GraphPlan::empty(block_size)),
             engine_handle,
             midi: MidiScheduler::new(),
+            offline_midi: Vec::with_capacity(OFFLINE_MIDI_CAPACITY),
             sample_rate,
             is_playing: false,
             frame_counter: 0,
@@ -168,6 +177,14 @@ impl AudioProcessor {
     /// at the sample matching when they arrived, one callback later.
     pub fn set_midi_input(&mut self, input: Consumer<TimestampedMidiEvent>) {
         self.midi.set_input(input);
+    }
+
+    /// Feeds notes played on the UI thread (the computer keys, the piano)
+    /// to the graph, merged with device MIDI, or in
+    /// [`process_offline`](Self::process_offline) with the caller's. See
+    /// [`ui_notes`](super::ui_notes).
+    pub fn set_ui_midi_input(&mut self, input: Consumer<TimestampedMidiEvent>) {
+        self.midi.set_ui_input(input);
     }
 
     /// How often to send CPU load events (in audio callbacks).
@@ -288,21 +305,34 @@ impl AudioProcessor {
     ///
     /// The capture mode renders this way, one video frame's worth of audio
     /// per UI frame, so picture and sound advance in lockstep however long
-    /// each frame takes to draw. Live MIDI and audio input that arrived
-    /// meanwhile are dropped: Audio Input modules hear `input` instead,
-    /// from the start of the buffer.
+    /// each frame takes to draw, and so does the plugin, with the host's
+    /// MIDI. Live MIDI and audio input that arrived meanwhile are dropped:
+    /// Audio Input modules hear `input` instead, from the start of the
+    /// buffer. Notes played on the UI still play, at the start of the
+    /// buffer, before `midi`.
     pub fn process_offline(&mut self, output: &mut [f32], channels: usize, midi: &mut [MidiEvent], input: InputAudio<'_>) {
         let _denormals = DenormalGuard::new();
         self.process_messages(output.len() / channels.max(1));
-        self.midi.skip(Instant::now());
+        let now = Instant::now();
         self.input.discard();
         output.fill(0.0);
         if !self.is_playing || channels == 0 {
+            self.midi.skip(now);
             self.record(output, channels);
             self.probe.idle();
             self.play_cue(output, channels);
             return;
         }
+
+        let ui = self.midi.collect_ui(now, OFFLINE_MIDI_CAPACITY.saturating_sub(midi.len()));
+        let midi = if ui.is_empty() {
+            midi
+        } else {
+            self.offline_midi.clear();
+            self.offline_midi.extend_from_slice(ui);
+            self.offline_midi.extend_from_slice(midi);
+            &mut self.offline_midi[..]
+        };
 
         // Input given with the picture is already in time with it
         Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0, None, self.host);
@@ -763,6 +793,64 @@ mod tests {
         readouts.sort_unstable();
         assert_eq!(outputs, lfos.clone().collect::<Vec<_>>(), "every output, once");
         assert_eq!(readouts, lfos.collect::<Vec<_>>(), "every readout, once");
+    }
+
+    #[test]
+    fn test_ui_notes_and_device_midi_both_reach_a_module_on_their_samples() {
+        let (mut ui, mut processor) = processor();
+        let (mut device, device_input) = rtrb::RingBuffer::new(64);
+        processor.set_midi_input(device_input);
+        let (mut notes, notes_input) = crate::engine::ui_notes();
+        processor.set_ui_midi_input(notes_input);
+
+        // A sine through a VCA a MIDI Note's gate opens
+        let port = |module_id: &str, name: &str| {
+            let module = create_module_registry().create(module_id).unwrap();
+            module.ports().iter().position(|p| p.name == name).unwrap()
+        };
+        for (node_id, module_id) in [(1, "input.midi_note"), (2, "osc.sine"), (3, "util.vca"), (4, "output.audio")] {
+            ui.send_command(EngineCommand::AddModule { node_id, module_id });
+        }
+        let cables = [
+            (1, port("input.midi_note", "Gate"), 3, port("util.vca", "CV")),
+            (2, port("osc.sine", "Out"), 3, port("util.vca", "In")),
+            (3, port("util.vca", "Out"), 4, port("output.audio", "Mono")),
+        ];
+        for (from_node, from_port, to_node, to_port) in cables {
+            ui.send_command(EngineCommand::Connect { from_node, from_port, to_node, to_port });
+        }
+        ui.send_command(EngineCommand::SetPlaying(true));
+        ui.flush();
+
+        let loud = |output: &[f32]| output.chunks(2).map(|frame| frame[0].abs() > 0.05).collect::<Vec<_>>();
+        let heard = |output: &[f32]| loud(output).contains(&true);
+        let mut output = vec![0.0; 512 * 2];
+
+        // Live: a key played on the UI, then its release from a device,
+        // each placed in the callback after it came
+        processor.process(&mut output, 2);
+        notes.note(60, true);
+        processor.process(&mut output, 2);
+        processor.process(&mut output, 2);
+        assert!(heard(&output), "the UI's note played");
+        device.push(TimestampedMidiEvent::now(crate::engine::MidiEvent::NoteOff { channel: 0, note: 60, velocity: 0 })).unwrap();
+        // Placed late in the next callback, it's quiet by the one after
+        for _ in 0..3 {
+            processor.process(&mut output, 2);
+        }
+        assert!(!heard(&output), "the device's release let it go");
+
+        // Offline (the plugin, a capture): the UI's note at the start, and
+        // the host's release on the sample the host put it
+        notes.note(60, true);
+        let mut host = [MidiEvent::note_off(200, 0, 60, 0)];
+        processor.process_offline(&mut output, 2, &mut host, InputAudio::default());
+        // Heard after the limiter's lookahead, and as the VCA opens and closes
+        let loud = loud(&output);
+        let first = loud.iter().position(|&l| l).unwrap();
+        let last = loud.iter().rposition(|&l| l).unwrap();
+        assert!(first < 64, "played from the start, heard from {first}");
+        assert!((200..320).contains(&last), "let go on sample 200, heard until {last}");
     }
 
     #[test]

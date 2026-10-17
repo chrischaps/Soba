@@ -182,6 +182,45 @@ fn plays_host_midi_without_allocating() {
     assert!(after_note > 0.01, "the pad didn't play the host's chord: {after_note}");
 }
 
+/// One of the app's frames with the editor open and focused, a computer
+/// key going down or up in it.
+fn key_frame(app: &mut SynthApp, ctx: &egui::Context, time: f64, key: egui::Key, pressed: bool) {
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(Default::default(), egui::vec2(1280.0, 720.0))),
+        time: Some(time),
+        focused: true,
+        events: vec![egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() }],
+        ..Default::default()
+    };
+    let _ = ctx.run(input, |ctx| app.draw_frame(ctx));
+}
+
+#[test]
+fn computer_keys_play_poly_midi_with_no_midi_device() {
+    // The pad's Poly MIDI hears the keys, though the plugin has no MIDI
+    // engine: they take the UI's own ring to the audio thread
+    let (mut app, mut player, ctx) = plugin();
+    frame(&mut app, &ctx, 0.0);
+
+    let mut left = vec![0.0; MAX_FRAMES];
+    let mut right = vec![0.0; MAX_FRAMES];
+    let mut play = |buffers: usize| {
+        let mut level = 0.0f32;
+        for _ in 0..buffers {
+            let mut channels: [&mut [f32]; 2] = [&mut left, &mut right];
+            player.play(&mut channels, MAX_FRAMES, None);
+            level = level.max(peak(&left)).max(peak(&right));
+        }
+        level
+    };
+    assert!(play(20) < 1e-4, "the pad sounded before any key");
+    key_frame(&mut app, &ctx, 0.1, egui::Key::Z, true);
+    assert!(play(40) > 0.01, "the pad didn't play the Z key");
+    key_frame(&mut app, &ctx, 0.6, egui::Key::Z, false);
+    play(400);
+    assert!(play(20) < 1e-3, "the pad kept sounding after the key let go");
+}
+
 #[test]
 fn draws_in_a_new_context_each_time_the_editor_opens() {
     // The runner's context, then the editor's, closed and opened again: each

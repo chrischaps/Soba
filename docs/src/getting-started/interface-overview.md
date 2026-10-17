@@ -236,7 +236,7 @@ The bottom row of letter keys plays like a piano, starting from C4 (middle C), w
 
 The two pianos overlap: `,` `.` `/` play the same notes as `Q` `W` `E`.
 
-The keys play every [Keyboard](../modules/midi/keyboard.md) module in the patch; use its **Oct** knob to shift it up or down. If the patch has a [Poly MIDI](../modules/midi/poly-midi.md) module, the keys play that too, so you can play chords without a MIDI controller. Keys typed into the quick-add box, or held with `Ctrl` or `Alt`, don't play notes. While a [Chord Sequencer](../modules/utilities/chord-sequencer.md#playing-a-chord-into-a-step)'s chord popover is open, the keys write chords into it instead.
+The keys play every [Keyboard](../modules/midi/keyboard.md) module in the patch; use its **Oct** knob to shift it up or down. If the patch has a [Poly MIDI](../modules/midi/poly-midi.md) module, the keys play that too, so you can play chords without a MIDI controller, in the browser and inside a DAW as well. They play on MIDI channel 1 at velocity 100. Keys typed into the quick-add box, or held with `Ctrl` or `Alt`, don't play notes. While a [Chord Sequencer](../modules/utilities/chord-sequencer.md#playing-a-chord-into-a-step)'s chord popover is open, the keys write chords into it instead.
 
 ### MIDI
 
