@@ -403,7 +403,7 @@ mod tests {
         // Untitled, a file is written into the session's folder in temp,
         // and that goes with it when the patch is let go
         app.open_file(&path);
-        app.current_patch_path = None;
+        app.document.path = None;
         let at = node_id(&app);
         app.graph_state.graph.nodes[at].user_data.file = Some(original.to_string_lossy().into_owned());
         app.sync_history();

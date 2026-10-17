@@ -30,6 +30,7 @@ use crate::persistence::patch_from_json;
 use crate::persistence::sample_files::SampleBase;
 use crate::widgets::{cpu_meter, CpuMeterConfig, KnobStyle};
 use super::audio_devices::{AudioDevices, AUDIO_STALL, INPUT_GLITCH_HOLD};
+use super::document::Document;
 use super::capture::{Capture, CaptureAction, CaptureConfig};
 use super::pace;
 use super::qwerty_keys;
@@ -143,10 +144,9 @@ pub struct SynthApp {
     /// Key is (node_id as u64, param_index), value is the last sent value.
     cached_params: HashMap<(u64, usize), f32>,
 
-    /// Current patch file path (None if unsaved/new).
-    current_patch_path: Option<PathBuf>,
-    /// The example the graph was opened from, until it's saved as a file or replaced.
-    current_example: Option<&'static Example>,
+    /// The patch as a document: its file or example, the files opened
+    /// lately, and the prompts before changes are lost.
+    document: Document,
 
     /// News for the status bar ("Saved", "Pasted 3 modules"), until the bar
     /// takes it up as its `status`. Errors go through `status_error`.
@@ -156,9 +156,6 @@ pub struct SynthApp {
 
     /// Problems skipped while loading the current patch, shown in the status bar.
     load_warnings: Vec<String>,
-    /// What loading the current file left out (a newer Soba's modules,
-    /// say), which saving over it would lose. See `lossy_load`.
-    dropped_on_load: Vec<String>,
 
     /// Currently pressed keyboard keys for virtual keyboard.
     /// Stores (relative_note, egui::Key) in order of press for key priority.
@@ -202,17 +199,6 @@ pub struct SynthApp {
     /// without moving the mouse fans the copies out instead of stacking them.
     last_paste: Option<(egui::Pos2, egui::Pos2)>,
 
-    // --- Session safety ---
-    /// Patch files opened or saved lately, for the Recent menu.
-    recent_files: RecentFiles,
-    /// What's waiting on an answer to "Save changes?".
-    pending_discard: Option<Discard>,
-    /// A crash's autosave, until it's recovered or let go.
-    recovery: Option<Autosave>,
-    /// Whether the window may close: set once unsaved changes are dealt with.
-    allow_close: bool,
-    /// The window title last sent, so it's only sent when it changes.
-    window_title: String,
     /// Filming the app with `--capture`: the script, clock and outputs.
     capture: Option<Capture>,
     /// The lesson being taken, from Help → Lessons (#305).
@@ -409,12 +395,10 @@ impl SynthApp {
             graph_state: GraphEditorState::new(1.0),
             user_state: SynthGraphState::default(),
             cached_params: HashMap::new(),
-            current_patch_path: None,
-            current_example: None,
+            document: Document::default(),
             status_message: None,
             status: None,
             load_warnings: Vec::new(),
-            dropped_on_load: Vec::new(),
             pressed_keys: Vec::new(),
             last_gate_on: None,
             gate_held_high: false,
@@ -428,11 +412,6 @@ impl SynthApp {
             quick_add: None,
             editor_rect: egui::Rect::NOTHING,
             last_paste: None,
-            recent_files: RecentFiles::default(),
-            pending_discard: None,
-            recovery: None,
-            allow_close: false,
-            window_title: String::new(),
             capture: None,
             lesson: None,
             recording: None,
@@ -1061,7 +1040,7 @@ impl SynthApp {
             self.status_error(format!("Can't record to {}: {}", folder.display(), e));
             return;
         }
-        let path = recording::take_path(&folder, &self.patch_title(), chrono::Local::now());
+        let path = recording::take_path(&folder, &self.document.title(), chrono::Local::now());
         let (take, tap) = match Recording::start(&path, sample_rate, channels) {
             Ok(started) => started,
             Err(e) => {
@@ -1096,7 +1075,7 @@ impl SynthApp {
     /// Saves the patch beside a take, as `<take>.json`.
     fn save_take_patch(&mut self, wav: &Path) {
         let path = wav.with_extension("json");
-        let patch = self.patch_for_file(&self.patch_title(), &path);
+        let patch = self.patch_for_file(&self.document.title(), &path);
         if let Err(e) = save_to_file(&patch, &path) {
             eprintln!("Couldn't save the patch beside {}: {}", wav.display(), e);
         }
@@ -1152,11 +1131,11 @@ impl SynthApp {
 
     /// The recently opened patches, as menu items.
     fn recent_menu(&self, ui: &mut egui::Ui, actions: &mut Vec<AppAction>) {
-        if self.recent_files.is_empty() {
+        if self.document.recent.is_empty() {
             ui.label(RichText::new("No recent patches").color(theme::text::DISABLED).italics());
             return;
         }
-        for path in self.recent_files.iter() {
+        for path in self.document.recent.iter() {
             let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("?");
             let button = ui.add_enabled(path.exists(), egui::Button::new(name));
             let clicked = button
@@ -2642,7 +2621,7 @@ impl SynthApp {
 
         // Everything the build skipped is missing from the graph, so from
         // anything saved from it. A sample that isn't there is still named
-        self.dropped_on_load = staged.warnings.clone();
+        self.document.dropped_on_load = staged.warnings.clone();
 
         // Samplers' files, found from where the patch is
         let sample_warnings = self.resolve_samples(&staged.nodes, base);
@@ -2713,22 +2692,14 @@ impl SynthApp {
         self.mark_saved();
         self.opened_loops();
         self.load_warnings.clear();
-        self.dropped_on_load.clear();
-        self.current_patch_path = None;
-        self.current_example = None;
+        self.document.untitled();
         self.status_message = Some("New patch created".to_string());
     }
 
     /// Show a save file dialog and save the current patch. Returns whether
     /// it was saved, not cancelled or failed.
     fn show_save_dialog(&mut self) -> bool {
-        let default_name = self.current_patch_path
-            .as_ref()
-            .and_then(|p| p.file_name())
-            .and_then(|n| n.to_str())
-            .or(self.current_example.map(|e| e.file_name))
-            .unwrap_or("patch.json")
-            .to_string();
+        let default_name = self.document.file_name();
 
         // The browser saves by downloading
         #[cfg(target_arch = "wasm32")]
@@ -2761,8 +2732,6 @@ impl SynthApp {
                     if !problems.is_empty() {
                         self.load_warnings = problems;
                     }
-                    self.current_patch_path = Some(path.clone());
-                    self.current_example = None;
                     self.status_message = Some(format!("Saved: {}", path.display()));
                     self.saved_as(&path);
                     return true;
@@ -2839,8 +2808,7 @@ impl SynthApp {
             Ok((warnings, name)) => {
                 self.fit_on_web();
                 // Remembered by name only, to offer when it's saved again
-                self.current_patch_path = Some(PathBuf::from(&upload.name));
-                self.current_example = None;
+                self.document.opened(Some(PathBuf::from(&upload.name)));
                 self.status_message = Some(format!("Loaded: {}", name));
                 self.show_load_warnings(warnings);
             }
@@ -2853,17 +2821,16 @@ impl SynthApp {
         let folder = path.parent().unwrap_or(Path::new("")).to_path_buf();
         match load_from_file(path).and_then(|patch| Ok((self.load_patch(&patch, SampleBase::Folder(&folder))?, patch.name))) {
             Ok((warnings, name)) => {
-                self.current_patch_path = Some(path.to_path_buf());
-                self.current_example = None;
+                self.document.opened(Some(path.to_path_buf()));
                 self.status_message = Some(format!("Loaded: {}", name));
                 self.show_load_warnings(warnings);
-                self.recent_files.push(path);
+                self.document.recent.push(path);
             }
             Err(e) => {
                 self.status_error(format!("Load failed: {}", e));
                 // A file that's gone stops being offered
                 if !path.exists() {
-                    self.recent_files.remove(path);
+                    self.document.recent.remove(path);
                 }
             }
         }
@@ -2875,8 +2842,7 @@ impl SynthApp {
         match example.patch().and_then(|patch| self.load_patch(&patch, SampleBase::Example)) {
             Ok(warnings) => {
                 self.fit_on_web();
-                self.current_patch_path = None;
-                self.current_example = Some(example);
+                self.document.opened_example(example);
                 self.status_message = Some(format!("Opened example: {}", example.name));
                 self.show_load_warnings(warnings);
             }
@@ -2974,9 +2940,9 @@ impl SynthApp {
                             };
                             toggle = ui.button(RichText::new(text).color(color).strong()).on_hover_text("Shift+Space").clicked();
                             ui.add_space(4.0);
-                            let name = self.current_example.map_or("Soba", |e| e.name);
+                            let name = self.document.example.map_or("Soba", |e| e.name);
                             let label = ui.label(RichText::new(name).color(theme::text::PRIMARY).strong());
-                            if let Some(example) = self.current_example {
+                            if let Some(example) = self.document.example {
                                 label.on_hover_text(example.description);
                             }
                             match status {
@@ -2998,7 +2964,7 @@ impl SynthApp {
                             #[cfg(target_arch = "wasm32")]
                             if let Some(app) = web::full_app_url() {
                                 ui.add_space(4.0);
-                                let file = self.current_example.map_or("", |e| e.file_name.trim_end_matches(".json"));
+                                let file = self.document.example.map_or("", |e| e.file_name.trim_end_matches(".json"));
                                 // A new tab: in the frame it would replace the page's embed
                                 ui.add(egui::Hyperlink::from_label_and_url(
                                     RichText::new("Open in Soba ↗").color(theme::text::SECONDARY).small(),
@@ -3058,11 +3024,10 @@ impl SynthApp {
     /// Notes a successful save to `path`.
     fn saved_as(&mut self, path: &Path) {
         // The file holds the patch as it is now, so nothing more is lost by saving over it
-        self.dropped_on_load.clear();
+        self.document.saved(path.to_path_buf());
         // Edits made this frame are in the file, so they're in the history first
         self.sync_history();
         self.mark_saved();
-        self.recent_files.push(path);
         #[cfg(not(target_arch = "wasm32"))]
         self.tidy_takes_on_save(path);
     }
@@ -3084,15 +3049,6 @@ impl SynthApp {
         self.history.has_unsaved_changes() || self.midi.unsaved() || self.loops_unsaved()
     }
 
-    /// The patch's name: its file's, its example's, or "Untitled".
-    fn patch_title(&self) -> String {
-        match (&self.current_patch_path, self.current_example) {
-            (Some(path), _) => path.file_stem().and_then(|s| s.to_str()).unwrap_or("Untitled").to_string(),
-            (None, Some(example)) => example.name.to_string(),
-            (None, None) => "Untitled".to_string(),
-        }
-    }
-
     /// Does `action` now if nothing would be lost, or asks first.
     fn request(&mut self, ctx: &egui::Context, action: Discard) {
         self.sync_history();
@@ -3104,7 +3060,7 @@ impl SynthApp {
         // Quitting stops a take, so that asks too
         let stops_take = matches!(action, Discard::Quit) && self.is_recording();
         if self.has_unsaved_changes() || stops_take {
-            self.pending_discard = Some(action);
+            self.document.pending = Some(action);
         } else {
             self.perform(ctx, action);
         }
@@ -3130,7 +3086,7 @@ impl SynthApp {
                 self.finish_recording_now();
                 #[cfg(not(target_arch = "wasm32"))]
                 self.tidy_takes_on_leave();
-                self.allow_close = true;
+                self.document.allow_close = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
             #[cfg(not(target_arch = "wasm32"))]
@@ -3142,14 +3098,14 @@ impl SynthApp {
 
     /// Shows whichever prompt is waiting, and acts on its answer.
     fn show_prompts(&mut self, ctx: &egui::Context) {
-        if let Some(action) = self.pending_discard.clone() {
+        if let Some(action) = self.document.pending.clone() {
             let unsaved = self.has_unsaved_changes();
             let take = match (&action, &self.recording) {
                 (Discard::Quit, Some(take)) if !take.is_stopping() => Some(recording::clock(take.elapsed())),
                 _ => None,
             };
-            if let Some(answer) = session::unsaved_changes_prompt(ctx, &self.patch_title(), &action, unsaved, take.as_deref()) {
-                self.pending_discard = None;
+            if let Some(answer) = session::unsaved_changes_prompt(ctx, &self.document.title(), &action, unsaved, take.as_deref()) {
+                self.document.pending = None;
                 match answer {
                     // A cancelled save dialog cancels the whole thing
                     Answer::Save => {
@@ -3161,9 +3117,9 @@ impl SynthApp {
                     Answer::Cancel => {}
                 }
             }
-        } else if let Some(autosave) = &self.recovery {
+        } else if let Some(autosave) = &self.document.recovery {
             if let Some(recover) = session::recovery_prompt(ctx, autosave) {
-                let autosave = self.recovery.take().expect("shown above");
+                let autosave = self.document.recovery.take().expect("shown above");
                 if recover {
                     self.recover(&autosave);
                 }
@@ -3176,7 +3132,7 @@ impl SynthApp {
 
     /// Whether a prompt is up, so shortcuts wait.
     fn prompt_open(&self) -> bool {
-        self.pending_discard.is_some() || self.recovery.is_some()
+        self.document.prompt_open()
     }
 
     /// Brings back the patch an autosave holds. It's still unsaved.
@@ -3184,12 +3140,9 @@ impl SynthApp {
         // An autosave keeps samples by key, as the editor does
         match autosave.patch().and_then(|patch| self.load_patch(&patch, SampleBase::Keys)) {
             Ok(warnings) => {
-                self.current_patch_path = autosave.path.clone();
-                self.current_example = autosave.example.as_deref()
-                    .and_then(|name| EXAMPLES.iter().find(|e| e.name == name));
+                // Its file, and what that had that the autosave never did
+                self.document.recovered(autosave);
                 self.history.mark_unsaved();
-                // What its file had that the autosave never did
-                self.dropped_on_load = autosave.dropped.clone();
                 self.status_message = Some(format!("Recovered unsaved changes to {}", autosave.name));
                 self.show_load_warnings(warnings);
             }
@@ -3202,10 +3155,10 @@ impl SynthApp {
     /// Picks up the last session: its recent files, and any autosave a crash
     /// left, which is offered back on the first frame.
     pub fn restore_session(&mut self, storage: Option<&dyn eframe::Storage>) {
-        self.recent_files = RecentFiles::load(storage);
+        self.document.recent = RecentFiles::load(storage);
         #[cfg(not(target_arch = "wasm32"))]
         self.updater.load(storage);
-        self.recovery = Autosave::load(storage);
+        self.document.recovery = Autosave::load(storage);
         if let Some(through) = storage.and_then(|s| s.get_string(CABLE_THROUGH_KEY)).and_then(|t| t.parse::<f32>().ok()) {
             self.user_state.cable_through = through.clamp(0.0, 1.0);
         }
@@ -3489,12 +3442,7 @@ impl SynthApp {
                 }
 
                 // Show current patch name if any
-                let patch_name = match (&self.current_patch_path, self.current_example) {
-                    (Some(path), _) => path.file_stem().and_then(|s| s.to_str()).map(str::to_string),
-                    (None, Some(example)) => Some(format!("{} (example)", example.name)),
-                    (None, None) => self.has_unsaved_changes().then(|| "Untitled".to_string()),
-                };
-                if let Some(name) = patch_name {
+                if let Some(name) = self.document.status_name(self.has_unsaved_changes()) {
                     // Right to left: the dot sits after the name
                     if self.has_unsaved_changes() {
                         ui.label(RichText::new("●").color(theme::accent::WARNING).small())
@@ -3907,7 +3855,7 @@ impl SynthApp {
         }
 
         // Closing the window with unsaved changes asks first
-        if ctx.input(|i| i.viewport().close_requested()) && !self.allow_close {
+        if ctx.input(|i| i.viewport().close_requested()) && !self.document.allow_close {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.request(ctx, Discard::Quit);
         }
@@ -4086,14 +4034,8 @@ impl SynthApp {
         }
 
         // The title names the patch, with a dot while it has unsaved changes
-        let title = format!(
-            "{}{} · Soba",
-            if self.has_unsaved_changes() { "● " } else { "" },
-            self.patch_title()
-        );
-        if title != self.window_title {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
-            self.window_title = title;
+        if let Some(title) = self.document.new_window_title(self.has_unsaved_changes()) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
         }
 
         if let Some(capture) = self.capture.as_mut() {
@@ -4103,7 +4045,7 @@ impl SynthApp {
                 // A take the script recorded isn't the patch's to keep
                 #[cfg(not(target_arch = "wasm32"))]
                 self.tidy_takes_on_leave();
-                self.allow_close = true;
+                self.document.allow_close = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
         }
@@ -4140,7 +4082,7 @@ impl eframe::App for SynthApp {
         if self.capture.is_some() || self.embedded {
             return;
         }
-        self.recent_files.store(storage);
+        self.document.recent.store(storage);
         #[cfg(not(target_arch = "wasm32"))]
         self.updater.store(storage);
         storage.set_string(FLOW_GLYPH_KEY, self.user_state.flow_glyph.name().to_string());
@@ -4154,15 +4096,12 @@ impl eframe::App for SynthApp {
         }
         let folder = self.recordings_folder.as_ref().map(|f| f.display().to_string()).unwrap_or_default();
         storage.set_string(recording::FOLDER_KEY, folder);
-        let autosave = if let Some(recovery) = &self.recovery {
+        let autosave = if let Some(recovery) = &self.document.recovery {
             // Not answered yet: keep it for next time
             Some(recovery.clone())
-        } else if self.has_unsaved_changes() && (!self.allow_close || self.resuming) {
-            let patch = self.create_patch(&self.patch_title());
-            let example = self.current_example.map(|e| e.name.to_string());
-            Autosave::new(&patch, self.current_patch_path.clone(), example)
-                .ok()
-                .map(|autosave| autosave.with_dropped(self.dropped_on_load.clone()))
+        } else if self.has_unsaved_changes() && (!self.document.allow_close || self.resuming) {
+            let patch = self.create_patch(&self.document.title());
+            self.document.autosave(&patch).ok()
         } else {
             // Saved, or let go on the way out. A restart into another
             // version keeps it, in case the next copy doesn't start

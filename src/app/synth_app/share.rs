@@ -48,7 +48,7 @@ pub(super) enum ShareAction {
 impl SynthApp {
     /// Copies a link to the open patch, or says why there can't be one.
     pub(super) fn share_patch(&mut self, ctx: &egui::Context) {
-        let patch = self.create_patch(&self.patch_title());
+        let patch = self.create_patch(&self.document.title());
         let kind = match patch_link::fragment(&patch) {
             Ok(fragment) => {
                 let link = format!("{}#{fragment}", share_base());
@@ -73,8 +73,7 @@ impl SynthApp {
         self.fit_on_web();
         // In the browser it's remembered by name only, to offer when it's
         // saved. The desktop asks where, as for an example
-        self.current_patch_path = WEB.then(|| PathBuf::from(format!("{}.json", patch.name)));
-        self.current_example = None;
+        self.document.opened(WEB.then(|| PathBuf::from(format!("{}.json", patch.name))));
         self.status_message = Some(format!("Opened a shared patch: {}", patch.name));
         self.show_load_warnings(warnings);
         self.share_note = Some(ShareNote { shown_at: 0.0, kind: NoteKind::Opened(patch.name) });

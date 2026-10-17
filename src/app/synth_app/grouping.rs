@@ -573,7 +573,7 @@ impl SynthApp {
         let graph = &self.graph_state.graph;
         let index = GroupIndex::of(graph);
         let Some(path) = index.path(graph, Some(level)) else { return };
-        let mut crumbs: Vec<(Option<GroupId>, String)> = vec![(None, self.patch_title())];
+        let mut crumbs: Vec<(Option<GroupId>, String)> = vec![(None, self.document.title())];
         crumbs.extend(path.into_iter().map(|id| (Some(id), index.node(id).map_or("Group", |n| groups::name(graph, n)).to_string())));
 
         let rose = theme::module::GROUP;

@@ -11,17 +11,17 @@ impl SynthApp {
     /// unless loading it left something out. In the browser the path is
     /// only a name, and saving downloads.
     pub(super) fn quick_save_path(&self) -> Option<PathBuf> {
-        self.current_patch_path.clone().filter(|_| !WEB && self.dropped_on_load.is_empty())
+        self.document.path.clone().filter(|_| !WEB && self.document.dropped_on_load.is_empty())
     }
 
     /// Says why Save is asking where, when it's because of what the file has.
     pub(super) fn explain_save_as(&mut self) {
-        let Some(path) = self.current_patch_path.as_ref().filter(|_| !WEB) else { return };
-        if self.dropped_on_load.is_empty() {
+        let Some(path) = self.document.path.as_ref().filter(|_| !WEB) else { return };
+        if self.document.dropped_on_load.is_empty() {
             return;
         }
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("The patch");
-        let count = self.dropped_on_load.len();
+        let count = self.document.dropped_on_load.len();
         self.raise_notice(format!(
             "{name} has {count} {} this Soba couldn't open (made by a newer one?). Saving over it would lose {}, so choose where to save",
             if count == 1 { "part" } else { "parts" },
@@ -60,8 +60,8 @@ mod tests {
 
         let mut app = SynthApp::new(false);
         app.open_file(&path);
-        assert_eq!(app.current_patch_path.as_deref(), Some(path.as_path()), "it still knows its file");
-        assert_eq!(app.dropped_on_load.len(), 2, "the module and its cable: {:?}", app.dropped_on_load);
+        assert_eq!(app.document.path.as_deref(), Some(path.as_path()), "it still knows its file");
+        assert_eq!(app.document.dropped_on_load.len(), 2, "the module and its cable: {:?}", app.document.dropped_on_load);
         assert_eq!(app.quick_save_path(), None, "Save asks where");
         app.explain_save_as();
         assert!(app.notice.is_some(), "and says why");
@@ -70,13 +70,13 @@ mod tests {
         // Once saved somewhere, that file has everything the patch does
         let copy = folder.join("Copy.json");
         app.saved_as(&copy);
-        app.current_patch_path = Some(copy.clone());
+        app.document.path = Some(copy.clone());
         assert_eq!(app.quick_save_path(), Some(copy));
 
         // A new patch has no file to lose anything from
         app.open_file(&path);
         app.new_patch();
-        assert!(app.dropped_on_load.is_empty());
+        assert!(app.document.dropped_on_load.is_empty());
         let _ = std::fs::remove_dir_all(&folder);
     }
 
@@ -90,7 +90,7 @@ mod tests {
 
         let mut app = SynthApp::new(false);
         app.open_file(&path);
-        assert!(app.dropped_on_load.is_empty(), "{:?}", app.dropped_on_load);
+        assert!(app.document.dropped_on_load.is_empty(), "{:?}", app.document.dropped_on_load);
         assert_eq!(app.quick_save_path(), Some(path.clone()));
         app.explain_save_as();
         assert!(app.notice.is_none());
@@ -107,14 +107,14 @@ mod tests {
         app.open_file(&path);
         let patch = app.create_patch("Newer");
         let autosave = Autosave::new(&patch, Some(path.clone()), None).unwrap();
-        let autosave = autosave.with_dropped(app.dropped_on_load.clone());
+        let autosave = autosave.with_dropped(app.document.dropped_on_load.clone());
         // Through JSON, as it's kept between sessions
         let autosave: Autosave = serde_json::from_str(&serde_json::to_string(&autosave).unwrap()).unwrap();
 
         let mut next = SynthApp::new(false);
         next.recover(&autosave);
-        assert_eq!(next.current_patch_path.as_deref(), Some(path.as_path()));
-        assert_eq!(next.dropped_on_load, app.dropped_on_load);
+        assert_eq!(next.document.path.as_deref(), Some(path.as_path()));
+        assert_eq!(next.document.dropped_on_load, app.document.dropped_on_load);
         assert_eq!(next.quick_save_path(), None);
         let _ = std::fs::remove_dir_all(&folder);
     }

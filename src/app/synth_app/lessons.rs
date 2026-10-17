@@ -80,8 +80,7 @@ impl SynthApp {
                 // Framed whole, at no more than life size, wherever its
                 // modules sit and however big the window
                 self.fit_pending = 6;
-                self.current_patch_path = None;
-                self.current_example = None;
+                self.document.opened(None);
             }
         }
         self.status_message = Some(format!("Lesson: {}", lesson.title));

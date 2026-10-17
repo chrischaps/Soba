@@ -4,7 +4,7 @@
 
 use eframe::egui::{self, RichText};
 
-use super::super::session::{Autosave, Discard};
+use super::super::session::Discard;
 use super::super::theme;
 use super::super::update::{self, release, Resume, UpdateAction};
 use super::actions::AppAction;
@@ -113,7 +113,7 @@ impl SynthApp {
                 }
                 // The autosave is kept too, in case the new copy doesn't start
                 self.resuming = true;
-                self.allow_close = true;
+                self.document.allow_close = true;
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
             Err(e) => self.raise_notice(format!("{if_it_fails}: {e}")),
@@ -123,10 +123,8 @@ impl SynthApp {
     /// What the next copy needs to carry on: the patch, devices, view.
     fn handover(&mut self) -> Result<Resume, String> {
         self.sync_history();
-        let patch = self.create_patch(&self.patch_title());
-        let example = self.current_example.map(|e| e.name.to_string());
-        let autosave = Autosave::new(&patch, self.current_patch_path.clone(), example).map_err(|e| e.to_string())?;
-        let autosave = autosave.with_dropped(self.dropped_on_load.clone());
+        let patch = self.create_patch(&self.document.title());
+        let autosave = self.document.autosave(&patch)?;
         // The view at the top of the patch; inside a group, it opens at the top
         let view = (self.level_trail.is_empty() && self.editor_rect.is_positive()).then(|| {
             let center = self.screen_to_patch(self.editor_rect.center());
@@ -153,7 +151,7 @@ impl SynthApp {
     /// back, or anything else started with `--resume`.
     pub fn resume(&mut self, resume: Resume) {
         // The handover has the patch; the autosave was only a fallback
-        self.recovery = None;
+        self.document.recovery = None;
         self.recover(&resume.patch);
         // The takes the last copy kept in temp are this one's now
         self.take_over_left_takes();

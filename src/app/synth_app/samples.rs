@@ -64,7 +64,7 @@ impl SynthApp {
             let folder = current
                 .filter(|key| !key.starts_with(sample_files::EXAMPLE_PREFIX) && !key.starts_with(DROPPED_PREFIX))
                 .and_then(|key| Path::new(&key).parent().map(Path::to_path_buf))
-                .or_else(|| self.current_patch_path.as_ref().and_then(|p| p.parent().map(Path::to_path_buf)));
+                .or_else(|| self.document.path.as_ref().and_then(|p| p.parent().map(Path::to_path_buf)));
             if let Some(folder) = folder.filter(|f| f.is_dir()) {
                 dialog = dialog.set_directory(folder);
             }

@@ -72,11 +72,11 @@ impl SynthApp {
 
     /// The patch as the DAW's project keeps it.
     pub fn hosted_state(&self) -> String {
-        let patch = self.create_patch(&self.patch_title());
+        let patch = self.create_patch(&self.document.title());
         let state = HostedState {
             patch: patch_to_json(&patch).unwrap_or_default(),
-            path: self.current_patch_path.clone(),
-            example: self.current_example.map(|e| e.name.to_string()),
+            path: self.document.path.clone(),
+            example: self.document.example.map(|e| e.name.to_string()),
         };
         serde_json::to_string(&state).unwrap_or_default()
     }
@@ -92,8 +92,8 @@ impl SynthApp {
             (None, None) => SampleBase::Keys,
         };
         let warnings = self.load_patch(&patch, base).map_err(|e| e.to_string())?;
-        self.current_patch_path = state.path;
-        self.current_example = example;
+        self.document.path = state.path;
+        self.document.example = example;
         self.show_load_warnings(warnings);
         // The knobs on macros take the macros' values again
         if let Some(hosted) = self.hosted.as_mut() {

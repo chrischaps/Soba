@@ -205,7 +205,7 @@ impl SynthApp {
             AppAction::OpenExample(example) => self.request(ctx, Discard::OpenExample(example)),
             AppAction::OpenLesson(lesson) => self.request(ctx, Discard::OpenLesson(lesson)),
             AppAction::OpenRecent(path) => self.request(ctx, Discard::OpenFile(path)),
-            AppAction::ClearRecent => self.recent_files.clear(),
+            AppAction::ClearRecent => self.document.recent.clear(),
             AppAction::Undo => self.undo(),
             AppAction::Redo => self.redo(),
             AppAction::AddModule => self.open_quick_add(ctx),

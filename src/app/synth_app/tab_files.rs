@@ -95,7 +95,7 @@ impl SynthApp {
     #[cfg(target_arch = "wasm32")]
     pub(super) fn tidy_tab_files(&self) {
         use crate::persistence::tab_store;
-        if self.embedded || self.recovery.is_some() || tab_store::tidied() {
+        if self.embedded || self.document.recovery.is_some() || tab_store::tidied() {
             return;
         }
         let patch = self.create_patch("");

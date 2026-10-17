@@ -137,7 +137,7 @@ impl SynthApp {
     pub(super) fn keep_beside_patch(&mut self, sample: SampleData, name: impl Fn(usize) -> String) -> Result<String, String> {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let folder = match &self.current_patch_path {
+            let folder = match &self.document.path {
                 Some(path) => sample_files::samples_folder(path),
                 None => super::take_files::temp_folder(),
             };
