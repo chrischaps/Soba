@@ -481,6 +481,15 @@ fn restore_parameters(graph: &mut SynthGraph, node_id: NodeId, node_data: &NodeD
             continue;
         };
 
+        // A kind of value a newer Soba saved: the parameter keeps its default
+        if let ParameterValue::Unknown { kind, .. } = &saved.value {
+            warnings.push(format!(
+                "{}: '{}' holds a {} value, which this build doesn't know, so it was left at its default",
+                node_data.module_id, saved.name, kind
+            ));
+            continue;
+        }
+
         // A choice this build doesn't offer (a Clock's Link Source, in a
         // build without Link) stays at its default, rather than becoming
         // whichever choice is last
@@ -705,6 +714,24 @@ mod tests {
         assert_eq!(param(&saved, "input.midi_note", "Channel"), 3.0);
         assert_eq!(param(&saved, "input.midi_note", "Octave"), 1.0);
         assert!(node(&saved, "input.midi_note").parameters.iter().all(|p| p.name != "Note"));
+    }
+
+    #[test]
+    fn test_a_parameter_type_from_a_newer_soba_keeps_the_rest_of_the_patch() {
+        // A v6 patch whose second parameter is of a kind this build has never seen
+        let json = r#"{
+            "name": "from the future", "version": 6, "connections": [],
+            "nodes": [{"id": 1, "module_id": "util.clock", "position": [0.0, 0.0], "parameters": [
+                {"name": "Tempo", "type": "Number", "value": 97.0},
+                {"name": "Division", "type": "Fraction", "value": [3, 16]}
+            ]}]
+        }"#;
+        let patch = patch_from_json(json).unwrap();
+
+        let (saved, warnings) = reload(&patch, 0);
+        assert_eq!(param(&saved, "util.clock", "Tempo"), 97.0);
+        assert_eq!(warnings.len(), 1, "{:?}", warnings);
+        assert!(warnings[0].contains("Division") && warnings[0].contains("Fraction"), "{:?}", warnings);
     }
 
     #[test]

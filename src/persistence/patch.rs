@@ -333,9 +333,11 @@ impl NamedParameter {
 /// A parameter value that preserves type information for proper restoration.
 ///
 /// New patches save continuous values as `Number`. The older continuous tags
-/// are still read; they all hold a value in real units.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", content = "value")]
+/// are still read; they all hold a value in real units. A tag this build
+/// doesn't know (one a newer Soba added) reads as `Unknown` rather than failing
+/// the whole patch, and the loader skips it with a warning (#330).
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(try_from = "RawParameterValue")]
 pub enum ParameterValue {
     /// Continuous value in the parameter's real units (Hz, seconds, dB, ...).
     Number(f32),
@@ -353,10 +355,75 @@ pub enum ParameterValue {
     Toggle(bool),
     /// Selection index.
     Select(usize),
+    /// A type this build doesn't know, kept as saved so it writes back unchanged.
+    Unknown { kind: String, value: serde_json::Value },
+}
+
+/// `ParameterValue` as the JSON holds it: `{"type": ..., "value": ...}`.
+#[derive(Deserialize)]
+struct RawParameterValue {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(default)]
+    value: serde_json::Value,
+}
+
+impl TryFrom<RawParameterValue> for ParameterValue {
+    type Error = serde_json::Error;
+
+    fn try_from(raw: RawParameterValue) -> Result<Self, Self::Error> {
+        let number = |value| serde_json::from_value::<f32>(value);
+        Ok(match raw.kind.as_str() {
+            "Number" => Self::Number(number(raw.value)?),
+            "Scalar" => Self::Scalar(number(raw.value)?),
+            "Frequency" => Self::Frequency(number(raw.value)?),
+            "LinearHz" => Self::LinearHz(number(raw.value)?),
+            "Time" => Self::Time(number(raw.value)?),
+            "LinearRange" => Self::LinearRange(number(raw.value)?),
+            "Toggle" => Self::Toggle(serde_json::from_value(raw.value)?),
+            "Select" => Self::Select(serde_json::from_value(raw.value)?),
+            _ => Self::Unknown { kind: raw.kind, value: raw.value },
+        })
+    }
+}
+
+/// Writes the same `{"type": ..., "value": ...}` the reader takes, with numbers
+/// as f32 so they print as short as they always have.
+impl Serialize for ParameterValue {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut out = serializer.serialize_struct("ParameterValue", 2)?;
+        out.serialize_field("type", self.kind())?;
+        match self {
+            Self::Number(v) | Self::Scalar(v) | Self::Frequency(v) | Self::LinearHz(v) | Self::Time(v) | Self::LinearRange(v) => {
+                out.serialize_field("value", v)?
+            }
+            Self::Toggle(v) => out.serialize_field("value", v)?,
+            Self::Select(v) => out.serialize_field("value", v)?,
+            Self::Unknown { value, .. } => out.serialize_field("value", value)?,
+        }
+        out.end()
+    }
 }
 
 impl ParameterValue {
-    /// Get the value as f32 for engine parameter setting.
+    /// The `type` tag the JSON holds.
+    pub fn kind(&self) -> &str {
+        match self {
+            Self::Number(_) => "Number",
+            Self::Scalar(_) => "Scalar",
+            Self::Frequency(_) => "Frequency",
+            Self::LinearHz(_) => "LinearHz",
+            Self::Time(_) => "Time",
+            Self::LinearRange(_) => "LinearRange",
+            Self::Toggle(_) => "Toggle",
+            Self::Select(_) => "Select",
+            Self::Unknown { kind, .. } => kind,
+        }
+    }
+
+    /// Get the value as f32 for engine parameter setting. An `Unknown` value
+    /// has none and reads as 0; the loader skips those before asking.
     pub fn as_f32(&self) -> f32 {
         match self {
             Self::Number(v) => *v,
@@ -367,6 +434,7 @@ impl ParameterValue {
             Self::LinearRange(v) => *v,
             Self::Toggle(v) => if *v { 1.0 } else { 0.0 },
             Self::Select(v) => *v as f32,
+            Self::Unknown { .. } => 0.0,
         }
     }
 }
@@ -418,7 +486,11 @@ impl std::fmt::Display for PatchError {
             Self::IoError(e) => write!(f, "File error: {}", e),
             Self::SerializationError(e) => write!(f, "Serialization error: {}", e),
             Self::IncompatibleVersion { found, expected } => {
-                write!(f, "Incompatible patch version: found {}, expected <= {}", found, expected)
+                write!(
+                    f,
+                    "This patch was made by a newer version of Soba (format {}; this one reads up to {}). Update Soba to open it.",
+                    found, expected
+                )
             }
         }
     }
@@ -838,6 +910,39 @@ mod tests {
             groups: vec![],
         };
         assert!(!future_patch.is_compatible());
+    }
+
+    #[test]
+    fn test_unknown_parameter_type_loads_and_writes_back() {
+        let json = r#"{"name": "Morph", "type": "Curve", "value": {"points": [0.0, 1.0]}}"#;
+        let param: NamedParameter = serde_json::from_str(json).unwrap();
+        assert_eq!(param.value.kind(), "Curve");
+        assert!(matches!(param.value, ParameterValue::Unknown { .. }));
+        let back: serde_json::Value = serde_json::to_value(&param).unwrap();
+        assert_eq!(back, serde_json::from_str::<serde_json::Value>(json).unwrap());
+    }
+
+    #[test]
+    fn test_known_parameter_types_round_trip_as_before() {
+        let params = vec![
+            NamedParameter::new("A", ParameterValue::Number(0.1)),
+            NamedParameter::new("B", ParameterValue::Toggle(true)),
+            NamedParameter::new("C", ParameterValue::Select(3)),
+        ];
+        let json = serde_json::to_string(&params).unwrap();
+        assert_eq!(
+            json,
+            r#"[{"name":"A","type":"Number","value":0.1},{"name":"B","type":"Toggle","value":true},{"name":"C","type":"Select","value":3}]"#
+        );
+        assert_eq!(serde_json::from_str::<Vec<NamedParameter>>(&json).unwrap(), params);
+        // A known type with the wrong kind of value is still an error
+        assert!(serde_json::from_str::<NamedParameter>(r#"{"name":"A","type":"Toggle","value":2.5}"#).is_err());
+    }
+
+    #[test]
+    fn test_newer_version_error_says_to_update() {
+        let message = PatchError::IncompatibleVersion { found: 7, expected: 6 }.to_string();
+        assert!(message.contains("newer version of Soba") && message.contains("Update Soba"), "{message}");
     }
 
     #[test]
