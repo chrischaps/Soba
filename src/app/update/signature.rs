@@ -12,6 +12,7 @@ use std::path::Path;
 pub const PUBLISHERS: &[&str] = &["SignPath Foundation", "Chris Chappelear"];
 
 /// An executable's Authenticode signature.
+#[cfg_attr(not(windows), allow(dead_code))] // only Windows reads a signature
 #[derive(Clone, Debug, PartialEq)]
 pub enum Signature {
     /// Signed, and the signature checks out, by this publisher.
@@ -82,6 +83,7 @@ pub fn read(_path: &Path) -> Signature {
 }
 
 /// `Get-AuthenticodeSignature`'s status, then the signer's subject.
+#[cfg_attr(not(windows), allow(dead_code))] // only Windows reads a signature
 fn parse(output: &str) -> Signature {
     let mut lines = output.lines().map(str::trim);
     let status = lines.next().unwrap_or_default();
@@ -95,6 +97,7 @@ fn parse(output: &str) -> Signature {
 }
 
 /// The `CN=` of a certificate subject.
+#[cfg_attr(not(windows), allow(dead_code))] // only Windows reads a signature
 fn common_name(subject: &str) -> Option<&str> {
     subject.split(',').map(str::trim).find_map(|part| part.strip_prefix("CN=")).map(|cn| cn.trim_matches('"'))
 }

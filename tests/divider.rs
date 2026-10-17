@@ -62,7 +62,7 @@ fn steps_db(patch: &Path, wav: &Path) -> Vec<f32> {
 /// ringing on step 7, and nothing else plays there, so a fill bar, with its
 /// hats pulled down, is silent on that step.
 fn fill_bars(steps: &[f32]) -> Vec<usize> {
-    steps.chunks_exact(16).enumerate().filter(|(_, bar)| bar[6] < -90.0).map(|(n, _)| n + 1).collect()
+    steps.as_chunks::<16>().0.iter().enumerate().filter(|(_, bar)| bar[6] < -90.0).map(|(n, _)| n + 1).collect()
 }
 
 /// Backbeat with its divider's Offset set, and its kick and snare kept out

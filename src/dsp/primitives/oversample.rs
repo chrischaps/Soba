@@ -367,7 +367,7 @@ mod tests {
         for f in [28000.0, 30000.0, 40000.0, 47000.0] {
             let input = sine(f, 96000.0, 19200);
             let mut down = Downsampler2x::new();
-            let out: Vec<f32> = input.chunks_exact(2).map(|p| down.process([p[0], p[1]])).collect();
+            let out: Vec<f32> = input.as_chunks::<2>().0.iter().map(|p| down.process([p[0], p[1]])).collect();
             let db = amp_to_db(rms(&out[4800..]) / rms(&input));
             assert!(db < -85.0, "{} Hz leaks at {:.1} dB", f, db);
         }
@@ -412,7 +412,7 @@ mod tests {
             let input = sine(f, 192000.0, 38400);
             let mut down = Downsampler4x::new();
             let out: Vec<f32> = input
-                .chunks_exact(4)
+                .as_chunks::<4>().0.iter()
                 .map(|p| down.process([p[0], p[1], p[2], p[3]]))
                 .collect();
             let db = amp_to_db(rms(&out[4800..]) / rms(&input));

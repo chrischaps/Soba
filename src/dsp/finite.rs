@@ -54,8 +54,7 @@ pub fn sanitize_all(samples: &mut [f32]) {
 #[inline]
 pub fn all_finite(samples: &[f32]) -> bool {
     let mut lanes = [0.0f32; 8];
-    let chunks = samples.chunks_exact(8);
-    let rest = chunks.remainder();
+    let (chunks, rest) = samples.as_chunks::<8>();
     for chunk in chunks {
         for (lane, sample) in lanes.iter_mut().zip(chunk) {
             *lane += sample * 0.0;

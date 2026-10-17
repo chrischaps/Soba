@@ -146,7 +146,7 @@ So the full `cargo test`, the layout and zoom checks and the picture re-shoots a
 
 ```bash
 cargo check
-cargo clippy --all-targets -- -D warnings   # CI fails on any warning, rustc's or clippy's
+cargo +1.99.1 clippy --all-targets -- -D warnings   # CI fails on any warning, rustc's or clippy's, on the Rust it pins (ci.yml's RUST_TOOLCHAIN)
 cargo test --lib <module>      # the unit tests of what you changed, e.g. cargo test --lib clock
 cargo test --test <file>       # and the tests/<file>.rs that covers it, if one does
 cargo run                      # if the issue adds visible functionality

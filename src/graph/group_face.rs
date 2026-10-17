@@ -200,7 +200,7 @@ pub fn jack_items(ui: &mut egui::Ui, actions: &[JackAction], node_id: NodeId, si
                 let renamed = name_field(ui, jack_name_id(node_id, side, port), port, "Type a new name and press Enter")
                     .filter(|name| !name.trim().is_empty())
                     .map(JackEdit::Rename)
-                    .and_then(&choose);
+                    .and_then(choose);
                 ui.separator();
                 let up = item(ui, slot > 0, "Move up", "One place up the group's jacks", JackEdit::Move { up: true });
                 let down = item(ui, slot + 1 < count, "Move down", "One place down the group's jacks", JackEdit::Move { up: false });

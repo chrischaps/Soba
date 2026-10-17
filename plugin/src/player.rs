@@ -68,7 +68,7 @@ impl Player {
             }
             self.processor.process_offline(output, 2, &mut self.midi[..end], InputAudio::default());
             self.midi.drain(..end);
-            for (i, frame) in output.chunks_exact(2).enumerate() {
+            for (i, frame) in output.as_chunks::<2>().0.iter().enumerate() {
                 for (channel, &sample) in channels.iter_mut().zip(frame) {
                     channel[done + i] = sample;
                 }
