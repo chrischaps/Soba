@@ -171,13 +171,18 @@ def push_pictures(worktree, short, log):
     names = sorted(Path(line[3:].strip().strip('"')).name for line in changed if line.strip())
     if not names:
         return None
-    run("git", "add", "--", images, cwd=worktree)
     message = (f"[Docs] Re-shoot pictures for {short}\n\n"
                + "".join(f"- {n}\n" for n in names)
                + "\nShot by tools/nightly.py from the commit that made them stale.\n")
-    run("git", "commit", "--quiet", "-m", message, cwd=worktree)
+    # A failure here is the step's note, not an exit: the report and the other steps still matter
+    for args in (["add", "--", images], ["commit", "--quiet", "-m", message]):
+        result = run("git", *args, cwd=worktree, check=False)
+        if result.returncode != 0:
+            with open(log, "a", encoding="utf-8") as out:
+                out.write(result.stdout + result.stderr)
+            return f"re-shot {', '.join(names)}, but git {args[0]} failed; nothing pushed"
     for _ in range(3):
-        run("git", "fetch", "--quiet", "origin", cwd=worktree)
+        run("git", "fetch", "--quiet", "origin", cwd=worktree, check=False)
         if run("git", "rebase", "--quiet", "origin/master", cwd=worktree, check=False).returncode != 0:
             run("git", "rebase", "--abort", cwd=worktree, check=False)
             return f"re-shot {', '.join(names)}, but they didn't rebase onto origin/master; nothing pushed"
@@ -228,13 +233,18 @@ def run_steps(steps, worktree, logs, push):
             steps_in = [line for line in tail(log).splitlines() if line.startswith("Steps in: ")]
             note = steps_in[-1].lower() if steps_in else ""
         elif step == "images":
-            passed = all(step_run([python, showcase / tool, "--refresh"], log, worktree, env) == 0
-                         for tool in ["recipe_images.py", "module_images.py", "manual_images.py"])
+            # Every tool runs even when one fails, so one bad capture can't leave the rest stale
+            tools = ["recipe_images.py", "module_images.py", "manual_images.py"]
+            failed = [tool for tool in tools
+                      if step_run([python, showcase / tool, "--refresh"], log, worktree, env) != 0]
+            passed = not failed
             if push:
                 short = run("git", "rev-parse", "--short", "HEAD", cwd=worktree).stdout.strip()
                 note = push_pictures(worktree, short, log) or ""
             else:
                 note = "re-shot in the nightly worktree only; nothing pushed"
+            if failed:
+                note = "; ".join(filter(None, [f"{', '.join(failed)} failed", note]))
         results[step] = (passed, (time.monotonic() - start) / 60, note)
         print(f"  {step:9} {'ok' if passed else 'FAILED'} in {results[step][1]:.1f} min  {note}".rstrip(), flush=True)
     return results
