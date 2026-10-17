@@ -42,7 +42,7 @@ use super::midi_mappings::MidiMappings;
 use super::palette::{PaletteAction, QuickAdd};
 use super::recording::{self, RecState, Toast, ToastAction};
 use super::session::{self, Answer, Autosave, Discard, RecentFiles};
-use super::shortcuts::ShortcutsSheet;
+use super::shortcuts::{self, ShortcutsSheet};
 use super::status_line::{self, Severity, StatusLine};
 use super::theme;
 use super::undo::{Applied, History};
@@ -1360,6 +1360,9 @@ impl SynthApp {
     /// arrows, the group labels drop away and the gaps tighten.
     fn draw_toolbar(&mut self, ui: &mut egui::Ui) -> ToolbarActions {
         let mut actions = ToolbarActions::default();
+        // Shortcuts as this keyboard writes them: ⌘ on a Mac
+        let ctx = ui.ctx().clone();
+        let keys = |text: &'static str| shortcuts::keys(&ctx, text).into_owned();
 
         // A row centres each item in the height it has reached so far, and
         // grows when a taller item arrives. Starting every row at the height
@@ -1438,10 +1441,11 @@ impl SynthApp {
                 };
                 let folder = self.recordings_folder();
                 let hint = match rec_state {
-                    RecState::Recording(_) => "Stop recording and save the take (Ctrl+R)".to_string(),
+                    RecState::Recording(_) => keys("Stop recording and save the take (Ctrl+R)"),
                     _ => format!(
-                        "Record what you hear to a WAV in {} (Ctrl+R)\nRight-click to choose the folder",
-                        recording::short_path(&folder)
+                        "Record what you hear to a WAV in {} ({})\nRight-click to choose the folder",
+                        recording::short_path(&folder),
+                        keys("Ctrl+R"),
                     ),
                 };
                 let rec = recording::rec_button(ui, &rec_state).on_hover_text(hint);
@@ -1474,8 +1478,8 @@ impl SynthApp {
 
             if compact {
                 ui.menu_button("📁 File", |ui| {
-                    let item = |ui: &mut egui::Ui, text: &str, shortcut: &str| {
-                        ui.add(egui::Button::new(text).shortcut_text(shortcut)).clicked()
+                    let item = |ui: &mut egui::Ui, text: &str, shortcut: &'static str| {
+                        ui.add(egui::Button::new(text).shortcut_text(keys(shortcut))).clicked()
                     };
                     if item(ui, "📄 New", "Ctrl+N") {
                         actions.new_patch = true;
@@ -1503,11 +1507,11 @@ impl SynthApp {
                     }
                 });
             } else {
-                if ui.button("📄 New").on_hover_text("Start an empty patch (Ctrl+N)").clicked() {
+                if ui.button("📄 New").on_hover_text(keys("Start an empty patch (Ctrl+N)")).clicked() {
                     actions.new_patch = true;
                 }
 
-                if ui.button("📂 Open").on_hover_text("Ctrl+O").clicked() {
+                if ui.button("📂 Open").on_hover_text(keys("Ctrl+O")).clicked() {
                     actions.load_patch = true;
                 }
 
@@ -1532,11 +1536,11 @@ impl SynthApp {
             });
 
             if !compact {
-                if ui.button("💾 Save").on_hover_text("Ctrl+S").clicked() {
+                if ui.button("💾 Save").on_hover_text(keys("Ctrl+S")).clicked() {
                     actions.save_patch = true;
                 }
 
-                if ui.button("💾 Save As").on_hover_text("Save to a new file (Ctrl+Shift+S)").clicked() {
+                if ui.button("💾 Save As").on_hover_text(keys("Save to a new file (Ctrl+Shift+S)")).clicked() {
                     actions.save_as_patch = true;
                 }
 
@@ -1557,12 +1561,12 @@ impl SynthApp {
             }
             let undo_label = self.history.undo_label();
             let undo = ui.add_enabled(undo_label.is_some(), egui::Button::new(named("↩", "Undo")));
-            if undo.on_hover_text(history_hint("Undo", undo_label, "Ctrl+Z")).clicked() {
+            if undo.on_hover_text(history_hint("Undo", undo_label, &keys("Ctrl+Z"))).clicked() {
                 actions.undo = true;
             }
             let redo_label = self.history.redo_label();
             let redo = ui.add_enabled(redo_label.is_some(), egui::Button::new(named("↪", "Redo")));
-            if redo.on_hover_text(history_hint("Redo", redo_label, "Ctrl+Shift+Z")).clicked() {
+            if redo.on_hover_text(history_hint("Redo", redo_label, &keys("Ctrl+Shift+Z"))).clicked() {
                 actions.redo = true;
             }
 
@@ -2465,7 +2469,7 @@ impl SynthApp {
         }
         let nodes = self.graph_state.selected_nodes.clone();
         let Some(screen) = nodes.iter().filter_map(|&id| annotation_ui::module_rect(ctx, id)).reduce(|a, b| a.union(b)) else {
-            self.status_message = Some("Select modules to frame them (Ctrl+Shift+F)".to_string());
+            self.status_message = Some(shortcuts::keys(ctx, "Select modules to frame them (Ctrl+Shift+F)").into_owned());
             return;
         };
         let around = egui::Rect::from_min_max(self.screen_to_patch(screen.min), self.screen_to_patch(screen.max));
@@ -2518,7 +2522,7 @@ impl SynthApp {
             NodeMenuAction::Reset(node_id) => self.reset_modules(&self.menu_targets(node_id).nodes),
             NodeMenuAction::Delete(node_id) => self.delete_selection(&self.menu_targets(node_id), "Delete", "Deleted"),
             NodeMenuAction::Group(node_id) => self.group_selection(ctx, &self.menu_targets(node_id).nodes),
-            NodeMenuAction::Ungroup(node_id) => self.ungroup(&self.menu_targets(node_id).nodes),
+            NodeMenuAction::Ungroup(node_id) => self.ungroup(ctx, &self.menu_targets(node_id).nodes),
             NodeMenuAction::Enter(node_id) => self.dive_into(ctx, node_id),
             NodeMenuAction::StartRename(node_id) => self.start_rename(node_id),
             NodeMenuAction::Rename(node_id, name) => self.rename_group(node_id, &name),
@@ -3668,7 +3672,7 @@ impl SynthApp {
                     // Right to left: the dot sits after the name
                     if self.has_unsaved_changes() {
                         ui.label(RichText::new("●").color(theme::accent::WARNING).small())
-                            .on_hover_text("Unsaved changes (Ctrl+S to save)");
+                            .on_hover_text(shortcuts::keys(ui.ctx(), "Unsaved changes (Ctrl+S to save)"));
                     }
                     ui.label(RichText::new(name)
                         .color(theme::text::SECONDARY)
@@ -4109,13 +4113,6 @@ impl SynthApp {
             pace::animate(ctx);
         }
 
-        // Handle keyboard shortcuts
-        let mut keyboard_save = false;
-        let mut keyboard_save_as = false;
-        let mut keyboard_load = false;
-        let mut keyboard_bypass = false;
-        let mut keyboard_record = false;
-
         // Closing the window with unsaved changes asks first
         if ctx.input(|i| i.viewport().close_requested()) && !self.allow_close {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -4146,46 +4143,38 @@ impl SynthApp {
             }
         }
 
-        let mut keyboard_new = false;
-        ctx.input(|i| {
-            if prompt_open {
-                return;
-            }
-            // Ctrl+N: New
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::N) {
-                keyboard_new = true;
-            }
-            // Ctrl+S: Save, Ctrl+Shift+S: Save As
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::S) {
-                if i.modifiers.shift {
-                    keyboard_save_as = true;
-                } else {
-                    keyboard_save = true;
-                }
-            }
-            // Ctrl+O: Open/Load
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::O) {
-                keyboard_load = true;
-            }
-            // Ctrl+B: Bypass the selected nodes
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::B) {
-                keyboard_bypass = true;
-            }
-            // Ctrl+R: Record, or stop recording
-            if i.modifiers.ctrl && i.key_pressed(egui::Key::R) {
-                keyboard_record = true;
-            }
-        });
-
-        if keyboard_bypass {
-            for node_id in self.graph_state.selected_nodes.clone() {
-                self.toggle_bypass(node_id);
-            }
-        }
+        // New, Open, Save and Save As, even while a text field has the keys.
+        // Command is Ctrl, or ⌘ on a Mac. Save As first: Save would match it too
+        let (keyboard_new, keyboard_load, keyboard_save_as, keyboard_save) = if prompt_open {
+            Default::default()
+        } else {
+            use egui::{Key, Modifiers};
+            ctx.input_mut(|i| {
+                let save_as = shortcuts::consume_command(i, Modifiers::SHIFT, Key::S);
+                (
+                    shortcuts::consume_command(i, Modifiers::NONE, Key::N),
+                    shortcuts::consume_command(i, Modifiers::NONE, Key::O),
+                    save_as,
+                    shortcuts::consume_command(i, Modifiers::NONE, Key::S),
+                )
+            })
+        };
 
         // Editing shortcuts act on the graph, so they wait while a text field
         // or the palette has the keys
+        let mut keyboard_record = false;
         if !crate::widgets::typing(ctx) && self.quick_add.is_none() && !prompt_open {
+            // Bypass the selected nodes; record, or stop recording
+            let (bypass, record) = ctx.input_mut(|i| {
+                use egui::{Key, Modifiers};
+                    (shortcuts::consume_command(i, Modifiers::NONE, Key::B), shortcuts::consume_command(i, Modifiers::NONE, Key::R))
+            });
+            if bypass {
+                for node_id in self.graph_state.selected_nodes.clone() {
+                    self.toggle_bypass(node_id);
+                }
+            }
+            keyboard_record = record;
             self.handle_group_shortcuts(ctx);
             self.handle_editing_shortcuts(ctx);
             self.handle_framing_shortcut(ctx);

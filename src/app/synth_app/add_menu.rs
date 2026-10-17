@@ -281,7 +281,7 @@ impl SynthApp {
                 self.user_state.context_menu_open_category = None;
                 self.user_state.context_menu_hover_intent = None;
             }
-            if hint_unless(response, hint, finger).clicked() {
+            if hint_unless(response, &super::super::shortcuts::keys(ui.ctx(), hint), finger).clicked() {
                 picks.annotation = Some(kind);
                 picks.close = true;
             }

@@ -20,7 +20,7 @@ pub mod pace;
 mod qwerty_keys;
 mod recording;
 mod session;
-mod shortcuts;
+pub mod shortcuts;
 mod status_line;
 pub mod synth_app;
 pub mod theme;

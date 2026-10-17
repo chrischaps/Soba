@@ -16,6 +16,7 @@ use crate::persistence::{capture_level, Patch};
 use super::super::editing;
 use super::super::library::{self, SavedModule};
 use super::super::recording;
+use super::super::shortcuts;
 use super::super::theme;
 use super::framing::View;
 use super::SynthApp;
@@ -142,7 +143,7 @@ impl SynthApp {
             .filter(|n| graph.nodes.get(*n).is_some_and(|node| !node.user_data.kind.is_proxy()))
             .collect();
         if nodes.is_empty() {
-            self.status_message = Some("Select modules to group them (Ctrl+G)".to_string());
+            self.status_message = Some(shortcuts::keys(ctx, "Select modules to group them (Ctrl+G)").into_owned());
             return;
         }
         let what = editing::describe_modules(&self.graph_state, &nodes);
@@ -173,7 +174,7 @@ impl SynthApp {
     /// Takes groups apart onto the level they sit on, their modules
     /// selected. With no group among `nodes`, inside a group, it takes that
     /// group apart and shows the level it was on.
-    pub(super) fn ungroup(&mut self, nodes: &[NodeId]) {
+    pub(super) fn ungroup(&mut self, ctx: &egui::Context, nodes: &[NodeId]) {
         let graph = &self.graph_state.graph;
         let mut targets: Vec<NodeId> =
             nodes.iter().copied().filter(|n| graph.nodes.get(*n).is_some_and(|n| n.user_data.kind.group().is_some())).collect();
@@ -187,7 +188,7 @@ impl SynthApp {
             }
         }
         if targets.is_empty() {
-            self.status_message = Some("Select a group to ungroup it (Ctrl+Alt+G)".to_string());
+            self.status_message = Some(shortcuts::keys(ctx, "Select a group to ungroup it (Ctrl+Alt+G)").into_owned());
             return;
         }
         let what = editing::describe_modules(&self.graph_state, &targets);
@@ -472,7 +473,7 @@ impl SynthApp {
         });
         let selection = self.graph_state.selected_nodes.clone();
         if ungroup {
-            self.ungroup(&selection);
+            self.ungroup(ctx, &selection);
         } else if group {
             self.group_selection(ctx, &selection);
         }

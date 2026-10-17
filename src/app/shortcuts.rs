@@ -6,6 +6,11 @@
 //! section, so the app and the manual can't drift apart. Backticked keys
 //! are drawn as keycaps. The Playing group adds a little piano of the
 //! letter keys, drawn from `key_to_note`, that lights up as they're held.
+//!
+//! The sheet, the manual and the tooltips write Command as Ctrl. On a Mac
+//! it's ⌘, and `keys` writes a shortcut that way there.
+
+use std::borrow::Cow;
 
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, RichText, Sense, Stroke};
 
@@ -90,6 +95,75 @@ pub const SHEET: &[Group] = &[
         ],
     },
 ];
+
+/// Did Command (Ctrl, or ⌘ on a Mac) and `key` go down this frame, with
+/// exactly `extra` held besides? Takes the press if so. egui's own matching
+/// lets an extra Alt through, and Windows reports AltGr as Ctrl+Alt: AltGr+S,
+/// typing a letter into a note, would otherwise save.
+pub fn consume_command(i: &mut egui::InputState, extra: egui::Modifiers, key: egui::Key) -> bool {
+    let modifiers = egui::Modifiers::COMMAND | extra;
+    i.modifiers.matches_exact(modifiers) && i.consume_shortcut(&egui::KeyboardShortcut::new(modifiers, key))
+}
+
+/// Is this a Mac, whose Command key is ⌘? Asked of egui, so a browser on a
+/// Mac counts too.
+fn is_mac(ctx: &egui::Context) -> bool {
+    ctx.os() == egui::os::OperatingSystem::Mac
+}
+
+/// A shortcut, written as this keyboard labels it: `text` as it is, or on a
+/// Mac each `Ctrl+` chord in it as a Mac menu writes it, ⇧⌘S for Ctrl+Shift+S.
+pub fn keys<'a>(ctx: &egui::Context, text: &'a str) -> Cow<'a, str> {
+    if is_mac(ctx) {
+        Cow::Owned(mac_keys(text))
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
+/// `text` with each `Ctrl+` chord's modifiers as Mac symbols before its key,
+/// in the Mac's order: Option, Shift, Command. None of the fonts has Option's
+/// ⌥, so it's written out.
+fn mac_keys(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("Ctrl+") {
+        out.push_str(&rest[..at]);
+        let (mut chord, mut alt, mut shift) = (&rest[at..], false, false);
+        loop {
+            if let Some(after) = chord.strip_prefix("Ctrl+") {
+                chord = after;
+            } else if let Some(after) = chord.strip_prefix("Shift+") {
+                (chord, shift) = (after, true);
+            } else if let Some(after) = chord.strip_prefix("Alt+") {
+                (chord, alt) = (after, true);
+            } else {
+                break;
+            }
+        }
+        if alt {
+            out.push_str("Option+");
+        }
+        if shift {
+            out.push('⇧');
+        }
+        out.push('⌘');
+        rest = chord;
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A modifier's keycap on a Mac, as its keys are marked (Option's ⌥ isn't
+/// in the fonts).
+fn mac_cap(cap: &str) -> &str {
+    match cap {
+        "Ctrl" => "⌘",
+        "Alt" => "Option",
+        "Shift" => "⇧",
+        _ => cap,
+    }
+}
 
 /// The keys that play notes, as the manual names them: the bottom row for
 /// white keys from C4, the row above for black; then the top row for white
@@ -263,8 +337,8 @@ const PIECE_GAP: f32 = 3.0;
 const JOINER_GAP: f32 = 2.0;
 
 /// The pieces of a shortcut: each backticked chord's keys, and the words
-/// between and after them.
-fn pieces(shortcut: &str) -> Vec<Piece<'_>> {
+/// between and after them. On a `mac` the modifiers' caps carry its symbols.
+fn pieces(shortcut: &str, mac: bool) -> Vec<Piece<'_>> {
     let mut pieces = Vec::new();
     for (i, part) in shortcut.split('`').enumerate() {
         let part = part.trim();
@@ -272,7 +346,7 @@ fn pieces(shortcut: &str) -> Vec<Piece<'_>> {
             continue;
         }
         if i % 2 == 1 {
-            pieces.extend(part.split(" + ").map(Piece::Cap));
+            pieces.extend(part.split(" + ").map(|cap| Piece::Cap(if mac { mac_cap(cap) } else { cap })));
         } else if part == "or" || part == "/" {
             pieces.push(Piece::Joiner(part));
         } else {
@@ -284,12 +358,13 @@ fn pieces(shortcut: &str) -> Vec<Piece<'_>> {
 
 /// How far in a column's actions start: past its widest shortcut.
 fn keys_width(ctx: &egui::Context, groups: &[Group]) -> f32 {
+    let mac = is_mac(ctx);
     let widest = ctx.fonts(|fonts| {
         groups
             .iter()
             .flat_map(|group| group.rows.iter())
             .map(|(shortcut, _)| {
-                pieces(shortcut).iter().map(|piece| piece.width(piece.galley(fonts).size().x) + PIECE_GAP).sum::<f32>()
+                pieces(shortcut, mac).iter().map(|piece| piece.width(piece.galley(fonts).size().x) + PIECE_GAP).sum::<f32>()
             })
             .fold(0.0, f32::max)
     });
@@ -301,7 +376,7 @@ fn keys_width(ctx: &egui::Context, groups: &[Group]) -> f32 {
 fn draw_keys(ui: &egui::Ui, rect: Rect, shortcut: &str) {
     let painter = ui.painter();
     let mut x = rect.left();
-    for piece in pieces(shortcut) {
+    for piece in pieces(shortcut, is_mac(ui.ctx())) {
         let galley = ui.fonts(|fonts| piece.galley(fonts));
         let text = galley.size();
         let cell = Rect::from_min_size(pos2(x, rect.top()), vec2(piece.width(text.x), KEYCAP_HEIGHT));
@@ -426,6 +501,25 @@ mod tests {
             }
         }
         groups
+    }
+
+    #[test]
+    fn mac_keys_writes_chords_as_mac_menus_do() {
+        assert_eq!(mac_keys("Save to a new file (Ctrl+Shift+S)"), "Save to a new file (⇧⌘S)");
+        assert_eq!(mac_keys("Ctrl+N"), "⌘N");
+        assert_eq!(mac_keys("Ungroup (Ctrl+Alt+G)"), "Ungroup (Option+⌘G)");
+        assert_eq!(mac_keys("Unsaved changes (Ctrl+S to save)"), "Unsaved changes (⌘S to save)");
+        assert_eq!(mac_keys("Shift+click its tie"), "Shift+click its tie");
+        assert_eq!(pieces("`Ctrl + Shift + Z` or `Ctrl + Y`", true).iter().map(Piece::text).collect::<Vec<_>>(), ["⌘", "⇧", "Z", "or", "⌘", "Y"]);
+    }
+
+    /// The Mac's symbols have to be in the fonts, or they'd draw as boxes
+    #[test]
+    fn mac_symbols_are_in_the_fonts() {
+        let ctx = egui::Context::default();
+        theme::install_fonts(&ctx);
+        let _ = ctx.run(Default::default(), |_| {});
+        assert!(ctx.fonts(|fonts| fonts.has_glyphs(&FontId::proportional(12.0), "⌘⇧")));
     }
 
     #[test]

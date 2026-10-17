@@ -330,6 +330,8 @@ Recent files, the autosave, your cable style and the window's size and position 
 
 **Help ▸ Keyboard Shortcuts**, or `F1`, shows these in the app too, with the letter keys drawn as the piano they play.
 
+On a Mac, hold `⌘ Command` where these say `Ctrl`, and `Option` for `Alt`. The app writes them that way there.
+
 ### Canvas
 
 | Shortcut | Action |

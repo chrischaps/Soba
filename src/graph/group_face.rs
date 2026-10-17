@@ -82,7 +82,7 @@ pub fn top_bar(data: &SynthNodeData, ui: &mut egui::Ui, node_id: NodeId, user_st
 fn group_menu(ui: &mut egui::Ui, node_id: NodeId, responses: &mut Responses) {
     ui.set_min_width(190.0);
     let mut item = |ui: &mut egui::Ui, label: &str, shortcut: &str, response: SynthResponse| {
-        if ui.add(egui::Button::new(label).shortcut_text(shortcut)).clicked() {
+        if ui.add(egui::Button::new(label).shortcut_text(crate::app::shortcuts::keys(ui.ctx(), shortcut))).clicked() {
             responses.push(NodeResponse::User(response));
             ui.close_menu();
         }

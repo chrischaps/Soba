@@ -1221,7 +1221,7 @@ impl SynthNodeData {
     ) {
         ui.set_min_width(170.0);
         let mut item = |ui: &mut egui::Ui, label: &str, shortcut: &str, response: SynthResponse| {
-            if ui.add(egui::Button::new(label).shortcut_text(shortcut)).clicked() {
+            if ui.add(egui::Button::new(label).shortcut_text(crate::app::shortcuts::keys(ui.ctx(), shortcut))).clicked() {
                 responses.push(NodeResponse::User(response));
                 ui.close_menu();
             }
@@ -1422,7 +1422,7 @@ impl NodeDataTrait for SynthNodeData {
             } else {
                 "Bypass: pass audio straight through (Ctrl+B)"
             };
-            if switch.on_hover_text(hint).clicked() {
+            if switch.on_hover_text(crate::app::shortcuts::keys(ui.ctx(), hint)).clicked() {
                 responses.push(NodeResponse::User(SynthResponse::ToggleBypass(node_id)));
             }
         }
