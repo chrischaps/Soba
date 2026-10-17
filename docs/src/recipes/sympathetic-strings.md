@@ -7,7 +7,7 @@ A Shaker plays sixteenths into a chord of four strings, and they hum the chord. 
 > **Load it:** choose **📚 Examples → Sympathetic Strings** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/sympathetic-strings.json`](https://github.com/chrischaps/Soba/blob/master/patches/sympathetic-strings.json).
 
-<iframe class="patch-embed" src="../play/?patch=sympathetic-strings" title="Sympathetic Strings, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=sympathetic-strings" title="Sympathetic Strings, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. Time is on the left, then the lanes and the Chord Sequencer, then the drums, then the three Resonators in the amber frame. Watch the strings swing on their faces and the glass bloom into rings on each rim hit.*
 

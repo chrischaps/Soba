@@ -5,7 +5,7 @@ A drum kit that plays the picture as well as the sound. This is [Roll Call](./ro
 > **Load it:** choose **📚 Examples → Pinwheel** in the toolbar and press **▶ Play**. Then start Seoul and pick **Obangsaek**.
 > The patch file is [`patches/pinwheel.json`](https://github.com/chrischaps/Soba/blob/master/patches/pinwheel.json).
 
-<iframe class="patch-embed" src="../play/?patch=pinwheel" title="Pinwheel, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=pinwheel" title="Pinwheel, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or hear it here: press **▶ Play** in the corner. The browser plays the drums, but only the desktop app sends to Seoul. The kit is Roll Call's; the **Picture** frame below the mix is what's new.*
 

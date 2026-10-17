@@ -293,7 +293,7 @@ mod tests {
 
     #[test]
     fn inline_styles_and_links() {
-        let spans = inline("Or [try it in the browser](https://docs.chaps.dev/soba/play/) first, *gently*.");
+        let spans = inline("Or [try it in the browser](https://soba.chaps.dev/) first, *gently*.");
         assert_eq!(text(&spans), "Or try it in the browser first, gently.");
         assert!(spans.iter().any(|s| s.link && s.text == "try it in the browser"));
         assert!(spans.iter().any(|s| s.italic && s.text == "gently"));

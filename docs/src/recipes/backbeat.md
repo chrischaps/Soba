@@ -7,7 +7,7 @@ To learn how drums are made, build them like this. To make a beat quickly, use t
 > **Load it:** choose **📚 Examples → Backbeat** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/backbeat.json`](https://github.com/chrischaps/Soba/blob/master/patches/backbeat.json).
 
-<iframe class="patch-embed" src="../play/?patch=backbeat" title="Backbeat, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=backbeat" title="Backbeat, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. One lane per drum, from the top: kick, snare, hi-hats, toms, crash. The clock is at the top left. The Clock Divider that schedules the fill sits lower down in the same column. Kick and snare mix, compress and land on a drum bus at the top right. Below and to the right, the main Mixer brings the whole kit together, shares one small room among every drum, and feeds the output through a Tape.*
 

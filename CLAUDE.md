@@ -274,7 +274,7 @@ cargo run -- patches/fm-synthesis.json
 # The browser build (see WEB.md): needs `rustup target add wasm32-unknown-unknown`
 # and `cargo install --locked trunk`. ?patch=lush-pad embeds an example
 trunk serve                # http://127.0.0.1:8080
-trunk build --release      # into dist/, published at docs.chaps.dev/soba/play/
+trunk build --release      # into dist/, published at soba.chaps.dev
 
 # GitHub CLI
 gh issue list --state open

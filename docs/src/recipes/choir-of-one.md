@@ -5,7 +5,7 @@ One singer, recorded once, singing twelve syllables on a single note. This patch
 > **Load it:** choose **📚 Examples → Choir of One** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/choir-of-one.json`](https://github.com/chrischaps/Soba/blob/master/patches/choir-of-one.json), and its singer is Canopy's [`patches/samples/canopy-chops.wav`](https://github.com/chrischaps/Soba/blob/master/patches/samples/canopy-chops.wav).
 
-<iframe class="patch-embed" src="../play/?patch=choir-of-one" title="Choir of One, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=choir-of-one" title="Choir of One, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The chords are in the amber frame, the drift in the violet one and the Cloud in the rose one. Watch its sparks: four clouds of them, gathered round the line where Position is, drifting along the syllables as the LFO turns.*
 

@@ -7,7 +7,7 @@ The patch plays the whole song itself. Three [Arrangers](../modules/utilities/ar
 > **Load it:** choose **📚 Examples → Clair de Satellite** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/clair-de-satellite.json`](https://github.com/chrischaps/Soba/blob/master/patches/clair-de-satellite.json).
 
-<iframe class="patch-embed" src="../play/?patch=clair-de-satellite" title="Clair de Satellite, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=clair-de-satellite" title="Clair de Satellite, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The score's three Arrangers run along the top, with the mixing desk at the right. Below them are the harmony (two Chord Sequencers, the Rhodes and the String Machine), the band (each part a group) and the voice.*
 

@@ -5,7 +5,7 @@ A patch that plays itself and sounds finished: a soft, plucked arpeggio rolls th
 > **Load it:** choose **📚 Examples → Afterglow** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/afterglow.json`](https://github.com/chrischaps/Soba/blob/master/patches/afterglow.json).
 
-<iframe class="patch-embed" src="../play/?patch=afterglow" title="Afterglow, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=afterglow" title="Afterglow, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The arpeggio voice and the effects run along the top, ending on tape, and the pad runs along the bottom. The cable from the Chord Sequencer's **Root** up to the arpeggio's oscillator is what moves the arpeggio from chord to chord.*
 

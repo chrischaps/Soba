@@ -7,7 +7,7 @@ This patch is the [Rhythmic Sequence](./rhythmic-sequence.md) acid line with a [
 > **Load it:** choose **📚 Examples → Breakdown** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/breakdown.json`](https://github.com/chrischaps/Soba/blob/master/patches/breakdown.json).
 
-<iframe class="patch-embed" src="../play/?patch=breakdown" title="Breakdown, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=breakdown" title="Breakdown, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The Scenes module and its LFO are in the amber frame at the bottom: watch the light move from pad A to pad B.*
 

@@ -13,11 +13,11 @@ Take them in order. Each one builds on the one before, and the five together cov
 
 | Lesson | What you do | In the browser |
 |---|---|---|
-| **1. First Sound** | Add an oscillator and an output, patch them together, and change the wave. | [Start](../play/?lesson=first-sound) |
-| **2. Shaping with a Filter** | Carve a bright saw with a lowpass filter, then hold `Alt` over a cable to hear what it carries. | [Start](../play/?lesson=shaping-with-a-filter) |
-| **3. Envelopes** | Give a tone that never stops a shape in time, from a pluck to a swell. | [Start](../play/?lesson=envelopes) |
-| **4. Your First Sequence** | A Clock and a Step Sequencer play a bass line, and you write the tune. | [Start](../play/?lesson=your-first-sequence) |
-| **5. Groups** | Fold four modules into one, go inside the group, and come back out. | [Start](../play/?lesson=groups) |
+| **1. First Sound** | Add an oscillator and an output, patch them together, and change the wave. | [Start](https://soba.chaps.dev/?lesson=first-sound) |
+| **2. Shaping with a Filter** | Carve a bright saw with a lowpass filter, then hold `Alt` over a cable to hear what it carries. | [Start](https://soba.chaps.dev/?lesson=shaping-with-a-filter) |
+| **3. Envelopes** | Give a tone that never stops a shape in time, from a pluck to a swell. | [Start](https://soba.chaps.dev/?lesson=envelopes) |
+| **4. Your First Sequence** | A Clock and a Step Sequencer play a bass line, and you write the tune. | [Start](https://soba.chaps.dev/?lesson=your-first-sequence) |
+| **5. Groups** | Fold four modules into one, go inside the group, and come back out. | [Start](https://soba.chaps.dev/?lesson=groups) |
 
 ## Taking a lesson
 

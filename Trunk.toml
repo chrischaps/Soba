@@ -1,5 +1,6 @@
 [build]
 target = "index.html"
 dist = "dist"
-# Relative, so the build works from any folder it is served from (docs.chaps.dev/soba/play/)
+# Relative, so the build works from any folder it is served from: soba.chaps.dev's
+# root, and docs.chaps.dev/soba/play/stay/ for visitors with work left at the old address
 public_url = "./"

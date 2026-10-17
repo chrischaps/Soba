@@ -7,7 +7,7 @@ This is how a modular player builds a piece that plays itself: patterns that mov
 > **Load it:** choose **📚 Examples → Orrery** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/orrery.json`](https://github.com/chrischaps/Soba/blob/master/patches/orrery.json).
 
-<iframe class="patch-embed" src="../play/?patch=orrery" title="Orrery, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=orrery" title="Orrery, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The clockwork's dividers are at the top left, with the orbits beside them. Below them is "Who is up", one Logic module for each voice, waiting for its height. The voices and the mixing desk come last.*
 

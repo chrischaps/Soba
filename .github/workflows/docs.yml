@@ -41,8 +41,8 @@ jobs:
           ssh-key: ${{ secrets.DOCS_DEPLOY_KEY }}
           path: docs-site
 
-      # What the site shows: the manual, and the app in the browser published
-      # beside it at /soba/play/. A manual run rebuilds even when nothing changed
+      # What the sites show: the manual, and the app in the browser at
+      # soba.chaps.dev. A manual run rebuilds even when nothing changed
       - name: Is there anything new to deploy?
         id: check
         run: |
@@ -55,7 +55,7 @@ jobs:
             deploy=false
           elif [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && git diff --quiet "$deployed" "$SHA" -- \
               docs src patches assets index.html Trunk.toml Cargo.toml Cargo.lock \
-              .github/workflows/docs.yml; then
+              packaging/web .github/workflows/docs.yml; then
             echo "Nothing the site shows changed between ${deployed::7} and ${SHA::7}"
             deploy=false
           fi
@@ -92,12 +92,45 @@ jobs:
         if: steps.check.outputs.deploy == 'true'
         run: trunk build --release
 
+      # soba.chaps.dev is GitHub Pages on its own repo, whose CNAME file names
+      # the domain. Trunk.toml's relative public_url serves from the root.
+      # Pushed before the docs, so the old address never forwards to an app
+      # that isn't there yet. The docs site's SOURCE stands for both
+      - name: Checkout app site repo
+        if: steps.check.outputs.deploy == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: chrischaps/soba.chaps.dev
+          ssh-key: ${{ secrets.SOBA_DEPLOY_KEY }}
+          path: app-site
+
+      - name: Push to app site
+        if: steps.check.outputs.deploy == 'true'
+        run: |
+          cd app-site
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r ../dist/. .
+          echo soba.chaps.dev > CNAME
+          touch .nojekyll
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet && exit 0
+          git commit -m "Update Soba to ${SHA::7}"
+          git push
+
+      # The app played at /soba/play/ until it had a site of its own (#371).
+      # That address now forwards there, keeping ?patch=, ?open= and #p=
+      # links, and keeps a copy of the app at play/stay/ for visitors whose
+      # unsaved work is in this site's browser storage
       - name: Copy built docs
         if: steps.check.outputs.deploy == 'true'
         run: |
           rm -rf docs-site/soba
           cp -r docs/book docs-site/soba
-          cp -r dist docs-site/soba/play
+          mkdir docs-site/soba/play
+          cp packaging/web/moved.html docs-site/soba/play/index.html
+          cp -r dist docs-site/soba/play/stay
           echo "$SHA" > docs-site/soba/SOURCE
 
       # Until the rename, the manual lived at /modular/. Each page there now

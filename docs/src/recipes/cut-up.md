@@ -7,7 +7,7 @@ This patch does that with a [Chopper](../modules/sources/chopper.md). Its break 
 > **Load it:** choose **📚 Examples → Cut-Up** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/cut-up.json`](https://github.com/chrischaps/Soba/blob/master/patches/cut-up.json).
 
-<iframe class="patch-embed" src="../play/?patch=cut-up" title="Cut-Up, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=cut-up" title="Cut-Up, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The Clock is at the left. The break and its compressor are in the blue frame, the Mixer, Reverb and Output in the cyan one, and the bass line beneath them.*
 

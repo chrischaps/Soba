@@ -292,7 +292,7 @@ A [Looper](../modules/utilities/looper.md)'s loop is kept the same way. Saving t
 
 ### Sharing a patch by link
 
-**🔗 Share** copies a link to the patch you have open. Whoever opens it gets the patch in their browser, in [Soba's web version](https://docs.chaps.dev/soba/play/), with nothing to install: the same modules, cables, knobs, frames and notes, stopped until they press **▶ Play**. What they change stays with them. The whole patch is inside the link itself, after the `#`, so it isn't stored anywhere or sent to a server.
+**🔗 Share** copies a link to the patch you have open. Whoever opens it gets the patch in their browser, in [Soba's web version](https://soba.chaps.dev/), with nothing to install: the same modules, cables, knobs, frames and notes, stopped until they press **▶ Play**. What they change stays with them. The whole patch is inside the link itself, after the `#`, so it isn't stored anywhere or sent to a server.
 
 A link carries the patch and the samples that come with Soba's examples, and nothing else. If a Sampler plays a file of your own, Share says which files, and offers **Save As** instead, to send the patch as a folder with its samples (in the browser, Save downloads it as a zip with them).
 

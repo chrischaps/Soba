@@ -1,7 +1,7 @@
 //! Patch links: a whole patch in one URL that plays in the browser.
 //!
 //! The patch's JSON, compact, is deflated and written in base64url into the
-//! address's *fragment*: `docs.chaps.dev/soba/play/#p=1.<data>`. A fragment
+//! address's *fragment*: `soba.chaps.dev/#p=1.<data>`. A fragment
 //! never reaches a server, so the patch stays between the person who shares
 //! it and the people who open it. The `1.` is the link format's version, so
 //! a link made today keeps opening after the format moves on.
@@ -20,7 +20,7 @@ use super::sample_files::{self, EXAMPLE_PREFIX};
 use super::{patch_from_json, Patch};
 
 /// Where the full app plays in the browser. A link is this with `#p=…`.
-pub const PLAY_URL: &str = "https://docs.chaps.dev/soba/play/";
+pub const PLAY_URL: &str = "https://soba.chaps.dev/";
 
 /// The fragment key a patch is kept under.
 const KEY: &str = "p=";
@@ -170,7 +170,7 @@ mod tests {
     fn a_link_is_plain_url_text() {
         let patch = EXAMPLES[0].patch().unwrap();
         let link = link(&patch).unwrap();
-        assert!(link.starts_with("https://docs.chaps.dev/soba/play/#p=1."));
+        assert!(link.starts_with("https://soba.chaps.dev/#p=1."));
         assert!(link.chars().all(|c| c.is_ascii_alphanumeric() || ":/.#=_-".contains(c)), "{link}");
     }
 
@@ -198,7 +198,7 @@ mod tests {
         let link = link(&patch).unwrap();
         assert_eq!(fragment_of(&format!("  {link}\n")), Some(fragment.as_str()));
         assert_eq!(fragment_of("{\"text\": \"see https://x/#p=1.abc\"}"), None);
-        assert_eq!(fragment_of("https://docs.chaps.dev/soba/play/"), None);
+        assert_eq!(fragment_of("https://soba.chaps.dev/"), None);
     }
 
     #[test]

@@ -5,7 +5,7 @@ A pad that sings. A soft triangle chord moves through Dmaj9, Bm9, Gmaj9 and A11,
 > **Load it:** choose **📚 Examples → Held Vowels** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/held-vowels.json`](https://github.com/chrischaps/Soba/blob/master/patches/held-vowels.json), and its singer is [`patches/samples/held-vowels.wav`](https://github.com/chrischaps/Soba/blob/master/patches/samples/held-vowels.wav).
 
-<iframe class="patch-embed" src="../play/?patch=held-vowels" title="Held Vowels, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=held-vowels" title="Held Vowels, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The bar, the singer and the vocoder along the top, the pad and the room beneath. Each time the Vocoder freezes on a vowel, its snowflake shows and its bars stand solid.*
 

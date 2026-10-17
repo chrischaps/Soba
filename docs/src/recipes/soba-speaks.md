@@ -5,7 +5,7 @@ A patch that talks. Every two bars a voice says *"Hello. I am Soba. I sing in si
 > **Load it:** choose **📚 Examples → Soba Speaks** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/soba-speaks.json`](https://github.com/chrischaps/Soba/blob/master/patches/soba-speaks.json), and its voices are [`patches/samples/soba-speaks-chris.wav`](https://github.com/chrischaps/Soba/blob/master/patches/samples/soba-speaks-chris.wav) and [`patches/samples/soba-speaks.wav`](https://github.com/chrischaps/Soba/blob/master/patches/samples/soba-speaks.wav).
 
-<iframe class="patch-embed" src="../play/?patch=soba-speaks" title="Soba Speaks, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=soba-speaks" title="Soba Speaks, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. The voices stand in a column on the left, beside the Mixer that picks one. The vocoder and its room run along the top, and the chords run along the bottom. One oscillator feeds both the vocoder's **Carrier** and the dark pad.*
 

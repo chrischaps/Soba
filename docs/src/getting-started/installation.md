@@ -4,9 +4,9 @@ Soba runs on Windows, macOS and Linux. You can download a prebuilt release or bu
 
 ## Try it in the browser
 
-**[Open Soba in the browser](../play/)**: the whole app, nothing to install. It opens on the **First Sound** example. Press **▶ Play**, then play the `Z` to `M` keys, or hold the keys of the Keyboard module's piano with the mouse or a finger.
+**[Open Soba in the browser](https://soba.chaps.dev/)**: the whole app, nothing to install. It opens on the **First Sound** example. Press **▶ Play**, then play the `Z` to `M` keys, or hold the keys of the Keyboard module's piano with the mouse or a finger.
 
-<iframe class="patch-embed" src="../play/?patch=first-sound" title="First Sound, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=first-sound" title="First Sound, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 The browser version runs the same engine and modules, and every example is in its **📚 Examples** menu. A few things need the desktop app:
 

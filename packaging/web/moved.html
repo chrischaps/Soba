@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<!--
+  docs.chaps.dev/soba/play/, where Soba played in the browser until #371.
+  It forwards to soba.chaps.dev, keeping ?patch=, ?open=, ?lesson= and #p=
+  patch links. A browser keeps saved data per site, so a visitor with
+  unsaved work here is told first, and can open it at stay/, a copy of the
+  app that still reads this site's data (.github/workflows/docs.yml).
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Soba has moved</title>
+<link rel="canonical" href="https://soba.chaps.dev/">
+<script>
+    (function () {
+        var target = "https://soba.chaps.dev/" + location.search + location.hash;
+        window.sobaTarget = target;
+        // A link or an embed goes straight on. So does a visit with nothing
+        // left behind here
+        var unsaved = false;
+        if (!location.search && !location.hash) {
+            try {
+                // eframe keeps the autosave as RON: `Some(…)`, or `None`
+                // after a clean exit (src/app/session.rs)
+                unsaved = (localStorage.getItem("autosave") || "").indexOf("Some") === 0;
+            } catch (e) {}
+        }
+        if (!unsaved) location.replace(target);
+    })();
+</script>
+<noscript><meta http-equiv="refresh" content="0; url=https://soba.chaps.dev/"></noscript>
+<style>
+    :root { color-scheme: dark; }
+    body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #1a1a2e radial-gradient(circle at 1px 1px, #ffffff0d 1px, transparent 0) 0 0 / 24px 24px;
+        color: #c8c8d8;
+        font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main {
+        max-width: 30rem;
+        margin: 16px;
+        padding: 0 0 24px;
+        background: #22223a;
+        border: 1px solid #2e2e4a;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    /* An output module's purple header */
+    header {
+        background: #7e57c2;
+        color: #fff;
+        padding: 8px 20px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+    }
+    p { margin: 16px 20px 0; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 20px 0; }
+    a.button {
+        padding: 8px 14px;
+        border-radius: 6px;
+        border: 1px solid #3a3a5c;
+        color: #c8c8d8;
+        text-decoration: none;
+    }
+    a.button.go { background: #4fc3f7; border-color: #4fc3f7; color: #1a1a2e; font-weight: 600; }
+    a.button:hover { filter: brightness(1.15); }
+    a.button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+    <header>Soba has moved</header>
+    <p>Soba now plays at <strong>soba.chaps.dev</strong>. The manual stays here.</p>
+    <p>You left a patch with unsaved changes at this address. Your browser keeps it for this site only, so it won't be at the new one. Open it here and save it to a file (or press <strong>🔗 Share</strong> and keep the link), then carry on at the new address.</p>
+    <div class="actions">
+        <a class="button go" id="go" href="https://soba.chaps.dev/">Go to soba.chaps.dev</a>
+        <a class="button" href="stay/">Open my patch here</a>
+    </div>
+</main>
+<script>document.getElementById("go").href = window.sobaTarget;</script>
+</body>
+</html>

@@ -2,8 +2,8 @@
 
 The same app, compiled to WebAssembly and drawn on a canvas, so a page can
 hand a visitor a patch to play instead of a video of one. It's published
-beside the manual at **docs.chaps.dev/soba/play/**, and every recipe page
-embeds its patch.
+at **soba.chaps.dev**, and every recipe page in the manual
+(docs.chaps.dev/soba) embeds its patch from there.
 
 ```bash
 rustup target add wasm32-unknown-unknown
@@ -14,10 +14,33 @@ trunk build --release       # into dist/
 
 | Address | Opens |
 |---|---|
-| `play/` | The full app on First Sound, with the last session's settings and any autosave |
-| `play/?patch=lush-pad` | An **embed**: just the canvas and a Play bar, for an iframe. Any example's file name works |
-| `play/?open=lush-pad` | That example in the full app (the embed's **Open in Soba** link) |
-| `play/#p=1.…` | A **patch link**: the patch inside the address, in the full app, stopped with a Play prompt (see below) |
+| `/` | The full app on First Sound, with the last session's settings and any autosave |
+| `/?patch=lush-pad` | An **embed**: just the canvas and a Play bar, for an iframe. Any example's file name works |
+| `/?open=lush-pad` | That example in the full app (the embed's **Open in Soba** link) |
+| `/?lesson=first-sound` | A lesson from the manual's Lessons page, in the full app |
+| `/#p=1.…` | A **patch link**: the patch inside the address, in the full app, stopped with a Play prompt (see below) |
+
+## Where it's published
+
+`.github/workflows/docs.yml` builds the manual and the app once CI passes on
+a master commit that changes either. The app (`dist/`) goes first, to the `chrischaps/soba.chaps.dev`
+repo, served by GitHub Pages under the domain in its `CNAME` file (a DNS
+`CNAME` record points `soba` at `chrischaps.github.io`); the workflow
+pushes with the `SOBA_DEPLOY_KEY` secret. The manual goes to
+`chrischaps/docs.chaps.dev` at `/soba/` as before, with `DOCS_DEPLOY_KEY`.
+Its embeds are iframes from soba.chaps.dev with `allow="autoplay"`, so the
+sound may start from a click inside them in every browser.
+
+Until #371 the app was at **docs.chaps.dev/soba/play/**. That address is
+now `packaging/web/moved.html`, which forwards to soba.chaps.dev keeping
+the query and the fragment, so `?patch=`, `?open=`, `?lesson=` and
+`#p=` patch links made before the move still open. A browser keeps the
+autosave, settings and tab-only files per site, so a visitor arriving
+plainly with an unsaved autosave at the old address is told so instead,
+and offered `play/stay/`: a copy of the app that still reads the old
+site's data, to save the patch from before carrying on.
+
+## Embeds
 
 An embed keeps nothing: it doesn't restore or autosave a session, so playing
 with a recipe never leaves an autosave for the full app to offer back.
@@ -26,8 +49,8 @@ with a recipe never leaves an autosave for the full app to offer back.
 
 **Share** (on the desktop too) copies a link that holds the whole patch:
 its compact JSON, deflated and written in base64url into the address's
-fragment, `play/#p=1.<data>` (`persistence/patch_link.rs`). A fragment never
-reaches the server, so the static docs host is all it needs, and nothing
+fragment, `soba.chaps.dev/#p=1.<data>` (`persistence/patch_link.rs`). A fragment never
+reaches the server, so a static host is all it needs, and nothing
 is stored anywhere. The `1.` is the link format's version: a newer one
 opened by an older page says to reload, and every later build keeps
 reading version 1.

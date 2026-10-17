@@ -5,7 +5,7 @@ A 16-step acid bassline at 120 BPM: a saw through a resonant lowpass that snaps 
 > **Load it:** choose **📚 Examples → Rhythmic Sequence** in the toolbar and press **▶ Play**. It needs no keyboard.
 > The patch file is [`patches/rhythmic-sequence.json`](https://github.com/chrischaps/Soba/blob/master/patches/rhythmic-sequence.json).
 
-<iframe class="patch-embed" src="../play/?patch=rhythmic-sequence" title="Rhythmic Sequence, playable in the browser" loading="lazy"></iframe>
+<iframe class="patch-embed" src="https://soba.chaps.dev/?patch=rhythmic-sequence" title="Rhythmic Sequence, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
 *Or play it here: press **▶ Play** in the corner. The full app is a click away under **Open in Soba**. Two envelopes from the sequencer's gate: one squelches the filter, one shapes the volume. Along the bottom, the clock plays noise hi-hats.*
 
