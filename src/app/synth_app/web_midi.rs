@@ -13,7 +13,8 @@ use eframe::egui::{self, RichText};
 
 use crate::engine::web_midi::{self, Access};
 use super::super::theme;
-use super::{SynthApp, ToolbarActions};
+use super::actions::AppAction;
+use super::SynthApp;
 
 /// What Connect MIDI says when the browser has no Web MIDI.
 const UNSUPPORTED: &str = "This browser has no Web MIDI, so Soba can't reach MIDI devices here. Chrome, Edge and Firefox have it, and so does the desktop app";
@@ -45,7 +46,7 @@ pub fn connect_button(ui: &mut egui::Ui) -> bool {
 impl SynthApp {
     /// The toolbar's MIDI In: Connect MIDI, then the inputs to choose from.
     /// No Refresh: the list follows the devices by itself.
-    pub(super) fn web_midi_in(&self, ui: &mut egui::Ui, actions: &mut ToolbarActions) {
+    pub(super) fn web_midi_in(&self, ui: &mut egui::Ui, actions: &mut Vec<AppAction>) {
         ui.label(RichText::new("MIDI In").color(theme::text::SECONDARY));
         ui.add_space(8.0);
         if connect_button(ui) {
@@ -61,7 +62,7 @@ impl SynthApp {
             .truncate()
             .show_ui(ui, |ui| {
                 if ui.selectable_label(connected.is_none(), "None (Disconnect)").clicked() {
-                    actions.disconnect_midi = true;
+                    actions.push(AppAction::DisconnectMidi);
                 }
                 ui.separator();
                 if self.midi_devices.is_empty() {
@@ -69,7 +70,7 @@ impl SynthApp {
                 }
                 for device in &self.midi_devices {
                     if ui.selectable_label(self.selected_midi_device == Some(device.index), &device.name).clicked() {
-                        actions.connect_midi_device = Some(device.index);
+                        actions.push(AppAction::ConnectMidi(device.index));
                     }
                 }
             });

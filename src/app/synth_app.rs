@@ -49,11 +49,13 @@ use super::undo::{Applied, History};
 #[cfg(not(target_arch = "wasm32"))]
 use super::update::Updater;
 use super::WEB;
+use actions::AppAction;
 use add_menu::AddMenu;
 use status_bar::Shown;
 #[cfg(target_arch = "wasm32")]
 use super::web;
 
+mod actions;
 mod add_menu;
 mod cue;
 mod dive;
@@ -1365,7 +1367,7 @@ impl SynthApp {
     }
 
     /// The recently opened patches, as menu items.
-    fn recent_menu(&self, ui: &mut egui::Ui, actions: &mut ToolbarActions) {
+    fn recent_menu(&self, ui: &mut egui::Ui, actions: &mut Vec<AppAction>) {
         if self.recent_files.is_empty() {
             ui.label(RichText::new("No recent patches").color(theme::text::DISABLED).italics());
             return;
@@ -1378,13 +1380,13 @@ impl SynthApp {
                 .on_disabled_hover_text(format!("Missing: {}", path.display()))
                 .clicked();
             if clicked {
-                actions.open_recent = Some(path.to_path_buf());
+                actions.push(AppAction::OpenRecent(path.to_path_buf()));
                 ui.close_menu();
             }
         }
         ui.separator();
         if ui.button(RichText::new("Clear Recent").color(theme::text::SECONDARY)).clicked() {
-            actions.clear_recent = true;
+            actions.push(AppAction::ClearRecent);
             ui.close_menu();
         }
     }
@@ -1394,8 +1396,8 @@ impl SynthApp {
     /// When the window is too narrow for the full row, it goes compact: the
     /// file buttons fold into one File menu, Undo and Redo keep only their
     /// arrows, the group labels drop away and the gaps tighten.
-    fn draw_toolbar(&mut self, ui: &mut egui::Ui) -> ToolbarActions {
-        let mut actions = ToolbarActions::default();
+    fn draw_toolbar(&mut self, ui: &mut egui::Ui) -> Vec<AppAction> {
+        let mut actions = Vec::new();
         // Shortcuts as this keyboard writes them: ⌘ on a Mac
         let ctx = ui.ctx().clone();
         let keys = |text: &'static str| shortcuts::keys(&ctx, text).into_owned();
@@ -1465,7 +1467,7 @@ impl SynthApp {
             // In a DAW, the DAW's transport plays it
             let play_hint = if self.is_playing { "Stop the patch (Shift+Space)" } else { "Play the patch (Shift+Space)" };
             if self.hosted.is_none() && ui.button(RichText::new(play_text).color(play_color)).on_hover_text(play_hint).clicked() {
-                actions.toggle_playing = true;
+                actions.push(AppAction::TogglePlaying);
             }
 
             // Record what you hear: the button breathes while a take runs.
@@ -1487,22 +1489,22 @@ impl SynthApp {
                 };
                 let rec = recording::rec_button(ui, &rec_state).on_hover_text(hint);
                 if rec.clicked() {
-                    actions.toggle_recording = true;
+                    actions.push(AppAction::ToggleRecording);
                 }
                 rec.context_menu(|ui| {
                     ui.label(RichText::new("Recordings folder").color(theme::text::SECONDARY));
                     ui.label(recording::short_path(&folder));
                     ui.separator();
                     if ui.button("📂 Open Folder").clicked() {
-                        actions.open_recordings = true;
+                        actions.push(AppAction::OpenRecordings);
                         ui.close_menu();
                     }
                     if ui.button("Change…").clicked() {
-                        actions.choose_recordings_folder = true;
+                        actions.push(AppAction::ChooseRecordingsFolder);
                         ui.close_menu();
                     }
                     if ui.add_enabled(self.recordings_folder.is_some(), egui::Button::new("Use Music/Soba")).clicked() {
-                        actions.reset_recordings_folder = true;
+                        actions.push(AppAction::ResetRecordingsFolder);
                         ui.close_menu();
                     }
                 });
@@ -1519,11 +1521,11 @@ impl SynthApp {
                         ui.add(egui::Button::new(text).shortcut_text(keys(shortcut))).clicked()
                     };
                     if item(ui, "📄 New", "Ctrl+N") {
-                        actions.new_patch = true;
+                        actions.push(AppAction::New);
                         ui.close_menu();
                     }
                     if item(ui, "📂 Open", "Ctrl+O") {
-                        actions.load_patch = true;
+                        actions.push(AppAction::Open);
                         ui.close_menu();
                     }
                     if !WEB {
@@ -1531,25 +1533,25 @@ impl SynthApp {
                     }
                     ui.separator();
                     if item(ui, "💾 Save", "Ctrl+S") {
-                        actions.save_patch = true;
+                        actions.push(AppAction::Save);
                         ui.close_menu();
                     }
                     if item(ui, "💾 Save As", "Ctrl+Shift+S") {
-                        actions.save_as_patch = true;
+                        actions.push(AppAction::SaveAs);
                         ui.close_menu();
                     }
                     if ui.button("🔗 Share").on_hover_text(SHARE_HINT).clicked() {
-                        actions.share_patch = true;
+                        actions.push(AppAction::Share);
                         ui.close_menu();
                     }
                 });
             } else {
                 if ui.button("📄 New").on_hover_text(keys("Start an empty patch (Ctrl+N)")).clicked() {
-                    actions.new_patch = true;
+                    actions.push(AppAction::New);
                 }
 
                 if ui.button("📂 Open").on_hover_text(keys("Ctrl+O")).clicked() {
-                    actions.load_patch = true;
+                    actions.push(AppAction::Open);
                 }
 
                 if !WEB {
@@ -1565,7 +1567,7 @@ impl SynthApp {
                     ui.label(RichText::new(shelf.title()).small().color(theme::text::SECONDARY));
                     for example in EXAMPLES.iter().filter(|e| e.shelf == shelf) {
                         if ui.button(example.name).on_hover_text(example.description).clicked() {
-                            actions.open_example = Some(example);
+                            actions.push(AppAction::OpenExample(example));
                             ui.close_menu();
                         }
                     }
@@ -1574,15 +1576,15 @@ impl SynthApp {
 
             if !compact {
                 if ui.button("💾 Save").on_hover_text(keys("Ctrl+S")).clicked() {
-                    actions.save_patch = true;
+                    actions.push(AppAction::Save);
                 }
 
                 if ui.button("💾 Save As").on_hover_text(keys("Save to a new file (Ctrl+Shift+S)")).clicked() {
-                    actions.save_as_patch = true;
+                    actions.push(AppAction::SaveAs);
                 }
 
                 if ui.button("🔗 Share").on_hover_text(SHARE_HINT).clicked() {
-                    actions.share_patch = true;
+                    actions.push(AppAction::Share);
                 }
             }
 
@@ -1594,17 +1596,17 @@ impl SynthApp {
             // Space or Tab opens the palette. A phone has neither key, and
             // a visitor may not know to press them
             if WEB && ui.button(named("+", "Add")).on_hover_text("Add a module (Space or Tab)").clicked() {
-                actions.add_module = true;
+                actions.push(AppAction::AddModule);
             }
             let undo_label = self.history.undo_label();
             let undo = ui.add_enabled(undo_label.is_some(), egui::Button::new(named("↩", "Undo")));
             if undo.on_hover_text(history_hint("Undo", undo_label, &keys("Ctrl+Z"))).clicked() {
-                actions.undo = true;
+                actions.push(AppAction::Undo);
             }
             let redo_label = self.history.redo_label();
             let redo = ui.add_enabled(redo_label.is_some(), egui::Button::new(named("↪", "Redo")));
             if redo.on_hover_text(history_hint("Redo", redo_label, &keys("Ctrl+Shift+Z"))).clicked() {
-                actions.redo = true;
+                actions.push(AppAction::Redo);
             }
 
             group_break(ui);
@@ -1650,7 +1652,7 @@ impl SynthApp {
                 }
                 ui.menu_button("🎓 Lessons", |ui| {
                     if let Some(lesson) = self.lessons_menu(ui) {
-                        actions.open_lesson = Some(lesson);
+                        actions.push(AppAction::OpenLesson(lesson));
                     }
                 })
                 .response
@@ -1720,7 +1722,7 @@ impl SynthApp {
                                         AudioSystem::System => "Shared with every other app, with more delay",
                                     };
                                     if ui.selectable_label(choice == system, choice.label()).on_hover_text(hint).clicked() && choice != system {
-                                        actions.select_audio_system = Some(choice);
+                                        actions.push(AppAction::SelectAudioSystem(choice));
                                     }
                                 }
                                 // Steinberg's licence asks for its logo where ASIO is chosen
@@ -1739,7 +1741,7 @@ impl SynthApp {
                                     device.index == self.selected_device_index,
                                     label
                                 ).clicked() {
-                                    actions.select_device = Some(device.index);
+                                    actions.push(AppAction::SelectDevice(device.index));
                                 }
                             }
 
@@ -1752,7 +1754,7 @@ impl SynthApp {
                                         let label = ui.selectable_label(buffer_frames == Some(*frames), frames.to_string())
                                             .on_hover_text(format!("{:.1} ms", frames_ms(*frames)));
                                         if label.clicked() && buffer_frames != Some(*frames) {
-                                            actions.select_buffer = Some(*frames);
+                                            actions.push(AppAction::SelectBuffer(*frames));
                                         }
                                     }
                                 });
@@ -1760,7 +1762,7 @@ impl SynthApp {
 
                             ui.separator();
                             if ui.button("🔄 Refresh").clicked() {
-                                actions.refresh_devices = true;
+                                actions.push(AppAction::RefreshDevices);
                             }
                         });
 
@@ -1792,7 +1794,7 @@ impl SynthApp {
                         .height(DEVICE_MENU_HEIGHT)
                         .show_ui(ui, |ui| {
                             if ui.selectable_label(input_index.is_none(), "None").clicked() {
-                                actions.select_input = Some(None);
+                                actions.push(AppAction::SelectInput(None));
                             }
                             ui.separator();
                             if self.input_devices.is_empty() {
@@ -1807,12 +1809,12 @@ impl SynthApp {
                                     device.name.clone()
                                 };
                                 if ui.selectable_label(input_index == Some(device.index), label).clicked() {
-                                    actions.select_input = Some(Some(device.index));
+                                    actions.push(AppAction::SelectInput(Some(device.index)));
                                 }
                             }
                             ui.separator();
                             if ui.button("🔄 Refresh").clicked() {
-                                actions.refresh_input_devices = true;
+                                actions.push(AppAction::RefreshInputDevices);
                             }
                         })
                         .response
@@ -1854,7 +1856,7 @@ impl SynthApp {
                                 self.selected_midi_device.is_none(),
                                 "None (Disconnect)"
                             ).clicked() {
-                                actions.disconnect_midi = true;
+                                actions.push(AppAction::DisconnectMidi);
                             }
 
                             ui.separator();
@@ -1868,14 +1870,14 @@ impl SynthApp {
                                 for device in &self.midi_devices {
                                     let is_selected = self.selected_midi_device == Some(device.index);
                                     if ui.selectable_label(is_selected, &device.name).clicked() {
-                                        actions.connect_midi_device = Some(device.index);
+                                        actions.push(AppAction::ConnectMidi(device.index));
                                     }
                                 }
                             }
 
                             ui.separator();
                             if ui.button("🔄 Refresh").clicked() {
-                                actions.refresh_midi_devices = true;
+                                actions.push(AppAction::RefreshMidiDevices);
                             }
                         });
                 }
@@ -2960,7 +2962,7 @@ impl SynthApp {
     #[cfg(not(target_arch = "wasm32"))]
     fn save_patch_as(&mut self, default_name: &str) -> bool {
         if let Some(path) = rfd::FileDialog::new()
-            .add_filter("Synth Patch", &["json"])
+            .add_filter("Soba Patch", &["json"])
             .set_file_name(default_name)
             .save_file()
         {
@@ -3023,7 +3025,7 @@ impl SynthApp {
         {
             let _ = ctx;
             if let Some(path) = rfd::FileDialog::new()
-                .add_filter("Synth Patch", &["json"])
+                .add_filter("Soba Patch", &["json"])
                 .pick_file()
             {
                 self.open_file(&path);
@@ -4051,45 +4053,6 @@ enum AudioStatus {
 /// What the Share button's tooltip says.
 const SHARE_HINT: &str = "Copy a link that plays this patch in a browser, with nothing to install";
 
-/// Actions collected from the toolbar for deferred execution
-#[derive(Default)]
-struct ToolbarActions {
-    toggle_playing: bool,
-    toggle_recording: bool,
-    open_recordings: bool,
-    choose_recordings_folder: bool,
-    reset_recordings_folder: bool,
-    select_device: Option<usize>,
-    select_audio_system: Option<AudioSystem>,
-    /// A buffer size, in frames.
-    select_buffer: Option<u32>,
-    /// Open this input device, or with `None` close the input.
-    select_input: Option<Option<usize>>,
-    refresh_input_devices: bool,
-    refresh_devices: bool,
-    save_patch: bool,
-    save_as_patch: bool,
-    share_patch: bool,
-    load_patch: bool,
-    open_example: Option<&'static Example>,
-    open_lesson: Option<&'static super::lesson::LessonFile>,
-    open_recent: Option<PathBuf>,
-    clear_recent: bool,
-    new_patch: bool,
-    undo: bool,
-    redo: bool,
-    add_module: bool,
-    // MIDI actions
-    connect_midi_device: Option<usize>,
-    disconnect_midi: bool,
-    refresh_midi_devices: bool,
-    // Help menu
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))] // the browser has no updater
-    check_updates: bool,
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-    roll_back: bool,
-}
-
 impl SynthApp {
     /// One frame of the app. Apart from `eframe::App` so a test can draw
     /// one without a window, and the plugin (`plugin/`) in its own.
@@ -4183,63 +4146,20 @@ impl SynthApp {
             self.shortcuts.handle_keys(ctx, free);
         }
 
-        // Undo and redo, unless a text field has the keys (it has its own undo).
-        // Redo is checked first: Ctrl+Z alone would also match Ctrl+Shift+Z.
-        if !crate::widgets::typing(ctx) && !prompt_open {
-            use egui::{Key, KeyboardShortcut, Modifiers};
-            let (redo, undo) = ctx.input_mut(|i| {
-                let redo = i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z))
-                    || i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Y));
-                (redo, i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Z)))
-            });
-            if redo {
-                self.redo();
-            } else if undo {
-                self.undo();
-            }
-        }
-
-        // New, Open, Save and Save As, even while a text field has the keys.
-        // Command is Ctrl, or ⌘ on a Mac. Save As first: Save would match it too
-        let (keyboard_new, keyboard_load, keyboard_save_as, keyboard_save) = if prompt_open {
-            Default::default()
+        // The app's shortcuts: New, Open, Save and Save As even while a
+        // text field has the keys, undo and redo unless one does, and
+        // bypass, record and play only on the canvas (see actions::KEYS)
+        let typing = crate::widgets::typing(ctx);
+        let on_canvas = !typing && self.quick_add.is_none() && !prompt_open;
+        let mut actions = if prompt_open {
+            Vec::new()
         } else {
-            use egui::{Key, Modifiers};
-            ctx.input_mut(|i| {
-                let save_as = shortcuts::consume_command(i, Modifiers::SHIFT, Key::S);
-                (
-                    shortcuts::consume_command(i, Modifiers::NONE, Key::N),
-                    shortcuts::consume_command(i, Modifiers::NONE, Key::O),
-                    save_as,
-                    shortcuts::consume_command(i, Modifiers::NONE, Key::S),
-                )
-            })
+            actions::pressed(ctx, typing, on_canvas, self.hosted.is_some())
         };
 
         // Editing shortcuts act on the graph, so they wait while a text field
         // or the palette has the keys
-        let mut keyboard_record = false;
-        let mut keyboard_play = false;
-        if !crate::widgets::typing(ctx) && self.quick_add.is_none() && !prompt_open {
-            // Bypass the selected nodes; record, or stop recording; play or
-            // stop. Shift+Space is taken before the palette's Space, which
-            // would match it too
-            let (bypass, record, play) = ctx.input_mut(|i| {
-                use egui::{Key, Modifiers};
-                (
-                    shortcuts::consume_command(i, Modifiers::NONE, Key::B),
-                    shortcuts::consume_command(i, Modifiers::NONE, Key::R),
-                    shortcuts::consume_play(i),
-                )
-            });
-            // In a DAW, the DAW's transport plays it
-            keyboard_play = play && self.hosted.is_none();
-            if bypass {
-                for node_id in self.graph_state.selected_nodes.clone() {
-                    self.toggle_bypass(node_id);
-                }
-            }
-            keyboard_record = record;
+        if on_canvas {
             self.handle_group_shortcuts(ctx);
             self.handle_editing_shortcuts(ctx);
             self.handle_framing_shortcut(ctx);
@@ -4254,9 +4174,7 @@ impl SynthApp {
         // Update gate timing (for minimum gate duration)
         self.update_gate_timing();
 
-        let toolbar_actions = if self.embedded {
-            ToolbarActions::default()
-        } else {
+        if !self.embedded {
             // Top toolbar panel
             let toolbar_actions = egui::TopBottomPanel::top("toolbar")
                 .frame(egui::Frame::none()
@@ -4275,8 +4193,8 @@ impl SynthApp {
                 .show(ctx, |ui| {
                     self.draw_status_bar(ui);
                 });
-            toolbar_actions
-        };
+            actions.extend(toolbar_actions);
+        }
 
         // Main content area - the node graph editor. A piano held down
         // says so as it's drawn
@@ -4287,11 +4205,9 @@ impl SynthApp {
         self.draw_main_area(ctx);
 
         // An embed's one control, over the canvas
-        let toolbar_actions = if self.embedded {
-            ToolbarActions { toggle_playing: self.draw_embed_bar(ctx), ..toolbar_actions }
-        } else {
-            toolbar_actions
-        };
+        if self.embedded && self.draw_embed_bar(ctx) {
+            actions.push(AppAction::TogglePlaying);
+        }
 
         // Followers take their leaders' sections, in the same undo step
         self.follow_arrangers();
@@ -4302,96 +4218,8 @@ impl SynthApp {
         // Sync parameter values to the audio engine
         self.sync_parameters();
 
-        // Handle deferred actions (to avoid borrow checker issues)
-        if toolbar_actions.toggle_playing || keyboard_play {
-            self.set_playing(!self.is_playing);
-        }
-        if toolbar_actions.toggle_recording || keyboard_record {
-            self.toggle_recording();
-        }
-        if toolbar_actions.open_recordings {
-            let folder = self.recordings_folder();
-            if let Err(e) = std::fs::create_dir_all(&folder).and_then(|()| recording::open_folder(&folder)) {
-                self.status_error(format!("Couldn't open {}: {}", folder.display(), e));
-            }
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        if toolbar_actions.choose_recordings_folder {
-            if let Some(folder) = rfd::FileDialog::new().set_directory(self.recordings_folder()).pick_folder() {
-                self.status_message = Some(format!("Recording to {}", folder.display()));
-                self.recordings_folder = Some(folder);
-            }
-        }
-        if toolbar_actions.reset_recordings_folder {
-            self.recordings_folder = None;
-        }
-        if toolbar_actions.refresh_devices {
-            self.refresh_devices();
-        }
-        if let Some(system) = toolbar_actions.select_audio_system {
-            self.select_audio_system(system);
-        }
-        if let Some(frames) = toolbar_actions.select_buffer {
-            self.select_buffer(frames);
-        }
-        if let Some(device_index) = toolbar_actions.select_device {
-            self.select_device(device_index);
-        }
-        if toolbar_actions.refresh_input_devices {
-            self.refresh_input_devices();
-        }
-        if let Some(input) = toolbar_actions.select_input {
-            self.select_input(input);
-        }
-
-        // Handle save/load actions (from toolbar buttons or keyboard shortcuts)
-        if toolbar_actions.save_patch || keyboard_save {
-            self.quick_save();
-        }
-        if toolbar_actions.save_as_patch || keyboard_save_as {
-            self.show_save_dialog();
-        }
-        if toolbar_actions.share_patch {
-            self.share_patch(ctx);
-        }
-        if toolbar_actions.load_patch || keyboard_load {
-            self.request(ctx, Discard::Open);
-        }
-        if let Some(example) = toolbar_actions.open_example {
-            self.request(ctx, Discard::OpenExample(example));
-        }
-        if let Some(lesson) = toolbar_actions.open_lesson {
-            self.request(ctx, Discard::OpenLesson(lesson));
-        }
-        if let Some(path) = toolbar_actions.open_recent {
-            self.request(ctx, Discard::OpenFile(path));
-        }
-        if toolbar_actions.clear_recent {
-            self.recent_files.clear();
-        }
-        if toolbar_actions.new_patch || keyboard_new {
-            self.request(ctx, Discard::New);
-        }
-        if toolbar_actions.undo {
-            self.undo();
-        }
-        if toolbar_actions.redo {
-            self.redo();
-        }
-        if toolbar_actions.add_module {
-            self.open_quick_add(ctx);
-        }
-
-        // Handle MIDI actions
-        if toolbar_actions.refresh_midi_devices {
-            self.refresh_midi_devices();
-        }
-        if let Some(device_index) = toolbar_actions.connect_midi_device {
-            self.connect_midi_device(device_index);
-        }
-        if toolbar_actions.disconnect_midi {
-            self.disconnect_midi_device();
-        }
+        // What the toolbar and the shortcuts asked for, now the graph is drawn
+        self.dispatch(ctx, actions);
 
         // Process pending MIDI events
         self.process_midi_events(ctx.input(|i| i.time));
@@ -4426,7 +4254,7 @@ impl SynthApp {
         // A plugin is updated with the app, not from inside the DAW
         #[cfg(not(target_arch = "wasm32"))]
         if self.hosted.is_none() {
-            self.run_updates(ctx, toolbar_actions.check_updates, toolbar_actions.roll_back, corner);
+            self.run_updates(ctx, corner);
         }
         let _ = corner;
 

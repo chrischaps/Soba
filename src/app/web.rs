@@ -21,7 +21,7 @@ pub struct Upload {
 pub fn pick_patch(ctx: &egui::Context, sender: Sender<Upload>) {
     let ctx = ctx.clone();
     wasm_bindgen_futures::spawn_local(async move {
-        let Some(file) = rfd::AsyncFileDialog::new().add_filter("Synth Patch", &["json"]).pick_file().await else {
+        let Some(file) = rfd::AsyncFileDialog::new().add_filter("Soba Patch", &["json"]).pick_file().await else {
             return;
         };
         let text = String::from_utf8(file.read().await).map_err(|_| "it isn't a text file".to_string());

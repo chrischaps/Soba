@@ -7,14 +7,15 @@ use eframe::egui::{self, RichText};
 use super::super::session::{Autosave, Discard};
 use super::super::theme;
 use super::super::update::{self, release, Resume, UpdateAction};
-use super::{SynthApp, ToolbarActions};
+use super::actions::AppAction;
+use super::SynthApp;
 
 impl SynthApp {
     /// The update items in the Help menu.
-    pub(super) fn update_menu(&mut self, ui: &mut egui::Ui, actions: &mut ToolbarActions) {
+    pub(super) fn update_menu(&mut self, ui: &mut egui::Ui, actions: &mut Vec<AppAction>) {
         ui.separator();
         if ui.button("Check for Updates…").clicked() {
-            actions.check_updates = true;
+            actions.push(AppAction::CheckUpdates);
             ui.close_menu();
         }
         ui.checkbox(&mut self.updater.auto_check, "Check for Updates Automatically")
@@ -27,7 +28,7 @@ impl SynthApp {
                 .on_disabled_hover_text("Once the recording ends: rolling back restarts Soba")
                 .clicked()
             {
-                actions.roll_back = true;
+                actions.push(AppAction::RollBack);
                 ui.close_menu();
             }
         }
@@ -63,17 +64,11 @@ impl SynthApp {
 
     /// Hears from the update check and draws its note, `above` the height
     /// of a note already in the corner.
-    pub(super) fn run_updates(&mut self, ctx: &egui::Context, check_now: bool, roll_back: bool, above: f32) {
+    pub(super) fn run_updates(&mut self, ctx: &egui::Context, above: f32) {
         // A film's frames are the script's, and an embed is someone's page.
         // A test server (SOBA_UPDATE_URL) lets a capture try an update
         let allowed = (self.capture.is_none() || update::test_source()) && !self.embedded;
         self.updater.tick(ctx, allowed);
-        if check_now {
-            self.updater.check_now(ctx);
-        }
-        if roll_back {
-            self.request(ctx, Discard::RollBack);
-        }
         if !allowed {
             return;
         }
