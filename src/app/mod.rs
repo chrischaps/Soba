@@ -16,6 +16,7 @@ mod mutate;
 mod notice;
 mod palette;
 pub mod pace;
+mod qwerty_keys;
 mod recording;
 mod session;
 mod shortcuts;

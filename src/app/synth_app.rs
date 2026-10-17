@@ -21,7 +21,7 @@ use crate::graph::{
     port_mapping, validate_connection, AllNodeTemplates, AnyParameterId, GroupId, SynthDataType, SynthGraphState,
     SynthNodeData, SynthNodeTemplate, SynthValueType,
 };
-use crate::modules::keyboard::{key_to_note, relative_to_midi, KeyPriority, KeyboardInput};
+use crate::modules::keyboard::{relative_to_midi, KeyPriority, KeyboardInput};
 use crate::persistence::{
     capture_patch, examples, load_from_file, renumber_groups, save_to_file, stage_patch, Example, MidiMapping, Patch, PatchError,
     Shelf, EXAMPLES,
@@ -32,6 +32,7 @@ use crate::persistence::sample_files::SampleBase;
 use crate::widgets::{cpu_meter, CpuMeterConfig, KnobStyle};
 use super::capture::{Capture, CaptureAction, CaptureConfig};
 use super::pace;
+use super::qwerty_keys;
 use super::editing::{self, Selection};
 use super::engine_sync;
 use super::input_device;
@@ -3781,59 +3782,35 @@ impl SynthApp {
             self.auditioning = None;
         }
 
-        // Skip if modifier keys are held (those are shortcuts, not notes)
-        let skip_keyboard = ctx.input(|i| {
-            i.modifiers.ctrl || i.modifiers.alt || i.modifiers.command
-        });
-        if skip_keyboard {
-            return;
-        }
+        // Keys held with a modifier are shortcuts, not notes. Letters typed
+        // into a text field (the palette, say) aren't notes either, nor are
+        // chords played into a Chord Sequencer's popover, which has the keys
+        // while it's open. Any of these turns presses away; releases still
+        // count, so a key held while one took over doesn't stick (#316)
+        let taken = ctx.input(|i| i.modifiers.ctrl || i.modifiers.alt || i.modifiers.command)
+            || ctx.wants_keyboard_input()
+            || self.quick_add.is_some()
+            || chord_popover;
 
-        // Letters typed into a text field (the palette, say) aren't notes, nor
-        // are chords played into a Chord Sequencer's popover, which has the
-        // keys while it's open. Releases still count, so a key held while
-        // either opened doesn't stick
-        let typing = ctx.wants_keyboard_input() || self.quick_add.is_some() || chord_popover;
-
-        // Process raw keyboard events - these haven't been consumed yet
-        let mut keys_changed = false;
         // With a Poly MIDI module to hear them, the keys also play as MIDI,
         // so chords can be played without a MIDI keyboard
         let play_midi = self.has_poly_midi_modules();
-        let mut midi_notes = Vec::new();
 
-        ctx.input(|i| {
-            // Check raw events for key presses/releases
-            for event in &i.raw.events {
-                if let egui::Event::Key { key, pressed, repeat, .. } = event {
-                    // Skip key repeat events
-                    if *repeat {
-                        continue;
-                    }
-
-                    if let Some(relative_note) = key_to_note(*key) {
-                        if *pressed && typing {
-                            continue;
-                        }
-                        if *pressed {
-                            // Add key if not already in list
-                            if !self.pressed_keys.iter().any(|(_, k)| *k == Some(*key)) {
-                                self.pressed_keys.push((relative_note, Some(*key)));
-                                keys_changed = true;
-                                midi_notes.push((relative_note, true));
-                            }
-                        } else {
-                            // Remove key from list
-                            if let Some(pos) = self.pressed_keys.iter().position(|(_, k)| *k == Some(*key)) {
-                                self.pressed_keys.remove(pos);
-                                keys_changed = true;
-                                midi_notes.push((relative_note, false));
-                            }
-                        }
-                    }
+        // Raw events, before the UI consumes them. Repeats aren't new notes
+        let mut midi_notes: Vec<(i32, bool)> = ctx.input(|i| {
+            i.raw.events.iter().filter_map(|event| match event {
+                egui::Event::Key { key, pressed, repeat: false, .. } => {
+                    qwerty_keys::key_event(&mut self.pressed_keys, *key, *pressed, taken)
                 }
-            }
+                _ => None,
+            }).collect()
         });
+        // Releases that happen in another window never arrive here, so
+        // losing the focus (Alt+Tab mid-note) lets go of every key
+        if !ctx.input(|i| i.focused) {
+            midi_notes.extend(qwerty_keys::release_all(&mut self.pressed_keys));
+        }
+        let mut keys_changed = !midi_notes.is_empty();
 
         // A piano key held with the mouse or a finger is one more held key,
         // with no computer key behind it (see `SynthGraphState::piano_pointer`)
