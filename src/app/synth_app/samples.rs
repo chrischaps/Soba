@@ -92,7 +92,7 @@ impl SynthApp {
                 true
             }
             Err(e) => {
-                self.status_message = Some(format!("Couldn't load {name}: {e}"));
+                self.status_error(format!("Couldn't load {name}: {e}"));
                 false
             }
         }
@@ -353,7 +353,7 @@ impl SynthApp {
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| file.name.clone());
             if !sample_files::is_sound_file(&name) {
-                self.status_message = Some(format!("{name} isn't a sound file: a Sampler plays WAV, MP3, FLAC and Ogg files"));
+                self.status_error(format!("{name} isn't a sound file: a Sampler plays WAV, MP3, FLAC and Ogg files"));
                 continue;
             }
             // Read it first: a file that won't play doesn't make a Sampler
@@ -375,7 +375,7 @@ impl SynthApp {
                             self.user_state.samples.insert(&key, decoded);
                         }
                         Err(e) => {
-                            self.status_message = Some(format!("Couldn't load {name}: {e}"));
+                            self.status_error(format!("Couldn't load {name}: {e}"));
                             continue;
                         }
                     }

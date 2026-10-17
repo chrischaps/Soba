@@ -30,16 +30,16 @@ impl SynthApp {
         let source = match self.user_state.samples.get(&key) {
             Some(Ok(shelved)) => Arc::clone(&shelved.source),
             _ => {
-                self.status_message = Some(format!("Couldn't download {name}: it isn't loaded"));
+                self.status_error(format!("Couldn't download {name}: it isn't loaded"));
                 return;
             }
         };
         #[cfg(target_arch = "wasm32")]
         {
-            self.status_message = Some(match super::web::download_bytes(&name, &sample_files::encode_wav(&source), "audio/wav") {
-                Ok(()) => format!("Downloaded {name}"),
-                Err(e) => format!("Couldn't download {name}: {e}"),
-            });
+            match super::web::download_bytes(&name, &sample_files::encode_wav(&source), "audio/wav") {
+                Ok(()) => self.status_message = Some(format!("Downloaded {name}")),
+                Err(e) => self.status_error(format!("Couldn't download {name}: {e}")),
+            }
         }
         #[cfg(not(target_arch = "wasm32"))]
         drop(source);

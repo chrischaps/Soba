@@ -87,7 +87,7 @@ impl SynthApp {
                     });
                     self.tidy_kept_take(node_id, &name, seconds);
                 }
-                Err(e) => self.status_message = Some(format!("Couldn't keep the take: {e}. The Sampler plays it until it's given another file")),
+                Err(e) => self.status_error(format!("Couldn't keep the take: {e}. The Sampler plays it until it's given another file")),
             }
         }
     }

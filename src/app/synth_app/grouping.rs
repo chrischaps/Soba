@@ -521,11 +521,11 @@ impl SynthApp {
         let mut patch = Patch::new(name.clone());
         patch.groups = level.groups;
         patch.version = patch.required_version();
-        self.status_message = Some(match library::save(&patch) {
-            Ok((_, false)) => format!("Saved {name} to My Modules: it's in the add menu and the palette"),
-            Ok((_, true)) => format!("Updated {name} in My Modules"),
-            Err(e) => format!("Couldn't save {name} to My Modules: {e}"),
-        });
+        match library::save(&patch) {
+            Ok((_, false)) => self.status_message = Some(format!("Saved {name} to My Modules: it's in the add menu and the palette")),
+            Ok((_, true)) => self.status_message = Some(format!("Updated {name} in My Modules")),
+            Err(e) => self.status_error(format!("Couldn't save {name} to My Modules: {e}")),
+        }
         self.my_modules = library::list();
     }
 
@@ -535,7 +535,7 @@ impl SynthApp {
         let patch = match saved.load() {
             Ok(patch) => patch,
             Err(e) => {
-                self.status_message = Some(format!("Couldn't add {}: {e}", saved.name));
+                self.status_error(format!("Couldn't add {}: {e}", saved.name));
                 return;
             }
         };
@@ -548,7 +548,7 @@ impl SynthApp {
                 self.finish_paste(pasted, &format!("Add {}", saved.name));
                 self.status_message = Some(format!("Added {} from {}", saved.name, saved.from_where()));
             }
-            Err(e) => self.status_message = Some(format!("Couldn't add {}: {e}", saved.name)),
+            Err(e) => self.status_error(format!("Couldn't add {}: {e}", saved.name)),
         }
     }
 
@@ -556,7 +556,7 @@ impl SynthApp {
     pub(super) fn open_library_folder(&mut self) {
         let folder = library::folder();
         if let Err(e) = std::fs::create_dir_all(&folder).and_then(|()| recording::open_folder(&folder)) {
-            self.status_message = Some(format!("Couldn't open {}: {e}", folder.display()));
+            self.status_error(format!("Couldn't open {}: {e}", folder.display()));
         }
     }
 

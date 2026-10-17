@@ -41,12 +41,14 @@ use super::palette::{PaletteAction, QuickAdd};
 use super::recording::{self, RecState, Toast, ToastAction};
 use super::session::{self, Answer, Autosave, Discard, RecentFiles};
 use super::shortcuts::ShortcutsSheet;
+use super::status_line::{self, Severity, StatusLine};
 use super::theme;
 use super::undo::{Applied, History};
 #[cfg(not(target_arch = "wasm32"))]
 use super::update::Updater;
 use super::WEB;
 use add_menu::AddMenu;
+use status_bar::Shown;
 #[cfg(target_arch = "wasm32")]
 use super::web;
 
@@ -69,6 +71,7 @@ mod probe;
 mod record_into;
 mod samples;
 mod slicing;
+mod status_bar;
 mod tab_files;
 mod takes;
 #[cfg(not(target_arch = "wasm32"))]
@@ -107,9 +110,6 @@ const BUFFER_FRAMES_KEY: &str = "buffer_frames";
 /// How long a stopped recording waits for the audio thread to hand its tap
 /// back before the file is finished without it (the device has gone quiet).
 const RECORDING_PATIENCE: std::time::Duration = std::time::Duration::from_secs(1);
-
-/// How long a warning stays in the status bar, unless clicked away.
-const NOTICE_SECONDS: f64 = 12.0;
 
 /// The manual, for the Help menu.
 const MANUAL_URL: &str = "https://docs.chaps.dev/soba/";
@@ -173,8 +173,11 @@ pub struct SynthApp {
     /// The example the graph was opened from, until it's saved as a file or replaced.
     current_example: Option<&'static Example>,
 
-    /// Status message for save/load operations (auto-clears after display).
+    /// News for the status bar ("Saved", "Pasted 3 modules"), until the bar
+    /// takes it up as its `status`. Errors go through `status_error`.
     status_message: Option<String>,
+    /// What the status bar says, until it times out or is clicked away.
+    status: Option<StatusLine>,
 
     /// Problems skipped while loading the current patch, shown in the status bar.
     load_warnings: Vec<String>,
@@ -315,8 +318,8 @@ pub struct SynthApp {
     input_glitches: (u64, Instant),
     /// Whether this session has warned about the input hearing the speakers.
     feedback_warned: bool,
-    /// A warning for the status bar, and when it was raised (UI clock).
-    notice: Option<(String, f64)>,
+    /// A warning for the status bar, its clock started once it's been seen.
+    notice: Option<StatusLine>,
 
     // --- Groups ---
     /// The groups the view went into, innermost last, each with the view
@@ -500,6 +503,7 @@ impl SynthApp {
             current_patch_path: None,
             current_example: None,
             status_message: None,
+            status: None,
             load_warnings: Vec::new(),
             pressed_keys: Vec::new(),
             last_gate_on: None,
@@ -802,8 +806,13 @@ impl SynthApp {
 
     /// Puts a warning in the status bar for a while.
     fn raise_notice(&mut self, text: String) {
-        // Stamped on the next frame, when the UI clock is at hand
-        self.notice = Some((text, f64::NAN));
+        self.notice = Some(StatusLine::new(text, Severity::Warning));
+    }
+
+    /// Puts an action that failed in the status bar, in red.
+    fn status_error(&mut self, text: impl Into<String>) {
+        self.status_message = None;
+        self.status = Some(StatusLine::new(text, Severity::Error));
     }
 
     /// Refresh the list of available MIDI devices
@@ -1018,7 +1027,7 @@ impl SynthApp {
     ///
     /// Starting on another knob while learning moves learn mode to that knob.
     pub fn start_midi_learn(&mut self, target: MidiLearnTarget) {
-        self.status_message = Some(format!("Move a MIDI CC to map {}... (Esc to cancel)", target.param_name));
+        // The status bar asks for a CC for as long as it's learning
         self.user_state.midi_learn_active = true;
         self.user_state.midi_learn_target = Some((target.node_id, target.param_index));
         self.midi_learn_target = Some(target);
@@ -1233,7 +1242,7 @@ impl SynthApp {
             return;
         }
         let (Ok(engine), Some(_)) = (&self.audio_engine, &self.ui_handle) else {
-            self.status_message = Some("Can't record: no audio output".to_string());
+            self.status_error("Can't record: no audio output");
             return;
         };
         // While filming, the capture renders stereo at its own rate, and the
@@ -1244,14 +1253,14 @@ impl SynthApp {
         };
 
         if let Err(e) = std::fs::create_dir_all(&folder) {
-            self.status_message = Some(format!("Can't record to {}: {}", folder.display(), e));
+            self.status_error(format!("Can't record to {}: {}", folder.display(), e));
             return;
         }
         let path = recording::take_path(&folder, &self.patch_title(), chrono::Local::now());
         let (take, tap) = match Recording::start(&path, sample_rate, channels) {
             Ok(started) => started,
             Err(e) => {
-                self.status_message = Some(format!("Can't record: {}", e));
+                self.status_error(format!("Can't record: {}", e));
                 return;
             }
         };
@@ -2582,7 +2591,7 @@ impl SynthApp {
                 let what = editing::describe(&self.graph_state, &self.user_state, selection);
                 self.status_message = Some(format!("Copied {what}"));
             }
-            Err(e) => self.status_message = Some(format!("Couldn't copy: {e}")),
+            Err(e) => self.status_error(format!("Couldn't copy: {e}")),
         }
     }
 
@@ -2617,7 +2626,7 @@ impl SynthApp {
                 self.status_message = Some(format!("Pasted {what}"));
             }
             Ok(_) => self.status_message = Some("Nothing to paste: no modules this version knows".to_string()),
-            Err(e) => self.status_message = Some(format!("Couldn't paste: {e}")),
+            Err(e) => self.status_error(format!("Couldn't paste: {e}")),
         }
     }
 
@@ -2934,7 +2943,7 @@ impl SynthApp {
                     return true;
                 }
                 Err(e) => {
-                    self.status_message = Some(format!("Save failed: {}", e));
+                    self.status_error(format!("Save failed: {}", e));
                 }
             }
         }
@@ -2955,7 +2964,7 @@ impl SynthApp {
                 true
             }
             Err(e) => {
-                self.status_message = Some(format!("Save failed: {}", e));
+                self.status_error(format!("Save failed: {}", e));
                 false
             }
         }
@@ -3010,7 +3019,7 @@ impl SynthApp {
                 self.status_message = Some(format!("Loaded: {}", name));
                 self.show_load_warnings(warnings);
             }
-            Err(e) => self.status_message = Some(format!("Couldn't open {}: {}", upload.name, e)),
+            Err(e) => self.status_error(format!("Couldn't open {}: {}", upload.name, e)),
         }
     }
 
@@ -3026,7 +3035,7 @@ impl SynthApp {
                 self.recent_files.push(path);
             }
             Err(e) => {
-                self.status_message = Some(format!("Load failed: {}", e));
+                self.status_error(format!("Load failed: {}", e));
                 // A file that's gone stops being offered
                 if !path.exists() {
                     self.recent_files.remove(path);
@@ -3047,7 +3056,7 @@ impl SynthApp {
                 self.show_load_warnings(warnings);
             }
             Err(e) => {
-                self.status_message = Some(format!("Couldn't open example {}: {}", example.name, e));
+                self.status_error(format!("Couldn't open example {}: {}", example.name, e));
             }
         }
     }
@@ -3206,7 +3215,7 @@ impl SynthApp {
                     true
                 }
                 Err(e) => {
-                    self.status_message = Some(format!("Save failed: {}", e));
+                    self.status_error(format!("Save failed: {}", e));
                     false
                 }
             }
@@ -3350,7 +3359,7 @@ impl SynthApp {
                 self.show_load_warnings(warnings);
             }
             Err(e) => {
-                self.status_message = Some(format!("Couldn't recover {}: {}", autosave.name, e));
+                self.status_error(format!("Couldn't recover {}: {}", autosave.name, e));
             }
         }
     }
@@ -3486,55 +3495,53 @@ impl SynthApp {
         ui.horizontal(|ui| {
             ui.add_space(8.0);
 
-            // Priority order: status message > validation message > audio error > default status
-            if let Some(ref status_msg) = self.status_message {
-                // Show status message (from save/load)
-                ui.label(RichText::new(status_msg)
-                    .color(theme::accent::SUCCESS)
-                    .small());
-            } else if let Some((notice, _)) = &self.notice {
-                let label = ui.add(
-                    egui::Label::new(RichText::new(format!("⚠ {}", notice)).color(theme::accent::WARNING).small())
-                        .sense(egui::Sense::click()),
-                );
-                if label.on_hover_text("Click to dismiss").clicked() {
-                    self.notice = None;
+            // News raised since the last frame
+            self.take_news();
+            let warn = |ui: &mut egui::Ui, text: &str, color| {
+                ui.label(RichText::new(format!("⚠ {}", text)).color(color).small());
+            };
+            match self.status_bar_shows() {
+                Shown::Learn => {
+                    let param = self.midi_learn_target.as_ref().map_or("", |target| target.param_name.as_str());
+                    ui.label(RichText::new(format!("Move a MIDI CC to map {}... (Esc to cancel)", param))
+                        .color(theme::accent::PRIMARY)
+                        .small());
                 }
-            } else if let Some(validation_msg) = self.user_state.validation_message() {
-                // Show validation error with warning icon
-                ui.label(RichText::new(format!("⚠ {}", validation_msg))
-                    .color(theme::accent::WARNING)
-                    .small());
-            } else if let Some(ref error) = self.audio_error_message {
-                // Show audio error
-                ui.label(RichText::new(format!("⚠ {}", error))
-                    .color(theme::accent::ERROR)
-                    .small());
-            } else if let Some(ref error) = self.midi_error_message {
-                ui.label(RichText::new(format!("⚠ {}", error))
-                    .color(theme::accent::ERROR)
-                    .small());
-            } else {
-                // Show module and connection count, through any groups
-                let node_count = self.user_state.node_id_map.len();
-                let connection_count = self.user_state.engine_cables.len();
+                Shown::Failure | Shown::News => {
+                    if self.status.as_ref().is_some_and(|line| status_line::draw(ui, line)) {
+                        self.status = None;
+                    }
+                }
+                Shown::Refusal => warn(ui, self.user_state.validation_message().unwrap_or_default(), theme::accent::WARNING),
+                Shown::Notice => {
+                    if self.notice.as_ref().is_some_and(|line| status_line::draw(ui, line)) {
+                        self.notice = None;
+                    }
+                }
+                Shown::AudioError => warn(ui, self.audio_error_message.as_deref().unwrap_or_default(), theme::accent::ERROR),
+                Shown::MidiError => warn(ui, self.midi_error_message.as_deref().unwrap_or_default(), theme::accent::ERROR),
+                Shown::Counts => {
+                    // Show module and connection count, through any groups
+                    let node_count = self.user_state.node_id_map.len();
+                    let connection_count = self.user_state.engine_cables.len();
 
-                let status = if node_count == 0 {
-                    "Right-click to add nodes".to_string()
-                } else if connection_count == 0 {
-                    format!("{} node{}", node_count, if node_count == 1 { "" } else { "s" })
-                } else {
-                    format!(
-                        "{} node{}, {} connection{}",
-                        node_count,
-                        if node_count == 1 { "" } else { "s" },
-                        connection_count,
-                        if connection_count == 1 { "" } else { "s" }
-                    )
-                };
-                ui.label(RichText::new(status)
-                    .color(theme::text::SECONDARY)
-                    .small());
+                    let status = if node_count == 0 {
+                        "Right-click to add nodes".to_string()
+                    } else if connection_count == 0 {
+                        format!("{} node{}", node_count, if node_count == 1 { "" } else { "s" })
+                    } else {
+                        format!(
+                            "{} node{}, {} connection{}",
+                            node_count,
+                            if node_count == 1 { "" } else { "s" },
+                            connection_count,
+                            if connection_count == 1 { "" } else { "s" }
+                        )
+                    };
+                    ui.label(RichText::new(status)
+                        .color(theme::text::SECONDARY)
+                        .small());
+                }
             }
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -4098,16 +4105,9 @@ impl SynthApp {
         self.user_state.focused = ctx.input(|i| i.focused);
         self.user_state.tick_signal_history(now, &self.graph_state.graph);
 
-        // A warning in the status bar fades out after a while
-        if let Some((_, raised)) = self.notice.as_mut() {
-            if raised.is_nan() {
-                *raised = now;
-            }
-            if now - *raised > NOTICE_SECONDS {
-                self.notice = None;
-            } else {
-                ctx.request_repaint_after(std::time::Duration::from_secs_f64(NOTICE_SECONDS - (now - *raised)));
-            }
+        // What the status bar says goes away after a while (#308)
+        if let Some(left) = self.tick_status_bar(now) {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(left));
         }
 
         // Advance meter ballistics; keep repainting until it has settled
@@ -4126,10 +4126,6 @@ impl SynthApp {
                 pace::animate(ctx);
             }
         }
-
-        // Clear status message after it's been shown (user will see it on first frame)
-        // We clear it on the next frame after it was set
-        let had_status_message = self.status_message.is_some();
 
         // Animate while playing (for LED indicators and other visualizations).
         // Stopped, nothing moves: keys and MIDI draw their own frames (#307)
@@ -4286,7 +4282,7 @@ impl SynthApp {
         if toolbar_actions.open_recordings {
             let folder = self.recordings_folder();
             if let Err(e) = std::fs::create_dir_all(&folder).and_then(|()| recording::open_folder(&folder)) {
-                self.status_message = Some(format!("Couldn't open {}: {}", folder.display(), e));
+                self.status_error(format!("Couldn't open {}: {}", folder.display(), e));
             }
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -4379,7 +4375,7 @@ impl SynthApp {
             match action {
                 Some(ToastAction::ShowInFolder) => {
                     if let Err(e) = recording::reveal_in_folder(&toast.summary.path) {
-                        self.status_message = Some(format!("Couldn't open the folder: {}", e));
+                        self.status_error(format!("Couldn't open the folder: {}", e));
                     }
                 }
                 Some(ToastAction::Dismiss) => self.record_toast = None,
@@ -4466,13 +4462,6 @@ impl SynthApp {
         if title != self.window_title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.window_title = title;
-        }
-
-        // Clear status message after showing it for one frame
-        // This gives user time to read it but doesn't persist forever
-        if had_status_message {
-            // Request one more repaint to clear the message
-            ctx.request_repaint_after(std::time::Duration::from_secs(2));
         }
 
         if let Some(capture) = self.capture.as_mut() {

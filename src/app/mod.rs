@@ -19,6 +19,7 @@ pub mod pace;
 mod recording;
 mod session;
 mod shortcuts;
+mod status_line;
 pub mod synth_app;
 pub mod theme;
 pub mod undo;

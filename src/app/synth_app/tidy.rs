@@ -31,7 +31,7 @@ impl SynthApp {
         let (source, survey) = match self.user_state.samples.load(&key) {
             Ok(shelved) => (Arc::clone(&shelved.source), shelved.survey().clone()),
             Err(e) => {
-                self.status_message = Some(format!("Couldn't read {name}: {e}"));
+                self.status_error(format!("Couldn't read {name}: {e}"));
                 return;
             }
         };
@@ -78,7 +78,7 @@ impl SynthApp {
                 self.status_message = Some(format!("{done}. Undo brings back the untouched file"));
                 self.cue_start_to_end(node_id);
             }
-            Err(e) => self.status_message = Some(format!("Couldn't write the {word} file: {e}")),
+            Err(e) => self.status_error(format!("Couldn't write the {word} file: {e}")),
         }
     }
 
