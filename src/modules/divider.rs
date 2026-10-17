@@ -7,6 +7,7 @@
 
 use crate::dsp::{
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -52,8 +53,8 @@ pub struct ClockDivider {
     period: Option<u64>,
     /// Samples since the clock last rose, `None` until it has.
     since_clock: Option<u64>,
-    prev_clock: bool,
-    prev_reset: bool,
+    clock: Edge,
+    reset: Edge,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
 }
@@ -68,8 +69,8 @@ impl ClockDivider {
             trig_active: false,
             period: None,
             since_clock: None,
-            prev_clock: false,
-            prev_reset: false,
+            clock: Edge::LOW,
+            reset: Edge::LOW,
             ports: vec![
                 PortDefinition::input_with_default("clock", "Clock", SignalType::Gate, 0.0).describe("Each rising edge counts one"),
                 PortDefinition::input_with_default("reset", "Reset", SignalType::Gate, 0.0).describe("A rising edge starts the count over: the next clock is count 0"),
@@ -102,8 +103,6 @@ impl ClockDivider {
     /// Readout slots: the count (-1 before the first clock) and Gate.
     pub const READOUT_COUNT: usize = 0;
     pub const READOUT_GATE: usize = 1;
-
-    const GATE_THRESHOLD: f32 = 0.5;
 
     /// An open Gate lets go when no clock has come for this many periods,
     /// so a stopped clock can't hold it open for good.
@@ -156,15 +155,11 @@ impl DspModule for ClockDivider {
         context: &ProcessContext,
     ) {
         let (divide, offset, length) = Self::counts(params);
-        let at = |port: usize, i: usize| inputs.get(port).map_or(0.0, |buf| buf.samples.get(i).copied().unwrap_or(0.0));
+        let at = |port: usize, i: usize| inputs.get(port).map_or(0.0, |buf| buf.at(i));
 
         for i in 0..context.block_size {
-            let clock = at(Self::PORT_CLOCK, i) > Self::GATE_THRESHOLD;
-            let reset = at(Self::PORT_RESET, i) > Self::GATE_THRESHOLD;
-            let clock_rising = clock && !self.prev_clock;
-            let reset_rising = reset && !self.prev_reset;
-            self.prev_clock = clock;
-            self.prev_reset = reset;
+            let clock_rising = self.clock.rising(at(Self::PORT_CLOCK, i));
+            let reset_rising = self.reset.rising(at(Self::PORT_RESET, i));
 
             // A reset ends the phrase: the gate closes, and the next clock,
             // even one on this same sample, is count 0
@@ -188,7 +183,7 @@ impl DspModule for ClockDivider {
                     self.gate_remaining = length;
                 }
             }
-            if !clock {
+            if !self.clock.is_high() {
                 self.trig_active = false;
             }
             self.trig_active |= fired;
@@ -223,8 +218,8 @@ impl DspModule for ClockDivider {
         self.trig_active = false;
         self.period = None;
         self.since_clock = None;
-        self.prev_clock = false;
-        self.prev_reset = false;
+        self.clock.reset();
+        self.reset.reset();
     }
 
     fn readout(&self, _params: &[f32]) -> Option<Readout> {

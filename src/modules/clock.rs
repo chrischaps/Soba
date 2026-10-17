@@ -12,6 +12,7 @@ pub mod link;
 
 use crate::dsp::{
     context::{ProcessContext, TransportState},
+    gate::{Edge, Pulse},
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -335,16 +336,16 @@ pub struct Clock {
     beats: f64,
     /// Whether the beat moved in the last sample: the transport is playing.
     running: bool,
-    /// Previous sync state for edge detection.
-    prev_sync: bool,
+    /// The sync input, for its rising edges.
+    sync: Edge,
     /// What Tempo CV multiplied the Tempo knob by at the last sample, so the
     /// transport and the readout carry the tempo the Clock is playing.
     tempo_scale: f64,
     /// Run as the last block saw it, to notice it switching on. `None`
     /// before the first block, so loading a running clock isn't a start.
     prev_run: Option<bool>,
-    /// Samples left in the Reset pulse.
-    reset_left: usize,
+    /// The Reset trigger.
+    reset_out: Pulse,
     /// Follows the MIDI clock, when Source is MIDI.
     midi: MidiClockFollower,
     /// Follows a Link session, when Source is Link.
@@ -367,10 +368,10 @@ impl Clock {
         Self {
             beats: 0.0,
             running: false,
-            prev_sync: false,
+            sync: Edge::LOW,
             tempo_scale: 1.0,
             prev_run: None,
-            reset_left: 0,
+            reset_out: Pulse::IDLE,
             midi: MidiClockFollower::new(),
             #[cfg(feature = "ableton-link")]
             link: link::LinkFollower::new(),
@@ -461,9 +462,6 @@ impl Clock {
     /// The tempo range, the Tempo knob's, which Tempo CV stays within too.
     pub const MIN_TEMPO: f64 = 20.0;
     pub const MAX_TEMPO: f64 = 300.0;
-
-    /// Sync threshold for detecting high/low states.
-    const SYNC_THRESHOLD: f32 = 0.5;
 
     /// How long the Reset pulse stays high: long enough to see on its jack,
     /// short enough to be over before the next sixteenth at any tempo.
@@ -569,7 +567,7 @@ impl Clock {
     /// Restarts from the top and fires Reset.
     fn restart(&mut self) {
         self.beats = 0.0;
-        self.reset_left = (Self::RESET_PULSE_SECONDS * self.sample_rate).round().max(1.0) as usize;
+        self.reset_out.fire(Self::RESET_PULSE_SECONDS, self.sample_rate);
     }
 }
 
@@ -658,12 +656,7 @@ impl DspModule for Clock {
 
         for i in 0..context.block_size {
             // Check for sync reset
-            let sync_value = sync_in
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
-                .unwrap_or(0.0);
-            let sync_high = sync_value > Self::SYNC_THRESHOLD;
-            let sync_rising = sync_high && !self.prev_sync;
-            self.prev_sync = sync_high;
+            let sync_rising = self.sync.rising(sync_in.map_or(0.0, |buf| buf.at(i)));
             // Following MIDI, the master's ticks place the beat instead
             if sync_rising && source == ClockSource::Internal {
                 self.beats = 0.0;
@@ -692,15 +685,15 @@ impl DspModule for Clock {
             if let Some(out) = outputs.get_mut(Self::PORT_RUN) {
                 out.samples[i] = if self.running { 1.0 } else { 0.0 };
             }
+            let reset = self.reset_out.sample();
             if let Some(out) = outputs.get_mut(Self::PORT_RESET) {
-                out.samples[i] = if self.reset_left > 0 { 1.0 } else { 0.0 };
+                out.samples[i] = reset;
             }
-            self.reset_left = self.reset_left.saturating_sub(1);
 
             // Advance the beat, at the tempo Tempo CV bends it to: by octaves,
             // so a ramp in the CV is an even slowing in the ear
             if let Some(cv) = tempo_cv {
-                let octaves = cv.samples.get(i).copied().unwrap_or(0.0) as f64;
+                let octaves = cv.at(i) as f64;
                 self.tempo_scale = octaves.exp2();
                 beats_per_sample = Self::bent_tempo(tempo, self.tempo_scale) * minutes_per_sample;
             }
@@ -726,10 +719,10 @@ impl DspModule for Clock {
     fn reset(&mut self) {
         self.beats = 0.0;
         self.running = false;
-        self.prev_sync = false;
+        self.sync.reset();
         self.tempo_scale = 1.0;
         self.prev_run = None;
-        self.reset_left = 0;
+        self.reset_out.clear();
         self.midi = MidiClockFollower::new();
         #[cfg(feature = "ableton-link")]
         self.link.rest();

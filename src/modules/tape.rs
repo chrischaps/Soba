@@ -682,7 +682,7 @@ impl DspModule for Tape {
         for i in 0..context.block_size {
             let x_left = in_left.and_then(|buf| buf.samples.get(i).copied()).unwrap_or(0.0);
             let x_right = match in_right {
-                Some(buf) => buf.samples.get(i).copied().unwrap_or(0.0),
+                Some(buf) => buf.at(i),
                 None => x_left,
             };
 

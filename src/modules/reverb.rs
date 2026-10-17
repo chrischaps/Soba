@@ -498,10 +498,10 @@ impl DspModule for Reverb {
             }
 
             let dry_left = in_left
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
             let dry_right = match in_right {
-                Some(buf) => buf.samples.get(i).copied().unwrap_or(0.0),
+                Some(buf) => buf.at(i),
                 None => dry_left,
             };
 

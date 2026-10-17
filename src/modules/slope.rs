@@ -15,6 +15,7 @@
 
 use crate::dsp::{
     context::ProcessContext,
+    gate::{Edge, Pulse},
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -37,9 +38,6 @@ const SHAPE_K: f32 = 6.0;
 
 /// How long the EOC pulse lasts, in seconds, unless the cycle is shorter.
 const EOC_SECONDS: f32 = 0.001;
-
-/// Gate threshold for Trig and Cycle.
-const GATE_THRESHOLD: f32 = 0.5;
 
 /// The Shape curve, from charge to level and back.
 ///
@@ -142,10 +140,12 @@ pub struct Slope {
     motion: Motion,
     /// The End of Rise gate.
     eor: bool,
-    /// Samples left of the EOC pulse.
-    eoc_left: u32,
-    /// Trig was high on the last sample.
-    trig_high: bool,
+    /// The EOC pulse.
+    eoc: Pulse,
+    /// The Trig input, for its rising edges.
+    trig: Edge,
+    /// The Cycle input, while it's patched.
+    cycle: Edge,
     /// The Shape curve in use, so turning the knob can keep Out where it is.
     curve: Curve,
     /// The last In value, and its charge, to save inverting the curve each
@@ -171,8 +171,9 @@ impl Slope {
             stage: Stage::Follow,
             motion: Motion::Rest,
             eor: false,
-            eoc_left: 0,
-            trig_high: false,
+            eoc: Pulse::IDLE,
+            trig: Edge::LOW,
+            cycle: Edge::LOW,
             curve: Curve::LINEAR,
             last_in: 0.0,
             in_charge: 0.0,
@@ -343,7 +344,7 @@ impl DspModule for Slope {
             self.curve = curve;
         }
 
-        let sample = |buffer: Option<&SignalBuffer>, i: usize| buffer.and_then(|b| b.samples.get(i).copied());
+        let sample = |buffer: Option<&SignalBuffer>, i: usize| buffer.map(|b| b.at(i));
         let samples_per_second = f64::from(self.sample_rate);
         for i in 0..context.block_size {
             let target = sample(input, i).unwrap_or(0.0);
@@ -351,11 +352,12 @@ impl DspModule for Slope {
                 self.last_in = target;
                 self.in_charge = self.curve.charge(target);
             }
-            let trig_high = sample(trig, i).unwrap_or(0.0) >= GATE_THRESHOLD;
-            let triggered = trig_high && !self.trig_high;
-            self.trig_high = trig_high;
+            let triggered = self.trig.rising(sample(trig, i).unwrap_or(0.0));
             let cycling = match cycle_in {
-                Some(_) => sample(cycle_in, i).unwrap_or(0.0) >= GATE_THRESHOLD,
+                Some(cycle_in) => {
+                    self.cycle.tick(cycle_in.at(i));
+                    self.cycle.is_high()
+                }
                 None => cycle_switch,
             };
             let rise = Self::time(rise_knob, sample(rise_cv, i));
@@ -427,8 +429,7 @@ impl DspModule for Slope {
             if end_of_cycle {
                 // A millisecond, or less if the cycle is quicker, so every
                 // pulse has its own edge
-                let cycle = (rise + fall) * self.sample_rate;
-                self.eoc_left = (EOC_SECONDS * self.sample_rate).min(cycle * 0.5).max(1.0) as u32;
+                self.eoc.fire(EOC_SECONDS.min((rise + fall) * 0.5), self.sample_rate);
             }
 
             // At rest on In, Out is In exactly
@@ -439,8 +440,7 @@ impl DspModule for Slope {
             };
             outputs[Self::OUT].samples[i] = self.level;
             outputs[Self::EOR].samples[i] = if self.eor { 1.0 } else { 0.0 };
-            outputs[Self::EOC].samples[i] = if self.eoc_left > 0 { 1.0 } else { 0.0 };
-            self.eoc_left = self.eoc_left.saturating_sub(1);
+            outputs[Self::EOC].samples[i] = self.eoc.sample();
         }
     }
 
@@ -449,8 +449,9 @@ impl DspModule for Slope {
         self.stage = Stage::Follow;
         self.motion = Motion::Rest;
         self.eor = false;
-        self.eoc_left = 0;
-        self.trig_high = false;
+        self.eoc.clear();
+        self.trig.reset();
+        self.cycle.reset();
         self.last_in = 0.0;
         self.in_charge = 0.0;
         self.level = 0.0;

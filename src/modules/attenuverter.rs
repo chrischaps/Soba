@@ -172,7 +172,7 @@ impl DspModule for Attenuverter {
             let offset = self.offset_smooth.next();
 
             let in_value = input
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
 
             // Apply scaling and offset, within ±1 (±4 at ×4)

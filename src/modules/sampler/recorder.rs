@@ -38,7 +38,12 @@
 
 use std::sync::Arc;
 
-use crate::dsp::{context::ProcessContext, signal::SignalBuffer, FinishedTake, SampleData};
+use crate::dsp::{
+    context::ProcessContext,
+    gate::{Edge, Transition},
+    signal::SignalBuffer,
+    FinishedTake, SampleData,
+};
 
 /// The longest take, in seconds: the room the UI sets aside for one.
 pub const TAKE_ROOM_SECONDS: f32 = 60.0;
@@ -84,8 +89,6 @@ const METER_RELEASE_SECONDS: f32 = 0.3;
 
 /// The take count wraps below this, so a readout's `f32` holds it exactly.
 const TAKES_WRAP: u32 = (1 << 24) - 1;
-
-const GATE_THRESHOLD: f32 = 0.5;
 
 /// Where the recorder is.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -147,7 +150,8 @@ pub struct Recorder {
     /// Recording from the bar line just gone, in case a late press wants it.
     speculating: bool,
     prev_button: Option<bool>,
-    prev_gate: bool,
+    /// The Rec jack, for its edges.
+    gate: Edge,
     /// The bar the last frame was in, while a Clock runs.
     prev_bar: Option<i64>,
     /// Frames in a beat, while a Clock runs (the last it ran at, after).
@@ -184,7 +188,7 @@ impl Default for Recorder {
             ring_head: 0,
             speculating: false,
             prev_button: None,
-            prev_gate: false,
+            gate: Edge::LOW,
             prev_bar: None,
             beat_frames: None,
             per_bar: 4,
@@ -310,7 +314,7 @@ impl Recorder {
             if let Some(room) = self.room.take() {
                 self.let_go = Some(room);
             }
-            self.prev_gate = false;
+            self.gate.reset();
             return done;
         }
 
@@ -337,7 +341,7 @@ impl Recorder {
 
         let mut done = None;
         for i in 0..context.block_size {
-            let sum = |buffer: &SignalBuffer| (0..buffer.channels()).map(|c| buffer.voice(c).samples.get(i).copied().unwrap_or(0.0)).sum::<f32>();
+            let sum = |buffer: &SignalBuffer| (0..buffer.channels()).map(|c| buffer.voice(c).at(i)).sum::<f32>();
             let frame = [left.map_or(0.0, sum), right.map_or(0.0, sum)];
             let level = frame[0].abs().max(frame[1].abs());
             self.onset = if level > self.onset { self.onset + (level - self.onset) * rise } else { self.onset * fall };
@@ -364,13 +368,11 @@ impl Recorder {
             // Rec: the jack's edges, or the button's press on the block's first sample
             let (start, stop) = match controls.gate {
                 Some(gate) => {
-                    let high = gate.samples.get(i).is_some_and(|&g| g > GATE_THRESHOLD);
-                    let edges = (high && !self.prev_gate, !high && self.prev_gate);
-                    self.prev_gate = high;
-                    edges
+                    let edge = self.gate.tick(gate.at(i));
+                    (edge == Some(Transition::Rising), edge == Some(Transition::Falling))
                 }
                 None => {
-                    self.prev_gate = false;
+                    self.gate.reset();
                     let tap = pressed && i == 0;
                     (tap && self.state == RecState::Idle, tap && self.state != RecState::Idle)
                 }

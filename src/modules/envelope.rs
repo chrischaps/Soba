@@ -18,6 +18,7 @@
 use crate::dsp::{
     connected_input,
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -168,10 +169,10 @@ pub struct AdsrEnvelope {
     sustain_primed: bool,
     /// One-pole coefficient for sustain smoothing.
     sustain_coeff: f64,
-    /// Previous gate state (for edge detection).
-    prev_gate: bool,
-    /// Previous retrigger state (for edge detection).
-    prev_retrigger: bool,
+    /// The gate input, for its edges and its level.
+    gate: Edge,
+    /// The retrigger input, for its rising edges.
+    retrigger: Edge,
     /// Stage times and sustain after CV, as of the last sample, for the display.
     attack_seconds: f32,
     decay_seconds: f32,
@@ -197,8 +198,8 @@ impl AdsrEnvelope {
             sustain: 0.0,
             sustain_primed: false,
             sustain_coeff: 0.0,
-            prev_gate: false,
-            prev_retrigger: false,
+            gate: Edge::LOW,
+            retrigger: Edge::LOW,
             attack_seconds: 0.01,
             decay_seconds: 0.1,
             sustain_target: 0.7,
@@ -342,9 +343,6 @@ impl AdsrEnvelope {
     pub const READOUT_STAGE_START: usize = 8;
     pub const READOUT_STAGE_TARGET: usize = 9;
 
-    /// Gate threshold for detecting high/low states.
-    const GATE_THRESHOLD: f32 = 0.5;
-
     /// Time constant for sustain knob moves.
     const SUSTAIN_SMOOTHING_SECONDS: f32 = 0.005;
 
@@ -456,12 +454,9 @@ impl DspModule for AdsrEnvelope {
         let output = &mut outputs[Self::PORT_OUT];
 
         for i in 0..context.block_size {
-            let gate_high = gate_in
-                .and_then(|buf| buf.samples.get(i))
-                .is_some_and(|&v| v > Self::GATE_THRESHOLD);
-            let retrigger_high = retrigger_in
-                .and_then(|buf| buf.samples.get(i))
-                .is_some_and(|&v| v > Self::GATE_THRESHOLD);
+            let gate_rising = self.gate.rising(gate_in.map_or(0.0, |buf| buf.at(i)));
+            let gate_high = self.gate.is_high();
+            let retrigger_rising = self.retrigger.rising(retrigger_in.map_or(0.0, |buf| buf.at(i)));
             let velocity = velocity_in.and_then(|buf| buf.samples.get(i).copied());
 
             // CV stretches the stage times and moves the sustain, sample by sample
@@ -471,11 +466,6 @@ impl DspModule for AdsrEnvelope {
             if let Some(cv) = cv_at(sustain_cv, i) {
                 sustain_target = (sustain_knob + cv).clamp(0.0, 1.0);
             }
-
-            let gate_rising = gate_high && !self.prev_gate;
-            let retrigger_rising = retrigger_high && !self.prev_retrigger;
-            self.prev_gate = gate_high;
-            self.prev_retrigger = retrigger_high;
 
             // Stage changes from the gates
             match self.stage {
@@ -552,8 +542,8 @@ impl DspModule for AdsrEnvelope {
         self.progress = 0.0;
         self.peak = 1.0;
         self.sustain_primed = false;
-        self.prev_gate = false;
-        self.prev_retrigger = false;
+        self.gate.reset();
+        self.retrigger.reset();
     }
 
     /// The stage times and sustain CV has moved them to, and where the

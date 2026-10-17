@@ -402,14 +402,14 @@ impl DspModule for StereoDelay {
 
             // Apply time CV modulation (bipolar, +/- 50% range)
             let time_mod = time_cv
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
             let modulated_time_ms = (time_ms_smoothed * (1.0 + time_mod * 0.5)).clamp(1.0, 2000.0);
 
             // Apply feedback CV modulation. Plain mode stops short of unity;
             // Tape mode goes past it and leans on the record head instead.
             let fb_mod = feedback_cv
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
             let feedback_amount = feedback_smoothed + fb_mod * 0.5;
             let plain_feedback = feedback_amount.clamp(0.0, 0.95);
@@ -426,12 +426,12 @@ impl DspModule for StereoDelay {
 
             // Get dry input samples
             let dry_left = in_left
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
 
             // Right channel is normalled from left if not connected
             let dry_right = match in_right {
-                Some(buf) => buf.samples.get(i).copied().unwrap_or(0.0),
+                Some(buf) => buf.at(i),
                 None => dry_left,
             };
 

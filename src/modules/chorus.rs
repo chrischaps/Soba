@@ -386,13 +386,13 @@ impl DspModule for Chorus {
 
             // Apply rate CV modulation (bipolar, +/- 50% range)
             let rate_mod = rate_cv
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
             let modulated_rate = (rate_smoothed * (1.0 + rate_mod * 0.5)).clamp(0.1, 10.0);
 
             // Apply depth CV modulation
             let depth_mod = depth_cv
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
             let modulated_depth = (depth_smoothed + depth_mod * 0.5).clamp(0.0, 1.0);
 
@@ -411,12 +411,12 @@ impl DspModule for Chorus {
 
             // Get dry input samples
             let dry_left = in_left
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
 
             // Right channel normalled from left if not connected
             let dry_right = match in_right {
-                Some(buf) => buf.samples.get(i).copied().unwrap_or(0.0),
+                Some(buf) => buf.at(i),
                 None => dry_left,
             };
 

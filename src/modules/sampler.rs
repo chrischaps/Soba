@@ -28,6 +28,7 @@ use std::sync::Arc;
 use crate::dsp::{
     connected_input,
     context::ProcessContext,
+    gate::{Edge, Transition},
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -146,7 +147,8 @@ impl Voice {
 struct Channel {
     voice: Voice,
     tail: Voice,
-    prev_gate: bool,
+    /// The channel's gate, for its edges.
+    gate: Edge,
 }
 
 /// Where in the recording a voice plays, in frames.
@@ -435,8 +437,6 @@ impl Sampler {
     /// Beats in that take's bar.
     pub const READOUT_REC_BAR: usize = 2 * MAX_CHANNELS + 7;
 
-    const GATE_THRESHOLD: f32 = 0.5;
-
     /// The recording voices start on, if one is loaded.
     pub fn sample(&self) -> Option<&Arc<SampleData>> {
         self.sample.as_ref()
@@ -686,7 +686,7 @@ impl DspModule for Sampler {
         // Each recording's rate against the engine's, so either plays in tune
         let rate_of = |data: Option<&SampleData>| data.map_or(1.0, |d| (d.sample_rate() / sample_rate) as f64);
         let (current_rate, previous_rate) = (rate_of(current), rate_of(previous));
-        let start_offset = |c: usize, i: usize| start_cv.map_or(0.0, |cv| cv.voice(c).samples.get(i).copied().unwrap_or(0.0));
+        let start_offset = |c: usize, i: usize| start_cv.map_or(0.0, |cv| cv.voice(c).at(i));
         let unmoved = Region::new(params, 0.0, current.map_or(0, SampleData::frames));
         let previous_region = Region::new(params, 0.0, previous.map_or(0, SampleData::frames));
         // Markers are fractions of the recording, as Start and End are
@@ -697,17 +697,15 @@ impl DspModule for Sampler {
         for i in 0..context.block_size {
             let gain = level.next();
             for (c, channel) in voices.iter_mut().enumerate().take(channels) {
-                let read = |buffer: Option<&SignalBuffer>, default: f32| {
-                    buffer.map_or(default, |b| b.voice(c).samples.get(i).copied().unwrap_or(default))
-                };
+                let read = |buffer: Option<&SignalBuffer>, default: f32| buffer.map_or(default, |b| b.voice(c).at(i));
                 let speed = (speed_knob + read(speed_cv, 0.0)).clamp(-4.0, 4.0) as f64;
                 let semitones = if slices.is_some() { transpose } else { tuning + 12.0 * read(voct, 0.0) };
                 let pitch = (semitones / 12.0).clamp(-8.0, 8.0).exp2() as f64;
                 let rate = (speed * pitch).clamp(-MAX_RATE, MAX_RATE);
 
                 // The gate
-                let gate_high = read(gate, 0.0) > Self::GATE_THRESHOLD;
-                if gate_high && !channel.prev_gate {
+                let edge = channel.gate.tick(read(gate, 0.0));
+                if edge == Some(Transition::Rising) {
                     if let Some(data) = current {
                         let note = match slices {
                             // The note's slice, if it has one, with Start CV
@@ -744,10 +742,9 @@ impl DspModule for Sampler {
                             };
                         }
                     }
-                } else if !gate_high && channel.prev_gate && gated {
+                } else if edge == Some(Transition::Falling) && gated {
                     channel.voice.release(release, sample_rate);
                 }
-                channel.prev_gate = gate_high;
 
                 let mut left = 0.0;
                 let mut right = 0.0;

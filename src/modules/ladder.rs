@@ -334,7 +334,7 @@ impl DspModule for LadderFilter {
         let max_cutoff = self.sample_rate * Self::MAX_CUTOFF_RATIO;
         let oversampled_rate = self.sample_rate * 2.0;
         let sample = |buf: Option<&&SignalBuffer>, i: usize| {
-            buf.map(|b| b.samples.get(i).copied().unwrap_or(0.0)).unwrap_or(0.0)
+            buf.map(|b| b.at(i)).unwrap_or(0.0)
         };
 
         for i in 0..context.block_size {

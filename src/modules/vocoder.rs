@@ -30,6 +30,7 @@ use crate::dsp::{
     context::ProcessContext,
     denormal::flush,
     dynamics::db_to_gain,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -117,9 +118,6 @@ const EMPHASIS_HZ: f32 = 6400.0;
 
 /// How long the voice's own highs take to fade out on Freeze, and back in.
 const FREEZE_FADE_MS: f32 = 3.0;
-
-/// A gate at Freeze is high from here.
-const GATE_THRESHOLD: f32 = 0.5;
 
 /// Two cascaded sections each this much sharper than the pair should be
 /// give the pair the bandwidth wanted (√(√2 - 1)).
@@ -332,6 +330,8 @@ pub struct Vocoder {
     unvoiced: f32,
     /// Whether Freeze held the bands on the last sample.
     frozen: bool,
+    /// The Freeze input, while it's patched.
+    freeze: Edge,
     /// How far the voice's own highs are let through: 0 while frozen, 1
     /// otherwise, gliding between.
     listening: f32,
@@ -405,6 +405,7 @@ impl Vocoder {
             voice_level: Follower::default(),
             unvoiced: 0.0,
             frozen: false,
+            freeze: Edge::LOW,
             listening: 1.0,
             noise: NoiseFloor::new(NOISE_LEVEL),
             formant: SmoothedValue::with_default_smoothing(0.0, sample_rate),
@@ -640,7 +641,10 @@ impl DspModule for Vocoder {
 
             // Frozen, every follower holds and the voice's own highs fade
             let frozen = match freeze_in {
-                Some(gate) => gate.samples[i] >= GATE_THRESHOLD,
+                Some(gate) => {
+                    self.freeze.tick(gate.at(i));
+                    self.freeze.is_high()
+                }
                 None => freeze_switch,
             };
             self.frozen = frozen;
@@ -705,6 +709,7 @@ impl DspModule for Vocoder {
         self.voice_level = Follower::default();
         self.unvoiced = 0.0;
         self.frozen = false;
+        self.freeze.reset();
         self.listening = 1.0;
         self.emphasis = 0.0;
         for smoothed in [&mut self.formant, &mut self.sibilance, &mut self.unvoiced_amount, &mut self.width, &mut self.mix, &mut self.flatten, &mut self.level] {

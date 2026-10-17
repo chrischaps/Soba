@@ -32,6 +32,7 @@ use crate::dsp::{
     connected_input,
     context::ProcessContext,
     denormal::flush,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -254,7 +255,8 @@ pub struct Slicer {
     on_transport: bool,
     /// The beat step 1 falls on: where Reset last fired.
     origin: f64,
-    prev_reset: bool,
+    /// The Reset input, for its rising edges.
+    reset: Edge,
     /// The step that played last, to notice the next starting.
     last_step: Option<i64>,
     /// The slices' level on each side, following the step's.
@@ -319,8 +321,6 @@ impl Slicer {
     /// The input's peak over the last block.
     pub const READOUT_INPUT: usize = 5;
 
-    const GATE_THRESHOLD: f32 = 0.5;
-
     /// The parameter of step `index` (from 0).
     pub const fn step_param(index: usize) -> usize {
         Self::PARAM_STEP + index
@@ -363,7 +363,7 @@ impl Slicer {
             last_beat: 0.0,
             on_transport: false,
             origin: 0.0,
-            prev_reset: false,
+            reset: Edge::LOW,
             last_step: None,
             env: [0.0; 2],
             bright: 0.0,
@@ -493,7 +493,7 @@ impl DspModule for Slicer {
         let in_r = connected_input(inputs, Self::PORT_IN_R);
         let reset = connected_input(inputs, Self::PORT_RESET);
         let depth_cv = connected_input(inputs, Self::PORT_DEPTH);
-        let read = |buffer: Option<&SignalBuffer>, i: usize| buffer.map_or(0.0, |b| b.samples.get(i).copied().unwrap_or(0.0));
+        let read = |buffer: Option<&SignalBuffer>, i: usize| buffer.map_or(0.0, |b| b.at(i));
 
         let step_beats = Self::rate_beats(params[Self::PARAM_RATE]);
         let count = Self::step_count(params[Self::PARAM_STEPS]);
@@ -538,13 +538,11 @@ impl DspModule for Slicer {
             };
             self.last_beat = beat;
 
-            let reset_high = read(reset, i) > Self::GATE_THRESHOLD;
-            if reset_high && !self.prev_reset {
+            if self.reset.rising(read(reset, i)) {
                 self.origin = beat;
                 self.last_step = None;
                 self.next_right = false;
             }
-            self.prev_reset = reset_high;
 
             let place = Self::place(((beat - self.origin) / step_beats).max(0.0), swing);
             let slice = Self::slice_at(params, place.step, count);

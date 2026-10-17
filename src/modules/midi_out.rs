@@ -16,6 +16,7 @@ use web_time::Instant;
 
 use crate::dsp::{
     context::ProcessContext,
+    gate::{Edge, Transition},
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::{ParameterDefinition, ParameterDisplay},
     port::PortDefinition,
@@ -33,9 +34,6 @@ const CC_DEFAULTS: [f32; CC_LANES] = [1.0, 74.0, 71.0, 10.0];
 
 /// MIDI clock ticks in a beat.
 const PPQN: f64 = 24.0;
-
-/// A gate above this is high.
-const GATE_THRESHOLD: f32 = 0.5;
 
 const CHANNEL_LABELS: &[&str] = &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"];
 
@@ -64,7 +62,7 @@ pub struct MidiOut {
     /// The channel held notes were sent on.
     channel: u8,
     /// Each voice's gate at the end of the last block.
-    gate_high: [bool; MAX_CHANNELS],
+    gates: [Edge; MAX_CHANNELS],
     /// The note each voice is holding.
     voice_note: [Option<u8>; MAX_CHANNELS],
     /// How many voices hold each note: it's let go when the last does.
@@ -125,7 +123,7 @@ impl MidiOut {
             ring: bus.open_stream(),
             sample: 0,
             channel: 0,
-            gate_high: [false; MAX_CHANNELS],
+            gates: [Edge::LOW; MAX_CHANNELS],
             voice_note: [None; MAX_CHANNELS],
             held: [0; 128],
             cc_sent: [None; CC_LANES],
@@ -342,7 +340,7 @@ impl DspModule for MidiOut {
         let voices = gate.map_or(0, |g| g.channels().max(pitch.map_or(1, |p| p.channels())));
         for voice in voices..MAX_CHANNELS {
             // A voice the cable no longer carries
-            self.gate_high[voice] = false;
+            self.gates[voice].reset();
             self.note_off(voice, 0);
         }
         if let Some(gate) = gate {
@@ -350,18 +348,15 @@ impl DspModule for MidiOut {
             // order and a note two voices share ends with the later
             for offset in 0..frames {
                 for voice in 0..voices {
-                    let high = gate.voice(voice).samples.get(offset).is_some_and(|&s| s > GATE_THRESHOLD);
-                    if high == self.gate_high[voice] {
-                        continue;
+                    match self.gates[voice].tick(gate.voice(voice).at(offset)) {
+                        None => continue,
+                        Some(Transition::Falling) => {
+                            self.note_off(voice, offset);
+                            continue;
+                        }
+                        Some(Transition::Rising) => {}
                     }
-                    self.gate_high[voice] = high;
-                    if !high {
-                        self.note_off(voice, offset);
-                        continue;
-                    }
-                    let read = |input: Option<&SignalBuffer>, default: f32| {
-                        input.and_then(|i| i.voice(voice).samples.get(offset).copied()).unwrap_or(default)
-                    };
+                    let read = |input: Option<&SignalBuffer>, default: f32| input.map_or(default, |i| i.voice(voice).at(offset));
                     let note = (60.0 + read(pitch, 0.0) * 12.0).round().clamp(0.0, 127.0) as u8;
                     let strike = (read(velocity, 0.8) * 127.0).round().clamp(1.0, 127.0) as u8;
                     self.note_on(voice, note, strike, offset);
@@ -391,7 +386,7 @@ impl DspModule for MidiOut {
     fn reset(&mut self) {
         self.release_all(0);
         self.stop_clock(0);
-        self.gate_high = [false; MAX_CHANNELS];
+        self.gates = [Edge::LOW; MAX_CHANNELS];
         self.cc_sent = [None; CC_LANES];
     }
 

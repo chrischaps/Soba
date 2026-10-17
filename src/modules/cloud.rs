@@ -39,6 +39,7 @@ use std::sync::Arc;
 use crate::dsp::{
     connected_input,
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -291,6 +292,8 @@ impl Grain {
 struct Channel {
     /// Samples until the next grain.
     countdown: f64,
+    /// The channel's Gate, held open.
+    gate: Edge,
 }
 
 /// The last few seconds of live audio, and a waveform of it for the face.
@@ -425,7 +428,8 @@ pub struct Cloud {
     active: usize,
     level: SmoothedValue,
     rng: Pcg32,
-    prev_trig: bool,
+    trig: Edge,
+    freeze: Edge,
     /// Whether the last block played the live audio.
     live: bool,
     frozen: bool,
@@ -480,8 +484,6 @@ impl Cloud {
     /// Position after CV, 0 to 1.
     pub const READOUT_POSITION: usize = 2 * SHOWN + 4;
 
-    const GATE_THRESHOLD: f32 = 0.5;
-
     pub fn new() -> Self {
         let sample_rate = 44100.0;
         Self {
@@ -495,7 +497,8 @@ impl Cloud {
             active: 1,
             level: SmoothedValue::with_default_smoothing(0.8, sample_rate),
             rng: Pcg32::next_stream(),
-            prev_trig: false,
+            trig: Edge::LOW,
+            freeze: Edge::LOW,
             live: false,
             frozen: false,
             position: 0.5,
@@ -714,7 +717,7 @@ impl DspModule for Cloud {
         let spread = params[Self::PARAM_SPREAD].clamp(0.0, 1.0);
         self.level.set_target(params[Self::PARAM_LEVEL].clamp(0.0, 1.0));
         let sample_rate = self.sample_rate as f64;
-        let read = |buffer: Option<&SignalBuffer>, c: usize, i: usize| buffer.map_or(0.0, |b| b.voice(c).samples.get(i).copied().unwrap_or(0.0));
+        let read = |buffer: Option<&SignalBuffer>, c: usize, i: usize| buffer.map_or(0.0, |b| b.voice(c).at(i));
 
         for out in outputs.iter_mut() {
             out.set_channels(1);
@@ -723,24 +726,26 @@ impl DspModule for Cloud {
         for i in 0..context.block_size {
             // Live audio in, unless frozen
             self.frozen = match freeze_in {
-                Some(buffer) => buffer.samples.get(i).copied().unwrap_or(0.0) > Self::GATE_THRESHOLD,
+                Some(buffer) => {
+                    self.freeze.tick(buffer.at(i));
+                    self.freeze.is_high()
+                }
                 None => switch,
             };
             if let (Some(l), Some(r), false) = (in_l, in_r, self.frozen) {
-                let sum = |buffer: &SignalBuffer| (0..buffer.channels()).map(|c| buffer.voice(c).samples.get(i).copied().unwrap_or(0.0)).sum::<f32>();
+                let sum = |buffer: &SignalBuffer| (0..buffer.channels()).map(|c| buffer.voice(c).at(i)).sum::<f32>();
                 self.ring.push(sum(l), sum(r));
             }
 
             // A Trig's edge starts a burst on every channel
-            let burst = trig.is_some_and(|t| {
-                let high = t.samples.get(i).copied().unwrap_or(0.0) > Self::GATE_THRESHOLD;
-                let rising = high && !self.prev_trig;
-                self.prev_trig = high;
-                rising
-            });
+            let burst = trig.is_some_and(|t| self.trig.rising(t.at(i)));
 
             for c in 0..channels {
-                let gate_open = gate.is_none_or(|g| read(Some(g), c, i) > Self::GATE_THRESHOLD);
+                let gate_open = gate.is_none_or(|g| {
+                    let edge = &mut self.channels[c].gate;
+                    edge.tick(g.voice(c).at(i));
+                    edge.is_high()
+                });
                 let size_ms = (params[Self::PARAM_SIZE] * read(size_cv, c, i).exp2()).clamp(MIN_SIZE_MS, MAX_SIZE_MS);
                 let density = (params[Self::PARAM_DENSITY] * read(density_cv, c, i).exp2()).clamp(MIN_DENSITY, MAX_DENSITY);
                 let due = if trig.is_some() {
@@ -830,7 +835,8 @@ impl DspModule for Cloud {
             grain.active = false;
         }
         self.channels = [Channel::default(); MAX_CHANNELS];
-        self.prev_trig = false;
+        self.trig.reset();
+        self.freeze.reset();
         if self.outgoing.is_some() {
             self.retire_outgoing_if_unused();
         }

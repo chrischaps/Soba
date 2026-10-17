@@ -30,6 +30,7 @@ use super::noise::{soft_ceiling, Pcg32};
 use crate::dsp::{
     connected_input,
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -338,7 +339,8 @@ pub struct Resonator {
     /// Samples until the modes are tuned again.
     retune_in: u32,
 
-    prev_gate: bool,
+    /// The gate input, for its rising edges.
+    gate: Edge,
     /// Samples since the last pluck or strike (for the face).
     since: u64,
     struck: bool,
@@ -380,7 +382,7 @@ impl Resonator {
             mallet_len: 0,
             mallet_gain: 0.0,
             retune_in: 0,
-            prev_gate: false,
+            gate: Edge::LOW,
             since: 0,
             struck: false,
             envelope: 0.0,
@@ -447,8 +449,6 @@ impl Resonator {
     pub const READOUT_HZ: usize = 2;
     pub const READOUT_SINCE: usize = 3;
     pub const READOUT_SHAPE: usize = 4;
-
-    const GATE_THRESHOLD: f32 = 0.5;
 
     /// How strongly In drives either model.
     const STRING_INPUT: f32 = 0.35;
@@ -589,9 +589,7 @@ impl DspModule for Resonator {
         let v_oct = connected_input(inputs, Self::PORT_V_OCT);
         let strike_in = connected_input(inputs, Self::PORT_STRIKE);
         let audio_in = connected_input(inputs, Self::PORT_IN);
-        let at = |buffer: Option<&SignalBuffer>, i: usize, default: f32| {
-            buffer.map_or(default, |buf| buf.samples.get(i).copied().unwrap_or(default))
-        };
+        let at = |buffer: Option<&SignalBuffer>, i: usize, default: f32| buffer.map_or(default, |buf| buf.at(i));
         let cv = |port: usize| at(connected_input(inputs, port), 0, 0.0);
         let param = |index: usize, default: f32| params.get(index).copied().unwrap_or(default);
 
@@ -626,8 +624,7 @@ impl DspModule for Resonator {
                 self.retune_in = 0;
             }
 
-            let gate_high = at(gate, i, 0.0) > Self::GATE_THRESHOLD;
-            if gate_high && !self.prev_gate {
+            if self.gate.rising(at(gate, i, 0.0)) {
                 let strike = at(strike_in, i, 1.0).clamp(0.0, 1.0);
                 match mode {
                     Mode::String => self.pluck(strike, brightness),
@@ -636,7 +633,6 @@ impl DspModule for Resonator {
                 self.since = 0;
                 self.struck = true;
             }
-            self.prev_gate = gate_high;
             // In through the same softness as the pick or the mallet
             self.input_lp += input_coeff * (at(audio_in, i, 0.0) - self.input_lp);
             let input = self.input_lp;
@@ -706,7 +702,7 @@ impl DspModule for Resonator {
 
     fn reset(&mut self) {
         self.silence();
-        self.prev_gate = false;
+        self.gate.reset();
         self.struck = false;
         self.since = 0;
         self.envelope = 0.0;

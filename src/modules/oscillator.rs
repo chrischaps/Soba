@@ -571,7 +571,7 @@ impl DspModule for Oscillator {
 
             // A rising zero crossing between the last input sample and this one
             let sync = sync_in.and_then(|buf| {
-                let s = buf.samples.get(i).copied().unwrap_or(0.0);
+                let s = buf.at(i);
                 let prev = std::mem::replace(&mut self.prev_sync, s);
                 (prev <= 0.0 && s > 0.0).then(|| prev / (prev - s))
             });

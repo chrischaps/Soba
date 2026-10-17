@@ -6,6 +6,7 @@
 
 use crate::dsp::{
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -44,8 +45,8 @@ pub struct SampleHold {
     held_value: f32,
     /// Current output value (may be slewing toward held_value).
     current_value: f32,
-    /// Previous trigger state for edge detection.
-    prev_trigger: bool,
+    /// The trigger input, for its rising edges.
+    trigger: Edge,
     /// Sample rate from last prepare() call.
     sample_rate: f32,
     /// Port definitions.
@@ -60,7 +61,7 @@ impl SampleHold {
         Self {
             held_value: 0.0,
             current_value: 0.0,
-            prev_trigger: false,
+            trigger: Edge::LOW,
             sample_rate: 44100.0,
             ports: vec![
                 // Input ports
@@ -90,9 +91,6 @@ impl SampleHold {
 
     /// Parameter index constants.
     const PARAM_SLEW: usize = 0;
-
-    /// Trigger threshold for detecting high/low states.
-    const TRIGGER_THRESHOLD: f32 = 0.5;
 }
 
 impl Default for SampleHold {
@@ -153,17 +151,10 @@ impl DspModule for SampleHold {
         // Process each sample
         for i in 0..context.block_size {
             // Get current input signal value
-            let input_value = signal_in
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
-                .unwrap_or(0.0);
+            let input_value = signal_in.map_or(0.0, |buf| buf.at(i));
 
             // Get trigger value and detect rising edge
-            let trigger_value = trigger_in
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
-                .unwrap_or(0.0);
-            let trigger_high = trigger_value >= Self::TRIGGER_THRESHOLD;
-            let trigger_rising = trigger_high && !self.prev_trigger;
-            self.prev_trigger = trigger_high;
+            let trigger_rising = self.trigger.rising(trigger_in.map_or(0.0, |buf| buf.at(i)));
 
             // On rising edge, sample the input
             if trigger_rising {
@@ -197,7 +188,7 @@ impl DspModule for SampleHold {
     fn reset(&mut self) {
         self.held_value = 0.0;
         self.current_value = 0.0;
-        self.prev_trigger = false;
+        self.trigger.reset();
     }
 }
 
@@ -496,14 +487,14 @@ mod tests {
         // Set some state
         sh.held_value = 0.75;
         sh.current_value = 0.5;
-        sh.prev_trigger = true;
+        sh.trigger.rising(1.0);
 
         // Reset
         sh.reset();
 
         assert!(sh.held_value.abs() < f32::EPSILON);
         assert!(sh.current_value.abs() < f32::EPSILON);
-        assert!(!sh.prev_trigger);
+        assert!(!sh.trigger.is_high());
     }
 
     #[test]

@@ -51,8 +51,7 @@ pub const PORT_LABELS: &[&str] = &["9137", "9138", "9139", "9140"];
 /// The version `/soba/hello` sends.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// A gate above this is high.
-pub const GATE_THRESHOLD: f32 = 0.5;
+pub use crate::dsp::gate::GATE_THRESHOLD;
 
 /// What the sender knows about a port, for a Link Out's face.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

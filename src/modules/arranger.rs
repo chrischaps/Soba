@@ -45,6 +45,7 @@ use std::sync::LazyLock;
 
 use crate::dsp::{
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -399,9 +400,9 @@ pub struct Arranger {
     pending: bool,
     /// The last section has finished, with Loop off.
     ended: bool,
-    prev_clock: bool,
-    prev_reset: bool,
-    prev_jump: bool,
+    clock: Edge,
+    reset: Edge,
+    jump: Edge,
     timer: StepTimer,
     /// Clocks since the first, which ramps count.
     count: u64,
@@ -480,8 +481,6 @@ impl Arranger {
     pub const READOUT_QUEUED: usize = 4;
     /// Which time through the section, from 0.
     pub const READOUT_PASS: usize = 5;
-
-    const GATE_THRESHOLD: f32 = 0.5;
 
     pub fn new() -> Self {
         let mut ports = vec![
@@ -773,7 +772,7 @@ impl DspModule for Arranger {
         params: &[f32],
         context: &ProcessContext,
     ) {
-        let sample = |port: usize, i: usize| inputs.get(port).and_then(|buf| buf.samples.get(i).copied()).unwrap_or(0.0);
+        let sample = |port: usize, i: usize| inputs.get(port).map_or(0.0, |buf| buf.at(i));
         let jump_to = connected_input(inputs, Self::PORT_JUMP_TO);
         let mut glide_rates = [f32::INFINITY; LANES];
         for (lane, rate) in glide_rates.iter_mut().enumerate() {
@@ -784,15 +783,9 @@ impl DspModule for Arranger {
         }
 
         for i in 0..context.block_size {
-            let reset_high = sample(Self::PORT_RESET, i) > Self::GATE_THRESHOLD;
-            let reset_rising = reset_high && !self.prev_reset;
-            self.prev_reset = reset_high;
-            let jump_high = sample(Self::PORT_JUMP, i) > Self::GATE_THRESHOLD;
-            let jump_rising = jump_high && !self.prev_jump;
-            self.prev_jump = jump_high;
-            let clock_high = sample(Self::PORT_CLOCK, i) > Self::GATE_THRESHOLD;
-            let clock_rising = clock_high && !self.prev_clock;
-            self.prev_clock = clock_high;
+            let reset_rising = self.reset.rising(sample(Self::PORT_RESET, i));
+            let jump_rising = self.jump.rising(sample(Self::PORT_JUMP, i));
+            let clock_rising = self.clock.rising(sample(Self::PORT_CLOCK, i));
 
             if reset_rising {
                 self.pending = true;
@@ -807,7 +800,7 @@ impl DspModule for Arranger {
                 }
             }
             if jump_rising {
-                let cv = jump_to.map_or(0.0, |buf| buf.samples.get(i).copied().unwrap_or(0.0));
+                let cv = jump_to.map_or(0.0, |buf| buf.at(i));
                 self.queued = Some(Self::section_for_cv(cv, Self::sections(params)));
             }
             let step_samples = self.step_samples(context);
@@ -888,9 +881,9 @@ impl Arranger {
         Self {
             pending: true,
             ended: false,
-            prev_clock: false,
-            prev_reset: false,
-            prev_jump: false,
+            clock: Edge::LOW,
+            reset: Edge::LOW,
+            jump: Edge::LOW,
             timer: StepTimer::new(),
             count: 0,
             section: 0,

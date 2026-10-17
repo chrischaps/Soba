@@ -382,12 +382,12 @@ impl DspModule for Compressor {
 
             // Get input sample
             let dry = input
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
 
             // Get sidechain sample (normalled from input if not connected)
             let sidechain_sample = sidechain
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(dry);
 
             // Detect the level, and only take its log once it reaches the

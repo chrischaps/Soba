@@ -470,12 +470,12 @@ impl DspModule for Distortion {
             let symmetry = self.symmetry_smooth.next();
 
             // Add CV modulation to drive (bipolar CV, -1 to +1 range)
-            let drive_mod = drive_cv.map_or(0.0, |buf| buf.samples.get(i).copied().unwrap_or(0.0));
+            let drive_mod = drive_cv.map_or(0.0, |buf| buf.at(i));
             let drive = (base_drive + drive_mod * 0.5).clamp(0.0, 1.0);
             let gain = Self::input_gain(distortion_type, drive);
             let offset = if distortion_type == DistortionType::Fold { symmetry } else { 0.0 };
 
-            let dry = audio_in.map_or(0.0, |buf| buf.samples.get(i).copied().unwrap_or(0.0));
+            let dry = audio_in.map_or(0.0, |buf| buf.at(i));
             heard = heard.max(dry.abs());
             self.drive_now = drive;
 

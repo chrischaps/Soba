@@ -17,6 +17,7 @@ use crate::dsp::{
     beat_tracker::BeatTracker,
     context::ProcessContext,
     denormal::flush,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -55,12 +56,14 @@ enum Source {
 /// - **Size** (1-3): How big the face is drawn, set by dragging its corner.
 pub struct Dancer {
     sample_rate: f32,
-    prev_clock: bool,
+    /// The clock input, for its rising edges.
+    clock_edge: Edge,
     /// The patched clock's steps.
     clock: StepTimer,
     /// Clock pulses since the first, `None` before it.
     pulses: Option<u64>,
-    prev_accent: bool,
+    /// The accent input, for its rising edges.
+    accent_edge: Edge,
     /// Accents so far, so the face can tell one it hasn't drawn yet.
     accent_count: u32,
     /// Samples since the last accent, `None` before the first.
@@ -141,10 +144,10 @@ impl Dancer {
     pub fn new() -> Self {
         Self {
             sample_rate: 48000.0,
-            prev_clock: false,
+            clock_edge: Edge::LOW,
             clock: StepTimer::new(),
             pulses: None,
-            prev_accent: false,
+            accent_edge: Edge::LOW,
             accent_count: 0,
             since_accent: None,
             fold: None,
@@ -225,8 +228,6 @@ impl Dancer {
     /// The music's level for no energy and for all of it, in dBFS.
     const QUIET_DB: f32 = -42.0;
     const LOUD_DB: f32 = -8.0;
-
-    const GATE_THRESHOLD: f32 = 0.5;
 
     /// How many beats (or pulses) of `unit_seconds` make one move, as a
     /// power of two: `current` while its move stays danceable, otherwise
@@ -327,27 +328,23 @@ impl DspModule for Dancer {
         let clock_in = connected_input(inputs, Self::PORT_CLOCK);
         let audio_in = connected_input(inputs, Self::PORT_AUDIO);
         let accent_in = connected_input(inputs, Self::PORT_ACCENT);
-        let at = |buf: Option<&SignalBuffer>, i: usize| buf.map_or(0.0, |buf| buf.samples.get(i).copied().unwrap_or(0.0));
+        let at = |buf: Option<&SignalBuffer>, i: usize| buf.map_or(0.0, |buf| buf.at(i));
         let c = self.coefficients;
 
         for i in 0..context.block_size {
             self.clock.tick();
-            let clock = at(clock_in, i) > Self::GATE_THRESHOLD;
-            if clock && !self.prev_clock {
+            if self.clock_edge.rising(at(clock_in, i)) {
                 self.clock.clock();
                 self.pulses = Some(self.pulses.map_or(1, |n| n + 1));
             }
-            self.prev_clock = clock;
 
             if let Some(since) = self.since_accent.as_mut() {
                 *since = since.saturating_add(1);
             }
-            let accent = at(accent_in, i) > Self::GATE_THRESHOLD;
-            if accent && !self.prev_accent {
+            if self.accent_edge.rising(at(accent_in, i)) {
                 self.accent_count = self.accent_count.wrapping_add(1);
                 self.since_accent = Some(0);
             }
-            self.prev_accent = accent;
 
             if audio_in.is_some() {
                 let x = at(audio_in, i);
@@ -393,10 +390,10 @@ impl DspModule for Dancer {
     }
 
     fn reset(&mut self) {
-        self.prev_clock = false;
+        self.clock_edge.reset();
         self.clock.forget();
         self.pulses = None;
-        self.prev_accent = false;
+        self.accent_edge.reset();
         self.accent_count = 0;
         self.since_accent = None;
         self.fold = None;

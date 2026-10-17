@@ -6,6 +6,7 @@ use std::f32::consts::TAU;
 
 use crate::dsp::{
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -117,8 +118,8 @@ pub struct Lfo {
     synced: Option<(f64, f32)>,
     /// The rate it ran at, after Rate CV, at the end of the last block.
     running_rate: f32,
-    /// Previous sync state for edge detection.
-    prev_sync: bool,
+    /// The sync input, for its rising edges.
+    sync: Edge,
     /// Sample rate from last prepare() call.
     sample_rate: f32,
     /// Port definitions.
@@ -142,7 +143,7 @@ impl Lfo {
             free_beats: 0.0,
             synced: None,
             running_rate: 0.0,
-            prev_sync: false,
+            sync: Edge::LOW,
             sample_rate,
             ports: vec![
                 // Input ports
@@ -206,9 +207,6 @@ impl Lfo {
     const PARAM_PHASE: usize = 2;
     const PARAM_BIPOLAR: usize = 3;
     const PARAM_TEMPO_SYNC: usize = 4;
-
-    /// Sync threshold for detecting high/low states.
-    const SYNC_THRESHOLD: f32 = 0.5;
 
     /// How far the beat must step back to count as the transport starting
     /// over: a MIDI clock tick. Smaller steps back are a block's pacing
@@ -318,12 +316,7 @@ impl DspModule for Lfo {
             let phase_offset = self.phase_offset_smooth.next();
 
             // Check for sync reset (rising edge detection)
-            let sync_value = sync_in
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
-                .unwrap_or(0.0);
-            let sync_high = sync_value > Self::SYNC_THRESHOLD;
-            let sync_rising = sync_high && !self.prev_sync;
-            self.prev_sync = sync_high;
+            let sync_rising = self.sync.rising(sync_in.map_or(0.0, |buf| buf.at(i)));
 
             if let Some(cycle_beats) = sync_beats {
                 // The phase is where the beat is in the cycle, so it can't
@@ -369,9 +362,7 @@ impl DspModule for Lfo {
             }
 
             // Get rate CV modulation
-            let rate_cv_value = rate_cv
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
-                .unwrap_or(0.0);
+            let rate_cv_value = rate_cv.map_or(0.0, |buf| buf.at(i));
 
             // Rate CV scales the rate multiplicatively
             // CV of 0 = base rate, CV of +1 = double rate, CV of -1 = half rate
@@ -396,7 +387,7 @@ impl DspModule for Lfo {
         self.origin = 0.0;
         self.last_beat = 0.0;
         self.free_beats = 0.0;
-        self.prev_sync = false;
+        self.sync.reset();
         // Reset smoothed parameters to their current targets
         self.rate_smooth.reset(self.rate_smooth.target());
         self.phase_offset_smooth.reset(self.phase_offset_smooth.target());

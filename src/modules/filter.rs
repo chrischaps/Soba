@@ -287,14 +287,14 @@ impl DspModule for SvfFilter {
 
             // Input with drive, plus the noise floor
             let input = audio_in
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
             let input = fast_tanh(input * drive) + self.noise.sample();
 
             // Cutoff CV adds octaves in the log domain, scaled by its depth
             let cv_depth = self.cv_depth_smooth.next();
             let cutoff_mod = cutoff_cv
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0)
                 * cv_depth;
             let cutoff = (log_cutoff + cutoff_mod)
@@ -303,7 +303,7 @@ impl DspModule for SvfFilter {
 
             // Resonance CV: adds directly to base resonance
             let res_mod = res_cv
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
             let resonance = (base_resonance + res_mod * 0.5).clamp(0.0, 1.0);
             self.running = (cutoff, resonance);

@@ -22,6 +22,7 @@ use std::sync::LazyLock;
 
 use crate::dsp::{
     context::ProcessContext,
+    gate::{Edge, GATE_THRESHOLD},
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -200,8 +201,10 @@ impl Lane {
 pub struct TriggerSequencer {
     /// The next clock plays the first step (at the start, and after a reset).
     pending: bool,
-    prev_clock: bool,
-    prev_reset: bool,
+    /// The clock input, for its rising edges.
+    clock: Edge,
+    /// The reset input, for its rising edges.
+    reset: Edge,
     timer: StepTimer,
     /// Clocks since the first step, which lanes with their own Length count.
     count: u64,
@@ -258,8 +261,6 @@ impl TriggerSequencer {
     pub const READOUT_PATTERN: usize = 2;
     /// The next bar's pattern, + 4 × the bar step, + 64 while Pattern is patched.
     pub const READOUT_BAR: usize = 3;
-
-    const GATE_THRESHOLD: f32 = 0.5;
 
     pub fn new() -> Self {
         let mut ports = vec![
@@ -329,8 +330,8 @@ impl TriggerSequencer {
 
         Self {
             pending: true,
-            prev_clock: false,
-            prev_reset: false,
+            clock: Edge::LOW,
+            reset: Edge::LOW,
             timer: StepTimer::new(),
             count: 0,
             bar_step: 0,
@@ -506,20 +507,16 @@ impl DspModule for TriggerSequencer {
         params: &[f32],
         context: &ProcessContext,
     ) {
-        let sample = |port: usize, i: usize| inputs.get(port).and_then(|buf| buf.samples.get(i).copied()).unwrap_or(0.0);
+        let sample = |port: usize, i: usize| inputs.get(port).map_or(0.0, |buf| buf.at(i));
         let run_in = connected_input(inputs, Self::PORT_RUN);
         let pattern_in = connected_input(inputs, Self::PORT_PATTERN);
         self.pattern_cv = pattern_in.is_some();
 
         for i in 0..context.block_size {
-            let clock_high = sample(Self::PORT_CLOCK, i) > Self::GATE_THRESHOLD;
-            let clock_rising = clock_high && !self.prev_clock;
-            self.prev_clock = clock_high;
-            let reset_high = sample(Self::PORT_RESET, i) > Self::GATE_THRESHOLD;
-            let reset_rising = reset_high && !self.prev_reset;
-            self.prev_reset = reset_high;
-            let running = run_in.is_none_or(|buf| buf.samples.get(i).copied().unwrap_or(1.0) > Self::GATE_THRESHOLD);
-            let cv = pattern_in.map(|buf| buf.samples.get(i).copied().unwrap_or(0.0));
+            let clock_rising = self.clock.rising(sample(Self::PORT_CLOCK, i));
+            let reset_rising = self.reset.rising(sample(Self::PORT_RESET, i));
+            let running = run_in.map_or(1.0, |buf| buf.at(i)) > GATE_THRESHOLD;
+            let cv = pattern_in.map(|buf| buf.at(i));
 
             if reset_rising {
                 self.pending = true;
@@ -575,8 +572,8 @@ impl DspModule for TriggerSequencer {
 
     fn reset(&mut self) {
         self.pending = true;
-        self.prev_clock = false;
-        self.prev_reset = false;
+        self.clock.reset();
+        self.reset.reset();
         self.timer.forget();
         self.count = 0;
         self.bar_step = 0;

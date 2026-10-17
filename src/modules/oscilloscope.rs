@@ -6,6 +6,7 @@
 
 use crate::dsp::{
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -88,8 +89,8 @@ pub struct Oscilloscope {
     sample_rate: f32,
     /// Previous sample value for trigger edge detection.
     prev_trigger_sample: f32,
-    /// Previous external trigger value for edge detection.
-    prev_ext_trigger: f32,
+    /// The external trigger, for its rising edges.
+    ext_trigger: Edge,
     /// Current capture state.
     capture_state: CaptureState,
     /// Position in buffer where trigger occurred.
@@ -128,7 +129,7 @@ impl Oscilloscope {
             write_pos: 0,
             sample_rate: 44100.0,
             prev_trigger_sample: 0.0,
-            prev_ext_trigger: 0.0,
+            ext_trigger: Edge::LOW,
             capture_state: CaptureState::WaitingForTrigger,
             trigger_pos: 0,
             samples_since_capture: 0,
@@ -176,9 +177,6 @@ impl Oscilloscope {
     const PARAM_TRIGGER_MODE: usize = 0;
     const PARAM_TRIGGER_LEVEL: usize = 1;
 
-    /// Threshold for external trigger detection.
-    const EXT_TRIGGER_THRESHOLD: f32 = 0.5;
-
     /// Auto-trigger timeout in samples (about 50ms at 44100Hz).
     const AUTO_TRIGGER_TIMEOUT: usize = 2205;
 
@@ -191,10 +189,7 @@ impl Oscilloscope {
 
     /// Check for rising edge on external trigger.
     fn check_ext_trigger(&mut self, ext_trig_val: f32) -> bool {
-        let triggered = self.prev_ext_trigger < Self::EXT_TRIGGER_THRESHOLD
-            && ext_trig_val >= Self::EXT_TRIGGER_THRESHOLD;
-        self.prev_ext_trigger = ext_trig_val;
-        triggered
+        self.ext_trigger.rising(ext_trig_val)
     }
 
     /// Capture the buffer starting from a specific trigger position.
@@ -273,15 +268,9 @@ impl DspModule for Oscilloscope {
         // Process each sample
         for i in 0..context.block_size {
             // Get sample values
-            let sample1 = input1
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
-                .unwrap_or(0.0);
-            let sample2 = input2
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
-                .unwrap_or(0.0);
-            let ext_trig_val = ext_trigger
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
-                .unwrap_or(0.0);
+            let sample1 = input1.map_or(0.0, |buf| buf.at(i));
+            let sample2 = input2.map_or(0.0, |buf| buf.at(i));
+            let ext_trig_val = ext_trigger.map_or(0.0, |buf| buf.at(i));
 
             // Write to ring buffer
             self.buffer1[self.write_pos] = sample1;
@@ -416,7 +405,7 @@ impl DspModule for Oscilloscope {
         self.buffer2.fill(0.0);
         self.write_pos = 0;
         self.prev_trigger_sample = 0.0;
-        self.prev_ext_trigger = 0.0;
+        self.ext_trigger.reset();
         self.capture_state = CaptureState::WaitingForTrigger;
         self.trigger_pos = 0;
         self.samples_since_capture = 0;

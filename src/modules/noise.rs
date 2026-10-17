@@ -269,7 +269,7 @@ impl DspModule for Noise {
         let rate_cv = connected_input(inputs, Self::PORT_RATE_CV);
 
         let cv_at = |buffer: Option<&SignalBuffer>, i: usize| {
-            buffer.map_or(0.0, |buf| buf.samples.get(i).copied().unwrap_or(0.0))
+            buffer.map_or(0.0, |buf| buf.at(i))
         };
         let sample_rate = self.sample_rate;
         let step_for = |rate: f32| rate.clamp(0.0, Self::MAX_RATE_HZ) / sample_rate;

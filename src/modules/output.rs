@@ -212,15 +212,15 @@ impl DspModule for AudioOutput {
 
             // Get input samples
             let left_sample = left_input
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
 
             let right_sample = right_input
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
 
             let mono_sample = mono_input
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
 
             // Mix: L/R inputs plus mono added to both channels

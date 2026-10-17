@@ -156,7 +156,7 @@ impl DspModule for Vca {
 
             // Get audio input
             let audio = audio_in
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
 
             // Get CV input (defaults to 1.0 when not connected)

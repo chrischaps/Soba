@@ -50,6 +50,7 @@ use std::sync::Arc;
 use crate::dsp::{
     connected_input,
     context::ProcessContext,
+    gate::{Edge, Pulse},
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -370,16 +371,16 @@ pub struct Looper {
     undo_fade: f32,
     /// A Clear waiting for the loop to fade out.
     clear_pending: bool,
-    /// Samples left of the Start pulse.
-    start_pulse: usize,
+    /// The Start trigger.
+    start_pulse: Pulse,
     /// The loop came round: Start pulses from the next sample, where the
     /// top of the loop plays.
     start_due: bool,
 
     // Gates
-    prev_gates: [bool; 4],
+    gates: [Edge; 4],
     prev_pedals: Option<[bool; 4]>,
-    prev_clock: bool,
+    clock: Edge,
     /// Frames since the clock last rose.
     since_pulse: Option<u64>,
     /// The clock's last period, in frames.
@@ -451,11 +452,11 @@ impl Looper {
             play_gain: 0.0,
             undo_fade: 0.0,
             clear_pending: false,
-            start_pulse: 0,
+            start_pulse: Pulse::IDLE,
             start_due: false,
-            prev_gates: [false; 4],
+            gates: [Edge::LOW; 4],
             prev_pedals: None,
-            prev_clock: false,
+            clock: Edge::LOW,
             since_pulse: None,
             pulse_period: None,
             bar: None,
@@ -568,8 +569,6 @@ impl Looper {
     /// Changes to the loop since the module was made or last given a loop
     /// to load: 0 means it holds just what it was given.
     pub const READOUT_EDITS: usize = 8;
-
-    const GATE_THRESHOLD: f32 = 0.5;
 
     /// Where the Looper is in its cycle.
     pub fn state(&self) -> LoopState {
@@ -726,7 +725,7 @@ impl Looper {
         self.state = if self.stop_on_close { LoopState::Stopped } else { LoopState::Playing };
         self.stop_on_close = false;
         if self.head == 0 && self.state == LoopState::Playing {
-            self.start_pulse = self.sample_frames(START_PULSE_SECONDS);
+            self.start_pulse.fire(START_PULSE_SECONDS, self.sample_rate);
         }
         self.bump();
         self.mark_all_dirty();
@@ -759,7 +758,7 @@ impl Looper {
         if self.len > 0 {
             self.state = LoopState::Playing;
             self.head = 0;
-            self.start_pulse = self.sample_frames(START_PULSE_SECONDS);
+            self.start_pulse.fire(START_PULSE_SECONDS, self.sample_rate);
         }
     }
 
@@ -1061,7 +1060,7 @@ impl DspModule for Looper {
             // Never prepared: nothing to record into
             return;
         }
-        let at = |port: usize, i: usize| inputs.get(port).map_or(0.0, |buf| buf.samples.get(i).copied().unwrap_or(0.0));
+        let at = |port: usize, i: usize| inputs.get(port).map_or(0.0, |buf| buf.at(i));
         let left = connected_input(inputs, Self::PORT_IN_L);
         let right = connected_input(inputs, Self::PORT_IN_R);
         // One side patched plays on both
@@ -1106,18 +1105,14 @@ impl DspModule for Looper {
             // Taps: a rising gate, or a footswitch pressed
             let mut taps = [false; 4];
             for (n, tap) in taps.iter_mut().enumerate() {
-                let gate = at(Self::PORT_REC + n, i) > Self::GATE_THRESHOLD;
-                *tap = gate && !self.prev_gates[n];
-                self.prev_gates[n] = gate;
+                *tap = self.gates[n].rising(at(Self::PORT_REC + n, i));
                 if i == 0 && pedals[n] && !prev_pedals[n] {
                     *tap = true;
                 }
             }
 
             // The clock
-            let clock = at(Self::PORT_CLOCK, i) > Self::GATE_THRESHOLD;
-            let pulse = clock && !self.prev_clock;
-            self.prev_clock = clock;
+            let pulse = self.clock.rising(at(Self::PORT_CLOCK, i));
             if pulse {
                 if let Some(since) = self.since_pulse {
                     self.pulse_period = Some(since.max(1));
@@ -1205,7 +1200,7 @@ impl DspModule for Looper {
             // The loop
             if self.start_due {
                 self.start_due = false;
-                self.start_pulse = self.sample_frames(START_PULSE_SECONDS);
+                self.start_pulse.fire(START_PULSE_SECONDS, self.sample_rate);
             }
             let mut heard = [0.0; 2];
             let mut phase = 0.0;
@@ -1279,8 +1274,7 @@ impl DspModule for Looper {
             outputs[Self::OUT_R].samples[i] = input[1] * dry_level + looped[1];
             outputs[Self::OUT_LOOP_L].samples[i] = looped[0];
             outputs[Self::OUT_LOOP_R].samples[i] = looped[1];
-            outputs[Self::OUT_START].samples[i] = if self.start_pulse > 0 { 1.0 } else { 0.0 };
-            self.start_pulse = self.start_pulse.saturating_sub(1);
+            outputs[Self::OUT_START].samples[i] = self.start_pulse.sample();
             outputs[Self::OUT_PHASE].samples[i] = phase;
 
             if let Some(since) = self.since_pulse.as_mut() {
@@ -1316,10 +1310,10 @@ impl DspModule for Looper {
         self.last_segment = None;
         self.play_gain = 0.0;
         self.undo_fade = 0.0;
-        self.start_pulse = 0;
+        self.start_pulse.clear();
         self.start_due = false;
-        self.prev_gates = [false; 4];
-        self.prev_clock = false;
+        self.gates = [Edge::LOW; 4];
+        self.clock.reset();
         self.since_pulse = None;
         self.speculating = false;
         self.loop_level.reset(self.loop_level.target());

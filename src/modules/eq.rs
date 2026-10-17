@@ -537,7 +537,7 @@ impl DspModule for ParametricEq {
 
                 // Get input sample
                 let input = audio_in
-                    .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
+                    .map(|buf| buf.at(i))
                     .unwrap_or(0.0);
 
                 // Cascade through all three filter bands

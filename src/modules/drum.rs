@@ -16,6 +16,7 @@ use super::noise::{soft_ceiling, Pcg32};
 use crate::dsp::{
     connected_input,
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -550,8 +551,8 @@ pub struct Drum {
     declick_step: f32,
     last_out: f32,
 
-    prev_trig: bool,
-    prev_choke: bool,
+    trig_edge: Edge,
+    choke_edge: Edge,
     level: SmoothedValue,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
@@ -595,8 +596,8 @@ impl Drum {
             declick: 0.0,
             declick_step: 0.0,
             last_out: 0.0,
-            prev_trig: false,
-            prev_choke: false,
+            trig_edge: Edge::LOW,
+            choke_edge: Edge::LOW,
             level: SmoothedValue::with_default_smoothing(0.8, sample_rate),
             ports: vec![
                 PortDefinition::input_with_default("trig", "Trig", SignalType::Gate, 0.0).describe("A rising edge strikes the drum; patch a sequencer's Gate"),
@@ -644,8 +645,6 @@ impl Drum {
     pub const READOUT_ACCENT: usize = 1;
     pub const READOUT_CHOKED: usize = 2;
     pub const READOUT_LEVEL: usize = 3;
-
-    const GATE_THRESHOLD: f32 = 0.5;
 
     /// The type and strike the knobs set, before any CV.
     pub fn knobs(params: &[f32]) -> (DrumType, Strike) {
@@ -880,15 +879,12 @@ impl DspModule for Drum {
         let choke = connected_input(inputs, Self::PORT_CHOKE);
         let tune_cv = connected_input(inputs, Self::PORT_TUNE_CV);
         let decay_cv = connected_input(inputs, Self::PORT_DECAY_CV);
-        let at = |buffer: Option<&SignalBuffer>, i: usize, default: f32| {
-            buffer.map_or(default, |buf| buf.samples.get(i).copied().unwrap_or(default))
-        };
+        let at = |buffer: Option<&SignalBuffer>, i: usize, default: f32| buffer.map_or(default, |buf| buf.at(i));
         let (kind, knobs) = Self::knobs(params);
         self.level.set_target(params[Self::PARAM_LEVEL].clamp(0.0, 1.0));
 
         for i in 0..context.block_size {
-            let trig_high = at(trig, i, 0.0) > Self::GATE_THRESHOLD;
-            if trig_high && !self.prev_trig {
+            if self.trig_edge.rising(at(trig, i, 0.0)) {
                 let hit = at(accent, i, 1.0).clamp(0.0, 1.0);
                 let strike = Strike {
                     tune: knobs.tune + 12.0 * at(tune_cv, i, 0.0),
@@ -899,13 +895,11 @@ impl DspModule for Drum {
                 self.accent = hit;
                 self.strike(Voicing::new(kind, strike));
             }
-            self.prev_trig = trig_high;
 
-            let choke_high = at(choke, i, 0.0) > Self::GATE_THRESHOLD;
-            if choke_high && !self.prev_choke && self.playing && self.choked_at.is_none() {
+            let choke_rising = self.choke_edge.rising(at(choke, i, 0.0));
+            if choke_rising && self.playing && self.choked_at.is_none() {
                 self.choked_at = Some(self.elapsed);
             }
-            self.prev_choke = choke_high;
 
             let level = self.level.next();
             let mut sample = 0.0;
@@ -953,8 +947,8 @@ impl DspModule for Drum {
         self.choke = 1.0;
         self.declick = 0.0;
         self.last_out = 0.0;
-        self.prev_trig = false;
-        self.prev_choke = false;
+        self.trig_edge.reset();
+        self.choke_edge.reset();
     }
 
     fn seed(&mut self, seed: u64) {

@@ -50,6 +50,7 @@ use std::sync::{Arc, LazyLock};
 use crate::dsp::{
     connected_input,
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -312,8 +313,8 @@ pub struct Chopper {
     timer: StepTimer,
     /// Pulses since the first after a reset, or `None` before it.
     pulses: Option<u64>,
-    prev_clock: bool,
-    prev_reset: bool,
+    clock: Edge,
+    reset: Edge,
     /// The last hit played: the pass through the loop, the step, and which
     /// of its repeats.
     last_hit: Option<(u64, usize, u8)>,
@@ -395,7 +396,6 @@ impl Chopper {
     pub const READOUT_REC_BEAT: usize = Sampler::READOUT_REC_BEAT;
     pub const READOUT_REC_BAR: usize = Sampler::READOUT_REC_BAR;
 
-    const GATE_THRESHOLD: f32 = 0.5;
     const SEED: u32 = 0x2545_F491;
 
     /// The parameter of step `index` (from 0).
@@ -466,8 +466,8 @@ impl Chopper {
             level: SmoothedValue::with_default_smoothing(0.8, sample_rate),
             timer: StepTimer::new(),
             pulses: None,
-            prev_clock: false,
-            prev_reset: false,
+            clock: Edge::LOW,
+            reset: Edge::LOW,
             last_hit: None,
             step_slice: 0,
             shown_step: None,
@@ -755,7 +755,7 @@ impl DspModule for Chopper {
         let clock = connected_input(inputs, Self::PORT_CLOCK);
         let reset = connected_input(inputs, Self::PORT_RESET);
         let slice_in = connected_input(inputs, Self::PORT_SLICE);
-        let read = |buffer: Option<&SignalBuffer>, i: usize| buffer.map_or(0.0, |b| b.samples.get(i).copied().unwrap_or(0.0));
+        let read = |buffer: Option<&SignalBuffer>, i: usize| buffer.map_or(0.0, |b| b.at(i));
 
         let pulse_beats = Self::pulse_beats(params[Self::PARAM_PULSE]);
         let mut loop_beats = self.loop_beats(params[Self::PARAM_BEATS]);
@@ -784,19 +784,15 @@ impl DspModule for Chopper {
         let end_fade = (FADE_SECONDS * self.sample_rate) as f64;
 
         for i in 0..context.block_size {
-            let reset_high = read(reset, i) > Self::GATE_THRESHOLD;
-            if reset_high && !self.prev_reset {
+            if self.reset.rising(read(reset, i)) {
                 self.rewind();
                 self.release_all(FADE_SECONDS);
             }
-            self.prev_reset = reset_high;
 
-            let clock_high = read(clock, i) > Self::GATE_THRESHOLD;
-            if clock_high && !self.prev_clock {
+            if self.clock.rising(read(clock, i)) {
                 self.timer.clock();
                 self.pulses = Some(self.pulses.map_or(0, |n| n + 1));
             }
-            self.prev_clock = clock_high;
 
             // Where the loop is: the beats since its top came round (a take
             // that ends just before the beat waits for it)
@@ -823,7 +819,7 @@ impl DspModule for Chopper {
                     let turn = (to - from) * loop_samples / repeat as f64;
                     let due = from + (to - from) * hit as f64 / repeat as f64;
                     let late = (phase - due) * loop_samples;
-                    let cv = slice_in.map(|_| read(slice_in, i));
+                    let cv = slice_in.map(|b| b.at(i));
                     self.strike(params, &slices, index, hit, turn, late, cv);
                 }
             }

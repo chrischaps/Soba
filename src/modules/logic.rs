@@ -8,6 +8,7 @@
 use crate::dsp::{
     connected_input,
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -35,6 +36,9 @@ use crate::dsp::{
 pub struct Logic {
     /// Whether Above is high.
     above: bool,
+    /// The A and B inputs, heard as gates.
+    a: Edge,
+    b: Edge,
     /// The last CV sample, for the display.
     last_cv: f32,
     /// The last sample's A and B, for the display.
@@ -49,6 +53,8 @@ impl Logic {
     pub fn new() -> Self {
         Self {
             above: false,
+            a: Edge::LOW,
+            b: Edge::LOW,
             last_cv: 0.0,
             last_a: false,
             last_b: false,
@@ -85,8 +91,6 @@ impl Logic {
     pub const READOUT_ABOVE: usize = 1;
     pub const READOUT_A: usize = 2;
     pub const READOUT_B: usize = 3;
-
-    const GATE_THRESHOLD: f32 = 0.5;
 
     /// How far past Threshold CV must go to switch Above, either way.
     pub const HYSTERESIS: f32 = 0.01;
@@ -127,7 +131,7 @@ impl DspModule for Logic {
         context: &ProcessContext,
     ) {
         let threshold = params[Self::PARAM_THRESHOLD];
-        let at = |buffer: Option<&SignalBuffer>, i: usize| buffer.map_or(0.0, |buf| buf.samples.get(i).copied().unwrap_or(0.0));
+        let at = |buffer: Option<&SignalBuffer>, i: usize| buffer.map_or(0.0, |buf| buf.at(i));
         let a_in = inputs.get(Self::PORT_A).copied();
         let b_in = connected_input(inputs, Self::PORT_B);
         let cv_in = inputs.get(Self::PORT_CV).copied();
@@ -142,11 +146,18 @@ impl DspModule for Logic {
             }
             self.last_cv = cv;
 
-            let a = at(a_in, i) > Self::GATE_THRESHOLD;
+            self.a.tick(at(a_in, i));
+            let a = self.a.is_high();
             // Normalled: an empty B jack reads Above
             let b = match b_in {
-                Some(buf) => at(Some(buf), i) > Self::GATE_THRESHOLD,
-                None => self.above,
+                Some(buf) => {
+                    self.b.tick(buf.at(i));
+                    self.b.is_high()
+                }
+                None => {
+                    self.b.reset();
+                    self.above
+                }
             };
             (self.last_a, self.last_b) = (a, b);
 
@@ -160,6 +171,8 @@ impl DspModule for Logic {
 
     fn reset(&mut self) {
         self.above = false;
+        self.a.reset();
+        self.b.reset();
         self.last_cv = 0.0;
         self.last_a = false;
         self.last_b = false;

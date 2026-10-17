@@ -7,6 +7,7 @@
 use crate::dsp::{
     connected_input,
     context::ProcessContext,
+    gate::Pulse,
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -125,13 +126,13 @@ pub struct Quantizer {
     note: Option<i32>,
     /// The note Out last carried, Transpose included, for Trig.
     out_note: Option<i32>,
-    /// Samples left of the current Trig pulse.
-    trig_remaining: u32,
+    /// The Trig pulse.
+    trig: Pulse,
     /// A new note arrived mid-pulse: drop Trig for a sample so the next
     /// pulse has an edge of its own.
     trig_gap: bool,
-    /// Trig's length in samples, set from the sample rate.
-    trig_samples: u32,
+    /// Sample rate from the last prepare() call.
+    sample_rate: f32,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
 }
@@ -142,9 +143,9 @@ impl Quantizer {
         let mut quantizer = Self {
             note: None,
             out_note: None,
-            trig_remaining: 0,
+            trig: Pulse::IDLE,
             trig_gap: false,
-            trig_samples: 0,
+            sample_rate: 44100.0,
             ports: vec![
                 PortDefinition::input_with_default("in", "In", SignalType::Control, 0.0).describe("V/Oct pitch to snap to the scale, such as a random voltage or an LFO"),
                 PortDefinition::input_with_default("transpose_cv", "Transpose", SignalType::Control, 0.0).describe("V/Oct added to the Transpose knob: a sequencer's pitch here changes key"),
@@ -203,18 +204,13 @@ impl Quantizer {
             self.trig_gap = false;
             return 0.0;
         }
-        if self.trig_remaining > 0 {
-            self.trig_remaining -= 1;
-            1.0
-        } else {
-            0.0
-        }
+        self.trig.sample()
     }
 
     /// Starts a Trig pulse, with a one-sample gap first if one is running.
     fn fire_trig(&mut self) {
-        self.trig_gap = self.trig_remaining > 0;
-        self.trig_remaining = self.trig_samples;
+        self.trig_gap = self.trig.is_high();
+        self.trig.fire(Self::TRIG_SECONDS, self.sample_rate);
     }
 }
 
@@ -244,7 +240,7 @@ impl DspModule for Quantizer {
     }
 
     fn prepare(&mut self, sample_rate: f32, _max_block_size: usize) {
-        self.trig_samples = (Self::TRIG_SECONDS * sample_rate).round().max(1.0) as u32;
+        self.sample_rate = sample_rate;
     }
 
     fn process(
@@ -265,9 +261,7 @@ impl DspModule for Quantizer {
 
         let pitch_in = inputs.get(Self::PORT_IN);
         let transpose_cv = connected_input(inputs, Self::PORT_TRANSPOSE_CV);
-        let at = |buffer: Option<&&SignalBuffer>, i: usize| {
-            buffer.map_or(0.0, |buf| buf.samples.get(i).copied().unwrap_or(0.0))
-        };
+        let at = |buffer: Option<&&SignalBuffer>, i: usize| buffer.map_or(0.0, |buf| buf.at(i));
 
         for i in 0..context.block_size {
             let semitones = at(pitch_in, i) * 12.0;
@@ -293,7 +287,7 @@ impl DspModule for Quantizer {
     fn reset(&mut self) {
         self.note = None;
         self.out_note = None;
-        self.trig_remaining = 0;
+        self.trig.clear();
         self.trig_gap = false;
     }
 }
