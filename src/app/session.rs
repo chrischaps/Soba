@@ -147,6 +147,9 @@ pub struct Autosave {
     pub example: Option<String>,
     /// The patch, as patch-file JSON.
     patch: String,
+    /// What loading `path` left out, which saving over it would lose.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dropped: Vec<String>,
 }
 
 impl Autosave {
@@ -157,7 +160,13 @@ impl Autosave {
             name: patch.name.clone(),
             example,
             patch: serde_json::to_string(patch)?,
+            dropped: Vec::new(),
         })
+    }
+
+    /// The autosave of a patch whose file has `dropped`, which loading it left out.
+    pub fn with_dropped(self, dropped: Vec<String>) -> Self {
+        Self { dropped, ..self }
     }
 
     pub fn patch(&self) -> Result<Patch, PatchError> {

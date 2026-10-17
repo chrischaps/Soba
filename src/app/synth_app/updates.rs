@@ -131,6 +131,7 @@ impl SynthApp {
         let patch = self.create_patch(&self.patch_title());
         let example = self.current_example.map(|e| e.name.to_string());
         let autosave = Autosave::new(&patch, self.current_patch_path.clone(), example).map_err(|e| e.to_string())?;
+        let autosave = autosave.with_dropped(self.dropped_on_load.clone());
         // The view at the top of the patch; inside a group, it opens at the top
         let view = (self.level_trail.is_empty() && self.editor_rect.is_positive()).then(|| {
             let center = self.screen_to_patch(self.editor_rect.center());

@@ -64,6 +64,7 @@ mod lessons;
 #[cfg(feature = "ableton-link")]
 mod link_follow;
 mod loops;
+mod lossy_load;
 mod mutating;
 mod scenes;
 mod share;
@@ -181,6 +182,9 @@ pub struct SynthApp {
 
     /// Problems skipped while loading the current patch, shown in the status bar.
     load_warnings: Vec<String>,
+    /// What loading the current file left out (a newer Soba's modules,
+    /// say), which saving over it would lose. See `lossy_load`.
+    dropped_on_load: Vec<String>,
 
     /// Currently pressed keyboard keys for virtual keyboard.
     /// Stores (relative_note, egui::Key) in order of press for key priority.
@@ -505,6 +509,7 @@ impl SynthApp {
             status_message: None,
             status: None,
             load_warnings: Vec::new(),
+            dropped_on_load: Vec::new(),
             pressed_keys: Vec::new(),
             last_gate_on: None,
             gate_held_high: false,
@@ -2820,6 +2825,10 @@ impl SynthApp {
         // Scenes name the modules by their new IDs
         crate::persistence::graph_io::remap_scenes(&mut self.graph_state.graph, &staged.nodes, |n| self.user_state.get_engine_node_id(n));
 
+        // Everything the build skipped is missing from the graph, so from
+        // anything saved from it. A sample that isn't there is still named
+        self.dropped_on_load = staged.warnings.clone();
+
         // Samplers' files, found from where the patch is
         let sample_warnings = self.resolve_samples(&staged.nodes, base);
         staged.warnings.extend(sample_warnings);
@@ -2895,6 +2904,7 @@ impl SynthApp {
         self.mark_saved();
         self.opened_loops();
         self.load_warnings.clear();
+        self.dropped_on_load.clear();
         self.current_patch_path = None;
         self.current_example = None;
         self.status_message = Some("New patch created".to_string());
@@ -3204,8 +3214,7 @@ impl SynthApp {
     /// Quick save to the current path, or show save dialog if no path.
     /// Returns whether the patch was saved.
     fn quick_save(&mut self) -> bool {
-        // In the browser the patch's path is just a name: saving downloads
-        if let Some(path) = self.current_patch_path.clone().filter(|_| !WEB) {
+        if let Some(path) = self.quick_save_path() {
             let name = path.file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("Untitled");
@@ -3226,12 +3235,15 @@ impl SynthApp {
                 }
             }
         } else {
+            self.explain_save_as();
             self.show_save_dialog()
         }
     }
 
     /// Notes a successful save to `path`.
     fn saved_as(&mut self, path: &Path) {
+        // The file holds the patch as it is now, so nothing more is lost by saving over it
+        self.dropped_on_load.clear();
         // Edits made this frame are in the file, so they're in the history first
         self.sync_history();
         self.mark_saved();
@@ -3361,6 +3373,8 @@ impl SynthApp {
                 self.current_example = autosave.example.as_deref()
                     .and_then(|name| EXAMPLES.iter().find(|e| e.name == name));
                 self.history.mark_unsaved();
+                // What its file had that the autosave never did
+                self.dropped_on_load = autosave.dropped.clone();
                 self.status_message = Some(format!("Recovered unsaved changes to {}", autosave.name));
                 self.show_load_warnings(warnings);
             }
@@ -4533,7 +4547,9 @@ impl eframe::App for SynthApp {
         } else if self.has_unsaved_changes() && (!self.allow_close || self.resuming) {
             let patch = self.create_patch(&self.patch_title());
             let example = self.current_example.map(|e| e.name.to_string());
-            Autosave::new(&patch, self.current_patch_path.clone(), example).ok()
+            Autosave::new(&patch, self.current_patch_path.clone(), example)
+                .ok()
+                .map(|autosave| autosave.with_dropped(self.dropped_on_load.clone()))
         } else {
             // Saved, or let go on the way out. A restart into another
             // version keeps it, in case the next copy doesn't start
