@@ -1,5 +1,7 @@
 # Future Customizations
 
+> **Historical.** This made the case for forking `egui_node_graph2`. The fork is done (`github.com/chrischaps/egui_node_graph2`, a git dependency in `Cargo.toml`), and the cables, jacks, nodes and widgets it asks for are drawn now (see `src/graph/` and `src/widgets/`). The unchecked boxes below were not kept up to date; kept for its reasoning, not as a to-do list.
+
 This document tracks visual and functional customizations that would require forking or modifying `egui_node_graph2` to achieve the aesthetic shown in the concept image.
 
 ## Why Fork?

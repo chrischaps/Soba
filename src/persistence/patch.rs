@@ -279,7 +279,7 @@ pub struct GroupData {
 }
 
 /// One of a group's jacks: its name and the signal it carries
-/// ("Audio", "Control", "Gate" or "MIDI").
+/// ("Audio", "Control", "Gate", "MIDI" or "Bus").
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct JackData {
     pub name: String,

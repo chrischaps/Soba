@@ -1,5 +1,7 @@
 # Soba - Implementation Plan
 
+> **Historical.** This is the plan the project started from (January 2026, as Modular Synth), kept for its reasoning. The code has moved on: the versions below are now egui/eframe 0.30, cpal 0.18 and our fork of egui_node_graph2 (0.7, a git dependency); there is no `registry.rs` (modules register in `src/modules/mod.rs`); and the work runs to fourteen phases, not six (the `phase:*` issue labels). Read the code, `CLAUDE.md` and the manual in `docs/` for how things are now.
+
 ## Overview
 
 A node-based modular synthesizer in Rust with a polished visual interface inspired by the provided concept art. Unlike VCV Rack's hardware skeuomorphism, this takes a cleaner node-graph approach while retaining rich visual feedback (waveform displays, meters, custom widgets).

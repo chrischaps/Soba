@@ -38,6 +38,7 @@
 | Control | Orange | 0.0-1.0 or -1.0-1.0  | Modulation CV      |
 | Gate    | Green  | 0.0 or 1.0           | On/off triggers    |
 | MIDI    | Purple | Structured events    | Note/CC data       |
+| Bus     | Steel  | Stereo pair + send   | A whole mix, Mixer to Mixer (connects only to Bus) |
 
 ## Module Categories (Color-Coded Headers)
 
@@ -56,32 +57,34 @@ These are `ModuleCategory::color` (`src/dsp/module_trait.rs`). Signal colours li
 src/
 ├── main.rs              # Entry point, egui app setup
 ├── lib.rs               # Module declarations
-├── app/                 # UI application, theme
-├── graph/               # Node graph (egui_node_graph2 integration)
+├── app/                 # UI application, theme, capture, session
+├── graph/               # Node graph (egui_node_graph2 integration), module faces and displays
 ├── widgets/             # Custom controls (knob, fader, displays)
 ├── engine/              # Audio engine, graph processor, commands
 ├── dsp/                 # DspModule trait, ports, parameters, signals
-├── modules/             # Built-in modules (osc, filter, env, lfo, output)
-└── persistence/         # Patch save/load (JSON)
+├── modules/             # Built-in modules; the registry is in modules/mod.rs
+├── persistence/         # Patch save/load (JSON), format versions
+├── link/                # Link Out to Seoul (OSC and MIDI)
+├── ableton_link.rs      # Ableton Link tempo sync (the `ableton-link` feature)
+├── hosted.rs            # Running inside a DAW as the CLAP plugin
+└── bin/render.rs        # Offline patch-to-WAV renderer
+plugin/                  # The CLAP plugin
+docs/                    # The mdBook user manual
+tools/                   # claim.py, nightly.py, showcase/ capture and picture tools
 ```
 
 ## Tech Stack
 
-- **eframe/egui 0.29**: Immediate-mode GUI
-- **egui_node_graph2 0.5**: Node editor foundation
-- **cpal 0.15**: Cross-platform audio I/O
+- **eframe/egui 0.30**: Immediate-mode GUI
+- **egui_node_graph2 0.7 (our fork)**: Node editor foundation, from `github.com/chrischaps/egui_node_graph2` (a git dependency, checked out beside this repo at `../egui_node_graph2`). Cable glow, jacks and node drawing hooks live there
+- **cpal 0.18**: Cross-platform audio I/O (ASIO behind the `asio` feature)
+- **midir 0.11**: MIDI in and out
 - **rtrb 0.3**: Lock-free ring buffer for thread communication
 - **serde/serde_json**: Patch serialization
 
 ## Development Phases
 
-Issues are organized into 6 phases:
-1. **Foundation**: Project setup, core types, basic audio, minimal window
-2. **Module System**: Registry, oscillator, output, command channel, audio graph
-3. **Node Graph UI**: egui_node_graph2 integration, templates, connections
-4. **Custom Rendering**: Styled nodes, cables, widgets
-5. **Complete Modules**: Filter, envelope, LFO, waveforms
-6. **Polish**: Save/load, smoothing, keyboard input, CPU metering
+Issues carry a `phase:<n>-<name>` label; `gh label list --search phase` lists them all (fourteen so far, from `phase:1-foundation` to `phase:14-make-music`). Audit issues (`audit`) have no phase. A commit's `[Phase X]` tag names the phase of the issue it closes, or `[Polish]`/`[Docs]` for work outside one.
 
 ---
 
@@ -108,7 +111,7 @@ When asked to implement the next issue, follow this workflow:
 ### 1. Find the Next Issue
 
 ```bash
-gh issue list --state open --limit 30 --search "-label:deferred -label:claimed"
+gh issue list --state open --limit 100 --search "-label:deferred -label:claimed"
 ```
 
 The **lowest issue number** is the next to implement. Issues are ordered by phase and dependency. Issues labeled `deferred` are parked: skip them unless Chris asks for one by number. Issues labeled `claimed` are taken (`gh issue list --label claimed` lists them). If the lowest one is already claimed on this machine (see `git worktree list` / `git branch`), take the next one that doesn't depend on it. Then claim yours: `python tools/claim.py <n>`. An open `ci-failure` or `nightly-failure` issue comes before all of them, because master is broken.
@@ -128,7 +131,7 @@ Understand:
 ### 3. Implement the Issue
 
 - Read existing code before modifying
-- Follow Rust idioms and the patterns established in PLAN.md
+- Follow Rust idioms and the patterns in the code around you (PLAN.md is the original plan, kept for history; the code has moved on)
 - Keep the lock-free constraint in mind for audio code (no allocations in audio thread)
 - Use the signal type colors consistently
 
@@ -335,5 +338,7 @@ From the concept image Chris provided:
 
 ## References
 
-- **PLAN.md**: Detailed implementation plan with all specifications
-- **Claude's Vault**: `~\dev\Claude's Vault\Modular Synth Project - 2026-01-20.md` has project context
+- **PLAN.md**: The original implementation plan (historical: the code is the reference now)
+- **FUTURE_CUSTOMIZATIONS.md**: The original case for forking egui_node_graph2 (historical: the fork is done)
+- **docs/**: The user manual, one page per module
+- **Claude's Vault**: `~\OneDrive\Documents\Claude's Vault`; `Modular Synth Project - 2026-01-20.md` has the early project context, and the `Soba ...` notes the later work
