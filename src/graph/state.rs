@@ -250,6 +250,10 @@ pub struct SynthGraphState {
     /// events. Key: engine node ID.
     pub readouts: HashMap<EngineNodeId, Readout>,
 
+    /// When each module last made a NaN and was reset, fed by ModuleFault
+    /// events, for its title bar to flash.
+    pub faults: super::fault_flash::ModuleFaults,
+
     /// What each filter is fed and lets through, band by band, for its
     /// display. Fed from the engine's spectrum taps once a frame.
     pub spectra: super::filter_spectrum::FilterSpectra,
@@ -355,6 +359,7 @@ impl Default for SynthGraphState {
             output_meter: LevelMeter::default(),
             module_meters: HashMap::new(),
             readouts: HashMap::new(),
+            faults: Default::default(),
             spectra: Default::default(),
             audio_input_name: None,
             samples: Default::default(),

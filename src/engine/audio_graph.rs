@@ -914,6 +914,7 @@ impl AudioGraph {
                 dry,
                 hears_live: live,
                 spectrum: spec.spectrum_watch(node_id, &self.connections),
+                faulted: false,
             });
         }
 

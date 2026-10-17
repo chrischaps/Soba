@@ -1912,6 +1912,15 @@ impl SynthApp {
                         // Where a Sampler's file heard from its face has got to
                         cue::follow(&mut self.user_state, node_id, place);
                     }
+                    crate::engine::EngineEvent::ModuleFault { node_id } => {
+                        // A module made a NaN: its title bar flashes, and the
+                        // first time the status bar says which
+                        if self.user_state.faults.note(node_id) {
+                            let node = self.user_state.node_id_map.iter().find(|&(_, &id)| id == node_id).map(|(&node, _)| node);
+                            let name = node.and_then(|node| self.graph_state.graph.nodes.get(node)).map(|node| node.label.clone());
+                            self.status_message = Some(crate::graph::fault_flash::status(name.as_deref()));
+                        }
+                    }
                     // Other events are not currently handled by the app
                     // (Started, Stopped, Error)
                     _ => {}

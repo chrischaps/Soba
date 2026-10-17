@@ -390,6 +390,23 @@ mod tests {
         assert_eq!(decoded.sample.left(), &[0.5, -1.0, 0.0]);
     }
 
+    #[test]
+    fn a_float_wav_holding_nan_or_infinity_decodes_finite() {
+        let spec = hound::WavSpec { channels: 1, sample_rate: 48000, bits_per_sample: 32, sample_format: hound::SampleFormat::Float };
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        {
+            let mut writer = hound::WavWriter::new(&mut bytes, spec).unwrap();
+            for s in [0.5f32, f32::NAN, f32::INFINITY, -1e30, 2.0] {
+                writer.write_sample(s).unwrap();
+            }
+            writer.finalize().unwrap();
+        }
+        let decoded = decode_wav(std::io::Cursor::new(bytes.into_inner())).unwrap();
+        // Past full scale is kept, up to the ceiling; NaN and infinity are silence
+        let ceiling = crate::dsp::finite::SAMPLE_CEILING;
+        assert_eq!(decoded.sample.left(), &[0.5, 0.0, 0.0, -ceiling, 2.0]);
+    }
+
     /// Peak level and frame count of a fixture, read as a Sampler reads it.
     fn fixture(name: &str) -> SampleData {
         read_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)).unwrap().sample

@@ -15,6 +15,8 @@ pub mod latency;
 pub mod midi_engine;
 pub mod midi_scheduler;
 mod monitor_board;
+#[cfg(test)]
+mod nan_containment;
 pub mod offline;
 pub mod probe;
 pub mod recorder;

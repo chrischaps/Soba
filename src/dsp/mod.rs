@@ -9,6 +9,7 @@ pub mod bypass;
 pub mod context;
 pub mod denormal;
 pub mod dynamics;
+pub mod finite;
 pub mod loudness;
 pub mod module_trait;
 pub mod parameter;

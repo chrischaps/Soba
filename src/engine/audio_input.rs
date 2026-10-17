@@ -59,6 +59,7 @@ use rtrb::{Consumer, Producer, RingBuffer};
 use web_time::Instant;
 
 use super::latency::LatencyGauge;
+use crate::dsp::finite::finite;
 use crate::dsp::primitives::hermite;
 
 /// How much audio the ring can hold, in seconds. Far more than the jitter
@@ -189,9 +190,10 @@ impl InputSender {
 
     /// Writes one callback's input into the ring: see [`push`](Self::push).
     fn write<T: Copy>(&mut self, data: &[T], channels: usize, to_f32: impl Fn(T) -> f32) {
+        // A driver's NaN or wild value goes no further than here
         let stereo = |frame: &[T]| {
-            let left = to_f32(frame[0]);
-            [left, if channels > 1 { to_f32(frame[1]) } else { left }]
+            let left = finite(to_f32(frame[0]));
+            [left, if channels > 1 { finite(to_f32(frame[1])) } else { left }]
         };
         let Self { producer, stats, resampler, .. } = self;
 

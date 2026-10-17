@@ -303,6 +303,7 @@ impl AudioProcessor {
         self.plan.publish_monitors();
         self.send_scope_captures();
         self.send_output_level();
+        self.send_faults();
 
         // Calculate CPU load
         let elapsed = start_time.elapsed();
@@ -351,6 +352,7 @@ impl AudioProcessor {
         self.plan.publish_monitors();
         self.send_scope_captures();
         self.send_output_level();
+        self.send_faults();
     }
 
     /// Runs the graph over a buffer in plan-sized blocks, each with the MIDI
@@ -432,6 +434,12 @@ impl AudioProcessor {
         if let Some(levels) = self.plan.take_output_levels() {
             self.engine_handle.send_event_lossy(EngineEvent::OutputLevel(levels));
         }
+    }
+
+    /// Tells the UI which modules made a NaN or infinity this callback.
+    fn send_faults(&mut self) {
+        let Self { plan, engine_handle, .. } = self;
+        plan.take_faults(|node_id| engine_handle.send_event_lossy(EngineEvent::ModuleFault { node_id }));
     }
 
     /// Applies all pending messages from the UI thread, then does a

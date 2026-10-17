@@ -31,6 +31,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use crate::dsp::{Audition, DspModule, FinishedTake, OutputLevels, ProcessContext, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
+use crate::dsp::finite::all_finite;
 use crate::dsp::primitives::Markers;
 use crate::engine::commands::{ChannelPeaks, NodeId, PortIndex};
 use crate::engine::monitor_board::MonitorWriter;
@@ -96,6 +97,9 @@ pub(crate) struct PlanNode {
     pub(crate) hears_live: bool,
     /// Where its display's spectra are kept, for a filter.
     pub(crate) spectrum: Option<SpectrumWatch>,
+    /// Whether it made a NaN or infinity since [`GraphPlan::take_faults`]
+    /// last asked, and was reset for it.
+    pub(crate) faulted: bool,
 }
 
 #[cfg(test)]
@@ -114,6 +118,7 @@ impl PlanNode {
             dry: Vec::new(),
             hears_live: false,
             spectrum: None,
+            faulted: false,
         }
     }
 }
@@ -503,6 +508,15 @@ impl GraphPlan {
             if node.wet != target {
                 node.wet = crossfade(own, &node.dry, inputs, node.wet, target, fade_step);
             }
+            if !outputs_finite(own) {
+                // A NaN would latch in every filter and delay downstream, and
+                // in this module's own state: silence the block and start over
+                for buffer in own.iter_mut() {
+                    buffer.clear();
+                }
+                module.reset();
+                node.faulted = true;
+            }
             watch_spectrum(&node.spectrum, inputs, own, context.sample_rate);
         }
 
@@ -634,6 +648,18 @@ impl GraphPlan {
     /// Calls `f` for each oscilloscope with a new capture ready.
     ///
     /// REAL-TIME SAFE: captures are lent, not copied.
+    /// Hands over each module that made a NaN or infinity since the last
+    /// call (and was silenced and reset for it), clearing the record.
+    ///
+    /// REAL-TIME SAFE.
+    pub fn take_faults(&mut self, mut f: impl FnMut(NodeId)) {
+        for node in &mut self.nodes {
+            if std::mem::take(&mut node.faulted) {
+                f(node.node_id);
+            }
+        }
+    }
+
     pub fn take_scope_captures(&mut self, mut f: impl FnMut(NodeId, &[f32], &[f32], bool)) {
         for node in &mut self.nodes {
             if let Some(module) = node.module.as_mut() {
@@ -643,6 +669,13 @@ impl GraphPlan {
             }
         }
     }
+}
+
+/// Whether every channel a module's outputs carried this block is finite.
+///
+/// REAL-TIME SAFE.
+fn outputs_finite(outputs: &[SignalBuffer]) -> bool {
+    outputs.iter().all(|buffer| (0..buffer.channels()).all(|channel| all_finite(&buffer.voice(channel).samples)))
 }
 
 /// Copies a watched node's input and heard output to its spectrum tap.

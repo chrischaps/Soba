@@ -12,6 +12,7 @@ use std::sync::Arc;
 use crate::persistence::sample_files::{self, SampleBase};
 use crate::persistence::{compile_patch, CompiledPatch, Patch, PatchError};
 
+use super::commands::NodeId;
 use super::{create_module_registry, AudioGraph, AudioMessage, EngineCommand, GraphPlan};
 
 /// Rendered stereo audio.
@@ -39,6 +40,9 @@ pub struct OfflineRenderer {
     block_input: StereoBuffer,
     /// What the output limiter has done so far.
     limiter: LimiterReport,
+    /// Every module that made a NaN or infinity (and was reset), in the
+    /// order they first did.
+    faults: Vec<NodeId>,
 }
 
 /// What the Audio Output's limiter has done over a render: how hard the
@@ -91,6 +95,7 @@ impl OfflineRenderer {
             input: StereoBuffer::default(),
             block_input: StereoBuffer { left: vec![0.0; block_size], right: vec![0.0; block_size] },
             limiter: LimiterReport::default(),
+            faults: Vec::new(),
         }
     }
 
@@ -234,6 +239,13 @@ impl OfflineRenderer {
         self.limiter
     }
 
+    /// The modules that made a NaN or infinity so far, each once, in the
+    /// order they first did. The engine silenced and reset each for the
+    /// block it happened in.
+    pub fn faults(&self) -> &[NodeId] {
+        &self.faults
+    }
+
     /// Adds the block just processed to the limiter report.
     fn note_limiter(&mut self) {
         let Some(levels) = self.plan.take_output_levels() else { return };
@@ -270,6 +282,12 @@ impl OfflineRenderer {
             self.plan.process(&self.context.with_midi(&self.block_midi).with_input(input));
             self.position += self.context.block_size as u64;
             self.note_limiter();
+            let faults = &mut self.faults;
+            self.plan.take_faults(|node_id| {
+                if !faults.contains(&node_id) {
+                    faults.push(node_id);
+                }
+            });
 
             let wanted = (frames - out.left.len()).min(self.context.block_size);
             match self.plan.audio_output() {

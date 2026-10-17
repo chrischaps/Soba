@@ -160,6 +160,15 @@ fn run(args: Args) -> Result<(), String> {
     let levels = Levels::of(&audio.left, &audio.right, args.sample_rate);
     levels.print();
     print_limiter(&renderer.limiter());
+    for &fault in renderer.faults() {
+        let node = compiled.node_ids.iter().find(|&(_, &engine)| engine == fault).map(|(&id, _)| id);
+        let module = node.and_then(|id| patch.all_nodes().into_iter().find(|n| n.id == id)).map(|n| n.module_id.clone());
+        println!(
+            "fault: {} (node {}) made a NaN or infinity and was reset",
+            module.as_deref().unwrap_or("a module"),
+            node.map_or("?".to_string(), |id| id.to_string())
+        );
+    }
     if let Some(path) = &args.compare {
         let (before, rate) = read_wav(path).map_err(|e| format!("{}: {}", path.display(), e))?;
         println!("against {}:", path.display());

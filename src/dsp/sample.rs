@@ -36,16 +36,22 @@ impl std::fmt::Debug for SampleData {
 }
 
 impl SampleData {
-    /// A mono recording.
-    pub fn mono(samples: Vec<f32>, sample_rate: f32) -> Self {
+    /// A mono recording. NaN and infinity become silence, and anything past
+    /// [`SAMPLE_CEILING`](super::finite::SAMPLE_CEILING) is held to it, so a
+    /// damaged file can't poison the patch.
+    pub fn mono(mut samples: Vec<f32>, sample_rate: f32) -> Self {
+        super::finite::sanitize_all(&mut samples);
         Self { left: samples, right: None, sample_rate: sample_rate.max(1.0) }
     }
 
-    /// A stereo recording. The longer channel is cut to the shorter.
+    /// A stereo recording. The longer channel is cut to the shorter, and
+    /// its samples made finite as in [`mono`](Self::mono).
     pub fn stereo(mut left: Vec<f32>, mut right: Vec<f32>, sample_rate: f32) -> Self {
         let frames = left.len().min(right.len());
         left.truncate(frames);
         right.truncate(frames);
+        super::finite::sanitize_all(&mut left);
+        super::finite::sanitize_all(&mut right);
         Self { left, right: Some(right), sample_rate: sample_rate.max(1.0) }
     }
 

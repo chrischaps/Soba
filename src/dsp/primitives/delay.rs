@@ -48,10 +48,13 @@ impl FracDelay {
 
     /// The sample pushed `delay` pushes ago (0 is the most recent), read
     /// between samples with a Catmull-Rom spline. `delay` is clamped to
-    /// 1..=max_delay so all four taps hold real history.
+    /// 1..=max_delay so all four taps hold real history, and a NaN delay
+    /// reads as 1.
     #[inline]
     pub fn read(&self, delay: f32) -> f32 {
-        let delay = delay.clamp(1.0, self.max_delay());
+        // max and min, not clamp: clamp passes NaN through, and a NaN
+        // delay would read from before the buffer
+        let delay = delay.max(1.0).min(self.max_delay());
         let whole = delay as usize;
         let t = delay - whole as f32;
 
@@ -99,6 +102,15 @@ mod tests {
         }
         assert!((line.read(10.25) - (99.0 - 10.25) * 0.5).abs() < 1e-4);
         assert!((line.read(3.75) - (99.0 - 3.75) * 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_a_nan_delay_reads_one_sample_back() {
+        let mut line = FracDelay::new(16);
+        for i in 0..32 {
+            line.push(i as f32);
+        }
+        assert_eq!(line.read(f32::NAN), 30.0);
     }
 
     #[test]

@@ -342,6 +342,14 @@ pub enum EngineEvent {
         place: Option<f32>,
     },
 
+    /// A module made a NaN or infinity, and was silenced and reset for the
+    /// block so it couldn't latch downstream. Sent once per callback it
+    /// happens in, so the editor can show which module it was.
+    ModuleFault {
+        /// The module that made it.
+        node_id: NodeId,
+    },
+
     /// Oscilloscope buffer data for waveform display.
     /// Sent when an oscilloscope module captures a triggered waveform.
     ScopeBuffer {

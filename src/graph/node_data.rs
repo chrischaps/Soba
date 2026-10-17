@@ -1759,13 +1759,18 @@ impl NodeDataTrait for SynthNodeData {
 
     fn titlebar_color(
         &self,
-        _ui: &egui::Ui,
-        _node_id: egui_node_graph2::NodeId,
+        ui: &egui::Ui,
+        node_id: egui_node_graph2::NodeId,
         _graph: &egui_node_graph2::Graph<Self, Self::DataType, Self::ValueType>,
-        _user_state: &mut Self::UserState,
+        user_state: &mut Self::UserState,
     ) -> Option<Color32> {
-        // Return the category-based header color
-        Some(self.titlebar_fill())
+        // The category-based header color, flushed red just after the
+        // module made a NaN and was reset
+        let glow = user_state.get_engine_node_id(node_id).map_or(0.0, |id| user_state.faults.glow(id));
+        if glow > 0.0 {
+            ui.ctx().request_repaint();
+        }
+        Some(super::fault_flash::tint(self.titlebar_fill(), glow))
     }
 
     fn titlebar_text_color(
