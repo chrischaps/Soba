@@ -1,9 +1,14 @@
 //! CPU meter widget for displaying audio engine load.
 //!
 //! Provides a visual indicator of how much CPU time the audio processing
-//! is consuming relative to the available time budget.
+//! is consuming relative to the available time budget: a bar for the
+//! smoothed average and a tick for the slowest recent callback, which is the
+//! one that drops out.
+
+use std::time::Duration;
 
 use eframe::egui::{self, Color32, Rect, Response, Sense, Ui, Vec2};
+use web_time::Instant;
 
 use crate::app::theme;
 
@@ -64,6 +69,35 @@ impl CpuMeterConfig {
     }
 }
 
+/// How long the meter keeps showing the slowest callback: long enough to
+/// read after hearing the click it caused.
+pub const PEAK_HOLD: Duration = Duration::from_secs(2);
+
+/// The slowest callback lately, held for [`PEAK_HOLD`] the way a level meter
+/// holds its peak, so one slow callback doesn't vanish in a frame.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CpuPeakHold {
+    peak: f32,
+    held_at: Option<Instant>,
+}
+
+impl CpuPeakHold {
+    /// Takes the engine's latest worst callback. A higher one replaces the
+    /// held peak at once; a lower one only once the hold has run out.
+    pub fn feed(&mut self, peak: f32, now: Instant) {
+        let expired = self.held_at.is_none_or(|at| now.saturating_duration_since(at) >= PEAK_HOLD);
+        if peak >= self.peak || expired {
+            self.peak = peak;
+            self.held_at = Some(now);
+        }
+    }
+
+    /// The held peak, in percent.
+    pub fn peak(&self) -> f32 {
+        self.peak
+    }
+}
+
 /// Returns the color for a given CPU load percentage.
 pub fn cpu_load_color(load: f32, config: &CpuMeterConfig) -> Color32 {
     if load >= config.high_threshold {
@@ -80,11 +114,12 @@ pub fn cpu_load_color(load: f32, config: &CpuMeterConfig) -> Color32 {
 /// # Arguments
 /// * `ui` - The egui UI to draw into
 /// * `cpu_load` - Current CPU load percentage (0-100)
+/// * `peak` - The slowest recent callback's load, drawn as a tick (0-100+)
 /// * `config` - Configuration for the meter appearance
 ///
 /// # Returns
 /// The response from the meter widget
-pub fn cpu_meter(ui: &mut Ui, cpu_load: f32, config: &CpuMeterConfig) -> Response {
+pub fn cpu_meter(ui: &mut Ui, cpu_load: f32, peak: f32, config: &CpuMeterConfig) -> Response {
     // Calculate total size: label, bar, then the readout and warning after it
     let text_width = if config.show_text { 32.0 } else { 0.0 };
     let warning_width = if config.show_warning && cpu_load >= config.high_threshold { 16.0 } else { 0.0 };
@@ -143,6 +178,17 @@ pub fn cpu_meter(ui: &mut Ui, cpu_load: f32, config: &CpuMeterConfig) -> Respons
             egui::Stroke::new(1.0_f32, theme::background::WIDGET_HOVERED),
         );
 
+        // The slowest callback, a tick standing a little proud of the bar:
+        // quiet while there's room, red once one comes close to dropping out
+        if peak > 0.0 {
+            let x = bar_rect.left() + (peak / 100.0).clamp(0.0, 1.0) * bar_rect.width();
+            let x = x.clamp(bar_rect.left() + 1.0, bar_rect.right() - 1.0);
+            painter.line_segment(
+                [egui::pos2(x, bar_rect.top() - 1.0), egui::pos2(x, bar_rect.bottom() + 1.0)],
+                egui::Stroke::new(2.0_f32, peak_tick_color(peak, config)),
+            );
+        }
+
         // Draw percentage text
         if config.show_text {
             let text_rect = Rect::from_min_size(
@@ -178,16 +224,31 @@ pub fn cpu_meter(ui: &mut Ui, cpu_load: f32, config: &CpuMeterConfig) -> Respons
 
     // Add hover tooltip with more details
     response.on_hover_text(format!(
-        "Audio CPU: {:.1}%\n{}",
+        "Audio CPU: {:.1}%\nSlowest callback: {:.0}%\n{}",
         cpu_load,
-        if cpu_load >= config.high_threshold {
+        peak,
+        if peak >= 100.0 {
+            "A callback ran past its buffer - that's a dropout"
+        } else if cpu_load >= config.high_threshold {
             "High load - risk of audio glitches!"
+        } else if peak >= config.high_threshold {
+            "A slow callback came close to dropping out"
         } else if cpu_load >= config.moderate_threshold {
             "Moderate load"
         } else {
             "Healthy"
         }
     ))
+}
+
+/// The peak tick's colour: quiet while there's room, red at or above the
+/// high threshold.
+pub fn peak_tick_color(peak: f32, config: &CpuMeterConfig) -> Color32 {
+    if peak >= config.high_threshold {
+        theme::accent::ERROR
+    } else {
+        theme::text::SECONDARY
+    }
 }
 
 #[cfg(test)]
@@ -251,5 +312,37 @@ mod tests {
         assert_eq!(cpu_load_color(80.0, &config), theme::accent::ERROR);
         // Just below high, should be warning
         assert_eq!(cpu_load_color(79.9, &config), theme::accent::WARNING);
+    }
+
+    #[test]
+    fn peak_tick_turns_red_at_the_high_threshold() {
+        let config = CpuMeterConfig::default();
+        assert_eq!(peak_tick_color(79.9, &config), theme::text::SECONDARY);
+        assert_eq!(peak_tick_color(80.0, &config), theme::accent::ERROR);
+    }
+
+    #[test]
+    fn a_slow_callback_is_held_then_let_go() {
+        let start = Instant::now();
+        let at = |ms: u64| start + Duration::from_millis(ms);
+        let mut hold = CpuPeakHold::default();
+        hold.feed(20.0, at(0));
+        hold.feed(95.0, at(500));
+        // Quieter readings don't hide it while it's held
+        hold.feed(15.0, at(1000));
+        hold.feed(15.0, at(500) + PEAK_HOLD - Duration::from_millis(10));
+        assert_eq!(hold.peak(), 95.0);
+        // Then the meter follows the engine again
+        hold.feed(15.0, at(500) + PEAK_HOLD);
+        assert_eq!(hold.peak(), 15.0);
+    }
+
+    #[test]
+    fn a_higher_peak_replaces_a_held_one_at_once() {
+        let start = Instant::now();
+        let mut hold = CpuPeakHold::default();
+        hold.feed(60.0, start);
+        hold.feed(110.0, start + Duration::from_millis(100));
+        assert_eq!(hold.peak(), 110.0);
     }
 }

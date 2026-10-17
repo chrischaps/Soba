@@ -30,7 +30,7 @@ pub use channels::{
     EngineChannels, EngineHandle, UiHandle, DEFAULT_COMMAND_BUFFER_SIZE, DEFAULT_EVENT_BUFFER_SIZE,
     MAX_PLANS_IN_FLIGHT,
 };
-pub use commands::{AudioMessage, ChannelPeaks, EngineCommand, EngineEvent, NodeId, PortIndex, ScopeFrame};
+pub use commands::{AudioMessage, ChannelPeaks, CpuLoad, EngineCommand, EngineEvent, NodeId, PortIndex, ScopeFrame};
 pub use cue::{Cue, CANVAS_CUE, CUE_LEVEL};
 pub use graph_plan::GraphPlan;
 pub use probe::{Probe, ProbeDuck, ProbeScope, SCOPE_WINDOW};

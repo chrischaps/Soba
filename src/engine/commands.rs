@@ -271,6 +271,17 @@ impl ScopeFrame {
     }
 }
 
+/// How much of its time budget the audio callback used, in percent (100 is
+/// the whole buffer's worth of time: the device would have run dry).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct CpuLoad {
+    /// The smoothed load, for the meter's bar.
+    pub average: f32,
+    /// The slowest single callback since the last reading. One slow callback
+    /// is what drops out, and the average hides it.
+    pub peak: f32,
+}
+
 /// Events sent from the audio engine to the UI thread.
 /// These provide feedback for metering and status display.
 #[derive(Debug, Clone)]
@@ -279,8 +290,8 @@ pub enum EngineEvent {
     /// reduction) for the most recent audio callback.
     OutputLevel(OutputLevels),
 
-    /// Current CPU load of the audio processing.
-    CpuLoad(f32),
+    /// How much of each callback's time the audio processing took.
+    CpuLoad(CpuLoad),
 
     /// Audio processing started.
     Started,

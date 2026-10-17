@@ -704,6 +704,7 @@ impl EngineHandle {
 mod tests {
     use super::*;
     use crate::dsp::OutputLevels;
+    use crate::engine::CpuLoad;
 
     fn add(node_id: u64, module_id: &'static str) -> EngineCommand {
         EngineCommand::AddModule { node_id, module_id }
@@ -1038,8 +1039,8 @@ mod tests {
     fn test_lossy_events() {
         let (mut ui, mut engine) = EngineChannels::new(1, 1).split();
 
-        engine.send_event_lossy(EngineEvent::CpuLoad(0.5));
-        engine.send_event_lossy(EngineEvent::CpuLoad(0.6)); // Should be dropped
+        engine.send_event_lossy(EngineEvent::CpuLoad(CpuLoad { average: 0.5, peak: 0.5 }));
+        engine.send_event_lossy(EngineEvent::CpuLoad(CpuLoad { average: 0.6, peak: 0.6 })); // Should be dropped
 
         assert!(ui.recv_event().is_some());
         assert!(ui.recv_event().is_none());
@@ -1051,7 +1052,7 @@ mod tests {
 
         // Send multiple events
         engine.send_event_lossy(EngineEvent::Started);
-        engine.send_event_lossy(EngineEvent::CpuLoad(0.3));
+        engine.send_event_lossy(EngineEvent::CpuLoad(CpuLoad { average: 0.3, peak: 0.3 }));
         engine.send_event_lossy(EngineEvent::OutputLevel(OutputLevels::default()));
 
         // Drain all events

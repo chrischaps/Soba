@@ -14,7 +14,7 @@ use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutp
 
 use super::audio_input::InputFeed;
 use super::channels::{EngineHandle, MAX_SNAPSHOTS};
-use super::commands::{AudioMessage, EngineEvent, NodeId, ScopeFrame};
+use super::commands::{AudioMessage, CpuLoad, EngineEvent, NodeId, ScopeFrame};
 use super::cue::CuePlayer;
 use super::probe::ProbePlayer;
 use super::graph_plan::GraphPlan;
@@ -152,6 +152,8 @@ pub struct AudioProcessor {
     frame_counter: u32,
     /// Running average of CPU load (0.0-100.0).
     cpu_load_avg: f32,
+    /// The slowest callback since the last CPU load event (0.0-100.0+).
+    cpu_load_peak: f32,
     /// Where the finished output is copied while recording.
     recorder: Option<RecordTap>,
     /// Audio from the input device, for Audio Input modules.
@@ -192,6 +194,7 @@ impl AudioProcessor {
             is_playing: false,
             frame_counter: 0,
             cpu_load_avg: 0.0,
+            cpu_load_peak: 0.0,
             recorder: None,
             input: LiveInput::new(block_size),
             snapshots: Vec::with_capacity(MAX_SNAPSHOTS),
@@ -283,6 +286,7 @@ impl AudioProcessor {
             self.input.discard();
             // Reset CPU load when not playing
             self.cpu_load_avg = 0.0;
+            self.cpu_load_peak = 0.0;
             self.record(output, channels);
             self.probe.idle();
             self.play_cue(output, channels);
@@ -313,12 +317,18 @@ impl AudioProcessor {
         // Smooth the CPU load value using exponential moving average
         self.cpu_load_avg = Self::CPU_SMOOTHING * cpu_percent
             + (1.0 - Self::CPU_SMOOTHING) * self.cpu_load_avg;
+        self.cpu_load_peak = self.cpu_load_peak.max(cpu_percent);
 
         // Send CPU load event at regular intervals (to avoid flooding UI)
         self.frame_counter += 1;
         if self.frame_counter >= Self::CPU_REPORT_INTERVAL {
             self.frame_counter = 0;
-            self.engine_handle.send_event_lossy(EngineEvent::CpuLoad(self.cpu_load_avg));
+            // A full queue would lose the peak: keep it for the next reading
+            if self.engine_handle.event_slots_available() > 0 {
+                let load = CpuLoad { average: self.cpu_load_avg, peak: self.cpu_load_peak };
+                self.engine_handle.send_event_lossy(EngineEvent::CpuLoad(load));
+                self.cpu_load_peak = 0.0;
+            }
         }
     }
 

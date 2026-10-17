@@ -207,6 +207,8 @@ pub struct SynthApp {
 
     /// Current CPU load percentage from the audio engine (0-100).
     cpu_load: f32,
+    /// The slowest recent audio callback, held a moment for the meter's tick.
+    cpu_peak: crate::widgets::CpuPeakHold,
 
     /// How wide the toolbar is with every button named, measured the last
     /// time it was drawn that way. A narrower window gets the compact row.
@@ -519,6 +521,7 @@ impl SynthApp {
             auditioning: None,
             shortcuts: ShortcutsSheet::default(),
             cpu_load: 0.0,
+            cpu_peak: Default::default(),
             toolbar_full_width: None,
             audio_heartbeat: (0, Instant::now()),
             midi_engine,
@@ -1927,7 +1930,8 @@ impl SynthApp {
                     }
                     crate::engine::EngineEvent::CpuLoad(load) => {
                         // Update CPU load for display
-                        self.cpu_load = load;
+                        self.cpu_load = load.average;
+                        self.cpu_peak.feed(load.peak, Instant::now());
                     }
                     crate::engine::EngineEvent::OutputLevel(levels) => {
                         // Feed the Audio Output node's meter
@@ -3668,7 +3672,7 @@ impl SynthApp {
                         }
                     }
                     if self.is_playing {
-                        cpu_meter(ui, self.cpu_load, &CpuMeterConfig::compact());
+                        cpu_meter(ui, self.cpu_load, self.cpu_peak.peak(), &CpuMeterConfig::compact());
                     }
                     ui.label(RichText::new("|")
                         .color(theme::text::DISABLED)
