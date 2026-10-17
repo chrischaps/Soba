@@ -3475,7 +3475,8 @@ impl SynthApp {
         // Offline (filming, or no stream to watch): the transport is the whole story
         let Ok(engine) = &self.audio_engine else { return transport };
         if !engine.is_running() {
-            return transport;
+            // A stream that couldn't be rebuilt (its device gone) is no audio
+            return if engine.stream_lost() { AudioStatus::NoAudio } else { transport };
         }
         #[cfg(target_arch = "wasm32")]
         if web::audio_blocked() {

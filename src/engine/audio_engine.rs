@@ -274,6 +274,10 @@ pub struct AudioEngine {
     /// The graph processor driven by the stream, kept here so it survives a
     /// device change (the stream, and its callback's handle, are rebuilt).
     processor: Option<Arc<Mutex<AudioProcessor>>>,
+    /// Whether a stream should be running: set when one starts, cleared only
+    /// by [`stop`](Self::stop). A rebuild that fails (the device gone) leaves
+    /// it set, so choosing the device again starts the stream there.
+    wanted: bool,
     /// The input device's stream, while one is open.
     input: Option<OpenInput>,
 }
@@ -303,6 +307,7 @@ impl AudioEngine {
             stream: None,
             state: Arc::new(AudioState::new()),
             processor: None,
+            wanted: false,
             input: None,
         })
     }
@@ -322,11 +327,11 @@ impl AudioEngine {
             return Ok(());
         }
         let previous = self.system;
-        let was_running = self.is_running();
+        let was_running = self.wanted;
         // ASIO lists its drivers by loading each in turn, which it can't do
         // while one is in use
         self.close_input();
-        self.stop()?;
+        self.drop_stream();
         match self.move_to(system, was_running) {
             Ok(()) => Ok(()),
             Err(e) => {
@@ -390,11 +395,11 @@ impl AudioEngine {
         if self.system != AudioSystem::Asio {
             return Ok(());
         }
-        let was_running = self.is_running();
+        let was_running = self.wanted;
         // The driver keeps the size its buffers were made at until every
         // stream on it has closed
         self.close_input();
-        self.stop()?;
+        self.drop_stream();
         let (config, format) = output_config(&self.device, self.system, frames)?;
         self.config = config;
         self.format = format;
@@ -417,7 +422,7 @@ impl AudioEngine {
     pub fn restart_after_reset(&mut self) -> Result<(), AudioError> {
         self.buffer_request = None;
         self.close_input();
-        self.stop()?;
+        self.drop_stream();
         let (config, format) = output_config(&self.device, self.system, None)?;
         self.config = config;
         self.format = format;
@@ -488,12 +493,12 @@ impl AudioEngine {
         let device = self.output_device_list().into_iter().nth(index).ok_or(AudioError::NoOutputDevice)?;
         let (config, format) = output_config(&device, self.system, self.buffer_request)?;
 
-        let was_running = self.is_running();
+        let was_running = self.wanted;
         if self.system == AudioSystem::Asio {
             // The old driver must unload before the new one can load
             self.close_input();
         }
-        self.stop()?;
+        self.drop_stream();
         self.device = device;
         self.config = config;
         self.format = format;
@@ -775,19 +780,28 @@ impl AudioEngine {
             .map_err(|e| AudioError::StreamPlaybackFailed(e.to_string()))?;
 
         self.stream = Some(stream);
+        self.wanted = true;
         Ok(())
     }
 
-    /// Stop the audio stream.
+    /// Stop the audio stream. It always stops, even on a device that has
+    /// gone (whose stream refuses to pause), so this never fails.
     pub fn stop(&mut self) -> Result<(), AudioError> {
+        self.wanted = false;
+        self.drop_stream();
+        Ok(())
+    }
+
+    /// Closes the stream, if one is open, without forgetting that one is
+    /// wanted: for the device and setting changes that rebuild it.
+    fn drop_stream(&mut self) {
         if let Some(stream) = self.stream.take() {
-            stream
-                .pause()
-                .map_err(|e| AudioError::StreamPlaybackFailed(e.to_string()))?;
+            // A lost device's stream can't pause (on Windows Audio its worker
+            // has already exited), but dropping it closes it all the same
+            let _ = stream.pause();
         }
         // Reset phase when stopping
         self.state.phase_fixed.store(0, Ordering::Relaxed);
-        Ok(())
     }
 
     /// Check if an audio stream has been started (it may since have failed:
@@ -795,6 +809,12 @@ impl AudioEngine {
     /// [`callback_count`](Self::callback_count)).
     pub fn is_running(&self) -> bool {
         self.stream.is_some()
+    }
+
+    /// Whether a stream should be running but isn't: rebuilding it on a
+    /// device or setting change failed. Choosing the device again retries.
+    pub fn stream_lost(&self) -> bool {
+        self.wanted && self.stream.is_none()
     }
 
     /// How many times the device has asked for audio. It stops climbing when
@@ -885,6 +905,7 @@ impl AudioEngine {
             .map_err(|e| AudioError::StreamPlaybackFailed(e.to_string()))?;
 
         self.stream = Some(stream);
+        self.wanted = true;
         Ok(())
     }
 
@@ -1104,4 +1125,23 @@ mod tests {
     //     assert!(engine.stop().is_ok());
     //     assert!(!engine.is_running());
     // }
+
+    /// Choosing the device again restarts the stream after a rebuild failed,
+    /// and only `stop` forgets it was wanted (#312). Needs an output device:
+    /// `cargo test --lib reselecting -- --ignored`
+    #[test]
+    #[ignore]
+    fn reselecting_the_device_restarts_a_lost_stream() {
+        let mut engine = AudioEngine::new().expect("an output device");
+        let index = engine.current_device_index().expect("the device is listed");
+        engine.start().unwrap();
+        // As a rebuild that failed leaves it: no stream, but one wanted
+        engine.drop_stream();
+        assert!(engine.stream_lost());
+        engine.select_device(index).unwrap();
+        assert!(engine.is_running() && !engine.stream_lost());
+        engine.stop().unwrap();
+        engine.select_device(index).unwrap();
+        assert!(!engine.is_running() && !engine.stream_lost());
+    }
 }
