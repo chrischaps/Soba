@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use egui_node_graph2::NodeId;
 
 use crate::engine::NodeId as EngineNodeId;
-use crate::modules::looper::{Looper, LOOPER_ID};
+use crate::modules::looper::{self, Looper};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::dsp::{SampleData, Snapshot, SnapshotOutcome};
 #[cfg(not(target_arch = "wasm32"))]
@@ -76,7 +76,7 @@ impl SynthApp {
             .graph
             .nodes
             .iter()
-            .filter(|(_, node)| node.user_data.module_id == LOOPER_ID)
+            .filter(|(_, node)| node.user_data.module_id == looper::ID)
             .filter_map(|(node_id, node)| {
                 let engine_id = self.user_state.get_engine_node_id(node_id)?;
                 Some((node_id, engine_id, node.user_data.file.clone()))
@@ -428,7 +428,7 @@ mod tests {
         // A sine into a Looper, opened as a patch file
         let mut patch = Patch::new("Song");
         patch.nodes.push(NodeData::new(1, "osc.sine", (0.0, 0.0)));
-        patch.nodes.push(NodeData::new(2, LOOPER_ID, (200.0, 0.0)));
+        patch.nodes.push(NodeData::new(2, looper::ID, (200.0, 0.0)));
         patch.connections.push(ConnectionData::new(1, "Out", 2, "In L"));
         save_to_file(&patch, &path).unwrap();
         app.open_file(&path);
@@ -457,7 +457,7 @@ mod tests {
         assert_eq!(Some(&first), held(&mut app).as_ref(), "the file is the loop");
         assert!(!app.has_unsaved_changes());
         let saved = load_from_file(&path).unwrap();
-        let file = saved.nodes.iter().find(|n| n.module_id == LOOPER_ID).and_then(|n| n.file.clone());
+        let file = saved.nodes.iter().find(|n| n.module_id == looper::ID).and_then(|n| n.file.clone());
         assert_eq!(file.as_deref(), Some(&*format!("Song loops/{}", sample_files::file_name(&key))));
 
         // Saving again untouched writes nothing
@@ -509,7 +509,7 @@ mod tests {
 
         // A loop file gone missing is a warning, and the Looper opens empty
         let mut patch = Patch::new("Song");
-        let mut looper = NodeData::new(2, LOOPER_ID, (0.0, 0.0));
+        let mut looper = NodeData::new(2, looper::ID, (0.0, 0.0));
         looper.file = Some("Song loops/gone.wav".to_string());
         patch.nodes.push(looper);
         save_to_file(&patch, &path).unwrap();

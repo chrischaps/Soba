@@ -298,6 +298,9 @@ impl MidiClockFollower {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.clock";
+
 /// A clock module that generates periodic gate triggers.
 ///
 /// Essential for testing envelope modules and creating rhythmic patterns
@@ -580,7 +583,7 @@ impl Default for Clock {
 impl DspModule for Clock {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.clock",
+            id: ID,
             name: "Clock",
             category: ModuleCategory::Utility,
             description: "Periodic gate trigger generator",

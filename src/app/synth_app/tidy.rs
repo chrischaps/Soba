@@ -172,13 +172,13 @@ mod tests {
 mod round {
     use super::*;
     use crate::dsp::SampleData;
-    use crate::modules::sampler::SAMPLER_ID;
+    use crate::modules::sampler;
     use crate::persistence::{save_to_file, NodeData, Patch};
     use crate::graph::SynthValueType;
     use std::path::Path;
 
     fn the_sampler(app: &SynthApp) -> NodeId {
-        app.graph_state.graph.nodes.iter().find(|(_, n)| n.user_data.module_id == SAMPLER_ID).map(|(id, _)| id).expect("a Sampler")
+        app.graph_state.graph.nodes.iter().find(|(_, n)| n.user_data.module_id == sampler::ID).map(|(id, _)| id).expect("a Sampler")
     }
 
     fn file(app: &SynthApp) -> String {
@@ -228,7 +228,7 @@ mod round {
         std::fs::write(&original, &bytes).unwrap();
         let path = folder.join("Song.json");
         let mut patch = Patch::new("Song");
-        let mut sampler = NodeData::new(1, SAMPLER_ID, (0.0, 0.0));
+        let mut sampler = NodeData::new(1, sampler::ID, (0.0, 0.0));
         sampler.file = Some("samples/padded.wav".to_string());
         patch.nodes.push(sampler);
         save_to_file(&patch, &path).unwrap();
@@ -285,7 +285,7 @@ mod round {
         std::fs::write(folder.join("Song samples").join("Take 1.wav"), sample_files::encode_wav(&padded(48000.0))).unwrap();
         let path = folder.join("Song.json");
         let mut patch = Patch::new("Song");
-        let mut sampler = NodeData::new(1, SAMPLER_ID, (0.0, 0.0));
+        let mut sampler = NodeData::new(1, sampler::ID, (0.0, 0.0));
         sampler.file = Some("Song samples/Take 1.wav".to_string());
         patch.nodes.push(sampler);
         save_to_file(&patch, &path).unwrap();

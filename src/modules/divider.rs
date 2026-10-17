@@ -18,6 +18,9 @@ use crate::dsp::{
 /// The largest division: eight bars of sixteenths.
 pub const MAX_DIVIDE: usize = 128;
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.divider";
+
 /// Divides a clock by counting its edges.
 ///
 /// # Ports
@@ -126,7 +129,7 @@ impl Default for ClockDivider {
 impl DspModule for ClockDivider {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.divider",
+            id: ID,
             name: "Clock Divider",
             category: ModuleCategory::Utility,
             description: "Fire once every N clocks, hold a gate for a phrase, and count where you are",

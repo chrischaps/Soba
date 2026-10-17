@@ -128,6 +128,9 @@ impl StageTime {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "mod.adsr";
+
 /// ADSR Envelope generator.
 ///
 /// Generates a control signal that follows the classic ADSR envelope shape:
@@ -395,7 +398,7 @@ impl Default for AdsrEnvelope {
 impl DspModule for AdsrEnvelope {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "mod.adsr",
+            id: ID,
             name: "ADSR Envelope",
             category: ModuleCategory::Modulation,
             description: "Attack-Decay-Sustain-Release envelope with exact stage times, curve shaping, velocity and CV on every stage",

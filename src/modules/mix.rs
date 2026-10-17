@@ -28,6 +28,9 @@ use super::mixer::soft_clip;
 /// The number of inputs.
 pub const INPUTS: usize = 4;
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.mix";
+
 /// A four-input mono mixer.
 ///
 /// # Ports
@@ -96,7 +99,7 @@ impl Default for Mix {
 impl DspModule for Mix {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.mix",
+            id: ID,
             name: "Mix",
             category: ModuleCategory::Utility,
             description: "Adds four signals, audio or CV, into one",

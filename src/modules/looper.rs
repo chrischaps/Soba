@@ -60,8 +60,8 @@ use crate::dsp::{
     ParameterDisplay, SampleData, SignalType, Snapshot, SnapshotOutcome,
 };
 
-/// The Looper's module ID.
-pub const LOOPER_ID: &str = "util.looper";
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.looper";
 
 /// The longest loop, in seconds. Recording past it closes the loop there.
 pub const MAX_LOOP_SECONDS: f32 = 120.0;
@@ -1016,7 +1016,7 @@ fn ramp(value: f32, target: f32, step: f32) -> f32 {
 impl DspModule for Looper {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: LOOPER_ID,
+            id: ID,
             name: "Looper",
             category: ModuleCategory::Utility,
             description: "Record, overdub and undo live layers, like a looper pedal, in time with the Clock",

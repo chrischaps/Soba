@@ -14,6 +14,9 @@ use crate::dsp::{
     SignalType,
 };
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "filter.svf";
+
 /// A State Variable Filter with multiple simultaneous outputs.
 ///
 /// The SVF is a classic filter topology that provides lowpass, highpass,
@@ -226,7 +229,7 @@ impl Default for SvfFilter {
 impl DspModule for SvfFilter {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "filter.svf",
+            id: ID,
             name: "SVF Filter",
             category: ModuleCategory::Filter,
             description: "Multi-mode filter with LP, HP, BP and notch outputs",

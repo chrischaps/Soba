@@ -48,6 +48,9 @@ impl KeyPriority {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "input.keyboard";
+
 /// A virtual keyboard for triggering notes from computer keyboard input.
 ///
 /// Converts QWERTY keyboard presses into musical notes, outputting gate,
@@ -173,7 +176,7 @@ impl Default for KeyboardInput {
 impl DspModule for KeyboardInput {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "input.keyboard",
+            id: ID,
             name: "Keyboard",
             category: ModuleCategory::Source,
             description: "Virtual keyboard for playing notes from computer keyboard",

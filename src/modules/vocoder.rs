@@ -284,6 +284,9 @@ fn tilt(levels: impl Iterator<Item = f32>, bands: usize) -> f32 {
     (n * sxy - sx * sy) / spread
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "fx.vocoder";
+
 /// The vocoder.
 ///
 /// # Ports
@@ -561,7 +564,7 @@ impl Default for Vocoder {
 impl DspModule for Vocoder {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "fx.vocoder",
+            id: ID,
             name: "Vocoder",
             category: ModuleCategory::Effect,
             description: "Puts a voice's spectrum on a synth: a bank of band-passes and followers",

@@ -20,6 +20,9 @@ use crate::dsp::{
 };
 use crate::link::{ClockState, LinkBus, BUS, CV_LANES, GATE_LANES, GATE_THRESHOLD, PORT_LABELS};
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "output.link";
+
 /// Sends its lanes, gates and the patch's Clock to Seoul.
 ///
 /// # Ports
@@ -125,7 +128,7 @@ impl Default for LinkOut {
 impl DspModule for LinkOut {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "output.link",
+            id: ID,
             name: "Link Out",
             category: ModuleCategory::Output,
             description: "Play Seoul's visuals from the patch: eight CV lanes, four gates and the Clock, sent over OSC",

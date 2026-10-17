@@ -64,8 +64,8 @@ use crate::dsp::onsets::DEFAULT_SENSITIVITY;
 use super::sampler::{Controls, Recorder, Sampler, NO_THRESHOLD_DB, TAKE_LENGTHS};
 use super::sequencer::StepTimer;
 
-/// The Chopper's module ID.
-pub const CHOPPER_ID: &str = "source.chopper";
+/// The module's ID, as patches name it.
+pub const ID: &str = "source.chopper";
 
 /// The most steps in the row: one per slice, or across up to
 /// [`MAX_PASSES`] passes of fewer slices.
@@ -716,7 +716,7 @@ impl Default for Chopper {
 impl DspModule for Chopper {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: CHOPPER_ID,
+            id: ID,
             name: "Chopper",
             category: ModuleCategory::Source,
             description: "Plays a sliced break in time with the Clock, at any tempo, rearranged step by step",
@@ -1070,7 +1070,7 @@ mod tests {
     #[test]
     fn test_ports_and_parameters() {
         let chopper = Chopper::new();
-        assert_eq!(chopper.info().id, CHOPPER_ID);
+        assert_eq!(chopper.info().id, ID);
         assert_eq!(chopper.info().category, ModuleCategory::Source);
         let names: Vec<&str> = chopper.ports().iter().map(|p| p.name).collect();
         // Recording's after the rest, so patches from before it load unchanged
@@ -1463,6 +1463,6 @@ mod tests {
     #[test]
     fn test_chopper_registry_instantiation() {
         let registry = crate::engine::audio_processor::create_module_registry();
-        assert!(registry.contains(CHOPPER_ID));
+        assert!(registry.contains(ID));
     }
 }

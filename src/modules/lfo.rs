@@ -76,6 +76,9 @@ pub fn sync_beats(value: f32) -> Option<f64> {
     SYNC_DIVISIONS.get(value.max(0.0) as usize).and_then(|&(_, beats)| beats)
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "mod.lfo";
+
 /// A low-frequency oscillator for modulation.
 ///
 /// Generates control-rate signals for modulating other module parameters.
@@ -261,7 +264,7 @@ impl Default for Lfo {
 impl DspModule for Lfo {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "mod.lfo",
+            id: ID,
             name: "LFO",
             category: ModuleCategory::Modulation,
             description: "Low frequency oscillator for modulation",

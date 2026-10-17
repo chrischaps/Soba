@@ -82,6 +82,9 @@ impl BiquadState {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "fx.eq";
+
 /// 3-Band Parametric EQ with low shelf, mid parametric, and high shelf.
 ///
 /// # Ports
@@ -459,7 +462,7 @@ impl Default for ParametricEq {
 impl DspModule for ParametricEq {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "fx.eq",
+            id: ID,
             name: "3-Band EQ",
             category: ModuleCategory::Effect,
             description: "Parametric EQ with low shelf, mid band, and high shelf",

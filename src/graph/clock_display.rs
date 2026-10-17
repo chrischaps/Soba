@@ -24,7 +24,7 @@ use egui_node_graph2::NodeId;
 use crate::app::theme;
 use crate::dsp::Readout;
 use crate::modules::attenuverter::Attenuverter;
-use crate::modules::clock::{Clock, ClockDivision};
+use crate::modules::clock::{self, Clock, ClockDivision};
 use crate::modules::lfo::{Lfo, SYNC_DIVISIONS};
 
 use super::{SynthGraph, SynthGraphState, SynthValueType};
@@ -122,7 +122,7 @@ pub fn knob_takeover(
                 locked: true,
             })
         }
-        ("util.clock", "Tempo") if follows_midi(graph, node_id) => {
+        (clock::ID, "Tempo") if follows_midi(graph, node_id) => {
             let receiving = readout.is_some_and(|r| r.values[Clock::READOUT_RECEIVING] > 0.5);
             let tempo = readout.map(|r| r.values[Clock::READOUT_TEMPO]);
             Some(KnobTakeover {
@@ -135,7 +135,7 @@ pub fn knob_takeover(
             })
         }
         // The DAW's tempo, which only the DAW sets
-        ("util.clock", "Tempo") if follows_host(graph, node_id) => {
+        (clock::ID, "Tempo") if follows_host(graph, node_id) => {
             let tempo = readout.filter(|r| r.values[Clock::READOUT_RECEIVING] > 0.5).map(|r| r.values[Clock::READOUT_TEMPO]);
             Some(KnobTakeover {
                 value: tempo,
@@ -145,7 +145,7 @@ pub fn knob_takeover(
         }
         // The session's tempo, which a peer may have set; turning the knob
         // proposes a new one
-        ("util.clock", "Tempo") if follows_link(graph, node_id) => {
+        (clock::ID, "Tempo") if follows_link(graph, node_id) => {
             let tempo = readout.map(|r| r.values[Clock::READOUT_TEMPO]).filter(|&bpm| bpm > 0.0)?;
             Some(KnobTakeover { value: None, text: format!("{tempo:.1} BPM"), locked: false })
         }

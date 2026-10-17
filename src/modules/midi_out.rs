@@ -37,6 +37,9 @@ const PPQN: f64 = 24.0;
 
 const CHANNEL_LABELS: &[&str] = &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"];
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "output.midi";
+
 /// Turns cables into MIDI for a device.
 ///
 /// # Ports
@@ -279,7 +282,7 @@ impl Default for MidiOut {
 impl DspModule for MidiOut {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "output.midi",
+            id: ID,
             name: "MIDI Out",
             category: ModuleCategory::Output,
             description: "Play hardware and other apps: gates and pitch as notes, four CCs, and the Clock as MIDI clock",

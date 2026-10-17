@@ -135,6 +135,9 @@ impl Strip {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.mixer";
+
 /// A four-channel stereo mixer.
 ///
 /// # Ports
@@ -323,7 +326,7 @@ impl Default for Mixer {
 impl DspModule for Mixer {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.mixer",
+            id: ID,
             name: "Mixer",
             category: ModuleCategory::Utility,
             description: "4-channel stereo console: pan, width, sends, mute and solo, chained over one cable",

@@ -55,6 +55,9 @@ enum CaptureState {
     Ready,
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.oscilloscope";
+
 /// A real-time oscilloscope module for waveform visualization.
 ///
 /// # Features
@@ -228,7 +231,7 @@ impl Default for Oscilloscope {
 impl DspModule for Oscilloscope {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.oscilloscope",
+            id: ID,
             name: "Oscilloscope",
             category: ModuleCategory::Utility,
             description: "Real-time waveform display for signal visualization",

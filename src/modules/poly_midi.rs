@@ -111,6 +111,9 @@ impl Voice {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "input.poly_midi";
+
 /// MIDI to polyphonic CV, with voice allocation and stealing.
 ///
 /// # Ports
@@ -343,7 +346,7 @@ impl Default for PolyMidi {
 impl DspModule for PolyMidi {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "input.poly_midi",
+            id: ID,
             name: "Poly MIDI",
             category: ModuleCategory::Source,
             description: "Play chords: MIDI notes as polyphonic pitch, gate and velocity",

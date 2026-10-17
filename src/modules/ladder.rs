@@ -103,6 +103,9 @@ impl LadderCore {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "filter.ladder";
+
 /// A 4-pole transistor-ladder lowpass filter.
 ///
 /// This is the filter people mean when they say a synth sounds "analog": a
@@ -285,7 +288,7 @@ impl Default for LadderFilter {
 impl DspModule for LadderFilter {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "filter.ladder",
+            id: ID,
             name: "Ladder Filter",
             category: ModuleCategory::Filter,
             description: "Moog-style 4-pole lowpass with saturating stages, 24 and 12 dB/oct outputs",

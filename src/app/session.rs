@@ -14,7 +14,7 @@ use web_time::{SystemTime, UNIX_EPOCH};
 use eframe::egui::{self, Align, Layout, RichText};
 use serde::{Deserialize, Serialize};
 
-use crate::modules::looper::LOOPER_ID;
+use crate::modules::looper;
 use crate::persistence::{patch_from_json, Example, Patch, PatchError};
 use super::lesson::LessonFile;
 use super::theme;
@@ -175,7 +175,7 @@ impl Autosave {
 
     /// Whether the patch has a Looper, whose loop an autosave doesn't keep.
     pub fn has_looper(&self) -> bool {
-        self.patch.contains(&format!("\"{LOOPER_ID}\""))
+        self.patch.contains(&format!("\"{}\"", looper::ID))
     }
 
     /// The autosave a crash left behind, if there is one.

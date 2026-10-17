@@ -275,6 +275,9 @@ pub const MAX_VOICES: usize = 7;
 /// Detune, in cents, of the outermost unison voice at full Detune.
 const MAX_DETUNE_CENTS: f32 = 100.0;
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "osc.sine";
+
 /// A multi-waveform VCO.
 ///
 /// # Ports
@@ -488,7 +491,7 @@ impl Default for Oscillator {
 impl DspModule for Oscillator {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "osc.sine",
+            id: ID,
             name: "Oscillator",
             category: ModuleCategory::Source,
             description: "Band-limited VCO with hard sync, through-zero FM, sub-oscillator and unison",

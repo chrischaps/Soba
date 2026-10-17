@@ -16,6 +16,9 @@ use crate::dsp::{
     ParameterDisplay, SignalType,
 };
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.attenuverter";
+
 /// An attenuverter for scaling and inverting control signals.
 ///
 /// This utility module takes an input signal and scales it by an amount
@@ -123,7 +126,7 @@ impl Default for Attenuverter {
 impl DspModule for Attenuverter {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.attenuverter",
+            id: ID,
             name: "Attenuverter",
             category: ModuleCategory::Utility,
             description: "Scale and invert control signals",

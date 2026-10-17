@@ -400,6 +400,9 @@ impl Dropouts {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "fx.tape";
+
 /// A tape machine for a bus: wow, flutter, saturation and age.
 ///
 /// # Ports
@@ -579,7 +582,7 @@ impl Default for Tape {
 impl DspModule for Tape {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "fx.tape",
+            id: ID,
             name: "Tape",
             category: ModuleCategory::Effect,
             description: "A tape machine for a bus: wow, flutter, saturation, age and hiss",

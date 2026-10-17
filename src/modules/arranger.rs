@@ -372,6 +372,9 @@ impl Lane {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "seq.arranger";
+
 /// A song timeline: sections of bars, with eight lanes of automation.
 ///
 /// # Ports
@@ -743,7 +746,7 @@ pub fn ease(t: f32) -> f32 {
 impl DspModule for Arranger {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "seq.arranger",
+            id: ID,
             name: "Arranger",
             category: ModuleCategory::Utility,
             description: "A song's timeline: named sections of bars, moving eight lanes of automation by jumps, ramps and hits",

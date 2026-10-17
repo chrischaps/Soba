@@ -16,6 +16,9 @@ use crate::dsp::{
     ParameterDisplay, SignalType,
 };
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.logic";
+
 /// Combines gates, and compares a CV with a threshold.
 ///
 /// # Ports
@@ -105,7 +108,7 @@ impl Default for Logic {
 impl DspModule for Logic {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.logic",
+            id: ID,
             name: "Logic",
             category: ModuleCategory::Utility,
             description: "Combine gates with AND, OR, XOR and NOT, and turn a CV into a gate at a threshold",

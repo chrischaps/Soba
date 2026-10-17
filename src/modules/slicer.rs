@@ -42,8 +42,8 @@ use crate::dsp::{
     ParameterDisplay, SignalType,
 };
 
-/// The Slicer's module ID.
-pub const SLICER_ID: &str = "fx.slicer";
+/// The module's ID, as patches name it.
+pub const ID: &str = "fx.slicer";
 
 /// Steps in the row.
 pub const STEPS: usize = 16;
@@ -456,7 +456,7 @@ impl Default for Slicer {
 impl DspModule for Slicer {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: SLICER_ID,
+            id: ID,
             name: "Slicer",
             category: ModuleCategory::Effect,
             description: "Chops its input into a rhythm in time with the Clock, like a slicer pedal: sixteen steps, a step filter and ping-pong",
@@ -747,7 +747,7 @@ mod tests {
     #[test]
     fn test_ports_and_parameters() {
         let slicer = Slicer::new();
-        assert_eq!(slicer.info().id, SLICER_ID);
+        assert_eq!(slicer.info().id, ID);
         assert_eq!(slicer.info().category, ModuleCategory::Effect);
         assert_eq!(slicer.parameters().len(), Slicer::PARAM_COUNT);
         let ports = slicer.ports();
@@ -990,7 +990,7 @@ mod tests {
     fn test_registry_instantiation() {
         let mut registry = crate::dsp::ModuleRegistry::new();
         registry.register::<Slicer>();
-        let module = registry.create(SLICER_ID).unwrap();
+        let module = registry.create(ID).unwrap();
         assert_eq!(module.parameters().len(), Slicer::PARAM_COUNT);
     }
 }

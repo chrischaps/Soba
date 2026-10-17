@@ -353,7 +353,7 @@ mod tests {
     fn takes_nobody_keeps_are_removed() {
         use crate::graph::Tidy;
         use crate::dsp::tidy::Level;
-        use crate::modules::sampler::SAMPLER_ID;
+        use crate::modules::sampler;
         use crate::persistence::{sample_files, save_to_file, NodeData, Patch};
 
         let mut app = SynthApp::new(false);
@@ -362,13 +362,13 @@ mod tests {
         std::fs::write(&original, sample_files::encode_wav(&padded())).unwrap();
         let path = folder.join("Song.json");
         let mut patch = Patch::new("Song");
-        let mut sampler = NodeData::new(1, SAMPLER_ID, (0.0, 0.0));
+        let mut sampler = NodeData::new(1, sampler::ID, (0.0, 0.0));
         sampler.file = Some("padded.wav".to_string());
         patch.nodes.push(sampler);
         save_to_file(&patch, &path).unwrap();
         app.open_file(&path);
         app.sync_samples();
-        let node_id = |app: &SynthApp| app.graph_state.graph.nodes.iter().find(|(_, n)| n.user_data.module_id == SAMPLER_ID).unwrap().0;
+        let node_id = |app: &SynthApp| app.graph_state.graph.nodes.iter().find(|(_, n)| n.user_data.module_id == sampler::ID).unwrap().0;
         let file = |app: &SynthApp| app.graph_state.graph.nodes[node_id(app)].user_data.file.clone().unwrap();
         let tidy = |app: &mut SynthApp, tidy: Tidy| {
             app.tidy_sample(node_id(app), tidy);
@@ -426,7 +426,7 @@ mod tests {
     #[ignore = "opens the audio device; run with --ignored"]
     fn a_recovered_patch_s_takes_are_tidied_when_it_is_let_go() {
         use crate::app::session::Autosave;
-        use crate::modules::sampler::SAMPLER_ID;
+        use crate::modules::sampler;
         use crate::persistence::{sample_files, NodeData, Patch};
 
         // A process id no session has: past what Windows or Linux hand out
@@ -436,7 +436,7 @@ mod tests {
         std::fs::write(&take, sample_files::encode_wav(&padded())).unwrap();
         let undone = write(&crashed, "Take 2.wav");
         let mut patch = Patch::new("Untitled");
-        let mut sampler = NodeData::new(1, SAMPLER_ID, (0.0, 0.0));
+        let mut sampler = NodeData::new(1, sampler::ID, (0.0, 0.0));
         sampler.file = Some(take.to_string_lossy().into_owned());
         patch.nodes.push(sampler);
 

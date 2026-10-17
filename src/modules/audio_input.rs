@@ -39,6 +39,9 @@ fn coefficient(ms: f32, sample_rate: f32) -> f32 {
     1.0 - (-1.0 / (ms * 0.001 * sample_rate).max(1.0)).exp()
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "source.audio_input";
+
 /// The patch's audio input.
 ///
 /// # Ports
@@ -131,7 +134,7 @@ impl DspModule for AudioInput {
 
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "source.audio_input",
+            id: ID,
             name: "Audio Input",
             category: ModuleCategory::Source,
             description: "A microphone, guitar or line source from the Input device, with an envelope follower and a gate",

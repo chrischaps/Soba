@@ -16,6 +16,9 @@ use crate::dsp::{
     signal::SignalBuffer,
 };
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.midi_monitor";
+
 /// A MIDI monitor module that displays incoming MIDI events.
 ///
 /// This module is display-only - it reads from the global MIDI input
@@ -63,7 +66,7 @@ impl Default for MidiMonitor {
 impl DspModule for MidiMonitor {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.midi_monitor",
+            id: ID,
             name: "MIDI Monitor",
             category: ModuleCategory::Utility,
             description: "Display incoming MIDI events",

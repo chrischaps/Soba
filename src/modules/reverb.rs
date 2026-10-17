@@ -135,6 +135,9 @@ fn householder(x: &mut [f32; LINES]) {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "fx.reverb";
+
 /// Stereo feedback-delay-network reverb.
 ///
 /// # Ports
@@ -415,7 +418,7 @@ impl Default for Reverb {
 impl DspModule for Reverb {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "fx.reverb",
+            id: ID,
             name: "Reverb",
             category: ModuleCategory::Effect,
             description: "Stereo feedback-delay-network reverb with size, decay, damping and a modulated tail",

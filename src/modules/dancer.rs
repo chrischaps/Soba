@@ -38,6 +38,9 @@ enum Source {
     Heard,
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.dancer";
+
 /// A stick figure who dances to the patch.
 ///
 /// # Ports
@@ -295,7 +298,7 @@ impl Default for Dancer {
 impl DspModule for Dancer {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.dancer",
+            id: ID,
             name: "Dancer",
             category: ModuleCategory::Utility,
             description: "A stick figure who dances to the patch: on the Clock's beat, as hard as the music is loud",

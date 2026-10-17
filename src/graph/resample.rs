@@ -12,10 +12,8 @@
 use egui_node_graph2::NodeId;
 
 use crate::dsp::SignalType;
+use crate::modules::{audio_input, clock};
 use super::{SynthGraph, SynthResponse};
-
-/// The Audio Input's module ID: what it offers is recorded, not resampled.
-pub const AUDIO_INPUT_ID: &str = "source.audio_input";
 
 /// What a new Sampler records from a module: a stereo pair of its audio
 /// outputs, or one alone.
@@ -43,13 +41,11 @@ impl Source {
 /// bars) are on the Sampler's own Take.
 pub const BAR_TAKES: [u32; 3] = [1, 2, 4];
 
-/// What the Clock module is called, by ID.
-const CLOCK_ID: &str = "util.clock";
 
 /// Whether a take in bars has a Clock to count them: one in the patch whose
 /// Run is on, or patched (it may be switched on by then).
 pub fn has_clock(graph: &SynthGraph) -> bool {
-    graph.nodes.iter().filter(|(_, node)| node.user_data.module_id == CLOCK_ID).any(|(_, node)| {
+    graph.nodes.iter().filter(|(_, node)| node.user_data.module_id == clock::ID).any(|(_, node)| {
         node.get_input("Run").ok().is_none_or(|run| graph.connection(run).is_some() || graph.get_input(run).value.actual_value() > 0.5)
     })
 }
@@ -107,7 +103,7 @@ pub fn source_of(graph: &SynthGraph, node_id: NodeId, port: &str) -> Option<Sour
 /// The menu item's words for a node: an Audio Input records, the rest resample.
 pub fn label(graph: &SynthGraph, node_id: NodeId) -> &'static str {
     match graph.nodes.get(node_id).map(|n| n.user_data.module_id) {
-        Some(AUDIO_INPUT_ID) => "Record into a new Sampler",
+        Some(audio_input::ID) => "Record into a new Sampler",
         _ => "Resample into a new Sampler",
     }
 }
@@ -210,7 +206,7 @@ mod tests {
 
     #[test]
     fn test_stereo_outputs_pair_up_and_the_rest_stand_alone() {
-        assert_eq!(sources_of(AUDIO_INPUT_ID), [pair("L", "R")]);
+        assert_eq!(sources_of(audio_input::ID), [pair("L", "R")]);
         assert_eq!(sources_of("util.mixer"), [pair("Out L", "Out R"), pair("Send L", "Send R")]);
         assert_eq!(sources_of("source.noise").len(), 3);
         // Audio Output has nothing to record from
@@ -237,7 +233,7 @@ mod tests {
         let mut graph = SynthGraph::default();
         add(&mut graph, "util.mixer");
         assert!(!has_clock(&graph), "no Clock, nothing to count bars");
-        let clock = add(&mut graph, CLOCK_ID);
+        let clock = add(&mut graph, clock::ID);
         assert!(has_clock(&graph));
         let run = graph[clock].get_input("Run").unwrap();
         graph.inputs[run].value.set_actual_value(0.0);

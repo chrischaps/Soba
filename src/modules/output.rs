@@ -14,6 +14,9 @@ use crate::dsp::{
     SignalType,
 };
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "output.audio";
+
 /// The audio output module that routes audio to the speakers.
 ///
 /// This is the final destination in an audio graph. It accepts stereo
@@ -157,7 +160,7 @@ impl Default for AudioOutput {
 impl DspModule for AudioOutput {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "output.audio",
+            id: ID,
             name: "Audio Output",
             category: ModuleCategory::Output,
             description: "Master stereo output with DC blocking and a peak limiter",

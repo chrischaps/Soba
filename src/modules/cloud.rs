@@ -51,8 +51,8 @@ use crate::dsp::{
 use super::noise::Pcg32;
 use super::sampler::Sampler;
 
-/// The Cloud's module ID.
-pub const CLOUD_ID: &str = "source.cloud";
+/// The module's ID, as patches name it.
+pub const ID: &str = "source.cloud";
 
 /// The grains it can play at once, set aside up front.
 pub const GRAINS: usize = 64;
@@ -645,7 +645,7 @@ impl Default for Cloud {
 impl DspModule for Cloud {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: CLOUD_ID,
+            id: ID,
             name: "Cloud",
             category: ModuleCategory::Source,
             description: "Granular: clouds of small grains from a WAV file or live audio, with Freeze",

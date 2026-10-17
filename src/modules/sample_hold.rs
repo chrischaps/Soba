@@ -14,6 +14,9 @@ use crate::dsp::{
     ParameterDisplay, SignalType,
 };
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.sample_hold";
+
 /// A Sample and Hold module.
 ///
 /// Samples the input signal on rising edge of the trigger and holds
@@ -102,7 +105,7 @@ impl Default for SampleHold {
 impl DspModule for SampleHold {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.sample_hold",
+            id: ID,
             name: "Sample & Hold",
             category: ModuleCategory::Utility,
             description: "Sample input on trigger, hold until next trigger",

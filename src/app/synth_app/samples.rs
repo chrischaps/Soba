@@ -29,9 +29,9 @@ use egui_node_graph2::NodeId;
 use crate::engine::EngineCommand;
 use crate::graph::sample_shelf::DROPPED_PREFIX;
 use crate::graph::SynthNodeTemplate;
-use crate::modules::looper::LOOPER_ID;
+use crate::modules::looper;
 use crate::modules::plays_a_sample;
-use crate::modules::sampler::SAMPLER_ID;
+use crate::modules::sampler;
 use crate::persistence::sample_files::{self, SampleBase};
 use crate::persistence::{Patch, StagedNode};
 use super::super::editing;
@@ -143,7 +143,7 @@ impl SynthApp {
             .graph
             .nodes
             .iter()
-            .filter(|(_, node)| node.user_data.module_id == LOOPER_ID)
+            .filter(|(_, node)| node.user_data.module_id == looper::ID)
             .filter_map(|(node_id, node)| Some((node_id, node.user_data.file.clone()?)))
             .collect();
 
@@ -205,7 +205,7 @@ impl SynthApp {
         for node in nodes {
             let Some(data) = self.graph_state.graph.nodes.get_mut(node.graph_id).map(|n| &mut n.user_data) else { continue };
             let Some(saved) = data.file.clone() else { continue };
-            let looper = data.module_id == LOOPER_ID;
+            let looper = data.module_id == looper::ID;
             let key = sample_files::resolve(&saved, base);
             data.file = Some(key.clone());
             if !checked.insert(key.clone()) {
@@ -425,7 +425,7 @@ impl SynthApp {
 
     /// A new Sampler with its waveform about under `screen`. Returns its node.
     fn add_sampler_at(&mut self, screen: egui::Pos2) -> NodeId {
-        let template = SynthNodeTemplate::from_module_id(SAMPLER_ID).expect("the Sampler is registered");
+        let template = SynthNodeTemplate::from_module_id(sampler::ID).expect("the Sampler is registered");
         let zoom = self.graph_state.pan_zoom.zoom;
         let position = self.screen_to_node(screen - egui::vec2(110.0, 60.0) * zoom);
         let (node_id, commands) = editing::add_module(&mut self.graph_state, &mut self.user_state, template, position);
@@ -529,7 +529,7 @@ mod tests {
         // Saved once with nothing to gather, then a Sampler plays a file from elsewhere
         let path = song.join("Song.json");
         let mut patch = Patch::new("Song");
-        let mut sampler = NodeData::new(1, SAMPLER_ID, (0.0, 0.0));
+        let mut sampler = NodeData::new(1, sampler::ID, (0.0, 0.0));
         sampler.file = Some(kick.to_string_lossy().into_owned());
         patch.nodes.push(sampler);
         save_to_file(&patch, &path).unwrap();

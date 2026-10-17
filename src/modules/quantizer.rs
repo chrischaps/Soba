@@ -99,6 +99,9 @@ fn nearest_in_key(semitones: f32, key: u16) -> i32 {
     best
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.quantizer";
+
 /// Snaps a V/Oct pitch to a musical scale.
 ///
 /// # Ports
@@ -223,7 +226,7 @@ impl Default for Quantizer {
 impl DspModule for Quantizer {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.quantizer",
+            id: ID,
             name: "Quantizer",
             category: ModuleCategory::Utility,
             description: "Snap a pitch to the nearest note of a scale",

@@ -16,8 +16,9 @@
 
 use egui_node_graph2::NodeId;
 
-use crate::modules::clock::Clock;
+use crate::modules::clock::{self, Clock};
 use crate::modules::envelope::AdsrEnvelope;
+use crate::modules::oscillator;
 use crate::modules::slope::Slope;
 use crate::modules::vocoder::Vocoder;
 
@@ -70,7 +71,7 @@ pub fn law(module_id: &str, param: &str) -> Option<CvLaw> {
         ("mod.lfo", "Rate") => Octaves, // lfo.rs: base_rate * 2^cv
         ("mod.slope", "Rise") => Readout(Slope::READOUT_RISE),
         ("mod.slope", "Fall") => Readout(Slope::READOUT_FALL),
-        ("util.clock", "Tempo") => Readout(Clock::READOUT_TEMPO),
+        (clock::ID, "Tempo") => Readout(Clock::READOUT_TEMPO),
         // mixer.rs: every strip's knobs, and the return, add their CV
         ("util.mixer", _) => Add { scale: 1.0 },
         ("util.quantizer", "Transpose") => Add { scale: 12.0 }, // quantizer.rs: knob + 12 cv
@@ -84,7 +85,7 @@ pub fn law(module_id: &str, param: &str) -> Option<CvLaw> {
         ("fx.vocoder", "Formant") => Readout(Vocoder::READOUT_FORMANT),
         // Knobs whose CV comes through another jack (see `jack`)
         ("util.vca", "Level") => GainBy("CV Amount"),      // vca.rs: level * (1 - amt + cv * amt)
-        ("osc.sine", "Pulse Width") => Add { scale: 0.4 }, // oscillator.rs: width + 0.4 pwm
+        (oscillator::ID, "Pulse Width") => Add { scale: 0.4 }, // oscillator.rs: width + 0.4 pwm
         // drum.rs Voicing::new: a softer hit is darker and less snappy
         ("source.drum", "Tone") => Dim { by: 0.25 },
         ("source.drum", "Snap") => Gain { amount: 0.5 },
@@ -96,7 +97,7 @@ pub fn law(module_id: &str, param: &str) -> Option<CvLaw> {
 pub fn jack(module_id: &str, param: &str) -> Option<&'static str> {
     Some(match (module_id, param) {
         ("util.vca", "Level") => "CV",
-        ("osc.sine", "Pulse Width") => "PWM",
+        (oscillator::ID, "Pulse Width") => "PWM",
         ("source.drum", "Tone" | "Snap") => "Accent",
         _ => return None,
     })

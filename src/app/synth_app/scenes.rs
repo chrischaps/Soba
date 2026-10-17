@@ -16,7 +16,6 @@ use egui_node_graph2::NodeId;
 use crate::engine::NodeId as EngineNodeId;
 use crate::graph::scenes::{self, Settings};
 use crate::graph::{port_mapping, SceneAction};
-use crate::modules::scenes::SCENES_ID;
 use super::SynthApp;
 
 /// How far Morph has to move before the knobs follow.
@@ -67,7 +66,7 @@ impl SynthApp {
         let graph = &self.graph_state.graph;
         let found = match self.graph_state.selected_nodes.first() {
             Some(&node) => scenes::scenes_for(graph, node),
-            None => graph.nodes.iter().find(|(_, n)| n.user_data.module_id == SCENES_ID && n.user_data.parent.is_none()).map(|(id, _)| id),
+            None => graph.nodes.iter().find(|(_, n)| n.user_data.module_id == crate::modules::scenes::ID && n.user_data.parent.is_none()).map(|(id, _)| id),
         };
         let Some(scenes_node) = found else {
             self.status_message = Some("Add a Scenes module to keep variations as scenes".to_string());
@@ -88,7 +87,7 @@ impl SynthApp {
         let mut patched = false;
         let mut seen = Vec::new();
         for (node_id, node) in graph.nodes.iter() {
-            if node.user_data.module_id != SCENES_ID {
+            if node.user_data.module_id != crate::modules::scenes::ID {
                 continue;
             }
             let Some(engine_id) = self.user_state.get_engine_node_id(node_id) else { continue };

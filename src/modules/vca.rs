@@ -13,6 +13,9 @@ use crate::dsp::{
     ParameterDisplay, SignalType,
 };
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.vca";
+
 /// A Voltage Controlled Amplifier.
 ///
 /// Multiplies an audio signal by a control voltage, allowing envelopes,
@@ -107,7 +110,7 @@ impl Default for Vca {
 impl DspModule for Vca {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "util.vca",
+            id: ID,
             name: "VCA",
             category: ModuleCategory::Utility,
             description: "Voltage controlled amplifier for amplitude shaping",

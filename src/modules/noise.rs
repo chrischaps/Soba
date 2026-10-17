@@ -106,6 +106,9 @@ pub(crate) fn soft_ceiling(x: f32) -> f32 {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "source.noise";
+
 /// A noise source: white, pink and brown noise, and a smooth random voltage.
 ///
 /// # Ports
@@ -227,7 +230,7 @@ impl Default for Noise {
 impl DspModule for Noise {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "source.noise",
+            id: ID,
             name: "Noise",
             category: ModuleCategory::Source,
             description: "White, pink and brown noise, and a smooth random voltage",

@@ -125,6 +125,9 @@ impl Crusher {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "fx.distortion";
+
 /// Distortion effect module with multiple algorithms.
 ///
 /// # Ports
@@ -397,7 +400,7 @@ impl Default for Distortion {
 impl DspModule for Distortion {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "fx.distortion",
+            id: ID,
             name: "Distortion",
             category: ModuleCategory::Effect,
             description: "Oversampled distortion: soft, hard, wavefolder, tube, and bit crush",

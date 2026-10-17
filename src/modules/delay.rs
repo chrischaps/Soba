@@ -60,6 +60,9 @@ impl TapeChannel {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "fx.delay";
+
 /// Stereo delay effect with feedback, filtering, ping-pong and Tape mode.
 ///
 /// # Ports
@@ -288,7 +291,7 @@ impl Default for StereoDelay {
 impl DspModule for StereoDelay {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "fx.delay",
+            id: ID,
             name: "Stereo Delay",
             category: ModuleCategory::Effect,
             description: "Stereo delay with feedback filtering, ping-pong, tempo sync and tape mode",

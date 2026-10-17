@@ -110,6 +110,9 @@ enum Motion {
     Down,
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "mod.slope";
+
 /// A Slope module: slew, trigger envelopes and cycling, as on Maths.
 ///
 /// # Ports
@@ -300,7 +303,7 @@ impl Default for Slope {
 impl DspModule for Slope {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "mod.slope",
+            id: ID,
             name: "Slope",
             category: ModuleCategory::Modulation,
             description: "Rises and falls at set rates: slew, glide, portamento, lag, AR envelope and function generator, or a cycling LFO with skew",

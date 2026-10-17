@@ -475,6 +475,9 @@ fn saturate(x: f32, drive: f32) -> f32 {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "source.drum";
+
 /// A drum voice: kick, snare, tom, clap, closed and open hat, cymbal, rim,
 /// cowbell and shaker.
 ///
@@ -841,7 +844,7 @@ impl Default for Drum {
 impl DspModule for Drum {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "source.drum",
+            id: ID,
             name: "Drum",
             category: ModuleCategory::Source,
             description: "An analog-style drum voice: kick, snare, tom, clap, hats, cymbal, rim, cowbell or shaker",

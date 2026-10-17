@@ -14,7 +14,7 @@ use crate::app::undo::History;
 use crate::dsp::Readout;
 use crate::graph::port_mapping::parameter_inputs;
 use crate::graph::{follows_link, SynthGraph, SynthGraphState};
-use crate::modules::clock::Clock;
+use crate::modules::clock::{self, Clock};
 
 /// Moves a Link Clock's Tempo knob and Run switch to match its session, if
 /// a peer changed it since the Clock's `previous` readout.
@@ -29,7 +29,7 @@ pub(super) fn follow_peers(
     let Some(node_id) = user_state.node_id_map.iter().find(|(_, &id)| id == engine_node_id).map(|(&node_id, _)| node_id) else {
         return;
     };
-    let is_link_clock = graph.nodes.get(node_id).is_some_and(|node| node.user_data.module_id == "util.clock") && follows_link(graph, node_id);
+    let is_link_clock = graph.nodes.get(node_id).is_some_and(|node| node.user_data.module_id == clock::ID) && follows_link(graph, node_id);
     if !is_link_clock {
         return;
     }

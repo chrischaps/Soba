@@ -9,8 +9,7 @@ use cpal::{FromSample, Sample};
 use rtrb::Consumer;
 
 use crate::dsp::denormal::DenormalGuard;
-use crate::dsp::{HostTransport, InputAudio, MidiEvent, ModuleRegistry, Poly, ProcessContext, Snapshot, SnapshotOutcome};
-use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Cloud, Chorus, Clock, ClockDivider, Compressor, Dancer, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, LinkOut, Logic, MidiOut, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Resonator, Reverb, SampleHold, Sampler, Scenes, Oscillator, Slicer, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
+use crate::dsp::{HostTransport, InputAudio, MidiEvent, ModuleRegistry, ProcessContext, Snapshot, SnapshotOutcome};
 
 use super::audio_input::InputFeed;
 use super::channels::{EngineHandle, MAX_SNAPSHOTS};
@@ -24,60 +23,12 @@ use super::recorder::RecordTap;
 
 /// Creates a module registry with all built-in modules.
 ///
-/// Registering a module here is all it takes to make it available in the
-/// editor: node templates are generated from the registry. Registration
-/// order is the order modules appear in the add-node menu.
-///
-/// Modules wrapped in [`Poly`] are polyphonic: they run one voice per
-/// channel of a polyphonic cable.
+/// Adding a module to [`crate::modules::register_builtin`]'s list is all it
+/// takes to make it available in the editor: node templates are generated
+/// from the registry.
 pub fn create_module_registry() -> ModuleRegistry {
     let mut registry = ModuleRegistry::new();
-    registry.register::<Poly<Oscillator>>();
-    registry.register::<Poly<Noise>>();
-    registry.register::<Poly<Drum>>();
-    registry.register::<Poly<Resonator>>();
-    registry.register::<Sampler>();
-    registry.register::<Chopper>();
-    registry.register::<Cloud>();
-    registry.register::<AudioInput>();
-    registry.register::<KeyboardInput>();
-    registry.register::<MidiNote>();
-    registry.register::<PolyMidi>();
-    registry.register::<Poly<SvfFilter>>();
-    registry.register::<Poly<LadderFilter>>();
-    registry.register::<Poly<AdsrEnvelope>>();
-    registry.register::<Lfo>();
-    registry.register::<Poly<Slope>>();
-    registry.register::<Clock>();
-    registry.register::<Poly<Vca>>();
-    registry.register::<Poly<Attenuverter>>();
-    registry.register::<Mix>();
-    registry.register::<Mixer>();
-    registry.register::<Poly<SampleHold>>();
-    registry.register::<Poly<Quantizer>>();
-    registry.register::<ClockDivider>();
-    registry.register::<Logic>();
-    registry.register::<Looper>();
-    registry.register::<Oscilloscope>();
-    registry.register::<Dancer>();
-    registry.register::<StepSequencer>();
-    registry.register::<ChordSequencer>();
-    registry.register::<TriggerSequencer>();
-    registry.register::<Arranger>();
-    registry.register::<Scenes>();
-    registry.register::<StereoDelay>();
-    registry.register::<Reverb>();
-    registry.register::<ParametricEq>();
-    registry.register::<Distortion>();
-    registry.register::<Chorus>();
-    registry.register::<Tape>();
-    registry.register::<Slicer>();
-    registry.register::<Vocoder>();
-    registry.register::<Compressor>();
-    registry.register::<MidiMonitor>();
-    registry.register::<AudioOutput>();
-    registry.register::<LinkOut>();
-    registry.register::<MidiOut>();
+    crate::modules::register_builtin(&mut registry);
     registry
 }
 
@@ -732,7 +683,7 @@ mod tests {
         assert!(registry.contains("output.midi"));
         assert!(registry.contains("source.cloud"));
         assert!(registry.contains("source.resonator"));
-        assert_eq!(registry.len(), 46);
+        assert_eq!(registry.len(), crate::modules::BUILTIN_COUNT);
     }
 
     #[test]

@@ -21,7 +21,7 @@ use std::collections::{BTreeMap, HashMap};
 use egui_node_graph2::{InputId, InputParamKind, NodeId};
 
 use crate::engine::NodeId as EngineNodeId;
-use crate::modules::scenes::{SCENES_ID, SLOT_LABELS};
+use crate::modules::scenes::{self, SLOT_LABELS};
 use crate::widgets::knob::KnobConfig;
 
 use super::groups::{self, GroupIndex, NodeKind};
@@ -58,7 +58,7 @@ pub fn scope(graph: &SynthGraph, scenes: NodeId) -> Vec<NodeId> {
     modules.retain(|&n| {
         graph.nodes.get(n).is_some_and(|node| {
             let data = &node.user_data;
-            data.kind == NodeKind::Module && data.module_id != SCENES_ID && !data.module_id.starts_with("output.")
+            data.kind == NodeKind::Module && data.module_id != scenes::ID && !data.module_id.starts_with("output.")
         })
     });
     modules.sort();
@@ -309,7 +309,7 @@ pub fn scenes_for(graph: &SynthGraph, node: NodeId) -> Option<NodeId> {
         let mut here: Vec<NodeId> = graph
             .nodes
             .iter()
-            .filter(|(_, n)| n.user_data.module_id == SCENES_ID && n.user_data.parent == level)
+            .filter(|(_, n)| n.user_data.module_id == scenes::ID && n.user_data.parent == level)
             .map(|(id, _)| id)
             .collect();
         here.sort();
@@ -368,7 +368,7 @@ mod tests {
         let mut rig = Rig::new();
         let filter = rig.add("filter.svf");
         let out = rig.add("output.audio");
-        let scenes = rig.add(SCENES_ID);
+        let scenes = rig.add(scenes::ID);
         let scene = capture(&rig.editor.graph, &rig.user_state, scenes);
         let id = |n| rig.user_state.get_engine_node_id(n).unwrap();
         assert!(scene[&id(filter)].contains_key("Cutoff"));
@@ -382,7 +382,7 @@ mod tests {
         let mut rig = Rig::new();
         let filter = rig.add("filter.svf");
         let osc = rig.add("osc.sine");
-        let scenes = rig.add(SCENES_ID);
+        let scenes = rig.add(scenes::ID);
         rig.set(filter, "Cutoff", 200.0);
         rig.set(osc, "Waveform", 0.0);
         let a = capture(&rig.editor.graph, &rig.user_state, scenes);
@@ -407,7 +407,7 @@ mod tests {
         let mut rig = Rig::new();
         let lfo = rig.add("mod.lfo");
         let filter = rig.add("filter.svf");
-        let scenes = rig.add(SCENES_ID);
+        let scenes = rig.add(scenes::ID);
         rig.set(filter, "Cutoff", 200.0);
         let a = capture(&rig.editor.graph, &rig.user_state, scenes);
         rig.set(filter, "Cutoff", 3200.0);
@@ -426,9 +426,9 @@ mod tests {
     fn scenes_in_a_group_reach_only_the_group() {
         let mut rig = Rig::new();
         let inside = rig.add("filter.svf");
-        let scenes = rig.add(SCENES_ID);
+        let scenes = rig.add(scenes::ID);
         let outside = rig.add("filter.svf");
-        let top = rig.add(SCENES_ID);
+        let top = rig.add(scenes::ID);
         let made = groups::group(&mut rig.editor, &[inside, scenes], GroupId(1), "Voice", Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(400.0, 300.0)))
             .expect("grouped");
 
@@ -460,7 +460,7 @@ mod tests {
 
         let mut rig = Rig::new();
         let filter = rig.add("filter.svf");
-        let scenes = rig.add(SCENES_ID);
+        let scenes = rig.add(scenes::ID);
         let mut history = History::default();
         history.reset(&rig.editor, &rig.user_state);
 

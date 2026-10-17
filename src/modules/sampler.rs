@@ -41,8 +41,8 @@ use crate::dsp::onsets::DEFAULT_SENSITIVITY;
 pub(crate) use recorder::{Controls, Recorder};
 pub use recorder::{RecState, LATE_TAP_SECONDS, NO_THRESHOLD_DB, PRE_ROLL_SECONDS, TAKE_COLUMNS, TAKE_LENGTHS, TAKE_ROOM_SECONDS};
 
-/// The Sampler's module ID.
-pub const SAMPLER_ID: &str = "source.sampler";
+/// The module's ID, as patches name it.
+pub const ID: &str = "source.sampler";
 
 /// The Loop menu, in saved order.
 pub const LOOP_MODES: &[&str] = &["Off", "Forward", "Ping-Pong"];
@@ -598,7 +598,7 @@ impl Default for Sampler {
 impl DspModule for Sampler {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: SAMPLER_ID,
+            id: ID,
             name: "Sampler",
             category: ModuleCategory::Source,
             description: "Plays a WAV file: one-shots from a gate, an instrument across the keyboard, or its slices by note",
@@ -1024,7 +1024,7 @@ mod tests {
     #[test]
     fn test_ports_and_parameters() {
         let sampler = Sampler::new();
-        assert_eq!(sampler.info().id, SAMPLER_ID);
+        assert_eq!(sampler.info().id, ID);
         assert_eq!(sampler.info().category, ModuleCategory::Source);
         let names: Vec<&str> = sampler.ports().iter().map(|p| p.name).collect();
         assert_eq!(names, ["Gate", "V/Oct", "Velocity", "Start", "Speed", "Slice", "In L", "In R", "Rec", "L", "R"]);
@@ -1546,7 +1546,7 @@ mod tests {
     #[test]
     fn test_sampler_registry_instantiation() {
         let registry = crate::engine::create_module_registry();
-        let module = registry.create(SAMPLER_ID).expect("Sampler is registered");
+        let module = registry.create(ID).expect("Sampler is registered");
         assert_eq!(module.info().name, "Sampler");
         assert!(module.polyphonic());
     }

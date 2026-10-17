@@ -32,8 +32,8 @@ use web_time::Instant;
 
 use crate::dsp::{FinishedTake, SampleData};
 use crate::engine::{EngineCommand, NodeId as EngineNodeId};
-use crate::modules::chopper::CHOPPER_ID;
-use crate::modules::sampler::{Sampler, SAMPLER_ID, TAKE_ROOM_SECONDS};
+use crate::modules::chopper;
+use crate::modules::sampler::{self, Sampler, TAKE_ROOM_SECONDS};
 use crate::persistence::sample_files::{self, Decoded};
 use super::slicing::value_of;
 use super::SynthApp;
@@ -118,7 +118,7 @@ impl SynthApp {
     /// as it already plays it. Returns the Beats set, for a Chopper.
     fn loop_take(&mut self, node_id: NodeId, beats: u32) -> Option<u32> {
         let graph = &mut self.graph_state.graph;
-        let node = graph.nodes.get(node_id).filter(|node| node.user_data.module_id == CHOPPER_ID)?;
+        let node = graph.nodes.get(node_id).filter(|node| node.user_data.module_id == chopper::ID)?;
         let (_, input) = node.inputs.iter().find(|(name, _)| name == "Beats")?;
         let beats = beats.clamp(1, 64);
         graph.inputs[*input].value.set_actual_value(beats as f32);
@@ -179,7 +179,7 @@ impl SynthApp {
             .graph
             .nodes
             .iter()
-            .filter(|(_, node)| [SAMPLER_ID, CHOPPER_ID].contains(&node.user_data.module_id))
+            .filter(|(_, node)| [sampler::ID, chopper::ID].contains(&node.user_data.module_id))
             .filter(|(_, node)| {
                 ["In L", "In R"]
                     .iter()
@@ -225,7 +225,7 @@ mod tests {
     }
 
     fn the_sampler(app: &SynthApp) -> (NodeId, EngineNodeId) {
-        let (node_id, _) = app.graph_state.graph.nodes.iter().find(|(_, n)| n.user_data.module_id == SAMPLER_ID).expect("a Sampler");
+        let (node_id, _) = app.graph_state.graph.nodes.iter().find(|(_, n)| n.user_data.module_id == sampler::ID).expect("a Sampler");
         (node_id, app.user_state.get_engine_node_id(node_id).unwrap())
     }
 
@@ -266,7 +266,7 @@ mod tests {
         // A sine into a Sampler's In L, opened as a patch file
         let mut patch = Patch::new("Song");
         patch.nodes.push(NodeData::new(1, "osc.sine", (0.0, 0.0)));
-        patch.nodes.push(NodeData::new(2, SAMPLER_ID, (200.0, 0.0)));
+        patch.nodes.push(NodeData::new(2, sampler::ID, (200.0, 0.0)));
         patch.connections.push(ConnectionData::new(1, "Out", 2, "In L"));
         save_to_file(&patch, &path).unwrap();
         app.open_file(&path);
@@ -310,7 +310,7 @@ mod tests {
         // Saved, the patch names it beside itself; opened again, it plays it
         assert!(app.quick_save());
         let saved = load_from_file(&path).unwrap();
-        let named = saved.nodes.iter().find(|n| n.module_id == SAMPLER_ID).and_then(|n| n.file.clone());
+        let named = saved.nodes.iter().find(|n| n.module_id == sampler::ID).and_then(|n| n.file.clone());
         assert_eq!(named.as_deref(), Some("Song samples/Take 1.wav"));
         app.open_file(&path);
         pump(&mut app, 0.3);
@@ -351,7 +351,7 @@ mod tests {
         clock.parameters.push(NamedParameter::new("Tempo", ParameterValue::Number(240.0)));
         patch.nodes.push(clock);
         patch.nodes.push(NodeData::new(2, "osc.sine", (0.0, 300.0)));
-        let mut chopper = NodeData::new(3, CHOPPER_ID, (250.0, 0.0));
+        let mut chopper = NodeData::new(3, chopper::ID, (250.0, 0.0));
         chopper.parameters.push(NamedParameter::new("Take", ParameterValue::Select(2)));
         patch.nodes.push(chopper);
         patch.connections.push(ConnectionData::new(1, "Gate", 3, "Clock"));
@@ -362,7 +362,7 @@ mod tests {
         app.user_state.is_playing = true;
         app.send_command(EngineCommand::SetPlaying(true));
         pump(&mut app, 0.3);
-        let (node_id, _) = app.graph_state.graph.nodes.iter().find(|(_, n)| n.user_data.module_id == CHOPPER_ID).expect("a Chopper");
+        let (node_id, _) = app.graph_state.graph.nodes.iter().find(|(_, n)| n.user_data.module_id == chopper::ID).expect("a Chopper");
         let beats = |app: &SynthApp| value_of(&app.graph_state.graph, node_id, "Beats");
         assert_eq!(beats(&app), Some(4.0));
 
@@ -404,7 +404,7 @@ mod tests {
         let path = folder.join("Song.json");
         let mut patch = Patch::new("Song");
         patch.nodes.push(NodeData::new(1, "osc.sine", (0.0, 0.0)));
-        let mut sampler = NodeData::new(2, SAMPLER_ID, (200.0, 0.0));
+        let mut sampler = NodeData::new(2, sampler::ID, (200.0, 0.0));
         sampler.parameters.push(NamedParameter::new("Tidy Takes", ParameterValue::Number(1.0)));
         patch.nodes.push(sampler);
         patch.connections.push(ConnectionData::new(1, "Out", 2, "In L"));

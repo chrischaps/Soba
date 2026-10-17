@@ -40,8 +40,8 @@ use crate::dsp::{
     ParameterDisplay, SignalType,
 };
 
-/// The patch file's name for the module.
-pub const RESONATOR_ID: &str = "source.resonator";
+/// The module's ID, as patches name it.
+pub const ID: &str = "source.resonator";
 
 /// The models, in the Mode menu's order. Saved patches store the index.
 pub const MODES: &[&str] = &["String", "Body"];
@@ -545,7 +545,7 @@ impl Default for Resonator {
 impl DspModule for Resonator {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: RESONATOR_ID,
+            id: ID,
             name: "Resonator",
             category: ModuleCategory::Source,
             description: "A physical model: a plucked string, or a struck bell, bar, glass or block of wood, played by a gate or by any sound",
@@ -1128,7 +1128,7 @@ mod tests {
     #[test]
     fn test_resonator_registry_instantiation() {
         let registry = crate::engine::create_module_registry();
-        let module = registry.create(RESONATOR_ID).expect("Resonator is registered");
+        let module = registry.create(ID).expect("Resonator is registered");
         assert_eq!(module.info().name, "Resonator");
         assert!(module.polyphonic());
     }

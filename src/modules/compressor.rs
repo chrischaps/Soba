@@ -71,6 +71,9 @@ impl CachedCoeff {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "fx.compressor";
+
 /// Dynamics compressor with sidechain support and gain reduction output.
 ///
 /// # Ports
@@ -307,7 +310,7 @@ impl Default for Compressor {
 impl DspModule for Compressor {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "fx.compressor",
+            id: ID,
             name: "Compressor",
             category: ModuleCategory::Effect,
             description: "Dynamics compressor with sidechain and gain reduction output",

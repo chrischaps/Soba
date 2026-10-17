@@ -17,7 +17,7 @@ use crate::graph::resample::Source;
 use crate::graph::sampler_take::{MIN_PRESS_SECONDS, REC_BUTTON};
 use crate::graph::SynthNodeTemplate;
 use crate::graph::resample::bar_name;
-use crate::modules::sampler::{Sampler, LOOP_MODES, NO_THRESHOLD_DB, SAMPLER_ID, TAKE_LENGTHS};
+use crate::modules::sampler::{self, Sampler, LOOP_MODES, NO_THRESHOLD_DB, TAKE_LENGTHS};
 use super::super::editing;
 use super::super::engine_sync;
 use super::framing::Target;
@@ -52,7 +52,7 @@ impl SynthApp {
     /// and brings the two into view if the Sampler landed out of it.
     pub(super) fn record_into_new_sampler(&mut self, node_id: NodeId, source: &Source, bars: u32) {
         let Some(&from) = self.graph_state.node_positions.get(node_id) else { return };
-        let Some(template) = SynthNodeTemplate::from_module_id(SAMPLER_ID) else { return };
+        let Some(template) = SynthNodeTemplate::from_module_id(sampler::ID) else { return };
         let size = self.sampler_size() * self.graph_state.pan_zoom.zoom;
         let at = self.clear_place_beside(node_id, from, size);
         let (sampler, mut commands) = editing::add_module(&mut self.graph_state, &mut self.user_state, template, at);
@@ -121,7 +121,7 @@ impl SynthApp {
         let graph = &self.graph_state.graph;
         self.node_sizes
             .iter()
-            .find(|(n, _)| graph.nodes.get(**n).is_some_and(|node| node.user_data.module_id == SAMPLER_ID))
+            .find(|(n, _)| graph.nodes.get(**n).is_some_and(|node| node.user_data.module_id == sampler::ID))
             .map_or(SAMPLER_SIZE, |(_, &size)| size)
     }
 
@@ -242,7 +242,7 @@ mod tests {
         let send = crate::graph::resample::source_of(&app.graph_state.graph, mixer, "Send R").unwrap();
         app.record_into_new_sampler(mixer, &send, 0);
         pump(&mut app, 0.05);
-        let sampler = node(&app, SAMPLER_ID);
+        let sampler = node(&app, sampler::ID);
         assert_eq!(patched_from(&app, sampler, "In L"), Some((mixer, "Send L".into())));
         assert_eq!(patched_from(&app, sampler, "In R"), Some((mixer, "Send R".into())));
         let graph = &app.graph_state.graph;
@@ -262,7 +262,7 @@ mod tests {
         // Undone in one step: the Sampler and its cables go together
         app.undo();
         pump(&mut app, 0.05);
-        assert!(app.graph_state.graph.nodes.iter().all(|(_, n)| n.user_data.module_id != SAMPLER_ID));
+        assert!(app.graph_state.graph.nodes.iter().all(|(_, n)| n.user_data.module_id != sampler::ID));
         std::fs::remove_dir_all(&folder).ok();
     }
 
@@ -276,7 +276,7 @@ mod tests {
         let out = crate::graph::resample::source_of(&app.graph_state.graph, sine, "Out").unwrap();
         app.record_into_new_sampler(sine, &out, 2);
         pump(&mut app, 0.05);
-        let sampler = node(&app, SAMPLER_ID);
+        let sampler = node(&app, sampler::ID);
         let graph = &app.graph_state.graph;
         let value = |name: &str| graph.get_input(graph[sampler].get_input(name).unwrap()).value.actual_value();
         assert_eq!(TAKE_LENGTHS[value("Take") as usize], "2 bars");
@@ -316,7 +316,7 @@ mod tests {
         app.record_into_new_sampler(sine, &out, 0);
         assert!(app.is_playing, "a stopped patch hears nothing, so it plays");
         pump(&mut app, 0.5);
-        let sampler = node(&app, SAMPLER_ID);
+        let sampler = node(&app, sampler::ID);
         let engine_id = app.user_state.get_engine_node_id(sampler).unwrap();
         let state = |app: &SynthApp| RecState::from_code(app.user_state.readouts[&engine_id].values[Sampler::READOUT_REC_STATE]);
         assert_eq!(state(&app), RecState::Recording, "the sine is over Thresh at once");
@@ -352,7 +352,7 @@ mod tests {
 
         let out = crate::graph::resample::source_of(&app.graph_state.graph, sine, "Out").unwrap();
         app.record_into_new_sampler(sine, &out, 1);
-        let sampler = node(&app, SAMPLER_ID);
+        let sampler = node(&app, sampler::ID);
         // Up to a bar to the line, a bar of take, at the Clock's 120 BPM
         let end = Instant::now() + Duration::from_secs(6);
         while app.graph_state.graph[sampler].user_data.file.is_none() && Instant::now() < end {

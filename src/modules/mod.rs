@@ -50,11 +50,77 @@ pub mod trigger_sequencer;
 pub mod vca;
 pub mod vocoder;
 
+use crate::dsp::{ModuleRegistry, Poly};
+
 /// Whether a module plays a WAV file its node names: the Sampler, the
 /// Chopper and the Cloud. The editor loads, slices and drops files on them
 /// alike (the Cloud has no Slices, so it's never sliced).
 pub fn plays_a_sample(module_id: &str) -> bool {
-    module_id == sampler::SAMPLER_ID || module_id == chopper::CHOPPER_ID || module_id == cloud::CLOUD_ID
+    module_id == sampler::ID || module_id == chopper::ID || module_id == cloud::ID
+}
+
+/// Every built-in module, in add-node menu order: the one list a new module
+/// joins. Modules wrapped in [`Poly`] are polyphonic: they run one voice per
+/// channel of a polyphonic cable.
+macro_rules! builtin_modules {
+    ($($module:ty),* $(,)?) => {
+        /// How many modules [`register_builtin`] registers.
+        pub const BUILTIN_COUNT: usize = [$(stringify!($module)),*].len();
+
+        /// Registers every built-in module, in add-node menu order.
+        pub fn register_builtin(registry: &mut ModuleRegistry) {
+            $(registry.register::<$module>();)*
+        }
+    };
+}
+
+builtin_modules! {
+    Poly<Oscillator>,
+    Poly<Noise>,
+    Poly<Drum>,
+    Poly<Resonator>,
+    Sampler,
+    Chopper,
+    Cloud,
+    AudioInput,
+    KeyboardInput,
+    MidiNote,
+    PolyMidi,
+    Poly<SvfFilter>,
+    Poly<LadderFilter>,
+    Poly<AdsrEnvelope>,
+    Lfo,
+    Poly<Slope>,
+    Clock,
+    Poly<Vca>,
+    Poly<Attenuverter>,
+    Mix,
+    Mixer,
+    Poly<SampleHold>,
+    Poly<Quantizer>,
+    ClockDivider,
+    Logic,
+    Looper,
+    Oscilloscope,
+    Dancer,
+    StepSequencer,
+    ChordSequencer,
+    TriggerSequencer,
+    Arranger,
+    Scenes,
+    StereoDelay,
+    Reverb,
+    ParametricEq,
+    Distortion,
+    Chorus,
+    Tape,
+    Slicer,
+    Vocoder,
+    Compressor,
+    MidiMonitor,
+    AudioOutput,
+    LinkOut,
+    MidiOut,
 }
 
 // Re-export commonly used types

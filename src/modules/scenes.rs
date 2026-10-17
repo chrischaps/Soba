@@ -16,8 +16,8 @@ use crate::dsp::{
     ParameterDisplay, SignalType,
 };
 
-/// The module's ID.
-pub const SCENES_ID: &str = "util.scenes";
+/// The module's ID, as patches name it.
+pub const ID: &str = "util.scenes";
 
 /// The scenes' names, in slot order.
 pub const SLOT_LABELS: [&str; 8] = ["A", "B", "C", "D", "E", "F", "G", "H"];
@@ -58,7 +58,7 @@ impl Default for Scenes {
 impl DspModule for Scenes {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: SCENES_ID,
+            id: ID,
             name: "Scenes",
             category: ModuleCategory::Utility,
             description: "Keep the knobs as scenes, and glide between two",
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn morph_pairs_with_its_jack() {
         let scenes = Scenes::new();
-        assert_eq!(scenes.info().id, SCENES_ID);
+        assert_eq!(scenes.info().id, ID);
         assert_eq!(scenes.ports()[0].name, scenes.parameters()[Scenes::PARAM_MORPH].name);
         assert_eq!(scenes.parameters()[Scenes::PARAM_TO].default, 1.0);
     }

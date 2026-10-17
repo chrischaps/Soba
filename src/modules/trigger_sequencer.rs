@@ -177,6 +177,9 @@ impl Lane {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "seq.trigger";
+
 /// An eight-lane trigger sequencer with four chained patterns.
 ///
 /// # Ports
@@ -478,7 +481,7 @@ impl Default for TriggerSequencer {
 impl DspModule for TriggerSequencer {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "seq.trigger",
+            id: ID,
             name: "Trigger Sequencer",
             category: ModuleCategory::Utility,
             description: "Eight lanes of drum triggers, in four patterns played in a chain, with accents, probability and ratchets",

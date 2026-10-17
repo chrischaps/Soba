@@ -584,6 +584,9 @@ const GUESSED_STEP: f32 = 0.5;
 /// seconds: a beat at 15 BPM. Any slower clock is taken to have stopped.
 const UNMEASURED_HOLD: f32 = 4.0;
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "seq.chord";
+
 /// A chord sequencer with 16 steps.
 ///
 /// # Ports
@@ -1071,7 +1074,7 @@ fn note_to_voct(note: i32) -> f32 {
 impl DspModule for ChordSequencer {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "seq.chord",
+            id: ID,
             name: "Chord Sequencer",
             category: ModuleCategory::Utility,
             description: "16 chords, each a root, a type and a slash bass, played on polyphonic cables with voice leading",

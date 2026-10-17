@@ -293,6 +293,9 @@ pub fn note_to_name(note: u8) -> String {
     format!("{}{}", name, octave)
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "seq.step";
+
 /// A step sequencer module with 16 steps.
 ///
 /// Outputs pitch CV, gate, and velocity for each step, advancing on clock input.
@@ -829,7 +832,7 @@ impl Default for StepSequencer {
 impl DspModule for StepSequencer {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "seq.step",
+            id: ID,
             name: "Step Sequencer",
             category: ModuleCategory::Utility,
             description: "16-step sequencer with pitch, gate, and velocity per step, in four patterns played in a chain",

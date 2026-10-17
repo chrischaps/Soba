@@ -133,6 +133,9 @@ impl VoiceSlot {
     }
 }
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "fx.chorus";
+
 /// Stereo chorus effect with multiple voices.
 ///
 /// # Ports
@@ -292,7 +295,7 @@ impl Default for Chorus {
 impl DspModule for Chorus {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "fx.chorus",
+            id: ID,
             name: "Chorus",
             category: ModuleCategory::Effect,
             description: "Stereo chorus/flanger with multiple voices",

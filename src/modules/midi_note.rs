@@ -50,6 +50,9 @@ const ALL_NOTES_OFF: u8 = 123;
 /// milliseconds apart; gliding between them keeps bends from zippering.
 const BEND_SMOOTHING_SECONDS: f32 = 0.005;
 
+/// The module's ID, as patches name it.
+pub const ID: &str = "input.midi_note";
+
 /// A MIDI Note module that converts MIDI input to CV signals.
 ///
 /// Monophonic: when several keys are held, the Priority parameter picks the
@@ -264,7 +267,7 @@ impl Default for MidiNote {
 impl DspModule for MidiNote {
     fn info(&self) -> &ModuleInfo {
         static INFO: ModuleInfo = ModuleInfo {
-            id: "input.midi_note",
+            id: ID,
             name: "MIDI Note",
             category: ModuleCategory::Source,
             description: "Convert MIDI note events to CV signals",

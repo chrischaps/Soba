@@ -91,7 +91,7 @@ pub fn module_ui(module_id: &str) -> Option<&'static ModuleUi> {
 
 static MODULE_UI: &[ModuleUi] = &[
     ModuleUi {
-        module_id: "osc.sine",
+        module_id: crate::modules::oscillator::ID,
         // Three rows: tune, timbre, ensemble
         knobs: &[
             knob_as("Octave", "Oct"),
@@ -283,7 +283,7 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
-        module_id: "util.clock",
+        module_id: crate::modules::clock::ID,
         knobs: &[modulatable("Tempo", "BPM"), knob_as("Gate Length", "Gate"), knob("Swing")],
         labels: &[("Division", "Div")],
         monitor: &["Gate", "Run", "Reset"],
