@@ -435,7 +435,7 @@ fn footer(ui: &mut egui::Ui, held: Option<&str>) {
     ui.set_max_width(width);
     ui.add_space(4.0);
     let rect = ui.min_rect();
-    ui.painter().hline(rect.x_range(), ui.cursor().top(), egui::Stroke::new(1.0, theme::background::WIDGET_HOVERED));
+    ui.painter().hline(rect.x_range(), ui.cursor().top(), egui::Stroke::new(1.0_f32, theme::background::WIDGET_HOVERED));
     ui.add_space(6.0);
     let top = ui.cursor().top();
     match held {

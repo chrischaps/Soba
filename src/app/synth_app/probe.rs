@@ -210,7 +210,7 @@ impl CableProbe {
             .show(ctx, |ui| {
                 egui::Frame::none()
                     .fill(theme::node::BODY_FILL.gamma_multiply(0.96))
-                    .stroke(Stroke::new(1.0, color.gamma_multiply(0.6)))
+                    .stroke(Stroke::new(1.0_f32, color.gamma_multiply(0.6)))
                     .rounding(theme::ROUNDING_SMALL)
                     .inner_margin(egui::Margin::same(8.0))
                     .shadow(egui::epaint::Shadow { offset: Vec2::new(0.0, 4.0), blur: 12.0, spread: 0.0, color: Color32::from_black_alpha(110) })

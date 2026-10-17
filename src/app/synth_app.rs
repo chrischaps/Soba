@@ -3130,7 +3130,7 @@ impl SynthApp {
             .show(ctx, |ui| {
                 egui::Frame::none()
                     .fill(theme::background::PANEL)
-                    .stroke(egui::Stroke::new(1.0, theme::background::PANEL.gamma_multiply(1.6)))
+                    .stroke(egui::Stroke::new(1.0_f32, theme::background::PANEL.gamma_multiply(1.6)))
                     .rounding(10.0)
                     .inner_margin(egui::Margin::symmetric(10.0, 8.0))
                     .shadow(egui::epaint::Shadow {
@@ -3985,7 +3985,7 @@ fn wordmark(ui: &mut egui::Ui) -> egui::Response {
         painter.add(curve(5.0, theme::signal::AUDIO.gamma_multiply(0.2)));
         painter.add(curve(1.8, theme::signal::AUDIO));
         for jack in [from, to] {
-            painter.circle(jack, 2.6, theme::background::WIDGET, egui::Stroke::new(1.2, theme::signal::AUDIO));
+            painter.circle(jack, 2.6, theme::background::WIDGET, egui::Stroke::new(1.2_f32, theme::signal::AUDIO));
         }
         painter.galley(egui::pos2(rect.left() + cable.x + gap, rect.top()), word, theme::text::PRIMARY);
     }

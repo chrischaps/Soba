@@ -357,7 +357,7 @@ pub fn miniature_transform(rect: Rect, preview: &Preview, zoom: f32) -> Option<T
 pub fn paint_miniature(painter: &egui::Painter, rect: Rect, preview: &Preview, zoom: f32, lit: bool) {
     let rounding = 6.0 * zoom;
     let rose = theme::module::GROUP;
-    painter.rect(rect, rounding, PREVIEW_FILL, Stroke::new(1.0, rose.gamma_multiply(if lit { 0.8 } else { 0.3 })));
+    painter.rect(rect, rounding, PREVIEW_FILL, Stroke::new(1.0_f32, rose.gamma_multiply(if lit { 0.8 } else { 0.3 })));
 
     let Some(to_face) = miniature_transform(rect, preview, zoom) else {
         painter.text(rect.center(), Align2::CENTER_CENTER, "Empty", FontId::proportional(11.0 * zoom), theme::text::DISABLED);
@@ -392,7 +392,7 @@ pub fn paint_open_pill(painter: &egui::Painter, rect: Rect, zoom: f32) {
     let galley = painter.layout_no_wrap(label.to_string(), font, theme::text::PRIMARY);
     let pill = Rect::from_center_size(rect.center(), galley.size() + vec2(18.0, 8.0) * zoom);
     painter.rect_filled(pill, pill.height() / 2.0, Color32::from_black_alpha(190));
-    painter.rect_stroke(pill, pill.height() / 2.0, Stroke::new(1.0, rose.gamma_multiply(0.9)));
+    painter.rect_stroke(pill, pill.height() / 2.0, Stroke::new(1.0_f32, rose.gamma_multiply(0.9)));
     painter.galley(pill.center() - galley.size() / 2.0, galley, theme::text::PRIMARY);
 }
 
@@ -490,8 +490,8 @@ fn switch_chip(
                     ui.disable();
                 }
                 let visuals = &mut ui.visuals_mut().widgets;
-                visuals.inactive.bg_stroke = Stroke::new(1.0, accent.gamma_multiply(0.45));
-                visuals.hovered.bg_stroke = Stroke::new(1.0, accent.gamma_multiply(0.8));
+                visuals.inactive.bg_stroke = Stroke::new(1.0_f32, accent.gamma_multiply(0.45));
+                visuals.hovered.bg_stroke = Stroke::new(1.0_f32, accent.gamma_multiply(0.8));
                 match &mut value {
                     SynthValueType::Select { value, options, .. } => {
                         steady_text::steady_dropdowns(ui);
@@ -513,7 +513,7 @@ fn switch_chip(
                         // Lit in the module's colour when on
                         let selection = &mut ui.visuals_mut().selection;
                         selection.bg_fill = accent.gamma_multiply(0.4);
-                        selection.stroke = Stroke::new(1.0, accent.lerp_to_gamma(Color32::WHITE, 0.55));
+                        selection.stroke = Stroke::new(1.0_f32, accent.lerp_to_gamma(Color32::WHITE, 0.55));
                         steady_text::steady_buttons(ui);
                         let text = if *value { "On" } else { "Off" };
                         let button = ui.add(egui::Button::new(text).selected(*value).min_size(vec2(width, 0.0)));

@@ -446,11 +446,11 @@ fn paint_frame(
     let band_wash = tint.gamma_multiply(if hovered { 0.12 } else { 0.07 });
     shapes.push(Shape::rect_filled(band, band_rounding, band_wash));
     let outline = if selected {
-        Stroke::new(1.5, tint.gamma_multiply(0.9))
+        Stroke::new(1.5_f32, tint.gamma_multiply(0.9))
     } else if hovered {
-        Stroke::new(1.0, tint.gamma_multiply(0.5))
+        Stroke::new(1.0_f32, tint.gamma_multiply(0.5))
     } else {
-        Stroke::new(1.0, tint.gamma_multiply(0.28))
+        Stroke::new(1.0_f32, tint.gamma_multiply(0.28))
     };
     shapes.push(Shape::rect_stroke(screen, rounding, outline));
 
@@ -473,7 +473,7 @@ fn paint_frame(
     let rule_to = band.right() - inset;
     if rule_to > rule_from {
         let y = band.center().y;
-        shapes.push(Shape::line_segment([pos2(rule_from, y), pos2(rule_to, y)], Stroke::new(1.0, tint.gamma_multiply(0.35))));
+        shapes.push(Shape::line_segment([pos2(rule_from, y), pos2(rule_to, y)], Stroke::new(1.0_f32, tint.gamma_multiply(0.35))));
     }
     ui.painter().set(slot, Shape::Vec(shapes));
 }
@@ -539,7 +539,7 @@ fn swatch(ui: &mut Ui, tint: Tint, current: bool) -> egui::Response {
     let fill = if response.hovered() { tint.color() } else { tint.color().gamma_multiply(0.85) };
     ui.painter().circle_filled(center, 6.0, fill);
     if current {
-        ui.painter().circle_stroke(center, 8.0, Stroke::new(1.5, theme::text::PRIMARY));
+        ui.painter().circle_stroke(center, 8.0, Stroke::new(1.5_f32, theme::text::PRIMARY));
     }
     response.on_hover_text(tint.label())
 }
@@ -770,9 +770,9 @@ fn note_ui(
     );
     shapes.push(Shape::rect_filled(mark, NOTE_MARK_WIDTH * zoom * 0.5, NOTE_MARK.gamma_multiply(0.55)));
     if selected || editing {
-        shapes.push(Shape::rect_stroke(card, rounding, Stroke::new(1.0, NOTE_MARK.gamma_multiply(0.7))));
+        shapes.push(Shape::rect_stroke(card, rounding, Stroke::new(1.0_f32, NOTE_MARK.gamma_multiply(0.7))));
     } else if body.hovered() || widen.hovered() {
-        shapes.push(Shape::rect_stroke(card, rounding, Stroke::new(1.0, NOTE_INK.gamma_multiply(0.18))));
+        shapes.push(Shape::rect_stroke(card, rounding, Stroke::new(1.0_f32, NOTE_INK.gamma_multiply(0.18))));
     }
     if let Some(text) = lettered {
         // A note is lettered over the cables, as a frame's title is

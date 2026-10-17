@@ -517,7 +517,7 @@ impl SynthNodeData {
                         egui::pos2(x, y)
                     })
                     .collect();
-                painter.add(egui::Shape::line(points, egui::Stroke::new(1.5, color)));
+                painter.add(egui::Shape::line(points, egui::Stroke::new(1.5_f32, color)));
             }
             ModuleCategory::Filter => {
                 // Triangle/slope icon (low-pass filter shape)
@@ -527,7 +527,7 @@ impl SynthNodeData {
                     egui::pos2(center.x + s * 0.3, center.y + s * 0.5),
                     egui::pos2(center.x + s, center.y + s * 0.5),
                 ];
-                painter.add(egui::Shape::line(points, egui::Stroke::new(1.5, color)));
+                painter.add(egui::Shape::line(points, egui::Stroke::new(1.5_f32, color)));
             }
             ModuleCategory::Modulation => {
                 // Diamond icon
@@ -538,7 +538,7 @@ impl SynthNodeData {
                     egui::pos2(center.x - s * 0.5, center.y),
                     egui::pos2(center.x, center.y - s * 0.7),
                 ];
-                painter.add(egui::Shape::line(points, egui::Stroke::new(1.5, color)));
+                painter.add(egui::Shape::line(points, egui::Stroke::new(1.5_f32, color)));
             }
             ModuleCategory::Effect => {
                 // Star/sparkle icon
@@ -549,24 +549,24 @@ impl SynthNodeData {
                     let dy = angle.sin() * len;
                     painter.line_segment(
                         [egui::pos2(center.x - dx, center.y - dy), egui::pos2(center.x + dx, center.y + dy)],
-                        egui::Stroke::new(1.5, color),
+                        egui::Stroke::new(1.5_f32, color),
                     );
                 }
             }
             ModuleCategory::Utility => {
                 // Hash/grid icon
                 let d = s * 0.4;
-                painter.line_segment([egui::pos2(center.x - d, center.y - s * 0.6), egui::pos2(center.x - d, center.y + s * 0.6)], egui::Stroke::new(1.5, color));
-                painter.line_segment([egui::pos2(center.x + d, center.y - s * 0.6), egui::pos2(center.x + d, center.y + s * 0.6)], egui::Stroke::new(1.5, color));
-                painter.line_segment([egui::pos2(center.x - s * 0.6, center.y - d), egui::pos2(center.x + s * 0.6, center.y - d)], egui::Stroke::new(1.5, color));
-                painter.line_segment([egui::pos2(center.x - s * 0.6, center.y + d), egui::pos2(center.x + s * 0.6, center.y + d)], egui::Stroke::new(1.5, color));
+                painter.line_segment([egui::pos2(center.x - d, center.y - s * 0.6), egui::pos2(center.x - d, center.y + s * 0.6)], egui::Stroke::new(1.5_f32, color));
+                painter.line_segment([egui::pos2(center.x + d, center.y - s * 0.6), egui::pos2(center.x + d, center.y + s * 0.6)], egui::Stroke::new(1.5_f32, color));
+                painter.line_segment([egui::pos2(center.x - s * 0.6, center.y - d), egui::pos2(center.x + s * 0.6, center.y - d)], egui::Stroke::new(1.5_f32, color));
+                painter.line_segment([egui::pos2(center.x - s * 0.6, center.y + d), egui::pos2(center.x + s * 0.6, center.y + d)], egui::Stroke::new(1.5_f32, color));
             }
             ModuleCategory::Output => {
                 // Speaker cone icon
                 painter.rect_stroke(
                     egui::Rect::from_center_size(egui::pos2(center.x - s * 0.3, center.y), egui::vec2(s * 0.4, s * 0.6)),
                     0.0,
-                    egui::Stroke::new(1.5, color),
+                    egui::Stroke::new(1.5_f32, color),
                 );
                 let cone = vec![
                     egui::pos2(center.x - s * 0.1, center.y - s * 0.3),
@@ -574,7 +574,7 @@ impl SynthNodeData {
                     egui::pos2(center.x + s * 0.6, center.y + s * 0.6),
                     egui::pos2(center.x - s * 0.1, center.y + s * 0.3),
                 ];
-                painter.add(egui::Shape::line(cone, egui::Stroke::new(1.5, color)));
+                painter.add(egui::Shape::line(cone, egui::Stroke::new(1.5_f32, color)));
             }
         }
     }
@@ -1688,7 +1688,7 @@ impl NodeDataTrait for SynthNodeData {
         let shapes = vec![
             egui::Shape::galley(egui::pos2(rect.min.x, text_top(rect)), galley, text_color),
             egui::Shape::rect_filled(badge, badge_size.y / 2.0, color.gamma_multiply(0.22)),
-            egui::Shape::rect_stroke(badge, badge_size.y / 2.0, egui::Stroke::new(1.0, color.gamma_multiply(0.7))),
+            egui::Shape::rect_stroke(badge, badge_size.y / 2.0, egui::Stroke::new(1.0_f32, color.gamma_multiply(0.7))),
             egui::Shape::galley(egui::pos2(badge.min.x + pad.x, badge.center().y - badge_galley.size().y / 2.0), badge_galley, badge_text),
         ];
         defer_output_label(ui, node_id, param_name, rect, shapes);

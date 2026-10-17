@@ -140,7 +140,7 @@ pub fn cpu_meter(ui: &mut Ui, cpu_load: f32, config: &CpuMeterConfig) -> Respons
         painter.rect_stroke(
             bar_rect,
             2.0,
-            egui::Stroke::new(1.0, theme::background::WIDGET_HOVERED),
+            egui::Stroke::new(1.0_f32, theme::background::WIDGET_HOVERED),
         );
 
         // Draw percentage text

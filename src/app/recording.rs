@@ -93,7 +93,7 @@ pub fn rec_button(ui: &mut egui::Ui, state: &RecState) -> egui::Response {
         RecState::Recording(elapsed) => {
             // Room on the left for the light; the digits don't jitter
             let label = RichText::new(format!("    {}", clock(*elapsed))).monospace().color(theme::text::PRIMARY);
-            let response = ui.add(egui::Button::new(label).fill(red.gamma_multiply(0.28)).stroke(egui::Stroke::new(1.0, red.gamma_multiply(0.7))));
+            let response = ui.add(egui::Button::new(label).fill(red.gamma_multiply(0.28)).stroke(egui::Stroke::new(1.0_f32, red.gamma_multiply(0.7))));
 
             let t = ui.input(|i| i.time);
             let breath = 0.5 + 0.5 * (t * std::f64::consts::TAU / PULSE_PERIOD).cos() as f32;

@@ -265,7 +265,7 @@ pub fn piano_keys(ui: &mut Ui, data: &PianoData, config: &PianoConfig) -> (Respo
             painter.rect_stroke(
                 key_rect,
                 2.0,
-                egui::Stroke::new(0.5, Color32::from_gray(if lit { 120 } else { 60 })),
+                egui::Stroke::new(0.5_f32, Color32::from_gray(if lit { 120 } else { 60 })),
             );
 
             // Add subtle 3D effect (top highlight)

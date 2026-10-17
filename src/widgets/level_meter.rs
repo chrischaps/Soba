@@ -263,7 +263,7 @@ pub fn column_meter(painter: &egui::Painter, rect: Rect, meter: &PeakBallistics,
     // it runs without a line that could pass for a hold mark
     let full = y_at(0.0);
     let notch = rect.width() * 0.5;
-    let tick = egui::Stroke::new(1.0, theme::text::SECONDARY.gamma_multiply(0.6));
+    let tick = egui::Stroke::new(1.0_f32, theme::text::SECONDARY.gamma_multiply(0.6));
     painter.line_segment([Pos2::new(rect.left() - notch - 1.0, full), Pos2::new(rect.left() - 1.0, full)], tick);
     painter.line_segment([Pos2::new(rect.right() + 1.0, full), Pos2::new(rect.right() + notch + 1.0, full)], tick);
 
@@ -271,7 +271,7 @@ pub fn column_meter(painter: &egui::Painter, rect: Rect, meter: &PeakBallistics,
         let y = y_at(meter.hold_db());
         painter.line_segment(
             [Pos2::new(rect.left(), y), Pos2::new(rect.right(), y)],
-            egui::Stroke::new(1.5, theme::text::PRIMARY.gamma_multiply(0.8 * fade)),
+            egui::Stroke::new(1.5_f32, theme::text::PRIMARY.gamma_multiply(0.8 * fade)),
         );
     }
 }
@@ -409,7 +409,7 @@ pub fn level_meter(ui: &mut Ui, meter: &LevelMeter, config: &LevelMeterConfig) -
                 let x = x_at(hold_db, bar);
                 painter.line_segment(
                     [Pos2::new(x, bar.top()), Pos2::new(x, bar.bottom())],
-                    egui::Stroke::new(1.5, theme::text::PRIMARY.gamma_multiply(0.8)),
+                    egui::Stroke::new(1.5_f32, theme::text::PRIMARY.gamma_multiply(0.8)),
                 );
             }
         }
@@ -420,7 +420,7 @@ pub fn level_meter(ui: &mut Ui, meter: &LevelMeter, config: &LevelMeterConfig) -
         let x = x_at(tick_db, all_bars);
         painter.line_segment(
             [Pos2::new(x, all_bars.top() - 1.0), Pos2::new(x, all_bars.bottom() + 1.0)],
-            egui::Stroke::new(1.0, theme::text::SECONDARY.gamma_multiply(0.7)),
+            egui::Stroke::new(1.0_f32, theme::text::SECONDARY.gamma_multiply(0.7)),
         );
 
         // Gain-reduction readout

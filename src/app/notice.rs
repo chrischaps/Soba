@@ -104,7 +104,7 @@ impl<'a> Notice<'a> {
 fn card(ui: &egui::Ui) -> egui::Frame {
     egui::Frame::popup(ui.style())
         .fill(theme::background::PANEL)
-        .stroke(egui::Stroke::new(1.0, theme::background::WIDGET_ACTIVE))
+        .stroke(egui::Stroke::new(1.0_f32, theme::background::WIDGET_ACTIVE))
         .rounding(theme::ROUNDING)
         .inner_margin(egui::Margin::same(14.0))
 }
@@ -115,7 +115,7 @@ pub fn close_button(ui: &mut egui::Ui) -> egui::Response {
     let color = if response.hovered() { theme::text::PRIMARY } else { theme::text::SECONDARY };
     let r = 4.0;
     let c = rect.center();
-    let stroke = egui::Stroke::new(1.5, color);
+    let stroke = egui::Stroke::new(1.5_f32, color);
     ui.painter().line_segment([c + egui::vec2(-r, -r), c + egui::vec2(r, r)], stroke);
     ui.painter().line_segment([c + egui::vec2(-r, r), c + egui::vec2(r, -r)], stroke);
     response

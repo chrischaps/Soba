@@ -584,7 +584,7 @@ impl SynthApp {
             .show(ctx, |ui| {
                 egui::Frame::none()
                     .fill(theme::background::PANEL.gamma_multiply(0.96))
-                    .stroke(egui::Stroke::new(1.0, rose.gamma_multiply(0.55)))
+                    .stroke(egui::Stroke::new(1.0_f32, rose.gamma_multiply(0.55)))
                     .rounding(16.0)
                     .inner_margin(egui::Margin::symmetric(14.0, 7.0))
                     .show(ui, |ui| {
@@ -629,7 +629,7 @@ impl SynthApp {
             FontId::new(72.0, egui::FontFamily::Name(theme::TITLE_FAMILY.into())),
             rose.gamma_multiply(0.07),
         );
-        painter.rect_stroke(rect.shrink(1.0), 0.0, egui::Stroke::new(2.0, rose.gamma_multiply(0.35)));
+        painter.rect_stroke(rect.shrink(1.0), 0.0, egui::Stroke::new(2.0_f32, rose.gamma_multiply(0.35)));
     }
 }
 

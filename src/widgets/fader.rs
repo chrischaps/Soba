@@ -318,14 +318,14 @@ pub fn fader(ui: &mut Ui, value: &mut f32, config: &FaderConfig) -> Response {
                     Pos2::new(thumb_rect.left() + 6.0, line_y),
                     Pos2::new(thumb_rect.right() - 6.0, line_y),
                 ],
-                Stroke::new(1.0, Color32::from_rgba_unmultiplied(0, 0, 0, 40)),
+                Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(0, 0, 0, 40)),
             );
             painter.line_segment(
                 [
                     Pos2::new(thumb_rect.left() + 6.0, line_y + 1.0),
                     Pos2::new(thumb_rect.right() - 6.0, line_y + 1.0),
                 ],
-                Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 20)),
+                Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(255, 255, 255, 20)),
             );
         }
 
@@ -334,7 +334,7 @@ pub fn fader(ui: &mut Ui, value: &mut f32, config: &FaderConfig) -> Response {
             thumb_rect,
             Rounding::same(4.0),
             Stroke::new(
-                1.0,
+                1.0_f32,
                 if response.has_focus() || response.dragged() {
                     theme::accent::PRIMARY
                 } else {
@@ -380,7 +380,7 @@ fn draw_scale_markers(painter: &egui::Painter, track_rect: Rect, _config: &Fader
                 Pos2::new(marker_x - line_length, y),
                 Pos2::new(marker_x, y),
             ],
-            Stroke::new(1.0, theme::text::DISABLED),
+            Stroke::new(1.0_f32, theme::text::DISABLED),
         );
     }
 }
@@ -533,7 +533,7 @@ pub fn horizontal_fader(ui: &mut Ui, value: &mut f32, config: &FaderConfig) -> R
             thumb_rect,
             Rounding::same(3.0),
             Stroke::new(
-                1.0,
+                1.0_f32,
                 if response.has_focus() || response.dragged() {
                     theme::accent::PRIMARY
                 } else {

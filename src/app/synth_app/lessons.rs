@@ -312,7 +312,7 @@ impl SynthApp {
             .show(ctx, |ui| {
                 egui::Frame::none()
                     .fill(theme::background::PANEL.gamma_multiply(0.98))
-                    .stroke(Stroke::new(1.0, GOLD.gamma_multiply(if met { 0.9 } else { 0.55 })))
+                    .stroke(Stroke::new(1.0_f32, GOLD.gamma_multiply(if met { 0.9 } else { 0.55 })))
                     .rounding(12.0)
                     .shadow(egui::epaint::Shadow { offset: vec2(0.0, 6.0), blur: 22.0, spread: 0.0, color: Color32::from_black_alpha(110) })
                     .inner_margin(egui::Margin::symmetric(16.0, 13.0))
@@ -441,12 +441,12 @@ fn glow(painter: &egui::Painter, rect: Rect, breath: f32) {
     let alpha = 0.45 + 0.55 * breath;
     if rect.width().max(rect.height()) < 48.0 {
         let radius = rect.size().max_elem() / 2.0 + 7.0 + 2.0 * breath;
-        for (grow, width, a) in [(7.0, 7.0, 0.12), (3.5, 4.0, 0.22), (0.0, 1.8, 0.9)] {
+        for (grow, width, a) in [(7.0, 7.0, 0.12), (3.5, 4.0_f32, 0.22), (0.0, 1.8, 0.9)] {
             painter.circle_stroke(rect.center(), radius + grow, Stroke::new(width, GOLD.gamma_multiply(a * alpha)));
         }
     } else {
         let rect = rect.expand(6.0 + 2.0 * breath);
-        for (grow, width, a) in [(6.0, 7.0, 0.10), (3.0, 4.0, 0.2), (0.0, 1.8, 0.85)] {
+        for (grow, width, a) in [(6.0, 7.0, 0.10), (3.0, 4.0_f32, 0.2), (0.0, 1.8, 0.85)] {
             painter.rect_stroke(rect.expand(grow), 14.0 + grow, Stroke::new(width, GOLD.gamma_multiply(a * alpha)));
         }
     }
@@ -523,11 +523,11 @@ fn draw_ghost(painter: &egui::Painter, show: &Show, spots: &[Rect], t: f64) {
         let double = matches!(show, Show::DoubleClick(_));
         if (0.0..0.5).contains(&since) && (at == GHOST_PRESS || double) {
             let k = (since / 0.5) as f32;
-            painter.circle_stroke(first, 6.0 + 16.0 * k, Stroke::new(2.0, GOLD.gamma_multiply((1.0 - k) * opacity)));
+            painter.circle_stroke(first, 6.0 + 16.0 * k, Stroke::new(2.0_f32, GOLD.gamma_multiply((1.0 - k) * opacity)));
         }
     }
     if held {
-        painter.circle_stroke(p, 9.0, Stroke::new(1.5, Color32::WHITE.gamma_multiply(0.5 * opacity)));
+        painter.circle_stroke(p, 9.0, Stroke::new(1.5_f32, Color32::WHITE.gamma_multiply(0.5 * opacity)));
     }
     draw_pointer(painter, p, opacity);
     // A right-click says so, since the ghost has no buttons to show it with
@@ -591,7 +591,7 @@ fn progress_dots(ui: &mut egui::Ui, done: usize, total: usize, finished: bool) {
         if i < done || finished {
             ui.painter().circle_filled(c, 2.6, GOLD);
         } else {
-            ui.painter().circle_stroke(c, 2.4, Stroke::new(1.0, GOLD.gamma_multiply(0.45)));
+            ui.painter().circle_stroke(c, 2.4, Stroke::new(1.0_f32, GOLD.gamma_multiply(0.45)));
         }
     }
 }

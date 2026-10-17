@@ -1013,7 +1013,7 @@ impl Capture {
         let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("capture_cursor")));
         draw_pointer(&painter, p, 1.0);
         if self.button_down {
-            painter.circle_stroke(p, 9.0, egui::Stroke::new(1.5, egui::Color32::from_white_alpha(120)));
+            painter.circle_stroke(p, 9.0, egui::Stroke::new(1.5_f32, egui::Color32::from_white_alpha(120)));
         }
     }
 
@@ -1144,7 +1144,7 @@ pub fn draw_pointer(painter: &egui::Painter, p: Pos2, opacity: f32) {
         points: shape,
         closed: true,
         fill: egui::Color32::WHITE.gamma_multiply(opacity),
-        stroke: egui::epaint::PathStroke::new(1.2, egui::Color32::from_gray(20).gamma_multiply(opacity)),
+        stroke: egui::epaint::PathStroke::new(1.2_f32, egui::Color32::from_gray(20).gamma_multiply(opacity)),
     }));
 }
 

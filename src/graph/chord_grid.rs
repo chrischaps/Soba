@@ -541,7 +541,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
             };
             painter.rect_filled(*rect, 4.0 * z, fill);
             if playing {
-                painter.rect_stroke(*rect, 4.0 * z, Stroke::new(2.0, Color32::WHITE));
+                painter.rect_stroke(*rect, 4.0 * z, Stroke::new(2.0_f32, Color32::WHITE));
             }
             // Velocity, along the foot
             if on {
@@ -595,7 +595,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
         }
 
         let Some(mut open) = entry else { return };
-        painter.rect_stroke(cells[open.step].0.expand(2.0 * z), 5.0 * z, Stroke::new(2.0, theme::signal::CONTROL));
+        painter.rect_stroke(cells[open.step].0.expand(2.0 * z), 5.0 * z, Stroke::new(2.0_f32, theme::signal::CONTROL));
 
         let (back, on, escape) = ui.input_mut(|i| {
             (
@@ -809,9 +809,9 @@ fn keyboard_strip(ui: &mut egui::Ui, node_id: NodeId, width: f32, low: i32, note
         if let Some(i) = notes.iter().position(|&n| n == note) {
             painter.rect_filled(key.shrink(0.5), 1.0, glow(if is_bass(i) { bass_colour } else { accent }, 255.0));
         }
-        painter.vline(key.right(), keys.y_range(), Stroke::new(0.6, Color32::from_rgb(120, 120, 132)));
+        painter.vline(key.right(), keys.y_range(), Stroke::new(0.6_f32, Color32::from_rgb(120, 120, 132)));
         if (note - low) % 12 == 0 && note > low {
-            painter.vline(key.left(), keys.y_range(), Stroke::new(1.0, Color32::from_rgb(90, 90, 104)));
+            painter.vline(key.left(), keys.y_range(), Stroke::new(1.0_f32, Color32::from_rgb(90, 90, 104)));
         }
     }
     // Black keys over them

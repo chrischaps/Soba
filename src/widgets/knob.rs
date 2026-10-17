@@ -715,7 +715,7 @@ fn shaded_disc(painter: &egui::Painter, center: Pos2, radius: f32, top: Color32,
     }
     painter.add(egui::Shape::mesh(mesh));
     // A mesh isn't anti-aliased; a hairline in the mid tone softens its edge
-    painter.circle_stroke(center, radius, Stroke::new(1.0, mix(top, bottom, 0.55)));
+    painter.circle_stroke(center, radius, Stroke::new(1.0_f32, mix(top, bottom, 0.55)));
 }
 
 const TRACK: Color32 = Color32::from_rgb(21, 23, 31);

@@ -886,14 +886,14 @@ fn sections(
             let x = x0 + per_bar * bar as f32;
             if seen(x, x) && (per_bar >= 3.0 * z || (between_passes && per_bar * length as f32 >= 3.0 * z)) {
                 let tall = if between_passes { 4.5 } else { 2.5 };
-                tl.vline(x, egui::Rangef::new(ruler.bottom() - tall * z, ruler.bottom()), Stroke::new(1.0, theme::background::GRID_MAJOR));
+                tl.vline(x, egui::Rangef::new(ruler.bottom() - tall * z, ruler.bottom()), Stroke::new(1.0_f32, theme::background::GRID_MAJOR));
                 // Clear of the next section's number
                 if every.is_some_and(|k| bar % k == 0) && x1 - x >= 16.0 * z {
                     tl.text(Pos2::new(x + 2.0 * z, ruler.top()), Align2::LEFT_TOP, (start + bar + 1).to_string(), number_font.clone(), theme::text::QUIET.gamma_multiply(0.8));
                 }
             }
         }
-        tl.vline(x0, egui::Rangef::new(ruler.top() + 1.0 * z, ruler.bottom()), Stroke::new(1.0, theme::text::DISABLED));
+        tl.vline(x0, egui::Rangef::new(ruler.top() + 1.0 * z, ruler.bottom()), Stroke::new(1.0_f32, theme::text::DISABLED));
         if x1 - x0 >= 14.0 * z {
             tl.text(Pos2::new(x0 + 2.0 * z, ruler.top()), Align2::LEFT_TOP, (start + 1).to_string(), number_font.clone(), theme::text::QUIET);
         }
@@ -1042,7 +1042,7 @@ fn sections(
         let size = galley.size() + 2.0 * pad;
         let x = shown.left().min(block.right() - size.x).max(block.left());
         let tag = Rect::from_min_size(Pos2::new(x, shown.top() - size.y - 1.0 * z), size);
-        painter.rect(tag, 3.0 * z, theme::background::PANEL, Stroke::new(1.0, theme::background::WIDGET_ACTIVE));
+        painter.rect(tag, 3.0 * z, theme::background::PANEL, Stroke::new(1.0_f32, theme::background::WIDGET_ACTIVE));
         painter.galley(tag.min + pad, galley, theme::text::PRIMARY);
     }
 }
@@ -1204,13 +1204,13 @@ fn lane_rows(
         }
         // A section boundary, faint, and fainter dashes between its passes
         if section > 0 {
-            tl.vline(x0, area.y_range(), Stroke::new(1.0, theme::background::GRID_MAJOR.gamma_multiply(0.7)));
+            tl.vline(x0, area.y_range(), Stroke::new(1.0_f32, theme::background::GRID_MAJOR.gamma_multiply(0.7)));
         }
         let length = song.sections[section].1;
         for pass in 1..song.repeats[section] {
             let x = layout.x(song, section, (pass * length) as f32);
             let ends = [Pos2::new(x, area.top()), Pos2::new(x, area.bottom())];
-            tl.extend(Shape::dashed_line(&ends, Stroke::new(1.0, theme::background::GRID_MAJOR.gamma_multiply(0.6)), 2.0 * z, 2.0 * z));
+            tl.extend(Shape::dashed_line(&ends, Stroke::new(1.0_f32, theme::background::GRID_MAJOR.gamma_multiply(0.6)), 2.0 * z, 2.0 * z));
         }
     }
 
@@ -1419,7 +1419,7 @@ fn curve_icon(ui: &mut egui::Ui, curve: Curve, chosen: bool) -> egui::Response {
         })
         .collect();
     let ink = if chosen { theme::signal::CONTROL } else { theme::text::SECONDARY };
-    ui.painter().add(Shape::line(points, Stroke::new(1.4, ink)));
+    ui.painter().add(Shape::line(points, Stroke::new(1.4_f32, ink)));
     response
 }
 

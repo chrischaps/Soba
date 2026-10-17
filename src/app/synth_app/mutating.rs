@@ -193,9 +193,9 @@ fn chip(ui: &mut egui::Ui, variation: &Variation, current: bool, original: bool)
     let fill = if hovered { theme::background::WIDGET_HOVERED } else { theme::background::PANEL };
     painter.rect_filled(rect, 6.0, fill);
     let ring = if current {
-        Stroke::new(1.5, theme::accent::PRIMARY)
+        Stroke::new(1.5_f32, theme::accent::PRIMARY)
     } else {
-        Stroke::new(1.0, theme::background::WIDGET_ACTIVE)
+        Stroke::new(1.0_f32, theme::background::WIDGET_ACTIVE)
     };
     painter.rect_stroke(rect, 6.0, ring);
 

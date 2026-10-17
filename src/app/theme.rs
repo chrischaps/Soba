@@ -233,7 +233,7 @@ pub fn apply_theme(ctx: &egui::Context) {
 
     // Window styling
     visuals.window_fill = background::PANEL;
-    visuals.window_stroke = Stroke::new(1.0, Color32::from_rgb(60, 60, 80));
+    visuals.window_stroke = Stroke::new(1.0_f32, Color32::from_rgb(60, 60, 80));
     visuals.window_rounding = ROUNDING;
 
     // Panel styling
@@ -241,28 +241,28 @@ pub fn apply_theme(ctx: &egui::Context) {
 
     // Widget styling
     visuals.widgets.noninteractive.bg_fill = background::WIDGET;
-    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, text::SECONDARY);
+    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, text::SECONDARY);
     visuals.widgets.noninteractive.rounding = ROUNDING_SMALL;
 
     visuals.widgets.inactive.bg_fill = background::WIDGET;
-    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, text::PRIMARY);
+    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, text::PRIMARY);
     visuals.widgets.inactive.rounding = ROUNDING_SMALL;
 
     visuals.widgets.hovered.bg_fill = background::WIDGET_HOVERED;
-    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, text::PRIMARY);
+    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0_f32, text::PRIMARY);
     visuals.widgets.hovered.rounding = ROUNDING_SMALL;
 
     visuals.widgets.active.bg_fill = background::WIDGET_ACTIVE;
-    visuals.widgets.active.fg_stroke = Stroke::new(1.5, accent::PRIMARY);
+    visuals.widgets.active.fg_stroke = Stroke::new(1.5_f32, accent::PRIMARY);
     visuals.widgets.active.rounding = ROUNDING_SMALL;
 
     visuals.widgets.open.bg_fill = background::WIDGET_ACTIVE;
-    visuals.widgets.open.fg_stroke = Stroke::new(1.0, text::PRIMARY);
+    visuals.widgets.open.fg_stroke = Stroke::new(1.0_f32, text::PRIMARY);
     visuals.widgets.open.rounding = ROUNDING_SMALL;
 
     // Selection styling
     visuals.selection.bg_fill = accent::PRIMARY.gamma_multiply(0.3);
-    visuals.selection.stroke = Stroke::new(1.0, accent::PRIMARY);
+    visuals.selection.stroke = Stroke::new(1.0_f32, accent::PRIMARY);
 
     // Hyperlink color
     visuals.hyperlink_color = text::ACCENT;

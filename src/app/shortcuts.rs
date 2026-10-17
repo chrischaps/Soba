@@ -396,7 +396,7 @@ fn draw_keys(ui: &egui::Ui, rect: Rect, shortcut: &str) {
             // The cap's lip below, and its face above
             painter.rect_filled(cell, 4.0, theme::background::MAIN);
             let face = Rect::from_min_max(cell.min, cell.max - vec2(0.0, 2.0));
-            painter.rect(face, 4.0, theme::background::WIDGET_HOVERED, Stroke::new(1.0, theme::background::WIDGET_ACTIVE));
+            painter.rect(face, 4.0, theme::background::WIDGET_HOVERED, Stroke::new(1.0_f32, theme::background::WIDGET_ACTIVE));
             painter.galley(face.center() - text / 2.0, galley, piece.color());
         } else {
             // On the caps' text line, which sits a point above the middle
@@ -443,7 +443,7 @@ fn piano(ui: &mut egui::Ui, held: &[i32]) {
         let x = rect.left() + (i + 1) as f32 * white_w;
         let key = Rect::from_min_size(pos2(x - black_w / 2.0, rect.top()), vec2(black_w, BLACK_H));
         let fill = if held.contains(&note) { lit } else { theme::background::MAIN };
-        painter.rect(key, egui::Rounding { nw: 0.0, ne: 0.0, sw: 3.0, se: 3.0 }, fill, Stroke::new(1.0, theme::background::WIDGET_ACTIVE));
+        painter.rect(key, egui::Rounding { nw: 0.0, ne: 0.0, sw: 3.0, se: 3.0 }, fill, Stroke::new(1.0_f32, theme::background::WIDGET_ACTIVE));
         for (row, name) in letters(note).enumerate() {
             let at = key.center_bottom() - vec2(0.0, 5.0 + row as f32 * LINE);
             painter.text(at, Align2::CENTER_BOTTOM, name, font.clone(), theme::text::PRIMARY);

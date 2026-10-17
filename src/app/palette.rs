@@ -311,7 +311,7 @@ impl QuickAdd {
         ui.painter().hline(
             rect.x_range(),
             rect.bottom() + 3.0,
-            egui::Stroke::new(1.0, theme::background::WIDGET_HOVERED),
+            egui::Stroke::new(1.0_f32, theme::background::WIDGET_HOVERED),
         );
     }
 
@@ -362,7 +362,7 @@ impl QuickAdd {
 fn palette_frame() -> egui::Frame {
     egui::Frame::none()
         .fill(theme::background::PANEL)
-        .stroke(egui::Stroke::new(1.0, theme::background::WIDGET_ACTIVE))
+        .stroke(egui::Stroke::new(1.0_f32, theme::background::WIDGET_ACTIVE))
         .rounding(10.0)
         .inner_margin(egui::Margin::symmetric(10.0, 8.0))
         .shadow(egui::epaint::Shadow {
@@ -418,7 +418,7 @@ fn result_row(ui: &mut egui::Ui, found: &Found, highlighted: bool, show_category
 fn footer(ui: &mut egui::Ui, entry: &Entry) {
     ui.add_space(4.0);
     let rect = ui.min_rect();
-    ui.painter().hline(rect.x_range(), ui.cursor().top(), egui::Stroke::new(1.0, theme::background::WIDGET_HOVERED));
+    ui.painter().hline(rect.x_range(), ui.cursor().top(), egui::Stroke::new(1.0_f32, theme::background::WIDGET_HOVERED));
     ui.add_space(6.0);
     ui.label(egui::RichText::new(entry.description()).small().color(theme::text::SECONDARY));
     ui.add_space(2.0);
