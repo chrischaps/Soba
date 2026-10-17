@@ -36,7 +36,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::prewarp,
+    primitives::{prewarp, rate_for_seconds, Svf, SvfCoeffs},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     ParameterDisplay, SignalType,
@@ -217,25 +217,6 @@ pub struct Place {
     pub length: f64,
 }
 
-/// One channel of the step filter: a TPT state-variable lowpass.
-#[derive(Clone, Copy, Debug, Default)]
-struct Lowpass {
-    ic1: f32,
-    ic2: f32,
-}
-
-impl Lowpass {
-    #[inline]
-    fn process(&mut self, x: f32, a1: f32, a2: f32, a3: f32) -> f32 {
-        let v3 = x - self.ic2;
-        let v1 = a1 * self.ic1 + a2 * v3;
-        let v2 = self.ic2 + a2 * self.ic1 + a3 * v3;
-        self.ic1 = flush(2.0 * v1 - self.ic1);
-        self.ic2 = flush(2.0 * v2 - self.ic2);
-        v2
-    }
-}
-
 /// Chops its input into a rhythm, in time with the patch.
 ///
 /// # Ports
@@ -273,7 +254,7 @@ pub struct Slicer {
     /// the last is still open starts with a rising edge.
     gate_dip: bool,
     gate_high: bool,
-    filter: [Lowpass; 2],
+    filter: [Svf; 2],
     depth: SmoothedValue,
     mix: SmoothedValue,
     filter_amount: SmoothedValue,
@@ -372,7 +353,7 @@ impl Slicer {
             next_right: false,
             gate_dip: false,
             gate_high: false,
-            filter: [Lowpass::default(); 2],
+            filter: [Svf::default(); 2],
             depth: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             mix: SmoothedValue::with_default_smoothing(1.0, sample_rate),
             filter_amount: SmoothedValue::with_default_smoothing(0.0, sample_rate),
@@ -438,12 +419,6 @@ impl Slicer {
             }
         }
         Slice::Hit.level()
-    }
-
-    /// One-pole coefficient for a time constant.
-    #[inline]
-    fn coefficient(seconds: f32, sample_rate: f32) -> f32 {
-        1.0 - (-1.0 / (seconds.max(1e-5) * sample_rate)).exp()
     }
 }
 
@@ -573,8 +548,8 @@ impl DspModule for Slicer {
 
             // How it opens and closes: crisp, or swelling over the step
             let step_seconds = (place.length * step_beats / beats_per_sample) as f32 / sr;
-            let attack = Self::coefficient(CRISP_ATTACK_SECONDS + swell * SWELL_ATTACK * step_seconds, sr);
-            let release = Self::coefficient(CRISP_RELEASE_SECONDS + swell * SWELL_RELEASE * step_seconds, sr);
+            let attack = rate_for_seconds(CRISP_ATTACK_SECONDS + swell * SWELL_ATTACK * step_seconds, sr);
+            let release = rate_for_seconds(CRISP_RELEASE_SECONDS + swell * SWELL_RELEASE * step_seconds, sr);
             let sides = [!ping_pong || !self.right_side, !ping_pong || self.right_side];
             for (env, side_open) in self.env.iter_mut().zip(sides) {
                 let target = if open && side_open { level } else { 0.0 };
@@ -583,14 +558,11 @@ impl DspModule for Slicer {
             }
 
             // The step filter closes through the slice, from as bright as it struck
-            self.bright = flush(self.bright * (1.0 - Self::coefficient(FILTER_CLOSE * step_seconds, sr)));
+            self.bright = flush(self.bright * (1.0 - rate_for_seconds(FILTER_CLOSE * step_seconds, sr)));
             let amount = self.filter_amount.next();
             let opening = self.struck_level * (0.25 + 0.75 * self.bright);
             let cutoff = FILTER_TOP_HZ * (-amount * FILTER_OCTAVES * (1.0 - opening)).exp2();
-            let g = prewarp(cutoff, sr);
-            let a1 = 1.0 / (1.0 + g * (g + k));
-            let a2 = g * a1;
-            let a3 = g * a2;
+            let tuning = SvfCoeffs::from_gain(prewarp(cutoff, sr), k);
             // Faded in from the bottom of the knob, so turning it up never clicks
             let filtered = (amount * 8.0).min(1.0);
 
@@ -603,7 +575,7 @@ impl DspModule for Slicer {
 
             let mut out = [0.0; 2];
             for (side, dry) in [dry_l, dry_r].into_iter().enumerate() {
-                let lp = self.filter[side].process(dry, a1, a2, a3);
+                let lp = self.filter[side].low(dry, &tuning);
                 let toned = dry + filtered * (FILTER_TRIM * lp - dry);
                 let gain = 1.0 - depth + depth * self.env[side];
                 out[side] = dry + mix * (toned * gain - dry);
@@ -637,7 +609,7 @@ impl DspModule for Slicer {
         self.right_side = false;
         self.next_right = false;
         self.gate_high = false;
-        self.filter = [Lowpass::default(); 2];
+        self.filter = [Svf::default(); 2];
         self.shown_place = None;
     }
 

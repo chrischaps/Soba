@@ -34,7 +34,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::noise::NoiseFloor,
+    primitives::{noise::NoiseFloor, rate_for_seconds, Follower, Svf, SvfCoeffs},
     signal::{connected_input, SignalBuffer},
     smoothed_value::SmoothedValue,
     ParameterDisplay, Readout, SignalType, MAX_READOUT,
@@ -140,91 +140,18 @@ fn band_count(param: f32) -> usize {
     BAND_COUNTS[(param.round().max(0.0) as usize).min(BAND_COUNTS.len() - 1)]
 }
 
-/// Coefficients of a TPT state-variable filter (Zavalishin; Simper's form).
-#[derive(Clone, Copy, Debug, Default)]
-struct SvfCoefficients {
-    a1: f32,
-    a2: f32,
-    a3: f32,
-    /// 1/Q, which also scales the band-pass to a peak of unity.
-    k: f32,
-}
-
-impl SvfCoefficients {
-    fn new(cutoff_hz: f32, q: f32, sample_rate: f32) -> Self {
-        let g = (PI * cutoff_hz.clamp(10.0, sample_rate * 0.45) / sample_rate).tan();
-        let k = 1.0 / q;
-        let a1 = 1.0 / (1.0 + g * (g + k));
-        let a2 = g * a1;
-        Self { a1, a2, a3: g * a2, k }
-    }
-}
-
-/// One state-variable section's state.
-#[derive(Clone, Copy, Debug, Default)]
-struct Svf {
-    ic1: f32,
-    ic2: f32,
-}
-
-impl Svf {
-    /// Advances the filter by one sample: (band-pass at unity peak, high-pass).
-    #[inline]
-    fn tick(&mut self, c: &SvfCoefficients, x: f32) -> (f32, f32) {
-        let v3 = x - self.ic2;
-        let v1 = c.a1 * self.ic1 + c.a2 * v3;
-        let v2 = self.ic2 + c.a2 * self.ic1 + c.a3 * v3;
-        self.ic1 = flush(2.0 * v1 - self.ic1);
-        self.ic2 = flush(2.0 * v2 - self.ic2);
-        (c.k * v1, x - c.k * v1 - v2)
-    }
-
-    #[inline]
-    fn band(&mut self, c: &SvfCoefficients, x: f32) -> f32 {
-        self.tick(c, x).0
-    }
-
-    #[inline]
-    fn high(&mut self, c: &SvfCoefficients, x: f32) -> f32 {
-        self.tick(c, x).1
-    }
-}
-
 /// Two identical band-pass sections in a row.
 #[inline]
-fn band_pair(sections: &mut [Svf; 2], c: &SvfCoefficients, x: f32) -> f32 {
+fn band_pair(sections: &mut [Svf; 2], c: &SvfCoeffs, x: f32) -> f32 {
     let [first, second] = sections;
-    second.band(c, first.band(c, x))
-}
-
-/// An envelope follower: a rectifier into a one-pole that rises at one rate
-/// and falls at another, as on an analog vocoder's band.
-#[derive(Clone, Copy, Debug, Default)]
-struct Follower {
-    level: f32,
-}
-
-impl Follower {
-    #[inline]
-    fn follow(&mut self, x: f32, attack: f32, release: f32) -> f32 {
-        let x = x.abs();
-        let rate = if x > self.level { attack } else { release };
-        self.level = flush(self.level + rate * (x - self.level));
-        self.level
-    }
-}
-
-/// The per-sample coefficient of a one-pole that covers 63% of a step in
-/// `ms` milliseconds.
-fn one_pole(ms: f32, sample_rate: f32) -> f32 {
-    1.0 - (-1000.0 / (ms.max(0.01) * sample_rate)).exp()
+    second.band(first.band(x, c), c)
 }
 
 /// One band: the voice's side and the carrier's side.
 #[derive(Clone, Copy, Debug)]
 struct Band {
-    analysis: SvfCoefficients,
-    synthesis: SvfCoefficients,
+    analysis: SvfCoeffs,
+    synthesis: SvfCoeffs,
     voice: [Svf; 2],
     carrier: [Svf; 2],
     follower: Follower,
@@ -246,8 +173,8 @@ struct Band {
 impl Default for Band {
     fn default() -> Self {
         Self {
-            analysis: SvfCoefficients::default(),
-            synthesis: SvfCoefficients::default(),
+            analysis: SvfCoeffs::default(),
+            synthesis: SvfCoeffs::default(),
             voice: [Svf::default(); 2],
             carrier: [Svf::default(); 2],
             follower: Follower::default(),
@@ -321,9 +248,9 @@ pub struct Vocoder {
     /// Counts samples to the next retune.
     retune_in: usize,
     sibilance_filter: [Svf; 2],
-    sibilance_coefficients: [SvfCoefficients; 2],
+    sibilance_coefficients: [SvfCoeffs; 2],
     hiss_filter: Svf,
-    hiss_coefficients: SvfCoefficients,
+    hiss_coefficients: SvfCoeffs,
     /// The pre-emphasis's one-pole low-pass state, and its coefficient.
     emphasis: f32,
     emphasis_coefficient: f32,
@@ -399,9 +326,9 @@ impl Vocoder {
             tuned_formant: 0.0,
             retune_in: 0,
             sibilance_filter: [Svf::default(); 2],
-            sibilance_coefficients: [SvfCoefficients::default(); 2],
+            sibilance_coefficients: [SvfCoeffs::default(); 2],
             hiss_filter: Svf::default(),
-            hiss_coefficients: SvfCoefficients::default(),
+            hiss_coefficients: SvfCoeffs::default(),
             hiss_level: Follower::default(),
             emphasis: 0.0,
             emphasis_coefficient: 0.0,
@@ -465,7 +392,7 @@ impl Vocoder {
     fn tune_all(&mut self) {
         let q = section_q(self.active);
         for (index, band) in self.bands.iter_mut().enumerate().take(self.active) {
-            band.analysis = SvfCoefficients::new(band_centre(index, self.active), q, self.sample_rate);
+            band.analysis = SvfCoeffs::new(band_centre(index, self.active), q, self.sample_rate);
         }
         self.retune_synthesis(self.tuned_formant);
         for band in &mut self.bands {
@@ -481,10 +408,10 @@ impl Vocoder {
         }
         // A fourth-order Butterworth high-pass
         self.sibilance_coefficients = [
-            SvfCoefficients::new(SIBILANCE_HZ, 0.541_196_1, self.sample_rate),
-            SvfCoefficients::new(SIBILANCE_HZ, 1.306_563, self.sample_rate),
+            SvfCoeffs::new(SIBILANCE_HZ, 0.541_196_1, self.sample_rate),
+            SvfCoeffs::new(SIBILANCE_HZ, 1.306_563, self.sample_rate),
         ];
-        self.hiss_coefficients = SvfCoefficients::new(HISS_HZ, FRAC_1_SQRT_2, self.sample_rate);
+        self.hiss_coefficients = SvfCoeffs::new(HISS_HZ, FRAC_1_SQRT_2, self.sample_rate);
         self.emphasis_coefficient = 1.0 - (-2.0 * PI * EMPHASIS_HZ / self.sample_rate).exp();
     }
 
@@ -493,7 +420,7 @@ impl Vocoder {
         let q = section_q(self.active);
         let shift = 2f32.powf(formant);
         for (index, band) in self.bands.iter_mut().enumerate().take(self.active) {
-            band.synthesis = SvfCoefficients::new(band_centre(index, self.active) * shift, q, self.sample_rate);
+            band.synthesis = SvfCoeffs::new(band_centre(index, self.active) * shift, q, self.sample_rate);
         }
         self.tuned_formant = formant;
     }
@@ -590,11 +517,11 @@ impl DspModule for Vocoder {
 
     fn process(&mut self, inputs: &[&SignalBuffer], outputs: &mut [SignalBuffer], params: &[f32], context: &ProcessContext) {
         let sample_rate = self.sample_rate;
-        let attack = one_pole(params[Self::PARAM_ATTACK], sample_rate);
-        let release = one_pole(params[Self::PARAM_RELEASE], sample_rate);
+        let attack = rate_for_seconds(0.001 * params[Self::PARAM_ATTACK], sample_rate);
+        let release = rate_for_seconds(0.001 * params[Self::PARAM_RELEASE], sample_rate);
         // The hiss detector listens as fast as speech moves
-        let (hiss_attack, hiss_release) = (one_pole(2.0, sample_rate), one_pole(25.0, sample_rate));
-        let (even_attack, even_release) = (one_pole(EVEN_ATTACK_MS, sample_rate), one_pole(EVEN_RELEASE_MS, sample_rate));
+        let (hiss_attack, hiss_release) = (rate_for_seconds(0.002, sample_rate), rate_for_seconds(0.025, sample_rate));
+        let (even_attack, even_release) = (rate_for_seconds(0.001 * EVEN_ATTACK_MS, sample_rate), rate_for_seconds(0.001 * EVEN_RELEASE_MS, sample_rate));
         let switch_step = 1.0 / (SWITCH_MS * 0.001 * sample_rate);
         let listen_step = 1.0 / (FREEZE_FADE_MS * 0.001 * sample_rate);
         let freeze_in = connected_input(inputs, Self::PORT_FREEZE);
@@ -654,7 +581,7 @@ impl DspModule for Vocoder {
             self.listening = if frozen { (self.listening - listen_step).max(0.0) } else { (self.listening + listen_step).min(1.0) };
 
             // How much of the voice is hiss: noise stands in for the carrier
-            let hissing = self.hiss_filter.high(&self.hiss_coefficients, voice);
+            let hissing = self.hiss_filter.high(voice, &self.hiss_coefficients);
             if !frozen {
                 let hiss = self.hiss_level.follow(hissing, hiss_attack, hiss_release);
                 let whole = self.voice_level.follow(voice, hiss_attack, hiss_release);
@@ -692,7 +619,7 @@ impl DspModule for Vocoder {
             }
 
             let [low_stage, high_stage] = &mut self.sibilance_filter;
-            let highs = high_stage.high(&self.sibilance_coefficients[1], low_stage.high(&self.sibilance_coefficients[0], voice));
+            let highs = high_stage.high(low_stage.high(voice, &self.sibilance_coefficients[0]), &self.sibilance_coefficients[1]);
             let sibilance = SIBILANCE_GAIN * self.sibilance.next() * self.listening * highs;
 
             // Rectified, a band reads 2/π of its amplitude
@@ -867,7 +794,7 @@ mod tests {
     fn vowel(formants: &'static [f32]) -> impl FnMut(usize) -> f32 {
         let mut noise = white(7);
         let (mut b0, mut b1, mut b2) = (0.0f32, 0.0f32, 0.0f32);
-        let coefficients: Vec<SvfCoefficients> = formants.iter().map(|&hz| SvfCoefficients::new(hz, 6.0, SR)).collect();
+        let coefficients: Vec<SvfCoeffs> = formants.iter().map(|&hz| SvfCoeffs::new(hz, 6.0, SR)).collect();
         let mut filters = vec![Svf::default(); formants.len()];
         move |_| {
             // Paul Kellett's economy pink noise
@@ -876,7 +803,7 @@ mod tests {
             b1 = 0.96300 * b1 + w * 0.296_516_4;
             b2 = 0.57000 * b2 + w * 1.052_691_3;
             let pink = 0.25 * (b0 + b1 + b2 + w * 0.1848);
-            filters.iter_mut().zip(&coefficients).map(|(f, c)| f.band(c, pink)).sum()
+            filters.iter_mut().zip(&coefficients).map(|(f, c)| f.band(pink, c)).sum()
         }
     }
 
@@ -925,7 +852,7 @@ mod tests {
             assert!((band_centre(bands - 1, bands) - 6400.0).abs() < 0.5);
             // A tone halfway between two centres is -3 dB through each pair
             let between = (band_centre(3, bands) * band_centre(4, bands)).sqrt();
-            let c = SvfCoefficients::new(band_centre(3, bands), section_q(bands), SR);
+            let c = SvfCoeffs::new(band_centre(3, bands), section_q(bands), SR);
             let mut pair = [Svf::default(); 2];
             let out: Vec<f32> = (0..48000).map(|n| band_pair(&mut pair, &c, (2.0 * PI * between * n as f32 / SR).sin())).collect();
             let gain = rms(&out[24000..]) * SQRT_2;
@@ -1027,9 +954,9 @@ mod tests {
         // No carrier at all, and a voice that's only an "s": noise high up
         let hiss = |seed| {
             let mut noise = white(seed);
-            let c = SvfCoefficients::new(5000.0, 0.7, SR);
+            let c = SvfCoeffs::new(5000.0, 0.7, SR);
             let mut f = Svf::default();
-            move |_| 0.3 * f.high(&c, noise())
+            move |_| 0.3 * f.high(noise(), &c)
         };
         let (l, _) = play(1.0, |_| 0.0, hiss(3), 0.0, |_| knobs(0.0, 1.0, 0.0, 1.0, 0.0, 1.0));
         assert!(rms(&l[24000..]) > 0.02, "unvoiced: {}", rms(&l[24000..]));
@@ -1338,9 +1265,9 @@ mod tests {
         let low = move |n: usize| 0.4 * (2.0 * PI * 200.0 * n as f32 / SR).sin() + 1e-5 * faint();
         let mut open = white(5);
         let (l, _) = play(1.0, low, move |_| 0.3 * open(), 0.0, |_| knobs_with(false, 1.0));
-        let c = SvfCoefficients::new(2000.0, 0.7, SR);
+        let c = SvfCoeffs::new(2000.0, 0.7, SR);
         let (mut first, mut second) = (Svf::default(), Svf::default());
-        let highs: Vec<f32> = l.iter().map(|&s| second.high(&c, first.high(&c, s))).collect();
+        let highs: Vec<f32> = l.iter().map(|&s| second.high(first.high(s, &c), &c)).collect();
         assert!(rms(&highs[24000..]) < 0.01 * rms(&l[24000..]), "hiss {} under {}", rms(&highs[24000..]), rms(&l[24000..]));
     }
 

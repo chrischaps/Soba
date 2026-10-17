@@ -14,7 +14,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::{glide_parameters, Glide, GlideMode},
+    primitives::{glide_parameters, rate_for_seconds, Glide, GlideMode},
     signal::SignalBuffer,
     MidiEvent, MidiMessage, ParameterDisplay, SignalType, MAX_CHANNELS,
 };
@@ -364,7 +364,7 @@ impl DspModule for PolyMidi {
 
     fn prepare(&mut self, sample_rate: f32, _max_block_size: usize) {
         self.sample_rate = sample_rate;
-        self.bend_coeff = 1.0 - (-1.0 / (BEND_SMOOTHING_SECONDS * sample_rate)).exp();
+        self.bend_coeff = rate_for_seconds(BEND_SMOOTHING_SECONDS, sample_rate);
     }
 
     fn process(
@@ -747,7 +747,7 @@ mod tests {
         let bend = MidiEvent::new(0, 0, MidiMessage::PitchBend { value: -3000 });
         let out = run(&mut m, &p, &[on(0, 60), on(0, 67), bend, off(20, 60), on(40, 62)]);
         let mut b = 0.0f32;
-        let coeff = 1.0 - (-1.0 / (BEND_SMOOTHING_SECONDS * SR)).exp();
+        let coeff = rate_for_seconds(BEND_SMOOTHING_SECONDS, SR);
         for i in 0..BLOCK {
             b += (-3000.0 / 8192.0 - b) * coeff;
             let shift = -12.0 + b * 2.0;

@@ -4,6 +4,7 @@
 //! speakers, so they are built to be inaudible when nothing is wrong and to
 //! make guarantees when something is.
 
+use super::primitives::rate_for_seconds;
 use super::denormal::flush;
 
 /// One-pole DC-blocking highpass at about 5 Hz.
@@ -319,7 +320,7 @@ pub fn db_to_gain(db: f32) -> f32 {
 
 /// One-pole smoothing coefficient for a time constant in milliseconds.
 fn one_pole_coeff(time_ms: f32, sample_rate: f32) -> f32 {
-    1.0 - (-1.0 / (time_ms * 0.001 * sample_rate)).exp()
+    rate_for_seconds(0.001 * time_ms, sample_rate)
 }
 
 #[cfg(test)]

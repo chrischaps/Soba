@@ -13,7 +13,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::{glide_parameters, Glide, GlideMode},
+    primitives::{glide_parameters, rate_for_seconds, Glide, GlideMode},
     signal::SignalBuffer,
     MidiEvent, MidiMessage, ParameterDisplay, SignalType,
 };
@@ -285,7 +285,7 @@ impl DspModule for MidiNote {
 
     fn prepare(&mut self, sample_rate: f32, _max_block_size: usize) {
         self.sample_rate = sample_rate;
-        self.bend_coeff = 1.0 - (-1.0 / (BEND_SMOOTHING_SECONDS * sample_rate)).exp();
+        self.bend_coeff = rate_for_seconds(BEND_SMOOTHING_SECONDS, sample_rate);
     }
 
     fn process(
@@ -750,7 +750,7 @@ mod tests {
 
             // Today's formula, from the bend the module heard
             let mut bend = 0.0f32;
-            let coeff = 1.0 - (-1.0 / (BEND_SMOOTHING_SECONDS * SR)).exp();
+            let coeff = rate_for_seconds(BEND_SMOOTHING_SECONDS, SR);
             let notes = |i: usize| match i {
                 0..=29 => 60.0,
                 30..=89 => 64.0,

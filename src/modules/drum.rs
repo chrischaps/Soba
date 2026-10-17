@@ -20,7 +20,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::{prewarp, BlepDelay},
+    primitives::{decay_for_seconds, BlepDelay, Svf, SvfCoeffs},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     ParameterDisplay, SignalType,
@@ -167,7 +167,7 @@ impl Decay {
 
     /// The per-sample multiplier that follows it.
     fn coefficient(&self, sample_rate: f32) -> f32 {
-        (-1.0 / (self.tau.max(1e-6) * sample_rate)).exp()
+        decay_for_seconds(self.tau, sample_rate)
     }
 }
 
@@ -368,55 +368,6 @@ impl Voicing {
     }
 }
 
-/// A topology-preserving state-variable filter, giving lowpass, bandpass
-/// and highpass at once.
-#[derive(Clone, Copy, Debug, Default)]
-struct Svf {
-    ic1: f32,
-    ic2: f32,
-}
-
-/// Coefficients for an [`Svf`] at one cutoff and damping.
-#[derive(Clone, Copy, Debug, Default)]
-struct SvfTuning {
-    a1: f32,
-    a2: f32,
-    a3: f32,
-    /// Damping, 1/Q.
-    k: f32,
-}
-
-impl SvfTuning {
-    fn new(cutoff_hz: f32, q: f32, sample_rate: f32) -> Self {
-        let g = prewarp(cutoff_hz, sample_rate);
-        let k = 1.0 / q;
-        let a1 = 1.0 / (1.0 + g * (g + k));
-        let a2 = g * a1;
-        Self { a1, a2, a3: g * a2, k }
-    }
-}
-
-/// The three outputs of one [`Svf`] step. `band` is scaled to unit gain at
-/// the cutoff.
-#[derive(Clone, Copy, Debug)]
-struct SvfOut {
-    low: f32,
-    band: f32,
-    high: f32,
-}
-
-impl Svf {
-    #[inline]
-    fn tick(&mut self, x: f32, c: &SvfTuning) -> SvfOut {
-        let v3 = x - self.ic2;
-        let v1 = c.a1 * self.ic1 + c.a2 * v3;
-        let v2 = self.ic2 + c.a2 * self.ic1 + c.a3 * v3;
-        self.ic1 = 2.0 * v1 - self.ic1;
-        self.ic2 = 2.0 * v2 - self.ic2;
-        SvfOut { low: v2, band: c.k * v1, high: x - c.k * v1 - v2 }
-    }
-}
-
 /// Up to six free-running square waves summed, with band-limited edges.
 ///
 /// They run on between hits, as the 808's do, so no two hits of a hat
@@ -540,7 +491,7 @@ pub struct Drum {
     phase: [f32; 2],
     squares: SquareBank,
     filter: [Svf; 2],
-    tuning: [SvfTuning; 2],
+    tuning: [SvfCoeffs; 2],
     /// A gentle lowpass over the metal, so hats and cymbals shimmer
     /// rather than fizz: its state, and its coefficient.
     air: f32,
@@ -591,7 +542,7 @@ impl Drum {
             phase: [0.0; 2],
             squares: SquareBank::default(),
             filter: [Svf::default(); 2],
-            tuning: [SvfTuning::default(); 2],
+            tuning: [SvfCoeffs::default(); 2],
             air: 0.0,
             air_step: 1.0,
             choke: 1.0,
@@ -683,10 +634,10 @@ impl Drum {
         self.noise_step = voicing.noise.coefficient(rate);
         self.click_step = voicing.click.coefficient(rate);
         self.sweep = voicing.sweep_octaves;
-        self.sweep_step = (-1.0 / (voicing.sweep_tau * rate)).exp();
+        self.sweep_step = decay_for_seconds(voicing.sweep_tau, rate);
         if voicing.swell > 0.0 {
             self.swell = 1.0;
-            self.swell_step = (-1.0 / (voicing.swell * rate)).exp();
+            self.swell_step = decay_for_seconds(voicing.swell, rate);
         } else {
             self.swell = 0.0;
         }
@@ -699,27 +650,27 @@ impl Drum {
         let pitch = voicing.pitch_hz;
         let filters = match voicing.kind {
             // The beater: a short burst of noise in a bright band
-            DrumType::Kick => [SvfTuning::new(2500.0 + 4000.0 * tone, 0.8, rate), SvfTuning::default()],
+            DrumType::Kick => [SvfCoeffs::new(2500.0 + 4000.0 * tone, 0.8, rate), SvfCoeffs::default()],
             // The wires: noise under a lowpass Tone opens, over a highpass
-            DrumType::Snare => [SvfTuning::new(2500.0 * (2.6 * tone).exp2(), 0.7, rate), SvfTuning::new(900.0, 0.7, rate)],
+            DrumType::Snare => [SvfCoeffs::new(2500.0 * (2.6 * tone).exp2(), 0.7, rate), SvfCoeffs::new(900.0, 0.7, rate)],
             // The stick on the head, dark or bright
-            DrumType::Tom => [SvfTuning::new(1200.0 * (2.5 * tone).exp2(), 0.7, rate), SvfTuning::default()],
+            DrumType::Tom => [SvfCoeffs::new(1200.0 * (2.5 * tone).exp2(), 0.7, rate), SvfCoeffs::default()],
             // A band of noise, narrower when dark
-            DrumType::Clap => [SvfTuning::new(pitch * (1.4 * (tone - 0.5)).exp2(), 1.0 + 1.2 * (1.0 - tone), rate), SvfTuning::default()],
+            DrumType::Clap => [SvfCoeffs::new(pitch * (1.4 * (tone - 0.5)).exp2(), 1.0 + 1.2 * (1.0 - tone), rate), SvfCoeffs::default()],
             // A band well above the metal's fundamentals, where the 808's
             // hats live, and hiss above it
             DrumType::ClosedHat | DrumType::OpenHat => {
                 let corner = 6000.0 * (pitch / METAL_HZ) * (1.6 * (tone - 0.5)).exp2();
-                [SvfTuning::new(corner, 1.2, rate), SvfTuning::new(corner * 1.5, 0.6, rate)]
+                [SvfCoeffs::new(corner, 1.2, rate), SvfCoeffs::new(corner * 1.5, 0.6, rate)]
             }
             // A low band and a high band, Tone moving between them
-            DrumType::Cymbal => [SvfTuning::new(4200.0 * (pitch / METAL_HZ), 0.9, rate), SvfTuning::new(7500.0, 0.7, rate)],
-            DrumType::Rim => [SvfTuning::new(300.0, 0.7, rate), SvfTuning::new(5000.0, 1.0, rate)],
-            DrumType::Cowbell => [SvfTuning::new(pitch * 1.7 * (2.0 * (tone - 0.5)).exp2(), 1.6, rate), SvfTuning::default()],
+            DrumType::Cymbal => [SvfCoeffs::new(4200.0 * (pitch / METAL_HZ), 0.9, rate), SvfCoeffs::new(7500.0, 0.7, rate)],
+            DrumType::Rim => [SvfCoeffs::new(300.0, 0.7, rate), SvfCoeffs::new(5000.0, 1.0, rate)],
+            DrumType::Cowbell => [SvfCoeffs::new(pitch * 1.7 * (2.0 * (tone - 0.5)).exp2(), 1.6, rate), SvfCoeffs::default()],
             // A band of hiss, its low side steepened by a highpass
             DrumType::Shaker => {
                 let centre = pitch.min(0.4 * rate);
-                [SvfTuning::new(centre, 1.3, rate), SvfTuning::new(0.55 * centre, 0.7, rate)]
+                [SvfCoeffs::new(centre, 1.3, rate), SvfCoeffs::new(0.55 * centre, 0.7, rate)]
             }
         };
         self.tuning = filters;
@@ -863,8 +814,8 @@ impl DspModule for Drum {
     fn prepare(&mut self, sample_rate: f32, _max_block_size: usize) {
         self.sample_rate = sample_rate;
         self.level.set_sample_rate(sample_rate);
-        self.choke_step = (-1.0 / (CHOKE_TAU * sample_rate)).exp();
-        self.declick_step = (-1.0 / (DECLICK_TAU * sample_rate)).exp();
+        self.choke_step = decay_for_seconds(CHOKE_TAU, sample_rate);
+        self.declick_step = decay_for_seconds(DECLICK_TAU, sample_rate);
     }
 
     fn process(

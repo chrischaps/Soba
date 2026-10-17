@@ -31,7 +31,7 @@ use crate::dsp::{
     denormal::flush,
     parameter::{ParameterDefinition, ParameterDisplay},
     port::PortDefinition,
-    primitives::{prewarp, Adaa1, BiasedTanh, Curve, FracDelay, NoiseFloor, RecordHead, StopHeads, TapeStop, TapeTransport},
+    primitives::{prewarp, rate_for_seconds, Adaa1, BiasedTanh, Curve, FracDelay, NoiseFloor, RecordHead, StopHeads, Svf, SvfCoeffs, TapeStop, TapeTransport, TptOnePole},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     connected_input, SignalType,
@@ -141,64 +141,6 @@ fn partial_shares() -> [f32; 4] {
     [p[0].1 / wow, p[1].1 / wow, p[2].1 / flutter, p[3].1 / flutter]
 }
 
-/// A one-pole lowpass, trapezoidal: `gg` is `g/(1+g)` of the prewarped gain.
-#[derive(Clone, Copy, Debug, Default)]
-struct OnePole {
-    state: f32,
-}
-
-impl OnePole {
-    #[inline]
-    fn lowpass(&mut self, x: f32, gg: f32) -> f32 {
-        let v = (x - self.state) * gg;
-        let y = v + self.state;
-        self.state = flush(y + v);
-        y
-    }
-}
-
-/// `g/(1+g)` for a one-pole at `g`.
-fn one_pole(g: f32) -> f32 {
-    g / (1.0 + g)
-}
-
-/// A state-variable filter, trapezoidal (Zavalishin).
-#[derive(Clone, Copy, Debug, Default)]
-struct Svf {
-    s1: f32,
-    s2: f32,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct SvfCoeffs {
-    g: f32,
-    /// 2R, the damping: 1/Q.
-    r2: f32,
-    h: f32,
-}
-
-impl SvfCoeffs {
-    fn new(cutoff_hz: f32, r2: f32, sample_rate: f32) -> Self {
-        let g = prewarp(cutoff_hz, sample_rate);
-        Self { g, r2, h: 1.0 / (1.0 + r2 * g + g * g) }
-    }
-}
-
-impl Svf {
-    /// Returns (lowpass, bandpass). `r2 · bandpass` has unity gain at the cutoff.
-    #[inline]
-    fn process(&mut self, x: f32, c: &SvfCoeffs) -> (f32, f32) {
-        let hp = (x - (c.r2 + c.g) * self.s1 - self.s2) * c.h;
-        let v1 = c.g * hp;
-        let bp = v1 + self.s1;
-        self.s1 = flush(bp + v1);
-        let v2 = c.g * bp;
-        let lp = v2 + self.s2;
-        self.s2 = flush(lp + v2);
-        (lp, bp)
-    }
-}
-
 /// Filter coefficients for a block, from the speed and the Age.
 #[derive(Clone, Copy, Debug, Default)]
 struct Coeffs {
@@ -220,50 +162,50 @@ impl Coeffs {
         // Gap loss falls from the top of hearing toward the worn cutoff
         let worn_hz = 20000.0 * (speed.worn_hz / 20000.0).powf(age.clamp(0.0, 1.0));
         Self {
-            pre: one_pole(pre_g),
-            de: one_pole(pre_g / (1.0 + EMPHASIS)),
+            pre: TptOnePole::gain(pre_g),
+            de: TptOnePole::gain(pre_g / (1.0 + EMPHASIS)),
             dc_pole: 1.0 - std::f32::consts::TAU * DC_HZ / sample_rate,
-            bump: SvfCoeffs::new(speed.bump_hz, BUMP_DAMPING, sample_rate),
-            top: one_pole(prewarp(speed.top_hz, sample_rate)),
-            hiss_low: one_pole(prewarp(HISS_LOW_HZ, sample_rate)),
-            worn: SvfCoeffs::new(worn_hz, 1.4, sample_rate),
-            split: one_pole(prewarp(DROPOUT_SPLIT_HZ, sample_rate)),
+            bump: SvfCoeffs::new(speed.bump_hz, 1.0 / BUMP_DAMPING, sample_rate),
+            top: TptOnePole::gain(prewarp(speed.top_hz, sample_rate)),
+            hiss_low: TptOnePole::gain(prewarp(HISS_LOW_HZ, sample_rate)),
+            worn: SvfCoeffs::new(worn_hz, 1.0 / 1.4, sample_rate),
+            split: TptOnePole::gain(prewarp(DROPOUT_SPLIT_HZ, sample_rate)),
         }
     }
 }
 
 /// One track of the tape: everything per channel.
 struct Track {
-    pre: OnePole,
+    pre: TptOnePole,
     head: Adaa1,
-    de: OnePole,
+    de: TptOnePole,
     dc_x: f32,
     dc_y: f32,
     bump: Svf,
-    top: OnePole,
+    top: TptOnePole,
     /// The tape between the record head and the read head.
     line: FracDelay,
     hiss: NoiseFloor,
-    hiss_low: OnePole,
+    hiss_low: TptOnePole,
     worn: Svf,
-    split: OnePole,
+    split: TptOnePole,
 }
 
 impl Track {
     fn new(sample_rate: f32, hiss_seed: u32) -> Self {
         Self {
-            pre: OnePole::default(),
+            pre: TptOnePole::default(),
             head: Adaa1::new(),
-            de: OnePole::default(),
+            de: TptOnePole::default(),
             dc_x: 0.0,
             dc_y: 0.0,
             bump: Svf::default(),
-            top: OnePole::default(),
+            top: TptOnePole::default(),
             line: FracDelay::new(Self::line_length(sample_rate)),
             hiss: NoiseFloor::with_seed(1.0, hiss_seed),
-            hiss_low: OnePole::default(),
+            hiss_low: TptOnePole::default(),
             worn: Svf::default(),
-            split: OnePole::default(),
+            split: TptOnePole::default(),
         }
     }
 
@@ -282,8 +224,8 @@ impl Track {
         let flat = (squashed + EMPHASIS * self.de.lowpass(squashed, c.de)) / (1.0 + EMPHASIS);
         self.dc_y = flush(flat - self.dc_x + c.dc_pole * self.dc_y);
         self.dc_x = flat;
-        let (low, band) = self.bump.process(self.dc_y, &c.bump);
-        let bumped = self.dc_y + BUMP_LIFT * c.bump.r2 * band - BUMP_CUT * low;
+        let bump = self.bump.tick(self.dc_y, &c.bump);
+        let bumped = self.dc_y + BUMP_LIFT * bump.band - BUMP_CUT * bump.low;
         let taped = self.top.lowpass(bumped, c.top);
         x + amount * (taped - x)
     }
@@ -322,24 +264,24 @@ impl Track {
     /// faded in by `amount`.
     #[inline]
     fn age(&mut self, x: f32, amount: f32, dropout: f32, c: &Coeffs) -> f32 {
-        let (worn, _) = self.worn.process(x, &c.worn);
+        let worn = self.worn.low(x, &c.worn);
         let low = self.split.lowpass(worn, c.split);
         let dipped = low * (0.5 + 0.5 * dropout) + (worn - low) * dropout;
         x + amount * (dipped - x)
     }
 
     fn reset(&mut self) {
-        self.pre = OnePole::default();
+        self.pre = TptOnePole::default();
         self.head.reset();
-        self.de = OnePole::default();
+        self.de = TptOnePole::default();
         self.dc_x = 0.0;
         self.dc_y = 0.0;
         self.bump = Svf::default();
-        self.top = OnePole::default();
+        self.top = TptOnePole::default();
         self.line.clear();
-        self.hiss_low = OnePole::default();
+        self.hiss_low = TptOnePole::default();
         self.worn = Svf::default();
-        self.split = OnePole::default();
+        self.split = TptOnePole::default();
     }
 }
 
@@ -364,8 +306,8 @@ impl Dropouts {
     }
 
     fn set_sample_rate(&mut self, sample_rate: f32) {
-        self.fall = 1.0 - (-1000.0 / (DROPOUT_FALL_MS * sample_rate)).exp();
-        self.rise = 1.0 - (-1000.0 / (DROPOUT_RISE_MS * sample_rate)).exp();
+        self.fall = rate_for_seconds(0.001 * DROPOUT_FALL_MS, sample_rate);
+        self.rise = rate_for_seconds(0.001 * DROPOUT_RISE_MS, sample_rate);
     }
 
     /// A uniform random number in 0..1.

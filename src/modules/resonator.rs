@@ -34,7 +34,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::FracDelay,
+    primitives::{decay_for_seconds, FracDelay},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     ParameterDisplay, SignalType,
@@ -568,7 +568,7 @@ impl DspModule for Resonator {
         self.pick.allocate(longest);
         self.pick_in.allocate(longest);
         self.level.set_sample_rate(sample_rate);
-        self.envelope_fall = (-1.0 / (0.08 * sample_rate)).exp();
+        self.envelope_fall = decay_for_seconds(0.08, sample_rate);
         self.dc_coeff = (-TAU * 12.0 / sample_rate).exp();
         self.last_octaves = f32::NAN;
         self.period = sample_rate / C4_HZ;

@@ -21,6 +21,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
+    primitives::{decay_for_seconds, rate_for_seconds, Follower},
     signal::{connected_input, SignalBuffer},
     ParameterDisplay, SignalType,
 };
@@ -108,39 +109,18 @@ struct Coefficients {
 impl Coefficients {
     fn at(sample_rate: f32) -> Self {
         Self {
-            level_attack: one_pole(10.0, sample_rate),
-            level_release: one_pole(250.0, sample_rate),
-            fast_attack: one_pole(1.0, sample_rate),
-            fast_release: one_pole(100.0, sample_rate),
-            slow_attack: one_pole(40.0, sample_rate),
-            slow_release: one_pole(100.0, sample_rate),
-            punch_decay: 1.0 - one_pole(120.0, sample_rate),
+            level_attack: rate_for_seconds(0.01, sample_rate),
+            level_release: rate_for_seconds(0.25, sample_rate),
+            fast_attack: rate_for_seconds(0.001, sample_rate),
+            fast_release: rate_for_seconds(0.1, sample_rate),
+            slow_attack: rate_for_seconds(0.04, sample_rate),
+            slow_release: rate_for_seconds(0.1, sample_rate),
+            punch_decay: decay_for_seconds(0.12, sample_rate),
         }
     }
 }
 
-/// An envelope follower: a rectifier into a one-pole that rises at one rate
-/// and falls at another (the Vocoder's band follower).
-#[derive(Clone, Copy, Debug, Default)]
-struct Follower {
-    level: f32,
-}
 
-impl Follower {
-    #[inline]
-    fn follow(&mut self, x: f32, attack: f32, release: f32) -> f32 {
-        let x = x.abs();
-        let rate = if x > self.level { attack } else { release };
-        self.level = flush(self.level + rate * (x - self.level));
-        self.level
-    }
-}
-
-/// The per-sample coefficient of a one-pole that covers 63% of a step in
-/// `ms` milliseconds.
-fn one_pole(ms: f32, sample_rate: f32) -> f32 {
-    1.0 - (-1000.0 / (ms.max(0.01) * sample_rate)).exp()
-}
 
 impl Dancer {
     /// Creates a Dancer, bouncing.

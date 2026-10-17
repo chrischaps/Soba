@@ -60,6 +60,29 @@ impl TptIntegrator {
     }
 }
 
+/// A one-pole lowpass, trapezoidal: one [`TptIntegrator`] in a loop, solved
+/// with zero delay. Its `gg` is [`gain`](Self::gain) of the prewarped `g`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct TptOnePole {
+    state: f32,
+}
+
+impl TptOnePole {
+    /// `g/(1+g)` for a prewarped gain `g`: the loop already solved.
+    #[inline]
+    pub fn gain(g: f32) -> f32 {
+        g / (1.0 + g)
+    }
+
+    #[inline]
+    pub fn lowpass(&mut self, x: f32, gg: f32) -> f32 {
+        let v = (x - self.state) * gg;
+        let y = v + self.state;
+        self.state = flush(y + v);
+        y
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

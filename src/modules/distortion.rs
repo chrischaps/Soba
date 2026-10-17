@@ -13,7 +13,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::{Adaa1, BiasedTanh, Curve, Downsampler4x, HardClip, RoundedFolder, Tanh, Upsampler4x},
+    primitives::{Adaa1, BiasedTanh, Curve, Downsampler4x, HardClip, OnePole, RoundedFolder, Tanh, Upsampler4x},
     signal::{connected_input, SignalBuffer},
     smoothed_value::SmoothedValue,
     ParameterDisplay, SignalType,
@@ -56,28 +56,6 @@ impl DistortionType {
     /// Whether the type is a static curve run through ADAA.
     fn is_curve(self) -> bool {
         self != DistortionType::Bit
-    }
-}
-
-/// Simple one-pole lowpass filter for tone control.
-#[derive(Clone, Copy, Default)]
-struct OnePoleFilter {
-    /// Filter state (previous output).
-    z1: f32,
-}
-
-impl OnePoleFilter {
-    /// Process a single sample through the filter.
-    #[inline]
-    fn process(&mut self, input: f32, coefficient: f32) -> f32 {
-        // One-pole lowpass: y[n] = (1-a)*x[n] + a*y[n-1]
-        self.z1 = input * (1.0 - coefficient) + self.z1 * coefficient;
-        self.z1
-    }
-
-    /// Reset filter state.
-    fn reset(&mut self) {
-        self.z1 = 0.0;
     }
 }
 
@@ -164,7 +142,7 @@ pub struct Distortion {
     /// Previous oversampled dry sample, for matching ADAA's half-sample delay.
     prev_dry: f32,
     /// Tone filter (runs oversampled).
-    tone_filter: OnePoleFilter,
+    tone_filter: OnePole,
     /// Removes the offset the asymmetric curves leave (runs oversampled).
     dc_blocker: DcBlocker,
     /// Smoothed drive parameter.
@@ -211,7 +189,7 @@ impl Distortion {
             active_type: DistortionType::Soft,
             last_drive_input: 0.0,
             prev_dry: 0.0,
-            tone_filter: OnePoleFilter::default(),
+            tone_filter: OnePole::default(),
             dc_blocker: DcBlocker::new(sample_rate * OVERSAMPLE as f32),
             drive_smooth: SmoothedValue::with_default_smoothing(0.5, sample_rate),
             tone_coeff_smooth: SmoothedValue::with_default_smoothing(0.0, sample_rate),
@@ -495,7 +473,7 @@ impl DspModule for Distortion {
                 };
                 self.prev_dry = x;
 
-                let wet = self.tone_filter.process(wet, tone_coeff);
+                let wet = self.tone_filter.follow(wet, 1.0 - tone_coeff);
                 let wet = self.dc_blocker.process(wet);
                 *slot = dry + (wet - dry) * mix;
             }
@@ -522,7 +500,7 @@ impl DspModule for Distortion {
         self.crusher.reset();
         self.last_drive_input = 0.0;
         self.prev_dry = 0.0;
-        self.tone_filter.reset();
+        self.tone_filter = OnePole::default();
         self.dc_blocker.reset();
 
         // Reset smoothed values

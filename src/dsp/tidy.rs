@@ -22,6 +22,7 @@
 use std::collections::VecDeque;
 use std::ops::Range;
 
+use super::primitives::rate_for_seconds;
 use super::SampleData;
 
 /// Frames a second the level is measured in: 10 ms each.
@@ -273,7 +274,7 @@ fn limit(sample: &SampleData, ceiling: f32) -> SampleData {
     let half = (width - 1) / 2;
     let at = |j: isize| lowest[j.clamp(0, frames as isize - 1) as usize] as f64;
     let mut sum: f64 = (0..width).map(|k| at(half as isize - width as isize + 1 + k as isize)).sum();
-    let release = 1.0 - (-1.0 / (LIMITER_RELEASE_SECONDS * rate)).exp();
+    let release = rate_for_seconds(LIMITER_RELEASE_SECONDS, rate);
     let mut state = 1.0f32;
     let mut gains = Vec::with_capacity(frames);
     for i in 0..frames {

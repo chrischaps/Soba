@@ -15,6 +15,7 @@ use crate::dsp::{
     denormal::flush,
     parameter::ParameterDefinition,
     port::PortDefinition,
+    primitives::decay_for_seconds,
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     connected_input, ParameterDisplay, SignalType,
@@ -41,7 +42,7 @@ const DETECTOR_VIEW_FALL_MS: f32 = 120.0;
 /// One-pole coefficient for a time constant in milliseconds.
 #[inline]
 fn time_coeff(ms: f32, sample_rate: f32) -> f32 {
-    (-1.0 / (ms * 0.001 * sample_rate)).exp()
+    decay_for_seconds(0.001 * ms, sample_rate)
 }
 
 /// A one-pole coefficient cached against the time it was computed for,

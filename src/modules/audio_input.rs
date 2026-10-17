@@ -11,6 +11,7 @@ use crate::dsp::{
     module_trait::{DspModule, MeterLevels, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
+    primitives::rate_for_seconds,
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     ParameterDisplay, SignalType,
@@ -36,7 +37,7 @@ pub fn follow_from_db(db: f32) -> f32 {
 /// One-pole coefficient that moves `1 - 1/e` of the way in `ms`.
 #[inline]
 fn coefficient(ms: f32, sample_rate: f32) -> f32 {
-    1.0 - (-1.0 / (ms * 0.001 * sample_rate).max(1.0)).exp()
+    rate_for_seconds(0.001 * ms, sample_rate)
 }
 
 /// The module's ID, as patches name it.

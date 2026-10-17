@@ -41,6 +41,7 @@ use std::sync::Arc;
 use crate::dsp::{
     context::ProcessContext,
     gate::{Edge, Transition},
+    primitives::{decay_for_seconds, rate_for_seconds},
     signal::SignalBuffer,
     FinishedTake, SampleData,
 };
@@ -334,8 +335,8 @@ impl Recorder {
         let latency = context.input_latency as u64;
         let late = (LATE_TAP_SECONDS * rate) as u64;
         let pre_roll = ((PRE_ROLL_SECONDS * rate) as usize).max(1);
-        let rise = 1.0 - (-1.0 / (ONSET_ATTACK_SECONDS * rate)).exp();
-        let fall = (-1.0 / (ONSET_RELEASE_SECONDS * rate)).exp();
+        let rise = rate_for_seconds(ONSET_ATTACK_SECONDS, rate);
+        let fall = decay_for_seconds(ONSET_RELEASE_SECONDS, rate);
         self.meter *= (-(context.block_size as f32) / (METER_RELEASE_SECONDS * rate)).exp();
         let beats_per_frame = beats.map_or(0.0, |(_, bpm)| bpm as f64 / 60.0 / rate as f64);
 
