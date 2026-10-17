@@ -54,7 +54,7 @@ impl SynthApp {
         let mut app = Self::with_devices(Err(AudioError::NoOutputDevice), None);
         app.audio_error_message = None;
         app.ui_handle = Some(ui_handle);
-        app.midi_event_consumer = Some(midi);
+        app.midi.events = Some(midi);
         app.user_state.hosted = true;
         app.hosted = Some(Hosted { macros: [f32::NAN; MACRO_COUNT as usize] });
         // The DAW decides when it plays; the patch always runs
@@ -114,7 +114,8 @@ impl SynthApp {
             }
         }
         let updates: Vec<(u64, usize, f32)> = self
-            .midi_mappings
+            .midi
+            .mappings
             .iter()
             .filter_map(|m| {
                 let slot = m.macro_slot? as usize;
@@ -134,7 +135,7 @@ impl SynthApp {
     pub(super) fn map_to_macro(&mut self, mapping: MidiMapping) {
         let Some(slot) = mapping.macro_slot else { return };
         self.status_message = Some(format!("{} follows Macro {}", mapping.param_name, slot + 1));
-        self.midi_mappings.map_macro(mapping);
+        self.midi.mappings.map_macro(mapping);
         self.show_midi_badges();
         if let Some(hosted) = self.hosted.as_mut() {
             hosted.macros[slot as usize] = f32::NAN;

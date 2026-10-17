@@ -45,7 +45,7 @@ impl SynthApp {
             Shown::News
         } else if self.audio_error_message.is_some() {
             Shown::AudioError
-        } else if self.midi_error_message.is_some() {
+        } else if self.midi.error.is_some() {
             Shown::MidiError
         } else {
             Shown::Counts

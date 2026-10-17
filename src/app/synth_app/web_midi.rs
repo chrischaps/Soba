@@ -52,11 +52,11 @@ impl SynthApp {
         if connect_button(ui) {
             return;
         }
-        let connected = self.selected_midi_device.and_then(|i| self.midi_devices.get(i));
+        let connected = self.midi.selected_device();
         let shown = connected.map_or("None", |d| d.name.as_str());
         // Keyed on the count: egui keeps a menu's size from when it first
         // opened, which would cut off a device plugged in since
-        egui::ComboBox::from_id_salt(("midi_device_selector", self.midi_devices.len()))
+        egui::ComboBox::from_id_salt(("midi_device_selector", self.midi.devices.len()))
             .selected_text(format!("{}{shown}", if connected.is_some() { "● " } else { "○ " }))
             .width(180.0)
             .truncate()
@@ -65,11 +65,11 @@ impl SynthApp {
                     actions.push(AppAction::DisconnectMidi);
                 }
                 ui.separator();
-                if self.midi_devices.is_empty() {
+                if self.midi.devices.is_empty() {
                     ui.label(RichText::new("No MIDI inputs plugged in").color(theme::text::DISABLED).italics());
                 }
-                for device in &self.midi_devices {
-                    if ui.selectable_label(self.selected_midi_device == Some(device.index), &device.name).clicked() {
+                for device in &self.midi.devices {
+                    if ui.selectable_label(self.midi.selected == Some(device.index), &device.name).clicked() {
                         actions.push(AppAction::ConnectMidi(device.index));
                     }
                 }
@@ -84,11 +84,11 @@ impl SynthApp {
         if changes != seen_changes {
             // The list is numbered afresh: MIDI In follows its device by
             // name, and lets go (and of its notes) if it was unplugged
-            let selected = self.selected_midi_device.and_then(|i| self.midi_devices.get(i)).map(|d| d.name.clone());
+            let selected = self.midi.selected_device().map(|d| d.name.clone());
             self.refresh_midi_devices();
             if let Some(name) = selected {
-                match self.midi_devices.iter().position(|d| d.name == name) {
-                    Some(index) => self.selected_midi_device = Some(index),
+                match self.midi.devices.iter().position(|d| d.name == name) {
+                    Some(index) => self.midi.selected = Some(index),
                     None => self.disconnect_midi_device(),
                 }
             }

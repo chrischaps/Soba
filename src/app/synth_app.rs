@@ -12,9 +12,8 @@ use egui_node_graph2::{FlowGlyph, GraphEditorState, NodeResponse, InputParamKind
 
 use crate::engine::{
     AudioEngine, AudioError, AudioProcessor, AudioSystem, DeviceInfo, EngineChannels, EngineCommand, InputMonitor, Recording, RoundTrip,
-    UiHandle, MidiDeviceInfo, MidiEngine, MidiEvent, MidiReceivers, TimestampedMidiEvent,
+    UiHandle, MidiEngine, MidiEvent, MidiReceivers,
 };
-use rtrb::Consumer;
 use crate::graph::annotation_ui;
 use crate::graph::annotations::{Annotation, AnnotationId, Frame, Note, Tint, DEFAULT_NOTE_WIDTH};
 use crate::graph::{
@@ -38,7 +37,7 @@ use super::engine_sync;
 use super::input_device;
 use super::library::{self, SavedModule};
 use super::long_press::LongPress;
-use super::midi_mappings::MidiMappings;
+use super::midi_session::MidiSession;
 use super::palette::{PaletteAction, QuickAdd};
 use super::recording::{self, RecState, Toast, ToastAction};
 use super::session::{self, Answer, Autosave, Discard, RecentFiles};
@@ -124,23 +123,7 @@ const MANUAL_URL: &str = "https://docs.chaps.dev/soba/";
 /// How long the input's status stays amber after a dropout.
 const INPUT_GLITCH_HOLD: std::time::Duration = std::time::Duration::from_secs(3);
 
-/// Target parameter for MIDI Learn mode.
-///
-/// When the user activates MIDI Learn on a knob, this stores the target
-/// parameter information until a CC event is received.
-#[derive(Debug, Clone)]
-pub struct MidiLearnTarget {
-    /// Engine node ID of the target parameter.
-    pub node_id: u64,
-    /// Parameter index within the node.
-    pub param_index: usize,
-    /// Parameter name for display.
-    pub param_name: String,
-    /// Minimum value of the parameter range.
-    pub min_value: f32,
-    /// Maximum value of the parameter range.
-    pub max_value: f32,
-}
+pub use super::midi_session::MidiLearnTarget;
 
 /// Main application state for the Soba
 pub struct SynthApp {
@@ -222,33 +205,8 @@ pub struct SynthApp {
     /// that stops moving means the device has stopped taking audio.
     audio_heartbeat: (u64, Instant),
 
-    /// MIDI engine for receiving MIDI input.
-    midi_engine: Option<MidiEngine>,
-
-    /// Consumer for the UI's copy of incoming MIDI: monitor display, piano,
-    /// MIDI Learn and CC mappings. Notes reach MIDI Note modules on the
-    /// audio thread, through the processor's own queue.
-    midi_event_consumer: Option<Consumer<TimestampedMidiEvent>>,
-
-    /// Cached list of MIDI input devices.
-    midi_devices: Vec<MidiDeviceInfo>,
-
-    /// Index of currently selected MIDI device (None = no device).
-    selected_midi_device: Option<usize>,
-
-    /// MIDI error message to display.
-    midi_error_message: Option<String>,
-
-    /// MIDI notes currently held, in order of press, each with its velocity:
-    /// for the piano display and the chord popover.
-    midi_held_notes: Vec<(u8, u8)>,
-
-    // --- MIDI CC Mapping state ---
-    /// Active MIDI CC to parameter mappings.
-    midi_mappings: MidiMappings,
-
-    /// Target for MIDI Learn mode (None = not learning).
-    midi_learn_target: Option<MidiLearnTarget>,
+    /// MIDI in: the inputs, the notes held, the CC mappings and MIDI Learn.
+    midi: MidiSession,
 
     /// Undo and redo for edits to the patch.
     history: History,
@@ -270,9 +228,6 @@ pub struct SynthApp {
     pending_discard: Option<Discard>,
     /// A crash's autosave, until it's recovered or let go.
     recovery: Option<Autosave>,
-    /// The MIDI mappings as last opened or saved. Undo history doesn't
-    /// cover them, but they're saved with the patch.
-    saved_midi_mappings: MidiMappings,
     /// Whether the window may close: set once unsaved changes are dealt with.
     allow_close: bool,
     /// The window title last sent, so it's only sent when it changes.
@@ -462,21 +417,13 @@ impl SynthApp {
         let input_devices = audio_engine.as_ref().map(|e| e.enumerate_input_devices()).unwrap_or_default();
 
         // Initialize MIDI engine
-        let (midi_engine, midi_receivers, midi_devices, midi_error_message) =
-            match midi {
-                None => (None, None, Vec::new(), None),
-                Some(Ok((mut engine, receivers))) => {
-                    let devices = engine.enumerate_devices();
-                    (Some(engine), Some(receivers), devices, None)
-                }
-                Some(Err(e)) => {
-                    eprintln!("MIDI initialization failed: {}", e);
-                    (None, None, Vec::new(), Some(e.to_string()))
-                }
-            };
-        let (midi_audio_consumer, midi_event_consumer) = match midi_receivers {
-            Some(MidiReceivers { audio, ui }) => (Some(audio), Some(ui)),
-            None => (None, None),
+        let (midi, midi_audio_consumer) = match midi {
+            None => (MidiSession::default(), None),
+            Some(Ok((engine, MidiReceivers { audio, ui }))) => (MidiSession::new(Some(engine), Some(ui), None), Some(audio)),
+            Some(Err(e)) => {
+                eprintln!("MIDI initialization failed: {}", e);
+                (MidiSession::new(None, None, Some(e.to_string())), None)
+            }
         };
 
         // Create engine channels for communication with audio thread
@@ -528,15 +475,7 @@ impl SynthApp {
             cpu_peak: Default::default(),
             toolbar_full_width: None,
             audio_heartbeat: (0, Instant::now()),
-            midi_engine,
-            midi_event_consumer,
-            midi_devices,
-            selected_midi_device: None,
-            midi_error_message,
-            midi_held_notes: Vec::new(),
-            // MIDI CC Mapping state
-            midi_mappings: MidiMappings::default(),
-            midi_learn_target: None,
+            midi,
             history: History::default(),
             quick_add: None,
             editor_rect: egui::Rect::NOTHING,
@@ -544,7 +483,6 @@ impl SynthApp {
             recent_files: RecentFiles::default(),
             pending_discard: None,
             recovery: None,
-            saved_midi_mappings: MidiMappings::default(),
             allow_close: false,
             window_title: String::new(),
             capture: None,
@@ -630,7 +568,7 @@ impl SynthApp {
                 CaptureAction::Midi { event, offset } => {
                     // The UI's copy lights the pianos; the audio's copy is
                     // placed by sample below instead
-                    if let Some(engine) = self.midi_engine.as_ref() {
+                    if let Some(engine) = self.midi.engine.as_ref() {
                         engine.send(event);
                     }
                     midi.extend(event.to_dsp(offset));
@@ -830,121 +768,38 @@ impl SynthApp {
 
     /// Refresh the list of available MIDI devices
     fn refresh_midi_devices(&mut self) {
-        if let Some(ref mut engine) = self.midi_engine {
-            self.midi_devices = engine.enumerate_devices();
-        }
+        self.midi.refresh_devices();
     }
 
     /// Connect to a MIDI device by index
     fn connect_midi_device(&mut self, index: usize) {
-        if let Some(ref mut engine) = self.midi_engine {
-            match engine.connect(index) {
-                Ok(()) => {
-                    self.selected_midi_device = Some(index);
-                    self.midi_error_message = None;
-                }
-                Err(e) => {
-                    // connect() drops the previous connection before trying
-                    self.selected_midi_device = None;
-                    self.midi_error_message = Some(e.to_string());
-                }
-            }
-            // Notes held on the previous device were released (All Notes Off)
-            self.clear_midi_held_notes();
-        }
+        self.midi.connect(index);
+        // Notes held on the previous device were released (All Notes Off)
+        self.user_state.set_midi_active_notes(self.midi.held());
     }
 
     /// Disconnect from the current MIDI device
     fn disconnect_midi_device(&mut self) {
-        if let Some(ref mut engine) = self.midi_engine {
-            engine.disconnect();
-            self.selected_midi_device = None;
-            self.midi_error_message = None;
-            self.clear_midi_held_notes();
-        }
+        self.midi.disconnect();
+        self.user_state.set_midi_active_notes(self.midi.held());
     }
 
-    /// Clears the piano display's held notes.
-    fn clear_midi_held_notes(&mut self) {
-        self.midi_held_notes.clear();
-        self.user_state.set_midi_active_notes(&[]);
-    }
-
-    /// Process the UI's copy of pending MIDI events.
-    /// - Stores events in user state for display by MIDI Monitor modules.
-    /// - Tracks held notes for the MIDI piano display.
-    /// - Handles CC events for MIDI Learn and mapped parameters.
+    /// Hears the UI's copy of the MIDI that came in: the MIDI Monitors log
+    /// it, the pianos light, MIDI Learn takes a CC and mapped knobs turn.
     ///
     /// Notes reach MIDI Note modules on the audio thread, sample-accurately;
     /// nothing here affects what they play.
     fn process_midi_events(&mut self, now: f64) {
-        let mut notes_changed = false;
-        let mut cc_updates: Vec<(u64, usize, f32)> = Vec::new();
-        let mut learned_mapping: Option<MidiMapping> = None;
+        let user_state = &mut self.user_state;
+        let heard = self.midi.drain(|event| user_state.push_midi_event(event, now));
 
-        if let Some(ref mut consumer) = self.midi_event_consumer {
-            while let Ok(timestamped) = consumer.pop() {
-                let event = timestamped.event;
-
-                // Store the event for MIDI Monitor display
-                self.user_state.push_midi_event(event, now);
-
-                match event {
-                    MidiEvent::NoteOn { note, velocity, .. } => {
-                        if !self.midi_held_notes.iter().any(|&(n, _)| n == note) {
-                            self.midi_held_notes.push((note, velocity));
-                            notes_changed = true;
-                        }
-                    }
-                    MidiEvent::NoteOff { note, .. } => {
-                        if let Some(pos) = self.midi_held_notes.iter().position(|&(n, _)| n == note) {
-                            self.midi_held_notes.remove(pos);
-                            notes_changed = true;
-                        }
-                    }
-                    MidiEvent::ControlChange { channel, controller, value } => {
-                        // Check if we're in MIDI Learn mode
-                        if let Some(ref target) = self.midi_learn_target {
-                            // Create new mapping from the received CC
-                            learned_mapping = Some(MidiMapping::new(
-                                controller,
-                                0, // Omni channel for learned mappings
-                                target.node_id,
-                                target.param_index,
-                                target.param_name.clone(),
-                                target.min_value,
-                                target.max_value,
-                            ));
-                        } else {
-                            // Apply CC to all matching mappings
-                            for mapping in &self.midi_mappings {
-                                if mapping.matches(controller, channel) {
-                                    let param_value = mapping.cc_to_value(value);
-                                    cc_updates.push((mapping.node_id, mapping.param_index, param_value));
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        // Handle MIDI Learn completion
-        if let Some(mapping) = learned_mapping {
-            // The CC leaves whatever knob it turned before
-            self.midi_mappings.learn(mapping);
+        if heard.learned {
             self.show_midi_badges();
-
-            // Exit learn mode
-            self.midi_learn_target = None;
-            self.user_state.midi_learn_active = false;
-            self.user_state.midi_learn_target = None;
+            self.show_midi_learn();
             self.status_message = Some("MIDI CC mapped successfully".to_string());
         }
 
-        // Apply CC updates to parameters
-        for (node_id, param_index, value) in cc_updates {
+        for (node_id, param_index, value) in heard.turns {
             self.send_command(EngineCommand::SetParameter {
                 node_id,
                 param_index,
@@ -957,8 +812,8 @@ impl SynthApp {
             self.update_graph_param_from_cc(node_id, param_index, value);
         }
 
-        if notes_changed {
-            self.user_state.set_midi_active_notes(&self.midi_held_notes);
+        if heard.notes_changed {
+            self.user_state.set_midi_active_notes(self.midi.held());
         }
     }
 
@@ -1024,35 +879,40 @@ impl SynthApp {
     ///
     /// Starting on another knob while learning moves learn mode to that knob.
     pub fn start_midi_learn(&mut self, target: MidiLearnTarget) {
-        // The status bar asks for a CC for as long as it's learning
-        self.user_state.midi_learn_active = true;
-        self.user_state.midi_learn_target = Some((target.node_id, target.param_index));
-        self.midi_learn_target = Some(target);
+        self.midi.start_learn(target);
+        self.show_midi_learn();
     }
 
     /// Cancel MIDI Learn mode.
     pub fn cancel_midi_learn(&mut self) {
-        self.midi_learn_target = None;
-        self.user_state.midi_learn_active = false;
-        self.user_state.midi_learn_target = None;
+        self.midi.cancel_learn();
+        self.show_midi_learn();
         self.status_message = Some("MIDI Learn cancelled".to_string());
     }
 
     /// Check if currently in MIDI Learn mode.
     pub fn is_midi_learning(&self) -> bool {
-        self.midi_learn_target.is_some()
+        self.midi.learning().is_some()
     }
 
     /// Remove MIDI mapping for a specific parameter.
     pub fn clear_mapping_for_param(&mut self, node_id: u64, param_index: usize) {
-        self.midi_mappings.unmap(node_id, param_index);
+        self.midi.mappings.unmap(node_id, param_index);
         self.show_midi_badges();
         self.status_message = Some("MIDI mapping cleared".to_string());
     }
 
+    /// Lights the knob MIDI Learn waits for, and has the status bar ask
+    /// for a CC for as long as it waits.
+    fn show_midi_learn(&mut self) {
+        let target = self.midi.learning().map(|t| (t.node_id, t.param_index));
+        self.user_state.midi_learn_active = target.is_some();
+        self.user_state.midi_learn_target = target;
+    }
+
     /// Puts on the knobs the badges of the mappings as they now stand.
     fn show_midi_badges(&mut self) {
-        self.user_state.midi_mappings = self.midi_mappings.badges();
+        self.user_state.midi_mappings = self.midi.mappings.badges();
     }
 
     /// Check if there are any Poly MIDI modules in the graph.
@@ -1829,8 +1689,7 @@ impl SynthApp {
                     ui.add_space(8.0);
 
                     // Get current MIDI device name for display
-                    let current_midi = self.selected_midi_device
-                        .and_then(|idx| self.midi_devices.get(idx))
+                    let current_midi = self.midi.selected_device()
                         .map(|d| d.name.as_str())
                         .unwrap_or("None");
 
@@ -1842,9 +1701,7 @@ impl SynthApp {
                     };
 
                     // MIDI connection indicator
-                    let midi_connected = self.selected_midi_device.is_some()
-                        && self.midi_engine.as_ref().map(|e| e.is_connected()).unwrap_or(false);
-                    let midi_indicator = if midi_connected { "● " } else { "○ " };
+                    let midi_indicator = if self.midi.is_connected() { "● " } else { "○ " };
 
                     egui::ComboBox::from_id_salt("midi_device_selector")
                         .selected_text(format!("{}{}", midi_indicator, midi_display_name))
@@ -1853,7 +1710,7 @@ impl SynthApp {
                         .show_ui(ui, |ui| {
                             // Option to disconnect / select none
                             if ui.selectable_label(
-                                self.selected_midi_device.is_none(),
+                                self.midi.selected.is_none(),
                                 "None (Disconnect)"
                             ).clicked() {
                                 actions.push(AppAction::DisconnectMidi);
@@ -1862,13 +1719,13 @@ impl SynthApp {
                             ui.separator();
 
                             // List available MIDI devices
-                            if self.midi_devices.is_empty() {
+                            if self.midi.devices.is_empty() {
                                 ui.label(RichText::new("No MIDI devices found")
                                     .color(theme::text::DISABLED)
                                     .italics());
                             } else {
-                                for device in &self.midi_devices {
-                                    let is_selected = self.selected_midi_device == Some(device.index);
+                                for device in &self.midi.devices {
+                                    let is_selected = self.midi.selected == Some(device.index);
                                     if ui.selectable_label(is_selected, &device.name).clicked() {
                                         actions.push(AppAction::ConnectMidi(device.index));
                                     }
@@ -2791,7 +2648,7 @@ impl SynthApp {
             &self.graph_state.graph,
             |node_id| self.user_state.get_engine_node_id(node_id),
             position,
-            self.midi_mappings.as_slice(),
+            self.midi.mappings.as_slice(),
         );
         let annotations = &self.user_state.annotations;
         let all: Vec<AnnotationId> = annotations.iter().map(|(id, _)| id).collect();
@@ -2875,7 +2732,7 @@ impl SynthApp {
 
         // Load MIDI mappings, retargeted from the patch's node IDs to the new ones
         let mappings = staged.remap_midi_mappings(|graph_id| self.user_state.get_engine_node_id(graph_id));
-        self.midi_mappings.load(mappings);
+        self.midi.open(mappings);
         self.show_midi_badges();
 
         // Restore playback state. The knobs go with the patch, which the
@@ -2920,8 +2777,7 @@ impl SynthApp {
         self.cached_params.clear();
 
         // Clear MIDI mappings
-        self.midi_mappings.clear();
-        self.midi_learn_target = None;
+        self.midi.clear();
     }
 
     /// Start a new patch - clears the graph and resets the current file path.
@@ -3290,7 +3146,7 @@ impl SynthApp {
     /// Notes that the patch as it stands is what was last opened or saved.
     fn mark_saved(&mut self) {
         self.history.mark_saved();
-        self.saved_midi_mappings = self.midi_mappings.clone();
+        self.midi.mark_saved();
     }
 
     /// Records any edit not yet in the undo history, so it counts as a change.
@@ -3301,7 +3157,7 @@ impl SynthApp {
     /// Whether the patch has changes that aren't saved anywhere, a loop
     /// recorded among them.
     fn has_unsaved_changes(&self) -> bool {
-        self.history.has_unsaved_changes() || self.midi_mappings != self.saved_midi_mappings || self.loops_unsaved()
+        self.history.has_unsaved_changes() || self.midi.unsaved() || self.loops_unsaved()
     }
 
     /// The patch's name: its file's, its example's, or "Untitled".
@@ -3558,7 +3414,7 @@ impl SynthApp {
             };
             match self.status_bar_shows() {
                 Shown::Learn => {
-                    let param = self.midi_learn_target.as_ref().map_or("", |target| target.param_name.as_str());
+                    let param = self.midi.learning().map_or("", |target| target.param_name.as_str());
                     ui.label(RichText::new(format!("Move a MIDI CC to map {}... (Esc to cancel)", param))
                         .color(theme::accent::PRIMARY)
                         .small());
@@ -3575,7 +3431,7 @@ impl SynthApp {
                     }
                 }
                 Shown::AudioError => warn(ui, self.audio_error_message.as_deref().unwrap_or_default(), theme::accent::ERROR),
-                Shown::MidiError => warn(ui, self.midi_error_message.as_deref().unwrap_or_default(), theme::accent::ERROR),
+                Shown::MidiError => warn(ui, self.midi.error.as_deref().unwrap_or_default(), theme::accent::ERROR),
                 Shown::Counts => {
                     // Show module and connection count, through any groups
                     let node_count = self.user_state.node_id_map.len();
@@ -3861,7 +3717,7 @@ impl SynthApp {
             keys_changed = true;
         }
 
-        if let (true, Some(engine)) = (play_midi, self.midi_engine.as_ref()) {
+        if let (true, Some(engine)) = (play_midi, self.midi.engine.as_ref()) {
             for (relative_note, pressed) in midi_notes {
                 let note = relative_to_midi(relative_note, 0);
                 engine.send(if pressed {
@@ -4063,7 +3919,7 @@ impl SynthApp {
             self.theme_applied = true;
             // MIDI arriving draws a frame, so the pianos, Monitor and Learn
             // follow it without the UI drawing all the time
-            if let Some(midi) = &self.midi_engine {
+            if let Some(midi) = &self.midi.engine {
                 midi.set_waker(ctx);
             }
         }

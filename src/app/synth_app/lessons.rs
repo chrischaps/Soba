@@ -124,7 +124,7 @@ impl SynthApp {
             graph: &self.graph_state.graph,
             state: &self.user_state,
             playing: self.is_playing,
-            notes_held: self.pressed_keys.len() + self.midi_held_notes.len(),
+            notes_held: self.pressed_keys.len() + self.midi.held().len(),
             probing: self.probe.probing(),
         };
         let dt = run.last_time.map_or(0.0, |t| (now - t).clamp(0.0, 0.25));

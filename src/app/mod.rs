@@ -13,6 +13,7 @@ pub mod lesson;
 pub mod library;
 mod long_press;
 pub mod midi_mappings;
+mod midi_session;
 mod mutate;
 mod notice;
 mod palette;
