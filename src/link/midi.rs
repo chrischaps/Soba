@@ -118,7 +118,7 @@ impl Message {
 /// What the sender knows about a port, for a MIDI Out's face.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PortStatus {
-    /// Nothing plays it: no sender (the browser, the offline renderer), or
+    /// Nothing plays it: no sender (the offline renderer), or
     /// no MIDI Out on this port.
     Idle = 0,
     /// Messages are going to its device.

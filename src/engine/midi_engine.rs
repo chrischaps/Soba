@@ -8,13 +8,18 @@
 //! ways: to the audio thread, which places it at the matching sample (see
 //! [`MidiScheduler`](super::MidiScheduler)), and to the UI, for display,
 //! MIDI Learn and CC mappings.
+//!
+//! In the browser the devices come from Web MIDI ([`super::web_midi`]) once
+//! Connect MIDI is allowed, and arrive in the same queues.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use web_time::Instant;
 
-use midir::{MidiInput, MidiInputConnection, MidiInputPort};
+use midir::{MidiInput, MidiInputPort};
+#[cfg(not(target_arch = "wasm32"))]
+use midir::MidiInputConnection;
 use rtrb::{Consumer, Producer, RingBuffer};
 
 /// Default buffer size for MIDI events.
@@ -364,9 +369,17 @@ impl std::fmt::Display for MidiError {
 
 impl std::error::Error for MidiError {}
 
+/// A device being listened to: midir's on the desktop, Web MIDI's in the browser.
+#[cfg(not(target_arch = "wasm32"))]
+type InputConnection = MidiInputConnection<()>;
+#[cfg(target_arch = "wasm32")]
+type InputConnection = super::web_midi::InputConnection;
+
 /// MIDI engine state shared between threads.
 struct MidiState {
-    /// Currently available ports (refreshed periodically).
+    /// Currently available ports (refreshed periodically). The browser
+    /// opens its inputs by name and keeps none.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     ports: Vec<MidiInputPort>,
     /// Port names for UI display.
     port_names: Vec<String>,
@@ -379,7 +392,7 @@ pub struct MidiEngine {
     /// Currently selected device index (None = no device).
     selected_device: Option<usize>,
     /// Active MIDI connection.
-    connection: Option<MidiInputConnection<()>>,
+    connection: Option<InputConnection>,
     /// Producers for sending events to the audio thread and the UI. Shared
     /// with the midir callback; each connection clones the Arc, and closing
     /// the connection drops that clone, so the producers outlive any one
@@ -402,9 +415,9 @@ impl MidiEngine {
         let (audio_producer, audio_consumer) = RingBuffer::new(DEFAULT_MIDI_BUFFER_SIZE);
         let (ui_producer, ui_consumer) = RingBuffer::new(DEFAULT_MIDI_BUFFER_SIZE);
 
-        // Get initial port list. Web MIDI needs asking for, and Safari has
-        // none: in the browser there are no devices, and the computer keyboard
-        // plays through the queues (see `send`)
+        // Get initial port list. Web MIDI needs asking for: in the browser
+        // there are no devices until Connect MIDI (see `enumerate_devices`),
+        // and the computer keyboard plays through the queues (see `send`)
         let (ports, port_names): (Vec<MidiInputPort>, Vec<String>) = if cfg!(target_arch = "wasm32") {
             (Vec::new(), Vec::new())
         } else {
@@ -449,6 +462,11 @@ impl MidiEngine {
     /// Enumerate available MIDI input devices.
     /// This returns a fresh list reflecting any hot-plugged devices.
     pub fn enumerate_devices(&mut self) -> Vec<MidiDeviceInfo> {
+        // The browser's list is Web MIDI's, kept up to date by its statechange
+        #[cfg(target_arch = "wasm32")]
+        if let Ok(mut state) = self.state.lock() {
+            state.port_names = super::web_midi::input_names();
+        }
         if let Ok(state) = self.state.lock() {
             self.devices = state
                 .port_names
@@ -478,13 +496,38 @@ impl MidiEngine {
         // Disconnect existing connection
         self.disconnect();
 
-        // Resolve the port by name: the scan thread may have reordered the
-        // port list since the UI's device list was cached.
         let name = self
             .devices
             .get(device_index)
             .map(|d| d.name.clone())
             .ok_or(MidiError::DeviceNotFound)?;
+        let senders = Arc::clone(&self.senders);
+        let on_message = move |data: &[u8]| {
+            // Stamped on arrival rather than with the device's timestamp,
+            // whose clock starts at connection and differs per platform;
+            // the audio callback reads this same clock
+            if let Some(event) = MidiEvent::from_bytes(data) {
+                let stamped = TimestampedMidiEvent::now(event);
+                if let Ok(mut senders) = senders.lock() {
+                    senders.send(stamped);
+                }
+            }
+        };
+        let connection = self.open(&name, on_message)?;
+
+        self.connection = Some(connection);
+        self.selected_device = Some(device_index);
+
+        eprintln!("MIDI connected to device {}: {}", device_index, name);
+
+        Ok(())
+    }
+
+    /// Listens to the input called `name`.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn open(&self, name: &str, mut on_message: impl FnMut(&[u8]) + Send + 'static) -> Result<InputConnection, MidiError> {
+        // Resolve the port by name: the scan thread may have reordered the
+        // port list since the UI's device list was cached.
         let port = {
             let state = self.state.lock().map_err(|_| {
                 MidiError::ConnectionError("Failed to lock state".to_string())
@@ -493,7 +536,7 @@ impl MidiEngine {
             let pos = state
                 .port_names
                 .iter()
-                .position(|n| *n == name)
+                .position(|n| n == name)
                 .ok_or(MidiError::DeviceNotFound)?;
             state.ports[pos].clone()
         };
@@ -502,27 +545,8 @@ impl MidiEngine {
         let midi_in = MidiInput::new("Soba Input")
             .map_err(|e| MidiError::InitError(e.to_string()))?;
 
-        // Connect with callback
-        let connection = midi_in
-            .connect(
-                &port,
-                "Soba Input",
-                {
-                    let senders = Arc::clone(&self.senders);
-                    move |_timestamp_us, data, _| {
-                        // Stamped on arrival rather than with midir's timestamp,
-                        // whose clock starts at connection and differs per
-                        // platform; the audio callback reads this same clock
-                        if let Some(event) = MidiEvent::from_bytes(data) {
-                            let stamped = TimestampedMidiEvent::now(event);
-                            if let Ok(mut senders) = senders.lock() {
-                                senders.send(stamped);
-                            }
-                        }
-                    }
-                },
-                (),
-            )
+        midi_in
+            .connect(&port, "Soba Input", move |_timestamp_us, data, _| on_message(data), ())
             .map_err(|e| {
                 // On Windows, a port already opened by another app (a DAW,
                 // Arturia MIDI Control Center, a browser) refuses a second open.
@@ -530,14 +554,13 @@ impl MidiEngine {
                     "{}: {} (is another app using it?)",
                     name, e
                 ))
-            })?;
+            })
+    }
 
-        self.connection = Some(connection);
-        self.selected_device = Some(device_index);
-
-        eprintln!("MIDI connected to device {}: {}", device_index, name);
-
-        Ok(())
+    /// Listens to the input called `name`, through Web MIDI.
+    #[cfg(target_arch = "wasm32")]
+    fn open(&self, name: &str, on_message: impl FnMut(&[u8]) + 'static) -> Result<InputConnection, MidiError> {
+        super::web_midi::open_input(name, on_message).ok_or(MidiError::DeviceNotFound)
     }
 
     /// Disconnect from the current MIDI device.

@@ -116,6 +116,10 @@ fn main() {
         .and_then(|c| c.dyn_into::<web_sys::HtmlCanvasElement>().ok())
         .expect("index.html's canvas");
 
+    // MIDI Out's sender, before the first patch makes its MIDI Outs. It
+    // sends nothing until Connect MIDI lists a device to send to
+    soba::link::web_sender::start();
+
     wasm_bindgen_futures::spawn_local(async move {
         let started = eframe::WebRunner::new()
             .start(

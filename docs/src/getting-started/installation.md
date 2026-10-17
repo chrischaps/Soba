@@ -10,7 +10,7 @@ Soba runs on Windows, macOS and Linux. You can download a prebuilt release or bu
 
 The browser version runs the same engine and modules, and every example is in its **📚 Examples** menu. A few things need the desktop app:
 
-- **MIDI devices and audio input.** In the browser, the computer keyboard and the on-screen pianos play the patch.
+- **Audio input.** In the browser, the computer keyboard, the on-screen pianos and MIDI devices play the patch. MIDI devices work in Chrome, Edge and Firefox, after **🎹 Connect MIDI** (see [MIDI](./interface-overview.md#midi)); Safari has no MIDI.
 - **Recording** to a WAV, and **My Modules**, which keep files in a folder.
 - **Low latency.** The browser plays sound through larger buffers, about a tenth of a second behind your playing, and twice that in Firefox. That's fine for listening and exploring, and loose for playing live.
 
@@ -263,4 +263,4 @@ To run the test suite, use `cargo test`.
 
 **Crackles and dropouts.** Make sure you're running the release build. The toolbar's CPU meter, shown while the patch plays, tells you how close the engine is to its limit. If it's near the top, remove modules or lower the voice count on Poly MIDI and the Oscillator's unison.
 
-**My MIDI controller does nothing.** Choose it in the toolbar's **MIDI In** menu: Soba doesn't connect to a controller until you do. A filled dot (●) before the name means it's connected. Connection errors appear in the status bar at the bottom of the window. See [MIDI](./interface-overview.md#midi).
+**My MIDI controller does nothing.** Choose it in the toolbar's **MIDI In** menu: Soba doesn't connect to a controller until you do. In the browser, click **🎹 Connect MIDI** there first. A filled dot (●) before the name means it's connected. Connection errors appear in the status bar at the bottom of the window. See [MIDI](./interface-overview.md#midi).

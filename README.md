@@ -41,7 +41,7 @@ It doesn't imitate hardware panels. Every module is a node with jacks on its sid
 
 ## Getting started
 
-**[Try it in the browser](https://soba.chaps.dev/)**, nothing to install: press **Play**, then play the `Z` to `M` keys or the Keyboard module's piano. The browser build has every module and example; MIDI devices, audio input and recording need the desktop app (see [`WEB.md`](WEB.md)).
+**[Try it in the browser](https://soba.chaps.dev/)**, nothing to install: press **Play**, then play the `Z` to `M` keys or the Keyboard module's piano. The browser build has every module and example, and plays MIDI devices in Chrome, Edge and Firefox after **Connect MIDI**; audio input and recording need the desktop app (see [`WEB.md`](WEB.md)).
 
 **[Download it](https://github.com/chrischaps/Soba/releases/latest)** for Windows (an installer, or a zip), macOS (a disk image) or Linux. It tells you when there's a newer version and installs it in place, bringing your patch back where you left it: see [Updates](https://docs.chaps.dev/soba/getting-started/installation.html#updates).
 

@@ -14,6 +14,8 @@ pub mod graph_plan;
 pub mod latency;
 pub mod midi_engine;
 pub mod midi_scheduler;
+#[cfg(target_arch = "wasm32")]
+pub mod web_midi;
 mod monitor_board;
 #[cfg(test)]
 mod nan_containment;

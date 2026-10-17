@@ -23,14 +23,16 @@
 //! nothing is sent to it, and Seoul sees the link drop.
 //!
 //! The same thread carries MIDI out ([`midi`]): a second protocol on the
-//! one transport, for MIDI Out modules playing hardware and other apps.
+//! one transport, for MIDI Out modules playing hardware and other apps. In
+//! the browser, which has no OSC, a timer sends MIDI Out ([`web_sender`]).
 
 pub mod midi;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod midi_sender;
 pub mod osc;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod sender;
+#[cfg(target_arch = "wasm32")]
+pub mod web_sender;
 
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering::Relaxed};
 

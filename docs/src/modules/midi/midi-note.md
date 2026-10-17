@@ -35,6 +35,7 @@ When several keys are held, **Priority** decides which one sounds, as on a class
 MIDI comes in from the device chosen in **MIDI In** on the toolbar. The menu lists every MIDI input the system can see. Pick one and the dot beside its name fills in (●) once it's connected. **None (Disconnect)** lets go of it.
 
 - **Plugged in a device after starting Soba?** Open the menu and click **🔄 Refresh**.
+- **In the browser,** the menu is a **🎹 Connect MIDI** button until you allow MIDI, and a device plugged in later appears by itself. See [MIDI](../../getting-started/interface-overview.md#midi).
 - **Connection failed?** The reason appears in the status bar at the bottom of the window, and the selection goes back to None. On Windows, a device another app already has open (a DAW, a browser, a controller's editor) can't be opened a second time, so close the other app and pick the device again.
 - **Switching or disconnecting a device** releases any notes still held on it, so nothing sticks.
 

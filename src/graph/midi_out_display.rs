@@ -35,7 +35,7 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     let channel = display_frame::value_of(graph, node_id, "Channel").unwrap_or(0.0).round() as usize + 1;
     let readout = display_frame::readout(user_state, node_id).unwrap_or_default();
     let values = &readout.values;
-    let live = !cfg!(target_arch = "wasm32") && values[MidiOut::READOUT_LIVE] > 0.5;
+    let live = values[MidiOut::READOUT_LIVE] > 0.5;
     let status = live.then(|| MIDI.status(port));
     let device = MIDI.chosen(port);
 
@@ -66,7 +66,6 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     }
     painter.circle_filled(lamp_at, 2.5 * z, lamp);
     let name = match (&device, status) {
-        (_, None) => "desktop app only".to_string(),
         (None, _) => "choose a device".to_string(),
         (Some(name), Some(PortStatus::Missing)) => format!("{name} (unplugged)"),
         (Some(name), Some(PortStatus::Failed)) => format!("{name} (in use)"),
@@ -94,9 +93,7 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         small.clone(),
         theme::text::SECONDARY,
     );
-    if live {
-        device_menu(ui, &picker, port, device.as_deref());
-    }
+    device_menu(ui, &picker, port, device.as_deref());
 
     // --- The keyboard: white keys across, black keys over them ---
     let board = Rect::from_min_max(rect.left_top() + Vec2::new(9.0 * z, 15.0 * z), rect.right_top() + Vec2::new(-9.0 * z, 44.0 * z));
@@ -192,7 +189,8 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
 
     let dropped = values[MidiOut::READOUT_DROPPED] > 0.0;
     response.on_hover_text(match status {
-        None => "MIDI Out plays devices from the desktop app; in the browser it stays quiet".to_string(),
+        // The browser holds the sound, and so MIDI Out, until a click
+        None => "MIDI Out sends once the sound starts".to_string(),
         Some(PortStatus::NoDevice) | Some(PortStatus::Idle) if device.is_none() => {
             format!("Port {} has no device yet: click its name to choose one", PORT_LABELS[port])
         }
@@ -217,6 +215,25 @@ fn device_menu(ui: &mut egui::Ui, picker: &egui::Response, port: usize, current:
     egui::popup::popup_below_widget(ui, popup, picker, egui::PopupCloseBehavior::CloseOnClick, |ui| {
         ui.set_min_width(160.0);
         ui.label(egui::RichText::new(format!("Port {} plays", PORT_LABELS[port])).small().weak());
+        // In the browser, the devices wait for Connect MIDI
+        #[cfg(target_arch = "wasm32")]
+        {
+            use crate::engine::web_midi::{self, Access};
+            match web_midi::access() {
+                Access::Allowed => {}
+                Access::Unsupported => {
+                    ui.label(egui::RichText::new("This browser has no Web MIDI").weak());
+                    return;
+                }
+                access => {
+                    let button = ui.add_enabled(access != Access::Asking, egui::Button::new("🎹 Connect MIDI"));
+                    if button.clicked() {
+                        web_midi::request(ui.ctx());
+                    }
+                    return;
+                }
+            }
+        }
         let devices = MIDI.devices();
         if devices.is_empty() {
             ui.label(egui::RichText::new("No MIDI outputs found").weak());

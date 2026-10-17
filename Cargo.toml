@@ -71,7 +71,7 @@ cpal = { version = "0.18", features = ["wasm-bindgen"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-web-sys = { version = "0.3", features = ["Window", "Document", "Location", "Element", "HtmlCanvasElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "Url", "UrlSearchParams", "Navigator", "Response", "History", "console"] }
+web-sys = { version = "0.3", features = ["Window", "Document", "Location", "Element", "HtmlCanvasElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "Url", "UrlSearchParams", "Navigator", "Response", "History", "console", "Performance", "MidiAccess", "MidiInput", "MidiOutput", "MidiInputMap", "MidiOutputMap", "MidiPort", "MidiPortDeviceState", "MidiMessageEvent"] }
 
 # The app icon in the Windows executable (build.rs)
 [build-dependencies]

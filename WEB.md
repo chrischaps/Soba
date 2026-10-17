@@ -96,8 +96,8 @@ One `wasm32` cfg gate keeps the desktop build exactly as it was; the
 | **Audio** | cpal needs a host | cpal's `wasm-bindgen` feature: the WebAudio host. A browser without Web Audio shows "No sound in this browser" instead of cpal's panic |
 | **Autoplay** | Browsers hold an `AudioContext` until a gesture, and Safari only releases it *inside* the gesture | `index.html` notes every context and resumes it from the first pointer or key event; the status bar says "Click to start sound" until then |
 | **F1** | Chrome, Edge and Firefox open their own help on `F1`, and eframe only stops the browser's default for Tab, Space, Backspace and the arrows | `index.html` calls `preventDefault` on `F1` itself, so it only toggles the Keyboard Shortcuts sheet |
-| **MIDI** | The scanner thread holds a non-`Send` Web MIDI handle; Web MIDI needs a permission prompt and Safari has none | No device list or scanner in the browser. The engine and its queues stay, so the computer keys still play Poly MIDI |
-| **Threads** | The recorder's writer thread, the MIDI scanner | Recording is hidden (it writes to a folder); the scanner isn't started |
+| **MIDI** | The scanner thread holds a non-`Send` Web MIDI handle; Web MIDI needs a permission prompt and Safari has none; MIDI Out's sender is a thread that wakes every millisecond | **Connect MIDI** (the toolbar's MIDI In, and a MIDI Out's device menu) asks for Web MIDI from a click, without sysex (`engine/web_midi.rs`). Its `statechange` stands in for the scanner. Inputs feed the desktop's queues, so MIDI Note, Poly MIDI, the Monitor, MIDI Learn, MIDI clock in and step-record work unchanged. MIDI Out's sender runs on a `setTimeout` (`link/web_sender.rs`) and hands each message over up to 100 ms early, stamped for when its sample is heard; the browser keeps to the stamp. Safari says it has no Web MIDI. See below |
+| **Threads** | The recorder's writer thread, the MIDI scanner and sender | Recording is hidden (it writes to a folder); the scanner isn't started, and MIDI Out is sent from a timer |
 | **Files** | `rfd`'s dialogs are async on the web, and there's no file system | **Save** downloads the patch; **Open** uploads one (`app/web.rs`). Examples were already `include_str!`. Recent files and the recordings folder are hidden; **My Modules** can't save (it needs a folder). Takes, trims and dropped files are kept in IndexedDB too (`persistence/tab_store.rs`), so a reload or a recovered autosave finds them. The first visit that finds no other copy of the app open lets go of the files its patch doesn't name |
 | **Samples** | The examples' WAVs were compiled in, so every visitor downloaded every example's samples (1.7 MB of the wasm, after wasm-opt drops their silences) | trunk copies `patches/samples/` beside the page, and a sample is fetched the first time a patch plays it (`persistence/example_fetch.rs`). Meanwhile the Sampler says "Loading…" and an embed's Play bar "loading samples…". The desktop build still compiles them in |
 | **Theme** | eframe follows the browser's light/dark preference, and a light browser started the theme from egui's light style | `apply_theme` pins egui to Dark first |
@@ -169,10 +169,37 @@ isolated page can only be embedded by pages that opt in too.
 Not worth it while the WebAudio host plays cleanly everywhere tested. It's
 the step to take if the browser build is ever for playing live.
 
+## MIDI devices
+
+Chrome, Edge and Firefox have Web MIDI; Safari doesn't. A page may use it
+only once the visitor allows it, so nothing is asked until **🎹 Connect
+MIDI** is clicked: Firefox first offers a small site add-on that grants it.
+midir's own Web MIDI backend wasn't used: it asks as soon as it's touched,
+always with sysex (which Chrome words as "control and reprogram your MIDI
+devices"), doesn't hear `statechange`, and sends without a timestamp.
+
+- **In:** each input's `midimessage` is stamped on arrival and goes into
+  the same audio and UI queues as the desktop's. A device unplugged while
+  MIDI In listens to it lets go, releasing its notes.
+- **Out:** `MidiSender` is the desktop's, ticked by a timer that sets
+  itself for when there's next work. A frame being drawn holds the timer
+  up, so it sends each message up to 100 ms before it's due, with
+  `MIDIOutput.send(bytes, timestamp)`. The stamp ties `web_time`'s
+  `Instant` to `performance.now()` once, so messages due together keep
+  their order. A note let go (the patch stopped, a module deleted) is
+  stamped after the last message already on its way, so it can't land
+  before a Note On the browser is still holding. Measured against a stand-in
+  output in Chrome: a Step Sequencer with Send Clock at 120 BPM put its
+  ticks 20.83 ms apart (0.14 ms spread), and stopping left no note held.
+- **A hidden tab** stops drawing frames but keeps its timers while it plays
+  sound, so MIDI Out carries on. The stale rule (250 ms without a block)
+  counts from when blocks were last read, so a slow timer doesn't release
+  notes that are still playing.
+- **Ports A–D** are remembered through eframe's storage, as on the desktop.
+
 ## Next steps
 
 - Check Safari and a phone on real hardware.
 - Scrolling: over an embed, the wheel and a dragging finger move the patch,
   not the page.
 - Recording in the browser: render to memory and download the WAV.
-- Web MIDI, behind a "Connect MIDI" button (Chrome, Edge and Firefox).

@@ -83,6 +83,8 @@ mod tidy;
 mod unseen;
 #[cfg(not(target_arch = "wasm32"))]
 mod updates;
+#[cfg(target_arch = "wasm32")]
+mod web_midi;
 
 /// Type alias for our graph editor state
 type SynthGraphEditorState = GraphEditorState<SynthNodeData, SynthDataType, SynthValueType, SynthNodeTemplate, SynthGraphState>;
@@ -1664,7 +1666,14 @@ impl SynthApp {
             match &self.audio_engine {
                 // The DAW has the devices
                 _ if self.hosted.is_some() => {}
-                Ok(_) if WEB => {}
+                // The browser picks the sound devices itself; MIDI's are Soba's
+                Ok(_) if WEB => {
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        group_break(ui);
+                        self.web_midi_in(ui, &mut actions);
+                    }
+                }
                 Ok(_) => {
                     if !new_row_for(ui, "Output", 200.0) {
                         group_break(ui);
@@ -4116,6 +4125,9 @@ impl SynthApp {
         }
         #[cfg(target_arch = "wasm32")]
         self.tidy_tab_files();
+        // MIDI devices plugged in or out, once Connect MIDI has them
+        #[cfg(target_arch = "wasm32")]
+        self.follow_web_midi();
 
         // Process events from the audio engine
         self.process_engine_events();

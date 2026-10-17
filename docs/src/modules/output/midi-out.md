@@ -6,7 +6,7 @@ MIDI Out plays other instruments from your patch: a hardware synth, a drum machi
 
 Patch a [Step Sequencer](../utilities/sequencer.md) into it and the sequencer plays your synth. Patch a [Chord Sequencer](../utilities/chord-sequencer.md) and it plays chords.
 
-MIDI Out makes no sound of its own. It works in the desktop app. In the browser it shows what it would send but sends nothing.
+MIDI Out makes no sound of its own. It works in the desktop app, and in the browser in Chrome, Edge and Firefox once you've clicked **🎹 Connect MIDI** (in the device menu on its face, or the toolbar's MIDI In). Safari has no MIDI.
 
 ## Inputs
 
@@ -40,13 +40,13 @@ Every input is optional. The module has no outputs.
 
 A patch doesn't name a device. It names a **port**, A to D, and this computer remembers which device each port plays. Choose port A's device once and every MIDI Out on port A plays it, in this patch and the next. Share the patch and it plays whatever synth is on port A on the other computer. So it travels without either of you editing it.
 
-Click the device's name on the face to choose. The list shows every MIDI output this computer has, and it updates as you plug devices in. A port's device stays chosen while it's unplugged and plays again once it's back.
+Click the device's name on the face to choose. The list shows every MIDI output this computer has, and it updates as you plug devices in. In the browser the menu offers **🎹 Connect MIDI** first, until you've allowed it. A port's device stays chosen while it's unplugged and plays again once it's back.
 
 On Windows only one app can open a MIDI port at a time. If the lamp is red, close whatever else has the device (a DAW, or the maker's editor app), and MIDI Out tries again within a couple of seconds. To play a DAW on the same computer, use a virtual MIDI port such as [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html): MIDI Out plays the port, and the DAW listens to it.
 
 ## How it works
 
-**In time with the sound.** Notes don't go out when the patch works them out. They go out when the audio beside them reaches your speakers, which is your audio device's delay later. So a hardware synth and Soba's own sounds play together, and each note is on time to within a millisecond or two.
+**In time with the sound.** Notes don't go out when the patch works them out. They go out when the audio beside them reaches your speakers, which is your audio device's delay later. So a hardware synth and Soba's own sounds play together, and each note is on time to within a millisecond or two. The browser can't promise to send at a given millisecond, so there Soba hands each message over up to a tenth of a second early, with the moment it's due, and the browser sends it then.
 
 **Chords.** Each channel of a poly cable is a voice. A Chord Sequencer's four-voice cable plays four-note chords, every note starting and ending with its own channel's gate. A one-channel Gate with a poly Pitch strikes the whole chord together. Two voices on the same note keep it sounding until the last of them lets go.
 

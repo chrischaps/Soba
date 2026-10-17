@@ -242,6 +242,8 @@ The keys play every [Keyboard](../modules/midi/keyboard.md) module in the patch;
 
 Choose your controller in the toolbar's **MIDI In** menu; Soba doesn't connect to one until you do. If the controller isn't listed, plug it in and click **🔄 Refresh** at the bottom of the menu. **None (Disconnect)** lets it go. Disconnecting or switching devices releases any notes that were held. If a controller can't be opened, the reason appears in the status bar.
 
+**In the browser**, **MIDI In** starts as a **🎹 Connect MIDI** button. A web page may use MIDI only once you allow it, so click it and your browser asks; Firefox first offers a small add-on for the site that allows it. Then the menu lists your controllers, and a controller you plug in later appears by itself, with no Refresh needed. Allowing it lets [MIDI Out](../modules/output/midi-out.md) play your devices too. If you said no, allow MIDI in the site settings (the icon to the left of the address) and click **Connect MIDI** again. Chrome, Edge and Firefox have MIDI; Safari doesn't, and the button says so.
+
 Three modules listen to the controller: [MIDI Note](../modules/midi/midi-note.md) for a single voice, [Poly MIDI](../modules/midi/poly-midi.md) for chords, and [MIDI Monitor](../modules/midi/midi-monitor.md) to see what's arriving.
 
 ### MIDI Learn

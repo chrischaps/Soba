@@ -8,8 +8,8 @@
 //! The module only turns cables into messages, each stamped with the sample
 //! it belongs on, and writes them to a ring. The link's sender thread
 //! (`link::midi_sender`) sends them to the port's device as that sample is
-//! heard. That happens on the desktop only: in the browser and the offline
-//! renderer a MIDI Out runs but sends nothing.
+//! heard; in the browser, a timer runs the same sender (`link::web_sender`).
+//! In the offline renderer a MIDI Out runs but sends nothing.
 
 use rtrb::Producer;
 use web_time::Instant;

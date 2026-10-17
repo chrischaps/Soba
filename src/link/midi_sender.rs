@@ -15,6 +15,14 @@
 //! notes it still holds are let go, with an All Notes Off on their
 //! channels. A port moved to another device lets go of its notes on the
 //! old one first.
+//!
+//! **Ahead of time.** The desktop's thread wakes every millisecond and
+//! sends each message as it falls due. The browser has no thread, only a
+//! timer that a busy frame can hold up, so there the sender looks
+//! [`MidiSender::ahead`] and hands each message over early with the moment
+//! it's due, which Web MIDI keeps to (`web_sender`). Notes it lets go are
+//! stamped after the last message it scheduled on their port, so a Note On
+//! already on its way can't land after the All Notes Off.
 
 use std::collections::VecDeque;
 use std::time::Duration;
@@ -60,8 +68,20 @@ pub fn raise_priority() {
     }
 }
 
-/// The machine's MIDI outputs: midir on the desktop, a recorder in tests.
-pub trait Outputs: Send {
+/// `Send` on the desktop, where the sender has a thread of its own. The
+/// browser has one thread, and its Web MIDI handles aren't `Send`.
+#[cfg(not(target_arch = "wasm32"))]
+pub trait ThreadSafe: Send {}
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: Send> ThreadSafe for T {}
+#[cfg(target_arch = "wasm32")]
+pub trait ThreadSafe {}
+#[cfg(target_arch = "wasm32")]
+impl<T> ThreadSafe for T {}
+
+/// The machine's MIDI outputs: midir on the desktop, Web MIDI in the
+/// browser, a recorder in tests.
+pub trait Outputs: ThreadSafe {
     /// The names of the outputs there are now.
     fn scan(&mut self) -> Vec<String>;
     /// Opens the output called `name`.
@@ -69,8 +89,15 @@ pub trait Outputs: Send {
 }
 
 /// An open output.
-pub trait Connection: Send {
+pub trait Connection: ThreadSafe {
     fn send(&mut self, bytes: &[u8]) -> Result<(), String>;
+
+    /// Sends `bytes` to play at `at`, which may be a little ahead. An
+    /// output that can't wait sends them now.
+    fn send_at(&mut self, bytes: &[u8], at: Instant) -> Result<(), String> {
+        let _ = at;
+        self.send(bytes)
+    }
 }
 
 /// Sends a bus's MIDI.
@@ -81,6 +108,8 @@ pub struct MidiSender {
     ports: [Port; PORTS],
     devices: Vec<String>,
     scanned_at: Option<Instant>,
+    /// How far ahead of its moment a message is sent: none on the desktop.
+    ahead: Duration,
 }
 
 /// One port's device, as opened.
@@ -90,6 +119,9 @@ struct Port {
     device: String,
     connection: Option<Box<dyn Connection>>,
     failed_at: Option<Instant>,
+    /// The latest moment a message was sent for. What lets go of notes
+    /// goes after it.
+    latest: Option<Instant>,
 }
 
 /// One MIDI Out's ring, and what sending it remembers.
@@ -144,7 +176,14 @@ impl MidiSender {
     /// A sender for `bus`, playing to `outputs`. The bus hands out rings from now on.
     pub fn new(bus: &'static MidiBus, outputs: Box<dyn Outputs>) -> Self {
         bus.start_draining();
-        Self { bus, outputs, streams: Vec::new(), ports: Default::default(), devices: Vec::new(), scanned_at: None }
+        Self { bus, outputs, streams: Vec::new(), ports: Default::default(), devices: Vec::new(), scanned_at: None, ahead: Duration::ZERO }
+    }
+
+    /// Sends each message up to `ahead` before it's due, stamped with when
+    /// it is: for outputs that keep to a stamp (Web MIDI).
+    pub fn ahead(mut self, ahead: Duration) -> Self {
+        self.ahead = ahead;
+        self
     }
 
     /// Sends whatever is due, and says when to look again.
@@ -168,12 +207,15 @@ impl MidiSender {
             // sends what it left at once, then lets go of its notes
             let flush = gone || stale;
             while let Some(&(sample, message)) = stream.pending.front() {
-                if !flush && stream.due(sample, latency).is_none_or(|due| due > now) {
+                let due = stream.due(sample, latency);
+                if !flush && due.is_none_or(|due| due > now + self.ahead) {
                     break;
                 }
                 stream.pending.pop_front();
-                let port = stream.port;
-                Self::send(&mut self.ports[port], &mut self.outputs, &self.devices, &mut stream.held, message, now);
+                let port = &mut self.ports[stream.port];
+                // What's left of a module that's gone goes after what's on its way
+                let at = if flush { port.after(now) } else { due.unwrap_or(now).max(now) };
+                Self::send(port, &mut self.outputs, &self.devices, &mut stream.held, message, now, at);
             }
             if flush && stream.holds_notes() {
                 let port = stream.port;
@@ -235,16 +277,18 @@ impl MidiSender {
         }
     }
 
-    /// Sends `message` on `port`, opening its device first if need be, and
-    /// keeps `held` up to date.
-    fn send(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], held: &mut [u128; 16], message: Message, now: Instant) {
+    /// Sends `message` on `port` to play at `at`, opening its device first
+    /// if need be, and keeps `held` up to date.
+    #[allow(clippy::too_many_arguments)]
+    fn send(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], held: &mut [u128; 16], message: Message, now: Instant, at: Instant) {
         if let Some((channel, note)) = message.starts() {
             held[channel as usize] |= 1 << note;
         } else if let Some((channel, note)) = message.ends() {
             held[channel as usize] &= !(1 << note);
         }
+        port.latest = Some(port.latest.map_or(at, |latest| latest.max(at)));
         if let Some(connection) = Self::connection(port, outputs, devices, now) {
-            if let Err(error) = connection.send(message.bytes()) {
+            if let Err(error) = connection.send_at(message.bytes(), at) {
                 eprintln!("MIDI Out: sending to {} failed: {error}", port.device);
                 port.connection = None;
                 port.failed_at = Some(now);
@@ -255,6 +299,7 @@ impl MidiSender {
     /// Lets go of every note in `held` on `port`, with All Notes Off on
     /// their channels.
     fn release(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], held: &mut [u128; 16], now: Instant) {
+        let at = port.after(now);
         for channel in 0..16u8 {
             let notes = std::mem::take(&mut held[channel as usize]);
             if notes == 0 {
@@ -262,9 +307,9 @@ impl MidiSender {
             }
             let mut ignored = [0u128; 16];
             for note in (0..128u8).filter(|&n| notes & (1 << n) != 0) {
-                Self::send(port, outputs, devices, &mut ignored, Message::note_off(channel, note), now);
+                Self::send(port, outputs, devices, &mut ignored, Message::note_off(channel, note), now, at);
             }
-            Self::send(port, outputs, devices, &mut ignored, Message::control(channel, ALL_NOTES_OFF, 0), now);
+            Self::send(port, outputs, devices, &mut ignored, Message::control(channel, ALL_NOTES_OFF, 0), now, at);
         }
     }
 
@@ -309,9 +354,19 @@ impl MidiSender {
     }
 }
 
-/// The machine's MIDI outputs, through midir.
+impl Port {
+    /// Now, or after the last message sent ahead on this port if that's later.
+    fn after(&self, now: Instant) -> Instant {
+        self.latest.map_or(now, |latest| latest.max(now))
+    }
+}
+
+/// The machine's MIDI outputs, through midir. Not in the browser, where
+/// midir's Web MIDI would ask for access before anyone clicked.
+#[cfg(not(target_arch = "wasm32"))]
 pub struct Midir;
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Outputs for Midir {
     fn scan(&mut self) -> Vec<String> {
         let Ok(output) = midir::MidiOutput::new("Soba Scanner") else { return Vec::new() };
@@ -333,6 +388,7 @@ impl Outputs for Midir {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Connection for midir::MidiOutputConnection {
     fn send(&mut self, bytes: &[u8]) -> Result<(), String> {
         midir::MidiOutputConnection::send(self, bytes).map_err(|e| e.to_string())
@@ -373,7 +429,10 @@ mod tests {
 
     impl Connection for Recording {
         fn send(&mut self, bytes: &[u8]) -> Result<(), String> {
-            self.log.lock().unwrap().push((self.name.clone(), bytes.to_vec(), Instant::now()));
+            self.send_at(bytes, Instant::now())
+        }
+        fn send_at(&mut self, bytes: &[u8], at: Instant) -> Result<(), String> {
+            self.log.lock().unwrap().push((self.name.clone(), bytes.to_vec(), at));
             Ok(())
         }
     }
@@ -494,6 +553,44 @@ mod tests {
             to,
             [("Synth", &[0x90, 50, 90][..]), ("Synth", &[0x80, 50, 0]), ("Synth", &[0xB0, ALL_NOTES_OFF, 0]), ("DAW", &[0x90, 52, 90])]
         );
+    }
+
+    #[test]
+    fn ahead_sends_early_stamped_with_when_its_due() {
+        let (bus, sender, log) = setup(false);
+        let mut sender = sender.ahead(Duration::from_millis(100));
+        bus.set_latency(Some(Duration::from_millis(30)));
+        let mut ring = bus.open_stream().unwrap();
+        let start = Instant::now();
+        ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        // 50 ms in, so heard at 80 ms; and a second later, not yet
+        ring.push(Outgoing::Message { sample: 2_400, message: Message::note_on(0, 60, 100) }).unwrap();
+        ring.push(Outgoing::Message { sample: 48_000, message: Message::note_off(0, 60) }).unwrap();
+        sender.tick(start);
+        let log = log.lock().unwrap();
+        assert_eq!(log.len(), 1, "only what's due within the lookahead");
+        assert_eq!(log[0].2, start + Duration::from_millis(80));
+    }
+
+    #[test]
+    fn letting_go_lands_after_what_was_sent_ahead() {
+        let (bus, sender, log) = setup(false);
+        let mut sender = sender.ahead(Duration::from_millis(100));
+        let mut ring = bus.open_stream().unwrap();
+        let start = Instant::now();
+        ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        ring.push(Outgoing::Message { sample: 4_800, message: Message::note_on(0, 60, 100) }).unwrap();
+        sender.tick(start);
+        // The patch is deleted before the note sounds
+        drop(ring);
+        sender.tick(start + TICK);
+        let log = log.lock().unwrap();
+        let note_on = start + Duration::from_millis(100);
+        assert_eq!(log[0].2, note_on);
+        assert_eq!(log[1..].iter().map(|(_, b, at)| (b.clone(), *at)).collect::<Vec<_>>(), [
+            (vec![0x80, 60, 0], note_on),
+            (vec![0xB0, ALL_NOTES_OFF, 0], note_on),
+        ]);
     }
 
     #[test]
