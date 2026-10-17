@@ -1377,8 +1377,8 @@ mod tests {
         assert!(leaf.contains(&("LFO".into(), "Out".into(), "SVF Filter".into(), "Cutoff".into())), "{leaf:?}");
         assert!(leaf.contains(&("ADSR Envelope".into(), "Out".into(), "Oscilloscope".into(), "In 1".into())), "{leaf:?}");
         let index = GroupIndex::of(&rig.editor.graph);
-        assert_eq!(actions(&rig, filter, Side::Input, "Cutoff"), [JackAction::Hide]);
-        assert_eq!(actions(&rig, env, Side::Output, "Out"), [JackAction::Hide]);
+        assert_eq!(jack_actions(&rig.editor.graph, &index, filter, Side::Input, "Cutoff"), [JackAction::Hide]);
+        assert_eq!(jack_actions(&rig.editor.graph, &index, env, Side::Output, "Out"), [JackAction::Hide]);
 
         // Hidden again, the jacks go with their cables outside
         let graph = &mut rig.editor.graph;

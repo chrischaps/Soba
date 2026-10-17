@@ -4,7 +4,6 @@
 //! connections can be made between ports.
 
 use crate::dsp::SignalType;
-use super::SynthDataType;
 
 /// Result of a connection validation check.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -98,14 +97,6 @@ pub fn validate_connection(
             to_type,
         })
     }
-}
-
-/// Checks if two data types are exactly equal.
-///
-/// This is the strict equality check, useful for cases where we need exact
-/// type matching rather than compatibility.
-pub fn types_equal(a: &SynthDataType, b: &SynthDataType) -> bool {
-    a.0 == b.0
 }
 
 #[cfg(test)]

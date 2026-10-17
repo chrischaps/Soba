@@ -370,7 +370,7 @@ impl DspModule for Chorus {
         let depth_cv = inputs.get(Self::PORT_DEPTH_CV);
 
         // Split outputs
-        let (out_left_slice, out_right_slice) = outputs.split_at_mut(1);
+        let (out_left_slice, out_right_slice) = outputs.split_at_mut(Self::PORT_OUT_R);
         let out_left = &mut out_left_slice[Self::PORT_OUT_L];
         let out_right = &mut out_right_slice[0];
 

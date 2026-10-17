@@ -579,69 +579,6 @@ impl SynthNodeData {
         }
     }
 
-    /// Draw a secondary/smaller icon at the given position.
-    fn draw_secondary_icon(&self, painter: &egui::Painter, center: egui::Pos2, size: f32, color: Color32) {
-        let s = size * 0.4; // Smaller than category icon
-        match self.category {
-            ModuleCategory::Source => {
-                // Small wave
-                let points: Vec<egui::Pos2> = (0..=8)
-                    .map(|i| {
-                        let t = i as f32 / 8.0;
-                        let x = center.x - s + t * s * 2.0;
-                        let y = center.y - (t * std::f32::consts::TAU).sin() * s * 0.5;
-                        egui::pos2(x, y)
-                    })
-                    .collect();
-                painter.add(egui::Shape::line(points, egui::Stroke::new(1.2, color)));
-            }
-            ModuleCategory::Filter => {
-                // Curved response line
-                let points: Vec<egui::Pos2> = (0..=8)
-                    .map(|i| {
-                        let t = i as f32 / 8.0;
-                        let x = center.x - s + t * s * 2.0;
-                        let curve = 1.0 - (t * 2.0).min(1.0).powi(2);
-                        let y = center.y + s * 0.5 - curve * s;
-                        egui::pos2(x, y)
-                    })
-                    .collect();
-                painter.add(egui::Shape::line(points, egui::Stroke::new(1.2, color)));
-            }
-            ModuleCategory::Modulation => {
-                // Up-down arrows
-                painter.line_segment([egui::pos2(center.x, center.y - s * 0.8), egui::pos2(center.x, center.y + s * 0.8)], egui::Stroke::new(1.2, color));
-                // Up arrow head
-                painter.line_segment([egui::pos2(center.x - s * 0.3, center.y - s * 0.4), egui::pos2(center.x, center.y - s * 0.8)], egui::Stroke::new(1.2, color));
-                painter.line_segment([egui::pos2(center.x + s * 0.3, center.y - s * 0.4), egui::pos2(center.x, center.y - s * 0.8)], egui::Stroke::new(1.2, color));
-                // Down arrow head
-                painter.line_segment([egui::pos2(center.x - s * 0.3, center.y + s * 0.4), egui::pos2(center.x, center.y + s * 0.8)], egui::Stroke::new(1.2, color));
-                painter.line_segment([egui::pos2(center.x + s * 0.3, center.y + s * 0.4), egui::pos2(center.x, center.y + s * 0.8)], egui::Stroke::new(1.2, color));
-            }
-            ModuleCategory::Effect | ModuleCategory::Output => {
-                // Small filled circle
-                painter.circle_stroke(center, s * 0.5, egui::Stroke::new(1.2, color));
-                painter.circle_filled(center, s * 0.2, color);
-            }
-            ModuleCategory::Utility => {
-                // Small gear (simplified)
-                painter.circle_stroke(center, s * 0.4, egui::Stroke::new(1.2, color));
-                for i in 0..6 {
-                    let angle = i as f32 * std::f32::consts::FRAC_PI_3;
-                    let inner = s * 0.4;
-                    let outer = s * 0.7;
-                    painter.line_segment(
-                        [
-                            egui::pos2(center.x + angle.cos() * inner, center.y + angle.sin() * inner),
-                            egui::pos2(center.x + angle.cos() * outer, center.y + angle.sin() * outer),
-                        ],
-                        egui::Stroke::new(1.2, color),
-                    );
-                }
-            }
-        }
-    }
-
     /// Render an interactive knob widget for a parameter value.
     ///
     /// When the knob is changed, emits a ParameterChanged response.

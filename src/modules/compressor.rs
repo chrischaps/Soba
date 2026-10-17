@@ -362,7 +362,7 @@ impl DspModule for Compressor {
         let sidechain = connected_input(inputs, Self::PORT_SIDECHAIN);
 
         // Split outputs
-        let (out_slice, gr_slice) = outputs.split_at_mut(1);
+        let (out_slice, gr_slice) = outputs.split_at_mut(Self::PORT_GR);
         let out = &mut out_slice[Self::PORT_OUT];
         let gr_out = &mut gr_slice[0];
 

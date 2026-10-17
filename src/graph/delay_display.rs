@@ -53,8 +53,6 @@ const WARM: Color32 = Color32::from_rgb(255, 170, 96);
 /// What the display needs to know, from the knobs and the engine.
 #[derive(Clone, Copy, Debug)]
 struct Train {
-    /// The delay time, in ms.
-    time_ms: f32,
     /// What each repeat keeps of the one before.
     loop_gain: f32,
     mix: f32,
@@ -136,7 +134,6 @@ pub fn delay_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
 
     let tape_loss = lowpass(BRIGHT_HZ, StereoDelay::tape_loss_hz(time_ms));
     let train = Train {
-        time_ms,
         loop_gain,
         mix: value_of(graph, node_id, "Mix").unwrap_or(0.5).clamp(0.0, 1.0),
         bright: lowpass(BRIGHT_HZ, high_cut) * (1.0 - tape + tape * tape_loss),
@@ -282,7 +279,7 @@ mod tests {
     use super::*;
 
     fn train(loop_gain: f32, mix: f32) -> Train {
-        Train { time_ms: 500.0, loop_gain, mix, bright: 1.0, body: 1.0, ping_pong: false }
+        Train { loop_gain, mix, bright: 1.0, body: 1.0, ping_pong: false }
     }
 
     #[test]

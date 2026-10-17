@@ -175,7 +175,7 @@ pub fn jack_items(ui: &mut egui::Ui, actions: &[JackAction], node_id: NodeId, si
         if i > 0 {
             ui.separator();
         }
-        let mut item = |ui: &mut egui::Ui, enabled: bool, label: &str, hint: &str, edit: JackEdit| {
+        let item = |ui: &mut egui::Ui, enabled: bool, label: &str, hint: &str, edit: JackEdit| {
             let button = ui.add_enabled(enabled, egui::Button::new(label));
             let button = if enabled { button.on_hover_text(hint) } else { button.on_disabled_hover_text(hint) };
             if button.clicked() {

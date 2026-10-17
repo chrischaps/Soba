@@ -383,7 +383,7 @@ impl DspModule for StereoDelay {
         let feedback_cv = inputs.get(Self::PORT_FEEDBACK_CV);
 
         // Split outputs
-        let (out_left_slice, out_right_slice) = outputs.split_at_mut(1);
+        let (out_left_slice, out_right_slice) = outputs.split_at_mut(Self::PORT_OUT_R);
         let out_left = &mut out_left_slice[Self::PORT_OUT_L];
         let out_right = &mut out_right_slice[0];
 

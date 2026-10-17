@@ -24,7 +24,8 @@ ableton-link = ["dep:rusty_link"]
 [dependencies]
 eframe = { version = "0.30", features = ["persistence"] }
 egui = "0.30"
-egui_node_graph2 = { git = "https://github.com/chrischaps/egui_node_graph2" }
+# Pinned: bump the rev on purpose, after a push to the fork
+egui_node_graph2 = { git = "https://github.com/chrischaps/egui_node_graph2", rev = "8660f48f4eb71da91269fdf65f48501eae5d5098" }
 cpal = "0.18"
 midir = "0.11"
 rtrb = "0.3"
