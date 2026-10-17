@@ -21,9 +21,10 @@ use std::time::Duration;
 use web_time::Instant;
 
 use egui::{Pos2, Vec2};
-use egui_node_graph2::{NodeId, PanZoom};
+use egui_node_graph2::{InputId, NodeId, OutputId, PanZoom};
 
 use crate::dsp::onsets::HandMarkers;
+use crate::dsp::SignalType;
 use crate::engine::{EngineCommand, NodeId as EngineNodeId};
 use crate::graph::annotations::{self, Annotation, AnnotationId};
 use crate::graph::groups::{self, GroupId, Jack, NodeKind, Side};
@@ -62,6 +63,12 @@ fn key_of(graph: &SynthGraph, user_state: &SynthGraphState, node_id: NodeId) -> 
         NodeKind::Inputs(id) => NodeKey::Inputs(id),
         NodeKind::Outputs(id) => NodeKey::Outputs(id),
     })
+}
+
+/// Whether a node's ports are the jacks a group was captured with.
+fn jacks_match<Id: Copy>(ports: &[(String, Id)], jacks: &[Jack], signal: impl Fn(Id) -> SignalType) -> bool {
+    ports.len() == jacks.len()
+        && ports.iter().zip(jacks).all(|((name, id), jack)| *name == jack.name && signal(*id) == jack.signal)
 }
 
 /// What a node is, as far as undo cares.
@@ -245,6 +252,86 @@ impl Snapshot {
         snapshot
     }
 
+    /// Whether the editor's patch is the same in substance as this snapshot,
+    /// so that capturing it would make no step. It runs every frame the mouse
+    /// is up, so it compares in place rather than capturing. It may answer
+    /// `false` for a patch that would make no step (the full comparison then
+    /// finds none), but never `true` for one that would.
+    pub fn matches(&self, editor: &SynthGraphEditorState, user_state: &SynthGraphState, anchor: &ViewAnchor) -> bool {
+        let graph = &editor.graph;
+        let zoom = editor.pan_zoom.zoom;
+
+        let mut nodes = 0;
+        for (node_id, node) in graph.nodes.iter() {
+            let Some(key) = key_of(graph, user_state, node_id) else { continue };
+            let data = &node.user_data;
+            if data.kind == NodeKind::Module && SynthNodeTemplate::from_module_id(data.module_id).is_none() {
+                continue;
+            }
+            nodes += 1;
+            let Some(state) = self.nodes.get(&key) else { return false };
+            let position = editor.node_positions.get(node_id).copied().unwrap_or_default();
+            if state.parent != data.parent || moved(state.position, anchor.unzoomed(position, zoom)) {
+                return false;
+            }
+            let input_signal = |id: InputId| graph.get_input(id).typ.signal_type();
+            let output_signal = |id: OutputId| graph.get_output(id).typ.signal_type();
+            // No `..` in these patterns: a field added to Body must be compared here too
+            let same = match (&state.body, data.kind) {
+                (
+                    Body::Module { template, params, bypassed, pins, face_labels, file, labels, slice_markers, scenes },
+                    NodeKind::Module,
+                ) => {
+                    let mut values = node.inputs.iter()
+                        .filter(|(_, id)| port_mapping::is_parameter(graph.get_input(*id).kind))
+                        .map(|(_, id)| graph.get_input(*id).value.actual_value());
+                    SynthNodeTemplate::from_module_id(data.module_id) == Some(*template)
+                        && *bypassed == data.bypassed
+                        && params.iter().all(|&value| values.next() == Some(value))
+                        && values.next().is_none()
+                        && *pins == data.pins
+                        && *face_labels == data.face_labels
+                        && *file == data.file
+                        && *labels == data.labels
+                        && *slice_markers == data.slice_markers
+                        && *scenes == data.scenes
+                }
+                (Body::Group { name, inputs, outputs }, NodeKind::Group(_)) => {
+                    *name == data.display_name
+                        && jacks_match(&node.inputs, inputs, input_signal)
+                        && jacks_match(&node.outputs, outputs, output_signal)
+                }
+                (Body::Jacks(jacks), NodeKind::Inputs(_)) => jacks_match(&node.outputs, jacks, output_signal),
+                (Body::Jacks(jacks), NodeKind::Outputs(_)) => jacks_match(&node.inputs, jacks, input_signal),
+                _ => false,
+            };
+            if !same {
+                return false;
+            }
+        }
+        if nodes != self.nodes.len() {
+            return false;
+        }
+
+        let mut cables = 0;
+        for (input, output) in graph.iter_connections() {
+            let (from, to) = (graph.get_output(output).node, graph.get_input(input).node);
+            let cable = (|| Some(Cable {
+                from: key_of(graph, user_state, from)?,
+                output: graph.get_output_index(output)?,
+                to: key_of(graph, user_state, to)?,
+                input: graph.nodes[to].inputs.iter().position(|(_, id)| *id == input)?,
+            }))();
+            if let Some(cable) = cable {
+                cables += 1;
+                if !self.cables.contains(&cable) {
+                    return false;
+                }
+            }
+        }
+        cables == self.cables.len() && self.annotations == *user_state.annotations.items()
+    }
+
     /// Records a file a save gave a module, so it isn't mistaken for an edit.
     fn set_file(&mut self, key: EngineNodeId, to: Option<String>) {
         if let Some(NodeState { body: Body::Module { file, .. }, .. }) = self.nodes.get_mut(&NodeKey::Module(key)) {
@@ -305,17 +392,16 @@ fn changed_params<'a>(a: &'a NodeState, b: &'a NodeState) -> impl Iterator<Item 
     a.params().iter().zip(b.params()).enumerate().filter(|(_, (x, y))| x != y).map(|(i, _)| i)
 }
 
-impl NodeDiff {
-    /// Whether the node is the same in substance on both sides.
-    fn is_noop(&self) -> bool {
-        match (&self.before, &self.after) {
-            (Some(a), Some(b)) => {
-                !moved(a.position, b.position) && a.same_but_knobs(b) && changed_params(a, b).next().is_none()
-            }
-            (None, None) => true,
-            _ => false,
-        }
+/// Whether a node is the same in substance on both sides of a step.
+fn unchanged(before: Option<&NodeState>, after: Option<&NodeState>) -> bool {
+    match (before, after) {
+        (Some(a), Some(b)) => !moved(a.position, b.position) && a.same_but_knobs(b) && changed_params(a, b).next().is_none(),
+        (None, None) => true,
+        _ => false,
     }
+}
+
+impl NodeDiff {
 
     /// The parameters a step changed on a node that stayed, if that's all
     /// it changed.
@@ -348,14 +434,12 @@ impl Step {
     /// What changed from `before` to `after`, or `None` if nothing did.
     pub fn between(before: &Snapshot, after: &Snapshot) -> Option<Self> {
         let keys: BTreeSet<NodeKey> = before.nodes.keys().chain(after.nodes.keys()).copied().collect();
+        // Only what changed is cloned: most nodes are the same on both sides
         let nodes: Vec<NodeDiff> = keys
             .into_iter()
-            .map(|key| NodeDiff {
-                key,
-                before: before.nodes.get(&key).cloned(),
-                after: after.nodes.get(&key).cloned(),
-            })
-            .filter(|diff| !diff.is_noop())
+            .map(|key| (key, before.nodes.get(&key), after.nodes.get(&key)))
+            .filter(|&(_, was, is)| !unchanged(was, is))
+            .map(|(key, was, is)| NodeDiff { key, before: was.cloned(), after: is.cloned() })
             .collect();
         let cables: Vec<CableDiff> = before.cables.difference(&after.cables)
             .map(|&cable| CableDiff { cable, added: false })
@@ -364,12 +448,9 @@ impl Step {
         let ids: BTreeSet<AnnotationId> = before.annotations.keys().chain(after.annotations.keys()).copied().collect();
         let annotations: Vec<AnnotationDiff> = ids
             .into_iter()
-            .map(|id| AnnotationDiff {
-                id,
-                before: before.annotations.get(&id).cloned(),
-                after: after.annotations.get(&id).cloned(),
-            })
-            .filter(|diff| diff.before != diff.after)
+            .map(|id| (id, before.annotations.get(&id), after.annotations.get(&id)))
+            .filter(|(_, was, is)| was != is)
+            .map(|(id, was, is)| AnnotationDiff { id, before: was.cloned(), after: is.cloned() })
             .collect();
 
         if nodes.is_empty() && cables.is_empty() && annotations.is_empty() {
@@ -814,6 +895,9 @@ pub struct History {
     /// The patch has never been saved as it stands, e.g. one recovered
     /// from an autosave, so it has unsaved changes whatever the history says.
     never_saved: bool,
+    /// Whether `baseline` differs from `saved`, worked out whenever either
+    /// changes rather than every time the title or status bar asks.
+    baseline_unsaved: bool,
 }
 
 impl History {
@@ -832,6 +916,7 @@ impl History {
     pub fn mark_saved(&mut self) {
         self.saved = self.baseline.clone();
         self.never_saved = false;
+        self.baseline_unsaved = false;
     }
 
     /// Notes that the patch isn't saved anywhere as it stands.
@@ -842,7 +927,17 @@ impl History {
     /// Whether the patch, as of the last step, differs from what was last
     /// opened or saved.
     pub fn has_unsaved_changes(&self) -> bool {
-        self.never_saved || Step::between(&self.saved, &self.baseline).is_some()
+        self.never_saved || self.baseline_unsaved
+    }
+
+    /// Takes `snapshot` as the patch as of the last step.
+    fn set_baseline(&mut self, snapshot: Snapshot) {
+        self.baseline = snapshot;
+        self.compare_with_saved();
+    }
+
+    fn compare_with_saved(&mut self) {
+        self.baseline_unsaved = Step::between(&self.saved, &self.baseline).is_some();
     }
 
     /// Starts tracking zoom afresh, for when the editor's pan and zoom are
@@ -881,12 +976,16 @@ impl History {
             return;
         }
         let label = self.next_label.take();
+        // Most frames change nothing: look before capturing the whole patch
+        if self.baseline.matches(editor, user_state, &self.anchor) {
+            return;
+        }
         let current = Snapshot::capture(editor, user_state, &self.anchor);
         let Some(mut step) = Step::between(&self.baseline, &current) else {
             return;
         };
         step.level = user_state.level;
-        self.baseline = current;
+        self.set_baseline(current);
         self.redo.clear();
 
         // A named command is a step of its own: nothing merges into or out of it
@@ -919,6 +1018,7 @@ impl History {
     /// Notes a value set by MIDI CC: playing a controller isn't an edit.
     pub fn absorb_param(&mut self, key: EngineNodeId, param_index: usize, value: f32) {
         self.baseline.set_param(key, param_index, value);
+        self.compare_with_saved();
     }
 
     /// Notes a file a save gave a module (a Looper's loop, written beside
@@ -927,6 +1027,7 @@ impl History {
     /// the loop is no longer in.
     pub fn absorb_file(&mut self, key: EngineNodeId, file: Option<String>) {
         self.baseline.set_file(key, file.clone());
+        self.compare_with_saved();
         for step in self.undo.iter_mut().chain(self.redo.iter_mut()) {
             step.set_file(key, &file);
         }
@@ -963,7 +1064,7 @@ impl History {
 
     fn replay(&mut self, step: &Step, editor: &mut SynthGraphEditorState, user_state: &mut SynthGraphState) -> Applied {
         let commands = step.apply(editor, user_state, &self.anchor);
-        self.baseline = Snapshot::capture(editor, user_state, &self.anchor);
+        self.set_baseline(Snapshot::capture(editor, user_state, &self.anchor));
         self.open_since = None;
         Applied { label: step.label.clone(), commands, level: step.level }
     }
@@ -1080,6 +1181,12 @@ mod tests {
             Snapshot::capture(&self.editor, &self.user_state, &self.history.anchor)
         }
 
+        /// Whether the editor matches the history's last step, by the check
+        /// `record` makes before capturing.
+        fn matches_baseline(&self) -> bool {
+            self.history.baseline.matches(&self.editor, &self.user_state, &self.history.anchor)
+        }
+
         fn undo(&mut self) -> Applied {
             self.history.undo(&mut self.editor, &mut self.user_state).expect("something to undo")
         }
@@ -1137,18 +1244,26 @@ mod tests {
     }
 
     /// Records an edit, then checks undo puts back what was there before
-    /// it, and redo what was there after.
+    /// it, and redo what was there after. Every kind of edit comes through
+    /// here, so it also checks `record`'s quick look sees each one: an edit
+    /// it missed would never become a step.
     fn round_trip(rig: &mut Rig, edit: impl FnOnce(&mut Rig)) -> (Applied, Applied) {
+        rig.record();
+        assert!(rig.matches_baseline(), "an unchanged patch should match its last step");
         let before = rig.snapshot();
         edit(rig);
+        assert!(!rig.matches_baseline(), "the quick look missed the edit");
         rig.record();
+        assert!(rig.matches_baseline(), "the patch should match the step it just made");
         let after = rig.snapshot();
         assert!(!same(&before, &after), "the edit changed nothing");
 
         let undone = rig.undo();
         assert!(same(&rig.snapshot(), &before), "undo left {:?}", Step::between(&before, &rig.snapshot()));
+        assert!(rig.matches_baseline());
         let redone = rig.redo();
         assert!(same(&rig.snapshot(), &after), "redo left {:?}", Step::between(&after, &rig.snapshot()));
+        assert!(rig.matches_baseline());
         (undone, redone)
     }
 
@@ -1188,6 +1303,7 @@ mod tests {
         assert!(!rig.history.has_unsaved_changes());
         // Zooming moves every node on screen, but that isn't an edit
         rig.zoom(1.7);
+        assert!(rig.matches_baseline(), "zooming isn't an edit to look for");
         rig.record();
         assert!(!rig.history.has_unsaved_changes());
     }

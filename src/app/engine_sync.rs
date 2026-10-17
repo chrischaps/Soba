@@ -68,9 +68,24 @@ pub type LeafCables = BTreeMap<LeafInput, LeafCable>;
 /// The graph's cables as the engine should have them: module to module,
 /// through any groups between.
 pub fn leaf_cables(graph: &SynthGraph, user_state: &SynthGraphState) -> LeafCables {
+    leaf_cable_entries(graph, user_state).collect()
+}
+
+/// Whether the graph's cables add up to `cables`, worked out without
+/// building the map. It may answer `false` for the same cables, but never
+/// `true` for different ones.
+fn leaf_cables_are(graph: &SynthGraph, user_state: &SynthGraphState, cables: &LeafCables) -> bool {
+    let mut count = 0;
+    leaf_cable_entries(graph, user_state).all(|(input, cable)| {
+        count += 1;
+        cables.get(&input) == Some(&cable)
+    }) && count == cables.len()
+}
+
+fn leaf_cable_entries<'a>(graph: &'a SynthGraph, user_state: &'a SynthGraphState) -> impl Iterator<Item = (LeafInput, LeafCable)> + 'a {
     groups::leaf_cables(graph)
         .into_iter()
-        .filter_map(|(output, input)| {
+        .filter_map(move |(output, input)| {
             let (from, to) = (graph.get_output(output).node, graph.get_input(input).node);
             let key = LeafInput {
                 node: user_state.get_engine_node_id(to)?,
@@ -84,7 +99,6 @@ pub fn leaf_cables(graph: &SynthGraph, user_state: &SynthGraphState) -> LeafCabl
             };
             Some((key, cable))
         })
-        .collect()
 }
 
 /// Whether a knob follows an input: an exposed parameter (both a jack and a
@@ -113,6 +127,10 @@ fn is_exposed(graph: &SynthGraph, input: InputId) -> bool {
 /// the cable's animation, with its first cable, and stops with its last,
 /// unless the module always shows it.
 pub fn sync_cables(graph: &SynthGraph, user_state: &mut SynthGraphState) -> Vec<EngineCommand> {
+    // It runs every frame, and most frames change no cables
+    if leaf_cables_are(graph, user_state, &user_state.engine_cables) {
+        return Vec::new();
+    }
     let now = leaf_cables(graph, user_state);
     let before = std::mem::replace(&mut user_state.engine_cables, now);
     let now = &user_state.engine_cables;
