@@ -1941,6 +1941,7 @@ impl SynthApp {
     fn draw_main_area(&mut self, ctx: &egui::Context) {
         // Collect connections to remove (validated after drawing)
         let mut invalid_connections: Vec<(egui_node_graph2::OutputId, egui_node_graph2::InputId)> = Vec::new();
+        let mut before_drop = None;
         // Collect commands to send (to avoid borrow issues)
         let mut commands_to_send: Vec<EngineCommand> = Vec::new();
         // Nodes whose bypass switch was clicked
@@ -2028,6 +2029,11 @@ impl SynthApp {
                 if dive.is_some() {
                     ui.set_clip_rect(canvas);
                 }
+                // A cable dropped on a full input replaces the one there; keep it in case it's refused
+                before_drop = crate::graph::refused_cable::before_drop(
+                    &self.graph_state.graph,
+                    self.graph_state.connection_in_progress.is_some(),
+                );
                 let graph_response = self.graph_state.draw_graph_editor(
                     ui,
                     AllNodeTemplates,
@@ -2323,9 +2329,9 @@ impl SynthApp {
         }
         self.draw_breadcrumbs(ctx);
 
-        // Remove invalid connections outside the UI closure
+        // Remove invalid connections outside the UI closure, putting back any they replaced
         for (output, input) in invalid_connections {
-            self.graph_state.graph.remove_connection(input, output);
+            crate::graph::refused_cable::refuse(&mut self.graph_state.graph, output, input, before_drop.as_ref());
         }
     }
 

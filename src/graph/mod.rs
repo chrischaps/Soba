@@ -32,6 +32,7 @@ mod filter_spectrum;
 mod filter_trail;
 pub mod knob_cv;
 pub mod loops;
+pub mod refused_cable;
 mod cable_spotlight;
 mod lfo_display;
 mod logic_display;
