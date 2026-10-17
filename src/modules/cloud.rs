@@ -877,7 +877,7 @@ impl DspModule for Cloud {
         readout.values[Self::READOUT_FROZEN] = if self.frozen { 1.0 } else { 0.0 };
         readout.values[Self::READOUT_COUNT] = self.playing() as f32;
         readout.values[Self::READOUT_POSITION] = self.position;
-        debug_assert!(Self::READOUT_POSITION < MAX_READOUT);
+        const { assert!(Self::READOUT_POSITION < MAX_READOUT) };
         Some(readout)
     }
 
@@ -1057,7 +1057,7 @@ mod tests {
         assert_eq!(params, ["Freeze", "Position", "Size", "Density", "Pitch", "Spray", "Spread", "Level"]);
         assert_eq!(params.len(), Cloud::PARAM_COUNT);
         assert!(cloud.polyphonic());
-        assert!(Cloud::READOUT_POSITION < MAX_READOUT);
+        const { assert!(Cloud::READOUT_POSITION < MAX_READOUT) };
     }
 
     #[test]

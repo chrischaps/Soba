@@ -25,6 +25,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -35,13 +37,18 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      # Against Cargo.lock as committed: a dependency that drifted fails
+      # here rather than in someone's next build. The allocation guard
+      # (tests/realtime_alloc.rs) is part of this run
       - name: Test
-        run: cargo test
+        run: cargo test --locked
 
-      # The allocation guard on its own, so a real-time regression is named
-      # in the job summary rather than buried in the full run
-      - name: Audio thread allocation guard
-        run: cargo test --test realtime_alloc
+      # No warnings, rustc's or clippy's. The few lints this repo allows are
+      # in Cargo.toml's [lints.clippy]. On Windows the CLAP plugin as well,
+      # whose window needs nothing installed there
+      - name: Clippy
+        shell: bash
+        run: cargo clippy --locked --all-targets ${{ matrix.os == 'windows-latest' && '--workspace' || '' }} -- -D warnings
 
       # The CLAP plugin (plugin/): its app, player and state, without a DAW.
       # Windows only, where its window's OpenGL needs nothing installed
@@ -81,14 +88,38 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
+      # Clippy stays on the desktop builds: in the browser, std's stub
+      # files and processes trip lints that mean nothing there
       - name: Check the web build
-        run: cargo check --target wasm32-unknown-unknown --bin soba
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo check --locked --target wasm32-unknown-unknown --bin soba
+
+  # The releases build two macOS targets (release.yml): check they still
+  # compile, warning-free, before a tag finds out
+  macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
 
   # A push to master that fails opens one issue labelled ci-failure, or
   # comments on the one already open, so the next session sees it without
   # watching CI. The next green push to master closes it
   report:
-    needs: [test, web]
+    needs: [test, web, macos]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
@@ -100,7 +131,7 @@ jobs:
       RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       SHA: ${{ github.sha }}
       FAILED: ${{ contains(needs.*.result, 'failure') }}
-      GREEN: ${{ needs.test.result == 'success' && needs.web.result == 'success' }}
+      GREEN: ${{ needs.test.result == 'success' && needs.web.result == 'success' && needs.macos.result == 'success' }}
 
     steps:
       - name: Open, update or close the ci-failure issue

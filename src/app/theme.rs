@@ -356,15 +356,16 @@ mod tests {
     #[test]
     fn node_styling_constants_exist() {
         // Verify node styling constants are defined and reasonable
-        assert!(node::PORT_RADIUS > 0.0);
-        assert!(cable::THICKNESS > 0.0);
-        assert!(cable::GLOW_RADIUS > cable::THICKNESS);
+        const {
+            assert!(node::PORT_RADIUS > 0.0);
+            assert!(cable::THICKNESS > 0.0);
+            assert!(cable::GLOW_RADIUS > cable::THICKNESS);
+        }
     }
 
     #[test]
     fn grid_spacing_is_reasonable() {
-        assert!(GRID_SPACING >= 10.0);
-        assert!(GRID_SPACING <= 50.0);
+        const { assert!(GRID_SPACING >= 10.0 && GRID_SPACING <= 50.0) };
     }
 
     /// WCAG contrast ratio of two opaque colours

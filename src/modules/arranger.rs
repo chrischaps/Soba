@@ -1047,7 +1047,7 @@ mod tests {
         // The largest value is still a whole number an f32 holds exactly
         let largest = Cue { kind: Move::Ramp, level: 1000, bars: MAX_BARS as u8, curve: Curve::Log, from: None };
         assert_eq!(largest.encode(), CUE_VALUE_LIMIT);
-        assert!(CUE_VALUE_LIMIT < 16_777_216.0);
+        const { assert!(CUE_VALUE_LIMIT < 16_777_216.0) };
     }
 
     #[test]

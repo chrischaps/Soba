@@ -122,6 +122,7 @@ pub fn close_button(ui: &mut egui::Ui) -> egui::Response {
 }
 
 /// A thin progress bar the width of the note, in the accent colour.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))] // the browser has no updater
 pub fn progress_bar(ui: &mut egui::Ui, fraction: Option<f32>) {
     let width = ui.available_width().clamp(200.0, 312.0);
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 4.0), egui::Sense::hover());

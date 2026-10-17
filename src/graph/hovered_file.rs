@@ -84,6 +84,7 @@ impl HoveredFile {
 /// Draws a hovered file across a face's waveform panel: its waveform, the
 /// span the node would play (`lo` to `hi`) bright against the rest, the cue
 /// playing it, and its name.
+#[allow(clippy::too_many_arguments)]
 pub fn draw(painter: &Painter, rect: Rect, plot: Rect, sample: &ShelvedSample, key: &str, span: (f32, f32), cue: Option<&SamplerCue>, z: f32) {
     let blue = crate::dsp::ModuleCategory::Source.color();
     let x_at = |place: f32| plot.left() + place.clamp(0.0, 1.0) * plot.width();

@@ -21,6 +21,13 @@ asio = ["cpal/asio", "dep:image"]
 # too. Needs CMake and LLVM (libclang); see docs/src/getting-started/installation.md
 ableton-link = ["dep:rusty_link"]
 
+# CI runs `cargo clippy --workspace --all-targets -- -D warnings`. These two
+# are matters of taste here: index loops over parallel tables read better than
+# zipped iterators, and the long types are mostly tests' tuples
+[lints.clippy]
+needless_range_loop = "allow"
+type_complexity = "allow"
+
 [dependencies]
 eframe = { version = "0.30", features = ["persistence"] }
 egui = "0.30"

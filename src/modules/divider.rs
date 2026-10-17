@@ -260,7 +260,7 @@ mod tests {
         let len = clock.len();
         let ctx = ProcessContext::new(SAMPLE_RATE, BLOCK);
         let mut outs = outputs();
-        let mut result = vec![Vec::with_capacity(len); 3];
+        let mut result = (0..3).map(|_| Vec::with_capacity(len)).collect::<Vec<_>>();
         for start in (0..len).step_by(BLOCK) {
             let buffers: Vec<SignalBuffer> = [clock, reset]
                 .iter()
@@ -424,8 +424,8 @@ mod tests {
                     fires += should_fire as usize;
                     edges += 1;
                 } else {
-                    assert!(!(trig && !prev_trig), "Trig rose off a clock edge");
-                    assert!(!(gate && !prev_gate), "Gate rose off a clock edge");
+                    assert!(!trig || prev_trig, "Trig rose off a clock edge");
+                    assert!(!gate || prev_gate, "Gate rose off a clock edge");
                 }
                 gate_opens += (gate && !prev_gate) as usize;
                 (prev_clock, prev_trig, prev_gate) = (clock_high, trig, gate);

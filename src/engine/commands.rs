@@ -24,6 +24,8 @@ pub type PortIndex = usize;
 
 /// Commands sent from the UI thread to the audio engine.
 /// These are processed non-blocking in the audio callback.
+// Not boxed: a box would be freed on the audio thread
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum EngineCommand {
     /// Add a new module instance to the audio graph.

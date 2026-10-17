@@ -1129,9 +1129,9 @@ impl PatternPosition {
         Self::read(readout, StepSequencer::READOUT_PATTERN)
     }
 
-    /// Written into a readout from `at`: the pattern, + 4 × the Chain slot,
-    /// + 32 once a step has played; then the next pass's pattern, + 64
-    /// while Pattern is patched.
+    /// Written into a readout from `at`: the pattern, plus 4 × the Chain
+    /// slot, plus 32 once a step has played; then the next pass's pattern,
+    /// plus 64 while Pattern is patched.
     pub fn write(&self, readout: &mut Readout, at: usize) {
         let started = if self.started { 32 } else { 0 };
         readout.values[at] = (self.pattern + 4 * self.chain_slot + started) as f32;

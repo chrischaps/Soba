@@ -139,13 +139,14 @@ Understand:
 
 Check what you touched, not the whole suite. The rest runs elsewhere and doesn't wait for you (#272):
 
-- **On every push, GitHub CI** runs the full `cargo test`, the allocation guard, and the ASIO and wasm builds. A failure on master opens a `ci-failure` issue.
+- **On every push, GitHub CI** runs the full `cargo test` (against `Cargo.lock`, `--locked`), `cargo clippy` with warnings denied, and the ASIO, wasm and macOS builds. A failure on master opens a `ci-failure` issue.
 - **Every night, `tools/nightly.py`** runs the slow checks that need this machine's windows: the loudness of every example, `check_layout.py`, `zoom_check.py` (`zoom_jitter.py` on every patch something it holds has changed), and the recipe, manual and module pictures. It re-shoots stale pictures and pushes them as a `[Docs]` commit of their own. A failing step opens a `nightly-failure` issue.
 
 So the full `cargo test`, the layout and zoom checks and the picture re-shoots are no longer part of a ticket. At minimum:
 
 ```bash
 cargo check
+cargo clippy --all-targets -- -D warnings   # CI fails on any warning, rustc's or clippy's
 cargo test --lib <module>      # the unit tests of what you changed, e.g. cargo test --lib clock
 cargo test --test <file>       # and the tests/<file>.rs that covers it, if one does
 cargo run                      # if the issue adds visible functionality

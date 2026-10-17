@@ -57,6 +57,8 @@ impl Markers {
 }
 
 /// How a recording is cut.
+// Kept inline and Copy: no box to allocate or free
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Cut {
     Equal,

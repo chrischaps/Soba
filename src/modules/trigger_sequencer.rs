@@ -641,6 +641,7 @@ impl Position {
 }
 
 #[cfg(test)]
+#[allow(clippy::single_range_in_vec_init)] // gaps in the clock, one or several
 mod tests {
     use super::*;
 

@@ -311,7 +311,7 @@ mod tests {
         assert!(Path::new(&ours).exists(), "this session's own is tidied as usual");
         assert!(Path::new(&unrelated).exists(), "not a session's folder");
         // Adopted: unsaved, it's tidied when the patch is let go, with its folder
-        assert_eq!(files.unkept(|_| false), [named.clone()]);
+        assert_eq!(files.unkept(|_| false), std::slice::from_ref(&named));
         files.remove(files.unkept(|_| false));
         assert!(!gone.exists());
         std::fs::remove_dir_all(&temp).ok();

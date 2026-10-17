@@ -53,7 +53,7 @@ enum Place {
     /// The screen ends first on the right, as it soon does on a phone.
     Left,
     /// No room on either side: in the menu's place.
-    InPlace,
+    Instead,
 }
 
 fn place(menu: Rect, width: f32, screen: Rect) -> Place {
@@ -62,7 +62,7 @@ fn place(menu: Rect, width: f32, screen: Rect) -> Place {
     } else if menu.left() - GAP - width >= screen.left() {
         Place::Left
     } else {
-        Place::InPlace
+        Place::Instead
     }
 }
 
@@ -116,7 +116,7 @@ impl SynthApp {
         let submenu_id = egui::Id::new("add_node_submenu");
         let submenu_width = ctx.memory(|m| m.area_rect(submenu_id)).map_or(160.0, |r| r.width());
         let opened = self.user_state.context_menu_open_category;
-        if !self.add_menu.drilled && opened.is_some() && opened != was_open && place(menu_rect, submenu_width, screen) == Place::InPlace {
+        if !self.add_menu.drilled && opened.is_some() && opened != was_open && place(menu_rect, submenu_width, screen) == Place::Instead {
             if picks.tapped_category {
                 self.add_menu.drilled = true;
                 ctx.request_repaint();
@@ -460,7 +460,7 @@ mod tests {
         assert_eq!(place(menu(10.0), 160.0, phone), Place::Right);
         assert_eq!(place(menu(250.0), 160.0, phone), Place::Left);
         // Mid-screen: 284 + 164 overruns 390 on the right, 136 - 164 the left
-        assert_eq!(place(menu(140.0), 160.0, phone), Place::InPlace);
+        assert_eq!(place(menu(140.0), 160.0, phone), Place::Instead);
         let desktop = Rect::from_min_size(Pos2::ZERO, egui::vec2(1600.0, 900.0));
         assert_eq!(place(menu(140.0), 160.0, desktop), Place::Right);
     }

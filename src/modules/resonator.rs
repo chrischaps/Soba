@@ -497,6 +497,7 @@ impl Resonator {
         self.mallet_gain = strike * PI / (2.0 * self.mallet_len as f32);
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn retune(&mut self, hz: f32, material: Material, decay: f32, damping: f32, brightness: f32, position: f32, inharm: f32) {
         let ratios = mode_ratios(material, inharm);
         let amps = mode_amplitudes(&ratios, position, brightness);

@@ -673,7 +673,7 @@ mod tests {
     /// Runs `osc` for `len` samples with the given inputs, in blocks of 256.
     fn run(osc: &mut Oscillator, params: &[f32], inputs: &[SignalBuffer], len: usize) -> Vec<Vec<f32>> {
         const BLOCK: usize = 256;
-        let mut result = vec![Vec::with_capacity(len); 4];
+        let mut result = (0..4).map(|_| Vec::with_capacity(len)).collect::<Vec<_>>();
         let mut done = 0;
         while done < len {
             let block = BLOCK.min(len - done);

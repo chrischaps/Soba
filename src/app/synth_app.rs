@@ -312,6 +312,7 @@ pub struct SynthApp {
     resuming: bool,
     /// A view to put back (zoom, and the patch point at the middle), once
     /// the editor has been laid out.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))] // set when an update restarts the app
     pending_view: Option<(f32, egui::Pos2)>,
 
     // --- Audio input ---
@@ -4039,7 +4040,9 @@ struct ToolbarActions {
     disconnect_midi: bool,
     refresh_midi_devices: bool,
     // Help menu
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))] // the browser has no updater
     check_updates: bool,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     roll_back: bool,
 }
 

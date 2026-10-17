@@ -94,7 +94,7 @@ mod tests {
         mappings.learn(cc(1, 20, 3));
 
         let badges = mappings.badges();
-        assert!(badges.get(&(10, 0)).is_none(), "knob A still shows CC1");
+        assert!(!badges.contains_key(&(10, 0)), "knob A still shows CC1");
         assert_eq!(badges.get(&(20, 3)).map(|b| b.cc_number), Some(1));
         assert_eq!(mappings.as_slice().len(), 1);
     }
@@ -133,7 +133,7 @@ mod tests {
         mappings.learn(cc(1, 10, 0));
         mappings.learn(cc(2, 20, 0));
         mappings.unmap(10, 0);
-        assert!(mappings.badges().get(&(10, 0)).is_none());
+        assert!(!mappings.badges().contains_key(&(10, 0)));
         mappings.clear();
         assert!(mappings.badges().is_empty());
     }

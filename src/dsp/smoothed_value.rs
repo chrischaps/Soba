@@ -127,6 +127,7 @@ impl SmoothedValue {
     ///
     /// Call this once per sample in your audio processing loop.
     #[inline]
+    #[allow(clippy::should_implement_trait)] // never ends, so not an Iterator
     pub fn next(&mut self) -> f32 {
         // Exponential smoothing: current = target + factor * (current - target)
         // This is mathematically equivalent to: current += (1 - factor) * (target - current)

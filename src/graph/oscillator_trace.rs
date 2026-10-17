@@ -131,8 +131,7 @@ mod tests {
         let ctx = egui::Context::default();
         let id = egui::Id::new("osc");
         let at = |time: f64, data: Option<&ScopeData>| {
-            let mut input = egui::RawInput::default();
-            input.time = Some(time);
+            let input = egui::RawInput { time: Some(time), ..Default::default() };
             let mut live = None;
             let _ = ctx.run(input, |ctx| live = Some(super::live(ctx, id, data)));
             live.unwrap()

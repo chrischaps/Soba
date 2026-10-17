@@ -49,7 +49,7 @@ fn held_keys(active_notes: &[u8], node_id: NodeId, graph: &SynthGraph) -> PianoD
     };
 
     // Base note is C4 (60) plus octave shift
-    let base_note = (60 + octave_shift * 12).max(0).min(127) as u8;
+    let base_note = (60 + octave_shift * 12).clamp(0, 127) as u8;
 
     PianoData {
         active_notes: active_notes.to_vec(),
