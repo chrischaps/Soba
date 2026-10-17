@@ -72,7 +72,7 @@
       "module_id": "seq.chord",
       "position": [
         40,
-        420
+        456
       ],
       "parameters": [
         {
@@ -2777,7 +2777,7 @@
       "module_id": "util.attenuverter",
       "position": [
         610,
-        420
+        467
       ],
       "parameters": [
         {
@@ -2997,7 +2997,7 @@
       ],
       "size": [
         560.0,
-        1080.0
+        1120.0
       ],
       "color": "amber"
     },
@@ -3009,7 +3009,7 @@
       ],
       "size": [
         270.0,
-        1080.0
+        1120.0
       ],
       "color": "violet"
     },
@@ -3021,7 +3021,7 @@
       ],
       "size": [
         330.0,
-        1080.0
+        1120.0
       ],
       "color": "rose"
     },
