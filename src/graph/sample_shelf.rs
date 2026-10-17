@@ -63,17 +63,14 @@ impl ShelvedSample {
         self.onsets.get_or_init(|| Onsets::detect(&self.source))
     }
 
-    /// The recording at `sample_rate`, resampled the first time it's asked
+    /// The recording at `sample_rate`, resampled and with its octaves made
+    /// (so it can be pitched up without folding) the first time it's asked
     /// for at that rate.
     pub fn at_rate(&mut self, sample_rate: f32) -> Arc<SampleData> {
         match &self.playing {
             Some((rate, playing)) if *rate == sample_rate => Arc::clone(playing),
             _ => {
-                let playing = if self.source.sample_rate() == sample_rate {
-                    Arc::clone(&self.source)
-                } else {
-                    Arc::new(self.source.resampled(sample_rate))
-                };
+                let playing = Arc::new(self.source.playable_at(sample_rate));
                 self.playing = Some((sample_rate, Arc::clone(&playing)));
                 playing
             }

@@ -249,7 +249,7 @@ impl Voice {
             1.0
         };
         let frames = data.frames() as f64;
-        let (left, right) = data.read(self.position.rem_euclid(frames));
+        let (left, right) = data.read_at_speed(self.position.rem_euclid(frames), self.velocity);
         let gain = self.envelope * edge;
         self.gain = gain;
 

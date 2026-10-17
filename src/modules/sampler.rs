@@ -81,8 +81,8 @@ const END_FADE_SECONDS: f32 = 0.003;
 /// into Loop Start without a click.
 const LOOP_SEAM_SECONDS: f32 = 0.008;
 
-/// The fastest a voice reads, in recorded frames per output frame. Past
-/// about 2 it aliases; this is just a bound.
+/// The fastest a voice reads, in recorded frames per output frame: as far
+/// as a playable recording's octaves reach (see [`SampleData::read_at_speed`]).
 const MAX_RATE: f64 = 16.0;
 
 /// How a voice's envelope is moving.
@@ -554,7 +554,7 @@ impl Sampler {
     /// wrap as the voice nears a Forward loop's seam, moving at `velocity`.
     #[inline]
     fn read_across_seam(data: &SampleData, region: &Region, seam: Option<&Seam>, position: f64, velocity: f64) -> (f32, f32) {
-        let here = data.read(position);
+        let here = data.read_at_speed(position, velocity);
         let Some(seam) = seam else { return here };
         let (to_seam, beyond) = if velocity > 0.0 {
             let to_seam = region.loop_end - position;
@@ -569,7 +569,7 @@ impl Sampler {
             return here;
         }
         let w = seam_weight(to_seam as f32, seam.length as f32);
-        let there = data.read(beyond);
+        let there = data.read_at_speed(beyond, velocity);
         (here.0 + (there.0 - here.0) * w, here.1 + (there.1 - here.1) * w)
     }
 
@@ -1065,6 +1065,20 @@ mod tests {
         let octave = play(&mut sampler(source), &params, 0.4, &[(0, 1)], 1.0);
         let hz = frequency(&octave[ms(10.0)..ms(300.0)]);
         assert!((hz - 2000.0).abs() < 1.0, "{hz}");
+    }
+
+    #[test]
+    fn test_pitched_up_past_nyquist_a_playable_recording_is_silent_not_folded() {
+        // 10 kHz pitched up 19 semitones is 30 kHz: past what 48 kHz holds
+        let tone = sine(10000.0, SAMPLE_RATE, 1.0);
+        let rms = |x: &[f32]| (x.iter().map(|s| s * s).sum::<f32>() / x.len() as f32).sqrt();
+        let up = 19.0 / 12.0;
+        let playable = Arc::new(tone.playable_at(SAMPLE_RATE));
+        let out = play(&mut sampler(playable), &with(&[]), 0.2, &[(0, 1)], up);
+        assert!(rms(&out[ms(20.0)..ms(150.0)]) < 3e-3, "{}", rms(&out[ms(20.0)..ms(150.0)]));
+        // A recording that isn't playable reads on a Hermite curve: 18 kHz, loud
+        let out = play(&mut sampler(tone), &with(&[]), 0.2, &[(0, 1)], up);
+        assert!(rms(&out[ms(20.0)..ms(150.0)]) > 0.1);
     }
 
     #[test]

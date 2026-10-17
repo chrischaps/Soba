@@ -132,7 +132,7 @@ impl OfflineRenderer {
                     if let Some((_, slicing)) = compiled.slicing.iter().find(|(id, _)| id == node_id) {
                         self.apply(EngineCommand::SetMarkers { node_id: *node_id, markers: slicing.markers(&decoded.sample) });
                     }
-                    let sample = Arc::new(decoded.sample.resampled(self.context.sample_rate));
+                    let sample = Arc::new(decoded.sample.playable_at(self.context.sample_rate));
                     self.apply(EngineCommand::LoadSample { node_id: *node_id, sample: Some(sample) });
                 }
                 Err(e) => warnings.push(format!("Couldn't load sample {file}: {e}")),

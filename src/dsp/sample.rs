@@ -5,15 +5,46 @@
 //! plays it as an `Arc`, so the audio thread only ever swaps a pointer.
 //! When it's replaced, the module hands the old one back to be dropped on
 //! the UI side, so freeing a long file never happens in the audio callback.
+//!
+//! Converting rates goes through a windowed sinc (see
+//! [`sinc`](super::primitives::sinc)), so what lies above the new Nyquist
+//! is taken out rather than folded back. Playing faster than one frame per
+//! frame would fold it back too, so a recording made
+//! [`playable`](SampleData::playable_at) also carries its octaves: copies
+//! filtered to half the band and half the length each time. A fast read
+//! picks the octave it steps through at under 4/3 of a frame a frame, where
+//! anything that folds lands above 17 kHz, and reads it on the same cheap
+//! Hermite curve.
 
 use super::primitives::hermite;
+use super::primitives::sinc::{CONVERT, OCTAVE};
+
+/// How many octaves a playable recording carries: enough to play it 16
+/// times as fast (a Sampler's fastest) stepping under 4/3 of a frame.
+pub const OCTAVES: usize = 4;
+
+/// The fastest a read steps through the octave it reads, in its frames per
+/// frame. Anything that folds back lands no lower than `1 - 0.475 * 4/3`
+/// of the rate: 17.6 kHz at 48 kHz.
+const MAX_STEP: f64 = 4.0 / 3.0;
+
+/// The last part of each octave's span of speeds, in octaves, over which a
+/// read crossfades into the next octave up, so a glide doesn't step.
+const OCTAVE_FADE: f64 = 0.25;
+
+/// How close to the new Nyquist a rate conversion cuts, so the kernel's
+/// slope has room to fall before it.
+const CONVERT_CUTOFF: f64 = 0.95;
+
+/// How close to its new Nyquist each octave is cut.
+const OCTAVE_CUTOFF: f64 = 0.95;
 
 /// The longest sample a module keeps, in seconds: five minutes, about
 /// 115 MB of stereo at 48 kHz. A longer file is cut to this.
 pub const MAX_SAMPLE_SECONDS: f32 = 300.0;
 
 /// A mono or stereo recording at a known sample rate.
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct SampleData {
     /// The left channel, or the only one.
     left: Vec<f32>,
@@ -22,6 +53,25 @@ pub struct SampleData {
     right: Option<Vec<f32>>,
     /// Frames per second the samples were recorded (or resampled) at.
     sample_rate: f32,
+    /// Once made playable: the recording at half the band and length, a
+    /// quarter, an eighth and a sixteenth, for reading it fast.
+    octaves: Option<Vec<Octave>>,
+}
+
+/// A recording filtered to a fraction of its band and cut to the same
+/// fraction of its frames: frame `m` is the recording at frame `m * 2^level`.
+#[derive(Clone)]
+struct Octave {
+    left: Vec<f32>,
+    right: Option<Vec<f32>>,
+}
+
+/// Two recordings are the same if their samples are: octaves are made from
+/// them.
+impl PartialEq for SampleData {
+    fn eq(&self, other: &Self) -> bool {
+        self.left == other.left && self.right == other.right && self.sample_rate == other.sample_rate
+    }
 }
 
 impl std::fmt::Debug for SampleData {
@@ -41,7 +91,7 @@ impl SampleData {
     /// damaged file can't poison the patch.
     pub fn mono(mut samples: Vec<f32>, sample_rate: f32) -> Self {
         super::finite::sanitize_all(&mut samples);
-        Self { left: samples, right: None, sample_rate: sample_rate.max(1.0) }
+        Self { left: samples, right: None, sample_rate: sample_rate.max(1.0), octaves: None }
     }
 
     /// A stereo recording. The longer channel is cut to the shorter, and
@@ -52,7 +102,7 @@ impl SampleData {
         right.truncate(frames);
         super::finite::sanitize_all(&mut left);
         super::finite::sanitize_all(&mut right);
-        Self { left, right: Some(right), sample_rate: sample_rate.max(1.0) }
+        Self { left, right: Some(right), sample_rate: sample_rate.max(1.0), octaves: None }
     }
 
     /// How many frames it holds.
@@ -100,6 +150,7 @@ impl SampleData {
         if let Some(right) = &mut self.right {
             right.truncate(keep);
         }
+        self.octaves = None;
         true
     }
 
@@ -111,44 +162,89 @@ impl SampleData {
     /// REAL-TIME SAFE.
     #[inline]
     pub fn read(&self, position: f64) -> (f32, f32) {
-        let frames = self.frames();
-        if frames == 0 {
-            return (0.0, 0.0);
-        }
-        let last = frames as i64 - 1;
-        let base = position.floor();
-        let t = (position - base) as f32;
-        let i = base as i64;
-        let at = |k: i64| (i + k).clamp(0, last) as usize;
-        let (a, b, c, d) = (at(-1), at(0), at(1), at(2));
-        let curve = |x: &[f32]| hermite(x[a], x[b], x[c], x[d], t);
-        let left = curve(&self.left);
-        let right = match &self.right {
-            Some(right) => curve(right),
-            None => left,
-        };
-        (left, right)
+        read_hermite(&self.left, self.right.as_deref(), position)
     }
 
-    /// The same recording at another sample rate, read between samples on
-    /// a Hermite curve, so a voice can play it back one frame per frame.
+    /// The frame at `position` (in frames, fractional) of a voice moving
+    /// `speed` frames per frame. Up to 4/3 as fast as its own rate it reads
+    /// as [`read`](Self::read) does. Faster, a recording made
+    /// [`playable`](Self::playable_at) is read from the octave it steps
+    /// through at between 2/3 and 4/3 of a frame a frame, which holds only
+    /// what that speed can carry, crossfading into the next octave up over
+    /// the last quarter octave before it. One that isn't playable reads its
+    /// frames as they are, and folds.
+    ///
+    /// REAL-TIME SAFE: one Hermite read, or two while crossfading.
+    #[inline]
+    pub fn read_at_speed(&self, position: f64, speed: f64) -> (f32, f32) {
+        let Some(octaves) = &self.octaves else { return self.read(position) };
+        // 0 at 2/3 of a frame a frame, 1 at 4/3, 2 at 8/3...
+        let along = (speed.abs() / MAX_STEP).log2() + 1.0;
+        if along.is_nan() || along < 1.0 - OCTAVE_FADE {
+            return self.read(position);
+        }
+        let level = (along.floor() as usize).min(octaves.len());
+        let fade = ((along.fract() - (1.0 - OCTAVE_FADE)) / OCTAVE_FADE).clamp(0.0, 1.0);
+        let at = |level: usize| match level {
+            0 => self.read(position),
+            _ => {
+                let octave = &octaves[level - 1];
+                read_hermite(&octave.left, octave.right.as_deref(), position / (1u64 << level) as f64)
+            }
+        };
+        let here = at(level);
+        if fade <= 0.0 || level >= octaves.len() {
+            return here;
+        }
+        let there = at(level + 1);
+        let fade = fade as f32;
+        (here.0 + (there.0 - here.0) * fade, here.1 + (there.1 - here.1) * fade)
+    }
+
+    /// The same recording at another sample rate, so a voice can play it
+    /// back one frame per frame. Read through a sinc: converting down, what
+    /// lies above the new Nyquist is taken out first rather than folded
+    /// back into the band.
     pub fn resampled(&self, sample_rate: f32) -> Self {
         let sample_rate = sample_rate.max(1.0);
         if sample_rate == self.sample_rate || self.is_empty() {
-            return Self { sample_rate, ..self.clone() };
+            return Self { sample_rate, octaves: None, ..self.clone() };
         }
         let step = self.sample_rate as f64 / sample_rate as f64;
         let frames = ((self.frames() as f64) / step).floor().max(1.0) as usize;
-        let mut left = Vec::with_capacity(frames);
-        let mut right = self.right.as_ref().map(|_| Vec::with_capacity(frames));
-        for n in 0..frames {
-            let (l, r) = self.read(n as f64 * step);
-            left.push(l);
-            if let Some(right) = &mut right {
-                right.push(r);
-            }
+        let cutoff = (1.0 / step).min(1.0) * CONVERT_CUTOFF;
+        let convert = |x: &[f32]| CONVERT.resample(x, self.sample_rate, sample_rate, frames, cutoff);
+        Self { left: convert(&self.left), right: self.right.as_deref().map(convert), sample_rate, octaves: None }
+    }
+
+    /// The recording at `sample_rate`, with its octaves made, for a module
+    /// to play at any speed (see [`read_at_speed`](Self::read_at_speed)).
+    /// Off the audio thread: the octaves take about as much room again as
+    /// the recording does.
+    pub fn playable_at(&self, sample_rate: f32) -> Self {
+        let mut playable = self.resampled(sample_rate);
+        playable.make_octaves();
+        playable
+    }
+
+    /// Whether it carries its octaves, to be read fast without folding.
+    pub fn is_playable(&self) -> bool {
+        self.octaves.is_some()
+    }
+
+    /// Makes its octaves, each from the one before.
+    fn make_octaves(&mut self) {
+        let mut octaves: Vec<Octave> = Vec::with_capacity(OCTAVES);
+        for _ in 0..OCTAVES {
+            let (left, right) = match octaves.last() {
+                Some(octave) => (&octave.left[..], octave.right.as_deref()),
+                None => (&self.left[..], self.right.as_deref()),
+            };
+            let cutoff = 0.5 * OCTAVE_CUTOFF;
+            let half = Octave { left: OCTAVE.halve(left, cutoff), right: right.map(|right| OCTAVE.halve(right, cutoff)) };
+            octaves.push(half);
         }
-        Self { left, right, sample_rate }
+        self.octaves = Some(octaves);
     }
 
     /// An empty stereo recording with room set aside for `frames` more, to
@@ -167,6 +263,7 @@ impl SampleData {
     ///
     /// REAL-TIME SAFE.
     pub fn clear(&mut self) {
+        debug_assert!(self.octaves.is_none(), "a take's room has no octaves to keep up to date");
         self.left.clear();
         if let Some(right) = &mut self.right {
             right.clear();
@@ -181,6 +278,7 @@ impl SampleData {
         if self.frames() >= self.room() {
             return false;
         }
+        debug_assert!(self.octaves.is_none(), "a take's room has no octaves to keep up to date");
         self.left.push(left);
         if let Some(r) = &mut self.right {
             r.push(right);
@@ -193,6 +291,7 @@ impl SampleData {
     /// REAL-TIME SAFE.
     #[inline]
     pub fn set(&mut self, i: usize, [left, right]: [f32; 2]) {
+        debug_assert!(self.octaves.is_none(), "a take's room has no octaves to keep up to date");
         if let Some(l) = self.left.get_mut(i) {
             *l = left;
             if let Some(r) = self.right.as_mut().and_then(|r| r.get_mut(i)) {
@@ -210,6 +309,7 @@ impl SampleData {
         if frames == 0 {
             return;
         }
+        debug_assert!(self.octaves.is_none(), "a take's room has no octaves to keep up to date");
         self.left.rotate_left(mid % frames);
         if let Some(right) = &mut self.right {
             right.rotate_left(mid % frames);
@@ -248,6 +348,27 @@ impl SampleData {
             })
             .collect()
     }
+}
+
+/// `left` (and `right`, if there is one) at `position`, read between frames
+/// on a Hermite curve, holding the first or last frame past either end.
+///
+/// REAL-TIME SAFE.
+#[inline]
+fn read_hermite(left: &[f32], right: Option<&[f32]>, position: f64) -> (f32, f32) {
+    let frames = left.len();
+    if frames == 0 {
+        return (0.0, 0.0);
+    }
+    let last = frames as i64 - 1;
+    let base = position.floor();
+    let t = (position - base) as f32;
+    let i = base as i64;
+    let at = |k: i64| (i + k).clamp(0, last) as usize;
+    let (a, b, c, d) = (at(-1), at(0), at(1), at(2));
+    let curve = |x: &[f32]| hermite(x[a], x[b], x[c], x[d], t);
+    let l = curve(left);
+    (l, right.map_or(l, curve))
 }
 
 /// How a [`Snapshot`] came out.
@@ -435,6 +556,80 @@ mod tests {
             let expected = (std::f32::consts::TAU * 1000.0 * n as f32 / 48000.0).sin();
             assert!((resampled.left()[n] - expected).abs() < 0.01, "frame {n}");
         }
+    }
+
+    /// The level of what's left of `samples` once the tone at `hz` (at
+    /// `rate`) is taken out of it, against full scale: what's left is
+    /// everything that folded back.
+    fn residue(samples: &[f32], hz: f32, rate: f32) -> f32 {
+        let samples = &samples[samples.len() / 4..samples.len() * 3 / 4];
+        let w = std::f64::consts::TAU * hz as f64 / rate as f64;
+        let (mut s, mut c) = (0.0f64, 0.0f64);
+        for (n, &x) in samples.iter().enumerate() {
+            s += x as f64 * (w * n as f64).sin();
+            c += x as f64 * (w * n as f64).cos();
+        }
+        let (a, b) = (2.0 * s / samples.len() as f64, 2.0 * c / samples.len() as f64);
+        let left: f64 = samples
+            .iter()
+            .enumerate()
+            .map(|(n, &x)| (x as f64 - a * (w * n as f64).sin() - b * (w * n as f64).cos()).powi(2))
+            .sum();
+        (left / samples.len() as f64).sqrt() as f32
+    }
+
+    fn rms(samples: &[f32]) -> f32 {
+        let samples = &samples[samples.len() / 4..samples.len() * 3 / 4];
+        (samples.iter().map(|x| x * x).sum::<f32>() / samples.len() as f32).sqrt()
+    }
+
+    #[test]
+    fn converting_down_takes_out_what_the_new_rate_cant_hold() {
+        // A 15 kHz tone with 30 kHz above it, at 96 kHz: at 48 kHz the 30 kHz
+        // would fold to 18 kHz on a Hermite curve
+        let samples: Vec<f32> = sine(15000.0, 96000.0, 0.5).iter().zip(sine(30000.0, 96000.0, 0.5)).map(|(a, b)| 0.5 * a + 0.5 * b).collect();
+        let source = SampleData::mono(samples, 96000.0);
+        let converted = source.resampled(48000.0);
+        assert_eq!(converted.sample_rate(), 48000.0);
+        // The 15 kHz stays, at its level
+        assert!((rms(converted.left()) - 0.5 / 2f32.sqrt()).abs() < 0.01, "{}", rms(converted.left()));
+        // ...and nothing else comes through: 60 dB down
+        let folded = residue(converted.left(), 15000.0, 48000.0);
+        assert!(folded < 1e-3, "{folded}");
+    }
+
+    #[test]
+    fn a_fast_read_of_a_playable_recording_doesnt_fold() {
+        let rate = 48000.0;
+        let play = |source: &SampleData, speed: f64| -> Vec<f32> { (0..9600).map(|n| source.read_at_speed(n as f64 * speed, speed).0).collect() };
+        // Played fast enough to land well past Nyquist, a tone leaves nothing
+        // to hear of it
+        for (hz, speed) in [(18000.0, 1.7), (10000.0, 3.0), (10000.0, 5.0), (4000.0, 11.0)] {
+            let high = SampleData::mono(sine(hz, rate, 4.0), rate);
+            let playable = high.playable_at(rate);
+            assert!(playable.is_playable() && !high.is_playable());
+            let level = rms(&play(&playable, speed));
+            assert!(level < 3e-3, "{hz} Hz ×{speed}: {level}");
+            // Read on a Hermite curve, as an unplayable one is, it folds back loud
+            assert!(rms(&play(&high, speed)) > 0.1, "{hz} Hz ×{speed}");
+        }
+        // A 1 kHz tone keeps its level and comes out clean at any speed
+        let low = SampleData::mono(sine(1000.0, rate, 8.0), rate).playable_at(rate);
+        for speed in [1.0, 1.5, 2.0, 3.7, 6.0, 8.0] {
+            let out = play(&low, speed);
+            let db = 20.0 * (rms(&out) * 2f32.sqrt()).log10();
+            assert!(db.abs() < 0.1, "×{speed}: {db} dB");
+            // Low in an octave's band the Hermite curve leaves next to nothing
+            // else; higher, its images are louder but land above 17 kHz
+            if speed < 4.0 {
+                let folded = residue(&out, 1000.0 * speed as f32, rate);
+                assert!(folded < 2e-3, "×{speed}: {folded}");
+            }
+        }
+        // ...up to where it plays near the top of the band: rolled off a
+        // little, as a Hermite read of a 15 kHz tone at its own rate would be
+        let out = play(&low, 15.0);
+        assert!((20.0 * (rms(&out) * 2f32.sqrt()).log10()).abs() < 2.0);
     }
 
     #[test]
