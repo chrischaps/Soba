@@ -4,18 +4,12 @@
 //!
 //! # Connection Compatibility
 //!
-//! The `PartialEq` implementation for `SynthDataType` is customized to support
-//! signal type compatibility rules rather than strict equality. This allows the
-//! node graph library to show visual feedback for compatible port types during
-//! connection dragging.
-//!
-//! Two types are considered "equal" for connection purposes if they can connect
-//! in either direction (symmetric check). This enables:
-//! - Audio ↔ Control (interchangeable for modulation)
-//! - Gate → Control (on/off modulation)
-//! - Same types always compatible
-//!
-//! MIDI is isolated and only "equals" itself.
+//! Equality is exact: Audio equals Audio and nothing else. Which outputs may
+//! feed which inputs is directional (Gate may feed Control, but not the other
+//! way round), so it lives in `DataTypeTrait::can_connect`, which the editor
+//! asks as (output, input) to light up, snap to and connect ports. It follows
+//! the same rules as `validate_connection`, so a cable the editor offers is
+//! never one the app then refuses.
 
 use std::borrow::Cow;
 use eframe::egui::Color32;
@@ -29,33 +23,9 @@ use super::SynthGraphState;
 /// This implements DataTypeTrait to define how signal types are displayed
 /// and how connections are validated in the graph editor.
 ///
-/// # Equality Semantics
-///
-/// `PartialEq` is implemented to check **connection compatibility** rather than
-/// strict type equality. Two `SynthDataType` values are "equal" if a connection
-/// could be valid between them in either direction. This allows the graph UI to
-/// show compatible ports during dragging.
-///
-/// For strict type equality, compare the inner `SignalType` values directly:
-/// ```ignore
-/// if a.signal_type() == b.signal_type() { /* exact match */ }
-/// ```
-#[derive(Clone, Copy, Debug)]
+/// Equality is exact. Whether one type may feed another is `can_connect`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SynthDataType(pub SignalType);
-
-impl PartialEq for SynthDataType {
-    /// Checks connection compatibility rather than strict equality.
-    ///
-    /// Returns true if these signal types can be connected in either direction.
-    /// This is symmetric: `a == b` implies `b == a`.
-    fn eq(&self, other: &Self) -> bool {
-        // For the node graph library, "equal" means "can connect".
-        // We check both directions since dragging can start from either end.
-        self.0.can_connect_to(other.0) || other.0.can_connect_to(self.0)
-    }
-}
-
-impl Eq for SynthDataType {}
 
 impl SynthDataType {
     /// Create a new SynthDataType from a SignalType.
@@ -89,6 +59,13 @@ impl DataTypeTrait<SynthGraphState> for SynthDataType {
         self.0.color()
     }
 
+    /// Whether an output of this type may feed an input of type `to`: the
+    /// rules of `validate_connection`, so the editor only offers cables the
+    /// app will accept.
+    fn can_connect(&self, to: &Self) -> bool {
+        self.0.can_connect_to(to.0)
+    }
+
     /// Returns the human-readable name for this data type.
     fn name(&self) -> Cow<'_, str> {
         Cow::Borrowed(self.0.name())
@@ -98,6 +75,7 @@ impl DataTypeTrait<SynthGraphState> for SynthDataType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graph::validate_connection;
 
     #[test]
     fn test_synth_data_type_creation() {
@@ -147,83 +125,63 @@ mod tests {
         }
     }
 
-    // Tests for connection compatibility (PartialEq semantics)
+    // Equality is exact; connecting is directional (#314)
+
+    const ALL: [SignalType; 5] = [
+        SignalType::Audio,
+        SignalType::Control,
+        SignalType::Gate,
+        SignalType::Midi,
+        SignalType::Bus,
+    ];
 
     #[test]
-    fn test_same_types_are_compatible() {
-        let audio1 = SynthDataType::new(SignalType::Audio);
-        let audio2 = SynthDataType::new(SignalType::Audio);
-        assert_eq!(audio1, audio2);
-
-        let control1 = SynthDataType::new(SignalType::Control);
-        let control2 = SynthDataType::new(SignalType::Control);
-        assert_eq!(control1, control2);
-
-        let gate1 = SynthDataType::new(SignalType::Gate);
-        let gate2 = SynthDataType::new(SignalType::Gate);
-        assert_eq!(gate1, gate2);
-
-        let midi1 = SynthDataType::new(SignalType::Midi);
-        let midi2 = SynthDataType::new(SignalType::Midi);
-        assert_eq!(midi1, midi2);
+    fn test_equality_is_exact() {
+        for a in ALL {
+            for b in ALL {
+                assert_eq!(
+                    SynthDataType::new(a) == SynthDataType::new(b),
+                    a == b,
+                    "{a:?} vs {b:?}"
+                );
+            }
+        }
     }
 
     #[test]
-    fn test_audio_control_compatible() {
-        let audio = SynthDataType::new(SignalType::Audio);
-        let control = SynthDataType::new(SignalType::Control);
-
-        // Audio and Control are interchangeable
-        assert_eq!(audio, control);
-        assert_eq!(control, audio);
+    fn test_can_connect_follows_validation() {
+        // The editor offers exactly the cables validate_connection accepts
+        for from in ALL {
+            for to in ALL {
+                assert_eq!(
+                    SynthDataType::new(from).can_connect(&SynthDataType::new(to)),
+                    validate_connection(from, to).is_valid(),
+                    "{from:?} -> {to:?}"
+                );
+            }
+        }
     }
 
     #[test]
-    fn test_gate_control_compatible() {
+    fn test_can_connect_is_directional() {
         let gate = SynthDataType::new(SignalType::Gate);
         let control = SynthDataType::new(SignalType::Control);
 
-        // Gate can connect to Control (asymmetric, but PartialEq is symmetric)
-        assert_eq!(gate, control);
-        assert_eq!(control, gate);
+        // A Gate may drive a Control input, but a Control output can't
+        // snap onto a Gate input
+        assert!(gate.can_connect(&control));
+        assert!(!control.can_connect(&gate));
     }
 
     #[test]
-    fn test_gate_audio_incompatible() {
-        let gate = SynthDataType::new(SignalType::Gate);
-        let audio = SynthDataType::new(SignalType::Audio);
-
-        // Gate cannot connect to Audio in either direction
-        assert_ne!(gate, audio);
-        assert_ne!(audio, gate);
-    }
-
-    #[test]
-    fn test_midi_isolated() {
-        let midi = SynthDataType::new(SignalType::Midi);
-        let audio = SynthDataType::new(SignalType::Audio);
-        let control = SynthDataType::new(SignalType::Control);
-        let gate = SynthDataType::new(SignalType::Gate);
-
-        // MIDI is only compatible with itself
-        assert_ne!(midi, audio);
-        assert_ne!(midi, control);
-        assert_ne!(midi, gate);
-        assert_ne!(audio, midi);
-        assert_ne!(control, midi);
-        assert_ne!(gate, midi);
-    }
-
-    #[test]
-    fn test_strict_equality_via_signal_type() {
-        // For cases where strict equality is needed, compare signal_type()
-        let audio = SynthDataType::new(SignalType::Audio);
-        let control = SynthDataType::new(SignalType::Control);
-
-        // These are "compatible" (PartialEq)
-        assert_eq!(audio, control);
-
-        // But not strictly equal
-        assert_ne!(audio.signal_type(), control.signal_type());
+    fn test_midi_and_bus_isolated() {
+        for isolated in [SignalType::Midi, SignalType::Bus] {
+            for other in ALL.into_iter().filter(|&t| t != isolated) {
+                let a = SynthDataType::new(isolated);
+                let b = SynthDataType::new(other);
+                assert!(!a.can_connect(&b), "{isolated:?} -> {other:?}");
+                assert!(!b.can_connect(&a), "{other:?} -> {isolated:?}");
+            }
+        }
     }
 }

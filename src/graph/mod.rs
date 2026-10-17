@@ -87,7 +87,7 @@ pub use node_data::{KnobParam, LedIndicator, NodeDisplay, SynthNodeData};
 pub use responses::{SceneAction, SynthResponse, Tidy};
 pub use state::{create_editor_state, DisplayMidiEvent, MidiMappingInfo, MACRO_COUNT, SamplerCue, SynthGraphEditorState, SynthGraphState};
 pub use templates::{AllNodeTemplates, SynthNodeTemplate};
-pub use validation::{validate_connection, types_compatible, ConnectionError, ValidationResult};
+pub use validation::{validate_connection, ConnectionError, ValidationResult};
 pub use value_types::{NumberSpec, SynthValueType};
 
 // Re-export useful types from egui_node_graph2

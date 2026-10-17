@@ -100,15 +100,6 @@ pub fn validate_connection(
     }
 }
 
-/// Checks if two data types are compatible for connection (symmetric check).
-///
-/// This is used for visual feedback during connection dragging, where we don't
-/// know which direction the connection will be made. Returns true if a connection
-/// could be valid in either direction.
-pub fn types_compatible(a: &SynthDataType, b: &SynthDataType) -> bool {
-    a.0.can_connect_to(b.0) || b.0.can_connect_to(a.0)
-}
-
 /// Checks if two data types are exactly equal.
 ///
 /// This is the strict equality check, useful for cases where we need exact
@@ -188,37 +179,6 @@ mod tests {
                 assert!(error.message().contains("Chain In"), "{other:?}: {}", error.message());
             }
         }
-    }
-
-    #[test]
-    fn test_types_compatible_symmetric() {
-        let audio = SynthDataType::new(SignalType::Audio);
-        let control = SynthDataType::new(SignalType::Control);
-        let gate = SynthDataType::new(SignalType::Gate);
-        let midi = SynthDataType::new(SignalType::Midi);
-
-        // Audio and Control are compatible (both directions work)
-        assert!(types_compatible(&audio, &control));
-        assert!(types_compatible(&control, &audio));
-
-        // Gate and Control are compatible (Gate→Control works)
-        assert!(types_compatible(&gate, &control));
-        assert!(types_compatible(&control, &gate));
-
-        // Same types are always compatible
-        assert!(types_compatible(&audio, &audio));
-        assert!(types_compatible(&control, &control));
-        assert!(types_compatible(&gate, &gate));
-        assert!(types_compatible(&midi, &midi));
-
-        // MIDI is not compatible with others
-        assert!(!types_compatible(&midi, &audio));
-        assert!(!types_compatible(&midi, &control));
-        assert!(!types_compatible(&midi, &gate));
-
-        // Gate and Audio are not compatible (neither direction works)
-        assert!(!types_compatible(&gate, &audio));
-        assert!(!types_compatible(&audio, &gate));
     }
 
     #[test]
