@@ -25,6 +25,7 @@ use crate::modules::trigger_sequencer::{
     PATTERN_NAMES, STEPS, VEL_NAMES,
 };
 
+use super::steady_text;
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
 /// Height of one output row, in unzoomed points.
@@ -183,23 +184,6 @@ fn lane_name(graph: &SynthGraph, node_id: NodeId, lane: usize) -> Option<String>
         }
     }
     Some(target.label.clone())
-}
-
-/// Shortens text to fit a width, with an ellipsis.
-fn fit(painter: &egui::Painter, text: &str, font: &FontId, width: f32) -> String {
-    let wide = |s: &str| painter.layout_no_wrap(s.to_string(), font.clone(), Color32::WHITE).size().x;
-    if wide(text) <= width {
-        return text.to_string();
-    }
-    let mut chars: Vec<char> = text.chars().collect();
-    while !chars.is_empty() {
-        chars.pop();
-        let shorter: String = chars.iter().collect::<String>() + "…";
-        if wide(&shorter) <= width {
-            return shorter;
-        }
-    }
-    String::new()
 }
 
 /// Which output row is being drawn.
@@ -361,7 +345,7 @@ fn lane_rows(
 
     // The lane's name, or its number, between its rows
     let font = FontId::proportional(9.5 * z);
-    let text = fit(&painter, name.as_deref().unwrap_or(&(lane + 1).to_string()), &font, (LABEL - 5.0) * z);
+    let text = steady_text::fit(painter.ctx(), name.as_deref().unwrap_or(&(lane + 1).to_string()), &font, (LABEL - 5.0) * z);
     let ink = if name.is_some() { theme::text::PRIMARY } else { theme::text::DISABLED };
     let name_rect = Rect::from_min_size(block.left_top(), Vec2::new((LABEL - 3.0) * z, block.height()));
     painter.text(Pos2::new(name_rect.left() + 1.0 * z, name_rect.center().y), egui::Align2::LEFT_CENTER, text, font, ink);

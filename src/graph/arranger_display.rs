@@ -667,23 +667,6 @@ fn pass_count(position: &Position, repeats: usize) -> Option<String> {
     (repeats > 1).then(|| format!("{}/{repeats}", position.pass.min(repeats - 1) + 1))
 }
 
-/// Shortens text to fit a width, with an ellipsis.
-fn fit(painter: &egui::Painter, text: &str, font: &FontId, width: f32) -> String {
-    let wide = |s: &str| painter.layout_no_wrap(s.to_string(), font.clone(), Color32::WHITE).size().x;
-    if wide(text) <= width {
-        return text.to_string();
-    }
-    let mut chars: Vec<char> = text.chars().collect();
-    while !chars.is_empty() {
-        chars.pop();
-        let shorter: String = chars.iter().collect::<String>() + "…";
-        if wide(&shorter) <= width {
-            return shorter;
-        }
-    }
-    String::new()
-}
-
 /// A level in words.
 fn percent(level: f32) -> String {
     format!("{}%", (level * 100.0).round())
@@ -872,12 +855,12 @@ fn sections(
         let width = LABEL * z - 6.0 * z;
         let text = match (p.ended, pass_count(&p, song.repeats[p.section])) {
             (true, _) => "End".to_string(),
-            (false, None) => fit(&painter, &section_name(graph, node_id, p.section), &font, width),
+            (false, None) => steady_text::fit(painter.ctx(), &section_name(graph, node_id, p.section), &font, width),
             // The pass count always shows; the name gives way to it
             (false, Some(count)) => {
                 let count = format!(" {count}");
                 let room = width - painter.layout_no_wrap(count.clone(), font.clone(), green).size().x;
-                fit(&painter, &section_name(graph, node_id, p.section), &font, room) + &count
+                steady_text::fit(painter.ctx(), &section_name(graph, node_id, p.section), &font, room) + &count
             }
         };
         painter.text(Pos2::new(left, block.top() + 44.0 * z), Align2::LEFT_TOP, text, font.clone(), green);
@@ -997,7 +980,7 @@ fn sections(
                     tl.galley(Pos2::new(shown.right() - 3.0 * z - galley.size().x, rect.top() + 3.5 * z), galley, ink);
                 }
             }
-            let text = if sliver { String::new() } else { fit(&painter, &name, &name_font, shown.width() - 4.0 * z - badge_width) };
+            let text = if sliver { String::new() } else { steady_text::fit(painter.ctx(), &name, &name_font, shown.width() - 4.0 * z - badge_width) };
             cut_short = text != name;
             let ink = if playing { Color32::WHITE } else { theme::text::PRIMARY };
             // Too narrow for any of the name: the badge says enough
@@ -1185,7 +1168,7 @@ fn lane_rows(
         let font = FontId::proportional(9.5 * z);
         let number = FontId::monospace(8.0 * z);
         painter.text(Pos2::new(name_rect.left() + 1.0 * z, name_rect.top() + 2.0 * z), Align2::LEFT_TOP, (lane + 1).to_string(), number, theme::text::QUIET);
-        let text = fit(&painter, name.as_deref().unwrap_or("–"), &font, name_rect.width() - 2.0 * z);
+        let text = steady_text::fit(painter.ctx(), name.as_deref().unwrap_or("–"), &font, name_rect.width() - 2.0 * z);
         let ink = if given { theme::text::PRIMARY } else if name.is_some() { theme::text::SECONDARY } else { theme::text::DISABLED };
         painter.text(Pos2::new(name_rect.left() + 1.0 * z, name_rect.center().y + 3.0 * z), Align2::LEFT_CENTER, text, font, ink);
     }
@@ -1541,7 +1524,7 @@ pub fn section_bar(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_
         let room = bar_slot(ui, &label, zoom).x.min(most);
         let (rect, response) = ui.allocate_exact_size(Vec2::new(room, BAR * zoom), Sense::hover());
         let font = egui::TextStyle::Body.resolve(ui.style());
-        let shown = fit(ui.painter(), &label, &font, room);
+        let shown = steady_text::fit(ui.ctx(), &label, &font, room);
         ui.painter().text(Pos2::new(rect.left(), rect.center().y), Align2::LEFT_CENTER, shown, font, ink);
         response.on_hover_text(&name);
         match leader.zip(follows) {
@@ -1587,7 +1570,7 @@ fn name_field(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, width: f32
     let given = arranger_follow::given_name(graph, node_id);
     let font = FontId::proportional(10.0 * z);
     let (text, ink) = match &given {
-        Some(name) => (fit(ui.painter(), name, &font, rect.width() - 2.0 * z), theme::text::PRIMARY),
+        Some(name) => (steady_text::fit(ui.ctx(), name, &font, rect.width() - 2.0 * z), theme::text::PRIMARY),
         None => ("Name…".to_string(), theme::text::DISABLED),
     };
     let ink = if response.hovered() { ink.lerp_to_gamma(Color32::WHITE, 0.3) } else { ink };

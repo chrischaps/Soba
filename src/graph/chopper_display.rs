@@ -45,6 +45,7 @@ use super::hovered_file;
 use super::sample_shelf::ShelvedSample;
 use super::sampler_slices::SliceMarkers;
 use super::sampler_take::{self, RecView};
+use super::steady_text;
 use super::{SynthGraph, SynthGraphState, SynthResponse};
 
 /// How close (in points) the pointer must be to grab a marker.
@@ -530,9 +531,9 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         // Its own tempo: where it plays back unchanged, as long as Beats says
         Some(sample) => {
             let bpm = Chopper::own_tempo(sample.source.seconds(), Chopper::beats(params.value(Chopper::PARAM_BEATS)));
-            fit(&painter, &format!("{name} · {bpm:.0} BPM"), &small, room)
+            steady_text::fit(painter.ctx(), &format!("{name} · {bpm:.0} BPM"), &small, room)
         }
-        None => fit(&painter, name, &small, room),
+        None => steady_text::fit(painter.ctx(), name, &small, room),
     };
     let name_rect = Rect::from_x_y_ranges(name_left..=name_left + room, line.y_range());
     ui.painter().text(Pos2::new(name_left, line.center().y), egui::Align2::LEFT_CENTER, label, small.clone(), name_color);
@@ -733,23 +734,6 @@ fn shuffled(count: usize, seed: u64) -> Vec<usize> {
         order.swap(i, (x % (i as u64 + 1)) as usize);
     }
     order
-}
-
-/// Shortens text to fit a width, with an ellipsis.
-fn fit(painter: &egui::Painter, text: &str, font: &FontId, width: f32) -> String {
-    let wide = |s: &str| painter.layout_no_wrap(s.to_string(), font.clone(), Color32::WHITE).size().x;
-    if wide(text) <= width {
-        return text.to_string();
-    }
-    let mut chars: Vec<char> = text.chars().collect();
-    while !chars.is_empty() {
-        chars.pop();
-        let shorter: String = chars.iter().collect::<String>() + "…";
-        if wide(&shorter) <= width {
-            return shorter;
-        }
-    }
-    String::new()
 }
 
 #[cfg(test)]
