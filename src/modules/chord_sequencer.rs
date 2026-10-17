@@ -30,6 +30,7 @@ use std::sync::LazyLock;
 
 use crate::dsp::{
     context::ProcessContext,
+    gate::{Edge, Pulse, GATE_THRESHOLD},
     module_trait::{Audition, DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -608,8 +609,8 @@ pub struct ChordSequencer {
     current_step: usize,
     ping_pong_direction: i32,
     reset_pending: bool,
-    prev_clock: bool,
-    prev_reset: bool,
+    clock: Edge,
+    reset: Edge,
     /// Each channel's gate: samples left, and whether it was high last sample.
     gate_timers: [usize; MAX_VOICES],
     gate_high: [bool; MAX_VOICES],
@@ -633,7 +634,8 @@ pub struct ChordSequencer {
     struck: [(usize, usize); MAX_VOICES],
     tied: bool,
     timer: StepTimer,
-    eoc_timer: usize,
+    /// The end-of-cycle trigger.
+    eoc: Pulse,
     random_state: u32,
     sample_rate: f32,
     /// The pattern playing.
@@ -742,8 +744,8 @@ impl ChordSequencer {
             current_step: 0,
             ping_pong_direction: 1,
             reset_pending: true,
-            prev_clock: false,
-            prev_reset: false,
+            clock: Edge::LOW,
+            reset: Edge::LOW,
             gate_timers: [0; MAX_VOICES],
             gate_high: [false; MAX_VOICES],
             gate_len: 0,
@@ -756,7 +758,7 @@ impl ChordSequencer {
             struck: std::array::from_fn(|channel| (Self::step_velocity_param(0), channel)),
             tied: false,
             timer: StepTimer::new(),
-            eoc_timer: 0,
+            eoc: Pulse::IDLE,
             random_state: 12345,
             sample_rate: 44100.0,
             pattern: 0,
@@ -883,8 +885,8 @@ impl ChordSequencer {
     /// next, as the Step Sequencer reports them (see [`PatternPosition`]).
     pub const READOUT_PATTERN: usize = Self::READOUT_NOTES + MAX_VOICES;
 
-    const GATE_THRESHOLD: f32 = 0.5;
-    const EOC_PULSE_SAMPLES: usize = 44;
+    /// How long the EOC trigger lasts, in seconds.
+    const EOC_SECONDS: f32 = 0.001;
 
     /// A step's chord in pattern A, as its parameters write it.
     pub fn spec(params: &[f32], step: usize) -> ChordSpec {
@@ -1135,18 +1137,10 @@ impl DspModule for ChordSequencer {
         self.pattern_cv = pattern_in.is_some();
 
         for i in 0..context.block_size {
-            let clock_value = clock_in.and_then(|buf| buf.samples.get(i).copied()).unwrap_or(0.0);
-            let reset_value = reset_in.and_then(|buf| buf.samples.get(i).copied()).unwrap_or(0.0);
-            let run_value = run_in.and_then(|buf| buf.samples.get(i).copied()).unwrap_or(1.0);
-
-            let clock_high = clock_value > Self::GATE_THRESHOLD;
-            let clock_rising = clock_high && !self.prev_clock;
-            self.prev_clock = clock_high;
-            let reset_high = reset_value > Self::GATE_THRESHOLD;
-            let reset_rising = reset_high && !self.prev_reset;
-            self.prev_reset = reset_high;
-            let is_running = run_value > Self::GATE_THRESHOLD;
-            let cv = pattern_in.map(|buf| buf.samples.get(i).copied().unwrap_or(0.0));
+            let clock_rising = self.clock.rising(clock_in.map_or(0.0, |buf| buf.at(i)));
+            let reset_rising = self.reset.rising(reset_in.map_or(0.0, |buf| buf.at(i)));
+            let is_running = run_in.map_or(1.0, |buf| buf.at(i)) > GATE_THRESHOLD;
+            let cv = pattern_in.map(|buf| buf.at(i));
 
             if reset_rising {
                 self.current_step = direction.start_step(num_steps);
@@ -1246,7 +1240,7 @@ impl DspModule for ChordSequencer {
                 // EOC once the whole chain has played (never in random
                 // order, which has no end)
                 if end_of_chain && direction != SequenceDirection::Random {
-                    self.eoc_timer = Self::EOC_PULSE_SAMPLES;
+                    self.eoc.fire(Self::EOC_SECONDS, self.sample_rate);
                 }
             }
 
@@ -1305,7 +1299,7 @@ impl DspModule for ChordSequencer {
             };
             outputs[Self::PORT_ROOT].samples[i] = note_to_voct(root);
             outputs[Self::PORT_BASS].samples[i] = note_to_voct(bass);
-            outputs[Self::PORT_EOC].samples[i] = if self.eoc_timer > 0 { 1.0 } else { 0.0 };
+            outputs[Self::PORT_EOC].samples[i] = self.eoc.sample();
 
             for timer in &mut self.gate_timers {
                 *timer = timer.saturating_sub(1);
@@ -1313,7 +1307,6 @@ impl DspModule for ChordSequencer {
             for wait in self.strum_wait.iter_mut().flatten() {
                 *wait = wait.saturating_sub(1);
             }
-            self.eoc_timer = self.eoc_timer.saturating_sub(1);
             self.timer.tick();
         }
 
@@ -1325,8 +1318,8 @@ impl DspModule for ChordSequencer {
         self.current_step = 0;
         self.ping_pong_direction = 1;
         self.reset_pending = true;
-        self.prev_clock = false;
-        self.prev_reset = false;
+        self.clock.reset();
+        self.reset.reset();
         self.gate_timers = [0; MAX_VOICES];
         self.gate_high = [false; MAX_VOICES];
         self.gate_len = 0;
@@ -1338,7 +1331,7 @@ impl DspModule for ChordSequencer {
         self.struck = std::array::from_fn(|channel| (Self::step_velocity_param(0), channel));
         self.tied = false;
         self.timer.forget();
-        self.eoc_timer = 0;
+        self.eoc.clear();
         self.sounding = Sounding::SILENT;
         self.before = None;
         self.audition = None;

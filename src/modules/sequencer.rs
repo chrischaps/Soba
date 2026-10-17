@@ -23,6 +23,7 @@ use std::sync::LazyLock;
 
 use crate::dsp::{
     context::ProcessContext,
+    gate::{Edge, Pulse, GATE_THRESHOLD},
     primitives::Glide,
     module_trait::{Audition, DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
@@ -370,10 +371,10 @@ pub struct StepSequencer {
     /// Set by a reset (and at the start): the next clock plays the start step
     /// instead of advancing past it.
     reset_pending: bool,
-    /// Previous clock state for edge detection.
-    prev_clock: bool,
-    /// Previous reset state for edge detection.
-    prev_reset: bool,
+    /// The clock input, for its rising edges.
+    clock: Edge,
+    /// The reset input, for its rising edges.
+    reset: Edge,
     /// Gate timer (samples remaining in gate).
     gate_timer: usize,
     /// The note playing is tied into the next step.
@@ -389,8 +390,8 @@ pub struct StepSequencer {
     sliding: bool,
     /// How long the clock's steps are.
     timer: StepTimer,
-    /// EOC timer (samples remaining in EOC pulse).
-    eoc_timer: usize,
+    /// The end-of-cycle trigger.
+    eoc: Pulse,
     /// Simple PRNG state for random mode.
     random_state: u32,
     /// The random number for the next step, once drawn to see whether it
@@ -555,8 +556,8 @@ impl StepSequencer {
             current_step: 0,
             ping_pong_direction: 1,
             reset_pending: true,
-            prev_clock: false,
-            prev_reset: false,
+            clock: Edge::LOW,
+            reset: Edge::LOW,
             gate_timer: 0,
             tied: false,
             gate_high: false,
@@ -564,7 +565,7 @@ impl StepSequencer {
             glide: Glide::NEW,
             sliding: false,
             timer: StepTimer::new(),
-            eoc_timer: 0,
+            eoc: Pulse::IDLE,
             random_state: 12345, // Seed for PRNG
             next_random: None,
             audition: None,
@@ -734,10 +735,8 @@ impl StepSequencer {
     }
 
     /// Gate threshold for edge detection.
-    const GATE_THRESHOLD: f32 = 0.5;
-
-    /// EOC pulse duration in samples (approx 1ms at 44100 Hz).
-    const EOC_PULSE_SAMPLES: usize = 44;
+    /// How long the EOC trigger lasts, in seconds.
+    const EOC_SECONDS: f32 = 0.001;
 
     /// Simple xorshift PRNG for random mode.
     fn next_random(&mut self) -> u32 {
@@ -880,27 +879,10 @@ impl DspModule for StepSequencer {
         // Process each sample
         for i in 0..context.block_size {
             // Get input values
-            let clock_value = clock_in
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
-                .unwrap_or(0.0);
-            let reset_value = reset_in
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(0.0))
-                .unwrap_or(0.0);
-            let run_value = run_in
-                .map(|buf| buf.samples.get(i).copied().unwrap_or(1.0))
-                .unwrap_or(1.0);
-
-            // Edge detection
-            let clock_high = clock_value > Self::GATE_THRESHOLD;
-            let clock_rising = clock_high && !self.prev_clock;
-            self.prev_clock = clock_high;
-
-            let reset_high = reset_value > Self::GATE_THRESHOLD;
-            let reset_rising = reset_high && !self.prev_reset;
-            self.prev_reset = reset_high;
-
-            let is_running = run_value > Self::GATE_THRESHOLD;
-            let cv = pattern_in.map(|buf| buf.samples.get(i).copied().unwrap_or(0.0));
+            let clock_rising = self.clock.rising(clock_in.map_or(0.0, |buf| buf.at(i)));
+            let reset_rising = self.reset.rising(reset_in.map_or(0.0, |buf| buf.at(i)));
+            let is_running = run_in.map_or(1.0, |buf| buf.at(i)) > GATE_THRESHOLD;
+            let cv = pattern_in.map(|buf| buf.at(i));
 
             // Handle reset
             if reset_rising {
@@ -991,7 +973,7 @@ impl DspModule for StepSequencer {
                 // Fire EOC pulse once the chain has played through (never in
                 // random order, which has no end)
                 if end_of_chain {
-                    self.eoc_timer = Self::EOC_PULSE_SAMPLES;
+                    self.eoc.fire(Self::EOC_SECONDS, self.sample_rate);
                 }
             }
 
@@ -1033,14 +1015,11 @@ impl DspModule for StepSequencer {
             outputs[Self::PORT_STEP].samples[i] = self.current_step as f32 / (num_steps - 1).max(1) as f32;
 
             // EOC output
-            outputs[Self::PORT_EOC].samples[i] = if self.eoc_timer > 0 { 1.0 } else { 0.0 };
+            outputs[Self::PORT_EOC].samples[i] = self.eoc.sample();
 
             // Decrement timers
             if self.gate_timer > 0 {
                 self.gate_timer -= 1;
-            }
-            if self.eoc_timer > 0 {
-                self.eoc_timer -= 1;
             }
             self.audition_gate = self.audition_gate.saturating_sub(1);
             self.timer.tick();
@@ -1054,8 +1033,8 @@ impl DspModule for StepSequencer {
         self.current_step = 0;
         self.ping_pong_direction = 1;
         self.reset_pending = true;
-        self.prev_clock = false;
-        self.prev_reset = false;
+        self.clock.reset();
+        self.reset.reset();
         self.gate_timer = 0;
         self.tied = false;
         self.gate_high = false;
@@ -1063,7 +1042,7 @@ impl DspModule for StepSequencer {
         self.glide = Glide::NEW;
         self.sliding = false;
         self.timer.forget();
-        self.eoc_timer = 0;
+        self.eoc.clear();
         self.audition = None;
         self.auditioning = false;
         self.audition_struck = false;
@@ -1653,6 +1632,29 @@ mod tests {
         set_chain(&mut params, "A");
         let out = run_all(&params, 16 * 100, 100, None);
         assert_eq!(rises(&out[4]), [400, 800, 1200]);
+    }
+
+    #[test]
+    fn eoc_lasts_a_millisecond_at_any_sample_rate() {
+        let params = params_with(4.0, 0.0, 50.0);
+        for sample_rate in [44_100.0, 96_000.0] {
+            let len = 1000;
+            let mut seq = StepSequencer::new();
+            seq.prepare(sample_rate, len);
+            let mut clock = SignalBuffer::control(len);
+            for t in (0..len).step_by(200) {
+                clock.samples[t] = 1.0;
+            }
+            let reset = SignalBuffer::control(len);
+            let mut run = SignalBuffer::control(len);
+            run.samples.fill(1.0);
+            let pattern = SignalBuffer::unconnected(len, SignalType::Control);
+            let mut outputs: Vec<SignalBuffer> = (0..5).map(|_| SignalBuffer::control(len)).collect();
+            seq.process(&[&clock, &reset, &run, &pattern], &mut outputs, &params, &ProcessContext::new(sample_rate, len));
+            let eoc = &outputs[StepSequencer::PORT_EOC].samples;
+            assert_eq!(rises(eoc), [800]);
+            assert_eq!(high_for(eoc, 800), (sample_rate / 1000.0).round() as usize, "at {sample_rate} Hz");
+        }
     }
 
     #[test]

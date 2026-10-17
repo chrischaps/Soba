@@ -165,6 +165,12 @@ impl SignalBuffer {
         }
     }
 
+    /// Sample `i` of channel 1, or silence past the end.
+    #[inline]
+    pub fn at(&self, i: usize) -> f32 {
+        self.samples.get(i).copied().unwrap_or(0.0)
+    }
+
     /// The number of channels in use.
     #[inline]
     pub fn channels(&self) -> usize {
