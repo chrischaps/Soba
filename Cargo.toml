@@ -83,6 +83,16 @@ winresource = "0.1"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
+# cargo run plays the examples, and unoptimised it can't: Canopy rendered at
+# a third of real time and Lush Pad barely above it (#346). Level 1 for our
+# code keeps debug assertions and overflow checks and still builds quickly;
+# the dependencies (egui, cpal, serde) build once, so they get level 2
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
+
 # cpal's ASIO clock adds 49.7 days whenever a driver's timestamp steps back
 # a little (Focusrite's do, several times a second), so it overflows after
 # about ten minutes. Release builds wrap past it harmlessly; a debug build
