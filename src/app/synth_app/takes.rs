@@ -255,7 +255,7 @@ mod tests {
     #[ignore = "needs an audio device; run with --ignored"]
     fn takes_are_kept_with_the_patch() {
         let mut app = SynthApp::new(false);
-        if app.audio_engine.is_err() {
+        if app.audio.engine.is_err() {
             eprintln!("no audio device: skipped");
             return;
         }
@@ -337,7 +337,7 @@ mod tests {
     #[ignore = "needs an audio device; run with --ignored"]
     fn a_take_in_bars_is_a_choppers_loop() {
         let mut app = SynthApp::new(false);
-        if app.audio_engine.is_err() {
+        if app.audio.engine.is_err() {
             eprintln!("no audio device: skipped");
             return;
         }
@@ -395,7 +395,7 @@ mod tests {
     #[ignore = "needs an audio device; run with --ignored"]
     fn tidied_takes_are_kept_beside_the_take() {
         let mut app = SynthApp::new(false);
-        if app.audio_engine.is_err() {
+        if app.audio.engine.is_err() {
             eprintln!("no audio device: skipped");
             return;
         }

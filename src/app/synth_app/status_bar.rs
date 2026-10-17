@@ -43,7 +43,7 @@ impl SynthApp {
             Shown::Notice
         } else if self.status.is_some() {
             Shown::News
-        } else if self.audio_error_message.is_some() {
+        } else if self.audio.error.is_some() {
             Shown::AudioError
         } else if self.midi.error.is_some() {
             Shown::MidiError

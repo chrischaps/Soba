@@ -52,7 +52,7 @@ impl SynthApp {
         let processor = AudioProcessor::new(sample_rate, crate::engine::BLOCK_SIZE, engine_handle);
 
         let mut app = Self::with_devices(Err(AudioError::NoOutputDevice), None);
-        app.audio_error_message = None;
+        app.audio.error = None;
         app.ui_handle = Some(ui_handle);
         app.midi.events = Some(midi);
         app.user_state.hosted = true;

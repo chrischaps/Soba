@@ -11,7 +11,7 @@ use eframe::egui::{self, RichText, Layout, Align};
 use egui_node_graph2::{FlowGlyph, GraphEditorState, NodeResponse, InputParamKind};
 
 use crate::engine::{
-    AudioEngine, AudioError, AudioProcessor, AudioSystem, DeviceInfo, EngineChannels, EngineCommand, InputMonitor, Recording, RoundTrip,
+    AudioEngine, AudioError, AudioProcessor, AudioSystem, EngineChannels, EngineCommand, InputMonitor, Recording, RoundTrip,
     UiHandle, MidiEngine, MidiEvent, MidiReceivers,
 };
 use crate::graph::annotation_ui;
@@ -29,6 +29,7 @@ use crate::persistence::{
 use crate::persistence::patch_from_json;
 use crate::persistence::sample_files::SampleBase;
 use crate::widgets::{cpu_meter, CpuMeterConfig, KnobStyle};
+use super::audio_devices::{AudioDevices, AUDIO_STALL, INPUT_GLITCH_HOLD};
 use super::capture::{Capture, CaptureAction, CaptureConfig};
 use super::pace;
 use super::qwerty_keys;
@@ -94,10 +95,6 @@ type SynthGraphEditorState = GraphEditorState<SynthNodeData, SynthDataType, Synt
 /// fits only ~3 rows at the theme's padding; egui still clamps to the window.
 const DEVICE_MENU_HEIGHT: f32 = 480.0;
 
-/// How long the audio callback can go quiet before the output is shown as
-/// stalled. Devices ask for audio every few milliseconds.
-const AUDIO_STALL: std::time::Duration = std::time::Duration::from_millis(750);
-
 /// Storage key for the mark drawn along cables (Cables menu)
 const FLOW_GLYPH_KEY: &str = "cable_flow_glyph";
 /// Storage key for how strongly cables show through modules (Cables menu)
@@ -120,21 +117,15 @@ const RECORDING_PATIENCE: std::time::Duration = std::time::Duration::from_secs(1
 /// The manual, for the Help menu.
 const MANUAL_URL: &str = "https://docs.chaps.dev/soba/";
 
-/// How long the input's status stays amber after a dropout.
-const INPUT_GLITCH_HOLD: std::time::Duration = std::time::Duration::from_secs(3);
-
 pub use super::midi_session::MidiLearnTarget;
 
 /// Main application state for the Soba
 pub struct SynthApp {
-    /// Audio engine handle
-    audio_engine: Result<AudioEngine, AudioError>,
+    /// The sound devices: the engine, the outputs and inputs, and their health.
+    audio: AudioDevices,
 
     /// UI-side handle for communicating with audio engine
     ui_handle: Option<UiHandle>,
-
-    /// Last audio error message to display
-    audio_error_message: Option<String>,
 
     /// Whether the transport is "playing" (audio graph processing active)
     is_playing: bool,
@@ -147,12 +138,6 @@ pub struct SynthApp {
 
     /// User state for the graph editor
     user_state: SynthGraphState,
-
-    /// Cached list of audio devices
-    audio_devices: Vec<DeviceInfo>,
-
-    /// Index of currently selected device
-    selected_device_index: usize,
 
     /// Cached parameter values for change detection.
     /// Key is (node_id as u64, param_index), value is the last sent value.
@@ -200,10 +185,6 @@ pub struct SynthApp {
     /// How wide the toolbar is with every button named, measured the last
     /// time it was drawn that way. A narrower window gets the compact row.
     toolbar_full_width: Option<f32>,
-
-    /// The audio callback count last seen, and when it last moved: a count
-    /// that stops moving means the device has stopped taking audio.
-    audio_heartbeat: (u64, Instant),
 
     /// MIDI in: the inputs, the notes held, the CC mappings and MIDI Learn.
     midi: MidiSession,
@@ -276,16 +257,6 @@ pub struct SynthApp {
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))] // set when an update restarts the app
     pending_view: Option<(f32, egui::Pos2)>,
 
-    // --- Audio input ---
-    /// Input devices, for the Input menu.
-    input_devices: Vec<DeviceInfo>,
-    /// The open input's counters and health, while one is open.
-    input_monitor: Option<InputMonitor>,
-    /// The input's dropouts so far (underruns plus overflows, in frames),
-    /// and when that last grew.
-    input_glitches: (u64, Instant),
-    /// Whether this session has warned about the input hearing the speakers.
-    feedback_warned: bool,
     /// A warning for the status bar, its clock started once it's been seen.
     notice: Option<StatusLine>,
 
@@ -397,25 +368,6 @@ impl SynthApp {
         mut audio_engine: Result<AudioEngine, AudioError>,
         midi: Option<Result<(MidiEngine, MidiReceivers), crate::engine::MidiError>>,
     ) -> Self {
-        let audio_error_message = match &audio_engine {
-            Ok(_) => None,
-            Err(e) => Some(e.to_string()),
-        };
-
-        // Get initial device list and find the default device index
-        let (audio_devices, selected_device_index) = match &audio_engine {
-            Ok(engine) => {
-                let devices = engine.enumerate_devices();
-                let default_idx = devices.iter()
-                    .position(|d| d.is_default)
-                    .unwrap_or(0);
-                (devices, default_idx)
-            }
-            Err(_) => (Vec::new(), 0),
-        };
-        // Listed, not opened: nothing opens the microphone unasked
-        let input_devices = audio_engine.as_ref().map(|e| e.enumerate_input_devices()).unwrap_or_default();
-
         // Initialize MIDI engine
         let (midi, midi_audio_consumer) = match midi {
             None => (MidiSession::default(), None),
@@ -450,15 +402,12 @@ impl SynthApp {
         };
 
         Self {
-            audio_engine,
+            audio: AudioDevices::new(audio_engine),
             ui_handle,
-            audio_error_message,
             is_playing: false,
             theme_applied: false,
             graph_state: GraphEditorState::new(1.0),
             user_state: SynthGraphState::default(),
-            audio_devices,
-            selected_device_index,
             cached_params: HashMap::new(),
             current_patch_path: None,
             current_example: None,
@@ -474,7 +423,6 @@ impl SynthApp {
             cpu_load: 0.0,
             cpu_peak: Default::default(),
             toolbar_full_width: None,
-            audio_heartbeat: (0, Instant::now()),
             midi,
             history: History::default(),
             quick_add: None,
@@ -502,10 +450,6 @@ impl SynthApp {
             updater: Updater::new(),
             resuming: false,
             pending_view: None,
-            input_devices,
-            input_monitor: None,
-            input_glitches: (0, Instant::now()),
-            feedback_warned: false,
             notice: None,
             level_trail: Vec::new(),
             level_view: None,
@@ -536,7 +480,7 @@ impl SynthApp {
     /// Hands the audio engine's clock to a capture: from here on audio is
     /// rendered one video frame at a time, in step with the picture.
     pub fn start_capture(&mut self, config: CaptureConfig) -> Result<(), String> {
-        let engine = self.audio_engine.as_mut().map_err(|e| e.to_string())?;
+        let engine = self.audio.engine.as_mut().map_err(|e| e.to_string())?;
         engine.go_offline(config.sample_rate as f32).map_err(|e| e.to_string())?;
         self.capture = Some(Capture::start(config)?);
         Ok(())
@@ -610,7 +554,7 @@ impl SynthApp {
             handle.flush();
         }
         midi.sort_by_key(|e| e.sample_offset);
-        let (Ok(engine), Some(capture)) = (self.audio_engine.as_ref(), self.capture.as_mut()) else { return };
+        let (Ok(engine), Some(capture)) = (self.audio.engine.as_ref(), self.capture.as_mut()) else { return };
         capture.render_audio(&mut midi, |buffer, midi, input| {
             engine.render_offline(buffer, 2, midi, input);
         });
@@ -697,22 +641,18 @@ impl SynthApp {
 
     /// Refresh the list of available audio devices
     fn refresh_devices(&mut self) {
-        if let Ok(ref engine) = self.audio_engine {
-            self.audio_devices = engine.enumerate_devices();
-        }
+        self.audio.refresh_outputs();
     }
 
     /// Refresh the list of input devices.
     fn refresh_input_devices(&mut self) {
-        if let Ok(ref engine) = self.audio_engine {
-            self.input_devices = engine.enumerate_input_devices();
-        }
+        self.audio.refresh_inputs();
     }
 
     /// Opens input device `index` and connects it to the patch's Audio
     /// Input modules, or with `None` closes the input.
     fn select_input(&mut self, index: Option<usize>) {
-        let Ok(engine) = self.audio_engine.as_mut() else { return };
+        let Ok(engine) = self.audio.engine.as_mut() else { return };
         let opened = index.map(|index| engine.open_input(index));
         let input_name = engine.input_name().map(str::to_string);
         if index.is_none() {
@@ -723,8 +663,7 @@ impl SynthApp {
                 if let Some(handle) = self.ui_handle.as_mut() {
                     handle.connect_input(feed);
                 }
-                self.input_glitches = (0, Instant::now());
-                self.input_monitor = Some(monitor);
+                self.audio.input_opened(monitor);
                 self.user_state.audio_input_name = input_name;
                 self.warn_about_feedback();
             }
@@ -732,7 +671,7 @@ impl SynthApp {
                 if let Some(handle) = self.ui_handle.as_mut() {
                     handle.disconnect_input();
                 }
-                self.input_monitor = None;
+                self.audio.input = None;
                 self.user_state.audio_input_name = None;
                 if let Some(Err(e)) = failed {
                     self.raise_notice(format!("Can't open the input: {}", e));
@@ -744,15 +683,9 @@ impl SynthApp {
     /// The first time an input is live while the output is speakers, says
     /// once that it may feed back.
     fn warn_about_feedback(&mut self) {
-        if self.feedback_warned || self.input_monitor.is_none() {
-            return;
+        if let Some(warning) = self.audio.feedback_warning() {
+            self.raise_notice(warning);
         }
-        let Some(output) = self.audio_devices.get(self.selected_device_index).map(|d| d.name.clone()) else { return };
-        if input_device::looks_like_headphones(&output) {
-            return;
-        }
-        self.feedback_warned = true;
-        self.raise_notice(input_device::feedback_warning(&output));
     }
 
     /// Puts a warning in the status bar for a while.
@@ -931,16 +864,16 @@ impl SynthApp {
                 handle.flush();
             }
         }
-        if let Ok(ref mut engine) = self.audio_engine {
+        if let Ok(ref mut engine) = self.audio.engine {
             // On ASIO the engine closes it: its driver is the output's
             let input = engine.input_index();
             match engine.select_device(index) {
                 Ok(()) => {
-                    self.selected_device_index = index;
-                    self.audio_error_message = None;
+                    self.audio.selected_output = index;
+                    self.audio.error = None;
                 }
                 Err(e) => {
-                    self.audio_error_message = Some(e.to_string());
+                    self.audio.error = Some(e.to_string());
                 }
             }
             // The input must run at the new output's rate: open it again,
@@ -957,7 +890,7 @@ impl SynthApp {
     /// start, audio stays where it was and a notice says why.
     fn select_audio_system(&mut self, system: AudioSystem) {
         self.end_take_for_device_change();
-        let Ok(engine) = self.audio_engine.as_mut() else { return };
+        let Ok(engine) = self.audio.engine.as_mut() else { return };
         let had_input = engine.input_index().is_some();
         let result = engine.set_audio_system(system);
         self.after_output_change();
@@ -965,8 +898,7 @@ impl SynthApp {
             self.raise_notice(format!("Can't use {}: {}", system.label(), e));
         }
         if had_input {
-            let default = self.input_devices.iter().find(|d| d.is_default).or(self.input_devices.first());
-            self.select_input(default.map(|d| d.index));
+            self.select_input(self.audio.default_input());
         }
     }
 
@@ -974,7 +906,7 @@ impl SynthApp {
     /// input open.
     fn select_buffer(&mut self, frames: u32) {
         self.end_take_for_device_change();
-        let Ok(engine) = self.audio_engine.as_mut() else { return };
+        let Ok(engine) = self.audio.engine.as_mut() else { return };
         let input = engine.input_index();
         let result = engine.set_buffer_size(Some(frames));
         let running = engine.buffer_frames();
@@ -995,18 +927,18 @@ impl SynthApp {
     /// When the driver has stopped the stream to change its own settings
     /// (its buffer size, from its control panel), starts it again there.
     fn recover_from_driver_reset(&mut self) {
-        let Ok(engine) = self.audio_engine.as_mut() else { return };
+        let Ok(engine) = self.audio.engine.as_mut() else { return };
         if !engine.stream_reset() {
             return;
         }
         self.end_take_for_device_change();
-        let Ok(engine) = self.audio_engine.as_mut() else { return };
+        let Ok(engine) = self.audio.engine.as_mut() else { return };
         let input = engine.input_index();
         let result = engine.restart_after_reset();
         let running = engine.buffer_frames();
         self.after_output_change();
         match (result, running) {
-            (Err(e), _) => self.audio_error_message = Some(e.to_string()),
+            (Err(e), _) => self.audio.error = Some(e.to_string()),
             (Ok(()), Some(frames)) => {
                 self.raise_notice(format!("The driver's settings changed: audio restarted at {} frames", frames))
             }
@@ -1021,7 +953,7 @@ impl SynthApp {
     /// pulled out) under a stream that follows it, or comes back after
     /// there was none, moves the stream there (#337).
     fn follow_default_output(&mut self, ctx: &egui::Context) {
-        let Ok(engine) = self.audio_engine.as_mut() else { return };
+        let Ok(engine) = self.audio.engine.as_mut() else { return };
         let moved = engine.default_changed();
         if !moved && !engine.default_returned() {
             if engine.awaiting_default() {
@@ -1031,7 +963,7 @@ impl SynthApp {
             return;
         }
         self.end_take_for_device_change();
-        let Ok(engine) = self.audio_engine.as_mut() else { return };
+        let Ok(engine) = self.audio.engine.as_mut() else { return };
         let rate = engine.sample_rate();
         let input = engine.input_index();
         let result = engine.follow_default();
@@ -1040,7 +972,7 @@ impl SynthApp {
         match result {
             Ok(name) => self.raise_notice(format!("Output moved to {}", name)),
             // Gone again already: wait for the next one
-            Err(e) if moved => self.audio_error_message = Some(e.to_string()),
+            Err(e) if moved => self.audio.error = Some(e.to_string()),
             Err(_) => {}
         }
         // The input converts to the output's rate
@@ -1064,20 +996,12 @@ impl SynthApp {
     /// Lists the devices again after the output changed system, device or
     /// buffer, pointing the Output menu at the one running.
     fn after_output_change(&mut self) {
-        let Ok(engine) = self.audio_engine.as_ref() else { return };
-        self.audio_devices = engine.enumerate_devices();
-        self.selected_device_index = engine.current_device_index().unwrap_or(0);
-        self.input_devices = engine.enumerate_input_devices();
-        if !engine.stream_failed() {
-            self.audio_error_message = None;
-        }
         // The engine closed the input, if it was open; select_input opens
         // it again where the caller wants it
-        if engine.input_index().is_none() {
+        if self.audio.after_output_change() {
             if let Some(handle) = self.ui_handle.as_mut() {
                 handle.disconnect_input();
             }
-            self.input_monitor = None;
             self.user_state.audio_input_name = None;
         }
     }
@@ -1122,7 +1046,7 @@ impl SynthApp {
         if self.recording.is_some() {
             return;
         }
-        let (Ok(engine), Some(_)) = (&self.audio_engine, &self.ui_handle) else {
+        let (Ok(engine), Some(_)) = (&self.audio.engine, &self.ui_handle) else {
             self.status_error("Can't record: no audio output");
             return;
         };
@@ -1525,7 +1449,7 @@ impl SynthApp {
 
             // Device selectors (engine status lives in the status bar). The
             // browser plays through its own output, and has no MIDI or input yet
-            match &self.audio_engine {
+            match &self.audio.engine {
                 // The DAW has the devices
                 _ if self.hosted.is_some() => {}
                 // The browser picks the sound devices itself; MIDI's are Soba's
@@ -1546,8 +1470,8 @@ impl SynthApp {
                     ui.add_space(8.0);
 
                     // Get current device name for display
-                    let current_device = self.audio_devices
-                        .get(self.selected_device_index)
+                    let current_device = self.audio.outputs
+                        .get(self.audio.selected_output)
                         .map(|d| d.name.as_str())
                         .unwrap_or("No device");
 
@@ -1557,7 +1481,7 @@ impl SynthApp {
                     } else {
                         current_device.to_string()
                     };
-                    let (system, buffer_choices, buffer_frames, sample_rate) = match &self.audio_engine {
+                    let (system, buffer_choices, buffer_frames, sample_rate) = match &self.audio.engine {
                         Ok(engine) => (engine.audio_system(), engine.buffer_choices(), engine.buffer_frames(), engine.sample_rate()),
                         Err(_) => (AudioSystem::default(), Vec::new(), None, 0),
                     };
@@ -1590,7 +1514,7 @@ impl SynthApp {
                                 super::asio_badge::show(ui);
                                 ui.separator();
                             }
-                            for device in &self.audio_devices {
+                            for device in &self.audio.outputs {
                                 let label = if device.is_default {
                                     format!("{} (Default)", device.name)
                                 } else {
@@ -1598,7 +1522,7 @@ impl SynthApp {
                                 };
 
                                 if ui.selectable_label(
-                                    device.index == self.selected_device_index,
+                                    device.index == self.audio.selected_output,
                                     label
                                 ).clicked() {
                                     actions.push(AppAction::SelectDevice(device.index));
@@ -1632,11 +1556,11 @@ impl SynthApp {
                     }
                     ui.label(RichText::new("Input").color(theme::text::SECONDARY));
                     ui.add_space(8.0);
-                    let (input_index, input_name) = match &self.audio_engine {
+                    let (input_index, input_name) = match &self.audio.engine {
                         Ok(engine) => (engine.input_index(), engine.input_name().map(str::to_string)),
                         Err(_) => (None, None),
                     };
-                    let input_failed = self.input_monitor.as_ref().is_some_and(InputMonitor::failed);
+                    let input_failed = self.audio.input.as_ref().is_some_and(InputMonitor::failed);
                     let input_text = match &input_name {
                         Some(name) => {
                             let name = if name.len() > 22 { format!("{}...", &name[..name.floor_char_boundary(19)]) } else { name.clone() };
@@ -1657,12 +1581,12 @@ impl SynthApp {
                                 actions.push(AppAction::SelectInput(None));
                             }
                             ui.separator();
-                            if self.input_devices.is_empty() {
+                            if self.audio.inputs.is_empty() {
                                 ui.label(RichText::new("No input devices found")
                                     .color(theme::text::DISABLED)
                                     .italics());
                             }
-                            for device in &self.input_devices {
+                            for device in &self.audio.inputs {
                                 let label = if device.is_default {
                                     format!("{} (Default)", device.name)
                                 } else {
@@ -3056,7 +2980,7 @@ impl SynthApp {
                                 label.on_hover_text(example.description);
                             }
                             match status {
-                                _ if self.audio_engine.is_err() => {
+                                _ if self.audio.engine.is_err() => {
                                     ui.label(RichText::new("⚠ No sound in this browser").color(theme::accent::ERROR).small());
                                 }
                                 AudioStatus::NoAudio => {
@@ -3314,7 +3238,7 @@ impl SynthApp {
         let system = storage
             .and_then(|s| s.get_string(AUDIO_SYSTEM_KEY))
             .and_then(|key| AudioSystem::from_key(&key));
-        if let Ok(engine) = self.audio_engine.as_mut() {
+        if let Ok(engine) = self.audio.engine.as_mut() {
             let _ = engine.set_buffer_size(buffer);
         }
         if let Some(system) = system {
@@ -3378,7 +3302,7 @@ impl SynthApp {
     fn audio_status(&mut self, ctx: &egui::Context) -> AudioStatus {
         let transport = if self.is_playing { AudioStatus::Playing } else { AudioStatus::Stopped };
         // Offline (filming, or no stream to watch): the transport is the whole story
-        let Ok(engine) = &self.audio_engine else { return transport };
+        let Ok(engine) = &self.audio.engine else { return transport };
         if !engine.is_running() {
             // A stream that couldn't be rebuilt (its device gone) is no audio
             return if engine.stream_lost() { AudioStatus::NoAudio } else { transport };
@@ -3388,15 +3312,11 @@ impl SynthApp {
             return AudioStatus::Waiting;
         }
 
-        let now = Instant::now();
-        let count = engine.callback_count();
-        if count != self.audio_heartbeat.0 {
-            self.audio_heartbeat = (count, now);
-        }
+        let (count, failed) = (engine.callback_count(), engine.stream_failed());
         // Keep looking even when nothing else redraws, so a lost device shows
         ctx.request_repaint_after(AUDIO_STALL);
 
-        if engine.stream_failed() || now - self.audio_heartbeat.1 > AUDIO_STALL {
+        if self.audio.stalled(count, Instant::now()) || failed {
             AudioStatus::NoAudio
         } else {
             transport
@@ -3430,7 +3350,7 @@ impl SynthApp {
                         self.notice = None;
                     }
                 }
-                Shown::AudioError => warn(ui, self.audio_error_message.as_deref().unwrap_or_default(), theme::accent::ERROR),
+                Shown::AudioError => warn(ui, self.audio.error.as_deref().unwrap_or_default(), theme::accent::ERROR),
                 Shown::MidiError => warn(ui, self.midi.error.as_deref().unwrap_or_default(), theme::accent::ERROR),
                 Shown::Counts => {
                     // Show module and connection count, through any groups
@@ -3461,7 +3381,11 @@ impl SynthApp {
 
                 // Engine status at the far right: what the output is doing, format, load
                 let status = self.audio_status(ui.ctx());
-                if let Ok(engine) = &self.audio_engine {
+                // Whether the open input dropped out lately
+                let recent = self.audio.input.as_ref()
+                    .map(|m| m.underrun_frames() + m.overflow_frames() + m.device_xruns())
+                    .is_some_and(|glitches| self.audio.input_glitched(glitches, Instant::now()));
+                if let Ok(engine) = &self.audio.engine {
                     let (status_text, status_color, hint) = match status {
                         AudioStatus::Playing => ("● Playing", theme::accent::SUCCESS, "The patch is playing"),
                         AudioStatus::Stopped => ("○ Stopped", theme::text::DISABLED, "Press Play to hear the patch"),
@@ -3483,13 +3407,7 @@ impl SynthApp {
                         engine.sample_rate(),
                         engine.channels()
                     )).color(theme::text::SECONDARY).small());
-                    if let Some(monitor) = &self.input_monitor {
-                        let glitches = monitor.underrun_frames() + monitor.overflow_frames() + monitor.device_xruns();
-                        let now = Instant::now();
-                        if glitches != self.input_glitches.0 {
-                            self.input_glitches = (glitches, now);
-                        }
-                        let recent = glitches > 0 && now - self.input_glitches.1 < INPUT_GLITCH_HOLD;
+                    if let Some(monitor) = &self.audio.input {
                         let trip = RoundTrip::of(monitor, engine.output_latency(), engine.sample_rate());
                         let (text, color) = if monitor.failed() {
                             ("⚠ Input lost".to_string(), theme::accent::ERROR)
@@ -3953,7 +3871,7 @@ impl SynthApp {
         self.recover_from_driver_reset();
         self.follow_default_output(ctx);
         // MIDI Out sends each note as the sound beside it is heard
-        if let Ok(engine) = &self.audio_engine {
+        if let Ok(engine) = &self.audio.engine {
             crate::link::midi::MIDI.set_latency(engine.output_latency());
         }
         let now = ctx.input(|i| i.time);
@@ -4148,7 +4066,7 @@ impl SynthApp {
 
         // How late live input is, for Loopers to take off their overdubs
         if let Some(ref handle) = self.ui_handle {
-            let frames = match (&self.input_monitor, &self.audio_engine) {
+            let frames = match (&self.audio.input, &self.audio.engine) {
                 (Some(monitor), Ok(engine)) => {
                     let trip = RoundTrip::of(monitor, engine.output_latency(), engine.sample_rate());
                     (trip.total().as_secs_f64() * engine.sample_rate() as f64).round() as usize
@@ -4230,7 +4148,7 @@ impl eframe::App for SynthApp {
         self.probe.store(storage);
         storage.set_string(KNOB_STYLE_KEY, self.user_state.knob_style.name().to_string());
         storage.set_string(MIDI_OUT_PORTS_KEY, crate::link::midi::MIDI.setting());
-        if let Ok(engine) = &self.audio_engine {
+        if let Ok(engine) = &self.audio.engine {
             storage.set_string(AUDIO_SYSTEM_KEY, engine.audio_system().key().to_string());
             storage.set_string(BUFFER_FRAMES_KEY, engine.buffer_request().map(|f| f.to_string()).unwrap_or_default());
         }

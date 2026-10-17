@@ -303,7 +303,7 @@ mod tests {
     #[ignore = "needs an audio device; run with --ignored"]
     fn resampling_records_the_next_sound() {
         let mut app = SynthApp::new(false);
-        if app.audio_engine.is_err() {
+        if app.audio.engine.is_err() {
             eprintln!("no audio device: skipped");
             return;
         }
@@ -342,7 +342,7 @@ mod tests {
     #[ignore = "needs an audio device; run with --ignored"]
     fn a_take_in_bars_stops_itself() {
         let mut app = SynthApp::new(false);
-        if app.audio_engine.is_err() {
+        if app.audio.engine.is_err() {
             eprintln!("no audio device: skipped");
             return;
         }

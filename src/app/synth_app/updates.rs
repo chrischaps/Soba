@@ -108,7 +108,7 @@ impl SynthApp {
             Ok(()) => {
                 // The new copy waits for this one to close before it opens
                 // the audio device (ASIO serves one program at a time)
-                if let Ok(engine) = self.audio_engine.as_mut() {
+                if let Ok(engine) = self.audio.engine.as_mut() {
                     let _ = engine.stop();
                 }
                 // The autosave is kept too, in case the new copy doesn't start
@@ -132,8 +132,8 @@ impl SynthApp {
             let center = self.screen_to_patch(self.editor_rect.center());
             (self.graph_state.pan_zoom.zoom, [center.x, center.y])
         });
-        let (output_device, input_device) = match &self.audio_engine {
-            Ok(engine) => (self.audio_devices.get(self.selected_device_index).map(|d| d.name.clone()), engine.input_name().map(str::to_string)),
+        let (output_device, input_device) = match &self.audio.engine {
+            Ok(engine) => (self.audio.output().map(|d| d.name.clone()), engine.input_name().map(str::to_string)),
             Err(_) => (None, None),
         };
         let midi_device = self.midi.selected_device().map(|d| d.name.clone());
@@ -161,14 +161,14 @@ impl SynthApp {
             self.mark_saved();
         }
 
-        if let Some(index) = resume.output_device.and_then(|name| self.audio_devices.iter().find(|d| d.name == name)).map(|d| d.index) {
-            if index != self.selected_device_index {
+        if let Some(index) = resume.output_device.and_then(|name| self.audio.outputs.iter().find(|d| d.name == name)).map(|d| d.index) {
+            if index != self.audio.selected_output {
                 self.select_device(index);
             }
         }
         if let Some(name) = resume.input_device {
             self.refresh_input_devices();
-            if let Some(index) = self.input_devices.iter().find(|d| d.name == name).map(|d| d.index) {
+            if let Some(index) = self.audio.inputs.iter().find(|d| d.name == name).map(|d| d.index) {
                 self.select_input(Some(index));
             }
         }

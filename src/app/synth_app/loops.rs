@@ -186,7 +186,7 @@ impl SynthApp {
     #[cfg(not(target_arch = "wasm32"))]
     fn snapshot_loops(&mut self, wanted: &[(NodeId, EngineNodeId, Option<String>)]) -> Result<HashMap<EngineNodeId, LoopCopy>, String> {
         let no_engine = "Loops weren't saved: there's no audio engine to copy them from".to_string();
-        if self.audio_engine.is_err() || self.ui_handle.is_none() {
+        if self.audio.engine.is_err() || self.ui_handle.is_none() {
             return Err(no_engine);
         }
         // A Looper added or pasted this frame must reach the engine first
@@ -417,7 +417,7 @@ mod tests {
     #[ignore = "needs an audio device; run with --ignored"]
     fn loops_are_kept_with_the_patch() {
         let mut app = SynthApp::new(false);
-        if app.audio_engine.is_err() {
+        if app.audio.engine.is_err() {
             eprintln!("no audio device: skipped");
             return;
         }

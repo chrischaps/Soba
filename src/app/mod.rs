@@ -4,6 +4,7 @@
 
 #[cfg(feature = "asio")]
 mod asio_badge;
+mod audio_devices;
 pub mod capture;
 mod capture_aim;
 pub(crate) mod editing;
