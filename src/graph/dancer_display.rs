@@ -253,7 +253,7 @@ pub fn dancer_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
     ui.ctx().data_mut(|d| d.insert_temp(id, stage));
     // Standing about still breathes, so keep the frames coming, gently
     if live || response.dragged() {
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     } else {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(33));
     }

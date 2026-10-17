@@ -14,6 +14,7 @@ mod long_press;
 mod mutate;
 mod notice;
 mod palette;
+pub mod pace;
 mod recording;
 mod session;
 mod shortcuts;

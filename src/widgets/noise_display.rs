@@ -43,9 +43,11 @@ pub struct NoiseDisplayConfig {
     /// Which outputs are patched, as (white, pink, brown). Unpatched lines
     /// dim while any other is patched.
     pub patched: [bool; 3],
+    /// Whether the patch is playing. Stopped, the lines hold still.
+    pub playing: bool,
 }
 
-/// Draws the noise display and asks for the next frame of shimmer.
+/// Draws the noise display and, while playing, asks for the next frame of shimmer.
 pub fn noise_display(ui: &mut Ui, config: &NoiseDisplayConfig) -> Response {
     let (rect, response) = ui.allocate_exact_size(config.size, Sense::hover());
     if !ui.is_rect_visible(rect) {
@@ -70,7 +72,7 @@ pub fn noise_display(ui: &mut Ui, config: &NoiseDisplayConfig) -> Response {
 
     // Between two readings the lines ease from one to the next, so the
     // shimmer breathes instead of strobing
-    let time = ui.ctx().input(|i| i.time) * READINGS_PER_SECOND;
+    let time = if config.playing { ui.ctx().input(|i| i.time) * READINGS_PER_SECOND } else { 0.0 };
     let reading = time.floor() as u32;
     let blend = smoothstep(time.fract() as f32);
 
@@ -117,7 +119,9 @@ pub fn noise_display(ui: &mut Ui, config: &NoiseDisplayConfig) -> Response {
 
     painter.rect_stroke(rect, 2.0 * scale, Stroke::new(1.0 * scale, Color32::from_rgb(50, 55, 70)));
 
-    ui.ctx().request_repaint();
+    if config.playing {
+        crate::app::pace::animate(ui.ctx());
+    }
     response
 }
 

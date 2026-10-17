@@ -248,7 +248,7 @@ pub fn vocoder_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     }
 
     if lively {
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 }
 

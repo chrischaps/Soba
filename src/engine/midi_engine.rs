@@ -312,6 +312,9 @@ pub struct MidiReceivers {
 struct MidiSenders {
     audio: Producer<TimestampedMidiEvent>,
     ui: Producer<TimestampedMidiEvent>,
+    /// Wakes the UI for what it's sent, which it reads only when it draws
+    /// and it doesn't draw while nothing moves (#307)
+    waker: Option<eframe::egui::Context>,
 }
 
 impl MidiSenders {
@@ -325,6 +328,9 @@ impl MidiSenders {
         let _ = self.audio.push(event);
         if !matches!(event.event, MidiEvent::Clock) {
             let _ = self.ui.push(event);
+            if let Some(waker) = &self.waker {
+                waker.request_repaint();
+            }
         }
     }
 }
@@ -431,7 +437,7 @@ impl MidiEngine {
             devices,
             selected_device: None,
             connection: None,
-            senders: Arc::new(Mutex::new(MidiSenders { audio: audio_producer, ui: ui_producer })),
+            senders: Arc::new(Mutex::new(MidiSenders { audio: audio_producer, ui: ui_producer, waker: None })),
             state,
             scan_running,
             scan_thread,
@@ -559,6 +565,13 @@ impl MidiEngine {
     pub fn send(&self, event: MidiEvent) {
         if let Ok(mut senders) = self.senders.lock() {
             senders.send(TimestampedMidiEvent::now(event));
+        }
+    }
+
+    /// Has `ctx` drawn a frame for each event the UI is sent from now on.
+    pub fn set_waker(&self, ctx: &eframe::egui::Context) {
+        if let Ok(mut senders) = self.senders.lock() {
+            senders.waker = Some(ctx.clone());
         }
     }
 

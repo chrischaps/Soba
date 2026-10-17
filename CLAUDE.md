@@ -215,7 +215,7 @@ cargo test --release --test example_loudness -- --ignored --nocapture
 # The slow checks against origin/master, in ../Modular-nightly at low priority: loudness, layout,
 # zoom and the pictures (stale ones re-shot and pushed). Failures open nightly-failure issues
 python tools/nightly.py                      # skips if master passed last time; --force runs anyway
-python tools/nightly.py --only layout,zoom   # some of: tests, loudness, layout, zoom, images
+python tools/nightly.py --only layout,zoom   # some of: tests, loudness, idle, layout, zoom, images
 python tools/nightly.py --ref HEAD --only layout   # your commit instead: no issues, no push
 powershell -File tools/nightly_schedule.ps1  # run it every night at 03:00 (-At, -Unregister)
 # The real input device, end to end (needs a mic; the patch is muted)

@@ -210,6 +210,9 @@ pub struct SynthGraphState {
     /// When false, cable animations are stopped.
     pub is_playing: bool,
 
+    /// Whether the window has the focus, which paces animation (#307).
+    pub focused: bool,
+
     /// Active notes for Keyboard module display (MIDI note numbers).
     /// Updated by the keyboard input handler.
     pub keyboard_active_notes: Vec<u8>,
@@ -334,6 +337,7 @@ impl Default for SynthGraphState {
             annotations: Annotations::default(),
             over_annotation: false,
             is_playing: false,
+            focused: true,
             keyboard_active_notes: Vec::new(),
             midi_active_notes: Vec::new(),
             midi_active_velocities: Vec::new(),
@@ -750,6 +754,10 @@ impl ConnectionSignalTrait for SynthGraphState {
 
     fn flow_glyph(&self) -> FlowGlyph {
         self.flow_glyph
+    }
+
+    fn flow_frame(&self) -> Option<std::time::Duration> {
+        self.is_playing.then(|| crate::app::pace::frame(self.focused))
     }
 
     fn cable_through_node(&self) -> f32 {

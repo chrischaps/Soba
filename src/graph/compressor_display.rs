@@ -264,7 +264,7 @@ pub fn compressor_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph
     header(&painter, rect, z, Some((setting, accent.gamma_multiply(0.9))), Some(right));
 
     if user_state.is_playing && (glowing || heard_any || pressed) {
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     if response.hovered() {

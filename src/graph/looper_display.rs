@@ -78,7 +78,7 @@ pub fn looper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
     let state = LoopState::from_code(v[Looper::READOUT_STATE]);
     let overview = engine_node_id.and_then(|id| user_state.get_scope_data(id));
     if matches!(state, LoopState::Recording | LoopState::Playing | LoopState::Overdubbing | LoopState::Armed) {
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     // As wide as the knob row below: four 44-pt columns
@@ -318,7 +318,7 @@ pub fn looper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
             let alpha = if learning { 0.4 + 0.6 * ((now * 4.0).sin().abs() as f32) } else { 1.0 };
             painter.circle_filled(badge, 2.6 * z, purple.gamma_multiply(alpha));
             if learning {
-                ui.ctx().request_repaint();
+                crate::app::pace::animate(ui.ctx());
             }
         }
 

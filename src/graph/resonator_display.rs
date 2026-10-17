@@ -94,7 +94,7 @@ pub fn resonator_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
         }
     }
     if level > 1e-4 {
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     // The note, and what rings it how long

@@ -10,6 +10,8 @@ Steps, in order (--only picks some):
 
     tests      cargo test
     loudness   the ignored example_loudness test: every example at length
+    idle       the ignored idle test: every example, stopped, asks for no
+               frames, so left open it costs next to nothing (#307)
     layout     check_layout.py: every example's modules inside their frames
     zoom       zoom_check.py: zoom_jitter.py --max 0.5 on each patch that
                something it holds has changed since it last passed, several at
@@ -43,7 +45,7 @@ import sys
 import time
 from pathlib import Path
 
-STEPS = ["tests", "loudness", "layout", "zoom", "images"]
+STEPS = ["tests", "loudness", "idle", "layout", "zoom", "images"]
 CAPTURE_STEPS = {"layout", "zoom", "images"}
 LABEL = "nightly-failure"
 STEP_TIMEOUT = 3 * 60 * 60
@@ -215,6 +217,9 @@ def run_steps(steps, worktree, logs, push):
             passed = step_run(["cargo", "test"], log, worktree, env) == 0
         elif step == "loudness":
             passed = step_run(["cargo", "test", "--release", "--test", "example_loudness", "--",
+                               "--ignored", "--nocapture"], log, worktree, env) == 0
+        elif step == "idle":
+            passed = step_run(["cargo", "test", "--release", "--lib", "a_stopped_example_asks_for_no_frames", "--",
                                "--ignored", "--nocapture"], log, worktree, env) == 0
         elif step == "layout":
             passed = step_run([python, showcase / "check_layout.py"], log, worktree, env) == 0

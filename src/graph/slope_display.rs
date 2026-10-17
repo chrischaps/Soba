@@ -150,7 +150,7 @@ pub fn slope_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
 
     // Moving, it animates; at rest, the next readout repaints it
     if rising || falling || cycling {
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 }
 

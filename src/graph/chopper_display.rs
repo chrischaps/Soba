@@ -209,7 +209,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         _ if live => {
             let scope = engine_id.and_then(|id| user_state.get_scope_data(id));
             sampler_take::draw_take(&painter, plot, &rec, scope, z);
-            ui.ctx().request_repaint();
+            crate::app::pace::animate(ui.ctx());
         }
         Some(sample) => {
             // The slice heard glows
@@ -303,7 +303,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     // Waiting to record, for the next bar
     if matches!(rec.state, RecState::Armed | RecState::Waiting) {
         sampler_take::draw_waiting(&painter, wave_rect, plot, &rec, ui.input(|i| i.time), z);
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     if drop_here {
@@ -481,7 +481,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         ));
     }
     if playing.phase.is_some() || cue.is_some() {
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     // Under it all: ▶, the file's name and tempo, and Open…

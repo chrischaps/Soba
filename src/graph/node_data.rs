@@ -1805,6 +1805,7 @@ impl NodeDataTrait for SynthNodeData {
                 size: egui::vec2(140.0 * zoom, 50.0 * zoom),
                 level,
                 patched,
+                playing: user_state.is_playing,
             };
             ui.horizontal(|ui| {
                 ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0); // Center the display

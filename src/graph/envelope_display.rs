@@ -91,7 +91,7 @@ pub fn envelope_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
             }
             curve(&painter, lit_points(&params, plot, z, &now, span, at), orange, 1.8 * z, true);
             playhead(&painter, Pos2::new(x_at(at), y_at(now.level)), with_alpha(orange, (50.0 + 60.0 * swell) as u8), z);
-            ui.ctx().request_repaint();
+            crate::app::pace::animate(ui.ctx());
         }
         None => curve(&painter, points, orange, 1.5 * z, true),
     }

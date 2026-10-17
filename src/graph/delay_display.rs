@@ -250,7 +250,7 @@ pub fn delay_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     );
 
     if user_state.is_playing && (sounding || tape > 0.0) {
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     if response.hovered() {

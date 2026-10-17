@@ -203,7 +203,7 @@ pub fn chorus_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
     );
 
     if live.is_some() {
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     if response.hovered() {

@@ -121,9 +121,10 @@ impl SynthApp {
                 self.history.absorb_param(engine_id, index, graph.get_input(input).value.actual_value());
             }
         }
-        // CV moves Morph without anything else asking for a frame
-        if patched {
-            ctx.request_repaint_after(std::time::Duration::from_millis(16));
+        // CV moves Morph without anything else asking for a frame, while
+        // the patch plays
+        if patched && self.is_playing {
+            super::pace::animate(ctx);
         }
     }
 

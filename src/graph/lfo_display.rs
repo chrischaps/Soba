@@ -41,11 +41,13 @@ pub fn lfo_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &SynthGrap
         .map(|r| r.values[Lfo::READOUT_RUNNING_RATE])
         .filter(|&hz| hz > 0.0)
         .unwrap_or_else(|| value("Rate", 1.0));
-    // Where it is: the Phase output, or a guess from the clock until it's heard
+    // Where it is: the Phase output, or a guess from the clock until it's
+    // heard. Stopped, it waits where it was, or where Phase starts it
+    let playing = user_state.is_playing;
     let phase = user_state
         .get_engine_node_id(node_id)
         .and_then(|id| user_state.get_output_value(id, 1))
-        .unwrap_or_else(|| ((ui.ctx().input(|i| i.time) * rate as f64 + start as f64) % 1.0) as f32)
+        .unwrap_or_else(|| if playing { ((ui.ctx().input(|i| i.time) * rate as f64 + start as f64) % 1.0) as f32 } else { start })
         .rem_euclid(1.0);
 
     let orange = theme::signal::CONTROL;
@@ -102,7 +104,9 @@ pub fn lfo_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &SynthGrap
     };
     let range = if bipolar { "±1" } else { "0–1" };
     header(&painter, rect, z, Some((speed, orange.gamma_multiply(0.9))), Some((range.to_string(), theme::text::SECONDARY)));
-    ui.ctx().request_repaint();
+    if playing {
+        crate::app::pace::animate(ui.ctx());
+    }
 
     if response.hovered() {
         let mut text = format!("{} at {}", WAVES[wave_index.clamp(0.0, 3.0) as usize], hertz(rate));

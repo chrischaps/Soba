@@ -521,7 +521,7 @@ fn update_view(ui: &egui::Ui, node_id: NodeId, owner: NodeId, song: &Song, timel
         if (left <= 0.0 && view.glide < 0.0) || (right >= 1.0 && view.glide > 0.0) {
             view.glide = 0.0;
         }
-        ctx.request_repaint();
+        crate::app::pace::animate(&ctx);
     }
 
     // The overview strip: click or drag to move the view, double-click to
@@ -571,7 +571,7 @@ fn update_view(ui: &egui::Ui, node_id: NodeId, owner: NodeId, song: &Song, timel
     let view = view.clamped(song);
     // The chain's timelines drawn before this one this frame catch up next
     if view != stored_view(&ctx, owner, song) {
-        ctx.request_repaint();
+        crate::app::pace::animate(&ctx);
     }
     ctx.data_mut(|data| {
         data.insert_temp(view_id(owner), view);

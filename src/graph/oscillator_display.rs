@@ -90,7 +90,8 @@ pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &Sy
 
     // The other voices, sliding at their beat rates
     if voices > 1 {
-        let time = ui.ctx().input(|i| i.time) as f32;
+        // Stopped, they hold still
+        let time = if user_state.is_playing { ui.ctx().input(|i| i.time) as f32 } else { 0.0 };
         let beats: Vec<f32> = (0..voices)
             .map(|i| hz * ((Oscillator::unison_cents(i, voices, detune) / 1200.0).exp2() - 1.0))
             .collect();
@@ -102,8 +103,8 @@ pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &Sy
             // The live trace shows them beating, so these all but go
             curve(&painter, points, with_alpha(blue, (44.0 * (1.0 - 0.85 * presence)) as u8), 0.9 * z, false);
         }
-        if fastest > 0.0 {
-            ui.ctx().request_repaint();
+        if fastest > 0.0 && user_state.is_playing {
+            crate::app::pace::animate(ui.ctx());
         }
     }
 
@@ -125,7 +126,7 @@ pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &Sy
                 curve(&painter, points, with_alpha(blue, (110.0 * brightness * presence) as u8), 1.0 * z, false);
             }
         }
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     // Moved by V/Oct or Exp FM, the note it's playing

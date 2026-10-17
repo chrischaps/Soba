@@ -146,7 +146,7 @@ pub fn filter_display(ui: &mut egui::Ui, filter: Filter, node_id: NodeId, graph:
         let going_out = landscape(&spectrum.output);
         fill_under(&painter, &going_out, plot.bottom(), with_alpha(green, fade(64.0)), with_alpha(green, fade(10.0)));
         curve(&painter, going_out, with_alpha(green, fade(110.0)), 0.7 * z, false);
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     // The last two seconds of it along the floor, falling away from the plot
@@ -155,7 +155,7 @@ pub fn filter_display(ui: &mut egui::Ui, filter: Filter, node_id: NodeId, graph:
         painter.rect_filled(strip, 1.0 * z, with_alpha(egui::Color32::BLACK, 70));
         if let Some(trail) = trail {
             trail.paint(&painter, strip, green, theme::signal::AUDIO);
-            ui.ctx().request_repaint();
+            crate::app::pace::animate(ui.ctx());
         }
     }
 
@@ -219,8 +219,8 @@ pub fn filter_display(ui: &mut egui::Ui, filter: Filter, node_id: NodeId, graph:
         (format!("Res {:.0}%", resonance * 100.0), if res_moved { orange } else { theme::text::SECONDARY })
     };
     header(&painter, rect, z, Some((hertz(cutoff), if swept { orange } else { green.gamma_multiply(0.9) })), Some(right));
-    if modulated {
-        ui.ctx().request_repaint();
+    if modulated && user_state.is_playing {
+        crate::app::pace::animate(ui.ctx());
     }
 
     if response.hovered() {

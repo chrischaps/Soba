@@ -195,7 +195,7 @@ pub fn eq_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_s
         curve(&painter, coming_in, with_alpha(blue, fade(70.0)), 0.7 * z, false);
         let going_out = landscape(&spectrum.output);
         curve(&painter, going_out, Color32::from_white_alpha(fade(70.0)), 0.7 * z, false);
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     // Each band on its own, filled from the 0 dB line

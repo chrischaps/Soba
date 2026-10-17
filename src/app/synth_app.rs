@@ -31,6 +31,7 @@ use crate::persistence::patch_from_json;
 use crate::persistence::sample_files::SampleBase;
 use crate::widgets::{cpu_meter, CpuMeterConfig, KnobStyle};
 use super::capture::{Capture, CaptureAction, CaptureConfig};
+use super::pace;
 use super::editing::{self, Selection};
 use super::engine_sync;
 use super::input_device;
@@ -55,6 +56,7 @@ mod dive;
 mod file_hover;
 mod framing;
 mod grouping;
+mod idle;
 #[cfg(feature = "ableton-link")]
 mod link_follow;
 mod loops;
@@ -1038,12 +1040,6 @@ impl SynthApp {
     pub fn clear_all_midi_mappings(&mut self) {
         self.midi_mappings.clear();
         self.status_message = Some("All MIDI mappings cleared".to_string());
-    }
-
-    /// Check if there are any MIDI Note or Poly MIDI modules in the graph.
-    fn has_midi_note_modules(&self) -> bool {
-        self.graph_state.graph.nodes.iter()
-            .any(|(_, node)| matches!(node.user_data.module_id, "input.midi_note" | "input.poly_midi"))
     }
 
     /// Check if there are any Poly MIDI modules in the graph.
@@ -4016,12 +4012,19 @@ struct ToolbarActions {
     roll_back: bool,
 }
 
-impl eframe::App for SynthApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+impl SynthApp {
+    /// One frame of the app. Apart from `eframe::App` so a test can draw
+    /// one without a window.
+    fn draw_frame(&mut self, ctx: &egui::Context) {
         // Apply theme on first frame
         if !self.theme_applied {
             theme::apply_theme(ctx);
             self.theme_applied = true;
+            // MIDI arriving draws a frame, so the pianos, Monitor and Learn
+            // follow it without the UI drawing all the time
+            if let Some(midi) = &self.midi_engine {
+                midi.set_waker(ctx);
+            }
         }
 
         // A capture renders this frame's audio before anything is drawn
@@ -4053,6 +4056,7 @@ impl eframe::App for SynthApp {
             crate::link::midi::MIDI.set_latency(engine.output_latency());
         }
         let now = ctx.input(|i| i.time);
+        self.user_state.focused = ctx.input(|i| i.focused);
         self.user_state.tick_signal_history(now, &self.graph_state.graph);
 
         // A warning in the status bar fades out after a while
@@ -4075,12 +4079,12 @@ impl eframe::App for SynthApp {
         }
         self.user_state.output_meter.tick(dt);
         if !self.user_state.output_meter.is_idle() {
-            ctx.request_repaint();
+            pace::animate(ctx);
         }
         for meters in self.user_state.module_meters.values_mut() {
             meters.tick(dt);
             if !meters.is_idle() {
-                ctx.request_repaint();
+                pace::animate(ctx);
             }
         }
 
@@ -4088,11 +4092,10 @@ impl eframe::App for SynthApp {
         // We clear it on the next frame after it was set
         let had_status_message = self.status_message.is_some();
 
-        // Request continuous repaints when playing (for LED indicators and other visualizations)
-        // Also repaint continuously when there are keyboard or MIDI Note modules, so
-        // their pianos follow the keys
-        if self.is_playing || self.has_keyboard_modules() || self.has_midi_note_modules() || !self.arming.is_empty() {
-            ctx.request_repaint();
+        // Animate while playing (for LED indicators and other visualizations).
+        // Stopped, nothing moves: keys and MIDI draw their own frames (#307)
+        if self.is_playing || !self.arming.is_empty() {
+            pace::animate(ctx);
         }
 
         // Handle keyboard shortcuts
@@ -4439,10 +4442,18 @@ impl eframe::App for SynthApp {
         // Then the frames of a long warmup that would look no different
         self.fast_forward_capture(ctx);
     }
+}
+
+impl eframe::App for SynthApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.draw_frame(ctx);
+    }
 
     /// While capturing, the script replaces the mouse and keyboard, and the
     /// clock moves one frame per pass.
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        // A frame that waited for its turn says how long it waited
+        pace::before_frame(ctx, raw_input);
         if let Some(capture) = self.capture.as_mut() {
             let (graph, zoom) = (&self.graph_state.graph, self.graph_state.pan_zoom.zoom);
             let state = &self.user_state;

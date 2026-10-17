@@ -155,7 +155,7 @@ pub fn distortion_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph
     );
 
     if live.is_some() && reach > 0.01 {
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     if response.hovered() {

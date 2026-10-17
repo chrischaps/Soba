@@ -268,14 +268,14 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             // A take just tidied as it was kept, and what that did
             if let Some((said, at)) = user_state.tidied_takes.get(&node_id) {
                 if sampler_take::draw_tidied(&painter, plot, said, sampler_take::tidied_age(ui, node_id, *at), z) {
-                    ui.ctx().request_repaint();
+                    crate::app::pace::animate(ui.ctx());
                 }
             }
         }
         None if live => {
             let scope = engine_id.and_then(|id| user_state.get_scope_data(id));
             sampler_take::draw_take(&painter, plot, &rec, scope, z);
-            ui.ctx().request_repaint();
+            crate::app::pace::animate(ui.ctx());
         }
         None if hovered.is_some() => {
             if let Some((key, sample)) = hovered {
@@ -309,7 +309,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     // Waiting to record: for a sound, or the next bar
     if matches!(rec.state, RecState::Armed | RecState::Waiting) {
         sampler_take::draw_waiting(&painter, rect, plot, &rec, ui.input(|i| i.time), z);
-        ui.ctx().request_repaint();
+        crate::app::pace::animate(ui.ctx());
     }
 
     // A file dragged over: this is where it lands
