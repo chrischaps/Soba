@@ -128,7 +128,7 @@ def film(patch, out, size, ppp, script=None):
     script.write_text(text)
     subprocess.run([str(EXE), str(patch), "--capture", str(script), "--out", str(out), "--fps", "10",
                     "--size", f"{size[0]}x{size[1]}", "--ppp", str(ppp)],
-                   check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                   check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
     if "still" in text and not (out / "shot.ppm").exists():
         raise RuntimeError(f"no still at {size[0]}x{size[1]}: is the window too big for the screen?")
     return json.loads((out / "shot.json").read_text())

@@ -17,6 +17,9 @@ inside one (`Strings/Pump#2`, as an `enter` cue takes it, to film it by):
 Frames and notes are drawn on the top level only, so inside a group it's
 modules over modules.
 
+An example that can't be filmed is reported as FAILED, with the last
+lines the capture wrote, and the rest are still checked.
+
 Build into target/capture first, as for shots.py. Exits 1 if anything is
 reported.
 """
@@ -25,7 +28,10 @@ import json
 import subprocess
 import sys
 import tempfile
+import textwrap
 from pathlib import Path
+
+import picture_check
 
 ROOT = Path(__file__).resolve().parents[2]
 EXE = ROOT / "target" / "capture" / "release" / "soba.exe"
@@ -132,8 +138,15 @@ if __name__ == "__main__":
         for name in names:
             out = Path(tmp) / name
             out.mkdir()
-            found = [("/".join(path), p) for path, lay in layouts(ROOT / "patches" / f"{name}.json", out)
-                     for p in problems(lay)]
+            # One patch that can't be filmed is reported, and the rest still checked
+            try:
+                found = [("/".join(path), p) for path, lay in layouts(ROOT / "patches" / f"{name}.json", out)
+                         for p in problems(lay)]
+            except Exception as e:
+                print(f"{name:20} FAILED")
+                print(textwrap.indent(picture_check.failure(e), "    "))
+                failed = True
+                continue
             print(f"{name:20} {'ok' if not found else ''}")
             for where, p in found:
                 print(f"    {where}: {p}" if where else f"    {p}")

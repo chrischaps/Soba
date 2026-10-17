@@ -410,6 +410,23 @@ def exe_is_old():
     return bool(last) and EXE.stat().st_mtime < int(last)
 
 
+# Lines of a failed capture's stderr worth showing: its last words
+TAIL = 20
+
+
+def failure(e):
+    """What went wrong filming, for the report: the exception, and for a
+    capture that exited non-zero the last lines it wrote to stderr (#333)."""
+    if isinstance(e, subprocess.CalledProcessError):
+        said = e.stderr or ""
+        if isinstance(said, bytes):
+            said = said.decode(errors="replace")
+        lines = said.strip().splitlines()[-TAIL:]
+        return f"the capture failed (exit {e.returncode})" + ("".join("\n" + line for line in lines)
+                                                             if lines else ", saying nothing")
+    return f"{type(e).__name__}: {e}"
+
+
 def jobs_arg(args):
     if "--jobs" in args:
         i = args.index("--jobs")
@@ -456,20 +473,29 @@ def run(args, tool, every, png, inputs, shoot, compare, width):
                             break_on_hyphens=False))
     if plan.skipped and plan.film:
         print()
-    stale, entries = [], {}
+    stale, failed, entries = [], [], {}
     with tempfile.TemporaryDirectory() as tmp, ThreadPoolExecutor(jobs) as pool:
         lock = threading.Lock()
 
         def film(name):
-            image = shoot(name, tmp)
+            """The picture, or None and what went wrong: one picture that
+            can't be filmed doesn't stop the rest."""
+            try:
+                image, error = shoot(name, tmp), None
+            except Exception as e:
+                image, error = None, failure(e)
             with lock:
-                print(f"  filmed {name}", file=sys.stderr, flush=True)
-            return image
+                print(f"  {'filmed' if error is None else 'failed'} {name}", file=sys.stderr, flush=True)
+            return image, error
 
-        for name, image in zip(plan.film, pool.map(film, plan.film)):
+        for name, (image, error) in zip(plan.film, pool.map(film, plan.film)):
             path = png(name)
             why = plan.why[name]
-            if check:
+            if error is not None:
+                print(f"{name:{width}} {'FAILED':22} filmed: {why}")
+                print(textwrap.indent(error, "    "))
+                failed.append(name)
+            elif check:
                 fraction = compare(image, path)
                 verdict = "ok" if fraction <= STALE_FRACTION else ("missing" if not path.exists() else f"stale ({fraction:.1%} changed)")
                 print(f"{name:{width}} {verdict:22} filmed: {why}")
@@ -491,4 +517,6 @@ def run(args, tool, every, png, inputs, shoot, compare, width):
         print(f"Re-shot {' '.join(stale)}")
     elif check and stale:
         print(f"Re-shoot with: python tools/showcase/{tool} {' '.join(stale)}")
-    return 1 if stale and not refresh else 0
+    if failed:
+        print(f"Couldn't film {' '.join(failed)}")
+    return 1 if failed or (stale and not refresh) else 0

@@ -202,7 +202,7 @@ def shoot(name, tmp):
     lesson = ["--lesson", pic["lesson"]] if "lesson" in pic else []
     subprocess.run([str(EXE), str(ROOT / pic["patch"]), *lesson, "--capture", str(out / "manual.txt"), "--out", str(out),
                     "--fps", "10", "--size", f"{size[0]}x{size[1]}", "--ppp", str(PPP)],
-                   check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                   check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
     image = Image.open(out / "shot.ppm").convert("RGB")
     crop = pic["crop"]
     if crop == "patch":
