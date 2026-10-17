@@ -177,8 +177,9 @@ pub struct SynthGraphState {
     midi_notes: VecDeque<(u8, u8)>,
     midi_note_count: u64,
 
-    /// MIDI CC mappings for UI display.
-    /// Key: (engine_node_id, param_index), Value: mapping info.
+    /// The badges of the knobs a MIDI CC or host macro turns, keyed by
+    /// (engine_node_id, param_index). The app works them out afresh from
+    /// its mappings whenever those change (`MidiMappings::badges`).
     pub midi_mappings: HashMap<(EngineNodeId, usize), MidiMappingInfo>,
 
     /// Whether MIDI Learn mode is active.
@@ -510,24 +511,6 @@ impl SynthGraphState {
     /// Get the MIDI mapping info for a parameter, if any.
     pub fn get_midi_mapping(&self, engine_node_id: EngineNodeId, param_index: usize) -> Option<&MidiMappingInfo> {
         self.midi_mappings.get(&(engine_node_id, param_index))
-    }
-
-    /// Set or update a MIDI mapping for a parameter.
-    pub fn set_midi_mapping(&mut self, engine_node_id: EngineNodeId, param_index: usize, cc_number: u8, channel: u8) {
-        self.midi_mappings.insert(
-            (engine_node_id, param_index),
-            MidiMappingInfo { cc_number, channel, macro_slot: None },
-        );
-    }
-
-    /// Notes that the plugin's host macro `slot` (0-7) turns a parameter.
-    pub fn set_macro_mapping(&mut self, engine_node_id: EngineNodeId, param_index: usize, slot: u8) {
-        self.midi_mappings.insert((engine_node_id, param_index), MidiMappingInfo { cc_number: 0, channel: 0, macro_slot: Some(slot) });
-    }
-
-    /// Remove a MIDI mapping for a parameter.
-    pub fn remove_midi_mapping(&mut self, engine_node_id: EngineNodeId, param_index: usize) {
-        self.midi_mappings.remove(&(engine_node_id, param_index));
     }
 
     /// Check if a parameter is currently the MIDI Learn target.

@@ -133,10 +133,9 @@ impl SynthApp {
     /// CC or macro turned it, and turns the knob to the macro at once.
     pub(super) fn map_to_macro(&mut self, mapping: MidiMapping) {
         let Some(slot) = mapping.macro_slot else { return };
-        self.midi_mappings.retain(|m| !(m.node_id == mapping.node_id && m.param_index == mapping.param_index));
-        self.user_state.set_macro_mapping(mapping.node_id, mapping.param_index, slot);
         self.status_message = Some(format!("{} follows Macro {}", mapping.param_name, slot + 1));
-        self.midi_mappings.push(mapping);
+        self.midi_mappings.map_macro(mapping);
+        self.show_midi_badges();
         if let Some(hosted) = self.hosted.as_mut() {
             hosted.macros[slot as usize] = f32::NAN;
         }

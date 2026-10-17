@@ -38,6 +38,7 @@ use super::engine_sync;
 use super::input_device;
 use super::library::{self, SavedModule};
 use super::long_press::LongPress;
+use super::midi_mappings::MidiMappings;
 use super::palette::{PaletteAction, QuickAdd};
 use super::recording::{self, RecState, Toast, ToastAction};
 use super::session::{self, Answer, Autosave, Discard, RecentFiles};
@@ -238,7 +239,7 @@ pub struct SynthApp {
 
     // --- MIDI CC Mapping state ---
     /// Active MIDI CC to parameter mappings.
-    midi_mappings: Vec<MidiMapping>,
+    midi_mappings: MidiMappings,
 
     /// Target for MIDI Learn mode (None = not learning).
     midi_learn_target: Option<MidiLearnTarget>,
@@ -265,7 +266,7 @@ pub struct SynthApp {
     recovery: Option<Autosave>,
     /// The MIDI mappings as last opened or saved. Undo history doesn't
     /// cover them, but they're saved with the patch.
-    saved_midi_mappings: Vec<MidiMapping>,
+    saved_midi_mappings: MidiMappings,
     /// Whether the window may close: set once unsaved changes are dealt with.
     allow_close: bool,
     /// The window title last sent, so it's only sent when it changes.
@@ -526,7 +527,7 @@ impl SynthApp {
             midi_error_message,
             midi_held_notes: Vec::new(),
             // MIDI CC Mapping state
-            midi_mappings: Vec::new(),
+            midi_mappings: MidiMappings::default(),
             midi_learn_target: None,
             history: History::default(),
             quick_add: None,
@@ -535,7 +536,7 @@ impl SynthApp {
             recent_files: RecentFiles::default(),
             pending_discard: None,
             recovery: None,
-            saved_midi_mappings: Vec::new(),
+            saved_midi_mappings: MidiMappings::default(),
             allow_close: false,
             window_title: String::new(),
             capture: None,
@@ -925,25 +926,9 @@ impl SynthApp {
 
         // Handle MIDI Learn completion
         if let Some(mapping) = learned_mapping {
-            // Remove any existing mapping for the same parameter (from user_state too)
-            self.midi_mappings.retain(|m| {
-                !(m.node_id == mapping.node_id && m.param_index == mapping.param_index)
-            });
-            self.user_state.remove_midi_mapping(mapping.node_id, mapping.param_index);
-
-            // Also remove any existing mapping for the same CC
-            self.midi_mappings.retain(|m| {
-                m.macro_slot.is_some() || !(m.cc_number == mapping.cc_number && (m.channel == 0 || m.channel == mapping.channel))
-            });
-
-            // Add the new mapping
-            self.user_state.set_midi_mapping(
-                mapping.node_id,
-                mapping.param_index,
-                mapping.cc_number,
-                mapping.channel,
-            );
-            self.midi_mappings.push(mapping);
+            // The CC leaves whatever knob it turned before
+            self.midi_mappings.learn(mapping);
+            self.show_midi_badges();
 
             // Exit learn mode
             self.midi_learn_target = None;
@@ -1052,24 +1037,16 @@ impl SynthApp {
         self.midi_learn_target.is_some()
     }
 
-    /// Get the MIDI mapping for a specific parameter, if any.
-    pub fn get_mapping_for_param(&self, node_id: u64, param_index: usize) -> Option<&MidiMapping> {
-        self.midi_mappings.iter()
-            .find(|m| m.node_id == node_id && m.param_index == param_index)
-    }
-
     /// Remove MIDI mapping for a specific parameter.
     pub fn clear_mapping_for_param(&mut self, node_id: u64, param_index: usize) {
-        self.midi_mappings.retain(|m| {
-            !(m.node_id == node_id && m.param_index == param_index)
-        });
+        self.midi_mappings.unmap(node_id, param_index);
+        self.show_midi_badges();
         self.status_message = Some("MIDI mapping cleared".to_string());
     }
 
-    /// Clear all MIDI mappings.
-    pub fn clear_all_midi_mappings(&mut self) {
-        self.midi_mappings.clear();
-        self.status_message = Some("All MIDI mappings cleared".to_string());
+    /// Puts on the knobs the badges of the mappings as they now stand.
+    fn show_midi_badges(&mut self) {
+        self.user_state.midi_mappings = self.midi_mappings.badges();
     }
 
     /// Check if there are any Poly MIDI modules in the graph.
@@ -2212,10 +2189,7 @@ impl SynthApp {
                             engine_node_id,
                             param_index,
                         }) => {
-                            // Clear MIDI mapping for this parameter
                             self.clear_mapping_for_param(engine_node_id, param_index);
-                            // Update the user state
-                            self.user_state.remove_midi_mapping(engine_node_id, param_index);
                         }
                         NodeResponse::User(crate::graph::SynthResponse::ToggleBypass(node_id)) => {
                             bypass_toggles.push(node_id);
@@ -2758,7 +2732,7 @@ impl SynthApp {
             &self.graph_state.graph,
             |node_id| self.user_state.get_engine_node_id(node_id),
             position,
-            &self.midi_mappings,
+            self.midi_mappings.as_slice(),
         );
         let annotations = &self.user_state.annotations;
         let all: Vec<AnnotationId> = annotations.iter().map(|(id, _)| id).collect();
@@ -2841,14 +2815,9 @@ impl SynthApp {
         self.sync_cables();
 
         // Load MIDI mappings, retargeted from the patch's node IDs to the new ones
-        self.midi_mappings = staged.remap_midi_mappings(|graph_id| self.user_state.get_engine_node_id(graph_id));
-        // Sync mappings to user state for UI display
-        for mapping in &self.midi_mappings {
-            match mapping.macro_slot {
-                Some(slot) => self.user_state.set_macro_mapping(mapping.node_id, mapping.param_index, slot),
-                None => self.user_state.set_midi_mapping(mapping.node_id, mapping.param_index, mapping.cc_number, mapping.channel),
-            }
-        }
+        let mappings = staged.remap_midi_mappings(|graph_id| self.user_state.get_engine_node_id(graph_id));
+        self.midi_mappings.load(mappings);
+        self.show_midi_badges();
 
         // Restore playback state. The knobs go with the patch, which the
         // play waits for, so it starts as it was saved rather than from its

@@ -12,6 +12,7 @@ mod input_device;
 pub mod lesson;
 pub mod library;
 mod long_press;
+pub mod midi_mappings;
 mod mutate;
 mod notice;
 mod palette;
