@@ -61,7 +61,7 @@ pub fn spread_offset(voice: usize, voices: usize) -> f32 {
     if voices < 2 {
         return 0.0;
     }
-    let place = if voice % 2 == 0 { voice / 2 } else { voices - 1 - voice / 2 };
+    let place = if voice.is_multiple_of(2) { voice / 2 } else { voices - 1 - voice / 2 };
     -1.0 + 2.0 * place as f32 / (voices - 1) as f32
 }
 

@@ -216,7 +216,7 @@ pub fn fader(ui: &mut Ui, value: &mut f32, config: &FaderConfig) -> Response {
 
         // Draw scale markers
         if config.show_markers {
-            draw_scale_markers(painter, track_rect, &config);
+            draw_scale_markers(painter, track_rect, config);
         }
 
         // Draw track groove (recessed look)
@@ -446,17 +446,15 @@ pub fn horizontal_fader(ui: &mut Ui, value: &mut f32, config: &FaderConfig) -> R
                     *value = config.range.start()
                         + new_normalized * (config.range.end() - config.range.start());
                 }
+            } else if config.logarithmic {
+                let min = *config.range.start();
+                let max = *config.range.end();
+                let log_min = min.ln();
+                let log_max = max.ln();
+                *value = (log_min + raw_normalized * (log_max - log_min)).exp();
             } else {
-                if config.logarithmic {
-                    let min = *config.range.start();
-                    let max = *config.range.end();
-                    let log_min = min.ln();
-                    let log_max = max.ln();
-                    *value = (log_min + raw_normalized * (log_max - log_min)).exp();
-                } else {
-                    *value = config.range.start()
-                        + raw_normalized * (config.range.end() - config.range.start());
-                }
+                *value = config.range.start()
+                    + raw_normalized * (config.range.end() - config.range.start());
             }
         }
     }

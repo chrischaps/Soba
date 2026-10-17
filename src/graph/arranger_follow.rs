@@ -225,7 +225,7 @@ fn mirror(graph: &mut SynthGraph, leader: NodeId, follower: NodeId) -> bool {
         }
     }
     let names: Vec<(String, Option<String>)> =
-        (0..SECTIONS).map(|s| section_key(s)).map(|key| (key.clone(), graph[leader].user_data.labels.get(&key).cloned())).collect();
+        (0..SECTIONS).map(section_key).map(|key| (key.clone(), graph[leader].user_data.labels.get(&key).cloned())).collect();
     let labels = &mut graph[follower].user_data.labels;
     for (key, name) in names {
         if labels.get(&key) != name.as_ref() {

@@ -899,8 +899,8 @@ mod tests {
         clock.process(&[], &mut outputs, &[120.0, 50.0, 2.0, 1.0, 0.0], &ctx);
 
         // Should have both high and low values
-        let has_high = outputs[0].samples.iter().any(|&s| s == 1.0);
-        let has_low = outputs[0].samples.iter().any(|&s| s == 0.0);
+        let has_high = outputs[0].samples.contains(&1.0);
+        let has_low = outputs[0].samples.contains(&0.0);
         assert!(has_high, "Clock should output high gates");
         assert!(has_low, "Clock should output low between gates");
 
@@ -938,7 +938,7 @@ mod tests {
         let expected = 22050;
         let tolerance = 100; // Allow small timing variance
         assert!(
-            (high_count as i32 - expected as i32).abs() < tolerance,
+            (high_count as i32 - expected).abs() < tolerance,
             "Expected ~{} high samples, got {}",
             expected,
             high_count
@@ -967,7 +967,7 @@ mod tests {
         let expected = 11025;
         let tolerance = 100;
         assert!(
-            (high_count as i32 - expected as i32).abs() < tolerance,
+            (high_count as i32 - expected).abs() < tolerance,
             "Expected ~{} high samples for 25% gate, got {}",
             expected,
             high_count
@@ -1001,7 +1001,7 @@ mod tests {
         // Should have 4 rising edges (4 eighth notes in 2 seconds at 60 BPM)
         // First rising edge is at start, so we should see 4 total
         assert!(
-            rising_edges >= 3 && rising_edges <= 5,
+            (3..=5).contains(&rising_edges),
             "Expected ~4 rising edges for eighth notes, got {}",
             rising_edges
         );
@@ -1112,7 +1112,7 @@ mod tests {
 
         // Should have approximately 20 triggers in 1 second
         assert!(
-            rising_edges >= 18 && rising_edges <= 22,
+            (18..=22).contains(&rising_edges),
             "Expected ~20 triggers at 300 BPM sixteenths, got {}",
             rising_edges
         );

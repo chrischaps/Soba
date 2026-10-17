@@ -18,7 +18,7 @@ impl StoredZip {
     /// An empty archive whose files read as changed at the date and time
     /// given (local, to the second; zip has no time zone).
     pub fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8) -> Self {
-        let time = (hour as u16) << 11 | (minute as u16) << 5 | (second as u16) / 2;
+        let time = (hour as u16) << 11 | (minute as u16) << 5 | ((second as u16) / 2);
         let date = year.saturating_sub(1980).min(127) << 9 | (month as u16) << 5 | day as u16;
         Self { bytes: Vec::new(), directory: Vec::new(), count: 0, modified: (time, date) }
     }

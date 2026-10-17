@@ -112,7 +112,7 @@ pub fn true_peak(channel: &[f32], sample_rate: f32) -> f32 {
     // Silence either side, so the filter runs into the first sample and out
     // past the last
     let taps = INTERPOLATION_PHASES[0].len();
-    let padding = std::iter::repeat(0.0).take(taps - 1);
+    let padding = std::iter::repeat_n(0.0, taps - 1);
     let padded: Vec<f64> = padding.clone().chain(channel.iter().map(|&s| s as f64)).chain(padding).collect();
     padded
         .windows(taps)

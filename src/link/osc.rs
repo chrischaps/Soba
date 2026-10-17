@@ -83,7 +83,7 @@ fn pad_str(bytes: &mut Vec<u8>, text: &str) {
 /// Pads with nulls until what's been written since `start` is a multiple
 /// of four bytes.
 fn pad_to_four(bytes: &mut Vec<u8>, start: usize) {
-    while (bytes.len() - start) % 4 != 0 {
+    while !(bytes.len() - start).is_multiple_of(4) {
         bytes.push(0);
     }
 }

@@ -271,8 +271,8 @@ impl MidiSender {
     /// `port`'s open device, opening it if it's plugged in and hasn't just
     /// refused.
     fn connection<'a>(port: &'a mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], now: Instant) -> Option<&'a mut Box<dyn Connection>> {
-        if port.connection.is_none() && !port.device.is_empty() && devices.contains(&port.device) {
-            if port.failed_at.is_none_or(|at| now.duration_since(at) >= RETRY_AFTER) {
+        if port.connection.is_none() && !port.device.is_empty() && devices.contains(&port.device)
+            && port.failed_at.is_none_or(|at| now.duration_since(at) >= RETRY_AFTER) {
                 match outputs.open(&port.device) {
                     Ok(connection) => {
                         port.connection = Some(connection);
@@ -284,7 +284,6 @@ impl MidiSender {
                     }
                 }
             }
-        }
         port.connection.as_mut()
     }
 

@@ -75,7 +75,7 @@ impl Train {
 
     /// Whether echo `n` on one side came in on the other side.
     fn crossed(&self, n: usize) -> bool {
-        self.ping_pong && n >= 2 && n % 2 == 0
+        self.ping_pong && n >= 2 && n.is_multiple_of(2)
     }
 }
 

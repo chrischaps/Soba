@@ -1001,17 +1001,15 @@ impl SynthNodeData {
                                 }));
                                 ui.close_menu();
                             }
-                        } else {
-                            if ui.button("Learn MIDI CC").clicked() {
-                                responses.push(NodeResponse::User(SynthResponse::MidiLearnStart {
-                                    engine_node_id: engine_id,
-                                    param_index: current_param_index,
-                                    param_name: knob_param.param_name.clone(),
-                                    min_value: midi_config.min_value,
-                                    max_value: midi_config.max_value,
-                                }));
-                                ui.close_menu();
-                            }
+                        } else if ui.button("Learn MIDI CC").clicked() {
+                            responses.push(NodeResponse::User(SynthResponse::MidiLearnStart {
+                                engine_node_id: engine_id,
+                                param_index: current_param_index,
+                                param_name: knob_param.param_name.clone(),
+                                min_value: midi_config.min_value,
+                                max_value: midi_config.max_value,
+                            }));
+                            ui.close_menu();
                         }
                         // In a DAW, one of the plugin's eight macros can turn it
                         if user_state.hosted && !is_learn_target {

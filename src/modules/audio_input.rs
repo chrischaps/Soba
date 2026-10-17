@@ -416,7 +416,7 @@ mod tests {
     fn test_gain_raises_the_input_over_the_threshold() {
         let signal = burst(-40.0);
         let out = run(&signal, &signal, [18.0, -30.0, 5.0, 150.0, 0.0]);
-        assert!(out.gate.iter().any(|&g| g == 1.0), "+18 dB lifts -40 dB over -30 dB");
+        assert!(out.gate.contains(&1.0), "+18 dB lifts -40 dB over -30 dB");
     }
 
     #[test]
@@ -465,7 +465,7 @@ mod tests {
         assert!(one.follow.iter().all(|&f| f < follow_from_db(-45.0)));
 
         let two = run(&quiet, &loud, on_channel(2.0));
-        assert!(two.gate.iter().any(|&g| g == 1.0), "input 2 opens the gate");
+        assert!(two.gate.contains(&1.0), "input 2 opens the gate");
         // The same as hearing input 2 on both sides
         assert_eq!(two.follow, run(&loud, &loud, DEFAULTS).follow);
     }

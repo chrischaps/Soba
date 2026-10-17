@@ -640,7 +640,7 @@ mod tests {
         let top = edges(&r.eor)[0];
         let end = edges(&r.eoc)[0];
         assert!((top as f32 - (100.0 + 0.05 * 48000.0)).abs() <= 1.0, "top at {top}");
-        assert!(r.out[top - 1..=top].iter().any(|&v| v == peak));
+        assert!(r.out[top - 1..=top].contains(&peak));
         assert!(r.eor[top..end].iter().all(|&g| g == 1.0) && r.eor[end] == 0.0);
     }
 

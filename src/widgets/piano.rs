@@ -138,7 +138,7 @@ impl PianoData {
 
     /// Whether a key (0-11) is in the scale; every key is when none is set.
     fn in_scale(&self, semitone: u8) -> bool {
-        self.scale.map_or(true, |scale| scale & (1 << semitone) != 0)
+        self.scale.is_none_or(|scale| scale & (1 << semitone) != 0)
     }
 
     /// Check if a note (0-11 semitone within octave) is active.

@@ -495,7 +495,7 @@ impl SynthApp {
             None
         };
 
-        let app = Self {
+        Self {
             audio_engine,
             ui_handle,
             audio_error_message,
@@ -584,9 +584,7 @@ impl SynthApp {
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
             hosted: None,
-        };
-
-        app
+        }
     }
 
     /// Hands the audio engine's clock to a capture: from here on audio is
@@ -3915,7 +3913,7 @@ impl SynthApp {
 
         // Update active notes for piano display (convert relative notes to MIDI notes)
         let active_notes: Vec<u8> = self.pressed_keys.iter()
-            .map(|(rel, _)| relative_to_midi(*rel, 0) as u8)
+            .map(|(rel, _)| relative_to_midi(*rel, 0))
             .collect();
         self.user_state.set_keyboard_active_notes(active_notes);
     }

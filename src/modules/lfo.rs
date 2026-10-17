@@ -521,7 +521,7 @@ mod tests {
         // Output should be within -1 to +1
         for &sample in &outputs[0].samples {
             assert!(
-                sample >= -1.0 && sample <= 1.0,
+                (-1.0..=1.0).contains(&sample),
                 "Bipolar sample {} out of range",
                 sample
             );
@@ -542,7 +542,7 @@ mod tests {
         // Output should be within 0 to +1
         for &sample in &outputs[0].samples {
             assert!(
-                sample >= 0.0 && sample <= 1.0,
+                (0.0..=1.0).contains(&sample),
                 "Unipolar sample {} out of range",
                 sample
             );
@@ -641,7 +641,7 @@ mod tests {
 
         // At 2 Hz for 1 second, expect ~2 cycles
         assert!(
-            zero_crossings >= 1 && zero_crossings <= 3,
+            (1..=3).contains(&zero_crossings),
             "Expected ~2 zero crossings for 2 Hz, got {}",
             zero_crossings
         );
@@ -753,7 +753,7 @@ mod tests {
 
         // Allow some tolerance
         assert!(
-            zero_crossings >= 95 && zero_crossings <= 105,
+            (95..=105).contains(&zero_crossings),
             "Expected ~100 cycles at 100 Hz, got {}",
             zero_crossings
         );

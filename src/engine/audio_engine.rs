@@ -581,7 +581,7 @@ impl AudioEngine {
             .filter(|range| range.min_sample_rate() <= rate && rate <= range.max_sample_rate())
             .filter_map(|range| format_rank(range.sample_format()).map(|rank| (rank, channel_rank(range.channels()), range)))
             .min_by_key(|&(rank, channels, _)| (rank, channels))
-            .map(|(_, _, range)| range.clone().with_sample_rate(rate));
+            .map(|(_, _, range)| (*range).with_sample_rate(rate));
         // Otherwise the device's own settings, converted on the way in
         let supported_config = match at_output_rate {
             Some(config) => config,

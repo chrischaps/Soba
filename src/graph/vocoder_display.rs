@@ -119,7 +119,7 @@ pub fn vocoder_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     // Each bar's colour: cyan to the left, violet to the right, parting as
     // Width opens
     let tint = |band: usize, alpha: f32| {
-        let lean = if band % 2 == 0 { 0.0 } else { width_knob };
+        let lean = if band.is_multiple_of(2) { 0.0 } else { width_knob };
         let mix = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * lean) as u8;
         let c = Color32::from_rgb(mix(cyan.r(), RIGHT_TINT.r()), mix(cyan.g(), RIGHT_TINT.g()), mix(cyan.b(), RIGHT_TINT.b()));
         Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), (alpha * 255.0).clamp(0.0, 255.0) as u8)

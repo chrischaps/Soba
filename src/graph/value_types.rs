@@ -81,8 +81,10 @@ impl NumberSpec {
 /// Each variant represents a different kind of input with its own
 /// UI widget and value handling.
 #[derive(Clone, Debug, PartialEq)]
+#[derive(Default)]
 pub enum SynthValueType {
     /// An input that only takes a cable and has no value of its own.
+    #[default]
     Port,
     /// A continuous value in real units, shown as a knob.
     Number {
@@ -182,11 +184,6 @@ impl SynthValueType {
     }
 }
 
-impl Default for SynthValueType {
-    fn default() -> Self {
-        Self::Port
-    }
-}
 
 impl WidgetValueTrait for SynthValueType {
     type Response = SynthResponse;

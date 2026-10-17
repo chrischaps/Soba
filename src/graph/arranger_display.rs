@@ -1828,7 +1828,7 @@ fn insert(node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, at:
     moved.extend((at..count).map(|section| section_data(&labels, song, section)));
     // Loop follows the section it named
     let loop_to = song.values[Arr::PARAM_LOOP];
-    let loop_to = if loop_to >= 1.0 && loop_to as usize - 1 >= at { loop_to + 1.0 } else { loop_to };
+    let loop_to = if loop_to >= 1.0 && loop_to as usize > at { loop_to + 1.0 } else { loop_to };
     Rewrite { from: at, sections: moved, count: count + 1, loop_to }.edits(node_id, params, label)
 }
 

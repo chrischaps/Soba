@@ -305,7 +305,7 @@ fn side_step(t: f32, amp: f32) -> Pose {
     pose.hip = vec2(x, STAND - 0.04 * amp * dip(p));
     pose.lean = -0.6 * x;
     // The foot that follows lifts as it comes
-    let trailing = if (t as usize) % 2 == 0 { 0 } else { 1 };
+    let trailing = if (t as usize).is_multiple_of(2) { 0 } else { 1 };
     for side in 0..2 {
         let out = if side == 0 { -1.0 } else { 1.0 };
         let lift = if side == trailing { 0.05 * amp * (PI * p).sin() } else { 0.0 };
@@ -338,7 +338,7 @@ fn running_man(t: f32, amp: f32) -> Pose {
 /// Out with arms up, in with arms down, a hop each beat.
 fn jumping_jack(t: f32, amp: f32) -> Pose {
     let p = t.fract();
-    let out = (t as usize) % 2 == 0;
+    let out = (t as usize).is_multiple_of(2);
     // How open the jack is, moving through each hop
     let open = if out { smooth(p / 0.6) } else { 1.0 - smooth(p / 0.6) };
     let hop = 0.07 * amp * (PI * p).sin().max(0.0);
@@ -402,7 +402,7 @@ fn roll(t: f32, amp: f32) -> Pose {
 /// A bump of the hips to one side on each beat, arms swung the other way.
 fn bump(t: f32, amp: f32) -> Pose {
     let p = t.fract();
-    let side = if (t as usize) % 2 == 0 { 1.0 } else { -1.0 };
+    let side = if (t as usize).is_multiple_of(2) { 1.0 } else { -1.0 };
     let push = side * (0.02 + 0.05 * amp) * hit(p, 0.12);
     let mut pose = Pose::stand();
     pose.hip = vec2(push, STAND - 0.02 * amp);
@@ -492,7 +492,7 @@ fn slide(t: f32, amp: f32) -> Pose {
 /// The head whips down on each beat, knees with it.
 fn whip(t: f32, amp: f32) -> Pose {
     let p = t.fract();
-    let side = if (t as usize) % 2 == 0 { 1.0 } else { -1.0 };
+    let side = if (t as usize).is_multiple_of(2) { 1.0 } else { -1.0 };
     let hit = hit(p, 0.08);
     let mut pose = Pose::stand();
     pose.hip.y -= 0.07 * amp * hit;
@@ -618,7 +618,7 @@ pub fn dance(m: &Moment) -> Pose {
 
     // A new step blends in from the last over the first quarter beat
     let blend = 0.25;
-    if m.beat % PHRASE == 0 && phase < blend && phrase > 0 {
+    if m.beat.is_multiple_of(PHRASE) && phase < blend && phrase > 0 {
         let before = STEPS[style][step_in(style, phrase - 1)](t, amp);
         pose = before.lerp(&pose, smooth(phase / blend));
     }
@@ -701,7 +701,7 @@ pub fn idle(time: f64, energy: f32) -> Pose {
     // And now and then a look round
     let look = (s / 11.0).fract();
     if look > 0.2 && look < 0.45 {
-        pose.head += 0.18 * (PI * (look - 0.2) / 0.25).sin() * if (s / 11.0) as u32 % 2 == 0 { 1.0 } else { -1.0 };
+        pose.head += 0.18 * (PI * (look - 0.2) / 0.25).sin() * if ((s / 11.0) as u32).is_multiple_of(2) { 1.0 } else { -1.0 };
     }
     pose
 }

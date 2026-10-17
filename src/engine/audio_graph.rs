@@ -1073,14 +1073,9 @@ mod tests {
     }
 
     /// A simple test output module.
+    #[derive(Default)]
     struct TestOutput {
         received: Vec<f32>,
-    }
-
-    impl Default for TestOutput {
-        fn default() -> Self {
-            Self { received: Vec::new() }
-        }
     }
 
     impl DspModule for TestOutput {
@@ -1441,7 +1436,7 @@ mod tests {
         let mut graph = AudioGraph::new(44100.0, 256);
 
         graph.add_module_instance(1, Box::new(TestOscillator::default()));
-        graph.add_module_instance(2, Box::new(TestPassthrough::default()));
+        graph.add_module_instance(2, Box::new(TestPassthrough));
         graph.add_module_instance(3, Box::new(TestOutput::default()));
 
         graph.connect(1, 0, 2, 0);
@@ -1480,7 +1475,7 @@ mod tests {
 
         // Create a chain: osc -> pass -> output
         graph.add_module_instance(1, Box::new(TestOscillator::default()));
-        graph.add_module_instance(2, Box::new(TestPassthrough::default()));
+        graph.add_module_instance(2, Box::new(TestPassthrough));
         graph.add_module_instance(3, Box::new(TestOutput::default()));
 
         graph.connect(1, 0, 2, 0);
@@ -1503,8 +1498,8 @@ mod tests {
     fn test_cycle_detection() {
         let mut graph = AudioGraph::new(44100.0, 256);
 
-        graph.add_module_instance(1, Box::new(TestPassthrough::default()));
-        graph.add_module_instance(2, Box::new(TestPassthrough::default()));
+        graph.add_module_instance(1, Box::new(TestPassthrough));
+        graph.add_module_instance(2, Box::new(TestPassthrough));
 
         // Create a valid connection
         assert!(graph.connect(1, 1, 2, 0));
@@ -1605,7 +1600,7 @@ mod tests {
     fn test_new_cable_replaces_existing_one() {
         let mut graph = AudioGraph::new(44100.0, 256);
         for id in 1..=3 {
-            graph.add_module_instance(id, Box::new(TestPassthrough::default()));
+            graph.add_module_instance(id, Box::new(TestPassthrough));
         }
 
         assert!(graph.connect(1, 1, 3, 0));
@@ -1620,7 +1615,7 @@ mod tests {
     fn test_rejected_replacement_keeps_existing_cable() {
         let mut graph = AudioGraph::new(44100.0, 256);
         for id in 1..=3 {
-            graph.add_module_instance(id, Box::new(TestPassthrough::default()));
+            graph.add_module_instance(id, Box::new(TestPassthrough));
         }
         assert!(graph.connect(1, 1, 2, 0)); // 1 -> 2
         assert!(graph.connect(3, 1, 1, 0)); // 3 -> 1
@@ -1634,8 +1629,8 @@ mod tests {
     #[test]
     fn test_unconnected_inputs_are_marked() {
         let mut graph = AudioGraph::new(44100.0, 64);
-        graph.add_module_instance(1, Box::new(TestPassthrough::default()));
-        graph.add_module_instance(2, Box::new(TestPassthrough::default()));
+        graph.add_module_instance(1, Box::new(TestPassthrough));
+        graph.add_module_instance(2, Box::new(TestPassthrough));
 
         let plan = graph.compile();
         let node = plan.nodes.iter().find(|n| n.node_id == 2).unwrap();
@@ -1686,7 +1681,7 @@ mod tests {
     fn test_short_block_reaches_modules() {
         let mut graph = AudioGraph::new(44100.0, 8);
         graph.add_module_instance(1, Box::new(TestOscillator::new(0.5)));
-        graph.add_module_instance(2, Box::new(TestPassthrough::default()));
+        graph.add_module_instance(2, Box::new(TestPassthrough));
         graph.connect(1, 0, 2, 0);
 
         // A block shorter than the plan's capacity: modules see that length
@@ -1866,7 +1861,7 @@ mod tests {
     fn test_only_effects_with_audio_through_them_take_bypass() {
         let mut graph = AudioGraph::new(44100.0, 4);
         graph.add_module_instance(1, Box::new(TestOscillator::default()));
-        graph.add_module_instance(2, Box::new(TestPassthrough::default()));
+        graph.add_module_instance(2, Box::new(TestPassthrough));
         graph.add_module_instance(3, Box::new(TestEffect::default()));
         assert!(!graph.set_bypass(1, true), "a source has nothing to pass");
         assert!(!graph.set_bypass(2, true), "utilities aren't bypassable");
@@ -1902,7 +1897,7 @@ mod tests {
     fn test_monitor_taps() {
         let mut graph = AudioGraph::new(44100.0, 4);
         graph.add_module_instance(1, Box::new(TestOscillator::new(-0.5)));
-        graph.add_module_instance(2, Box::new(TestPassthrough::default()));
+        graph.add_module_instance(2, Box::new(TestPassthrough));
         graph.monitor_output(1, 0);
         graph.monitor_input(2, 0);
 

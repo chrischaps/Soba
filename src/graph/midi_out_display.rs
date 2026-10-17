@@ -117,7 +117,7 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         if on {
             painter.rect_filled(r.expand(1.2 * z), 2.0 * z, purple.gamma_multiply(0.25));
         }
-        if note % 12 == 0 {
+        if note.is_multiple_of(12) {
             // Each C named, faintly, to read the octave by
             painter.text(
                 Pos2::new(r.center().x, r.bottom() - 1.0 * z),

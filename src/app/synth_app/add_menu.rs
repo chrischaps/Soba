@@ -158,7 +158,7 @@ impl SynthApp {
             if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
                 // Check if click was outside both main menu and submenu
                 let in_main_menu = menu_rect.contains(pos);
-                let in_submenu = submenu_rect.map_or(false, |r| r.contains(pos));
+                let in_submenu = submenu_rect.is_some_and(|r| r.contains(pos));
                 if !in_main_menu && !in_submenu && picks.template.is_none() && picks.annotation.is_none() && picks.saved.is_none() {
                     picks.close = true;
                 }

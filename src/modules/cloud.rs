@@ -348,7 +348,7 @@ impl Ring {
         let width = self.column_frames();
         let column = (i / width).min(LIVE_COLUMNS - 1);
         let mono = 0.5 * (l + r);
-        if i % width == 0 {
+        if i.is_multiple_of(width) {
             self.highs[column] = mono;
             self.lows[column] = mono;
         } else {
