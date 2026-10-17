@@ -568,18 +568,26 @@ impl AudioProcessor {
         let Some((left, right)) = plan.audio_output() else {
             return;
         };
+        Self::interleave(left, right, output, channels, frames);
+    }
 
+    /// Lays a stereo pair into the device's frames: a mono device gets the
+    /// two mixed, so nothing panned right goes missing, and a surround
+    /// device gets the pair in its front two speakers and silence in the
+    /// rest, rather than a mono copy that smears the image.
+    fn interleave(left: &[f32], right: &[f32], output: &mut [f32], channels: usize, frames: usize) {
         for (i, frame) in output.chunks_mut(channels).take(frames).enumerate() {
             let l = left.get(i).copied().unwrap_or(0.0);
             let r = right.get(i).copied().unwrap_or(0.0);
 
-            frame[0] = l;
-            if channels >= 2 {
-                frame[1] = r;
-            }
-            // For more than 2 channels, duplicate to additional channels
-            for ch in frame.iter_mut().skip(2) {
-                *ch = (l + r) * 0.5;
+            match frame {
+                [mono] => *mono = (l + r) * 0.5,
+                [front_left, front_right, rest @ ..] => {
+                    *front_left = l;
+                    *front_right = r;
+                    rest.fill(0.0);
+                }
+                [] => {}
             }
         }
     }
@@ -634,6 +642,27 @@ mod tests {
         ui.send_command(EngineCommand::Connect { from_node: 1, from_port: 5, to_node: 2, to_port: 2 });
         ui.send_command(EngineCommand::SetPlaying(true));
         ui.flush();
+    }
+
+    #[test]
+    fn test_mono_device_hears_both_sides() {
+        let mut output = [9.0; 2];
+        AudioProcessor::interleave(&[1.0, 0.0], &[0.0, 0.5], &mut output, 1, 2);
+        assert_eq!(output, [0.5, 0.25]);
+    }
+
+    #[test]
+    fn test_surround_device_gets_the_pair_in_front_and_silence_behind() {
+        let mut output = [9.0; 12];
+        AudioProcessor::interleave(&[1.0, 0.25], &[-1.0, 0.5], &mut output, 6, 2);
+        assert_eq!(output, [1.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.25, 0.5, 0.0, 0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn test_stereo_device_gets_the_pair() {
+        let mut output = [9.0; 4];
+        AudioProcessor::interleave(&[1.0, 0.25], &[-1.0, 0.5], &mut output, 2, 2);
+        assert_eq!(output, [1.0, -1.0, 0.25, 0.5]);
     }
 
     #[test]
