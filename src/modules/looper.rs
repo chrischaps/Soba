@@ -53,7 +53,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::hermite,
+    primitives::{hermite, seam_weight},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     ParameterDisplay, SampleData, SignalType, Snapshot, SnapshotOutcome,
@@ -718,7 +718,7 @@ impl Looper {
         let len = self.len;
         for k in 0..self.fade_frames.min(self.tape.used.saturating_sub(len)) {
             let frame = self.tape.banks[0][len + k];
-            self.tape.blend(k, frame, seam_weight(k, self.fade_frames));
+            self.tape.blend(k, frame, seam_weight(k as f32, self.fade_frames as f32));
         }
         self.head = (2 * into) % (2 * self.len as u64);
         self.close_at = None;
@@ -1004,14 +1004,6 @@ impl Default for Looper {
     }
 }
 
-/// How much of the pre-roll replaces the loop's frame `k` at the seam: all
-/// of it at the wrap, none `fade` frames on, along a raised cosine. A
-/// straight line would bend the waveform at both ends, which is heard.
-#[inline]
-fn seam_weight(k: usize, fade: usize) -> f32 {
-    0.5 + 0.5 * (std::f32::consts::PI * k as f32 / fade as f32).cos()
-}
-
 /// A ramp's next value toward `target`, `step` at a time.
 #[inline]
 fn ramp(value: f32, target: f32, step: f32) -> f32 {
@@ -1184,7 +1176,7 @@ impl DspModule for Looper {
                         // The pre-roll: what came after the loop closed fades
                         // over its first frames, so the wrap runs on into it
                         let k = frame - self.len;
-                        self.tape.blend(k, input, seam_weight(k, self.fade_frames));
+                        self.tape.blend(k, input, seam_weight(k as f32, self.fade_frames as f32));
                         self.mark_dirty(k);
                     } else {
                         self.finishing = false;

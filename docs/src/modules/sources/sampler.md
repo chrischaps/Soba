@@ -123,7 +123,7 @@ Both outputs carry a channel per voice when the gate is polyphonic.
 
 | Control | Range | Default | Description |
 |---------|-------|---------|-------------|
-| **Loop** | Off, Forward, Ping-Pong | Off | Off plays once. Forward jumps from Loop End back to Loop Start. Ping-Pong plays back and forth between them |
+| **Loop** | Off, Forward, Ping-Pong | Off | Off plays once. Forward goes from Loop End back to Loop Start, crossfaded so it doesn't click. Ping-Pong plays back and forth between them |
 | **Mode** | One-Shot, Gated | One-Shot | One-Shot plays to the end whatever the gate does. Gated lets go when the gate falls |
 | **Take** | Free, 1 – 16 bars | Free | Free records until Rec is pressed again. In bars, with a Clock running, a take starts on the next bar and lasts exactly that long |
 | **Start** | 0 – 100% | 0% | Where notes start, through the recording |
@@ -163,7 +163,7 @@ At negative **Speed** a note plays backwards, starting at **End** and finishing 
 
 **Start** and **End** set the part of the recording a note plays. The rest of the waveform sinks into the background. A note fades out over its last 3 ms, so a recording cut mid-sound doesn't click at the end.
 
-With **Loop** on, a note plays from **Start** to **Lp End**, then goes round. **Forward** jumps back to **Lp St**. **Ping-Pong** turns around and plays backwards to **Lp St**, then forwards again. A loop over whole cycles of a steady sound is seamless. Elsewhere, set the loop points where the waveform crosses zero, or use Ping-Pong, which never jumps.
+With **Loop** on, a note plays from **Start** to **Lp End**, then goes round. **Forward** jumps back to **Lp St**. **Ping-Pong** turns around and plays backwards to **Lp St**, then forwards again. Forward crossfades the jump over 8 ms, blending the end of the loop into the sound just before **Lp St**, so wherever the points sit the loop goes round without a click. A loop that starts at the very beginning of the recording has nothing before it to blend, so it borrows those 8 ms from its own start and comes round that much sooner. Ping-Pong never jumps.
 
 In **Gated** mode a looping note keeps looping through its release, then fades. In **One-Shot** mode a looping note never ends. It plays until a new note takes its voice or the transport stops. That's a drone: a field recording slowed down an octave, looping forever.
 

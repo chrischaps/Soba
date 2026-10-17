@@ -31,7 +31,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::{Markers, Slices, ONSETS},
+    primitives::{seam_weight, Markers, Slices, ONSETS},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     FinishedTake, ParameterDisplay, SampleData, SignalType, MAX_CHANNELS, MAX_READOUT,
@@ -76,6 +76,10 @@ const STEAL_FADE_SECONDS: f32 = 0.005;
 /// How long before the end of the recording (or of Start–End) a voice
 /// fades to nothing, so a recording cut mid-sound doesn't click.
 const END_FADE_SECONDS: f32 = 0.003;
+
+/// How long a Forward loop crossfades across its seam, so Loop End runs
+/// into Loop Start without a click.
+const LOOP_SEAM_SECONDS: f32 = 0.008;
 
 /// The fastest a voice reads, in recorded frames per output frame. Past
 /// about 2 it aliases; this is just a bound.
@@ -155,6 +159,16 @@ struct Region {
     loop_end: f64,
 }
 
+/// A Forward loop's crossfade: going forward, its last `length` frames
+/// fade into the frames before `head`, where it wraps to; going backward,
+/// its first `length` fade into the frames after `tail`.
+#[derive(Clone, Copy, Debug)]
+struct Seam {
+    length: f64,
+    head: f64,
+    tail: f64,
+}
+
 impl Region {
     /// The region the knobs set over a recording `frames` long, with
     /// `start_offset` (0–1) added to Start.
@@ -178,6 +192,28 @@ impl Region {
             LoopMode::from_param(params[Sampler::PARAM_LOOP])
         };
         Self { start, end, loop_mode, loop_start, loop_end }
+    }
+
+    /// Where a Forward loop's seam is hidden, in a recording `frames` long
+    /// at `sample_rate`: `None` for any other loop.
+    fn seam(&self, frames: usize, sample_rate: f32) -> Option<Seam> {
+        if self.loop_mode != LoopMode::Forward {
+            return None;
+        }
+        let span = self.loop_end - self.loop_start;
+        let length = (LOOP_SEAM_SECONDS as f64 * sample_rate as f64).min(span / 2.0);
+        if length < 1.0 {
+            return None;
+        }
+        // Crossfaded with what comes before Loop Start (going forward) or
+        // after Loop End (going backward). Where the recording has too
+        // little there, the loop gives up the difference from its own ends
+        let last = frames.saturating_sub(1) as f64;
+        Some(Seam {
+            length,
+            head: self.loop_start.max(length),
+            tail: self.loop_end.min(last - length).max(self.loop_start + length),
+        })
     }
 
     fn is_playable(&self) -> bool {
@@ -463,8 +499,9 @@ impl Sampler {
             }
         }
 
-        let (left, right) = data.read(voice.position);
         let velocity = rate * voice.direction;
+        let seam = region.seam(data.frames(), data.sample_rate());
+        let (left, right) = Self::read_across_seam(data, region, seam.as_ref(), voice.position, velocity);
 
         // Fade into the end of what plays, unless a loop turns it back first
         let looping = region.loop_mode != LoopMode::Off;
@@ -482,14 +519,16 @@ impl Sampler {
         let before = voice.position;
         voice.position += velocity;
         if looping {
-            let span = region.loop_end - region.loop_start;
             if velocity > 0.0 && voice.position >= region.loop_end && before < region.loop_end {
                 match region.loop_mode {
                     LoopMode::PingPong => {
                         voice.position = 2.0 * region.loop_end - voice.position;
                         voice.direction = -voice.direction;
                     }
-                    _ => voice.position = region.loop_start + (voice.position - region.loop_end) % span,
+                    _ => {
+                        let head = seam.map_or(region.loop_start, |s| s.head);
+                        voice.position = head + (voice.position - region.loop_end) % (region.loop_end - head);
+                    }
                 }
             } else if velocity < 0.0 && voice.position <= region.loop_start && before > region.loop_start {
                 match region.loop_mode {
@@ -497,7 +536,10 @@ impl Sampler {
                         voice.position = 2.0 * region.loop_start - voice.position;
                         voice.direction = -voice.direction;
                     }
-                    _ => voice.position = region.loop_end - (region.loop_start - voice.position) % span,
+                    _ => {
+                        let tail = seam.map_or(region.loop_end, |s| s.tail);
+                        voice.position = tail - (region.loop_start - voice.position) % (tail - region.loop_start);
+                    }
                 }
             }
         }
@@ -506,6 +548,29 @@ impl Sampler {
             *voice = Voice::default();
         }
         (left * gain, right * gain)
+    }
+
+    /// Reads the recording at `position`, crossfaded with what follows the
+    /// wrap as the voice nears a Forward loop's seam, moving at `velocity`.
+    #[inline]
+    fn read_across_seam(data: &SampleData, region: &Region, seam: Option<&Seam>, position: f64, velocity: f64) -> (f32, f32) {
+        let here = data.read(position);
+        let Some(seam) = seam else { return here };
+        let (to_seam, beyond) = if velocity > 0.0 {
+            let to_seam = region.loop_end - position;
+            (to_seam, seam.head - to_seam)
+        } else if velocity < 0.0 {
+            let to_seam = position - region.loop_start;
+            (to_seam, seam.tail + to_seam)
+        } else {
+            return here;
+        };
+        if !(0.0..seam.length).contains(&to_seam) {
+            return here;
+        }
+        let w = seam_weight(to_seam as f32, seam.length as f32);
+        let there = data.read(beyond);
+        (here.0 + (there.0 - here.0) * w, here.1 + (there.1 - here.1) * w)
     }
 
     /// Packs a voice's place in the recording (0–1) and level (0–1) into
@@ -1100,6 +1165,41 @@ mod tests {
                 assert!((frequency(&looped[..ms(900.0)]) - 1000.0).abs() < 1.0);
             }
         }
+    }
+
+    #[test]
+    fn test_forward_loops_crossfade_their_seam() {
+        // 10% to 30.05% of 24000 samples: 4812, 100.25 cycles, so Loop End
+        // lands a quarter cycle from Loop Start, a full-swing jump unhidden
+        let source = sine(1000.0, SAMPLE_RATE, 0.5);
+        let natural = play(&mut sampler(source.clone()), &with(&[]), 0.3, &[(0, 1)], 0.0);
+        let natural_step = largest_step(&natural[ms(5.0)..ms(250.0)]);
+        let ragged = [(Sampler::PARAM_LOOP, 1.0), (Sampler::PARAM_LOOP_START, 0.1), (Sampler::PARAM_LOOP_END, 0.3005)];
+        let backward = [ragged.as_slice(), &[(Sampler::PARAM_SPEED, -1.0)]].concat();
+        // Round the whole of a recording 500.5 cycles long, where the seam
+        // has nothing outside the loop to borrow
+        let odd = sine(1000.0, SAMPLE_RATE, 0.5005);
+        let whole = [(Sampler::PARAM_LOOP, 1.0)];
+        let whole_backward = [whole.as_slice(), &[(Sampler::PARAM_SPEED, -1.0)]].concat();
+        for (name, source, params) in [
+            ("forward", &source, &ragged[..]),
+            ("backward", &source, &backward[..]),
+            ("whole", &odd, &whole[..]),
+            ("whole backward", &odd, &whole_backward[..]),
+        ] {
+            let out = play(&mut sampler(source.clone()), &with(params), 1.5, &[(0, 1)], 0.0);
+            assert!(peak(&out[ms(1400.0)..]) > 0.9, "{name}");
+            // Each pass blends into the next no faster than the sine moves
+            let step = largest_step(&out[ms(5.0)..]);
+            assert!(step < natural_step * 1.05, "{name}: {step} vs {natural_step}");
+        }
+
+        // With room around it, the seam keeps the loop its length: the
+        // sound repeats every 4812 samples
+        let out = play(&mut sampler(source), &with(&ragged), 1.0, &[(0, 1)], 0.0);
+        let at = ms(200.0);
+        let (a, b) = (&out[at..at + 4812], &out[at + 4812..at + 2 * 4812]);
+        assert!(a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-3));
     }
 
     #[test]
