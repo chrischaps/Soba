@@ -167,6 +167,28 @@ Steinberg licenses the ASIO SDK under the GPLv3 (or its own proprietary terms). 
 
 Soba's source is MIT, but a binary built with Link includes the SDK, so if you share one, the GPL applies to it. Builds without the feature leave Link out and stay MIT. The browser version can't use Link.
 
+## The plugin (CLAP)
+
+Soba also runs inside a DAW, as a [CLAP](https://cleveraudio.org/) instrument on a track. Bitwig Studio, REAPER, FL Studio and Studio One load CLAP plugins. The plugin is the whole app: the node graph is its window, and the patch plays whatever the track sends it.
+
+- **Notes and CCs** from the track reach **MIDI Note** and **Poly MIDI** modules, the MIDI Monitor and MIDI Learn, as a MIDI device's do in the app.
+- **Tempo and transport.** Set a Clock's **Source** to **Host** and it plays at the DAW's tempo, on its beat, starting and stopping with it (see [Playing in a DAW](../modules/modulation/clock.md#playing-in-a-daw)).
+- **Macros.** The plugin offers the DAW eight parameters, **Macro 1** to **Macro 8**, to automate. Right-click a knob, then **Map to Macro**, and the knob follows that macro.
+- **The patch is saved with the project.** Samples are kept by path, as in a patch file, so keep them where they are.
+
+The DAW plays the patch, so the plugin has no **Play** button and no device menus. **Open** and **Save As** still read and write patch files, so a patch moves between the plugin and the app.
+
+There's no download of the plugin yet. To build one from source (see [Build from source](#build-from-source) above for Rust):
+
+```bash
+python tools/plugin_bundle.py            # builds dist/Soba.clap
+python tools/plugin_bundle.py --install  # ...and copies it where DAWs look
+```
+
+`--install` puts it in your own CLAP folder: `%LOCALAPPDATA%\Programs\Common\CLAP` on Windows, `~/Library/Audio/Plug-Ins/CLAP` on macOS, `~/.clap` on Linux. Then rescan plugins in the DAW and add **Soba** to an instrument track.
+
+The plugin leaves out VST3 for now: its SDK is GPL, so a VST3 build would be too.
+
 ## Command line
 
 Pass a patch file to open it instead of First Sound:

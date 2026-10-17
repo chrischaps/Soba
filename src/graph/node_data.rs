@@ -413,6 +413,8 @@ struct KnobMidiConfig {
     has_midi_mapping: bool,
     /// The CC number if mapped.
     cc_number: Option<u8>,
+    /// The plugin's host macro (0-7), if one is mapped instead of a CC.
+    macro_slot: Option<u8>,
     /// Whether this knob is the current MIDI Learn target.
     is_learn_target: bool,
     /// Parameter min value (for MIDI Learn).
@@ -927,6 +929,7 @@ impl SynthNodeData {
                 let midi_config = KnobMidiConfig {
                     has_midi_mapping: midi_mapping.is_some(),
                     cc_number: midi_mapping.map(|m| m.cc_number),
+                    macro_slot: midi_mapping.and_then(|m| m.macro_slot),
                     is_learn_target,
                     min_value,
                     max_value,
@@ -1090,9 +1093,11 @@ impl SynthNodeData {
                                 ui.close_menu();
                             }
                         } else if midi_config.has_midi_mapping {
-                            let cc_text = midi_config.cc_number
-                                .map(|cc| format!("CC #{}", cc))
-                                .unwrap_or_else(|| "MIDI".to_string());
+                            let cc_text = match (midi_config.macro_slot, midi_config.cc_number) {
+                                (Some(slot), _) => format!("Macro {}", slot + 1),
+                                (None, Some(cc)) => format!("CC #{}", cc),
+                                (None, None) => "MIDI".to_string(),
+                            };
                             ui.label(RichText::new(cc_text).small().weak());
                             ui.separator();
 
@@ -1124,6 +1129,27 @@ impl SynthNodeData {
                                 }));
                                 ui.close_menu();
                             }
+                        }
+                        // In a DAW, one of the plugin's eight macros can turn it
+                        if user_state.hosted && !is_learn_target {
+                            ui.menu_button("Map to Macro", |ui| {
+                                for slot in 0..crate::graph::MACRO_COUNT {
+                                    let current = midi_config.macro_slot == Some(slot);
+                                    if ui.selectable_label(current, format!("Macro {}", slot + 1)).clicked() {
+                                        responses.push(NodeResponse::User(SynthResponse::MapToMacro {
+                                            engine_node_id: engine_id,
+                                            param_index: current_param_index,
+                                            param_name: knob_param.param_name.clone(),
+                                            min_value: midi_config.min_value,
+                                            max_value: midi_config.max_value,
+                                            slot,
+                                        }));
+                                        ui.close_menu();
+                                    }
+                                }
+                            })
+                            .response
+                            .on_hover_text("The DAW automates the macro, and the knob follows it");
                         }
                         if self.parent.is_some() || place.is_face() {
                             ui.separator();

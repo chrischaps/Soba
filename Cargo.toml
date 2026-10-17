@@ -7,6 +7,11 @@ authors = ["Chris"]
 license = "MIT"
 default-run = "soba"
 
+# The CLAP plugin (plugin/) builds on this crate. A plain `cargo build` or
+# `cargo test` here leaves it out; `cargo build -p soba-plugin` builds it
+[workspace]
+members = [".", "plugin"]
+
 [features]
 # Low-latency audio through an interface's ASIO driver (Windows). Needs LLVM
 # (libclang) to build; see docs/src/getting-started/installation.md

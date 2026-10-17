@@ -9,7 +9,7 @@ use cpal::{FromSample, Sample};
 use rtrb::Consumer;
 
 use crate::dsp::denormal::DenormalGuard;
-use crate::dsp::{InputAudio, MidiEvent, ModuleRegistry, Poly, ProcessContext, Snapshot, SnapshotOutcome};
+use crate::dsp::{HostTransport, InputAudio, MidiEvent, ModuleRegistry, Poly, ProcessContext, Snapshot, SnapshotOutcome};
 use crate::modules::{AdsrEnvelope, Arranger, Attenuverter, AudioInput, AudioOutput, Chopper, ChordSequencer, Cloud, Chorus, Clock, ClockDivider, Compressor, Dancer, Distortion, Drum, KeyboardInput, LadderFilter, Lfo, LinkOut, Logic, MidiOut, Looper, MidiMonitor, MidiNote, Mix, Mixer, Noise, Oscilloscope, PolyMidi, ParametricEq, Quantizer, Resonator, Reverb, SampleHold, Sampler, Scenes, Oscillator, Slicer, Slope, StepSequencer, StereoDelay, Tape, TriggerSequencer, SvfFilter, Vca, Vocoder};
 
 use super::audio_input::InputFeed;
@@ -163,6 +163,8 @@ pub struct AudioProcessor {
     cue: CuePlayer,
     /// A cable heard on its own, beside the patch.
     probe: Box<ProbePlayer>,
+    /// The DAW's transport at the start of the next buffer, in the plugin.
+    host: Option<HostTransport>,
 }
 
 /// Frames of background copying (loops loaded or snapshotted) per frame a
@@ -195,7 +197,17 @@ impl AudioProcessor {
             snapshots: Vec::with_capacity(MAX_SNAPSHOTS),
             cue: CuePlayer::default(),
             probe: Box::default(),
+            host: None,
         }
+    }
+
+    /// In the plugin, the DAW's transport at the start of the next buffer
+    /// [`process_offline`](Self::process_offline) is given, for Clocks that
+    /// follow the host.
+    ///
+    /// REAL-TIME SAFE.
+    pub fn set_host_transport(&mut self, host: Option<HostTransport>) {
+        self.host = host;
     }
 
     /// Feeds live MIDI from the MIDI engine to the graph. Events are placed
@@ -283,7 +295,7 @@ impl AudioProcessor {
             feed.begin(num_frames);
         }
         let latency = if self.input.feed.is_some() { self.engine_handle.input_latency() } else { 0 };
-        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Live(&mut self.input), latency, Some(start_time));
+        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Live(&mut self.input), latency, Some(start_time), None);
         self.record(output, channels);
         self.probe.mix(output, channels);
         self.play_cue(output, channels);
@@ -331,7 +343,7 @@ impl AudioProcessor {
         }
 
         // Input given with the picture is already in time with it
-        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0, None);
+        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0, None, self.host);
         self.record(output, channels);
         self.probe.mix(output, channels);
         self.play_cue(output, channels);
@@ -345,7 +357,8 @@ impl AudioProcessor {
     /// that falls inside it and the next block of `input` (`latency` frames
     /// late), and writes the output module's audio into it. The probe
     /// listens to each block as it's made. Played live, the buffer leaves
-    /// for the device at `sent_at`, and each block its frames after.
+    /// for the device at `sent_at`, and each block its frames after. In a
+    /// DAW, `host` is its transport at the buffer's start.
     #[allow(clippy::too_many_arguments)]
     fn render(
         plan: &mut GraphPlan,
@@ -357,6 +370,7 @@ impl AudioProcessor {
         mut input: RenderInput<'_>,
         latency: usize,
         sent_at: Option<Instant>,
+        host: Option<HostTransport>,
     ) {
         let block = plan.max_block_size().max(1);
         probe.begin(plan);
@@ -371,7 +385,8 @@ impl AudioProcessor {
             let mut context = ProcessContext::new(sample_rate, frames)
                 .with_midi(chunk_midi)
                 .with_input(chunk_input)
-                .with_input_latency(latency);
+                .with_input_latency(latency)
+                .with_host(host.map(|host| HostTransport { beat: host.beat_after(start, sample_rate), ..host }));
             if let Some(at) = sent_at {
                 context = context.sent_at(at + std::time::Duration::from_secs_f64(start as f64 / sample_rate as f64));
             }

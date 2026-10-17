@@ -43,6 +43,12 @@ jobs:
       - name: Audio thread allocation guard
         run: cargo test --test realtime_alloc
 
+      # The CLAP plugin (plugin/): its app, player and state, without a DAW.
+      # Windows only, where its window's OpenGL needs nothing installed
+      - name: Test the CLAP plugin
+        if: matrix.os == 'windows-latest'
+        run: cargo test -p soba-plugin
+
       # ASIO is an opt-in Windows build: check it still compiles. The runner
       # has LLVM for bindgen; the build fetches Steinberg's ASIO SDK. Its
       # PowerShell unzip fails under pwsh's module path, so that's cleared

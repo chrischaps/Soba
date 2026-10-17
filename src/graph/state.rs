@@ -78,6 +78,10 @@ pub struct ScopeData {
     pub count: u64,
 }
 
+/// The macros the plugin offers its host (see plugin/): knobs mapped to
+/// one follow it, as they would a MIDI CC.
+pub const MACRO_COUNT: u8 = 8;
+
 /// Info about a MIDI CC mapping for display in the UI.
 #[derive(Clone, Debug)]
 pub struct MidiMappingInfo {
@@ -85,6 +89,8 @@ pub struct MidiMappingInfo {
     pub cc_number: u8,
     /// MIDI channel (0 = omni).
     pub channel: u8,
+    /// In the plugin, the host macro (0-7) mapped instead of a CC.
+    pub macro_slot: Option<u8>,
 }
 
 /// User state for the graph editor.
@@ -212,6 +218,8 @@ pub struct SynthGraphState {
 
     /// Whether the window has the focus, which paces animation (#307).
     pub focused: bool,
+    /// Running inside a DAW as the plugin: knobs offer the host's macros.
+    pub hosted: bool,
 
     /// Active notes for Keyboard module display (MIDI note numbers).
     /// Updated by the keyboard input handler.
@@ -338,6 +346,7 @@ impl Default for SynthGraphState {
             over_annotation: false,
             is_playing: false,
             focused: true,
+            hosted: false,
             keyboard_active_notes: Vec::new(),
             midi_active_notes: Vec::new(),
             midi_active_velocities: Vec::new(),
@@ -507,8 +516,13 @@ impl SynthGraphState {
     pub fn set_midi_mapping(&mut self, engine_node_id: EngineNodeId, param_index: usize, cc_number: u8, channel: u8) {
         self.midi_mappings.insert(
             (engine_node_id, param_index),
-            MidiMappingInfo { cc_number, channel },
+            MidiMappingInfo { cc_number, channel, macro_slot: None },
         );
+    }
+
+    /// Notes that the plugin's host macro `slot` (0-7) turns a parameter.
+    pub fn set_macro_mapping(&mut self, engine_node_id: EngineNodeId, param_index: usize, slot: u8) {
+        self.midi_mappings.insert((engine_node_id, param_index), MidiMappingInfo { cc_number: 0, channel: 0, macro_slot: Some(slot) });
     }
 
     /// Remove a MIDI mapping for a parameter.

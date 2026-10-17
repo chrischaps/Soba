@@ -143,6 +143,16 @@ The badge reads **LINK**, and fills in with a count of the other apps while ther
 
 Link is in the desktop app when it's built with Link: see [Build with Ableton Link](../../getting-started/installation.md#build-with-ableton-link-optional). The browser version can't join a session and doesn't offer it. A patch saved with **Source** on **Link** and opened in a build without Link keeps its own time at **BPM**.
 
+## Playing in a DAW
+
+In the [plugin](../../getting-started/installation.md#the-plugin-clap), **Source** offers **Host** where the app offers Link. Set it and the Clock plays in the DAW's time:
+
+- **Tempo.** The Clock plays at the DAW's tempo, tempo changes and all. The **BPM** knob shows it and can't be turned. The **Tempo** jack does nothing while the Clock follows the host.
+- **Beat.** The Clock's beat is the DAW's: beat 1 of a Soba bar is beat 1 of the song's, wherever playback starts.
+- **Start and stop.** The Clock runs while the DAW plays, if **Run** is on. Starting fires **Reset**, so patched sequencers start from step 1 as the song does.
+
+The badge reads **HOST**, filled in while the DAW plays. A patch saved with **Source** on **Host** follows Link when it's opened in the app (or keeps its own time in a build without Link), and a Link patch opened in the plugin follows the DAW.
+
 ## Patch examples
 
 ### Stepping a sequencer

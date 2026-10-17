@@ -56,6 +56,7 @@ mod dive;
 mod file_hover;
 mod framing;
 mod grouping;
+mod hosted;
 mod idle;
 #[cfg(feature = "ableton-link")]
 mod link_follow;
@@ -367,6 +368,8 @@ pub struct SynthApp {
     /// Patch files the visitor picked, which the browser hands over later.
     #[cfg(target_arch = "wasm32")]
     uploads: (std::sync::mpsc::Sender<web::Upload>, std::sync::mpsc::Receiver<web::Upload>),
+    /// Inside a DAW, as the plugin's editor: what the plugin keeps.
+    hosted: Option<hosted::Hosted>,
 }
 
 /// What a module's right-click menu asked for, handled once the graph is drawn.
@@ -409,8 +412,17 @@ impl SynthApp {
     ///
     /// If `enable_test_tone` is true, audio will start with a test tone immediately.
     pub fn new(enable_test_tone: bool) -> Self {
-        let mut audio_engine = AudioEngine::new();
+        // Note: enable_test_tone is ignored - test tone was removed in favor of AudioProcessor
+        let _ = enable_test_tone;
+        Self::with_devices(AudioEngine::new(), Some(MidiEngine::new()))
+    }
 
+    /// The app on `audio_engine`, and on the MIDI engine `midi` made, if
+    /// one was (the plugin has neither: see [`hosted`](Self::hosted)).
+    fn with_devices(
+        mut audio_engine: Result<AudioEngine, AudioError>,
+        midi: Option<Result<(MidiEngine, MidiReceivers), crate::engine::MidiError>>,
+    ) -> Self {
         let audio_error_message = match &audio_engine {
             Ok(_) => None,
             Err(e) => Some(e.to_string()),
@@ -432,12 +444,13 @@ impl SynthApp {
 
         // Initialize MIDI engine
         let (midi_engine, midi_receivers, midi_devices, midi_error_message) =
-            match MidiEngine::new() {
-                Ok((mut engine, receivers)) => {
+            match midi {
+                None => (None, None, Vec::new(), None),
+                Some(Ok((mut engine, receivers))) => {
                     let devices = engine.enumerate_devices();
                     (Some(engine), Some(receivers), devices, None)
                 }
-                Err(e) => {
+                Some(Err(e)) => {
                     eprintln!("MIDI initialization failed: {}", e);
                     (None, None, Vec::new(), Some(e.to_string()))
                 }
@@ -555,10 +568,8 @@ impl SynthApp {
             gliding: Default::default(),
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
+            hosted: None,
         };
-
-        // Note: enable_test_tone is ignored - test tone was removed in favor of AudioProcessor
-        let _ = enable_test_tone;
 
         app
     }
@@ -903,7 +914,7 @@ impl SynthApp {
 
             // Also remove any existing mapping for the same CC
             self.midi_mappings.retain(|m| {
-                !(m.cc_number == mapping.cc_number && (m.channel == 0 || m.channel == mapping.channel))
+                m.macro_slot.is_some() || !(m.cc_number == mapping.cc_number && (m.channel == 0 || m.channel == mapping.channel))
             });
 
             // Add the new mapping
@@ -1416,7 +1427,8 @@ impl SynthApp {
                 theme::accent::SUCCESS
             };
 
-            if ui.button(RichText::new(play_text).color(play_color)).clicked() {
+            // In a DAW, the DAW's transport plays it
+            if self.hosted.is_none() && ui.button(RichText::new(play_text).color(play_color)).clicked() {
                 actions.toggle_playing = true;
             }
 
@@ -1600,12 +1612,16 @@ impl SynthApp {
                     ui.close_menu();
                 }
                 #[cfg(not(target_arch = "wasm32"))]
-                self.update_menu(ui, &mut actions);
+                if self.hosted.is_none() {
+                    self.update_menu(ui, &mut actions);
+                }
             });
 
             // Device selectors (engine status lives in the status bar). The
             // browser plays through its own output, and has no MIDI or input yet
             match &self.audio_engine {
+                // The DAW has the devices
+                _ if self.hosted.is_some() => {}
                 Ok(_) if WEB => {}
                 Ok(_) => {
                     if !new_row_for(ui, "Output", 200.0) {
@@ -2149,6 +2165,16 @@ impl SynthApp {
                         }
                         NodeResponse::User(crate::graph::SynthResponse::MidiLearnCancel) => {
                             self.cancel_midi_learn();
+                        }
+                        NodeResponse::User(crate::graph::SynthResponse::MapToMacro {
+                            engine_node_id,
+                            param_index,
+                            param_name,
+                            min_value,
+                            max_value,
+                            slot,
+                        }) => {
+                            self.map_to_macro(MidiMapping::from_macro(slot, engine_node_id, param_index, param_name, min_value, max_value));
                         }
                         NodeResponse::User(crate::graph::SynthResponse::MidiLearnClear {
                             engine_node_id,
@@ -2782,12 +2808,10 @@ impl SynthApp {
         self.midi_mappings = staged.remap_midi_mappings(|graph_id| self.user_state.get_engine_node_id(graph_id));
         // Sync mappings to user state for UI display
         for mapping in &self.midi_mappings {
-            self.user_state.set_midi_mapping(
-                mapping.node_id,
-                mapping.param_index,
-                mapping.cc_number,
-                mapping.channel,
-            );
+            match mapping.macro_slot {
+                Some(slot) => self.user_state.set_macro_mapping(mapping.node_id, mapping.param_index, slot),
+                None => self.user_state.set_midi_mapping(mapping.node_id, mapping.param_index, mapping.cc_number, mapping.channel),
+            }
         }
 
         // Restore playback state. The knobs go with the patch, which the
@@ -4014,8 +4038,8 @@ struct ToolbarActions {
 
 impl SynthApp {
     /// One frame of the app. Apart from `eframe::App` so a test can draw
-    /// one without a window.
-    fn draw_frame(&mut self, ctx: &egui::Context) {
+    /// one without a window, and the plugin (`plugin/`) in its own.
+    pub fn draw_frame(&mut self, ctx: &egui::Context) {
         // Apply theme on first frame
         if !self.theme_applied {
             theme::apply_theme(ctx);
@@ -4355,8 +4379,11 @@ impl SynthApp {
             None => {}
         }
         // New versions: the daily check, and its note above the take's
+        // A plugin is updated with the app, not from inside the DAW
         #[cfg(not(target_arch = "wasm32"))]
-        self.run_updates(ctx, toolbar_actions.check_updates, toolbar_actions.roll_back, corner);
+        if self.hosted.is_none() {
+            self.run_updates(ctx, toolbar_actions.check_updates, toolbar_actions.roll_back, corner);
+        }
         let _ = corner;
 
         // Help ▸ Keyboard Shortcuts, its piano lit by the keys held

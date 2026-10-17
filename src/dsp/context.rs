@@ -149,6 +149,33 @@ pub struct ProcessContext<'a> {
     /// buffer. The device plays it its own delay after that. `None` where
     /// blocks aren't played as they're made (an offline render, a test).
     pub sent_at: Option<Instant>,
+    /// The DAW's transport, when Soba runs inside one as a plugin, for a
+    /// Clock whose Source is Host. `None` everywhere else.
+    pub host: Option<HostTransport>,
+}
+
+/// The DAW's transport at the first sample of a block, as the plugin's host
+/// reports it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HostTransport {
+    /// Whether the DAW is playing.
+    pub playing: bool,
+    /// Its tempo, in beats per minute.
+    pub tempo_bpm: f64,
+    /// Where it is, in beats (quarter notes) from the start of the song.
+    pub beat: f64,
+}
+
+impl HostTransport {
+    /// The beat `samples` into the block at `sample_rate`.
+    #[inline]
+    pub fn beat_after(&self, samples: usize, sample_rate: f32) -> f64 {
+        if self.playing {
+            self.beat + samples as f64 * self.tempo_bpm / 60.0 / sample_rate as f64
+        } else {
+            self.beat
+        }
+    }
 }
 
 impl<'a> ProcessContext<'a> {
@@ -162,6 +189,7 @@ impl<'a> ProcessContext<'a> {
             input: InputAudio::default(),
             input_latency: 0,
             sent_at: None,
+            host: None,
         }
     }
 
@@ -175,6 +203,7 @@ impl<'a> ProcessContext<'a> {
             input: InputAudio::default(),
             input_latency: 0,
             sent_at: None,
+            host: None,
         }
     }
 
@@ -198,6 +227,11 @@ impl<'a> ProcessContext<'a> {
     /// [`input_latency`](Self::input_latency)).
     pub fn with_input_latency(self, frames: usize) -> Self {
         Self { input_latency: frames, ..self }
+    }
+
+    /// The same context, inside a DAW whose transport is `host`.
+    pub fn with_host(self, host: Option<HostTransport>) -> Self {
+        Self { host, ..self }
     }
 
     /// The same context, its first sample leaving for the device at `at`.

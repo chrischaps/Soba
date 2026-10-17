@@ -84,6 +84,7 @@ Hover any jack's name or knob for a tooltip: what it does, its signal type in th
 | Make fine adjustments | Hold `Shift` while dragging |
 | Return to the default | Double-click |
 | Map to a MIDI controller | Right-click, then **Learn MIDI CC** |
+| Let the DAW automate it (in the [plugin](installation.md#the-plugin-clap)) | Right-click, then **Map to Macro** |
 
 A knob's ring lights up in its module's header color. Knobs with a range either side of zero, like **Semi** and **Fine**, light outward from the top, so you can see at a glance which way they're set. A small mark stands where zero is, so a knob at zero shows a dark ring with its pointer on the mark.
 

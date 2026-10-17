@@ -87,6 +87,16 @@ pub enum SynthResponse {
     },
     /// Request to leave MIDI Learn mode without mapping anything.
     MidiLearnCancel,
+    /// In the plugin, map the host's macro `slot` (0-7) to a parameter, in
+    /// place of any CC or macro it had.
+    MapToMacro {
+        engine_node_id: u64,
+        param_index: usize,
+        param_name: String,
+        min_value: f32,
+        max_value: f32,
+        slot: u8,
+    },
     /// Show a module's knob on the faces of the groups around it, `levels`
     /// groups up (0 takes it off them all).
     PinKnob {

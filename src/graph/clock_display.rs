@@ -74,9 +74,15 @@ fn follows_midi(graph: &SynthGraph, node_id: NodeId) -> bool {
     selected(graph, node_id, "Source") == Some(1)
 }
 
-/// Whether a Clock node plays in a Link session.
+/// Whether a Clock node plays in a Link session. In the plugin, the same
+/// choice follows the DAW instead (see [`follows_host`]).
 pub fn follows_link(graph: &SynthGraph, node_id: NodeId) -> bool {
-    selected(graph, node_id, "Source") == Some(2)
+    selected(graph, node_id, "Source") == Some(2) && !crate::hosted::is_hosted()
+}
+
+/// Whether a Clock node plays in time with the DAW, in the plugin.
+pub fn follows_host(graph: &SynthGraph, node_id: NodeId) -> bool {
+    selected(graph, node_id, "Source") == Some(2) && crate::hosted::is_hosted()
 }
 
 /// The latest readout from a node's module.
@@ -128,6 +134,15 @@ pub fn knob_takeover(
                 locked: true,
             })
         }
+        // The DAW's tempo, which only the DAW sets
+        ("util.clock", "Tempo") if follows_host(graph, node_id) => {
+            let tempo = readout.filter(|r| r.values[Clock::READOUT_RECEIVING] > 0.5).map(|r| r.values[Clock::READOUT_TEMPO]);
+            Some(KnobTakeover {
+                value: tempo,
+                text: tempo.map_or("No host tempo".to_string(), |bpm| format!("{bpm:.1} BPM")),
+                locked: true,
+            })
+        }
         // The session's tempo, which a peer may have set; turning the knob
         // proposes a new one
         ("util.clock", "Tempo") if follows_link(graph, node_id) => {
@@ -153,6 +168,7 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     let z = zoom;
     let midi = follows_midi(graph, node_id);
     let link = follows_link(graph, node_id);
+    let host = follows_host(graph, node_id);
     let readout = readout(user_state, node_id).copied().unwrap_or_default();
     let beat = readout.values[Clock::READOUT_BEAT].max(0.0);
     let running = readout.values[Clock::READOUT_RUNNING] > 0.5 && user_state.is_playing;
@@ -189,6 +205,13 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
             ("LINK", Color32::WHITE, teal.gamma_multiply(0.85), teal)
         } else {
             ("LINK", teal, Color32::TRANSPARENT, teal.gamma_multiply(0.6))
+        }
+    } else if host {
+        // Lit while the DAW plays
+        if running {
+            ("HOST", Color32::WHITE, accent.gamma_multiply(0.85), accent)
+        } else {
+            ("HOST", accent, Color32::TRANSPARENT, accent.gamma_multiply(0.6))
         }
     } else if midi {
         let purple = theme::signal::MIDI;
@@ -276,6 +299,8 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     let state = match (midi, running, receiving) {
         _ if link && running => format!("Playing in a Link session at {:.1} BPM, with {peer_text}", readout.values[Clock::READOUT_TEMPO]),
         _ if link => format!("In a Link session, stopped, with {peer_text}. Run starts every peer"),
+        _ if host && running => format!("Playing in time with the DAW at {:.1} BPM", readout.values[Clock::READOUT_TEMPO]),
+        _ if host => "Waiting for the DAW to play".to_string(),
         (true, true, _) => "Following MIDI clock".to_string(),
         (true, false, true) => "The MIDI clock master is stopped".to_string(),
         (true, false, false) => "Waiting for MIDI clock on the MIDI input".to_string(),

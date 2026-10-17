@@ -54,6 +54,10 @@ cargo run --release -- patches/lush-pad.json  # or open a patch
 
 The example patches are in [`patches/`](patches) and in the app's **Examples** menu, on two shelves: **Recipes**, each built around one idea, and **Songs**, whole pieces that play themselves from start to end. Press **Play**, then hold a few keys on the computer keyboard (`Z` to `M` is a white-key octave, with the sharps on the row above).
 
+### In a DAW (CLAP)
+
+Soba also builds as a CLAP instrument, for Bitwig, REAPER and other DAWs that load CLAP. The node graph is the plugin's window, the track's notes play it, a Clock can follow the DAW's tempo and transport, and the patch is saved with the project. `python tools/plugin_bundle.py --install` builds it and puts it where DAWs look: see [The plugin](https://docs.chaps.dev/soba/getting-started/installation.html#the-plugin-clap).
+
 ### Render a patch offline
 
 The `render` binary plays a patch to a WAV file without an audio device, and prints its peak, true peak and RMS levels, its loudness in LUFS, and the peak going into the output limiter (`--compare before.wav` shows how far they moved):

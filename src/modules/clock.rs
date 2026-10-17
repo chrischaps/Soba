@@ -61,29 +61,43 @@ impl ClockDivision {
 }
 
 /// Where the Clock gets its time.
+///
+/// The third choice is the outside clock: an Ableton Link session in the
+/// app, the DAW's transport in the plugin. So a patch made with one follows
+/// the other.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClockSource {
     /// Its own Tempo knob.
-    Internal = 0,
+    Internal,
     /// A MIDI clock master, through the MIDI input.
-    Midi = 1,
+    Midi,
     /// An Ableton Link session, in builds that have Link. Without a
     /// session (the renderer, the tests), the Clock keeps its own time.
-    Link = 2,
+    Link,
+    /// The DAW's transport, when Soba is a plugin (see [`crate::hosted`]).
+    /// Without the host's transport, the Clock keeps its own time.
+    Host,
 }
 
 impl ClockSource {
-    /// The Source choice's labels. Link only in builds that have it.
-    #[cfg(feature = "ableton-link")]
-    pub const LABELS: &'static [&'static str] = &["Internal", "MIDI", "Link"];
-    #[cfg(not(feature = "ableton-link"))]
-    pub const LABELS: &'static [&'static str] = &["Internal", "MIDI"];
+    /// The Source choice's labels: the outside clock only where there is
+    /// one, Link in builds that have it, the host in a plugin.
+    pub fn labels() -> &'static [&'static str] {
+        if crate::hosted::is_hosted() {
+            &["Internal", "MIDI", "Host"]
+        } else if cfg!(feature = "ableton-link") {
+            &["Internal", "MIDI", "Link"]
+        } else {
+            &["Internal", "MIDI"]
+        }
+    }
 
-    /// Convert from parameter value to source. Link, in a build without
-    /// it, keeps its own time.
+    /// Convert from parameter value to source. The outside clock, where
+    /// there isn't one, keeps its own time.
     pub fn from_param(value: f32) -> Self {
         match value.round() as i32 {
             1 => ClockSource::Midi,
+            2 if crate::hosted::is_hosted() => ClockSource::Host,
             2 if cfg!(feature = "ableton-link") => ClockSource::Link,
             _ => ClockSource::Internal,
         }
@@ -336,6 +350,9 @@ pub struct Clock {
     /// Follows a Link session, when Source is Link.
     #[cfg(feature = "ableton-link")]
     link: link::LinkFollower,
+    /// The DAW's tempo at the last block, when Source is Host and the host
+    /// reports its transport.
+    host_tempo: Option<f64>,
     /// Sample rate from last prepare() call.
     sample_rate: f32,
     /// Port definitions.
@@ -357,6 +374,7 @@ impl Clock {
             midi: MidiClockFollower::new(),
             #[cfg(feature = "ableton-link")]
             link: link::LinkFollower::new(),
+            host_tempo: None,
             sample_rate: 44100.0,
             ports: vec![
                 // Input port
@@ -403,9 +421,11 @@ impl Clock {
                 ParameterDefinition::choice(
                     "source",
                     "Source",
-                    ClockSource::LABELS,
+                    ClockSource::labels(),
                     0,
-                ).describe(if cfg!(feature = "ableton-link") {
+                ).describe(if crate::hosted::is_hosted() {
+                    "Internal keeps time at Tempo; MIDI follows a MIDI clock coming in; Host plays in time with the DAW, starting and stopping with it"
+                } else if cfg!(feature = "ableton-link") {
                     "Internal keeps time at Tempo; MIDI follows the clock of a DAW or drum machine on the MIDI input; Link plays in time with Ableton Link apps on the network"
                 } else {
                     "Internal keeps time at Tempo; MIDI follows the clock of a DAW or drum machine on the MIDI input"
@@ -470,7 +490,8 @@ impl Clock {
             ClockSource::Midi => self.midi.tempo_bpm(self.sample_rate).unwrap_or(knob),
             #[cfg(feature = "ableton-link")]
             ClockSource::Link if self.link.last.is_some() => self.link.last.map_or(knob, |block| block.tempo as f32),
-            ClockSource::Internal | ClockSource::Link => Self::bent_tempo(knob as f64, self.tempo_scale) as f32,
+            ClockSource::Host if self.host_tempo.is_some() => self.host_tempo.map_or(knob, |bpm| bpm as f32),
+            ClockSource::Internal | ClockSource::Link | ClockSource::Host => Self::bent_tempo(knob as f64, self.tempo_scale) as f32,
         }
     }
 
@@ -529,6 +550,20 @@ impl Clock {
     #[cfg(not(feature = "ableton-link"))]
     fn follow_link(&mut self, _block: Option<&()>, _i: usize) -> bool {
         false
+    }
+
+    /// Whether a Clock following the DAW runs at sample `i` of the block,
+    /// with its beat on the DAW's. It runs while the DAW plays and Run is
+    /// on, firing Reset as it starts, so sequencers start with the song.
+    fn follow_host(&mut self, host: &crate::dsp::HostTransport, run: bool, i: usize, sample_rate: f32) -> bool {
+        let running = run && host.playing;
+        if running {
+            if !self.running {
+                self.restart();
+            }
+            self.beats = host.beat_after(i, sample_rate);
+        }
+        running
     }
 
     /// Restarts from the top and fires Reset.
@@ -599,6 +634,12 @@ impl DspModule for Clock {
         if source == ClockSource::Link && link_block.is_none() {
             source = ClockSource::Internal;
         }
+        // The DAW's transport, or the Clock's own time without one
+        let host = context.host.filter(|_| source == ClockSource::Host);
+        self.host_tempo = host.map(|host| host.tempo_bpm);
+        if source == ClockSource::Host && host.is_none() {
+            source = ClockSource::Internal;
+        }
 
         // Switching Run on starts from the top, as a drum machine's Play does
         if source == ClockSource::Internal && run && self.prev_run == Some(false) {
@@ -643,6 +684,7 @@ impl DspModule for Clock {
                 ClockSource::Internal => run,
                 ClockSource::Midi => run && self.midi.is_running(),
                 ClockSource::Link => self.follow_link(link_block.as_ref(), i),
+                ClockSource::Host => host.is_some_and(|host| self.follow_host(&host, run, i, self.sample_rate)),
             };
 
             let gate = self.running && Self::gate_at(self.beats, division, gate_length, swing);
@@ -665,8 +707,8 @@ impl DspModule for Clock {
             if self.running {
                 match source {
                     ClockSource::Internal => self.beats += beats_per_sample,
-                    // Placed from the session's beat by follow_link
-                    ClockSource::Link => {}
+                    // Placed from the session's or the DAW's beat
+                    ClockSource::Link | ClockSource::Host => {}
                     // Between ticks, at the master's pace, but never past the
                     // next tick: that beat is the tick's to set
                     ClockSource::Midi => {
@@ -691,6 +733,7 @@ impl DspModule for Clock {
         self.midi = MidiClockFollower::new();
         #[cfg(feature = "ableton-link")]
         self.link.rest();
+        self.host_tempo = None;
     }
 
     fn transport(&self, params: &[f32]) -> Option<TransportState> {
@@ -714,7 +757,12 @@ impl DspModule for Clock {
         readout.values[Self::READOUT_TEMPO] = self.tempo(params);
         readout.values[Self::READOUT_BEAT] = self.beats.rem_euclid(4.0) as f32;
         readout.values[Self::READOUT_RUNNING] = if self.running { 1.0 } else { 0.0 };
-        readout.values[Self::READOUT_RECEIVING] = if self.midi.is_receiving(self.sample_rate) { 1.0 } else { 0.0 };
+        // Following the DAW, whether it's reporting its transport
+        let receiving = match Self::source(params) {
+            ClockSource::Host => self.host_tempo.is_some(),
+            _ => self.midi.is_receiving(self.sample_rate),
+        };
+        readout.values[Self::READOUT_RECEIVING] = if receiving { 1.0 } else { 0.0 };
         #[cfg(feature = "ableton-link")]
         if let Some(block) = self.link.last.filter(|_| Self::source(params) == ClockSource::Link) {
             readout.values[Self::READOUT_PEERS] = crate::ableton_link::peers() as f32;

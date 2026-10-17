@@ -47,6 +47,10 @@ pub struct MidiMapping {
     pub min_value: f32,
     /// Maximum value of the mapped range.
     pub max_value: f32,
+    /// In the plugin, the host macro (0-7) that turns the knob instead of a
+    /// CC: the DAW automates it. `cc_number` and `channel` are unused then.
+    #[serde(default, rename = "macro", skip_serializing_if = "Option::is_none")]
+    pub macro_slot: Option<u8>,
 }
 
 impl MidiMapping {
@@ -68,12 +72,23 @@ impl MidiMapping {
             param_name: param_name.into(),
             min_value,
             max_value,
+            macro_slot: None,
         }
+    }
+
+    /// A mapping from the plugin's host macro `slot` (0-7) instead of a CC.
+    pub fn from_macro(slot: u8, node_id: u64, param_index: usize, param_name: impl Into<String>, min_value: f32, max_value: f32) -> Self {
+        Self { macro_slot: Some(slot), ..Self::new(0, 0, node_id, param_index, param_name, min_value, max_value) }
     }
 
     /// Check if this mapping matches a given CC event.
     pub fn matches(&self, cc_number: u8, channel: u8) -> bool {
-        self.cc_number == cc_number && (self.channel == 0 || self.channel == channel + 1)
+        self.macro_slot.is_none() && self.cc_number == cc_number && (self.channel == 0 || self.channel == channel + 1)
+    }
+
+    /// The macro's value (0-1) in the mapped parameter range.
+    pub fn macro_to_value(&self, normalized: f32) -> f32 {
+        self.min_value + normalized.clamp(0.0, 1.0) * (self.max_value - self.min_value)
     }
 
     /// Convert a CC value (0-127) to the mapped parameter range.
