@@ -652,9 +652,27 @@ pub fn patch_to_json(patch: &Patch) -> Result<String, PatchError> {
 }
 
 /// Save a patch to a JSON file.
+///
+/// The patch is written beside the file as `<name>.partial`, flushed to disk and
+/// then renamed over it, so a crash, a full disk or a sync client grabbing the file
+/// mid-write leaves the old patch whole rather than truncated (#310).
 pub fn save_to_file(patch: &Patch, path: &std::path::Path) -> Result<(), PatchError> {
-    std::fs::write(path, patch_to_json(patch)?)?;
-    Ok(())
+    use std::io::Write;
+    let json = patch_to_json(patch)?;
+    let mut partial_name = path.file_name().unwrap_or_default().to_os_string();
+    partial_name.push(".partial");
+    let partial = path.with_file_name(partial_name);
+    let written = (|| {
+        let mut file = std::fs::File::create(&partial)?;
+        file.write_all(json.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&partial, path)
+    })();
+    if written.is_err() {
+        std::fs::remove_file(&partial).ok();
+    }
+    Ok(written?)
 }
 
 /// Load a patch from a JSON file.
@@ -686,6 +704,35 @@ mod tests {
         let loaded = load_from_file(&path);
         std::fs::remove_file(&path).ok();
         assert_eq!(loaded.unwrap(), patch);
+    }
+
+    #[test]
+    fn test_save_replaces_the_patch_and_leaves_no_partial_file() {
+        let dir = std::env::temp_dir().join(format!("soba-atomic-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("song.json");
+        save_to_file(&Patch::new("First"), &path).unwrap();
+        save_to_file(&Patch::new("Second"), &path).unwrap();
+        let loaded = load_from_file(&path).unwrap();
+        let leftovers: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name()).collect();
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(loaded.name, "Second");
+        assert_eq!(leftovers, vec![std::ffi::OsString::from("song.json")]);
+    }
+
+    #[test]
+    fn test_a_failed_save_leaves_the_old_patch_intact() {
+        let dir = std::env::temp_dir().join(format!("soba-failed-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("song.json");
+        save_to_file(&Patch::new("Original"), &path).unwrap();
+        // A folder where the partial file should go makes the write fail before the rename
+        std::fs::create_dir_all(dir.join("song.json.partial")).unwrap();
+        let failed = save_to_file(&Patch::new("Replacement"), &path);
+        let loaded = load_from_file(&path);
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(matches!(failed, Err(PatchError::IoError(_))));
+        assert_eq!(loaded.unwrap().name, "Original");
     }
 
     #[test]
