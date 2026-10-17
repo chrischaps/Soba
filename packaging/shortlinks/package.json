@@ -1,0 +1,14 @@
+{
+  "name": "soba-links",
+  "private": true,
+  "description": "Short patch links (#370): a spike. See docs/SHORT_LINKS.md",
+  "type": "module",
+  "scripts": {
+    "schema": "wrangler d1 execute soba-links --local --file schema.sql",
+    "dev": "wrangler dev --local --port 8787",
+    "test": "node spike_test.mjs ../../patches"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.1"
+  }
+}

@@ -1,0 +1,17 @@
+# The short-link spike (#370). Not deployed: `npx wrangler dev` runs it
+# locally, with a local D1 database. See docs/SHORT_LINKS.md.
+name = "soba-links"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "soba-links"
+database_id = "local-spike"
+
+# Ten new links a minute from one address. Sharing the same patch again
+# counts too, though it stores nothing
+[[ratelimits]]
+name = "CREATE_LIMIT"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }

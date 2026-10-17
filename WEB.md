@@ -78,8 +78,10 @@ reading version 1.
   short, which Share's note mentions over 30 K. Every example round-trips
   exactly, layout included, so nothing is dropped to save space.
 
-Not yet: a hosted gallery of shared patches with listen-first previews
-rendered by the `render` bin.
+Not yet: short links (`soba.chaps.dev/s/<id>`), designed in
+[docs/SHORT_LINKS.md](docs/SHORT_LINKS.md) with a spike Worker in
+`packaging/shortlinks/`, and a hosted gallery of shared patches with
+listen-first previews rendered by the `render` bin.
 
 This page is the spike report for issue #90: what stood in the way, what
 was done about each, and how steady the sound is.
