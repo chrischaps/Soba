@@ -217,7 +217,7 @@ A whole drag is one step: turning a knob from 200 Hz to 2 kHz and back undoes in
 
 ### Transport
 
-Nothing sounds until you press **▶ Play**. **⏹ Stop** silences the patch, lets the last of the signal drain out of the cables, and clears echoes and reverb tails, so they don't resume when you play again.
+Nothing sounds until you press **▶ Play** (or `Shift + Space`, which also stops it). **⏹ Stop** silences the patch, lets the last of the signal drain out of the cables, and clears echoes and reverb tails, so they don't resume when you play again.
 
 ### The computer keyboard
 
@@ -389,6 +389,7 @@ On a Mac, hold `⌘ Command` where these say `Ctrl`, and `Option` for `Alt`. The
 
 | Shortcut | Action |
 |----------|--------|
+| `Shift + Space` | Play or stop the patch |
 | `Ctrl + R` | Record, or end the take |
 | `Alt` over a cable | Hear what the cable carries |
 

@@ -1427,7 +1427,8 @@ impl SynthApp {
             };
 
             // In a DAW, the DAW's transport plays it
-            if self.hosted.is_none() && ui.button(RichText::new(play_text).color(play_color)).clicked() {
+            let play_hint = if self.is_playing { "Stop the patch (Shift+Space)" } else { "Play the patch (Shift+Space)" };
+            if self.hosted.is_none() && ui.button(RichText::new(play_text).color(play_color)).on_hover_text(play_hint).clicked() {
                 actions.toggle_playing = true;
             }
 
@@ -3146,7 +3147,7 @@ impl SynthApp {
                             } else {
                                 ("▶ Play", theme::accent::SUCCESS)
                             };
-                            toggle = ui.button(RichText::new(text).color(color).strong()).clicked();
+                            toggle = ui.button(RichText::new(text).color(color).strong()).on_hover_text("Shift+Space").clicked();
                             ui.add_space(4.0);
                             let name = self.current_example.map_or("Soba", |e| e.name);
                             let label = ui.label(RichText::new(name).color(theme::text::PRIMARY).strong());
@@ -4163,12 +4164,21 @@ impl SynthApp {
         // Editing shortcuts act on the graph, so they wait while a text field
         // or the palette has the keys
         let mut keyboard_record = false;
+        let mut keyboard_play = false;
         if !crate::widgets::typing(ctx) && self.quick_add.is_none() && !prompt_open {
-            // Bypass the selected nodes; record, or stop recording
-            let (bypass, record) = ctx.input_mut(|i| {
+            // Bypass the selected nodes; record, or stop recording; play or
+            // stop. Shift+Space is taken before the palette's Space, which
+            // would match it too
+            let (bypass, record, play) = ctx.input_mut(|i| {
                 use egui::{Key, Modifiers};
-                    (shortcuts::consume_command(i, Modifiers::NONE, Key::B), shortcuts::consume_command(i, Modifiers::NONE, Key::R))
+                (
+                    shortcuts::consume_command(i, Modifiers::NONE, Key::B),
+                    shortcuts::consume_command(i, Modifiers::NONE, Key::R),
+                    shortcuts::consume_play(i),
+                )
             });
+            // In a DAW, the DAW's transport plays it
+            keyboard_play = play && self.hosted.is_none();
             if bypass {
                 for node_id in self.graph_state.selected_nodes.clone() {
                     self.toggle_bypass(node_id);
@@ -4238,7 +4248,7 @@ impl SynthApp {
         self.sync_parameters();
 
         // Handle deferred actions (to avoid borrow checker issues)
-        if toolbar_actions.toggle_playing {
+        if toolbar_actions.toggle_playing || keyboard_play {
             self.set_playing(!self.is_playing);
         }
         if toolbar_actions.toggle_recording || keyboard_record {

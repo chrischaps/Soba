@@ -90,6 +90,7 @@ pub const SHEET: &[Group] = &[
         name: "Playing",
         color: theme::signal::MIDI,
         rows: &[
+            ("`Shift + Space`", "Play or stop the patch"),
             ("`Ctrl + R`", "Record, or end the take"),
             ("`Alt` over a cable", "Hear what the cable carries"),
         ],
@@ -103,6 +104,17 @@ pub const SHEET: &[Group] = &[
 pub fn consume_command(i: &mut egui::InputState, extra: egui::Modifiers, key: egui::Key) -> bool {
     let modifiers = egui::Modifiers::COMMAND | extra;
     i.modifiers.matches_exact(modifiers) && i.consume_shortcut(&egui::KeyboardShortcut::new(modifiers, key))
+}
+
+/// Did Shift+Space, Play or Stop, go down this frame, with nothing else
+/// held? Takes the press, and the space it would type, if so. Not Command:
+/// ⌘Space is Spotlight on a Mac, and Ctrl+Space its input-source switch.
+pub fn consume_play(i: &mut egui::InputState) -> bool {
+    let pressed = i.modifiers.matches_exact(egui::Modifiers::SHIFT) && i.consume_key(egui::Modifiers::SHIFT, egui::Key::Space);
+    if pressed {
+        i.events.retain(|event| !matches!(event, egui::Event::Text(text) if text == " "));
+    }
+    pressed
 }
 
 /// Is this a Mac, whose Command key is ⌘? Asked of egui, so a browser on a
@@ -520,6 +532,37 @@ mod tests {
         theme::install_fonts(&ctx);
         let _ = ctx.run(Default::default(), |_| {});
         assert!(ctx.fonts(|fonts| fonts.has_glyphs(&FontId::proportional(12.0), "⌘⇧")));
+    }
+
+    /// One frame with Space pressed under `modifiers` (and the space it
+    /// types): was it Play, and was the space left for the palette?
+    fn press_space(modifiers: egui::Modifiers) -> (bool, bool) {
+        let ctx = egui::Context::default();
+        let raw = egui::RawInput {
+            modifiers,
+            events: vec![
+                egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed: true, repeat: false, modifiers },
+                egui::Event::Text(" ".into()),
+            ],
+            ..Default::default()
+        };
+        let mut result = (false, false);
+        let _ = ctx.run(raw, |ctx| {
+            result = ctx.input_mut(|i| {
+                let play = consume_play(i);
+                (play, i.key_pressed(egui::Key::Space))
+            });
+        });
+        result
+    }
+
+    #[test]
+    fn shift_space_plays_and_nothing_else_does() {
+        assert_eq!(press_space(egui::Modifiers::SHIFT), (true, false));
+        // Plain Space is the palette's, and Ctrl+Shift+Space no one's
+        assert_eq!(press_space(egui::Modifiers::NONE), (false, true));
+        assert!(!press_space(egui::Modifiers::SHIFT | egui::Modifiers::COMMAND).0);
+        assert!(!press_space(egui::Modifiers::SHIFT | egui::Modifiers::ALT).0);
     }
 
     #[test]
