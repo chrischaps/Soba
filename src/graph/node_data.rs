@@ -16,84 +16,11 @@ use eframe::egui::{self, Color32, RichText};
 use egui_node_graph2::{ConnectionSignalTrait, NodeDataTrait, NodeResponse, UserResponseTrait};
 
 use crate::dsp::ModuleCategory;
-use crate::engine::midi_engine::MidiEvent;
-use crate::widgets::{knob, led, KnobStyle, KnobConfig, LedConfig, piano, piano_keys, PianoConfig, PianoData, noise_display, NoiseDisplayConfig};
+use crate::widgets::{knob, led, KnobStyle, KnobConfig, LedConfig};
 use super::groups::{GroupId, NodeKind, Side};
 use super::hints::{self, Hint};
 use super::step_grid::step_sequencer_display;
 use super::{SynthResponse, SynthValueType};
-
-/// MIDI event colors for the MIDI Monitor display.
-mod midi_colors {
-    use super::Color32;
-
-    /// Note On/Off events (green)
-    pub const NOTE: Color32 = Color32::from_rgb(100, 200, 100);
-    /// Control Change events (orange)
-    pub const CC: Color32 = Color32::from_rgb(255, 165, 0);
-    /// Pitch Bend events (purple)
-    pub const PITCH_BEND: Color32 = Color32::from_rgb(180, 100, 200);
-    /// Transport events from a MIDI clock master: Start, Stop (pale blue)
-    pub const TRANSPORT: Color32 = Color32::from_rgb(130, 180, 230);
-    /// Other events (gray)
-    pub const OTHER: Color32 = Color32::from_rgb(150, 150, 150);
-}
-
-/// Convert a MIDI note number to a note name (e.g., 60 -> "C4").
-fn note_to_name(note: u8) -> String {
-    const NOTES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-    let octave = (note / 12) as i32 - 1; // MIDI note 60 = C4
-    let name = NOTES[(note % 12) as usize];
-    format!("{}{}", name, octave)
-}
-
-/// Format a MIDI event for display.
-/// Rows in the MIDI Monitor's log.
-const MIDI_LOG_ROWS: usize = 8;
-/// The longest line the log usually shows, which sets its width.
-const MIDI_LOG_WIDEST: &str = "NoteOn Ch16 C#-1 vel=127";
-
-fn format_midi_event(event: &MidiEvent) -> (String, Color32) {
-    match event {
-        MidiEvent::NoteOn { channel, note, velocity } => (
-            format!("NoteOn Ch{} {} vel={}", channel + 1, note_to_name(*note), velocity),
-            midi_colors::NOTE,
-        ),
-        MidiEvent::NoteOff { channel, note, .. } => (
-            format!("NoteOff Ch{} {}", channel + 1, note_to_name(*note)),
-            midi_colors::NOTE,
-        ),
-        MidiEvent::ControlChange { channel, controller, value } => (
-            format!("CC Ch{} #{} val={}", channel + 1, controller, value),
-            midi_colors::CC,
-        ),
-        MidiEvent::PitchBend { channel, value } => (
-            format!("PitchBend Ch{} {}", channel + 1, value),
-            midi_colors::PITCH_BEND,
-        ),
-        MidiEvent::ChannelPressure { channel, pressure } => (
-            format!("Pressure Ch{} {}", channel + 1, pressure),
-            midi_colors::OTHER,
-        ),
-        MidiEvent::PolyPressure { channel, note, pressure } => (
-            format!("PolyPres Ch{} {} {}", channel + 1, note_to_name(*note), pressure),
-            midi_colors::OTHER,
-        ),
-        MidiEvent::ProgramChange { channel, program } => (
-            format!("Program Ch{} #{}", channel + 1, program),
-            midi_colors::OTHER,
-        ),
-        // Ticks never reach the UI, but name them in case one does
-        MidiEvent::Clock => ("Clock".to_string(), midi_colors::TRANSPORT),
-        MidiEvent::Start => ("Start".to_string(), midi_colors::TRANSPORT),
-        MidiEvent::Continue => ("Continue".to_string(), midi_colors::TRANSPORT),
-        MidiEvent::Stop => ("Stop".to_string(), midi_colors::TRANSPORT),
-        MidiEvent::SongPosition { sixteenths } => (
-            format!("SongPos bar {} 16th {}", sixteenths / 16 + 1, sixteenths % 16 + 1),
-            midi_colors::TRANSPORT,
-        ),
-    }
-}
 
 /// Describes how a knob parameter interacts with its CV input port.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -1339,6 +1266,26 @@ struct DeferredOutputLabel {
     shapes: Vec<egui::Shape>,
 }
 
+/// The faint rule in the module's category colour between its ports and
+/// the face drawn under them, with room above and below.
+fn category_rule(ui: &mut egui::Ui, category_color: Color32, zoom: f32) {
+    ui.add_space(4.0 * zoom);
+    let separator_color = Color32::from_rgba_unmultiplied(
+        category_color.r(),
+        category_color.g(),
+        category_color.b(),
+        64,
+    );
+    let margin = 4.0 * zoom;
+    let rect = ui.available_rect_before_wrap();
+    ui.painter().hline(
+        (rect.left() + margin)..=(rect.right() - margin),
+        ui.cursor().top(),
+        egui::Stroke::new(1.0 * zoom, separator_color),
+    );
+    ui.add_space(4.0 * zoom);
+}
+
 fn deferred_labels_id(node_id: egui_node_graph2::NodeId) -> egui::Id {
     egui::Id::new((node_id, "deferred_output_labels"))
 }
@@ -1543,709 +1490,139 @@ impl NodeDataTrait for SynthNodeData {
         // Get the engine node ID for looking up input values
         let engine_node_id = user_state.get_engine_node_id(node_id);
 
-        // Special rendering for MIDI Monitor module
-        if self.display == NodeDisplay::MidiLog {
-            // Get filter settings from the node's input parameters
-            let (channel_filter, show_notes, show_cc, show_pitch_bend) = if let Some(node) = graph.nodes.get(node_id) {
-                let mut channel = 0usize; // 0 = all channels
-                let mut notes = true;
-                let mut cc = true;
-                let mut pb = true;
-
-                for (name, input_id) in &node.inputs {
-                    let input = graph.get_input(*input_id);
-                    match name.as_str() {
-                        "Channel" => {
-                            if let SynthValueType::Select { value, .. } = &input.value {
-                                channel = *value;
-                            }
-                        }
-                        "Notes" => {
-                            if let SynthValueType::Toggle { value, .. } = &input.value {
-                                notes = *value;
-                            }
-                        }
-                        "CC" => {
-                            if let SynthValueType::Toggle { value, .. } = &input.value {
-                                cc = *value;
-                            }
-                        }
-                        "Pitch Bend" => {
-                            if let SynthValueType::Toggle { value, .. } = &input.value {
-                                pb = *value;
-                            }
-                        }
-                        _ => {}
-                    }
+        // Each module's own face, above its knob row. The match has no
+        // catch-all, so a new NodeDisplay doesn't compile until it's drawn
+        let color = self.category.color();
+        match self.display {
+            NodeDisplay::None => {}
+            NodeDisplay::MidiLog => {
+                category_rule(ui, color, zoom);
+                super::midi_log_display::midi_log_display(ui, node_id, graph, user_state, zoom);
+            }
+            // Audio Output: the output stage's level meter
+            NodeDisplay::OutputMeter => {
+                category_rule(ui, color, zoom);
+                ui.add_space(2.0 * zoom);
+                super::output_meter_display::output_meter_display(ui, node_id, graph, user_state, zoom);
+            }
+            NodeDisplay::Scope => {
+                category_rule(ui, color, zoom);
+                super::scope_display::scope_display(ui, node_id, graph, user_state, zoom);
+            }
+            NodeDisplay::StepGrid => {
+                category_rule(ui, color, zoom);
+                step_sequencer_display(ui, zoom, node_id, graph, user_state, &mut responses);
+            }
+            NodeDisplay::ChordGrid => {
+                ui.add_space(4.0 * zoom);
+                let edits = super::chord_grid::chord_grid(ui, node_id, graph, user_state, zoom);
+                responses.extend(edits.into_iter().map(NodeResponse::User));
+            }
+            // Oscillator: the wave it plays, and its unison voices
+            NodeDisplay::OscillatorWave => super::oscillator_display::oscillator_display(ui, node_id, graph, user_state, zoom),
+            // Noise: the three slopes, with the patched ones lit
+            NodeDisplay::NoiseSpectrum => {
+                category_rule(ui, color, zoom);
+                super::noise_display::noise_display(ui, node_id, graph, user_state, zoom);
+            }
+            // ADSR: the envelope's shape, and where a note is in it
+            NodeDisplay::Envelope => super::envelope_display::envelope_display(ui, node_id, graph, user_state, zoom),
+            // Filters: what each output passes, at the cutoff CV has taken it to
+            NodeDisplay::FilterResponse => {
+                super::filter_display::filter_display(ui, super::filter_display::Filter::Svf, node_id, graph, user_state, zoom);
+            }
+            NodeDisplay::LadderResponse => {
+                super::filter_display::filter_display(ui, super::filter_display::Filter::Ladder, node_id, graph, user_state, zoom);
+            }
+            // LFO: its cycle, with a dot where it is
+            NodeDisplay::LfoWave => super::lfo_display::lfo_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::KeyboardPiano => {
+                category_rule(ui, color, zoom);
+                super::piano_display::keyboard_piano_display(ui, node_id, graph, user_state, zoom);
+            }
+            NodeDisplay::MidiPiano => {
+                category_rule(ui, color, zoom);
+                let playable = self.module_id == "input.poly_midi";
+                super::piano_display::midi_piano_display(ui, node_id, graph, user_state, zoom, playable);
+            }
+            // Quantizer: its scale on a one-octave piano, the notes it plays
+            // glowing. Clicking a key adds it to or takes it out of the scale
+            NodeDisplay::ScalePiano => {
+                category_rule(ui, color, zoom);
+                let edits = super::scale_display::scale_display(ui, node_id, graph, user_state, zoom);
+                responses.extend(edits.into_iter().map(NodeResponse::User));
+            }
+            // Clock: the beat in the bar, and where the time comes from
+            NodeDisplay::ClockBeat => super::clock_display::clock_display(ui, node_id, graph, user_state, zoom),
+            // Mixer: a row per channel strip, its jacks, lane, meter, knobs and
+            // buttons, and the bus row below
+            NodeDisplay::MixerStrips => {
+                responses.extend(super::mixer_strips::mixer_strips(self, ui, node_id, graph, user_state, zoom));
+            }
+            NodeDisplay::InputListen => {
+                if let Some((param_name, value)) = super::input_display::input_display(ui, node_id, graph, user_state, zoom) {
+                    responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
                 }
-                (channel, notes, cc, pb)
-            } else {
-                (0, true, true, true)
-            };
-
-            // Add separator with zoom-scaled margins
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(4.0 * zoom);
-
-            // Render MIDI event log
-            let midi_events = user_state.midi_events();
-
-            // Newest first, after the channel and type filters
-            let visible: Vec<_> = midi_events
-                .iter()
-                .rev()
-                .filter(|event| {
-                    // Channel filter: 0 = all, 1-16 = that channel
-                    let channel_ok = channel_filter == 0
-                        || event.event.channel() as usize + 1 == channel_filter;
-                    let type_ok = match &event.event {
-                        MidiEvent::NoteOn { .. } | MidiEvent::NoteOff { .. } => show_notes,
-                        MidiEvent::ControlChange { .. } => show_cc,
-                        MidiEvent::PitchBend { .. } => show_pitch_bend,
-                        _ => true, // Always show other events
-                    };
-                    channel_ok && type_ok
-                })
-                .take(MIDI_LOG_ROWS)
-                .collect();
-
-            // A fixed panel holding exactly the rows it shows, painted at a set
-            // pitch: rows can't crowd into each other, and the node keeps its
-            // size as events arrive
-            let font = egui::FontId::monospace(egui::TextStyle::Small.resolve(ui.style()).size);
-            let row_height = ui.fonts(|f| f.row_height(&font)) + 2.0 * zoom;
-            let gap = 6.0 * zoom;
-            let (stamp_width, width) = ui.fonts(|f| {
-                let measure = |text: &str| f.layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE).size().x;
-                let stamp = measure("000.0s");
-                (stamp, (stamp + gap + measure(MIDI_LOG_WIDEST)).max(180.0 * zoom))
-            });
-            let (rect, _) = ui.allocate_exact_size(
-                egui::vec2(width, MIDI_LOG_ROWS as f32 * row_height),
-                egui::Sense::hover(),
-            );
-            let painter = ui.painter_at(rect);
-            let weak = ui.visuals().weak_text_color();
-
-            if visible.is_empty() {
-                let note = if midi_events.is_empty() { "No MIDI events" } else { "No matching events" };
-                painter.text(
-                    egui::pos2(rect.left(), rect.top() + row_height / 2.0),
-                    egui::Align2::LEFT_CENTER,
-                    note,
-                    font.clone(),
-                    weak,
-                );
             }
-            for (row, event) in visible.iter().enumerate() {
-                let y = rect.top() + (row as f32 + 0.5) * row_height;
-                let (text, color) = format_midi_event(&event.event);
-                painter.text(
-                    egui::pos2(rect.left() + stamp_width, y),
-                    egui::Align2::RIGHT_CENTER,
-                    format!("{:.1}s", event.timestamp),
-                    font.clone(),
-                    weak,
-                );
-                painter.text(egui::pos2(rect.left() + stamp_width + gap, y), egui::Align2::LEFT_CENTER, text, font.clone(), color);
-            }
-        }
-
-        // Special rendering for Audio Output module - output stage meter
-        if self.display == NodeDisplay::OutputMeter {
-            // Add separator with zoom-scaled margins
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(6.0 * zoom);
-
-            // The meter marks overs differently when the limiter is off
-            let limiter_enabled = graph
-                .nodes
-                .get(node_id)
-                .and_then(|node| {
-                    node.inputs.iter().find(|(name, _)| name == "Limiter").map(|(_, id)| *id)
-                })
-                .map(|input_id| match graph.get_input(input_id).value {
-                    SynthValueType::Toggle { value, .. } => value,
-                    _ => true,
-                })
-                .unwrap_or(true);
-
-            let config = crate::widgets::LevelMeterConfig {
-                limiter_enabled,
-                ceiling_db: crate::dsp::dynamics::PeakLimiter::DEFAULT_CEILING_DB,
-                ..Default::default()
-            }
-            .scaled(zoom);
-
-            ui.horizontal(|ui| {
-                let meter_width = config.width + config.bar_height * 9.0;
-                ui.add_space(((ui.available_width() - meter_width) / 2.0).max(0.0));
-                crate::widgets::level_meter(ui, &user_state.output_meter, &config);
-            });
-            ui.add_space(2.0 * zoom);
-        }
-
-        // Special rendering for Oscilloscope module
-        if self.display == NodeDisplay::Scope {
-            // Add separator with zoom-scaled margins
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(4.0 * zoom);
-
-            // Get scope data from user state
-            let scope_data = engine_node_id
-                .and_then(|eid| user_state.get_scope_data(eid));
-
-            // Get trigger level from the node's input parameters
-            let trigger_level = if let Some(node) = graph.nodes.get(node_id) {
-                let mut level = 0.0f32;
-                for (name, input_id) in &node.inputs {
-                    if name == "Trigger Level" {
-                        let input = graph.get_input(*input_id);
-                        if let SynthValueType::Number { value, .. } = &input.value {
-                            level = *value;
-                        }
-                    }
+            NodeDisplay::DividerRing => super::divider_display::divider_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::Dancer => {
+                if let Some((param_name, value)) = super::dancer_display::dancer_display(ui, node_id, graph, user_state, zoom) {
+                    responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
                 }
-                level
-            } else {
-                0.0
-            };
-
-            // Render the oscilloscope display
-            let (channel1, channel2) = if let Some(data) = scope_data {
-                (data.channel1.as_slice(), data.channel2.as_slice())
-            } else {
-                (&[] as &[f32], &[] as &[f32])
-            };
-
-            let config = crate::widgets::OscilloscopeConfig::new(200.0 * zoom, 120.0 * zoom)
-                .with_trigger_level(trigger_level)
-                .with_trigger_indicator(true);
-
-            crate::widgets::oscilloscope_display(ui, channel1, channel2, &config);
-        }
-
-        // Special rendering for Step Sequencer module
-        if self.display == NodeDisplay::StepGrid {
-            // Add separator with zoom-scaled margins
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(4.0 * zoom);
-
-            step_sequencer_display(ui, zoom, node_id, graph, user_state, &mut responses);
-        }
-
-        if self.display == NodeDisplay::ChordGrid {
-            ui.add_space(4.0 * zoom);
-            let edits = super::chord_grid::chord_grid(ui, node_id, graph, user_state, zoom);
-            responses.extend(edits.into_iter().map(NodeResponse::User));
-        }
-
-        // Oscillator: the wave it plays, and its unison voices
-        if self.display == NodeDisplay::OscillatorWave {
-            super::oscillator_display::oscillator_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        // Noise: the three slopes, with the patched ones lit
-        if self.display == NodeDisplay::NoiseSpectrum {
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(4.0 * zoom);
-
-            let (level, patched) = if let Some(node) = graph.nodes.get(node_id) {
-                // With Level patched, the CV sets the level (often an envelope
-                // over a knob at 0), so draw the slopes at full scale
-                let level_input = node.inputs.iter().find(|(name, _)| name == "Level").map(|(_, id)| *id);
-                let level = match level_input {
-                    Some(id) if graph.iter_connections().any(|(input, _)| input == id) => 1.0,
-                    Some(id) => match graph.get_input(id).value {
-                        SynthValueType::Number { value, .. } => value,
-                        _ => 0.5,
-                    },
-                    None => 0.5,
-                };
-                let is_patched = |port: &str| {
-                    node.outputs
-                        .iter()
-                        .find(|(name, _)| name == port)
-                        .is_some_and(|(_, id)| graph.iter_connections().any(|(_, output)| output == *id))
-                };
-                (level, [is_patched("White"), is_patched("Pink"), is_patched("Brown")])
-            } else {
-                (0.5, [false; 3])
-            };
-
-            let config = NoiseDisplayConfig {
-                size: egui::vec2(140.0 * zoom, 50.0 * zoom),
-                level,
-                patched,
-                playing: user_state.is_playing,
-            };
-            ui.horizontal(|ui| {
-                ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0); // Center the display
-                noise_display(ui, &config);
-            });
-        }
-
-        // ADSR: the envelope's shape, and where a note is in it
-        if self.display == NodeDisplay::Envelope {
-            super::envelope_display::envelope_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        // Filters: what each output passes, at the cutoff CV has taken it to
-        let filter = match self.display {
-            NodeDisplay::FilterResponse => Some(super::filter_display::Filter::Svf),
-            NodeDisplay::LadderResponse => Some(super::filter_display::Filter::Ladder),
-            _ => None,
-        };
-        if let Some(filter) = filter {
-            super::filter_display::filter_display(ui, filter, node_id, graph, user_state, zoom);
-        }
-
-        // LFO: its cycle, with a dot where it is
-        if self.display == NodeDisplay::LfoWave {
-            super::lfo_display::lfo_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        // Special rendering for Keyboard module - piano keyboard display
-        if self.display == NodeDisplay::KeyboardPiano {
-            // Add separator with zoom-scaled margins
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(4.0 * zoom);
-
-            // Get octave parameter from node
-            let octave_shift = if let Some(node) = graph.nodes.get(node_id) {
-                let mut octave = 0i32;
-                for (name, input_id) in &node.inputs {
-                    if name == "Octave" {
-                        let input = graph.get_input(*input_id);
-                        if let SynthValueType::Number { value, .. } = &input.value {
-                            octave = *value as i32;
-                        }
-                    }
+            }
+            NodeDisplay::SlopeShape => super::slope_display::slope_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::LinkLanes => super::link_display::link_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::MidiOutKeys => super::midi_out_display::midi_out_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::TapeReels => super::tape_display::tape_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::VocoderBands => super::vocoder_display::vocoder_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::CompressorCurve => super::compressor_display::compressor_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::ReverbTail => super::reverb_display::reverb_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::DistortionCurve => super::distortion_display::distortion_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::ChorusBraid => super::chorus_display::chorus_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::DelayTaps => super::delay_display::delay_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::EqCurve => {
+                let changes = super::eq_display::eq_display(ui, node_id, graph, user_state, zoom);
+                responses.extend(changes.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::ScenePads => {
+                if let Some((slot, action)) = super::scenes_display::scenes_display(ui, node_id, graph, user_state, zoom) {
+                    responses.push(NodeResponse::User(SynthResponse::Scene { node_id, slot, action }));
                 }
-                octave
-            } else {
-                0
-            };
-
-            // Base note is C4 (60) plus octave shift
-            let base_note = (60 + octave_shift * 12).max(0).min(127) as u8;
-
-            let data = PianoData {
-                active_notes: user_state.keyboard_active_notes().to_vec(),
-                base_note,
-                octave_shift,
-                ..Default::default()
-            };
-
-            let config = PianoConfig::keyboard()
-                .with_size(140.0 * zoom, 45.0 * zoom);
-
-            // Playable with the mouse, or a finger on a touch screen: the key
-            // held plays like a computer key, and sliding across glides
-            let config = config.clickable();
-            let (response, key) = ui
-                .horizontal(|ui| {
-                    ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0); // Center the display
-                    piano_keys(ui, &data, &config)
-                })
-                .inner;
-            if let (true, Some(key)) = (response.is_pointer_button_down_on(), key) {
-                user_state.piano_pointer = Some(key as i32);
             }
-        }
-
-        // Special rendering for MIDI Note module - piano keyboard display
-        if self.display == NodeDisplay::MidiPiano {
-            // Add separator with zoom-scaled margins
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(4.0 * zoom);
-
-            // Get octave parameter from node
-            let octave_shift = if let Some(node) = graph.nodes.get(node_id) {
-                let mut octave = 0i32;
-                for (name, input_id) in &node.inputs {
-                    if name == "Octave" {
-                        let input = graph.get_input(*input_id);
-                        if let SynthValueType::Number { value, .. } = &input.value {
-                            octave = *value as i32;
-                        }
-                    }
+            NodeDisplay::ResonatorRings => super::resonator_display::resonator_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::DrumHit => super::drum_display::drum_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::SamplerWave => {
+                let actions = super::sampler_display::sampler_display(ui, node_id, graph, user_state, zoom);
+                responses.extend(actions.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::ChopperRow => {
+                let actions = super::chopper_display::chopper_display(ui, node_id, graph, user_state, zoom);
+                responses.extend(actions.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::CloudSparks => {
+                let actions = super::cloud_display::cloud_display(ui, node_id, graph, user_state, zoom);
+                responses.extend(actions.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::SlicerRow => {
+                let edits = super::slicer_display::slicer_display(ui, node_id, graph, user_state, zoom);
+                responses.extend(edits.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::LooperRing => {
+                let actions = super::looper_display::looper_display(ui, node_id, graph, user_state, zoom);
+                responses.extend(actions.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::TriggerGrid => {
+                let edits = super::trigger_display::pattern_bar(ui, node_id, graph, user_state, zoom);
+                responses.extend(edits.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::Timeline => {
+                let edits = super::arranger_display::section_bar(ui, node_id, graph, user_state, zoom);
+                responses.extend(edits.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::LogicLamps => {
+                if let Some((param_name, value)) = super::logic_display::logic_display(ui, node_id, graph, user_state, zoom) {
+                    responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
                 }
-                octave
-            } else {
-                0
-            };
-
-            // Base note is C4 (60) plus octave shift
-            let base_note = (60 + octave_shift * 12).max(0).min(127) as u8;
-
-            let data = PianoData {
-                active_notes: user_state.midi_active_notes().to_vec(),
-                base_note,
-                octave_shift,
-                ..Default::default()
-            };
-
-            let config = PianoConfig::midi()
-                .with_size(140.0 * zoom, 45.0 * zoom);
-
-            // Poly MIDI's piano plays it like the computer keys do; MIDI
-            // Note's only shows what its device plays
-            if self.module_id == "input.poly_midi" {
-
-                // Playable with the mouse, or a finger on a touch screen: the key
-                // held plays like a computer key, and sliding across glides
-                let config = config.clickable();
-                let (response, key) = ui
-                    .horizontal(|ui| {
-                        ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0); // Center the display
-                        piano_keys(ui, &data, &config)
-                    })
-                    .inner;
-                if let (true, Some(key)) = (response.is_pointer_button_down_on(), key) {
-                    user_state.piano_pointer = Some(key as i32);
-                }
-            } else {
-                ui.horizontal(|ui| {
-                    ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0); // Center the display
-                    piano(ui, &data, &config);
-                });
-            }
-        }
-
-        // Quantizer: its scale on a one-octave piano, the notes it plays
-        // glowing. Clicking a key adds it to or takes it out of the scale
-        if self.display == NodeDisplay::ScalePiano {
-            use crate::modules::quantizer::{self, NOTE_NAMES};
-
-            ui.add_space(4.0 * zoom);
-            let category_color = self.category.color();
-            let separator_color = Color32::from_rgba_unmultiplied(
-                category_color.r(),
-                category_color.g(),
-                category_color.b(),
-                64,
-            );
-            let margin = 4.0 * zoom;
-            let rect = ui.available_rect_before_wrap();
-            ui.painter().hline(
-                (rect.left() + margin)..=(rect.right() - margin),
-                ui.cursor().top(),
-                egui::Stroke::new(1.0 * zoom, separator_color),
-            );
-            ui.add_space(4.0 * zoom);
-
-            let node = graph.nodes.get(node_id);
-            let input_of = |name: &str| node.and_then(|n| n.inputs.iter().find(|(n, _)| n == name).map(|(_, id)| *id));
-            let value_of = |name: &str| {
-                input_of(name).map_or(0.0, |id| match &graph.get_input(id).value {
-                    SynthValueType::Number { value, .. } => *value,
-                    SynthValueType::Select { value, .. } => *value as f32,
-                    _ => 0.0,
-                })
-            };
-            let scale = value_of("Scale") as usize;
-            let relative = quantizer::scale_mask(scale, value_of("Mask").round() as u16);
-
-            // The key Out is in: the root moved by Transpose, CV included
-            let transpose_patched = input_of("Transpose")
-                .is_some_and(|id| graph.iter_connections().any(|(input, _)| input == id));
-            let transpose_cv = if transpose_patched {
-                engine_node_id.and_then(|eid| user_state.get_input_value(eid, 1)).unwrap_or(0.0)
-            } else {
-                0.0
-            };
-            let tonic = value_of("Root") as i32 + (value_of("Transpose") + transpose_cv * 12.0).round() as i32;
-
-            // The notes Out is playing, one per voice
-            let playing: Vec<u8> = engine_node_id
-                .and_then(|eid| user_state.output_channels.get(&(eid, 0)))
-                .map(|peaks| {
-                    (0..peaks.count())
-                        .map(|voice| (60.0 + peaks.peak(voice) * 12.0).round().clamp(0.0, 127.0) as u8)
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            let data = PianoData {
-                active_notes: playing.clone(),
-                base_note: 60,
-                octave_shift: 0,
-                scale: Some(quantizer::rotate_to_key(relative, tonic)),
-                root: Some(tonic.rem_euclid(12) as u8),
-            };
-            let accent = crate::dsp::SignalType::Control.color();
-            let config = PianoConfig::scale(accent).with_size(140.0 * zoom, 45.0 * zoom);
-
-            let (response, hovered) = ui
-                .horizontal(|ui| {
-                    ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0); // Center the display
-                    piano_keys(ui, &data, &config)
-                })
-                .inner;
-
-            if let Some(key) = hovered {
-                let bit = 1 << (key as i32 - tonic).rem_euclid(12);
-                let name = NOTE_NAMES[key as usize];
-                let tip = if relative & bit != 0 {
-                    format!("{name}: click to take it out of the scale")
-                } else {
-                    format!("{name}: click to add it to the scale")
-                };
-                if response.clicked() {
-                    responses.push(NodeResponse::User(SynthResponse::ParameterChanged {
-                        node_id,
-                        param_name: "Mask".to_string(),
-                        value: (relative ^ bit) as f32,
-                    }));
-                    responses.push(NodeResponse::User(SynthResponse::ParameterChanged {
-                        node_id,
-                        param_name: "Scale".to_string(),
-                        value: quantizer::CUSTOM_SCALE as f32,
-                    }));
-                }
-                response.on_hover_text(tip);
-            }
-
-            // The notes by name, under the keys
-            let mut names: Vec<String> = playing.iter().map(|&note| crate::modules::sequencer::note_to_name(note)).collect();
-            names.dedup();
-            let caption = if names.is_empty() { "–".to_string() } else { names.join("  ") };
-            ui.horizontal(|ui| {
-                ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0);
-                let (rect, _) = ui.allocate_exact_size(egui::vec2(140.0 * zoom, 14.0 * zoom), egui::Sense::hover());
-                ui.painter().text(
-                    rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    caption,
-                    egui::FontId::proportional(10.0 * zoom),
-                    accent,
-                );
-            });
-        }
-
-        // Clock: the beat in the bar, and where the time comes from
-        if self.display == NodeDisplay::ClockBeat {
-            super::clock_display::clock_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        // Mixer: a row per channel strip, its jacks, lane, meter, knobs and
-        // buttons, and the bus row below
-        if self.display == NodeDisplay::MixerStrips {
-            responses.extend(super::mixer_strips::mixer_strips(self, ui, node_id, graph, user_state, zoom));
-        }
-
-        if self.display == NodeDisplay::InputListen {
-            if let Some((param_name, value)) = super::input_display::input_display(ui, node_id, graph, user_state, zoom) {
-                responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
-            }
-        }
-
-        if self.display == NodeDisplay::DividerRing {
-            super::divider_display::divider_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::Dancer {
-            if let Some((param_name, value)) = super::dancer_display::dancer_display(ui, node_id, graph, user_state, zoom) {
-                responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
-            }
-        }
-
-        if self.display == NodeDisplay::SlopeShape {
-            super::slope_display::slope_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::LinkLanes {
-            super::link_display::link_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::MidiOutKeys {
-            super::midi_out_display::midi_out_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::TapeReels {
-            super::tape_display::tape_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::VocoderBands {
-            super::vocoder_display::vocoder_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::CompressorCurve {
-            super::compressor_display::compressor_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::ReverbTail {
-            super::reverb_display::reverb_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::DistortionCurve {
-            super::distortion_display::distortion_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::ChorusBraid {
-            super::chorus_display::chorus_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::DelayTaps {
-            super::delay_display::delay_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::EqCurve {
-            let changes = super::eq_display::eq_display(ui, node_id, graph, user_state, zoom);
-            responses.extend(changes.into_iter().map(NodeResponse::User));
-        }
-
-        if self.display == NodeDisplay::ScenePads {
-            if let Some((slot, action)) = super::scenes_display::scenes_display(ui, node_id, graph, user_state, zoom) {
-                responses.push(NodeResponse::User(SynthResponse::Scene { node_id, slot, action }));
-            }
-        }
-
-        if self.display == NodeDisplay::ResonatorRings {
-            super::resonator_display::resonator_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::DrumHit {
-            super::drum_display::drum_display(ui, node_id, graph, user_state, zoom);
-        }
-
-        if self.display == NodeDisplay::SamplerWave {
-            let actions = super::sampler_display::sampler_display(ui, node_id, graph, user_state, zoom);
-            responses.extend(actions.into_iter().map(NodeResponse::User));
-        }
-
-        if self.display == NodeDisplay::ChopperRow {
-            let actions = super::chopper_display::chopper_display(ui, node_id, graph, user_state, zoom);
-            responses.extend(actions.into_iter().map(NodeResponse::User));
-        }
-
-        if self.display == NodeDisplay::CloudSparks {
-            let actions = super::cloud_display::cloud_display(ui, node_id, graph, user_state, zoom);
-            responses.extend(actions.into_iter().map(NodeResponse::User));
-        }
-
-        if self.display == NodeDisplay::SlicerRow {
-            let edits = super::slicer_display::slicer_display(ui, node_id, graph, user_state, zoom);
-            responses.extend(edits.into_iter().map(NodeResponse::User));
-        }
-
-        if self.display == NodeDisplay::LooperRing {
-            let actions = super::looper_display::looper_display(ui, node_id, graph, user_state, zoom);
-            responses.extend(actions.into_iter().map(NodeResponse::User));
-        }
-
-        if self.display == NodeDisplay::TriggerGrid {
-            let edits = super::trigger_display::pattern_bar(ui, node_id, graph, user_state, zoom);
-            responses.extend(edits.into_iter().map(NodeResponse::User));
-        }
-
-        if self.display == NodeDisplay::Timeline {
-            let edits = super::arranger_display::section_bar(ui, node_id, graph, user_state, zoom);
-            responses.extend(edits.into_iter().map(NodeResponse::User));
-        }
-
-        if self.display == NodeDisplay::LogicLamps {
-            if let Some((param_name, value)) = super::logic_display::logic_display(ui, node_id, graph, user_state, zoom) {
-                responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
             }
         }
 
