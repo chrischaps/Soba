@@ -182,6 +182,37 @@ Windows has no Web Audio, and its phone emulation fakes the pixel ratio
 (it drew the UI twice the size; a real 2× scale factor draws it correctly).
 Both need a look on real hardware: an iPhone or iPad, and Safari on a Mac.
 
+### The heavy examples
+
+Lush Pad turned out not to be the heaviest. Canopy, Clair de Satellite and
+Orrery cost about three times as much natively, and in the browser they
+**drop buffers** (#349: `tools/web/steadiness.mjs` in Chrome and
+Playwright's Firefox, six runs over three builds). Each cell is the range
+of late buffers in 30 seconds, then of the time to render one:
+
+| Browser | Buffer | Lush Pad | Canopy | Clair de Satellite | Orrery |
+|---|---|---|---|---|---|
+| Chrome | 2048 (43 ms) | 0 late; 4–7 ms | 7–424 late; 11–21 ms | 0–363; 10–19 ms | 5–321; 9–17 ms |
+| Firefox | 4096 (93 ms) | 0 late; 7–15 ms | 1–113; 22–67 ms | 0–179; 20–101 ms | 0–69; 19–34 ms |
+
+Rendering alone takes a quarter to a half of each buffer, sometimes more,
+and drawing a graph this size shares the thread with it, so a long frame
+or two misses the next buffer. #387 has the ways out.
+
+The browser build is compiled with wasm's 128-bit SIMD (`+simd128`, in
+`.cargo/config.toml`) and `wasm-opt -O3`. Every browser that runs Soba has
+had SIMD since 2021–23 (Safari since 16.4), and LLVM vectorizes the DSP
+loops with it. These runs couldn't say how much it gains: the same build
+varied up to 2× from run to run on a machine busy with other work, more
+than the difference between builds. So the ranges above span all three
+builds, and a quiet machine should measure it again:
+
+```bash
+(cd tools/web && npm install && npx playwright install firefox)
+trunk build --release
+node tools/web/steadiness.mjs --dist dist --browsers chrome,firefox
+```
+
 ## The AudioWorklet route
 
 cpal's other web host, `audioworklet`, renders in the browser's audio thread,

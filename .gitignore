@@ -21,3 +21,6 @@ nul
 # The manual, built by mdbook (docs.yml builds it fresh)
 /docs/book/
 __pycache__/
+
+# The browser tools (tools/web), installed by npm
+node_modules/

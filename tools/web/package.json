@@ -1,0 +1,12 @@
+{
+  "name": "soba-web-tools",
+  "private": true,
+  "description": "Browser checks of the web build (WEB.md's steadiness table)",
+  "type": "module",
+  "scripts": {
+    "steadiness": "node steadiness.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

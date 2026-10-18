@@ -1,0 +1,5 @@
+# The browser build uses wasm's 128-bit SIMD, which every browser that runs
+# it has had since 2021-23 (Safari 16.4). LLVM vectorizes the DSP loops with
+# it (#349; WEB.md has the measurements)
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+simd128"]
