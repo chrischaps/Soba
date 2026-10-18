@@ -31,7 +31,7 @@ use rtrb::{Consumer, Producer, PushError, RingBuffer};
 
 use super::audio_graph::AudioGraph;
 use super::audio_processor::create_module_registry;
-use super::commands::{AudioMessage, EngineCommand, EngineEvent, NodeId, ScopeFrame};
+use super::commands::{AudioMessage, EngineCommand, EngineEvent, NodeId, PlanMessage, ScopeFrame};
 use crate::dsp::{FinishedTake, SampleData, Snapshot};
 use super::graph_plan::GraphPlan;
 use super::monitor_board::Monitors;
@@ -276,7 +276,7 @@ impl UiHandle {
         match cmd {
             EngineCommand::SetParameter { node_id, param_index, value } => {
                 self.graph.set_parameter(node_id, param_index, value);
-                let message = AudioMessage::SetParameter { node_id, param_index, value };
+                let message = AudioMessage::Plan(PlanMessage::SetParameter { node_id, param_index, value });
                 if self.message_tx.push(message).is_err() {
                     // Make sure the value travels with the next plan instead
                     self.graph.mark_dirty();
@@ -284,14 +284,14 @@ impl UiHandle {
             }
             EngineCommand::SetBypass { node_id, bypassed } => {
                 self.graph.set_bypass(node_id, bypassed);
-                if self.message_tx.push(AudioMessage::SetBypass { node_id, bypassed }).is_err() {
+                if self.message_tx.push(AudioMessage::Plan(PlanMessage::SetBypass { node_id, bypassed })).is_err() {
                     self.graph.mark_dirty();
                 }
             }
             EngineCommand::Audition { node_id, chord } => {
                 // Kept until there's room, in order: a chord let go of mustn't
                 // be lost, or it would go on sounding
-                self.unsent_handoffs.push(AudioMessage::Audition { node_id, chord });
+                self.unsent_handoffs.push(AudioMessage::Plan(PlanMessage::Audition { node_id, chord }));
                 self.send_handoffs();
             }
             EngineCommand::SetPlaying(playing) => {
@@ -450,8 +450,8 @@ impl UiHandle {
             return false;
         }
         let loads = self.graph.take_sample_loads();
-        self.unsent_samples.extend(loads.into_iter().map(|(node_id, sample)| AudioMessage::LoadSample { node_id, sample }));
-        self.unsent_samples.extend(self.graph.take_take_handoffs());
+        let loads = loads.into_iter().map(|(node_id, sample)| PlanMessage::LoadSample { node_id, sample });
+        self.unsent_samples.extend(loads.chain(self.graph.take_take_handoffs()).map(AudioMessage::Plan));
         if !self.send_samples() {
             return false;
         }
@@ -721,17 +721,17 @@ mod tests {
                     engine.retire_plan(old);
                     seen.push("plan");
                 }
-                AudioMessage::SetBypass { node_id, bypassed } => {
-                    current.set_bypass(node_id, bypassed);
-                    seen.push("bypass");
-                }
-                AudioMessage::Audition { node_id, chord } => {
-                    current.audition(node_id, chord);
-                    seen.push(if chord.is_some() { "audition" } else { "audition off" });
-                }
-                AudioMessage::SetParameter { node_id, param_index, value } => {
-                    current.set_parameter(node_id, param_index, value);
-                    seen.push("param");
+                AudioMessage::Plan(message) => {
+                    seen.push(match &message {
+                        PlanMessage::SetParameter { .. } => "param",
+                        PlanMessage::SetBypass { .. } => "bypass",
+                        PlanMessage::Audition { chord, .. } => if chord.is_some() { "audition" } else { "audition off" },
+                        PlanMessage::LoadSample { .. } => "sample",
+                        PlanMessage::SetMarkers { .. } => "markers",
+                        PlanMessage::GiveRoom { .. } => "room",
+                        PlanMessage::SettleTake { .. } => "settle",
+                    });
+                    current.apply(message, |sample| engine.retire_sample(sample));
                 }
                 AudioMessage::SetPlaying(playing) => seen.push(if playing { "play" } else { "stop" }),
                 AudioMessage::StartRecording(tap) => {
@@ -744,12 +744,6 @@ mod tests {
                     seen.push("input");
                 }
                 AudioMessage::DisconnectInput => seen.push("no input"),
-                AudioMessage::LoadSample { node_id, sample } => {
-                    if let Some(old) = current.load_sample(node_id, sample) {
-                        engine.retire_sample(old);
-                    }
-                    seen.push("sample");
-                }
                 AudioMessage::Cue(cue) => {
                     if let Some(cue) = cue {
                         engine.retire_sample(cue.sample);
@@ -762,22 +756,6 @@ mod tests {
                     current.fill_snapshot(node_id, &mut snapshot, &mut budget);
                     engine.return_snapshot(node_id, snapshot);
                     seen.push("snapshot");
-                }
-                AudioMessage::GiveRoom { node_id, room } => {
-                    if let Some(old) = current.give_room(node_id, room) {
-                        engine.retire_sample(old);
-                    }
-                    seen.push("room");
-                }
-                AudioMessage::SettleTake { node_id, take, sample } => {
-                    if let Some(old) = current.settle_take(node_id, take, sample) {
-                        engine.retire_sample(old);
-                    }
-                    seen.push("settle");
-                }
-                AudioMessage::SetMarkers { node_id, markers } => {
-                    current.set_markers(node_id, markers);
-                    seen.push("markers");
                 }
             }
         }

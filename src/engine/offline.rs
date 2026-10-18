@@ -18,7 +18,7 @@ use crate::persistence::sample_files::{self, SampleBase};
 use crate::persistence::{compile_patch, CompiledPatch, Patch, PatchError};
 
 use super::commands::NodeId;
-use super::{create_module_registry, AudioGraph, AudioMessage, EngineCommand, GraphPlan};
+use super::{create_module_registry, AudioGraph, EngineCommand, GraphPlan, PlanMessage};
 
 /// Rendered stereo audio.
 #[derive(Debug, Default, Clone)]
@@ -231,15 +231,10 @@ impl OfflineRenderer {
         }
         // Recordings for modules already running, after the plan that has them
         for (node_id, sample) in self.graph.take_sample_loads() {
-            drop(self.plan.load_sample(node_id, sample));
+            self.plan.apply(PlanMessage::LoadSample { node_id, sample }, drop);
         }
         for handoff in self.graph.take_take_handoffs() {
-            match handoff {
-                AudioMessage::SetMarkers { node_id, markers } => self.plan.set_markers(node_id, markers),
-                AudioMessage::GiveRoom { node_id, room } => drop(self.plan.give_room(node_id, room)),
-                AudioMessage::SettleTake { node_id, take, sample } => drop(self.plan.settle_take(node_id, take, sample)),
-                _ => {}
-            }
+            self.plan.apply(handoff, drop);
         }
         // Nothing here is real time, so loops loaded are copied in at once
         self.plan.background(&mut { usize::MAX });

@@ -445,14 +445,9 @@ impl AudioProcessor {
                     let retired = std::mem::replace(&mut self.plan, plan);
                     self.engine_handle.retire_plan(retired);
                 }
-                AudioMessage::SetParameter { node_id, param_index, value } => {
-                    self.plan.set_parameter(node_id, param_index, value);
-                }
-                AudioMessage::SetBypass { node_id, bypassed } => {
-                    self.plan.set_bypass(node_id, bypassed);
-                }
-                AudioMessage::Audition { node_id, chord } => {
-                    self.plan.audition(node_id, chord);
+                AudioMessage::Plan(message) => {
+                    let engine_handle = &mut self.engine_handle;
+                    self.plan.apply(message, |sample| engine_handle.retire_sample(sample));
                 }
                 AudioMessage::SetPlaying(playing) => {
                     if self.is_playing && !playing {
@@ -487,29 +482,11 @@ impl AudioProcessor {
                         self.engine_handle.retire_input(feed);
                     }
                 }
-                AudioMessage::LoadSample { node_id, sample } => {
-                    if let Some(old) = self.plan.load_sample(node_id, sample) {
-                        self.engine_handle.retire_sample(old);
-                    }
-                }
                 AudioMessage::Cue(cue) => {
                     self.cue.play(cue, self.sample_rate);
                 }
                 AudioMessage::Probe(probe) => {
                     self.probe.probe(probe);
-                }
-                AudioMessage::GiveRoom { node_id, room } => {
-                    if let Some(old) = self.plan.give_room(node_id, room) {
-                        self.engine_handle.retire_sample(old);
-                    }
-                }
-                AudioMessage::SettleTake { node_id, take, sample } => {
-                    if let Some(old) = self.plan.settle_take(node_id, take, sample) {
-                        self.engine_handle.retire_sample(old);
-                    }
-                }
-                AudioMessage::SetMarkers { node_id, markers } => {
-                    self.plan.set_markers(node_id, markers);
                 }
                 AudioMessage::SnapshotLoop { node_id, mut snapshot } => {
                     if self.snapshots.len() < self.snapshots.capacity() {

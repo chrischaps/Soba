@@ -35,7 +35,7 @@ use web_time::Instant;
 use crate::dsp::{Audition, DspModule, FinishedTake, OutputLevels, ProcessContext, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
 use crate::dsp::finite::all_finite;
 use crate::dsp::primitives::Markers;
-use crate::engine::commands::{ChannelPeaks, NodeId, PortIndex};
+use crate::engine::commands::{ChannelPeaks, NodeId, PlanMessage, PortIndex};
 use crate::engine::monitor_board::MonitorWriter;
 use crate::engine::spectrum_tap::SpectrumTap;
 
@@ -404,6 +404,39 @@ impl GraphPlan {
     pub fn audition(&mut self, node_id: NodeId, chord: Option<Audition>) {
         if let Some(module) = self.nodes.iter_mut().find(|node| node.node_id == node_id).and_then(|node| node.module.as_mut()) {
             module.audition(chord);
+        }
+    }
+
+    /// Applies a change to a running module. Recordings the plan lets go
+    /// of go to `retire`, to be dropped off the audio thread. The live
+    /// engine, the offline renderer and the tests all come through here,
+    /// so a new kind of change can't reach one and not the others.
+    ///
+    /// REAL-TIME SAFE: as the methods it calls.
+    pub fn apply(&mut self, message: PlanMessage, mut retire: impl FnMut(Arc<SampleData>)) {
+        let let_go = match message {
+            PlanMessage::SetParameter { node_id, param_index, value } => {
+                self.set_parameter(node_id, param_index, value);
+                None
+            }
+            PlanMessage::SetBypass { node_id, bypassed } => {
+                self.set_bypass(node_id, bypassed);
+                None
+            }
+            PlanMessage::Audition { node_id, chord } => {
+                self.audition(node_id, chord);
+                None
+            }
+            PlanMessage::LoadSample { node_id, sample } => self.load_sample(node_id, sample),
+            PlanMessage::SetMarkers { node_id, markers } => {
+                self.set_markers(node_id, markers);
+                None
+            }
+            PlanMessage::GiveRoom { node_id, room } => self.give_room(node_id, room),
+            PlanMessage::SettleTake { node_id, take, sample } => self.settle_take(node_id, take, sample),
+        };
+        if let Some(sample) = let_go {
+            retire(sample);
         }
     }
 

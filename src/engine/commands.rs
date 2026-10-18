@@ -190,14 +190,8 @@ pub enum EngineCommand {
 pub enum AudioMessage {
     /// Swap in a newly compiled graph.
     InstallPlan(Box<GraphPlan>),
-    /// Set a parameter on a running module.
-    SetParameter {
-        node_id: NodeId,
-        param_index: usize,
-        value: f32,
-    },
-    /// Bypass a running module, or bring it back.
-    SetBypass { node_id: NodeId, bypassed: bool },
+    /// Change something in the running plan (see [`GraphPlan::apply`]).
+    Plan(PlanMessage),
     /// Start or stop audio processing.
     SetPlaying(bool),
     /// Start copying the output into a recording's ring. A tap already
@@ -210,27 +204,58 @@ pub enum AudioMessage {
     ConnectInput(InputFeed),
     /// Hand the audio input's feed back to the UI.
     DisconnectInput,
+    /// Copy a module's recording (a Looper's loop) into room the UI set
+    /// aside, a piece each callback, and hand it back when it's done.
+    SnapshotLoop { node_id: NodeId, snapshot: Box<Snapshot> },
+    /// Hear a recording from a module's face, beside the patch, playing or
+    /// stopped; or with `None`, stop the one playing.
+    Cue(Option<Cue>),
+    /// Hear what a cable carries, beside the patch, or with `None`, stop.
+    Probe(Option<Probe>),
+}
+
+/// Changes to a module in the running plan: the part of an
+/// [`AudioMessage`] the live engine, the offline renderer and the tests
+/// all apply alike, through [`GraphPlan::apply`].
+// Not boxed: a box would be freed on the audio thread
+#[allow(clippy::large_enum_variant)]
+pub enum PlanMessage {
+    /// Set a parameter on a running module.
+    SetParameter {
+        node_id: NodeId,
+        param_index: usize,
+        value: f32,
+    },
+    /// Bypass a running module, or bring it back.
+    SetBypass { node_id: NodeId, bypassed: bool },
+    /// Play a chord on a running module's outputs, or stop.
+    Audition { node_id: NodeId, chord: Option<Audition> },
     /// Give a running module a recording to play, or take its away. The
     /// recording it had goes back to the UI to be dropped.
     LoadSample { node_id: NodeId, sample: Option<Arc<SampleData>> },
     /// Give a running module the markers its recording is cut at.
     SetMarkers { node_id: NodeId, markers: Markers },
-    /// Copy a module's recording (a Looper's loop) into room the UI set
-    /// aside, a piece each callback, and hand it back when it's done.
-    SnapshotLoop { node_id: NodeId, snapshot: Box<Snapshot> },
     /// Give a running module room to record a take into. Room it's done
     /// with goes back to the UI to be dropped.
     GiveRoom { node_id: NodeId, room: Arc<SampleData> },
     /// Swap a running module's take for the same recording made to
     /// measure. What it's done with goes back to the UI to be dropped.
     SettleTake { node_id: NodeId, take: u32, sample: Arc<SampleData> },
-    /// Play a chord on a running module's outputs, or stop.
-    Audition { node_id: NodeId, chord: Option<Audition> },
-    /// Hear a recording from a module's face, beside the patch, playing or
-    /// stopped; or with `None`, stop the one playing.
-    Cue(Option<Cue>),
-    /// Hear what a cable carries, beside the patch, or with `None`, stop.
-    Probe(Option<Probe>),
+}
+
+impl PlanMessage {
+    /// The module the message is for.
+    pub fn node_id(&self) -> NodeId {
+        match *self {
+            Self::SetParameter { node_id, .. }
+            | Self::SetBypass { node_id, .. }
+            | Self::Audition { node_id, .. }
+            | Self::LoadSample { node_id, .. }
+            | Self::SetMarkers { node_id, .. }
+            | Self::GiveRoom { node_id, .. }
+            | Self::SettleTake { node_id, .. } => node_id,
+        }
+    }
 }
 
 /// One oscilloscope capture, sent from the audio thread by value so that
