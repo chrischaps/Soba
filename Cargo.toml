@@ -1,6 +1,6 @@
 [package]
 name = "soba"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 # egui 0.37's (CI builds on the newer Rust ci.yml pins)
 rust-version = "1.95"
