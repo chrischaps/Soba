@@ -11,7 +11,7 @@
 //! directly in the [`OfflineRenderer`](super::OfflineRenderer), so it may
 //! allocate freely.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::dsp::bypass::{bypass_routes, can_bypass};
@@ -365,16 +365,15 @@ impl AudioGraph {
             .position(|c| c.to_node == to_node && c.to_port == to_port)
             .map(|index| self.connections.remove(index));
 
-        // Check that we're not creating a cycle
-        // (We'll do a full topological sort to verify)
-        self.connections.push(new_conn);
-
-        // Try to sort - if it fails, we have a cycle
-        if self.has_cycle() {
-            self.connections.pop(); // Remove the connection that caused the cycle
+        // Refuse a cable that would close a loop: the graph is acyclic, so it
+        // closes one only if its source is already downstream of where it
+        // goes. A loop closed through a late input isn't one: that cable
+        // hears its source a block late.
+        if !self.is_late(&new_conn) && self.reaches(to_node, from_node) {
             self.connections.extend(replaced); // Keep the cable that was there
             return false;
         }
+        self.connections.push(new_conn);
 
         self.needs_sort = true;
         self.dirty = true;
@@ -620,14 +619,6 @@ impl AudioGraph {
     // Topological Sort
     // ========================================================================
 
-    /// Checks if the current graph has a cycle. A loop closed through a late
-    /// input isn't one: that cable hears its source a block late.
-    fn has_cycle(&self) -> bool {
-        // Use Kahn's algorithm - if we can't process all nodes, there's a cycle
-        let sorted = self.compute_topological_order();
-        sorted.len() != self.nodes.len()
-    }
-
     /// Whether a connection ends at a late input, which may close a loop.
     fn is_late(&self, conn: &Connection) -> bool {
         self.nodes
@@ -636,71 +627,62 @@ impl AudioGraph {
             .is_some_and(|port| port.late)
     }
 
+    /// The modules each module feeds, along every cable but those into late inputs.
+    fn successors(&self) -> HashMap<NodeId, Vec<NodeId>> {
+        let mut successors: HashMap<NodeId, Vec<NodeId>> = HashMap::with_capacity(self.nodes.len());
+        for conn in self.connections.iter().filter(|conn| !self.is_late(conn)) {
+            successors.entry(conn.from_node).or_default().push(conn.to_node);
+        }
+        successors
+    }
+
+    /// Whether `to` is downstream of `from` (or is `from`), along every
+    /// cable but those into late inputs.
+    fn reaches(&self, from: NodeId, to: NodeId) -> bool {
+        reachable(&self.successors(), from, to)
+    }
+
     /// Computes the processing order.
     ///
     /// Every cable's source comes before the module it feeds, except a cable
     /// into a late input that would close a loop. Late cables that close no
     /// loop are ordered like the rest, so they're heard without delay.
     fn compute_topological_order(&self) -> Vec<NodeId> {
-        let mut kept: Vec<bool> = self.connections.iter().map(|conn| !self.is_late(conn)).collect();
-        for index in 0..self.connections.len() {
-            if !kept[index] {
-                kept[index] = true;
-                kept[index] = self.order_by(&kept).len() == self.nodes.len();
+        let mut successors = self.successors();
+        // In cable order, each late cable that closes no loop with those
+        // kept so far is kept too
+        for conn in self.connections.iter().filter(|conn| self.is_late(conn)) {
+            if !reachable(&successors, conn.to_node, conn.from_node) {
+                successors.entry(conn.from_node).or_default().push(conn.to_node);
             }
         }
-        self.order_by(&kept)
+        self.order_by(&successors)
     }
 
-    /// Kahn's algorithm over the connections marked in `kept`. Comes up
-    /// short of every node when they form a cycle.
-    fn order_by(&self, kept: &[bool]) -> Vec<NodeId> {
-        let connections = || self.connections.iter().zip(kept).filter(|(_, &kept)| kept).map(|(conn, _)| conn);
-        // Build in-degree map
-        let mut in_degree: HashMap<NodeId, usize> = HashMap::new();
-
-        // Initialize all nodes with 0 in-degree
-        for &node_id in self.nodes.keys() {
-            in_degree.insert(node_id, 0);
-        }
-
-        // Count incoming edges for each node
-        for conn in connections() {
-            if let Some(degree) = in_degree.get_mut(&conn.to_node) {
+    /// Kahn's algorithm over the cables in `successors`, the highest ready
+    /// module first. Comes up short of every node when they form a cycle.
+    fn order_by(&self, successors: &HashMap<NodeId, Vec<NodeId>>) -> Vec<NodeId> {
+        let mut in_degree: HashMap<NodeId, usize> = self.nodes.keys().map(|&node_id| (node_id, 0)).collect();
+        for to_node in successors.values().flatten() {
+            if let Some(degree) = in_degree.get_mut(to_node) {
                 *degree += 1;
             }
         }
 
-        // Start with nodes that have no incoming edges
-        let mut queue: Vec<NodeId> = in_degree
-            .iter()
-            .filter(|(_, &degree)| degree == 0)
-            .map(|(&node_id, _)| node_id)
-            .collect();
-
-        // Sort the queue for deterministic ordering
-        queue.sort();
-
+        let mut ready: BinaryHeap<NodeId> =
+            in_degree.iter().filter(|(_, &degree)| degree == 0).map(|(&node_id, _)| node_id).collect();
         let mut result = Vec::with_capacity(self.nodes.len());
-
-        while let Some(node_id) = queue.pop() {
+        while let Some(node_id) = ready.pop() {
             result.push(node_id);
-
-            // Find all nodes that depend on this one
-            for conn in connections() {
-                if conn.from_node == node_id {
-                    if let Some(degree) = in_degree.get_mut(&conn.to_node) {
-                        *degree -= 1;
-                        if *degree == 0 {
-                            // Insert in sorted position for determinism
-                            let insert_pos = queue.binary_search(&conn.to_node).unwrap_or_else(|p| p);
-                            queue.insert(insert_pos, conn.to_node);
-                        }
+            for to_node in successors.get(&node_id).into_iter().flatten() {
+                if let Some(degree) = in_degree.get_mut(to_node) {
+                    *degree -= 1;
+                    if *degree == 0 {
+                        ready.push(*to_node);
                     }
                 }
             }
         }
-
         result
     }
 
@@ -991,6 +973,24 @@ impl Default for AudioGraph {
     fn default() -> Self {
         Self::new(44100.0, 256)
     }
+}
+
+/// Whether `to` is downstream of `from` (or is `from`) in `successors`:
+/// one depth-first search, visiting each module and cable at most once.
+fn reachable(successors: &HashMap<NodeId, Vec<NodeId>>, from: NodeId, to: NodeId) -> bool {
+    let mut seen = HashSet::from([from]);
+    let mut stack = vec![from];
+    while let Some(node_id) = stack.pop() {
+        if node_id == to {
+            return true;
+        }
+        for &next in successors.get(&node_id).into_iter().flatten() {
+            if seen.insert(next) {
+                stack.push(next);
+            }
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -1497,6 +1497,27 @@ mod tests {
         // Try to create a cycle - should fail
         assert!(!graph.connect(2, 1, 1, 0));
         assert_eq!(graph.connection_count(), 1);
+    }
+
+    #[test]
+    fn test_cycle_detection_finds_long_loops() {
+        // A chain of 500 modules, each cable checked as it goes in
+        let mut graph = AudioGraph::new(44100.0, 256);
+        for id in 1..=500 {
+            graph.add_module_instance(id, Box::new(TestPassthrough));
+        }
+        for id in 1..500 {
+            assert!(graph.connect(id, 1, id + 1, 0));
+        }
+
+        // Closing it from the far end, or partway along, is refused
+        assert!(!graph.connect(500, 1, 1, 0));
+        assert!(!graph.connect(300, 1, 200, 0));
+        assert!(!graph.connect(7, 1, 7, 0), "nor may a module feed itself");
+        assert_eq!(graph.connection_count(), 499);
+
+        graph.update_processing_order();
+        assert_eq!(graph.processing_order(), (1..=500).collect::<Vec<_>>());
     }
 
     /// A Mixer (node 2) with a constant on channel 1, panned hard left and
