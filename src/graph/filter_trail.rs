@@ -130,7 +130,7 @@ impl Trail {
     /// the top.
     pub fn image(&self, height: usize, green: Color32, blue: Color32) -> ColorImage {
         let height = height.max(1);
-        let mut image = ColorImage::new([BANDS, height], Color32::TRANSPARENT);
+        let mut image = ColorImage::filled([BANDS, height], Color32::TRANSPARENT);
         let per_pixel = ROWS as f32 / height as f32;
         let mut input = [0.0f32; BANDS];
         let mut output = [0.0f32; BANDS];

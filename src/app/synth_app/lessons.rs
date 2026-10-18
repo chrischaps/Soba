@@ -107,7 +107,7 @@ impl SynthApp {
             let label = format!("{}. {}{}", n + 1, lesson.title, if taking { "  ·  now" } else { "" });
             if ui.button(label).on_hover_text(&lesson.about).clicked() {
                 chosen = Some(file);
-                ui.close_menu();
+                ui.close();
             }
         }
         chosen

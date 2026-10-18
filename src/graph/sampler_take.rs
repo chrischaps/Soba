@@ -410,7 +410,7 @@ pub fn rec_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, user_state: &S
     };
     let menu = if tidy_menu { "Right-click to tidy takes as they're kept, or learn a MIDI footswitch" } else { "Right-click to learn a MIDI footswitch" };
     let button = button.on_hover_text(format!("{tip}\n{menu}"));
-    button.context_menu(|ui| {
+    crate::widgets::menu::context_menu(&button, |ui| {
         if tidy_menu {
             let mut on = tidies;
             let tidy = ui.checkbox(&mut on, "Tidy takes").on_hover_text(
@@ -418,7 +418,7 @@ pub fn rec_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, user_state: &S
             );
             if tidy.changed() {
                 responses.push(SynthResponse::ParameterChanged { node_id, param_name: TIDY_TAKES.to_string(), value: if on { 1.0 } else { 0.0 } });
-                ui.close_menu();
+                ui.close();
             }
             ui.separator();
         }
@@ -426,18 +426,18 @@ pub fn rec_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, user_state: &S
         if learning {
             if ui.button("Cancel MIDI Learn").clicked() {
                 responses.push(SynthResponse::MidiLearnCancel);
-                ui.close_menu();
+                ui.close();
             }
             return;
         }
         let learn = if mapping.is_some() { "Re-learn MIDI CC" } else { "Learn MIDI CC" };
         if ui.button(learn).clicked() {
             responses.push(SynthResponse::MidiLearnStart { engine_node_id: eid, param_index, param_name: REC_BUTTON.to_string(), min_value: 0.0, max_value: 1.0 });
-            ui.close_menu();
+            ui.close();
         }
         if mapping.is_some() && ui.button("Clear MIDI mapping").clicked() {
             responses.push(SynthResponse::MidiLearnClear { engine_node_id: eid, param_index });
-            ui.close_menu();
+            ui.close();
         }
     });
     responses

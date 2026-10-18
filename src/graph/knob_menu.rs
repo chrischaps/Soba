@@ -49,7 +49,7 @@ pub fn value_items(ui: &mut egui::Ui, id: egui::Id, spec: &NumberSpec, value: f3
             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 if let Some(typed) = read(&text) {
                     chosen = Some(typed);
-                    ui.close_menu();
+                    ui.close();
                 }
             }
         });
@@ -59,7 +59,7 @@ pub fn value_items(ui: &mut egui::Ui, id: egui::Id, spec: &NumberSpec, value: f3
             .on_hover_text("Double-clicking the knob resets it too, as does Home once it's clicked");
         if reset.clicked() {
             chosen = Some(spec.default);
-            ui.close_menu();
+            ui.close();
         }
     });
     ui.data_mut(|d| d.insert_temp(id, (text, false)));

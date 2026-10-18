@@ -75,7 +75,7 @@ tools/                   # claim.py, nightly.py, showcase/ capture and picture t
 
 ## Tech Stack
 
-- **eframe/egui 0.30**: Immediate-mode GUI
+- **eframe/egui 0.32**: Immediate-mode GUI. Menus go through `widgets::menu`, which keeps them open until an item calls `ui.close()`
 - **egui_node_graph2 0.7 (our fork)**: Node editor foundation, from `github.com/chrischaps/egui_node_graph2` (a git dependency, checked out beside this repo at `../egui_node_graph2`). Cable glow, jacks and node drawing hooks live there
 - **egui-baseview (our fork)**: The plugin's glue between its baseview window and egui, from `github.com/chrischaps/egui-baseview` (branch `soba`, pinned by rev in `plugin/Cargo.toml`, checked out beside this repo at `../egui-baseview`). Upstream stops at egui 0.33, so each egui step past that lands on the `soba` branch first
 - **cpal 0.18**: Cross-platform audio I/O (ASIO behind the `asio` feature)

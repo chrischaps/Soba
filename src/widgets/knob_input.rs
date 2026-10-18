@@ -160,7 +160,7 @@ pub fn claim_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     }) else {
         return;
     };
-    let line = ctx.options(|options| options.line_scroll_speed);
+    let line = ctx.options(|options| options.input_options.line_scroll_speed);
     let mut pointer = ctx.input(|input| input.pointer.latest_pos());
     raw.events.retain(|event| match event {
         Event::PointerMoved(at) => {

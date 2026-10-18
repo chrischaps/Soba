@@ -467,7 +467,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             if step.plays { "rest" } else { "play" },
         );
         let response = response.on_hover_text(hint);
-        response.context_menu(|ui| step_menu(ui, node_id, &params, &at, steps, &mut edits));
+        crate::widgets::menu::context_menu(&response, |ui| step_menu(ui, node_id, &params, &at, steps, &mut edits));
     }
 
     // Where the loop is, in time, under the line of the pass it's in
@@ -663,7 +663,7 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s
         for repeat in 1..=MAX_REPEAT {
             if ui.selectable_label(step.repeat == repeat, format!("×{repeat}")).clicked() {
                 set(format!("Repeat ×{repeat} on {what}"), Step { plays: true, repeat, ..step }, edits);
-                ui.close_menu();
+                ui.close();
             }
         }
     });
@@ -673,7 +673,7 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s
             let label = if pitch == 0 { "0".to_string() } else { format!("{pitch:+}") };
             if ui.selectable_label(step.pitch == pitch, label).clicked() {
                 set(format!("Pitch {pitch:+} on {what}"), Step { plays: true, pitch, ..step }, edits);
-                ui.close_menu();
+                ui.close();
             }
         }
     });
@@ -682,7 +682,7 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s
         for next in CHANCES.into_iter().chain([10.0]) {
             if ui.selectable_label((chance - next).abs() < 0.5, format!("{next:.0}%")).clicked() {
                 edits.push(edit(node_id, format!("{next:.0}% chance on {what}"), vec![params.set_chance(index, next)]));
-                ui.close_menu();
+                ui.close();
             }
         }
     });
@@ -694,7 +694,7 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s
             let text = egui::RichText::new(format!("{:>2}", slice + 1)).color(slice_color(slice, count));
             if ui.selectable_label(current == slice, text).clicked() {
                 set(format!("{what} plays slice {}", slice + 1), Step { plays: true, slice: own_or(index, slice, count), ..step }, edits);
-                ui.close_menu();
+                ui.close();
             }
             if (slice + 1) % 8 == 0 {
                 ui.end_row();
@@ -704,7 +704,7 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s
     ui.separator();
     if ui.add_enabled(!step.is_plain(index, count) || chance > 0.0, egui::Button::new(format!("Back to slice {}, as it was", index % count + 1))).clicked() {
         edits.push(edit(node_id, format!("Reset {what}"), vec![params.set_step(index, Step::DEFAULT), params.set_chance(index, 0.0)]));
-        ui.close_menu();
+        ui.close();
     }
     ui.separator();
     // The pass it's in, and the whole row
@@ -716,7 +716,7 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s
             let mut changes: Vec<(String, f32)> = (first..first + count).map(|k| params.set_step(k, params.step(k - count))).collect();
             changes.extend((first..first + count).map(|k| params.set_chance(k, params.chance(k - count))));
             edits.push(edit(node_id, format!("Pass {pass} as pass {before}"), changes));
-            ui.close_menu();
+            ui.close();
         }
     }
     let shuffle = if steps > count { format!("Shuffle the slices in pass {pass}") } else { "Shuffle the slices".to_string() };
@@ -724,13 +724,13 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s
         let order = shuffled(count, ui.input(|i| i.time).to_bits());
         let changes = (first..first + count).map(|k| params.set_step(k, Step { plays: true, slice: own_or(k, order[k - first], count), ..params.step(k) })).collect();
         edits.push(edit(node_id, shuffle, changes));
-        ui.close_menu();
+        ui.close();
     }
     if ui.button("Reset every step").on_hover_text("Back to the break as it was: each step its own slice, once, forwards").clicked() {
         let mut changes: Vec<(String, f32)> = (0..steps).map(|k| params.set_step(k, Step::DEFAULT)).collect();
         changes.extend((0..steps).map(|k| params.set_chance(k, 0.0)));
         edits.push(edit(node_id, "Reset every step", changes));
-        ui.close_menu();
+        ui.close();
     }
 }
 

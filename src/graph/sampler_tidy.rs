@@ -47,7 +47,7 @@ pub fn name_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, label: &NameL
     let &NameLabel { name, length, color } = label;
     let mut responses = Vec::new();
     let id = popup_id(node_id);
-    let open = ui.memory(|m| m.is_popup_open(id));
+    let open = egui::Popup::is_id_open(ui.ctx(), id);
     let response = ui.interact(rect, ui.id().with(("sampler_name", node_id)), Sense::click());
     if open || response.hovered() {
         let fill = if open { theme::background::WIDGET_ACTIVE } else { theme::background::WIDGET_HOVERED };
@@ -81,23 +81,23 @@ pub fn name_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, label: &NameL
         "Trim it to its sound, or normalize its level"
     });
     if response.clicked() {
-        ui.memory_mut(|m| m.toggle_popup(id));
+        egui::Popup::toggle_id(ui.ctx(), id);
     }
 
     let mut hovered = None;
-    egui::popup_below_widget(ui, id, &response, PopupCloseBehavior::CloseOnClickOutside, |ui| {
+    egui::Popup::from_response(&response).id(id).open_memory(None).close_behavior(PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
         ui.set_min_width(250.0);
         if let Some(tidy) = menu(ui, sample, &mut hovered) {
             responses.push(SynthResponse::TidySample { node_id, tidy });
-            ui.memory_mut(|m| m.close_popup());
+            egui::Popup::close_id(ui.ctx(), id);
         }
         if in_tab && download_item(ui, sample) {
             responses.push(SynthResponse::DownloadSample(node_id));
-            ui.memory_mut(|m| m.close_popup());
+            egui::Popup::close_id(ui.ctx(), id);
         }
     });
     let was = previewing(ui, node_id);
-    let shown = hovered.filter(|_| ui.memory(|m| m.is_popup_open(id)));
+    let shown = hovered.filter(|_| egui::Popup::is_id_open(ui.ctx(), id));
     if shown != was {
         ui.data_mut(|d| match shown {
             Some(tidy) => d.insert_temp(preview_id(node_id), tidy),

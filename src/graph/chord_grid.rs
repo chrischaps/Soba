@@ -462,8 +462,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
     let mut played = None;
     // Changes to the chord sounding, to send to the engine
     let mut auditions = Vec::new();
-    let mut entry = ui
-        .memory(|m| m.is_popup_open(entry_id))
+    let mut entry = egui::Popup::is_id_open(ui.ctx(), entry_id)
         .then(|| ui.data(|d| d.get_temp::<ChordEntry>(entry_id)))
         .flatten()
         .map(|e| ChordEntry { step: e.step.min(pattern.steps - 1), anchor: e.anchor.min(pattern.steps - 1), ..e });
@@ -552,7 +551,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
             }
             if response.secondary_clicked() {
                 entry = Some(ChordEntry { step, base: popover_base(spec.root), anchor: step });
-                ui.memory_mut(|m| m.open_popup(entry_id));
+                egui::Popup::open_id(ui.ctx(), entry_id);
             }
 
             // Dragging up or down moves the root
@@ -589,7 +588,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
             )
         });
         if escape {
-            ui.memory_mut(|m| m.close_popup());
+            egui::Popup::close_id(ui.ctx(), entry_id);
         }
         open.step = step_along(open.step, on as isize - back as isize, pattern.steps);
 
@@ -610,7 +609,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
 
         let anchor = &cells[open.anchor].1;
         let mut touch = Touch::default();
-        egui::popup_below_widget(ui, entry_id, anchor, PopupCloseBehavior::CloseOnClickOutside, |ui| {
+        egui::Popup::from_response(anchor).id(entry_id).open_memory(None).close_behavior(PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             chord_popover(ui, &mut open, &pattern, &held, &listening, &mut touch, &mut set);
         });
 
@@ -640,7 +639,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
         }
         listening.sounding = sounding;
         listening.chiming = by_hand.is_none() && chime.is_some();
-        if ui.memory(|m| m.is_popup_open(entry_id)) {
+        if egui::Popup::is_id_open(ui.ctx(), entry_id) {
             ui.data_mut(|d| {
                 d.insert_temp(entry_id, open);
                 d.insert_temp(ear_id, listening);
@@ -940,7 +939,7 @@ fn chord_popover(ui: &mut egui::Ui, open: &mut ChordEntry, pattern: &ChordPatter
         for (place, &index) in TYPE_ORDER.iter().enumerate() {
             let kind = &CHORD_TYPES[index];
             let name = format!("{}{}", spec.root_name(), kind.suffix);
-            let chip = ui.add_sized([52.0, 20.0], egui::SelectableLabel::new(spec.kind == index, name));
+            let chip = ui.add_sized([52.0, 20.0], egui::Button::selectable(spec.kind == index, name));
             touch.follow(&chip, Chip::Type(index), step, Sound::Chord(ChordSpec { kind: index, ..spec }));
             if chip.on_hover_text(kind.label).clicked() {
                 set(pattern.param(step, ChordField::Type), index as f32);

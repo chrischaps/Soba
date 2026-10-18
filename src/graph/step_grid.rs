@@ -367,8 +367,7 @@ pub(super) fn step_grid(
     let entry_id = Id::new(("step_entry", node_id));
     let ear_id = Id::new(("step_ear", node_id));
     let drag_id = Id::new(("step_drag", node_id));
-    let mut entry = ui
-        .memory(|m| m.is_popup_open(entry_id))
+    let mut entry = egui::Popup::is_id_open(ui.ctx(), entry_id)
         .then(|| ui.data(|d| d.get_temp::<StepEntry>(entry_id)))
         .flatten()
         .map(|e| StepEntry { step: e.step.min(pattern.steps - 1), anchor: e.anchor.min(pattern.steps - 1), ..e });
@@ -468,7 +467,7 @@ pub(super) fn step_grid(
             }
             if response.secondary_clicked() {
                 entry = Some(StepEntry { step, base: popover_base(pitch as i32), anchor: step, written: None });
-                ui.memory_mut(|m| m.open_popup(entry_id));
+                egui::Popup::open_id(ui.ctx(), entry_id);
             }
 
             // Dragging up or down moves the note, sounding it as it goes, at
@@ -523,7 +522,7 @@ pub(super) fn step_grid(
             )
         });
         if escape {
-            ui.memory_mut(|m| m.close_popup());
+            egui::Popup::close_id(ui.ctx(), entry_id);
         }
         open.step = step_along(open.step, on as isize - back as isize, pattern.steps);
 
@@ -549,7 +548,7 @@ pub(super) fn step_grid(
         listening.sounding = held;
 
         let anchor = &cells[open.anchor].1;
-        egui::popup_below_widget(ui, entry_id, anchor, PopupCloseBehavior::CloseOnClickOutside, |ui| {
+        egui::Popup::from_response(anchor).id(entry_id).open_memory(None).close_behavior(PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
             if let Some((note, step)) = step_piano(ui, &mut open, pattern, &mut set) {
                 // Written with a click, which has no legato to tie from,
                 // and sounds for a Gate Length, over the hand if it's down
@@ -560,7 +559,7 @@ pub(super) fn step_grid(
                 sounded.extend([Some(audition_of(note, pattern.velocities[step])), None]);
             }
         });
-        if ui.memory(|m| m.is_popup_open(entry_id)) {
+        if egui::Popup::is_id_open(ui.ctx(), entry_id) {
             ui.data_mut(|d| {
                 d.insert_temp(entry_id, open);
                 d.insert_temp(ear_id, listening);

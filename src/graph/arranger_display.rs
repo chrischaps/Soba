@@ -446,7 +446,7 @@ pub fn claim_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     if claims.is_empty() {
         return;
     }
-    let line = ctx.options(|options| options.line_scroll_speed);
+    let line = ctx.options(|options| options.input_options.line_scroll_speed);
     let mut pointer = ctx.input(|input| input.pointer.latest_pos());
     let claim_at = |pointer: Option<Pos2>, zoom: bool| {
         let at = pointer?;
@@ -1046,7 +1046,7 @@ fn sections(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, now: Now
             if length == 1 { "" } else { "s" },
             song.sections[section].0 + 1
         ));
-        response.context_menu(|ui| {
+        crate::widgets::menu::context_menu(&response, |ui| {
             select(ui.ctx(), node_id, section);
             section_menu(ui, cx, section, edits);
         });
@@ -1118,7 +1118,7 @@ fn rename_field(ui: &mut egui::Ui, node_id: NodeId, rect: Rect, z: f32) -> Optio
     let mut renaming: Renaming = ui.ctx().data(|data| data.get_temp(id))?;
     let field_id = Id::new((node_id, "arranger-rename-field"));
     let mut output = ui
-        .allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+        .scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
             egui::TextEdit::singleline(&mut renaming.text)
                 .id(field_id)
                 .font(FontId::proportional(10.0 * z))
@@ -1196,7 +1196,7 @@ fn lane_rows(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, lane: u
         let existing = graph.nodes.get(node_id).and_then(|n| n.user_data.labels.get(&key).cloned()).unwrap_or_default();
         ui.ctx().data_mut(|data| data.insert_temp(renaming_id(node_id), Renaming::start(key.clone(), existing)));
     }
-    name_response.context_menu(|ui| lane_menu(ui, cx, lane, &lane_label, glide, edits));
+    crate::widgets::menu::context_menu(&name_response, |ui| lane_menu(ui, cx, lane, &lane_label, glide, edits));
 
     // The level's room, and the gate strip under it
     let tl = painter.with_clip_rect(clip);
@@ -1333,7 +1333,7 @@ fn lane_rows(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, lane: u
             "{what} {}\nDrag up or down to set its level · Shift-drag to set where its ramp starts · right-click for how it gets there",
             describe(cue)
         ));
-        response.context_menu(|ui| {
+        crate::widgets::menu::context_menu(&response, |ui| {
             select(ui.ctx(), node_id, section);
             cue_menu(ui, cx, section, lane, cue, &what, edits);
         });
@@ -1453,12 +1453,12 @@ fn lane_menu(ui: &mut egui::Ui, cx: Ctx, lane: usize, lane_label: &str, glide: f
     });
     if ui.button("Rename…").clicked() {
         ui.ctx().data_mut(|data| data.insert_temp(renaming_id(node_id), Renaming::start(lane_key(lane), String::new())));
-        ui.close_menu();
+        ui.close();
     }
     if ui.button("Hold in every section").on_hover_text("Clears the lane: it stays at 0").clicked() {
         let changes = (0..song.count()).flat_map(|section| cue_changes(params, section, lane, Cue::HOLD)).collect();
         edits.push(edit(node_id, format!("Clear {lane_label}"), changes));
-        ui.close_menu();
+        ui.close();
     }
 }
 
@@ -1634,7 +1634,7 @@ fn section_controls(ui: &mut egui::Ui, cx: Ctx, section: usize, edits: &mut Vec<
                 edits.extend(more);
             }
             if menu {
-                ui.close_menu();
+                ui.close();
             }
         }
     };

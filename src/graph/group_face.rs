@@ -56,7 +56,7 @@ pub fn top_bar(data: &SynthNodeData, ui: &mut egui::Ui, node_id: NodeId, user_st
             if window.secondary_clicked() {
                 responses.push(NodeResponse::User(SynthResponse::NodeSelected(node_id)));
             }
-            if window.context_menu(|ui| group_menu(ui, node_id, &mut responses)).is_some() {
+            if crate::widgets::menu::context_menu(&window, |ui| group_menu(ui, node_id, &mut responses)).is_some() {
                 user_state.widget_context_menu_open = true;
             }
         }
@@ -84,7 +84,7 @@ fn group_menu(ui: &mut egui::Ui, node_id: NodeId, responses: &mut Responses) {
     let mut item = |ui: &mut egui::Ui, label: &str, shortcut: &str, response: SynthResponse| {
         if ui.add(egui::Button::new(label).shortcut_text(crate::app::shortcuts::keys(ui.ctx(), shortcut))).clicked() {
             responses.push(NodeResponse::User(response));
-            ui.close_menu();
+            ui.close();
         }
     };
     item(ui, "Open", "Tab", SynthResponse::EnterGroup(node_id));
@@ -130,7 +130,7 @@ pub fn port_menu_with(
         reset_name_field(&response.ctx, jack_name_id(node_id, side, port));
     }
     let mut chosen = None;
-    let menu = response.context_menu(|ui| {
+    let menu = crate::widgets::menu::context_menu(response, |ui| {
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
         if !actions.is_empty() {
             chosen = jack_items(ui, &actions, node_id, side, port);
@@ -179,7 +179,7 @@ pub fn jack_items(ui: &mut egui::Ui, actions: &[JackAction], node_id: NodeId, si
             let button = ui.add_enabled(enabled, egui::Button::new(label));
             let button = if enabled { button.on_hover_text(hint) } else { button.on_disabled_hover_text(hint) };
             if button.clicked() {
-                ui.close_menu();
+                ui.close();
                 return choose(edit);
             }
             None
@@ -235,7 +235,7 @@ pub fn name_field(ui: &mut egui::Ui, id: egui::Id, current: &str, hint: &str) ->
             if text.trim() != current {
                 renamed = Some(text.clone());
             }
-            ui.close_menu();
+            ui.close();
         }
     });
     ui.data_mut(|d| d.insert_temp(id, (text, false)));

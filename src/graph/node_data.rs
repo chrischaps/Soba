@@ -864,7 +864,7 @@ impl SynthNodeData {
                 if interact_response.secondary_clicked() {
                     super::knob_menu::reset_value_field(ui.ctx(), super::knob_menu::value_field_id(node_id, &knob_param.param_name));
                 }
-                let menu_response = interact_response.context_menu(|ui| {
+                let menu_response = crate::widgets::menu::context_menu(&interact_response, |ui| {
                     // The menu is as wide as its longest entry, not wrapped to the knob
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                     if place.is_face() {
@@ -888,7 +888,7 @@ impl SynthNodeData {
                             // Already waiting for a CC: the way out
                             if ui.button("Cancel MIDI Learn").clicked() {
                                 responses.push(NodeResponse::User(SynthResponse::MidiLearnCancel));
-                                ui.close_menu();
+                                ui.close();
                             }
                         } else if midi_config.has_midi_mapping {
                             let cc_text = match (midi_config.macro_slot, midi_config.cc_number) {
@@ -904,7 +904,7 @@ impl SynthNodeData {
                                     engine_node_id: engine_id,
                                     param_index: current_param_index,
                                 }));
-                                ui.close_menu();
+                                ui.close();
                             }
                             if ui.button("Re-learn MIDI CC").clicked() {
                                 responses.push(NodeResponse::User(SynthResponse::MidiLearnStart {
@@ -914,7 +914,7 @@ impl SynthNodeData {
                                     min_value: midi_config.min_value,
                                     max_value: midi_config.max_value,
                                 }));
-                                ui.close_menu();
+                                ui.close();
                             }
                         } else if ui.button("Learn MIDI CC").clicked() {
                             responses.push(NodeResponse::User(SynthResponse::MidiLearnStart {
@@ -924,11 +924,11 @@ impl SynthNodeData {
                                 min_value: midi_config.min_value,
                                 max_value: midi_config.max_value,
                             }));
-                            ui.close_menu();
+                            ui.close();
                         }
                         // In a DAW, one of the plugin's eight macros can turn it
                         if user_state.hosted && !is_learn_target {
-                            ui.menu_button("Map to Macro", |ui| {
+                            crate::widgets::menu::menu_button(ui, "Map to Macro", |ui| {
                                 for slot in 0..crate::graph::MACRO_COUNT {
                                     let current = midi_config.macro_slot == Some(slot);
                                     if ui.selectable_label(current, format!("Macro {}", slot + 1)).clicked() {
@@ -940,7 +940,7 @@ impl SynthNodeData {
                                             max_value: midi_config.max_value,
                                             slot,
                                         }));
-                                        ui.close_menu();
+                                        ui.close();
                                     }
                                 }
                             })
@@ -976,7 +976,7 @@ impl SynthNodeData {
         let mut pin = |ui: &mut egui::Ui, label: &str, hint: &str, levels: u8| {
             if ui.button(label).on_hover_text(hint).clicked() {
                 chosen = Some(SynthResponse::PinKnob { node_id, param_name: param_name.to_string(), levels });
-                ui.close_menu();
+                ui.close();
             }
         };
         match place {
@@ -1042,7 +1042,7 @@ impl SynthNodeData {
             KnobPlace::Face { .. } => Vec::new(),
         };
         let mut chosen = None;
-        let menu = response.context_menu(|ui| {
+        let menu = crate::widgets::menu::context_menu(response, |ui| {
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
             if place.is_face() {
                 chosen = self.face_name_item(ui, node_id, param_name, named);
@@ -1075,7 +1075,7 @@ impl SynthNodeData {
         let mut item = |ui: &mut egui::Ui, label: &str, shortcut: &str, response: SynthResponse| {
             if ui.add(egui::Button::new(label).shortcut_text(crate::app::shortcuts::keys(ui.ctx(), shortcut))).clicked() {
                 responses.push(NodeResponse::User(response));
-                ui.close_menu();
+                ui.close();
             }
         };
         item(ui, "Duplicate", "Ctrl+D", SynthResponse::DuplicateNode(node_id));
@@ -1253,7 +1253,7 @@ impl NodeDataTrait for SynthNodeData {
             if window.secondary_clicked() {
                 responses.push(NodeResponse::User(SynthResponse::NodeSelected(node_id)));
             }
-            let menu = window.context_menu(|ui| self.node_menu(ui, node_id, graph, &mut responses));
+            let menu = crate::widgets::menu::context_menu(&window, |ui| self.node_menu(ui, node_id, graph, &mut responses));
             if menu.is_some() {
                 user_state.widget_context_menu_open = true;
             }

@@ -1141,13 +1141,13 @@ impl SynthApp {
                 .clicked();
             if clicked {
                 actions.push(AppAction::OpenRecent(path.to_path_buf()));
-                ui.close_menu();
+                ui.close();
             }
         }
         ui.separator();
         if ui.button(RichText::new("Clear Recent").color(theme::text::SECONDARY)).clicked() {
             actions.push(AppAction::ClearRecent);
-            ui.close_menu();
+            ui.close();
         }
     }
 
@@ -1251,21 +1251,21 @@ impl SynthApp {
                 if rec.clicked() {
                     actions.push(AppAction::ToggleRecording);
                 }
-                rec.context_menu(|ui| {
+                crate::widgets::menu::context_menu(&rec, |ui| {
                     ui.label(RichText::new("Recordings folder").color(theme::text::SECONDARY));
                     ui.label(recording::short_path(&folder));
                     ui.separator();
                     if ui.button("📂 Open Folder").clicked() {
                         actions.push(AppAction::OpenRecordings);
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("Change…").clicked() {
                         actions.push(AppAction::ChooseRecordingsFolder);
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.add_enabled(self.recordings_folder.is_some(), egui::Button::new("Use Music/Soba")).clicked() {
                         actions.push(AppAction::ResetRecordingsFolder);
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
             }
@@ -1276,33 +1276,33 @@ impl SynthApp {
             group_label(ui, "File");
 
             if compact {
-                ui.menu_button("📁 File", |ui| {
+                crate::widgets::menu::menu_button(ui, "📁 File", |ui| {
                     let item = |ui: &mut egui::Ui, text: &str, shortcut: &'static str| {
                         ui.add(egui::Button::new(text).shortcut_text(keys(shortcut))).clicked()
                     };
                     if item(ui, "📄 New", "Ctrl+N") {
                         actions.push(AppAction::New);
-                        ui.close_menu();
+                        ui.close();
                     }
                     if item(ui, "📂 Open", "Ctrl+O") {
                         actions.push(AppAction::Open);
-                        ui.close_menu();
+                        ui.close();
                     }
                     if !WEB {
-                        ui.menu_button("🕘 Recent", |ui| self.recent_menu(ui, &mut actions));
+                        crate::widgets::menu::menu_button(ui, "🕘 Recent", |ui| self.recent_menu(ui, &mut actions));
                     }
                     ui.separator();
                     if item(ui, "💾 Save", "Ctrl+S") {
                         actions.push(AppAction::Save);
-                        ui.close_menu();
+                        ui.close();
                     }
                     if item(ui, "💾 Save As", "Ctrl+Shift+S") {
                         actions.push(AppAction::SaveAs);
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("🔗 Share").on_hover_text(SHARE_HINT).clicked() {
                         actions.push(AppAction::Share);
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
             } else {
@@ -1315,11 +1315,11 @@ impl SynthApp {
                 }
 
                 if !WEB {
-                    ui.menu_button("🕘 Recent", |ui| self.recent_menu(ui, &mut actions));
+                    crate::widgets::menu::menu_button(ui, "🕘 Recent", |ui| self.recent_menu(ui, &mut actions));
                 }
             }
 
-            ui.menu_button("📚 Examples", |ui| {
+            crate::widgets::menu::menu_button(ui, "📚 Examples", |ui| {
                 for (n, shelf) in Shelf::ALL.into_iter().enumerate() {
                     if n > 0 {
                         ui.separator();
@@ -1328,7 +1328,7 @@ impl SynthApp {
                     for example in EXAMPLES.iter().filter(|e| e.shelf == shelf) {
                         if ui.button(example.name).on_hover_text(example.description).clicked() {
                             actions.push(AppAction::OpenExample(example));
-                            ui.close_menu();
+                            ui.close();
                         }
                     }
                 }
@@ -1372,7 +1372,7 @@ impl SynthApp {
             group_break(ui);
 
             // How the signal is drawn flowing along the cables
-            ui.menu_button("〰 Cables", |ui| {
+            crate::widgets::menu::menu_button(ui, "〰 Cables", |ui| {
                 ui.label(RichText::new("Signal flow marks").color(theme::text::SECONDARY));
                 for glyph in FlowGlyph::ALL {
                     ui.radio_value(&mut self.user_state.flow_glyph, glyph, glyph.name());
@@ -1392,7 +1392,7 @@ impl SynthApp {
             .on_hover_text("How signal flow is drawn along cables");
 
             // How the modules' knobs are drawn
-            ui.menu_button("◉ Knobs", |ui| {
+            crate::widgets::menu::menu_button(ui, "◉ Knobs", |ui| {
                 ui.label(RichText::new("Knob style").color(theme::text::SECONDARY));
                 for style in KnobStyle::ALL {
                     ui.radio_value(&mut self.user_state.knob_style, style, style.name());
@@ -1401,16 +1401,16 @@ impl SynthApp {
             .response
             .on_hover_text("How knobs are drawn");
 
-            ui.menu_button("❓ Help", |ui| {
+            crate::widgets::menu::menu_button(ui, "❓ Help", |ui| {
                 if ui.button("📖 Manual").on_hover_text("docs.chaps.dev/soba, in your browser").clicked() {
                     ui.ctx().open_url(egui::OpenUrl::new_tab(MANUAL_URL));
-                    ui.close_menu();
+                    ui.close();
                 }
                 if ui.add(egui::Button::new("⌨ Keyboard Shortcuts").shortcut_text("F1")).clicked() {
                     self.shortcuts.open = true;
-                    ui.close_menu();
+                    ui.close();
                 }
-                ui.menu_button("🎓 Lessons", |ui| {
+                crate::widgets::menu::menu_button(ui, "🎓 Lessons", |ui| {
                     if let Some(lesson) = self.lessons_menu(ui) {
                         actions.push(AppAction::OpenLesson(lesson));
                     }

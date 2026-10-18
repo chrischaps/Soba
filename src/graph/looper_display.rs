@@ -327,12 +327,12 @@ pub fn looper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
             _ => format!("{}. Right-click to learn a MIDI footswitch", pedal_tip(n)),
         };
         let pedal = pedal.on_hover_text(tip);
-        pedal.context_menu(|ui| {
+        crate::widgets::menu::context_menu(&pedal, |ui| {
             let Some(eid) = engine_node_id else { return };
             if learning {
                 if ui.button("Cancel MIDI Learn").clicked() {
                     responses.push(SynthResponse::MidiLearnCancel);
-                    ui.close_menu();
+                    ui.close();
                 }
                 return;
             }
@@ -345,11 +345,11 @@ pub fn looper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
                     min_value: 0.0,
                     max_value: 1.0,
                 });
-                ui.close_menu();
+                ui.close();
             }
             if mapping.is_some() && ui.button("Clear MIDI mapping").clicked() {
                 responses.push(SynthResponse::MidiLearnClear { engine_node_id: eid, param_index });
-                ui.close_menu();
+                ui.close();
             }
         });
     }

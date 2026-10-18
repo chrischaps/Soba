@@ -120,7 +120,7 @@ fn length_items(ui: &mut egui::Ui, label: &str, clocked: bool) -> Option<u32> {
         return ui.button(label).on_hover_text(HINT).clicked().then_some(0);
     }
     let mut chosen = None;
-    ui.menu_button(label, |ui| {
+    crate::widgets::menu::menu_button(ui, label, |ui| {
         if ui.button("Free").on_hover_text(HINT).clicked() {
             chosen = Some(0);
         }
@@ -146,7 +146,7 @@ pub fn module_items(ui: &mut egui::Ui, graph: &SynthGraph, node_id: NodeId) -> O
         [source] => length_items(ui, label, clocked).map(|bars| choose(source, bars)),
         _ => {
             let mut chosen = None;
-            ui.menu_button(label, |ui| {
+            crate::widgets::menu::menu_button(ui, label, |ui| {
                 for source in &sources {
                     if let Some(bars) = length_items(ui, source.name(), clocked) {
                         chosen = Some(choose(source, bars));
@@ -157,7 +157,7 @@ pub fn module_items(ui: &mut egui::Ui, graph: &SynthGraph, node_id: NodeId) -> O
         }
     };
     if chosen.is_some() {
-        ui.close_menu();
+        ui.close();
     }
     chosen
 }
@@ -170,7 +170,7 @@ pub fn port_item(ui: &mut egui::Ui, graph: &SynthGraph, node_id: NodeId, source:
         _ => label.to_string(),
     };
     let bars = length_items(ui, &named, has_clock(graph))?;
-    ui.close_menu();
+    ui.close();
     Some(SynthResponse::RecordInto { node_id, source: source.clone(), bars })
 }
 

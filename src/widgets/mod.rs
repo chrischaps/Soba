@@ -6,6 +6,7 @@
 
 pub mod knob;
 pub mod knob_input;
+pub mod menu;
 mod param_parse;
 pub mod led;
 pub mod cpu_meter;

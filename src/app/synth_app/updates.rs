@@ -16,7 +16,7 @@ impl SynthApp {
         ui.separator();
         if ui.button("Check for Updates…").clicked() {
             actions.push(AppAction::CheckUpdates);
-            ui.close_menu();
+            ui.close();
         }
         ui.checkbox(&mut self.updater.auto_check, "Check for Updates Automatically")
             .on_hover_text("Once a day, Soba asks GitHub whether there's a newer release: one request, with nothing about you or this computer in it");
@@ -29,7 +29,7 @@ impl SynthApp {
                 .clicked()
             {
                 actions.push(AppAction::RollBack);
-                ui.close_menu();
+                ui.close();
             }
         }
     }

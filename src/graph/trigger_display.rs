@@ -357,7 +357,7 @@ fn lane_rows(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, at
     let name_response = ui
         .interact(name_rect, Id::new((node_id, "trigger-lane", lane)), Sense::click())
         .on_hover_text(format!("{lane_label}: right-click for its length, or to clear it"));
-    name_response.context_menu(|ui| lane_menu(ui, node_id, params, pattern, lane, &lane_label, edits));
+    crate::widgets::menu::context_menu(&name_response, |ui| lane_menu(ui, node_id, params, pattern, lane, &lane_label, edits));
 
     let extent = params.extent(lane);
     // The playhead shows on whichever pattern is up, bright on the one playing
@@ -462,7 +462,7 @@ fn lane_rows(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, at
             format!("{what}: off\nClick to add · drag up or down to add it at a velocity")
         };
         let response = response.on_hover_text(hint);
-        response.context_menu(|ui| step_menu(ui, node_id, params, &StepAt { pattern, lane, step, lane_label: &lane_label }, s, &what, edits));
+        crate::widgets::menu::context_menu(&response, |ui| step_menu(ui, node_id, params, &StepAt { pattern, lane, step, lane_label: &lane_label }, s, &what, edits));
     }
 }
 
@@ -492,7 +492,7 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s
         for velocity in [100, 80, 60, 40, 20] {
             if ui.selectable_label(s.velocity == velocity, format!("{velocity}")).clicked() {
                 set(format!("Velocity {velocity}% on {what}"), Step { on: true, velocity, ..s }, edits);
-                ui.close_menu();
+                ui.close();
             }
         }
     });
@@ -501,7 +501,7 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s
         for probability in PROBABILITIES {
             if ui.selectable_label(s.probability == probability, format!("{probability}%")).clicked() {
                 set(format!("{probability}% chance on {what}"), Step { on: true, probability, ..s }, edits);
-                ui.close_menu();
+                ui.close();
             }
         }
     });
@@ -510,7 +510,7 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s
         for ratchet in 1..=MAX_RATCHET {
             if ui.selectable_label(s.ratchet == ratchet, format!("×{ratchet}")).clicked() {
                 set(format!("Ratchet ×{ratchet} on {what}"), Step { on: true, ratchet, ..s }, edits);
-                ui.close_menu();
+                ui.close();
             }
         }
     });
@@ -519,11 +519,11 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, at: &StepAt, s
     if length == step + 1 {
         if ui.button(format!("{lane_label} follows the bar")).clicked() {
             edits.push(length_edit(node_id, params, lane, lane_label, 0));
-            ui.close_menu();
+            ui.close();
         }
     } else if ui.button(format!("End {lane_label} here (loops {} steps)", step + 1)).on_hover_text("Alt+click").clicked() {
         edits.push(length_edit(node_id, params, lane, lane_label, step + 1));
-        ui.close_menu();
+        ui.close();
     }
 }
 
@@ -543,13 +543,13 @@ fn lane_menu(
     ui.label("Loops");
     if ui.selectable_label(length == 0, "With the bar").clicked() {
         edits.push(length_edit(node_id, params, lane, lane_label, 0));
-        ui.close_menu();
+        ui.close();
     }
     egui::Grid::new(("trigger-lengths", node_id, lane)).spacing([2.0, 2.0]).show(ui, |ui| {
         for steps in 1..=STEPS {
             if ui.selectable_label(length == steps, format!("{steps:>2}")).clicked() {
                 edits.push(length_edit(node_id, params, lane, lane_label, steps));
-                ui.close_menu();
+                ui.close();
             }
             if steps % 8 == 0 {
                 ui.end_row();
@@ -563,7 +563,7 @@ fn lane_menu(
             .map(|step| params.set_step(pattern, lane, step, Step { on: false, ..params.step(pattern, lane, step) }))
             .collect();
         edits.push(edit(node_id, format!("Clear {lane_label} in {letter}"), changes));
-        ui.close_menu();
+        ui.close();
     }
 }
 
@@ -683,7 +683,7 @@ pub(super) fn pattern_tabs(
             set_edit_pattern(ui.ctx(), node_id, pattern);
             set_following(ui.ctx(), node_id, false);
         }
-        response.context_menu(|ui| menu(ui, pattern, &mut edits));
+        crate::widgets::menu::context_menu(&response, |ui| menu(ui, pattern, &mut edits));
     }
     let after_tabs = row.left() + inset + PATTERNS as f32 * (tab.x + 4.0 * z) + 6.0 * z;
     follow_toggle(ui, node_id, z, Rect::from_min_size(Pos2::new(after_tabs, row.top()), Vec2::new(46.0 * z, tab.y)), position.map(|p| p.pattern));
@@ -723,7 +723,7 @@ pub(super) fn pattern_tabs(
                 vec![(bar.chain_names[slot].clone(), (next + 1) as f32)],
             ));
         }
-        response.context_menu(|ui| {
+        crate::widgets::menu::context_menu(&response, |ui| {
             for (choice, letter) in PATTERN_NAMES.iter().enumerate() {
                 if ui.selectable_label(choice == pattern, *letter).clicked() {
                     edits.push(edit(
@@ -731,7 +731,7 @@ pub(super) fn pattern_tabs(
                         format!("Chain {} → {letter}", index + 1),
                         vec![(bar.chain_names[slot].clone(), (choice + 1) as f32)],
                     ));
-                    ui.close_menu();
+                    ui.close();
                 }
             }
             if filled.len() > 1 {
@@ -742,7 +742,7 @@ pub(super) fn pattern_tabs(
                     rest.resize(CHAIN_SLOTS, 0);
                     let changes = rest.iter().enumerate().map(|(s, &v)| (bar.chain_names[s].clone(), v as f32)).collect();
                     edits.push(edit(node_id, format!("Remove chain {}", index + 1), changes));
-                    ui.close_menu();
+                    ui.close();
                 }
             }
         });

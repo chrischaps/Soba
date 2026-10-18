@@ -345,11 +345,11 @@ fn frame_ui(
     } else if title.hovered() && !editing {
         ui.ctx().set_cursor_icon(CursorIcon::Grab);
     }
-    title.context_menu(|ui| {
+    crate::widgets::menu::context_menu(&title, |ui| {
         ui.set_min_width(180.0);
         if ui.add(egui::Button::new("Rename").shortcut_text("Double-click")).clicked() {
             menu_actions.push(MenuAction::Edit(id));
-            ui.close_menu();
+            ui.close();
         }
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
@@ -361,12 +361,12 @@ fn frame_ui(
         });
         if ui.button("Select modules inside").clicked() {
             menu_actions.push(MenuAction::SelectInside(id));
-            ui.close_menu();
+            ui.close();
         }
         ui.separator();
         if ui.add(egui::Button::new("Delete frame").shortcut_text("Del")).clicked() {
             menu_actions.push(MenuAction::Delete(id));
-            ui.close_menu();
+            ui.close();
         }
     });
 
@@ -556,7 +556,7 @@ fn title_editor(ui: &mut Ui, annotations: &mut Annotations, id: AnnotationId, ba
     let Some(editing) = annotations.editing.as_mut() else { return };
     ui.painter().rect_filled(rect.expand(3.0 * zoom), 4.0 * zoom, theme::background::MAIN.gamma_multiply(0.8));
     let output = ui
-        .allocate_new_ui(UiBuilder::new().max_rect(rect), |ui| {
+        .scope_builder(UiBuilder::new().max_rect(rect), |ui| {
             egui::TextEdit::singleline(&mut editing.draft)
                 .id(edit_id(id))
                 .font(title_font(FRAME_TITLE_SIZE * zoom))
@@ -696,16 +696,16 @@ fn note_ui(
     if body.secondary_clicked() && !selected {
         select(ui, annotations, id, backdrop);
     }
-    body.context_menu(|ui| {
+    crate::widgets::menu::context_menu(&body, |ui| {
         ui.set_min_width(160.0);
         if ui.add(egui::Button::new("Edit").shortcut_text("Double-click")).clicked() {
             menu_actions.push(MenuAction::Edit(id));
-            ui.close_menu();
+            ui.close();
         }
         ui.separator();
         if ui.add(egui::Button::new("Delete note").shortcut_text("Del")).clicked() {
             menu_actions.push(MenuAction::Delete(id));
-            ui.close_menu();
+            ui.close();
         }
     });
 
@@ -742,7 +742,7 @@ fn note_ui(
         let rect = Rect::from_min_size(at + padding, vec2(wrap, text_height));
         let Some(editing) = annotations.editing.as_mut() else { return over };
         let output = ui
-            .allocate_new_ui(UiBuilder::new().max_rect(rect), |ui| {
+            .scope_builder(UiBuilder::new().max_rect(rect), |ui| {
                 egui::TextEdit::multiline(&mut editing.draft)
                     .id(edit_id(id))
                     .font(FontId::proportional(NOTE_TEXT_SIZE * zoom))

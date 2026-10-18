@@ -33,10 +33,10 @@ needless_range_loop = "allow"
 type_complexity = "allow"
 
 [dependencies]
-eframe = { version = "0.31", features = ["persistence"] }
-egui = "0.31"
+eframe = { version = "0.32", features = ["persistence"] }
+egui = "0.32"
 # Pinned: bump the rev on purpose, after a push to the fork
-egui_node_graph2 = { git = "https://github.com/chrischaps/egui_node_graph2", rev = "5c0c33dd26c9336aaed38628be1f29a3d56f8d1b" }
+egui_node_graph2 = { git = "https://github.com/chrischaps/egui_node_graph2", rev = "e2e43af7323e4723b711869f6b2f4d4d03ed4c11" }
 cpal = "0.18"
 midir = "0.11"
 rtrb = "0.3"

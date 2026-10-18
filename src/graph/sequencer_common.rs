@@ -59,13 +59,13 @@ pub(super) fn pattern_menu(
     for to in (0..PATTERNS).filter(|&p| p != pattern) {
         if ui.button(format!("Copy to {}", PATTERN_NAMES[to])).on_hover_text(hints.copy).clicked() {
             edits.push(edit(format!("Copy pattern {from} to {}", PATTERN_NAMES[to]), copy_to(to)));
-            ui.close_menu();
+            ui.close();
         }
     }
     ui.separator();
     if ui.button(format!("Clear {from}")).on_hover_text(hints.clear).clicked() {
         edits.push(edit(format!("Clear pattern {from}"), clear()));
-        ui.close_menu();
+        ui.close();
     }
 }
 

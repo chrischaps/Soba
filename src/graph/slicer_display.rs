@@ -288,7 +288,7 @@ pub fn slicer_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
             if matches!(slice, Slice::Rest | Slice::Tie) { "high for an accent, low for a ghost" } else { "to rest it" },
         );
         let response = response.on_hover_text(hint);
-        response.context_menu(|ui| step_menu(ui, node_id, &steps, count, j, &mut edits));
+        crate::widgets::menu::context_menu(&response, |ui| step_menu(ui, node_id, &steps, count, j, &mut edits));
     }
     edits
 }
@@ -300,17 +300,17 @@ fn step_menu(ui: &mut egui::Ui, node_id: NodeId, steps: &[Slice; STEPS], count: 
         for slice in Slice::ALL {
             if ui.selectable_label(steps[j] == slice, slice.name()).clicked() {
                 edits.push(edit(node_id, format!("{} on {what}", slice.name()), vec![(STEP_NAMES[j].to_string(), slice.encode())]));
-                ui.close_menu();
+                ui.close();
             }
         }
     });
     ui.separator();
     let current = pattern_named(steps, count);
-    ui.menu_button("Patterns", |ui| {
+    crate::widgets::menu::menu_button(ui, "Patterns", |ui| {
         for family in pattern_families() {
             let holds_current = PATTERNS.iter().any(|p| p.3 == family && current == Some(p.0));
             let label = if holds_current { format!("● {family}") } else { family.to_string() };
-            ui.menu_button(label, |ui| {
+            crate::widgets::menu::menu_button(ui, label, |ui| {
                 for (name, symbols, length, _) in PATTERNS.iter().filter(|p| p.3 == family) {
                     let shown: String = symbols.chars().take(*length).collect();
                     let response = ui.selectable_label(current == Some(*name), *name).on_hover_text(format!("{shown}
@@ -319,7 +319,7 @@ x a hit · X an accent · . a ghost · = a tie · - a rest"));
                         let mut changes = write(&pattern_steps(symbols));
                         changes.push(("Steps".to_string(), *length as f32));
                         edits.push(edit(node_id, format!("Slicer pattern: {name}"), changes));
-                        ui.close_menu();
+                        ui.close();
                     }
                 }
             });
@@ -328,16 +328,16 @@ x a hit · X an accent · . a ghost · = a tie · - a rest"));
     ui.horizontal(|ui| {
         if ui.button("◀ Rotate").on_hover_text("Moves every step one earlier").clicked() {
             edits.push(edit(node_id, "Rotate the row earlier", write(&rotated(steps, count, -1))));
-            ui.close_menu();
+            ui.close();
         }
         if ui.button("Rotate ▶").on_hover_text("Moves every step one later").clicked() {
             edits.push(edit(node_id, "Rotate the row later", write(&rotated(steps, count, 1))));
-            ui.close_menu();
+            ui.close();
         }
     });
     if ui.button("Clear").on_hover_text("Rests every step").clicked() {
         edits.push(edit(node_id, "Clear the Slicer's row", write(&[Slice::Rest; STEPS])));
-        ui.close_menu();
+        ui.close();
     }
 }
 

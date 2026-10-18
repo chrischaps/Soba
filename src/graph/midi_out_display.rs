@@ -210,9 +210,9 @@ fn device_menu(ui: &mut egui::Ui, picker: &egui::Response, port: usize, current:
     let popup = picker.id.with("menu");
     if picker.clicked() {
         MIDI.rescan();
-        ui.memory_mut(|m| m.toggle_popup(popup));
+        egui::Popup::toggle_id(ui.ctx(), popup);
     }
-    egui::popup::popup_below_widget(ui, popup, picker, egui::PopupCloseBehavior::CloseOnClick, |ui| {
+    egui::Popup::from_response(picker).id(popup).open_memory(None).close_behavior(egui::PopupCloseBehavior::CloseOnClick).show(|ui| {
         ui.set_min_width(160.0);
         ui.label(egui::RichText::new(format!("Port {} plays", PORT_LABELS[port])).small().weak());
         // In the browser, the devices wait for Connect MIDI
