@@ -12,7 +12,7 @@
 //! pointer swap, not a copy, so the audio thread never allocates.
 
 use super::context::{ProcessContext, TransportState};
-use super::module_trait::{DspModule, MeterLevels, ModuleInfo, OutputLevels, Readout, SpectrumPorts, MAX_INPUTS};
+use super::module_trait::{Audition, DspModule, MeterLevels, ModuleInfo, OutputLevels, Readout, SpectrumPorts, MAX_INPUTS};
 use super::parameter::ParameterDefinition;
 use super::port::PortDefinition;
 use super::signal::{SignalBuffer, MAX_CHANNELS};
@@ -105,7 +105,9 @@ impl<M: DspModule> DspModule for Poly<M> {
         self.active = channels;
 
         let Self { voices, scratch, .. } = self;
-        let (first, rest) = voices.split_first_mut().expect("at least one voice");
+        let Some((first, rest)) = voices.split_first_mut() else {
+            return;
+        };
         first.process(inputs, outputs, params, context);
 
         let scratch = &mut scratch[..outputs.len()];
@@ -183,6 +185,24 @@ impl<M: DspModule> DspModule for Poly<M> {
     fn polyphonic(&self) -> bool {
         true
     }
+
+    fn key_inputs(&self) -> &'static [usize] {
+        self.voices[0].key_inputs()
+    }
+
+    fn is_live_input(&self) -> bool {
+        self.voices[0].is_live_input()
+    }
+
+    /// Voice 1 plays the chord: its outputs are the module's own.
+    fn audition(&mut self, chord: Option<Audition>) {
+        self.voices[0].audition(chord);
+    }
+
+    // The recording hand-off (load_sample, give_room, set_markers and the
+    // rest) keeps the defaults: one recording shared out among voices that
+    // each retire it on their own time is a design of its own, and no
+    // polyphonic module plays one yet.
 }
 
 #[cfg(test)]
@@ -354,6 +374,61 @@ mod tests {
         let out = run(&mut module, &[&poly_input(&[1.0, 1.0]), &offset]);
         assert_eq!(out.voice(1).samples, [1.0, 2.0, 3.0, 4.0]);
         assert_eq!(out.voice(0).samples[0], 9.0, "voice 1 never stopped");
+    }
+
+    /// An Accumulator that describes itself beyond the defaults: a key
+    /// input, live input, and a chord it remembers being played.
+    #[derive(Default)]
+    struct Described {
+        inner: Accumulator,
+        chord: Option<Audition>,
+    }
+
+    impl DspModule for Described {
+        fn info(&self) -> &ModuleInfo {
+            self.inner.info()
+        }
+
+        fn ports(&self) -> &[PortDefinition] {
+            self.inner.ports()
+        }
+
+        fn parameters(&self) -> &[ParameterDefinition] {
+            &[]
+        }
+
+        fn prepare(&mut self, _: f32, _: usize) {}
+
+        fn process(&mut self, inputs: &[&SignalBuffer], outputs: &mut [SignalBuffer], params: &[f32], context: &ProcessContext) {
+            self.inner.process(inputs, outputs, params, context);
+        }
+
+        fn reset(&mut self) {}
+
+        fn key_inputs(&self) -> &'static [usize] {
+            &[1]
+        }
+
+        fn is_live_input(&self) -> bool {
+            true
+        }
+
+        fn audition(&mut self, chord: Option<Audition>) {
+            self.chord = chord;
+        }
+    }
+
+    #[test]
+    fn test_wrapper_forwards_what_the_module_says_of_itself() {
+        let mut module = Poly::<Described>::default();
+        let bare = Described::default();
+        assert_eq!(module.key_inputs(), bare.key_inputs());
+        assert_eq!(module.is_live_input(), bare.is_live_input());
+
+        let chord = Audition { len: 1, ..Audition::default() };
+        module.audition(Some(chord));
+        assert_eq!(module.voice(0).chord, Some(chord));
+        assert_eq!(module.voice(1).chord, None, "voice 1 alone plays it");
     }
 
     #[test]
