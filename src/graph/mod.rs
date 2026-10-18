@@ -7,6 +7,8 @@ pub mod annotation_ui;
 pub mod annotations;
 pub mod catalog;
 pub mod groups;
+#[cfg(test)]
+mod garden_table;
 mod group_face;
 mod steady_text;
 mod clock_display;
