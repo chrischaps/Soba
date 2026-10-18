@@ -841,17 +841,26 @@ mod tests {
         assert_eq!(state.midi_notes_since(seen).len(), MAX_MIDI_NOTES);
     }
 
+    /// `n` distinct node ids, from nodes added to a graph
+    fn graph_node_ids(n: usize) -> Vec<NodeId> {
+        let mut graph = SynthGraph::default();
+        (0..n)
+            .map(|_| {
+                let data = SynthNodeData::new("test.node", "Test", crate::dsp::ModuleCategory::Utility);
+                graph.add_node("Test".to_string(), data, |_, _| {})
+            })
+            .collect()
+    }
+
     #[test]
     fn test_allocate_engine_node_id() {
         let mut state = SynthGraphState::new();
-
-        // Create a fake graph node id for testing
-        let graph_node_id: NodeId = unsafe { std::mem::transmute(1u64) };
+        let ids = graph_node_ids(2);
+        let (graph_node_id, graph_node_id2) = (ids[0], ids[1]);
 
         let engine_id = state.allocate_engine_node_id(graph_node_id);
         assert_eq!(engine_id, 0);
 
-        let graph_node_id2: NodeId = unsafe { std::mem::transmute(2u64) };
         let engine_id2 = state.allocate_engine_node_id(graph_node_id2);
         assert_eq!(engine_id2, 1);
     }
@@ -859,7 +868,7 @@ mod tests {
     #[test]
     fn test_get_engine_node_id() {
         let mut state = SynthGraphState::new();
-        let graph_node_id: NodeId = unsafe { std::mem::transmute(1u64) };
+        let graph_node_id = graph_node_ids(1)[0];
 
         // Before allocation
         assert!(state.get_engine_node_id(graph_node_id).is_none());
@@ -872,7 +881,7 @@ mod tests {
     #[test]
     fn test_remove_node() {
         let mut state = SynthGraphState::new();
-        let graph_node_id: NodeId = unsafe { std::mem::transmute(1u64) };
+        let graph_node_id = graph_node_ids(1)[0];
 
         let engine_id = state.allocate_engine_node_id(graph_node_id);
         assert_eq!(state.remove_node(graph_node_id), Some(engine_id));
@@ -882,7 +891,7 @@ mod tests {
     #[test]
     fn test_clear() {
         let mut state = SynthGraphState::new();
-        let graph_node_id: NodeId = unsafe { std::mem::transmute(1u64) };
+        let graph_node_id = graph_node_ids(1)[0];
         state.allocate_engine_node_id(graph_node_id);
         state.selected_node = Some(graph_node_id);
 

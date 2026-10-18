@@ -243,10 +243,10 @@ impl UserResponseTrait for SynthResponse {}
 mod tests {
     use super::*;
 
+    /// A real node id, from a node added to a graph
     fn make_node_id() -> egui_node_graph2::NodeId {
-        // Create a test node ID (egui_node_graph2 uses slotmap internally)
-        // We'll use a workaround since NodeId is opaque
-        unsafe { std::mem::transmute(1u64) }
+        let data = crate::graph::SynthNodeData::new("test.node", "Test", crate::dsp::ModuleCategory::Utility);
+        crate::graph::SynthGraph::default().add_node("Test".to_string(), data, |_, _| {})
     }
 
     #[test]
