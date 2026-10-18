@@ -54,9 +54,13 @@ impl SynthApp {
 mod tests {
     use super::*;
 
+    /// An app with no audio device, as the plugin's begins. Not
+    /// `SynthApp::hosted`: that marks the whole test process a plugin's, and
+    /// a Clock in another test would then offer the host, not Link (#403).
     fn app() -> SynthApp {
-        let (_, heard) = rtrb::RingBuffer::new(16);
-        SynthApp::hosted(48000.0, heard).0
+        let mut app = SynthApp::with_devices(Err(crate::engine::AudioError::NoOutputDevice), None);
+        app.audio.error = None;
+        app
     }
 
     /// A context with the app's fonts, as `main` makes it, but not its theme.
