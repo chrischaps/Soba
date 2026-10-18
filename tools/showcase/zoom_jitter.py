@@ -10,10 +10,17 @@ size at every zoom. One whose size depends on text laid out at the zoomed
 font saws: text steps a whole pixel at a time while the rest scales
 smoothly (#255). Notes that rewrap jump by whole lines.
 
---max N exits non-zero if anything moves by more than N patch units. Since
-#255 every example holds still to within a few hundredths of a unit, so --max
-0.5 is the check: a face whose size moves sizes something by its text.
-Size it with src/graph/steady_text.rs instead.
+It judges each change on screen, in pixels: how far a size strays from its
+steady value at the zoom it was seen at. egui rounds layout to 1/32 pt
+(#402), so every face wobbles by a few tenths of a pixel, which nobody can
+see. Text laid out at the zoomed font steps by whole pixels (#255).
+
+Every example strays 0.5-1.0 px: tall faces gather more roundings, and
+the Arranger's 1.0 is noise, a different miss at each zoom with no saw.
+--max N exits non-zero if anything strays by more than N pixels, and
+--max 1.5 is the check: a face that strays further moves by something
+other than rounding, most likely rows sized by their text. Size them
+with src/graph/steady_text.rs instead.
 
 Needs the capture build (CARGO_TARGET_DIR=target/capture cargo build
 --release). Output goes to target/showcase/zoom-jitter/<patch>/.
@@ -26,6 +33,7 @@ run uses it.
 import argparse
 import collections
 import json
+import statistics
 import subprocess
 import sys
 from pathlib import Path
@@ -107,20 +115,35 @@ def sweep(path, ppp=1.25, steps=80, zoom=(0.3, 2.0)):
     for name, seen_at in sizes.items():
         if len(seen_at) >= 5:
             ws, hs = [w for _, w, _ in seen_at], [h for _, _, h in seen_at]
-            rows.append((max(ws) - min(ws), max(hs) - min(hs), len(seen_at), name, min(ws), min(hs)))
-    rows.sort(key=lambda r: -max(r[0], r[1]))
-    (out / "report.json").write_text(json.dumps([{"name": r[3], "width": r[0], "height": r[1], "seen": r[2]} for r in rows], indent=1))
+            rows.append((max(ws) - min(ws), max(hs) - min(hs), len(seen_at), name, min(ws), min(hs),
+                         on_screen(seen_at, 1, ppp), on_screen(seen_at, 2, ppp)))
+    rows.sort(key=lambda r: -max(r[6], r[7]))
+    (out / "report.json").write_text(json.dumps([{"name": r[3], "width": r[0], "height": r[1], "seen": r[2],
+                                                  "width_px": r[6], "height_px": r[7]} for r in rows], indent=1))
     return rows
 
 
+def on_screen(seen_at, i, ppp):
+    """How far one size strays from its steady value on screen, in pixels:
+    each zoom's miss from the median, at that zoom. Since egui 0.31 every
+    layout step rounds to 1/32 pt (#402), so sizes wobble by a few tenths of a
+    pixel around a steady value: invisible, and in patch units it looks three
+    times bigger at zoom 0.3 than it is. Text laid out at the zoomed font
+    steps by whole pixels (#255), so a pixel is the line between them."""
+    steady = statistics.median(s[i] for s in seen_at)
+    misses = [(s[i] - steady) * s[0] * ppp for s in seen_at]
+    return max(misses) - min(misses)
+
+
 def worst(rows):
-    return max((max(r[0], r[1]) for r in rows), default=0.0)
+    """The most anything strays on screen, in pixels."""
+    return max((max(r[6], r[7]) for r in rows), default=0.0)
 
 
 def table(rows):
-    lines = [f"{'':40} {'width':>7} {'height':>7}  how much each changes, in patch units"]
-    for dw, dh, n, name, w, h in rows:
-        lines.append(f"{name[:40]:40} {dw:7.1f} {dh:7.1f}  ({w:.0f} x {h:.0f}, {n} zooms)")
+    lines = [f"{'':40} {'width':>7} {'height':>7}  how much each strays on screen, in pixels (in patch units)"]
+    for dw, dh, n, name, w, h, sw, sh in rows:
+        lines.append(f"{name[:40]:40} {sw:7.2f} {sh:7.2f}  ({dw:.1f}, {dh:.1f}; {w:.0f} x {h:.0f}, {n} zooms)")
     return "\n".join(lines)
 
 

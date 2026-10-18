@@ -21,7 +21,7 @@ Steps, in order (--only picks some):
                the timings of the last run it passed (#347). The renders
                run at normal priority, one core at a time
     layout     check_layout.py: every example's modules inside their frames
-    zoom       zoom_check.py: zoom_jitter.py --max 0.5 on each patch that
+    zoom       zoom_check.py: zoom_jitter.py --max 1.5 on each patch that
                something it holds has changed since it last passed, several at
                once
     images     the recipe, manual and module pictures; stale ones are re-shot

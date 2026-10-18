@@ -1,10 +1,11 @@
 """Does every example still scale smoothly as the view zooms? (#255, #276)
 
-    python tools/showcase/zoom_check.py [patch ...] [--all] [--jobs N] [--max 0.5] [--plan]
+    python tools/showcase/zoom_check.py [patch ...] [--all] [--jobs N] [--max 1.5] [--plan]
 
 Runs zoom_jitter.py's sweep over each patch in patches/ (or the ones named)
-and fails any where something changes size by more than --max patch units as
-the view zooms (default 0.5: see zoom_jitter.py). The nightly run's zoom step.
+and fails any where something strays from its size by more than --max
+pixels on screen as the view zooms (default 1.5: see zoom_jitter.py). The
+nightly run's zoom step.
 
 A sweep takes a minute or two, and one at a time the 22 examples took 37
 minutes. So, like the picture tools (picture_check.py, #217):
@@ -51,7 +52,7 @@ def main():
     ap.add_argument("patches", nargs="*")
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--jobs", type=int, default=picture_check.JOBS)
-    ap.add_argument("--max", type=float, default=0.5)
+    ap.add_argument("--max", type=float, default=1.5)
     ap.add_argument("--plan", action="store_true")
     a = ap.parse_args()
 
