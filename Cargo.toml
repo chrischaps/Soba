@@ -81,7 +81,7 @@ winresource = "0.1"
 # winit doesn't say on Windows (already in the tree through winit), and
 # whether the session that left takes in temp is still running
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 # cargo run plays the examples, and unoptimised it can't: Canopy rendered at
 # a third of real time and Lush Pad barely above it (#346). Level 1 for our
