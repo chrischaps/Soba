@@ -75,7 +75,7 @@ fn frame(app: &mut SynthApp, ctx: &egui::Context, time: f64) {
         time: Some(time),
         ..Default::default()
     };
-    let _ = ctx.run_ui(input, |ui| app.draw_frame(ui));
+    ctx.run_ui(input, |ui| app.draw_frame(ui)).textures_delta.clear();
 }
 
 /// The patch the plugin's state holds.
@@ -192,7 +192,7 @@ fn key_frame(app: &mut SynthApp, ctx: &egui::Context, time: f64, key: egui::Key,
         events: vec![egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers: Default::default() }],
         ..Default::default()
     };
-    let _ = ctx.run_ui(input, |ui| app.draw_frame(ui));
+    ctx.run_ui(input, |ui| app.draw_frame(ui)).textures_delta.clear();
 }
 
 #[test]

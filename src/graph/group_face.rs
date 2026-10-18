@@ -48,7 +48,7 @@ pub fn header_color(kind: NodeKind) -> Color32 {
 /// right-click menu. A group opens on a double-click.
 pub fn top_bar(data: &SynthNodeData, ui: &mut egui::Ui, node_id: NodeId, user_state: &mut SynthGraphState, zoom: f32) -> Responses {
     let mut responses = Vec::new();
-    if let Some(window) = ui.ctx().read_response(egui::Id::new((node_id, "window"))) {
+    if let Some(window) = ui.ctx().read_response(egui::Id::unique((node_id, "window"))) {
         if data.kind.group().is_some() {
             if window.double_clicked() {
                 responses.push(NodeResponse::User(SynthResponse::EnterGroup(node_id)));
@@ -151,12 +151,12 @@ pub fn port_menu_with(
 
 /// Where a jack's menu keeps the name being typed.
 fn jack_name_id(node_id: NodeId, side: Side, port: &str) -> egui::Id {
-    egui::Id::new((node_id, side, port, "jack name"))
+    egui::Id::unique((node_id, side, port, "jack name"))
 }
 
 /// Where a face control's menu keeps the name being typed.
 pub fn face_name_id(node_id: NodeId, param_name: &str) -> egui::Id {
-    egui::Id::new((node_id, param_name, "face name"))
+    egui::Id::unique((node_id, param_name, "face name"))
 }
 
 /// Starts a menu's name field afresh, from the name it names, as the menu
@@ -555,7 +555,7 @@ fn rename_field(
 ) {
     let Some(id) = data.kind.group() else { return };
     let Some(renaming) = user_state.renaming.as_mut().filter(|r| r.group == id) else { return };
-    let edit_id = egui::Id::new((node_id, "group name"));
+    let edit_id = egui::Id::unique((node_id, "group name"));
     let mut output = egui::TextEdit::singleline(&mut renaming.text)
         .id(edit_id)
         .font(FontId::proportional(14.0 * zoom))
@@ -595,8 +595,8 @@ mod tests {
         for _ in 0..2 {
             let input = egui::RawInput { viewport_id: egui::ViewportId::ROOT, ..Default::default() };
             ctx.set_pixels_per_point(1.25);
-            let _ = ctx.run_ui(input, |ui| {
-                egui::CentralPanel::default().show_inside(ui, |ui| {
+            ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
                     seen.clear();
                     let style = ui.style().clone();
                     for step in 0..60 {
@@ -616,7 +616,7 @@ mod tests {
                     }
                     ui.set_style(style);
                 });
-            });
+            }).textures_delta.clear();
         }
         let (_, first) = seen[0];
         assert!(first > PREVIEW_WIDTH / 2.0, "the longest choice is wider than half the face: {first}");

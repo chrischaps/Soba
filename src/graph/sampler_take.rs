@@ -269,7 +269,7 @@ fn crop_marks(painter: &egui::Painter, rect: Rect, arm: f32, stroke: Stroke) {
 /// Seconds since the face first showed the take tidied `at`, on the
 /// frame clock, so a capture shows it as long as the app does.
 pub fn tidied_age(ui: &egui::Ui, node_id: NodeId, at: Instant) -> f32 {
-    let id = egui::Id::new(("sampler_tidied", node_id));
+    let id = egui::Id::unique(("sampler_tidied", node_id));
     let now = ui.input(|i| i.time);
     let shown = ui.data_mut(|d| match d.get_temp::<(Instant, f64)>(id) {
         Some((seen, shown)) if seen == at => shown,
@@ -323,7 +323,7 @@ pub fn rec_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, user_state: &S
     let tidies = tidies.unwrap_or(false);
     let mut responses = Vec::new();
     let red = theme::accent::ERROR;
-    let id = ui.id().with(("sampler_rec", node_id));
+    let id = ui.scope_id().with(("sampler_rec", node_id));
     let button = ui.interact(rect, id, Sense::click());
     super::marks::mark(ui.ctx(), node_id, "rec", rect);
     let engine_node_id = user_state.get_engine_node_id(node_id);

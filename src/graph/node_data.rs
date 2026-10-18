@@ -846,7 +846,7 @@ impl SynthNodeData {
                     Some(control) if control.enabled() => control,
                     _ => ui.interact(
                         knob_response.response.rect,
-                        egui::Id::new(("knob_context", node_id, current_param_index, place.is_face())),
+                        egui::Id::unique(("knob_context", node_id, current_param_index, place.is_face())),
                         egui::Sense::click(),
                     ),
                 };
@@ -1139,7 +1139,7 @@ fn category_rule(ui: &mut egui::Ui, category_color: Color32, zoom: f32) {
 }
 
 fn deferred_labels_id(node_id: egui_node_graph2::NodeId) -> egui::Id {
-    egui::Id::new((node_id, "deferred_output_labels"))
+    egui::Id::unique((node_id, "deferred_output_labels"))
 }
 
 /// Reserves the label's place in the paint order now, and its shapes for
@@ -1179,7 +1179,7 @@ fn output_menu(
     if user_state.jack_actions(node_id, Side::Output, param_name).is_empty() && source.is_none() {
         return Vec::new();
     }
-    let response = ui.interact(rect, egui::Id::new((node_id, param_name, "output menu")), egui::Sense::click());
+    let response = ui.interact(rect, egui::Id::unique((node_id, param_name, "output menu")), egui::Sense::click());
     let more = |ui: &mut egui::Ui| source.as_ref().and_then(|source| super::resample::port_item(ui, graph, node_id, source));
     let more: Option<&dyn Fn(&mut egui::Ui) -> Option<SynthResponse>> = if source.is_some() { Some(&more) } else { None };
     super::group_face::port_menu_with(&response, node_id, Side::Output, param_name, user_state, more)
@@ -1218,7 +1218,7 @@ fn place_output_labels(
 
         let rect = label.rect.translate(offset);
         responses.extend(output_menu(ui, rect, node_id, graph, &label.name, user_state));
-        let id = ui.id().with((node_id, "output_label", &label.name));
+        let id = ui.scope_id().with((node_id, "output_label", &label.name));
         let response = ui.interact(rect, id, egui::Sense::hover());
         hints::attach(response, Hint::output(module_id, &label.name));
     }
@@ -1249,7 +1249,7 @@ impl NodeDataTrait for SynthNodeData {
 
         // Right-clicking the module opens its menu. The editor senses clicks
         // on the whole node under this id, before drawing what's inside it
-        if let Some(window) = ui.ctx().read_response(egui::Id::new((node_id, "window"))) {
+        if let Some(window) = ui.ctx().read_response(egui::Id::unique((node_id, "window"))) {
             if window.secondary_clicked() {
                 responses.push(NodeResponse::User(SynthResponse::NodeSelected(node_id)));
             }

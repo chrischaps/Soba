@@ -153,11 +153,11 @@ enum MenuAction {
 }
 
 fn drag_id(id: AnnotationId) -> Id {
-    Id::new(("annotation drag", id))
+    Id::unique(("annotation drag", id))
 }
 
 fn edit_id(id: AnnotationId) -> Id {
-    Id::new(("annotation edit", id))
+    Id::unique(("annotation edit", id))
 }
 
 /// The face frame titles and bold note words are set in.
@@ -173,7 +173,7 @@ fn title_ink(tint: Tint) -> Color32 {
 
 /// Where a module was last drawn, on screen.
 pub fn module_rect(ctx: &egui::Context, node_id: NodeId) -> Option<Rect> {
-    ctx.read_response(Id::new((node_id, "window"))).map(|r| r.rect)
+    ctx.read_response(Id::unique((node_id, "window"))).map(|r| r.rect)
 }
 
 /// Modules whose middle lies inside a rectangle on screen.
@@ -300,7 +300,7 @@ fn frame_ui(
 
     // The title band: a handle to move the frame by
     let handle_rect = Rect::from_min_max(band.min + vec2(GRAB, GRAB), pos2(band.max.x - GRAB, band.max.y));
-    let title = ui.interact(handle_rect, Id::new(("frame title", id)), Sense::click_and_drag());
+    let title = ui.interact(handle_rect, Id::unique(("frame title", id)), Sense::click_and_drag());
     let mut over = title.hovered();
 
     if title.drag_started_by(PointerButton::Primary) && !pans_view(ui, &title) {
@@ -381,7 +381,7 @@ fn frame_ui(
             (None, Some(y)) => Rect::from_x_y_ranges(screen.left() + GRAB..=screen.right() - GRAB, y - GRAB..=y + GRAB),
             (None, None) => continue,
         };
-        let handle = ui.interact(rect, Id::new(("frame edge", id, x.is_some(), edges.left, edges.top, y.is_some())), Sense::drag());
+        let handle = ui.interact(rect, Id::unique(("frame edge", id, x.is_some(), edges.left, edges.top, y.is_some())), Sense::drag());
         over |= handle.hovered();
         if handle.hovered() || handle.dragged() {
             ui.ctx().set_cursor_icon(edges.cursor());
@@ -637,7 +637,7 @@ fn note_text(ui: &Ui, text: &str, width: f32, zoom: f32) -> NoteText {
     let mut breaks = Vec::new();
     let mut at = 0;
     for row in &set.rows {
-        at += row.char_count_including_newline();
+        at += row.char_count_including_newline().0;
         if !row.ends_with_newline {
             breaks.push(at);
         }
@@ -674,7 +674,7 @@ fn note_ui(
     let card_slot = ui.painter().add(Shape::Noop);
 
     // The card moves the note; while editing, the text field has the mouse
-    let body = ui.interact(card, Id::new(("note", id)), if editing { Sense::hover() } else { Sense::click_and_drag() });
+    let body = ui.interact(card, Id::unique(("note", id)), if editing { Sense::hover() } else { Sense::click_and_drag() });
     let mut over = body.hovered();
     if pans_view(ui, &body) {
         *backdrop.pan += body.drag_delta();
@@ -711,7 +711,7 @@ fn note_ui(
 
     // The right edge sets where the text wraps
     let edge = Rect::from_x_y_ranges(card.right() - GRAB..=card.right() + GRAB, card.top()..=card.bottom());
-    let widen = ui.interact(edge, Id::new(("note edge", id)), Sense::drag());
+    let widen = ui.interact(edge, Id::unique(("note edge", id)), Sense::drag());
     over |= widen.hovered();
     if widen.hovered() || widen.dragged() {
         ui.ctx().set_cursor_icon(CursorIcon::ResizeHorizontal);
@@ -819,15 +819,15 @@ mod tests {
         for _ in 0..2 {
             let input = egui::RawInput { viewport_id: egui::ViewportId::ROOT, ..Default::default() };
             ctx.set_pixels_per_point(1.25);
-            let _ = ctx.run_ui(input, |ui| {
-                egui::CentralPanel::default().show_inside(ui, |ui| {
+            ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
                     seen.clear();
                     for step in 0..60 {
                         let zoom = 0.3 * (2.0f32 / 0.3).powf(step as f32 / 59.0);
                         seen.push((zoom, note_text(ui, text, 250.0, zoom)));
                     }
                 });
-            });
+            }).textures_delta.clear();
         }
         // The note as it's set, at zoom 1
         let (one, at_one) = seen.iter().min_by(|a, b| (a.0 - 1.0).abs().total_cmp(&(b.0 - 1.0).abs())).unwrap();

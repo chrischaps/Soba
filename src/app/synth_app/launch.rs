@@ -30,6 +30,9 @@ mod tests {
         fn set_string(&mut self, key: &str, value: String) {
             self.0.insert(key.to_string(), value);
         }
+        fn remove_string(&mut self, key: &str) {
+            self.0.remove(key);
+        }
         fn flush(&mut self) {}
     }
 

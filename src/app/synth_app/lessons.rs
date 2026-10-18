@@ -258,7 +258,7 @@ impl SynthApp {
         }
         let run = self.lesson.as_ref()?;
 
-        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("lesson_glow")));
+        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("lesson_glow")));
         let breath = 0.5 + 0.5 * (now * 2.6).sin() as f32;
         if run.met_at.is_none() {
             for rect in &points {
@@ -271,7 +271,7 @@ impl SynthApp {
         if let (Some(show), None) = (&step.show, run.met_at) {
             let spots: Option<Vec<Rect>> = ghost.iter().copied().collect();
             if let Some(spots) = spots {
-                let ghost_painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("lesson_ghost")));
+                let ghost_painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("lesson_ghost")));
                 draw_ghost(&ghost_painter, show, &spots, now - ghost_from);
             }
         }
@@ -292,7 +292,7 @@ impl SynthApp {
     /// way out.
     fn lesson_card(&self, ctx: &egui::Context, anchor: Option<Rect>, keep_clear: (&[Rect], &[Rect]), now: f64) -> Option<CardAction> {
         let run = self.lesson.as_ref()?;
-        let id = egui::Id::new("lesson_card");
+        let id = egui::Id::unique("lesson_card");
         let size = ctx.memory(|m| m.area_rect(id)).map_or(vec2(CARD_WIDTH, 170.0), |r| r.size());
         let bounds = self.editor_rect.shrink(12.0);
         let at = card_position(anchor, size, bounds, keep_clear);
@@ -302,7 +302,7 @@ impl SynthApp {
 
         if let (Some(anchor), Some(card)) = (anchor, ctx.memory(|m| m.area_rect(id))) {
             if !card.expand(4.0).contains(anchor.center()) {
-                let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("lesson_leader")));
+                let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("lesson_leader")));
                 leader(&painter, card, anchor);
             }
         }
@@ -666,7 +666,7 @@ mod tests {
     #[test]
     fn keys_and_bold_words_are_set_apart() {
         let job = caption_job("Press **Play**, then `Z`.", 300.0, false);
-        let texts: Vec<&str> = job.sections.iter().map(|s| &job.text[s.byte_range.clone()]).collect();
+        let texts: Vec<&str> = job.sections.iter().map(|s| &job.text[s.byte_range.start.0..s.byte_range.end.0]).collect();
         assert_eq!(texts, ["Press ", "Play", ", then ", "\u{2009}Z\u{2009}", "."]);
         assert_eq!(job.sections[1].format.color, EMPHASIS);
         assert_eq!(job.sections[3].format.background, theme::background::WIDGET_ACTIVE);

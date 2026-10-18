@@ -141,9 +141,9 @@ mod tests {
     fn frame(ctx: &egui::Context, time: f64, mut add_contents: impl FnMut(&mut egui::Ui)) {
         let screen = Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1000.0));
         let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), ..Default::default() };
-        let _ = ctx.run_ui(input, |ui| {
-            egui::CentralPanel::default().frame(egui::Frame::NONE).show_inside(ui, |ui| add_contents(ui));
-        });
+        ctx.run_ui(input, |ui| {
+            egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| add_contents(ui));
+        }).textures_delta.clear();
     }
 
     /// Every module inside every group of `file_name` is measured before

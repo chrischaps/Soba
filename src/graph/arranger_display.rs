@@ -148,7 +148,7 @@ impl Song {
     /// rather than once for each of its rows.
     fn this_pass(ctx: &egui::Context, node_id: NodeId, params: &Params) -> Arc<Self> {
         let pass = ctx.cumulative_pass_nr();
-        let id = Id::new((node_id, "arranger-song"));
+        let id = Id::unique((node_id, "arranger-song"));
         if let Some((at, song)) = ctx.data(|data| data.get_temp::<(u64, Arc<Self>)>(id)) {
             if at == pass {
                 return song;
@@ -389,11 +389,11 @@ impl View {
 }
 
 fn view_id(node_id: NodeId) -> Id {
-    Id::new((node_id, "arranger-view"))
+    Id::unique((node_id, "arranger-view"))
 }
 
 fn watch_id(node_id: NodeId) -> Id {
-    Id::new((node_id, "arranger-watch"))
+    Id::unique((node_id, "arranger-watch"))
 }
 
 /// Whose view an Arranger shows: the one at the top of its chain, or its
@@ -418,7 +418,7 @@ struct Wheel {
 }
 
 fn wheel_id(node_id: NodeId) -> Id {
-    Id::new((node_id, "arranger-wheel"))
+    Id::unique((node_id, "arranger-wheel"))
 }
 
 /// A timeline drawn last frame: over it, the wheel turns it instead of the
@@ -433,7 +433,7 @@ struct Claim {
 }
 
 fn claims_id() -> Id {
-    Id::new("arranger-wheel-claims")
+    Id::unique("arranger-wheel-claims")
 }
 
 /// Takes the wheel's turns over a timeline out of the frame's input before
@@ -545,7 +545,7 @@ fn update_view(ui: &egui::Ui, node_id: NodeId, owner: NodeId, song: &Song, timel
     // see the whole song
     let strip = overview_rect(timeline, z);
     let response = ui
-        .interact(strip.expand2(Vec2::new(0.0, 1.5 * z)).intersect(ui.clip_rect()), Id::new((node_id, "arranger-overview")), Sense::click_and_drag())
+        .interact(strip.expand2(Vec2::new(0.0, 1.5 * z)).intersect(ui.clip_rect()), Id::unique((node_id, "arranger-overview")), Sense::click_and_drag())
         .on_hover_cursor(if view.zoomed() { CursorIcon::Grab } else { CursorIcon::Default })
         .on_hover_text("The whole song, with the part in view marked\nDrag along it to move · double-click to see it all · Ctrl+scroll the timeline to zoom");
     if response.double_clicked() {
@@ -601,11 +601,11 @@ fn update_view(ui: &egui::Ui, node_id: NodeId, owner: NodeId, song: &Song, timel
 /// The section picked for editing. It's the editor's choice, not the
 /// patch's, so it isn't saved and isn't an edit.
 fn selected(ctx: &egui::Context, node_id: NodeId) -> usize {
-    ctx.data(|data| data.get_temp::<usize>(Id::new((node_id, "arranger-selected")))).unwrap_or(0)
+    ctx.data(|data| data.get_temp::<usize>(Id::unique((node_id, "arranger-selected")))).unwrap_or(0)
 }
 
 fn select(ctx: &egui::Context, node_id: NodeId, section: usize) {
-    ctx.data_mut(|data| data.insert_temp(Id::new((node_id, "arranger-selected")), section));
+    ctx.data_mut(|data| data.insert_temp(Id::unique((node_id, "arranger-selected")), section));
 }
 
 /// A name being typed: what it names, and the text so far.
@@ -624,7 +624,7 @@ impl Renaming {
 }
 
 fn renaming_id(node_id: NodeId) -> Id {
-    Id::new((node_id, "arranger-renaming"))
+    Id::unique((node_id, "arranger-renaming"))
 }
 
 fn position(user_state: &SynthGraphState, node_id: NodeId) -> Option<Position> {
@@ -1023,7 +1023,7 @@ fn sections(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, now: Now
 
         super::marks::mark(ui.ctx(), node_id, format_args!("section:{}", section + 1), shown);
         let response = ui
-            .interact(shown, Id::new((node_id, "arranger-section", section)), Sense::click())
+            .interact(shown, Id::unique((node_id, "arranger-section", section)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand);
         if cut_short && response.hovered() {
             hovered_name = Some((shown, name.clone()));
@@ -1116,7 +1116,7 @@ fn overview(painter: &egui::Painter, song: &Song, layout: &Layout, view: &View, 
 fn rename_field(ui: &mut egui::Ui, node_id: NodeId, rect: Rect, z: f32) -> Option<Vec<SynthResponse>> {
     let id = renaming_id(node_id);
     let mut renaming: Renaming = ui.ctx().data(|data| data.get_temp(id))?;
-    let field_id = Id::new((node_id, "arranger-rename-field"));
+    let field_id = Id::unique((node_id, "arranger-rename-field"));
     let mut output = ui
         .scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
             egui::TextEdit::singleline(&mut renaming.text)
@@ -1187,7 +1187,7 @@ fn lane_rows(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, lane: u
     }
     let glide = params.value(Arr::PARAM_GLIDE + lane);
     let name_response = ui
-        .interact(name_rect, Id::new((node_id, "arranger-lane", lane)), Sense::click())
+        .interact(name_rect, Id::unique((node_id, "arranger-lane", lane)), Sense::click())
         .on_hover_ui(|ui| {
             let gliding = if glide > 0.0 { format!(", gliding {}", super::drum_display::duration(glide)) } else { String::new() };
             ui.label(format!("{lane_label}{gliding}\nDouble-click to rename · right-click for its glide"));
@@ -1305,7 +1305,7 @@ fn lane_rows(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, lane: u
         let what = format!("{} · {lane_label}", section_name(graph, node_id, section));
         super::marks::mark(ui.ctx(), node_id, format_args!("cell:{}:{}", lane + 1, section + 1), cell);
         let response = ui
-            .interact(cell, Id::new((node_id, "arranger-cell", lane, section)), Sense::click_and_drag())
+            .interact(cell, Id::unique((node_id, "arranger-cell", lane, section)), Sense::click_and_drag())
             .on_hover_cursor(CursorIcon::ResizeVertical);
         if response.clicked() {
             select(ui.ctx(), node_id, section);
@@ -2186,11 +2186,11 @@ mod tests {
     fn frame(ctx: &egui::Context, time: f64, user_state: &SynthGraphState, song: &Song, nodes: &[NodeId]) -> Vec<View> {
         let mut views = Vec::new();
         let input = egui::RawInput { time: Some(time), ..Default::default() };
-        let _ = ctx.run_ui(input, |ui| {
-            egui::CentralPanel::default().show_inside(ui, |ui| {
+        ctx.run_ui(input, |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 views = nodes.iter().map(|&node| update_view(ui, node, view_owner(user_state, node), song, timeline(), 1.0, Now { position: None, selected: 0 })).collect();
             });
-        });
+        }).textures_delta.clear();
         views
     }
 

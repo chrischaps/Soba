@@ -309,7 +309,7 @@ pub fn recovery_prompt(ctx: &egui::Context, autosave: &Autosave) -> Option<bool>
 
 /// A modal card in the panel colours, a fixed width so the text wraps.
 fn prompt<R>(ctx: &egui::Context, id: &str, content: impl FnOnce(&mut egui::Ui) -> R) -> egui::ModalResponse<R> {
-    egui::Modal::new(egui::Id::new(id))
+    egui::Modal::new(egui::Id::unique(id))
         .backdrop_color(egui::Color32::from_black_alpha(140))
         .frame(
             egui::Frame::popup(&ctx.global_style())
@@ -368,6 +368,9 @@ mod tests {
             }
             fn set_string(&mut self, key: &str, value: String) {
                 self.0.insert(key.to_string(), value);
+            }
+            fn remove_string(&mut self, key: &str) {
+                self.0.remove(key);
             }
             fn flush(&mut self) {}
         }

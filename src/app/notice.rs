@@ -63,7 +63,7 @@ impl<'a> Notice<'a> {
         body: impl FnOnce(&mut egui::Ui) -> R,
     ) -> NoticeResponse<R> {
         let mut closed = false;
-        let area = egui::Area::new(egui::Id::new(self.id))
+        let area = egui::Area::new(egui::Id::unique(self.id))
             .anchor(egui::Align2::RIGHT_BOTTOM, -MARGIN - egui::vec2(0.0, self.raise))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {

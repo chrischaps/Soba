@@ -261,7 +261,7 @@ pub fn looper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
         let disc_center = Pos2::new(cx, pedals_top + 10.0 * z);
         let disc = 8.5 * z;
         let hit = Rect::from_center_size(Pos2::new(cx, pedals_top + pedal_height / 2.0), Vec2::new(pitch - 2.0 * z, pedal_height));
-        let id = ui.id().with(("looper_pedal", node_id, n));
+        let id = ui.scope_id().with(("looper_pedal", node_id, n));
         let pedal = ui.interact(hit, id, Sense::click_and_drag());
         super::marks::mark(ui.ctx(), node_id, format_args!("pedal:{name}"), hit);
 

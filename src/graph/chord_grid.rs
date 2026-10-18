@@ -456,9 +456,9 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
         _ => pattern.preview(current.unwrap_or(0)),
     };
 
-    let entry_id = Id::new(("chord_entry", node_id));
-    let ear_id = Id::new(("chord_ear", node_id));
-    let drag_id = Id::new(("chord_drag", node_id));
+    let entry_id = Id::unique(("chord_entry", node_id));
+    let ear_id = Id::unique(("chord_ear", node_id));
+    let drag_id = Id::unique(("chord_drag", node_id));
     let mut played = None;
     // Changes to the chord sounding, to send to the engine
     let mut auditions = Vec::new();
@@ -807,7 +807,7 @@ fn keyboard_strip(ui: &mut egui::Ui, node_id: NodeId, width: f32, low: i32, chor
     // widths, not on screen, so it stays on its key as the view pans or zooms
     for (i, &note) in notes.iter().enumerate() {
         let Some((x, _)) = key_position(note, low) else { continue };
-        let x = ui.ctx().animate_value_with_time(Id::new(("chord_voice", node_id, i)), x, 0.18);
+        let x = ui.ctx().animate_value_with_time(Id::unique(("chord_voice", node_id, i)), x, 0.18);
         let colour = if is_bass(i) { bass_colour } else { accent };
         let centre = egui::pos2(keys.left() + x * key_w, rect.top() + 4.5 * z);
         painter.circle_filled(centre, 4.5 * z, glow(colour, 60.0));

@@ -129,7 +129,7 @@ impl SynthApp {
         let graph = &self.graph_state.graph;
         let current = chips.iter().rev().find(|(_, v)| mutate::matches(graph, &self.user_state, &v.values)).map(|(i, _)| *i);
         let mut chosen = None;
-        let area = egui::Area::new(egui::Id::new("mutate_strip"))
+        let area = egui::Area::new(egui::Id::unique("mutate_strip"))
             .order(egui::Order::Foreground)
             .fixed_pos(at)
             .show(ctx, |ui| {

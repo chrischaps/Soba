@@ -20,7 +20,7 @@ pub const UNFOCUSED: Duration = Duration::from_millis(33);
 
 /// Where the time of a frame that asked for a later one is kept.
 fn paced_id() -> egui::Id {
-    egui::Id::new("pace::paced_at")
+    egui::Id::unique("pace::paced_at")
 }
 
 /// How long an animation waits for its next frame: none in front, which
@@ -63,11 +63,11 @@ mod tests {
         let mut input = egui::RawInput { time: Some(time), focused, ..Default::default() };
         before_frame(ctx, &mut input);
         let mut dt = 0.0;
-        let _ = ctx.run_ui(input, |ui| {
+        ctx.run_ui(input, |ui| {
             let ctx = ui.ctx();
             dt = ctx.input(|i| i.stable_dt);
             animate(ctx);
-        });
+        }).textures_delta.clear();
         dt
     }
 
@@ -85,7 +85,8 @@ mod tests {
         let ctx = egui::Context::default();
         let mut input = egui::RawInput { time: Some(0.0), focused: true, ..Default::default() };
         before_frame(&ctx, &mut input);
-        let output = ctx.run_ui(input, |ui| animate(ui.ctx()));
+        let mut output = ctx.run_ui(input, |ui| animate(ui.ctx()));
+        output.textures_delta.clear();
         assert_eq!(output.viewport_output[&egui::ViewportId::ROOT].repaint_delay, Duration::ZERO);
         assert!((frame_at(&ctx, 0.007, true) - 0.007).abs() < 1e-4);
     }

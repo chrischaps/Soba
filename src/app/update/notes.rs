@@ -333,18 +333,18 @@ mod tests {
             ..Default::default()
         };
         // The first frame loads the fonts
-        let _ = ctx.run_ui(input(), |_| {});
+        ctx.run_ui(input(), |_| {}).textures_delta.clear();
         let column = 300.0;
         let mut widest = 0.0_f32;
-        let _ = ctx.run_ui(input(), |ui| {
-            egui::CentralPanel::default().show_inside(ui, |ui| {
+        ctx.run_ui(input(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 for release in &releases {
                     // A column of its own: the panel's rect starts out full width
                     let used = ui.allocate_ui(egui::vec2(column, f32::INFINITY), |ui| show(ui, &parse(&release.notes)));
                     widest = widest.max(used.response.rect.width());
                 }
             });
-        });
+        }).textures_delta.clear();
         assert!(widest <= column + 1.0, "the notes reach {widest} px in a {column} px column");
     }
 }

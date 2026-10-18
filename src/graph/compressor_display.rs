@@ -164,7 +164,7 @@ pub fn compressor_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph
     let heard = live.map_or(FLOOR_DB, |r| r.values[Compressor::READOUT_DETECTOR_DB]);
     let reduction = live.map_or(0.0, |r| r.values[Compressor::READOUT_GR_DB].max(0.0));
     let now = ui.input(|input| input.time);
-    let trail_id = Id::new(("compressor_dot", node_id));
+    let trail_id = Id::unique(("compressor_dot", node_id));
     let mut trail = ui.ctx().data_mut(|data| data.get_temp::<Trail>(trail_id)).unwrap_or_default();
     while trail.0.front().is_some_and(|&(when, _, _)| now - when > AFTERGLOW) {
         trail.0.pop_front();

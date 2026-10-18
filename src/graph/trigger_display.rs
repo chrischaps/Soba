@@ -121,21 +121,21 @@ fn edit(node_id: NodeId, label: impl Into<String>, changes: Vec<(String, f32)>) 
 /// so it isn't saved and isn't an edit. The Step Sequencer's grid keeps its
 /// own the same way.
 pub(super) fn edit_pattern(ctx: &egui::Context, node_id: NodeId) -> usize {
-    ctx.data(|data| data.get_temp::<usize>(Id::new((node_id, "edit-pattern")))).unwrap_or(0).min(PATTERNS - 1)
+    ctx.data(|data| data.get_temp::<usize>(Id::unique((node_id, "edit-pattern")))).unwrap_or(0).min(PATTERNS - 1)
 }
 
 fn set_edit_pattern(ctx: &egui::Context, node_id: NodeId, pattern: usize) {
-    ctx.data_mut(|data| data.insert_temp(Id::new((node_id, "edit-pattern")), pattern));
+    ctx.data_mut(|data| data.insert_temp(Id::unique((node_id, "edit-pattern")), pattern));
 }
 
 /// Whether the grid follows the pattern playing, as the Follow toggle beside
 /// the tabs sets it. Like the pattern shown, it's the editor's.
 fn following(ctx: &egui::Context, node_id: NodeId) -> bool {
-    ctx.data(|data| data.get_temp::<bool>(Id::new((node_id, "follow-pattern")))).unwrap_or(false)
+    ctx.data(|data| data.get_temp::<bool>(Id::unique((node_id, "follow-pattern")))).unwrap_or(false)
 }
 
 fn set_following(ctx: &egui::Context, node_id: NodeId, on: bool) {
-    ctx.data_mut(|data| data.insert_temp(Id::new((node_id, "follow-pattern")), on));
+    ctx.data_mut(|data| data.insert_temp(Id::unique((node_id, "follow-pattern")), on));
 }
 
 /// The pattern the grid shows: the one being edited, or while it follows,
@@ -314,7 +314,7 @@ fn accent_row(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, p
 
         super::marks::mark(ui.ctx(), node_id, format_args!("accent:{}", step + 1), cell);
         let response = ui
-            .interact(cell, Id::new((node_id, "trigger-accent", step)), Sense::click())
+            .interact(cell, Id::unique((node_id, "trigger-accent", step)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand)
             .on_hover_text(format!("Accent on step {} of {letter}: every lane playing here plays louder. Click to switch", step + 1));
         if response.clicked() {
@@ -355,7 +355,7 @@ fn lane_rows(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, at
     painter.text(Pos2::new(name_rect.left() + 1.0 * z, name_rect.center().y), egui::Align2::LEFT_CENTER, text, font, ink);
     let length = params.length(lane);
     let name_response = ui
-        .interact(name_rect, Id::new((node_id, "trigger-lane", lane)), Sense::click())
+        .interact(name_rect, Id::unique((node_id, "trigger-lane", lane)), Sense::click())
         .on_hover_text(format!("{lane_label}: right-click for its length, or to clear it"));
     crate::widgets::menu::context_menu(&name_response, |ui| lane_menu(ui, node_id, params, pattern, lane, &lane_label, edits));
 
@@ -408,7 +408,7 @@ fn lane_rows(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, at
 
         super::marks::mark(ui.ctx(), node_id, format_args!("cell:{}:{}", lane + 1, step + 1), cell);
         let response = ui
-            .interact(cell, Id::new((node_id, "trigger-step", lane, step)), Sense::click_and_drag())
+            .interact(cell, Id::unique((node_id, "trigger-step", lane, step)), Sense::click_and_drag())
             .on_hover_cursor(CursorIcon::PointingHand);
         let what = format!("{lane_label} step {} of {letter}", step + 1);
         let describe = |s: Step| {
@@ -442,7 +442,7 @@ fn lane_rows(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, at
         }
 
         // Dragging up or down sets the velocity, and plays the step
-        let drag_id = Id::new((node_id, "trigger-drag", lane, step));
+        let drag_id = Id::unique((node_id, "trigger-drag", lane, step));
         if response.drag_started() {
             ui.ctx().data_mut(|data| data.insert_temp(drag_id, s.velocity as f32));
         }
@@ -675,7 +675,7 @@ pub(super) fn pattern_tabs(
 
         super::marks::mark(ui.ctx(), node_id, format_args!("pattern:{letter}"), rect);
         let response = ui
-            .interact(rect, Id::new((node_id, "trigger-tab", pattern)), Sense::click())
+            .interact(rect, Id::unique((node_id, "trigger-tab", pattern)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand)
             .on_hover_text(format!("Edit pattern {letter}. Right-click to copy or clear it"));
         if response.clicked() {
@@ -712,7 +712,7 @@ pub(super) fn pattern_tabs(
         }
 
         let response = ui
-            .interact(rect, Id::new((node_id, "trigger-chain", slot)), Sense::click())
+            .interact(rect, Id::unique((node_id, "trigger-chain", slot)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand)
             .on_hover_text("A bar of this pattern. Click for the next pattern; right-click to pick one or remove it");
         if response.clicked() {
@@ -752,7 +752,7 @@ pub(super) fn pattern_tabs(
     if filled.len() < CHAIN_SLOTS {
         let rect = Rect::from_min_size(Pos2::new(x, row.top()), slot_size);
         let response = ui
-            .interact(rect, Id::new((node_id, "trigger-chain-add")), Sense::click())
+            .interact(rect, Id::unique((node_id, "trigger-chain-add")), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand)
             .on_hover_text(format!("Add a bar of {} to the chain", PATTERN_NAMES[editing]));
         let ink = if response.hovered() { theme::text::PRIMARY } else { theme::text::DISABLED };
@@ -789,7 +789,7 @@ fn follow_toggle(ui: &mut egui::Ui, node_id: NodeId, z: f32, rect: Rect, playing
     let green = theme::signal::GATE;
     super::marks::mark(ui.ctx(), node_id, format_args!("follow"), rect);
     let response = ui
-        .interact(rect, Id::new((node_id, "trigger-follow")), Sense::click())
+        .interact(rect, Id::unique((node_id, "trigger-follow")), Sense::click())
         .on_hover_cursor(CursorIcon::PointingHand)
         .on_hover_text(if was_on {
             "Following the pattern playing. Click to stop, or click a tab to edit one"

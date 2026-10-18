@@ -80,12 +80,13 @@ mod tests {
         };
         let info = egui::ViewportInfo { minimized: Some(minimized), occluded: Some(false), ..Default::default() };
         input.viewports.insert(egui::ViewportId::ROOT, info);
-        let output = ctx.run_ui(input, |ui| {
+        let mut output = ctx.run_ui(input, |ui| {
             app.tend_out_of_sight(ui.ctx());
             if !minimized {
                 app.draw_frame(ui);
             }
         });
+        output.textures_delta.clear();
         output.viewport_output[&egui::ViewportId::ROOT].repaint_delay
     }
 
@@ -121,10 +122,12 @@ mod tests {
         let ctx = context();
         let mut app = app();
         app.is_playing = true;
-        // egui asks for a second frame after the first
+        // egui asks for a second frame after the first, and a third for the
+        // window's theme it sends in the first (since 0.37)
         let mut delay = Duration::ZERO;
-        for _ in 0..2 {
-            let output = ctx.run_ui(egui::RawInput::default(), |ui| app.tend_out_of_sight(ui.ctx()));
+        for _ in 0..3 {
+            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| app.tend_out_of_sight(ui.ctx()));
+            output.textures_delta.clear();
             delay = output.viewport_output[&egui::ViewportId::ROOT].repaint_delay;
         }
         assert_eq!(delay, Duration::MAX);

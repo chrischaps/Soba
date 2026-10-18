@@ -129,11 +129,11 @@ mod tests {
     #[test]
     fn captures_glow_then_settle() {
         let ctx = egui::Context::default();
-        let id = egui::Id::new("osc");
+        let id = egui::Id::unique("osc");
         let at = |time: f64, data: Option<&ScopeData>| {
             let input = egui::RawInput { time: Some(time), ..Default::default() };
             let mut live = None;
-            let _ = ctx.run_ui(input, |ui| live = Some(super::live(ui.ctx(), id, data)));
+            ctx.run_ui(input, |ui| live = Some(super::live(ui.ctx(), id, data))).textures_delta.clear();
             live.unwrap()
         };
         let capture = |count| ScopeData { channel1: vec![0.5; TRACE_POINTS], channel2: Vec::new(), triggered: true, count };

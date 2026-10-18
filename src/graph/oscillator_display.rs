@@ -60,7 +60,7 @@ pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &Sy
     let y_live = |v: f32| plot.center().y - v.clamp(-1.15, 1.15) * plot.height() * 0.5;
 
     let scope = user_state.get_engine_node_id(node_id).and_then(|id| user_state.get_scope_data(id));
-    let now = live(ui.ctx(), egui::Id::new(("oscillator trace", node_id)), scope);
+    let now = live(ui.ctx(), egui::Id::unique(("oscillator trace", node_id)), scope);
     let presence = now.presence;
     let playing = readout(user_state, node_id).filter(|_| presence > 0.0);
     // While it plays, the shape is drawn at the pulse width PWM has it at

@@ -13,6 +13,7 @@ use eframe::egui::{self, Color32, CornerRadius, Pos2, Rect, Stroke};
 use crate::app::theme;
 use crate::dsp::ModuleCategory;
 use crate::graph::hovered_file::{self, HoveredFile};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::graph::sample_shelf::ShelvedSample;
 use crate::persistence::sample_files;
 use super::SynthApp;
@@ -78,7 +79,7 @@ impl SynthApp {
         // Where add_sampler_at puts the new node, at about a Sampler's size
         let card = Rect::from_min_size(pointer - GHOST_GRAB * z, GHOST_SIZE * z);
         let blue = ModuleCategory::Source.color();
-        let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::new("ghost sampler"));
+        let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("ghost sampler"));
         let painter = ctx.layer_painter(layer).with_clip_rect(self.editor_rect);
         let rounding = CornerRadius::from(theme::ROUNDING.nw as f32 * z);
         painter.rect_filled(card, rounding, Color32::from_gray(63).gamma_multiply(0.75));
@@ -111,7 +112,9 @@ impl SynthApp {
     }
 
     /// The file dragged over the window, as read, if it's the one `key`
-    /// names: a drop takes it rather than read it again.
+    /// names: a drop takes it rather than read it again. (A page is told no
+    /// path for a file dragged over it, so only the desktop reads one early.)
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn take_hovered_file(&mut self, key: &str) -> Option<ShelvedSample> {
         self.user_state.hovered_file.take_if(|hovered| hovered.key == key).and_then(HoveredFile::into_sample)
     }

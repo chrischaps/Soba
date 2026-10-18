@@ -111,6 +111,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
 
 use eframe::egui;
 use egui::{Pos2, Rect, Vec2};
@@ -349,6 +350,8 @@ pub struct Capture {
     skipped: i64,
     /// A screenshot has been asked for and hasn't arrived.
     awaiting_shot: bool,
+    /// Where the screenshot's callback leaves it, after the frame is painted.
+    shot: Arc<Mutex<Option<Arc<egui::ColorImage>>>>,
     actions: Vec<CaptureAction>,
     ffmpeg: Option<Child>,
     wav: Option<hound::WavWriter<BufWriter<File>>>,
@@ -475,6 +478,7 @@ impl Capture {
             fresh: false,
             skipped: 0,
             awaiting_shot: false,
+            shot: Arc::default(),
             actions: Vec::new(),
             ffmpeg: None,
             wav: None,
@@ -547,19 +551,15 @@ impl Capture {
         raw: &mut egui::RawInput,
         mut locate: impl FnMut(&Part) -> Result<Pos2, String>,
     ) {
-        let mut shot = None;
-        for event in raw.events.drain(..) {
-            if let egui::Event::Screenshot { image, .. } = event {
-                shot = Some(image);
-            }
-        }
+        let shot = self.shot.lock().unwrap_or_else(|e| e.into_inner()).take();
+        raw.events.clear();
         raw.hovered_files.clear();
         raw.dropped_files.clear();
         // A drag lasts across passes, as a real one does, and so does a held
         // key: a still is drawn in the pass after its cues, so without it Alt
         // held over a face never shows
         self.hover_into(raw);
-        raw.modifiers = self.modifiers;
+        raw.events.push(egui::Event::ModifiersChanged(self.modifiers));
         raw.focused = true;
         raw.predicted_dt = self.dt() as f32;
 
@@ -610,7 +610,7 @@ impl Capture {
                 glide.to = to.to_vec2();
             }
         }
-        raw.modifiers = self.modifiers;
+        raw.events.push(egui::Event::ModifiersChanged(self.modifiers));
         self.animate(raw);
     }
 
@@ -759,7 +759,7 @@ impl Capture {
                     });
                 }
                 Cue::Wheel { delta, modifiers } => {
-                    raw.events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, delta), modifiers, phase: egui::TouchPhase::Move });
+                    raw.events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, delta), modifiers, phase: egui::TouchPhase::Move, source: egui::MouseWheelSource::Wheel });
                 }
                 Cue::View { pan, dur } => {
                     // `from` is filled in by the app, which knows the pan
@@ -814,7 +814,7 @@ impl Capture {
                 }
                 Cue::Drop => {
                     if let Some(path) = self.hovering.take() {
-                        raw.dropped_files.push(egui::DroppedFile { path: Some(path), ..Default::default() });
+                        raw.dropped_files.push(Arc::new(DroppedPath(path)));
                     }
                     self.hover_into(raw);
                 }
@@ -1010,7 +1010,7 @@ impl Capture {
         let (true, Some(p)) = (self.cursor_visible, self.pointer) else {
             return;
         };
-        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("capture_cursor")));
+        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("capture_cursor")));
         draw_pointer(&painter, p, 1.0);
         if self.button_down {
             painter.circle_stroke(p, 9.0, egui::Stroke::new(1.5_f32, egui::Color32::from_white_alpha(120)));
@@ -1027,7 +1027,11 @@ impl Capture {
     pub fn end_frame(&mut self, ctx: &egui::Context) {
         self.check_aim(ctx);
         if self.fresh {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
+            let (slot, ctx2) = (self.shot.clone(), ctx.clone());
+            ctx.request_screenshot(move |image| {
+                *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(image);
+                ctx2.request_repaint();
+            });
             self.awaiting_shot = true;
         }
         ctx.request_repaint();
@@ -1361,6 +1365,27 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
         return Err("script has no `end` cue".into());
     }
     Ok(cues)
+}
+
+/// A file a script drops, as one dropped from the desktop.
+#[derive(Debug)]
+struct DroppedPath(PathBuf);
+
+impl egui::DroppedFile for DroppedPath {
+    fn path(&self) -> &Path {
+        &self.0
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.0).map_err(|e| e.to_string())
+    }
+
+    // Captures film the desktop app: a page has no files to drop from
+    #[cfg(target_arch = "wasm32")]
+    fn bytes_async(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<u8>, String>> + '_>> {
+        Box::pin(std::future::ready(Err("a page can't read a script's files".to_string())))
+    }
 }
 
 #[cfg(test)]

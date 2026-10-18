@@ -2,6 +2,8 @@
 name = "soba"
 version = "0.7.0"
 edition = "2021"
+# egui 0.37's (CI builds on the newer Rust ci.yml pins)
+rust-version = "1.95"
 description = "A node-based modular audio synthesizer"
 authors = ["Chris"]
 license = "MIT"
@@ -34,11 +36,14 @@ type_complexity = "allow"
 
 [dependencies]
 # glow, not wgpu (eframe's default since 0.34): a smaller, quicker build, the
-# OpenGL the plugin draws with too, and WebGL in the browser
-eframe = { version = "0.34", default-features = false, features = ["accesskit", "default_fonts", "glow", "persistence", "wayland", "web_screen_reader", "x11"] }
-egui = "0.34"
+# OpenGL the plugin draws with too, and WebGL in the browser. Since 0.37 the
+# clipboard and opening links are features too, and so are the default fonts
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "glow", "links", "persistence", "wayland", "web_screen_reader", "x11"] }
+# The emoji faces hold the Mac's ⌘ and ⇧, and symbols the faces draw: a
+# feature of their own since 0.37
+egui = { version = "0.37", features = ["monochrome_emoji_fonts"] }
 # Pinned: bump the rev on purpose, after a push to the fork
-egui_node_graph2 = { git = "https://github.com/chrischaps/egui_node_graph2", rev = "cbe5ef0e5fd3d3f783cc389ee456adbd3cc24ae9" }
+egui_node_graph2 = { git = "https://github.com/chrischaps/egui_node_graph2", rev = "1ff971fddd098c9de27f1fe3f81a5fc711f3427e" }
 cpal = "0.18"
 midir = "0.11"
 rtrb = "0.3"

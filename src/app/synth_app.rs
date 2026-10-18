@@ -1760,7 +1760,7 @@ impl SynthApp {
 
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 // Store editor rect for coordinate conversion
                 editor_rect = ui.available_rect_before_wrap();
                 self.editor_rect = editor_rect;
@@ -2200,7 +2200,7 @@ impl SynthApp {
     fn is_over_module(&self, ctx: &egui::Context, screen: egui::Pos2) -> bool {
         // The editor senses clicks on each whole node under this id
         self.graph_state.node_order.iter().any(|&node_id| {
-            ctx.read_response(egui::Id::new((node_id, "window"))).is_some_and(|r| r.rect.contains(screen))
+            ctx.read_response(egui::Id::unique((node_id, "window"))).is_some_and(|r| r.rect.contains(screen))
         })
     }
 
@@ -2901,7 +2901,7 @@ impl SynthApp {
     fn draw_embed_bar(&mut self, ctx: &egui::Context) -> bool {
         let status = self.audio_status(ctx);
         let mut toggle = false;
-        egui::Area::new(egui::Id::new("embed_bar"))
+        egui::Area::new(egui::Id::unique("embed_bar"))
             .anchor(egui::Align2::LEFT_TOP, egui::vec2(12.0, 12.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
@@ -3770,7 +3770,7 @@ impl SynthApp {
                 .frame(egui::Frame::NONE
                     .fill(theme::background::PANEL)
                     .inner_margin(egui::Margin::symmetric(8, 8)))
-                .show_inside(ui, |ui| {
+                .show(ui, |ui| {
                     self.draw_toolbar(ui)
                 })
                 .inner;
@@ -3780,7 +3780,7 @@ impl SynthApp {
                 .frame(egui::Frame::NONE
                     .fill(theme::background::PANEL)
                     .inner_margin(egui::Margin::symmetric(0, 4)))
-                .show_inside(ui, |ui| {
+                .show(ui, |ui| {
                     self.draw_status_bar(ui);
                 });
             actions.extend(toolbar_actions);

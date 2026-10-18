@@ -203,7 +203,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let place_at = |x: f32| ((x - plot.left()) / plot.width()).clamp(0.0, 1.0);
     let mid = plot.center().y;
     let small = FontId::proportional(8.0 * z);
-    let wave = ui.interact(wave_rect, Id::new((node_id, "chopper-wave")), Sense::click_and_drag());
+    let wave = ui.interact(wave_rect, Id::unique((node_id, "chopper-wave")), Sense::click_and_drag());
     let _ = response;
 
     match shown {
@@ -422,7 +422,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         let at = StepAt { index, step, chance, slice, count };
         draw_step(&painter, cell, &at, here, z);
 
-        let response = ui.interact(cell, Id::new((node_id, "chopper-step", index)), Sense::click_and_drag()).on_hover_cursor(CursorIcon::PointingHand);
+        let response = ui.interact(cell, Id::unique((node_id, "chopper-step", index)), Sense::click_and_drag()).on_hover_cursor(CursorIcon::PointingHand);
         let what = format!("Step {}", index + 1);
         if response.clicked() {
             let modifiers = ui.input(|input| input.modifiers);
@@ -445,7 +445,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         }
 
         // Dragging up or down picks its slice
-        let drag_id = Id::new((node_id, "chopper-drag", index));
+        let drag_id = Id::unique((node_id, "chopper-drag", index));
         if response.drag_started() {
             ui.ctx().data_mut(|data| data.insert_temp(drag_id, (slice as f32, 0.0f32)));
         }
@@ -493,7 +493,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let mut name_left = line.left() + 2.0 * z;
     if loaded.is_some() {
         let play = Rect::from_min_size(Pos2::new(line.left(), line.top() + 1.0 * z), Vec2::new(18.0 * z, line_height - 2.0 * z));
-        let hear = ui.interact(play, ui.id().with(("chopper_cue", node_id)), Sense::click());
+        let hear = ui.interact(play, ui.scope_id().with(("chopper_cue", node_id)), Sense::click());
         let fill = match (cue.is_some(), hear.hovered()) {
             (true, _) => blue.gamma_multiply(0.45),
             (false, true) => theme::background::WIDGET_HOVERED,
@@ -541,13 +541,13 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     if let Some(sample) = loaded {
         let seconds = sample.source.seconds();
         let beats = Chopper::beats(params.value(Chopper::PARAM_BEATS));
-        ui.interact(name_rect, Id::new((node_id, "chopper-name")), Sense::hover()).on_hover_text(format!(
+        ui.interact(name_rect, Id::unique((node_id, "chopper-name")), Sense::hover()).on_hover_text(format!(
             "{}\n{seconds:.2} s as {beats:.0} beats: it plays unchanged at {:.1} BPM, and keeps its pitch at any other",
             key.unwrap_or(name),
             Chopper::own_tempo(seconds, beats),
         ));
     }
-    let open = ui.interact(button, ui.id().with(("chopper_open", node_id)), Sense::click());
+    let open = ui.interact(button, ui.scope_id().with(("chopper_open", node_id)), Sense::click());
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
     ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
     ui.painter().text(button.center(), egui::Align2::CENTER_CENTER, "Open…", small, theme::text::PRIMARY);

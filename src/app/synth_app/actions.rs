@@ -250,15 +250,17 @@ mod tests {
     fn press(modifiers: Modifiers, key: Key, typing: bool, on_canvas: bool) -> Vec<String> {
         let ctx = egui::Context::default();
         let raw = egui::RawInput {
-            modifiers,
-            events: vec![egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }],
+            events: vec![
+                egui::Event::ModifiersChanged(modifiers),
+                egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers },
+            ],
             ..Default::default()
         };
         let mut got = Vec::new();
-        let _ = ctx.run_ui(raw, |ui| {
+        ctx.run_ui(raw, |ui| {
             let ctx = ui.ctx();
             got = pressed(ctx, typing, on_canvas, false).iter().map(|a| format!("{a:?}")).collect();
-        });
+        }).textures_delta.clear();
         got
     }
 

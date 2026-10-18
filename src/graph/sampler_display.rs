@@ -324,7 +324,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     // The markers: Start and End in blue at the foot, the loop's in orange at the head
     let marker_places = [lo, hi, loop_lo, loop_hi];
     let pointer = response.hover_pos().or(response.interact_pointer_pos());
-    let drag_id = ui.id().with(("sampler_marker", node_id));
+    let drag_id = ui.scope_id().with(("sampler_marker", node_id));
     let dragging: Option<usize> = ui.ctx().data(|d| d.get_temp(drag_id));
     let nearest = |x: f32| {
         (0..4)
@@ -505,7 +505,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let mut name_left = row.left() + 2.0 * z;
     if loaded.is_some() {
         let play = Rect::from_min_size(Pos2::new(row.left(), row.top() + 1.0 * z), Vec2::new(18.0 * z, row_height - 2.0 * z));
-        let hear = ui.interact(play, ui.id().with(("sampler_cue", node_id)), Sense::click());
+        let hear = ui.interact(play, ui.scope_id().with(("sampler_cue", node_id)), Sense::click());
         super::marks::mark(ui.ctx(), node_id, "cue", play);
         let fill = match (cue.is_some(), hear.hovered()) {
             (true, _) => blue.gamma_multiply(0.45),
@@ -549,7 +549,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         }
     }
     let button = Rect::from_min_size(Pos2::new(row.right() - button_width, row.top() + 1.0 * z), Vec2::new(button_width, row_height - 2.0 * z));
-    let open = ui.interact(button, ui.id().with(("sampler_open", node_id)), Sense::click());
+    let open = ui.interact(button, ui.scope_id().with(("sampler_open", node_id)), Sense::click());
     super::marks::mark(ui.ctx(), node_id, "file", button);
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
     ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);

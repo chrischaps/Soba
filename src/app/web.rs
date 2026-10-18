@@ -3,6 +3,7 @@
 //!
 //! Compiled only for the web build (`trunk build`, see `index.html`).
 
+use std::cell::RefCell;
 use std::sync::mpsc::Sender;
 
 use eframe::egui;
@@ -28,6 +29,37 @@ pub fn pick_patch(ctx: &egui::Context, sender: Sender<Upload>) {
         let _ = sender.send(Upload { name: file.file_name(), text });
         ctx.request_repaint();
     });
+}
+
+/// A file dropped on the page, once the browser has read it.
+pub struct DroppedSound {
+    /// The file's name, e.g. `kick.wav`.
+    pub name: String,
+    /// Where it was dropped, in egui points.
+    pub at: Option<egui::Pos2>,
+    /// Its contents, or why they couldn't be read.
+    pub bytes: Result<Vec<u8>, String>,
+}
+
+thread_local! {
+    /// Dropped files read since the last frame.
+    static DROPPED: RefCell<Vec<DroppedSound>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Reads a file dropped on the page at `at`. The browser answers later:
+/// [`take_dropped`] collects it, and a repaint is asked for to do that.
+pub fn read_dropped(ctx: &egui::Context, file: egui::DroppedFileHandle, name: String, at: Option<egui::Pos2>) {
+    let ctx = ctx.clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        let bytes = file.bytes_async().await;
+        DROPPED.with_borrow_mut(|dropped| dropped.push(DroppedSound { name, at, bytes }));
+        ctx.request_repaint();
+    });
+}
+
+/// The dropped files read since the last call.
+pub fn take_dropped() -> Vec<DroppedSound> {
+    DROPPED.take()
 }
 
 /// Hands `text` to the browser to save as `file_name`, as a download.

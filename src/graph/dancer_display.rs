@@ -113,7 +113,7 @@ pub fn dancer_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
         accent: (value(Dancer::READOUT_ACCENTS).max(0.0) as u32, value(Dancer::READOUT_ACCENT_AGE)),
     });
 
-    let id = Id::new((node_id, "dancer-stage"));
+    let id = Id::unique((node_id, "dancer-stage"));
     let mut stage: Stage = ui.ctx().data(|d| d.get_temp(id)).unwrap_or_default();
     // A capture starting over winds egui's clock back: start the stage afresh
     if time < stage.time {
@@ -229,7 +229,7 @@ pub fn dancer_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
 
     // The grip: drag the corner to resize the stage
     let grip = Rect::from_min_max(rect.max - Vec2::splat(11.0 * z), rect.max);
-    let response = ui.interact(grip, Id::new((node_id, "dancer-grip")), Sense::click_and_drag());
+    let response = ui.interact(grip, Id::unique((node_id, "dancer-grip")), Sense::click_and_drag());
     let hot = response.hovered() || response.dragged();
     let ink = if hot { theme::text::PRIMARY } else { face::with_alpha(theme::text::SECONDARY, 110) };
     for i in 1..=2 {

@@ -21,11 +21,11 @@ use super::sample_shelf::ShelvedSample;
 use super::{SynthResponse, Tidy};
 
 fn popup_id(node_id: NodeId) -> egui::Id {
-    egui::Id::new(("sampler_tidy_menu", node_id))
+    egui::Id::unique(("sampler_tidy_menu", node_id))
 }
 
 fn preview_id(node_id: NodeId) -> egui::Id {
-    egui::Id::new(("sampler_tidy_preview", node_id))
+    egui::Id::unique(("sampler_tidy_preview", node_id))
 }
 
 /// What the menu's pointer is on, for the waveform to show.
@@ -48,7 +48,7 @@ pub fn name_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, label: &NameL
     let mut responses = Vec::new();
     let id = popup_id(node_id);
     let open = egui::Popup::is_id_open(ui.ctx(), id);
-    let response = ui.interact(rect, ui.id().with(("sampler_name", node_id)), Sense::click());
+    let response = ui.interact(rect, ui.scope_id().with(("sampler_name", node_id)), Sense::click());
     if open || response.hovered() {
         let fill = if open { theme::background::WIDGET_ACTIVE } else { theme::background::WIDGET_HOVERED };
         ui.painter().rect_filled(rect, 3.0 * z, fill.gamma_multiply(0.7));

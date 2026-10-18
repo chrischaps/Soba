@@ -75,7 +75,7 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         lamp_at + Vec2::new(5.0 * z, -5.0 * z),
         Pos2::new(rect.right() - 26.0 * z, lamp_at.y + 5.0 * z),
     );
-    let picker = ui.interact(label_rect, Id::new(("midi_out_device", node_id)), Sense::click());
+    let picker = ui.interact(label_rect, Id::unique(("midi_out_device", node_id)), Sense::click());
     let text_color = if picker.hovered() && live {
         theme::text::PRIMARY
     } else if device.is_some() && live {
@@ -261,7 +261,7 @@ fn is_black(note: u8) -> bool {
 /// How bright the lamp's flash is, 0 to 1: full when the count of notes
 /// sent has moved since the last frame, fading over [`FLASH`].
 fn flash_of(ui: &egui::Ui, node_id: NodeId, count: u32, now: f64) -> f32 {
-    let id = Id::new(("midi_out_flash", node_id));
+    let id = Id::unique(("midi_out_flash", node_id));
     let (seen, at) = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(id, || (count, f64::NEG_INFINITY)));
     let at = if seen != count {
         ui.ctx().data_mut(|d| d.insert_temp(id, (count, now)));

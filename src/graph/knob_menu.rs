@@ -10,7 +10,7 @@ use crate::app::theme;
 
 /// The id a knob's value field keeps its text under while the menu's open.
 pub fn value_field_id(node_id: NodeId, param_name: &str) -> egui::Id {
-    egui::Id::new((node_id, param_name, "knob value"))
+    egui::Id::unique((node_id, param_name, "knob value"))
 }
 
 /// Starts the value field afresh as the menu opens, from the knob's value

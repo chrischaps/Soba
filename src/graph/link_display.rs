@@ -164,7 +164,7 @@ pub fn link_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user
 /// How bright gate `lane`'s flash is, 0 to 1: full when its edge count has
 /// moved since the last frame, fading over [`FLASH`].
 fn flash_of(ui: &egui::Ui, node_id: NodeId, lane: usize, edges: u32, now: f64) -> f32 {
-    let id = Id::new(("link_out_flash", node_id, lane));
+    let id = Id::unique(("link_out_flash", node_id, lane));
     let (seen, at) = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(id, || (edges, f64::NEG_INFINITY)));
     let at = if seen != edges {
         ui.ctx().data_mut(|d| d.insert_temp(id, (edges, now)));

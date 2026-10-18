@@ -108,7 +108,7 @@ mod tests {
         fn frame(&mut self, time: f64, events: Vec<Event>) -> Option<Pos2> {
             let input = RawInput { time: Some(time), events, ..Default::default() };
             let mut seen = None;
-            let _ = self.ctx.run_ui(input, |ui| seen = self.watch.update(ui.ctx()));
+            self.ctx.run_ui(input, |ui| seen = self.watch.update(ui.ctx())).textures_delta.clear();
             seen
         }
 

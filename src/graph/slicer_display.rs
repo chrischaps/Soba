@@ -252,7 +252,7 @@ pub fn slicer_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
     for j in 0..count {
         let cell = cell_rect(j);
         let what = format!("Step {}", j + 1);
-        let response = ui.interact(cell, Id::new((node_id, "slicer-step", j)), Sense::click_and_drag()).on_hover_cursor(CursorIcon::PointingHand);
+        let response = ui.interact(cell, Id::unique((node_id, "slicer-step", j)), Sense::click_and_drag()).on_hover_cursor(CursorIcon::PointingHand);
         let slice = steps[j];
         let set = |to: Slice| vec![(STEP_NAMES[j].to_string(), to.encode())];
 

@@ -80,13 +80,11 @@ impl SynthApp {
 
     /// Keeps a file kept only in the tab, made of `bytes`, in the browser's
     /// IndexedDB too, under its key. The desktop has it on disk already.
+    #[cfg(target_arch = "wasm32")]
     pub(super) fn keep_in_tab(&self, key: &str, bytes: impl FnOnce() -> Vec<u8>) {
-        #[cfg(target_arch = "wasm32")]
         if !self.embedded {
             crate::persistence::tab_store::keep(key, bytes());
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        let _ = (key, bytes);
     }
 
     /// Once the recovery prompt is answered (or there was none), lets go of

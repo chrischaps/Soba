@@ -109,7 +109,7 @@ impl ChordEar {
 }
 
 fn taken_id() -> Id {
-    Id::new("chord_popover_takes_letter_keys")
+    Id::unique("chord_popover_takes_letter_keys")
 }
 
 /// Marks the letter keys as the open popover's for the next frame.

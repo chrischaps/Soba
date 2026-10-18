@@ -93,7 +93,7 @@ pub fn scenes_display(
     let mut clicked = None;
     for slot in 0..SLOTS {
         let pad = pad_rect(slot);
-        let id = ui.id().with(("scene_pad", node_id, slot));
+        let id = ui.scope_id().with(("scene_pad", node_id, slot));
         let response = ui.interact(pad, id, Sense::click());
         let scene = bank.get(scenes::letter(slot));
         let hovered = response.hovered();

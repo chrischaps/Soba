@@ -84,7 +84,7 @@ pub fn logic_display(
     // An empty B reads Above, and says so under its lamp
     let b_lamp = Pos2::new(inputs_x, rect.top() + height * 0.72);
     let b_rect = Rect::from_center_size(b_lamp + Vec2::new(4.0 * z, 0.0), Vec2::new(18.0 * z, 12.0 * z));
-    let b_hover = ui.interact(b_rect, ui.id().with(("logic_b", node_id)), Sense::hover());
+    let b_hover = ui.interact(b_rect, ui.scope_id().with(("logic_b", node_id)), Sense::hover());
     if !b_patched {
         painter.text(
             b_lamp + Vec2::new(0.0, 9.0 * z),
@@ -110,7 +110,7 @@ pub fn logic_display(
     let line_y = y_at(threshold);
     let grab = Rect::from_x_y_ranges(column.left() - 4.0 * z..=column.right() + 2.0 * z, line_y - 4.0 * z..=line_y + 4.0 * z);
     let response = ui
-        .interact(grab, ui.id().with(("logic_threshold", node_id)), Sense::drag())
+        .interact(grab, ui.scope_id().with(("logic_threshold", node_id)), Sense::drag())
         .on_hover_cursor(CursorIcon::ResizeVertical);
     let hot = response.hovered() || response.dragged();
     let line_ink = if hot { green } else { green.gamma_multiply(0.75) };

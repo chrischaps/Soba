@@ -537,7 +537,7 @@ impl Updater {
         let mut clicked = None;
         let screen = ctx.content_rect();
         egui::Window::new("What's new")
-            .id(egui::Id::new("update_whats_new"))
+            .id(egui::Id::unique("update_whats_new"))
             .open(&mut open)
             .collapsible(false)
             .resizable(true)
@@ -678,12 +678,12 @@ mod tests {
         updater.state = State::Available;
         // A few frames: fonts load, then the window settles on its size
         for _ in 0..4 {
-            let _ = ctx.run_ui(input(), |ui| {
+            ctx.run_ui(input(), |ui| {
                 let ctx = ui.ctx();
                 updater.show_whats_new(ctx, false);
-            });
+            }).textures_delta.clear();
         }
-        let rect = ctx.memory(|m| m.area_rect(egui::Id::new("update_whats_new"))).expect("the window was shown");
+        let rect = ctx.memory(|m| m.area_rect(egui::Id::unique("update_whats_new"))).expect("the window was shown");
         assert!(rect.width() <= width, "a {} px window in a {width} px app", rect.width());
         assert!(rect.left() >= 0.0 && rect.right() <= width, "{rect:?} spills off a {width} px app");
     }
@@ -705,6 +705,9 @@ mod tests {
             }
             fn set_string(&mut self, key: &str, value: String) {
                 self.0.insert(key.to_string(), value);
+            }
+            fn remove_string(&mut self, key: &str) {
+                self.0.remove(key);
             }
             fn flush(&mut self) {}
         }

@@ -72,7 +72,7 @@ fn frame(ctx: &egui::Context, shared: &Weak<Shared>, params: &Weak<SobaParams>, 
     shared.with_app(|app| {
         app.follow_macros(&macros);
         // Laid out and thrown away: no one sees it
-        let _ = ctx.run_ui(input, |ui| app.draw_frame(ui));
+        ctx.run_ui(input, |ui| app.draw_frame(ui)).textures_delta.clear();
     });
 }
 

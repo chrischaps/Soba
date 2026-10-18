@@ -54,7 +54,7 @@ pub fn turned(config: &KnobConfig, value: f32, turn: Turn) -> f32 {
 }
 
 fn focus_id() -> Id {
-    Id::new("knob-focus")
+    Id::unique("knob-focus")
 }
 
 /// Whether a text field has the keys. A knob with focus takes only the keys
@@ -116,7 +116,7 @@ struct Hovered {
 }
 
 fn hovered_id() -> Id {
-    Id::new("knob-wheel-hovered")
+    Id::unique("knob-wheel-hovered")
 }
 
 /// Notches of the wheel taken for a knob, as (plain, fine), not yet turned.

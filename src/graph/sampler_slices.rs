@@ -42,7 +42,7 @@ pub struct SliceMarkers<'a> {
 
 impl SliceMarkers<'_> {
     fn drag_id(&self, ui: &egui::Ui) -> egui::Id {
-        ui.id().with(("sampler_slice_drag", self.node_id))
+        ui.scope_id().with(("sampler_slice_drag", self.node_id))
     }
 
     /// Whether one is being dragged.
@@ -169,13 +169,13 @@ mod tests {
     /// Runs `f` on a frame's panel, as a display draws on one.
     fn in_frame<R>(ctx: &egui::Context, f: impl FnOnce(&egui::Ui) -> R) -> R {
         let (mut f, mut out) = (Some(f), None);
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
-            egui::CentralPanel::default().show_inside(ui, |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 if let Some(f) = f.take() {
                     out = Some(f(ui));
                 }
             });
-        });
+        }).textures_delta.clear();
         out.expect("the panel was drawn")
     }
 

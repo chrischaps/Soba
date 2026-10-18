@@ -430,7 +430,11 @@ impl SynthApp {
     /// anywhere else brings a new Sampler there to play it.
     pub(super) fn handle_file_drops(&mut self, ctx: &egui::Context) {
         let (hovering, dropped) = ctx.input(|i| (!i.raw.hovered_files.is_empty(), i.raw.dropped_files.clone()));
-        if !hovering && dropped.is_empty() {
+        #[cfg(target_arch = "wasm32")]
+        let arrived = crate::app::web::take_dropped();
+        #[cfg(not(target_arch = "wasm32"))]
+        let arrived: Vec<()> = Vec::new();
+        if !hovering && dropped.is_empty() && arrived.is_empty() {
             self.user_state.file_drop_target = None;
             return;
         }
@@ -442,59 +446,60 @@ impl SynthApp {
 
         let mut placed = 0;
         for file in dropped {
-            let name = file
-                .path
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| file.name.clone());
+            let name = file.path().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             if !sample_files::is_sound_file(&name) {
                 self.status_error(format!("{name} isn't a sound file: a Sampler plays WAV, MP3, FLAC and Ogg files"));
                 continue;
             }
+            // The page reads a dropped file in its own time: it's placed once it's arrived
+            #[cfg(target_arch = "wasm32")]
+            crate::app::web::read_dropped(ctx, file, name, pointer);
             // Read it first: a file that won't play doesn't make a Sampler
             // (unless it's still being read, and says so once it has been)
-            let key = match (&file.path, &file.bytes) {
-                (Some(path), _) => {
-                    let key = path.to_string_lossy().into_owned();
-                    match self.take_hovered_file(&key) {
-                        // Read a moment ago, while it was dragged over
-                        Some(shelved) => self.user_state.samples.shelve(&key, shelved),
-                        None => self.user_state.samples.forget(&key),
-                    }
-                    key
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let key = file.path().to_string_lossy().into_owned();
+                match self.take_hovered_file(&key) {
+                    // Read a moment ago, while it was dragged over
+                    Some(shelved) => self.user_state.samples.shelve(&key, shelved),
+                    None => self.user_state.samples.forget(&key),
                 }
-                (None, Some(bytes)) => {
-                    let key = format!("{DROPPED_PREFIX}{name}");
-                    match sample_files::decode(std::io::Cursor::new(bytes.to_vec()), &name) {
-                        Ok(decoded) => {
-                            self.keep_in_tab(&key, || bytes.to_vec());
-                            self.user_state.samples.insert(&key, decoded);
-                        }
-                        Err(e) => {
-                            self.status_error(format!("Couldn't load {name}: {e}"));
-                            continue;
-                        }
-                    }
-                    key
-                }
-                (None, None) => continue,
-            };
-            if !self.check_sample(&key) {
-                continue;
+                self.place_dropped(ctx, key, pointer, &mut placed);
             }
-
-            let at = pointer.unwrap_or_else(|| self.editor_rect.center()) + egui::vec2(24.0, 24.0) * placed as f32;
-            let node_id = match self.sampler_at(ctx, at) {
-                Some(node_id) => node_id,
-                None => {
-                    placed += 1;
-                    self.add_sampler_at(at)
-                }
-            };
-            self.set_sample(node_id, key);
-            self.graph_state.selected_nodes = vec![node_id];
         }
+        #[cfg(target_arch = "wasm32")]
+        for crate::app::web::DroppedSound { name, at, bytes } in arrived {
+            let key = format!("{DROPPED_PREFIX}{name}");
+            match bytes.and_then(|bytes| Ok((sample_files::decode(std::io::Cursor::new(bytes.clone()), &name)?, bytes))) {
+                Ok((decoded, bytes)) => {
+                    self.keep_in_tab(&key, || bytes);
+                    self.user_state.samples.insert(&key, decoded);
+                }
+                Err(e) => {
+                    self.status_error(format!("Couldn't load {name}: {e}"));
+                    continue;
+                }
+            }
+            self.place_dropped(ctx, key, at, &mut placed);
+        }
+    }
+
+    /// Plays the dropped file `key` from the Sampler under `pointer`, or
+    /// from a new one there, `placed` new ones along from it.
+    fn place_dropped(&mut self, ctx: &egui::Context, key: String, pointer: Option<egui::Pos2>, placed: &mut usize) {
+        if !self.check_sample(&key) {
+            return;
+        }
+        let at = pointer.unwrap_or_else(|| self.editor_rect.center()) + egui::vec2(24.0, 24.0) * *placed as f32;
+        let node_id = match self.sampler_at(ctx, at) {
+            Some(node_id) => node_id,
+            None => {
+                *placed += 1;
+                self.add_sampler_at(at)
+            }
+        };
+        self.set_sample(node_id, key);
+        self.graph_state.selected_nodes = vec![node_id];
     }
 
     /// A new Sampler with its waveform about under `screen`. Returns its node.
@@ -514,7 +519,7 @@ impl SynthApp {
         self.graph_state.node_order.iter().rev().copied().find(|&node_id| {
             !self.user_state.hidden.contains(&node_id)
                 && self.graph_state.graph.nodes.get(node_id).is_some_and(|n| plays_a_sample(n.user_data.module_id))
-                && ctx.read_response(egui::Id::new((node_id, "window"))).is_some_and(|r| r.rect.contains(screen))
+                && ctx.read_response(egui::Id::unique((node_id, "window"))).is_some_and(|r| r.rect.contains(screen))
         })
     }
 }

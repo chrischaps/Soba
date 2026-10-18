@@ -580,7 +580,7 @@ impl SynthApp {
 
         let rose = theme::module::GROUP;
         let mut go_to = None;
-        egui::Area::new(egui::Id::new("group_breadcrumbs"))
+        egui::Area::new(egui::Id::unique("group_breadcrumbs"))
             .fixed_pos(self.editor_rect.left_top() + vec2(14.0, 12.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {

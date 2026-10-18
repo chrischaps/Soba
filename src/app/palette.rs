@@ -260,7 +260,7 @@ impl QuickAdd {
         }
 
         let mut action = PaletteAction::None;
-        let area = egui::Area::new(egui::Id::new("quick_add_palette"))
+        let area = egui::Area::new(egui::Id::unique("quick_add_palette"))
             .fixed_pos(self.anchor)
             .order(egui::Order::Foreground)
             .constrain(true)

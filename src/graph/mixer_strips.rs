@@ -292,7 +292,7 @@ pub fn mixer_strips(
         let lane = Rect::from_min_size(Pos2::new(at(LANE_X, 0.0).x, mid - 11.0 * z), Vec2::new(LANE_W, 22.0) * z);
         let lights = Lights { hue, is_heard, meter: meter(s), playing: user_state.is_playing };
         draw_lane(&painter, lane, strip, lights, z);
-        let lane_response = ui.interact(lane, ui.id().with(("mixer_lane", node_id, s)), Sense::hover());
+        let lane_response = ui.interact(lane, ui.scope_id().with(("mixer_lane", node_id, s)), Sense::hover());
         lane_response.on_hover_text(format!(
             "Where channel {n} sits, left to right. A polyphonic channel has a light per voice, fanned out by its Width. With its Send up it blooms along the lane"
         ));
@@ -300,7 +300,7 @@ pub fn mixer_strips(
         // The meter, after the fader
         let bar = Rect::from_center_size(Pos2::new(at(METER_X, 0.0).x, mid), Vec2::new(6.0, ROW - 18.0) * z);
         column_meter(&painter, bar, meter(s), !is_heard);
-        ui.interact(bar.expand2(Vec2::new(4.0 * z, 0.0)), ui.id().with(("mixer_meter", node_id, s)), Sense::hover())
+        ui.interact(bar.expand2(Vec2::new(4.0 * z, 0.0)), ui.scope_id().with(("mixer_meter", node_id, s)), Sense::hover())
             .on_hover_text(format!("Channel {n}: {} after its fader", format_db(meter(s).level_db())));
 
         // The knobs, one per column, untitled: the header names them
@@ -372,7 +372,7 @@ pub fn mixer_strips(
         painter.text(Pos2::new(x, bar.bottom() + 6.0 * z), egui::Align2::CENTER_CENTER, ["L", "R"][side], tiny.clone(), theme::text::SECONDARY);
     }
     let master_area = Rect::from_center_size(Pos2::new(at(METER_X, 0.0).x, meter_mid), Vec2::new(18.0, 64.0) * z);
-    ui.interact(master_area, ui.id().with(("mixer_master", node_id)), Sense::hover()).on_hover_text(format!(
+    ui.interact(master_area, ui.scope_id().with(("mixer_master", node_id)), Sense::hover()).on_hover_text(format!(
         "Master: L {} / R {}",
         format_db(meter(Mixer::METER_OUT_L).level_db()),
         format_db(meter(Mixer::METER_OUT_R).level_db()),
@@ -416,7 +416,7 @@ fn jack_caption(ui: &egui::Ui, painter: &egui::Painter, data: &SynthNodeData, no
     let galley = painter.layout_no_wrap(jack_label(name).to_string(), font.clone(), color);
     let label = Rect::from_min_size(Pos2::new(left_centre.x, left_centre.y - galley.size().y * 0.5), galley.size());
     painter.galley(label.min, galley, color);
-    let response = ui.interact(label.expand(2.0), ui.id().with(("mixer_jack", node_id, name)), Sense::hover());
+    let response = ui.interact(label.expand(2.0), ui.scope_id().with(("mixer_jack", node_id, name)), Sense::hover());
     hints::attach(response, Hint::input(data.module_id, name));
 }
 
@@ -441,9 +441,9 @@ struct Latch<'a> {
 }
 
 /// A small latching button; true when clicked.
-fn button(ui: &egui::Ui, painter: &egui::Painter, rect: Rect, id: impl std::hash::Hash, latch: Latch, z: f32) -> bool {
+fn button(ui: &egui::Ui, painter: &egui::Painter, rect: Rect, id: impl egui::AsIdSalt, latch: Latch, z: f32) -> bool {
     let Latch { text, on, lit, tip } = latch;
-    let response = ui.interact(rect, ui.id().with(id), Sense::click());
+    let response = ui.interact(rect, ui.scope_id().with(id), Sense::click());
     let hot = response.hovered();
     let (fill, stroke, ink) = if on {
         (lit.gamma_multiply(if hot { 1.0 } else { 0.85 }), lit, Color32::from_rgb(40, 18, 20))

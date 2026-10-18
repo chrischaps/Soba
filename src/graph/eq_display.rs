@@ -228,12 +228,12 @@ pub fn eq_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_s
         let x = x_at(hz);
         if x > plot.left() && x < plot.right() {
             let hit = Rect::from_center_size(Pos2::new(x, wing_y), Vec2::new(GRAB * z, 2.0 * GRAB * z));
-            grips.push((Grip::Wing, ui.interact(hit, ui.id().with(("eq_wing", node_id, side)), Sense::drag())));
+            grips.push((Grip::Wing, ui.interact(hit, ui.scope_id().with(("eq_wing", node_id, side)), Sense::drag())));
         }
     }
     for band in 0..3 {
         let hit = Rect::from_center_size(dot_at(band), Vec2::splat(2.0 * GRAB * z));
-        grips.push((Grip::Dot(band), ui.interact(hit, ui.id().with(("eq_dot", node_id, band)), Sense::click_and_drag())));
+        grips.push((Grip::Dot(band), ui.interact(hit, ui.scope_id().with(("eq_dot", node_id, band)), Sense::click_and_drag())));
     }
     let active = grips.iter().find(|(_, r)| r.dragged()).or_else(|| grips.iter().find(|(_, r)| r.hovered()));
     let active_band = active.map(|(grip, _)| match grip {

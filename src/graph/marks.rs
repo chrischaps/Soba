@@ -67,7 +67,7 @@ struct Marks {
 }
 
 fn marks_id(node_id: NodeId) -> Id {
-    Id::new((node_id, "marks"))
+    Id::unique((node_id, "marks"))
 }
 
 /// Marks a part of a module as drawn at `rect`, on screen, this pass.

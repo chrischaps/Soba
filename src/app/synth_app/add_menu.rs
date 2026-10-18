@@ -93,7 +93,7 @@ impl SynthApp {
         let mut row_tops: Vec<f32> = Vec::new();
         // An area keeps the width it last had, and the separators fill it, so
         // the categories and a submenu in their place each keep their own
-        let menu_id = egui::Id::new("add_node_context_menu").with(self.add_menu.drilled);
+        let menu_id = egui::Id::unique("add_node_context_menu").with(self.add_menu.drilled);
         let menu_response = egui::Area::new(menu_id)
             .fixed_pos(menu_pos)
             .order(egui::Order::Foreground)
@@ -113,7 +113,7 @@ impl SynthApp {
 
         // A category just opened with no room beside the menu opens in its
         // place, but only for a click: a passing mouse mustn't swap the menu
-        let submenu_id = egui::Id::new("add_node_submenu");
+        let submenu_id = egui::Id::unique("add_node_submenu");
         let submenu_width = ctx.memory(|m| m.area_rect(submenu_id)).map_or(160.0, |r| r.width());
         let opened = self.user_state.context_menu_open_category;
         if !self.add_menu.drilled && opened.is_some() && opened != was_open && place(menu_rect, submenu_width, screen) == Place::Instead {

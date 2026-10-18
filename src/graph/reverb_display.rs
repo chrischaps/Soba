@@ -169,7 +169,7 @@ pub fn reverb_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
     // --- The room ringing now ---
     let live = readout(user_state, node_id).filter(|_| user_state.is_playing);
     let now = ui.input(|input| input.time);
-    let memory = Id::new(("reverb_loudest", node_id));
+    let memory = Id::unique(("reverb_loudest", node_id));
     let mut loudest = ui.ctx().data_mut(|data| data.get_temp::<Loudest>(memory)).unwrap_or(Loudest { db: -120.0, at: now });
     let mut ringing = false;
     if let Some(r) = live {

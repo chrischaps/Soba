@@ -200,7 +200,7 @@ pub fn cloud_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     };
     ui.painter().text(Pos2::new(row.left() + 2.0 * z, row.center().y), egui::Align2::LEFT_CENTER, label, small.clone(), color);
     let button = Rect::from_min_size(Pos2::new(row.right() - 34.0 * z, row.top() + 1.0 * z), Vec2::new(34.0 * z, row_height - 2.0 * z));
-    let open = ui.interact(button, ui.id().with(("cloud_open", node_id)), Sense::click());
+    let open = ui.interact(button, ui.scope_id().with(("cloud_open", node_id)), Sense::click());
     super::marks::mark(ui.ctx(), node_id, "file", button);
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
     ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);

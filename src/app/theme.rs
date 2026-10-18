@@ -217,6 +217,10 @@ pub fn apply_theme(ctx: &egui::Context) {
     // clicks, so right-clicking a port's name wouldn't reach its module
     style.interaction.selectable_labels = false;
 
+    // egui 0.35 doubled its animations to 0.2 s. Menus and hovers keep the
+    // snap they had, and the capture scripts' stills land where they did
+    style.animation_time = 0.1;
+
     // Visuals
     let visuals = &mut style.visuals;
     visuals.dark_mode = true;
@@ -267,6 +271,8 @@ pub fn apply_theme(ctx: &egui::Context) {
     style.spacing.item_spacing = Vec2::new(8.0, 6.0);
     style.spacing.button_padding = Vec2::new(12.0, 6.0);
     style.spacing.window_margin = egui::Margin::same(12);
+    // egui 0.35 made each row 20 points: the faces are laid out at 18
+    style.spacing.interact_size.y = 18.0;
 
     style.text_styles.insert(
         title_text_style(),

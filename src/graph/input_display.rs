@@ -86,7 +86,7 @@ pub fn input_display(
         );
     }
     let meter_area = Rect::from_x_y_ranges(rect.left()..=rect.left() + 14.0 * z, rect.top()..=meter_bottom);
-    ui.interact(meter_area, ui.id().with(("input_meters", node_id)), Sense::hover()).on_hover_text(format!(
+    ui.interact(meter_area, ui.scope_id().with(("input_meters", node_id)), Sense::hover()).on_hover_text(format!(
         "Input after Gain: L {} / R {}",
         format_db(meter(0).level_db()),
         format_db(meter(1).level_db()),
@@ -172,7 +172,7 @@ pub fn input_display(
     // --- The Threshold line, draggable ---
     let line_y = y_at(follow_from_db(threshold_db));
     let grab = Rect::from_x_y_ranges(inner.x_range(), line_y - 5.0 * z..=line_y + 5.0 * z);
-    let response = ui.interact(grab, ui.id().with(("input_threshold", node_id)), Sense::drag());
+    let response = ui.interact(grab, ui.scope_id().with(("input_threshold", node_id)), Sense::drag());
     let hot = response.hovered() || response.dragged();
     let green = theme::signal::GATE;
     let line_color = if hot { green } else { green.gamma_multiply(0.7) };

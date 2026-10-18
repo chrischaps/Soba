@@ -236,7 +236,7 @@ impl ShortcutsSheet {
         let two_columns = screen.width() >= left_keys + right_keys + 2.0 * ACTION_WIDTH + COLUMN_GAP + 64.0;
         let mut open = true;
         egui::Window::new("Keyboard Shortcuts")
-            .id(egui::Id::new("keyboard_shortcuts"))
+            .id(egui::Id::unique("keyboard_shortcuts"))
             .open(&mut open)
             .collapsible(false)
             .auto_sized()
@@ -529,7 +529,7 @@ mod tests {
     fn mac_symbols_are_in_the_fonts() {
         let ctx = egui::Context::default();
         theme::install_fonts(&ctx);
-        let _ = ctx.run_ui(Default::default(), |_| {});
+        ctx.run_ui(Default::default(), |_| {}).textures_delta.clear();
         assert!(ctx.fonts_mut(|fonts| fonts.has_glyphs(&FontId::proportional(12.0), "⌘⇧")));
     }
 
@@ -538,21 +538,21 @@ mod tests {
     fn press_space(modifiers: egui::Modifiers) -> (bool, bool) {
         let ctx = egui::Context::default();
         let raw = egui::RawInput {
-            modifiers,
             events: vec![
+                egui::Event::ModifiersChanged(modifiers),
                 egui::Event::Key { key: egui::Key::Space, physical_key: None, pressed: true, repeat: false, modifiers },
                 egui::Event::Text(" ".into()),
             ],
             ..Default::default()
         };
         let mut result = (false, false);
-        let _ = ctx.run_ui(raw, |ui| {
+        ctx.run_ui(raw, |ui| {
             let ctx = ui.ctx();
             result = ctx.input_mut(|i| {
                 let play = consume_play(i);
                 (play, i.key_pressed(egui::Key::Space))
             });
-        });
+        }).textures_delta.clear();
         result
     }
 

@@ -364,9 +364,9 @@ pub(super) fn step_grid(
         responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
     };
 
-    let entry_id = Id::new(("step_entry", node_id));
-    let ear_id = Id::new(("step_ear", node_id));
-    let drag_id = Id::new(("step_drag", node_id));
+    let entry_id = Id::unique(("step_entry", node_id));
+    let ear_id = Id::unique(("step_ear", node_id));
+    let drag_id = Id::unique(("step_drag", node_id));
     let mut entry = egui::Popup::is_id_open(ui.ctx(), entry_id)
         .then(|| ui.data(|d| d.get_temp::<StepEntry>(entry_id)))
         .flatten()
@@ -618,7 +618,7 @@ fn slur(painter: &egui::Painter, from: egui::Rect, to: egui::Rect, wraps: bool, 
 /// The note a drag will land on, floated above its step where the node's
 /// edge can't clip it.
 pub(super) fn drag_badge(ui: &egui::Ui, node_id: NodeId, step: egui::Rect, name: &str, zoom: f32) {
-    let painter = ui.ctx().layer_painter(LayerId::new(Order::Tooltip, Id::new(("step_drag_badge", node_id))));
+    let painter = ui.ctx().layer_painter(LayerId::new(Order::Tooltip, Id::unique(("step_drag_badge", node_id))));
     let font = egui::FontId::proportional((12.0 * zoom).max(11.0));
     let galley = painter.layout_no_wrap(name.to_string(), font, Color32::from_rgb(30, 22, 12));
     let size = galley.size() + egui::vec2(10.0, 4.0);
