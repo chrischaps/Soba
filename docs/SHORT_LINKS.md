@@ -199,10 +199,31 @@ shows it, from `packaging/shortlinks/` against the deployed database:
 
 ```
 npm run garden:pending       # the waiting plants, each with its short link to listen to
-npm run garden:show <id>     # into the garden
-npm run garden:hide <id>     # out of it again; its short link still works
+npm run garden:show <id> …   # into the garden
+npm run garden:hide <id> …   # out of it again; its short link still works
 ```
 
 (`node garden.mjs ... --local` does the same against `wrangler dev`'s
 database.) A whole takedown is still `patches.removed`, which also takes the
 plant out of the garden.
+
+**Seeded with the examples** (#392), so the garden is never empty:
+
+```
+cargo run --release --bin garden_seed            # SOBA_LINKS_URL=http://127.0.0.1:8787 for wrangler dev
+cargo run --release --bin garden_seed -- --dry-run
+```
+
+It plants every example under its own name, by "Soba", opened in the app
+(with no audio device) and encoded as Share encodes it, so an example shared
+from the app later is the same plant, not a twin. Encoding the example files
+themselves would not do: the editor writes parameters a file leaves out, so
+the JSON differs. Nor would a seed in Node, whose JSON differs again. For the
+same reason a link numbers its modules from 1 in order
+(`patch_link::renumbered`): the editor's IDs count up across a session, so
+without it an example opened second made a different link from one opened
+first. One plant every
+twelve seconds keeps it inside the rate limit (about five minutes for all
+of them), and it plants the last example first, so the garden, newest
+first, reads in the Examples menu's order. It ends by printing the
+`npm run garden:show -- <id> …` that lists them all.

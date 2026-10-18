@@ -309,6 +309,26 @@ fn describe_length(length: usize) -> String {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+impl SynthApp {
+    /// Each example as Share sends it once it's opened: its title and its
+    /// link's payload (`1.<data>`), or why it can't go by link. Opened in an
+    /// app with no audio device. The garden's seed (`--bin garden_seed`,
+    /// #392) plants these, so an example shared later is the same short link.
+    pub fn shared_examples() -> Vec<(&'static str, Result<(String, String), ShareError>)> {
+        crate::persistence::EXAMPLES
+            .iter()
+            .map(|example| {
+                let mut app = SynthApp::with_devices(Err(crate::engine::AudioError::NoOutputDevice), None);
+                app.open_example(example);
+                let title = app.document.title();
+                let fragment = patch_link::fragment(&app.create_patch(&title));
+                (example.name, fragment.map(|f| (title, f.strip_prefix("p=").unwrap_or(&f).to_string())))
+            })
+            .collect()
+    }
+}
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod round {
     use super::*;
@@ -331,6 +351,23 @@ mod round {
 
     fn example(name: &str) -> &'static crate::persistence::Example {
         EXAMPLES.iter().find(|e| e.name == name).expect("the example")
+    }
+
+    /// The link to `name`, opened in `app`.
+    fn shared(app: &mut SynthApp, name: &str) -> String {
+        app.open_example(example(name));
+        patch_link::fragment(&app.create_patch(name)).unwrap()
+    }
+
+    #[test]
+    fn a_patch_makes_the_same_link_whatever_was_open_before() {
+        let headless = || SynthApp::with_devices(Err(crate::engine::AudioError::NoOutputDevice), None);
+        // Breakdown's Scenes keep its knobs by module, and Canopy has groups
+        let fresh = [shared(&mut headless(), "Breakdown"), shared(&mut headless(), "Canopy")];
+        let mut app = headless();
+        shared(&mut app, "Orrery");
+        assert_eq!(shared(&mut app, "Breakdown"), fresh[0]);
+        assert_eq!(shared(&mut app, "Canopy"), fresh[1]);
     }
 
     #[test]

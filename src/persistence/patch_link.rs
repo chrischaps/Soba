@@ -11,13 +11,14 @@
 //! by the browser as the example's are; a patch that plays the user's own
 //! files can't be shared this way, and [`ShareError::OwnFiles`] names them.
 
+use std::collections::HashMap;
 use std::fmt;
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 
 use super::sample_files::{self, EXAMPLE_PREFIX};
-use super::{patch_from_json, Patch};
+use super::{patch_from_json, ConnectionData, GroupData, NodeData, Patch};
 
 /// Where the full app plays in the browser. A link is this with `#p=…`.
 pub const PLAY_URL: &str = "https://soba.chaps.dev/";
@@ -58,13 +59,14 @@ impl fmt::Display for ShareError {
 }
 
 /// The fragment for `patch`, `p=1.<data>`, without the `#`. Its samples
-/// must be named by key, as the editor names them.
+/// must be named by key, as the editor names them. Its modules are
+/// [`renumbered`], so the same patch always makes the same link.
 pub fn fragment(patch: &Patch) -> Result<String, ShareError> {
     let own = own_files(patch);
     if !own.is_empty() {
         return Err(ShareError::OwnFiles(own));
     }
-    let json = serde_json::to_vec(patch).map_err(|e| ShareError::Json(e.to_string()))?;
+    let json = serde_json::to_vec(&renumbered(patch)).map_err(|e| ShareError::Json(e.to_string()))?;
     let deflated = miniz_oxide::deflate::compress_to_vec(&json, LEVEL);
     Ok(format!("{KEY}{VERSION}.{}", URL_SAFE_NO_PAD.encode(deflated)))
 }
@@ -119,6 +121,50 @@ pub fn patch_from_fragment(fragment: &str) -> Result<Patch, String> {
     patch_from_json(&json).map_err(|e| e.to_string())
 }
 
+/// `patch` with its modules and groups numbered from 1, in the order
+/// they're met: each level's modules, then each of its groups and what's
+/// inside it. The editor saves the engine's IDs, which count up across
+/// the session, so the same patch opened after another would otherwise
+/// make a different link, and a different short link (the service names
+/// a patch by a hash of its JSON).
+pub fn renumbered(patch: &Patch) -> Patch {
+    fn number(nodes: &[NodeData], groups: &[GroupData], ids: &mut HashMap<u64, u64>) {
+        for id in nodes.iter().map(|node| node.id) {
+            let next = ids.len() as u64 + 1;
+            ids.entry(id).or_insert(next);
+        }
+        for group in groups {
+            let next = ids.len() as u64 + 1;
+            ids.entry(group.id).or_insert(next);
+            number(&group.nodes, &group.groups, ids);
+        }
+    }
+    fn apply(nodes: &mut [NodeData], connections: &mut [ConnectionData], groups: &mut [GroupData], ids: &HashMap<u64, u64>) {
+        let new = |id: &mut u64| *id = ids.get(id).copied().unwrap_or(*id);
+        for node in nodes {
+            new(&mut node.id);
+            // A Scenes module's scenes are kept by module
+            crate::graph::scenes::remap(&mut node.scenes, |id| Some(ids.get(&id).copied().unwrap_or(id)));
+        }
+        for connection in connections {
+            new(&mut connection.from_node);
+            new(&mut connection.to_node);
+        }
+        for group in groups {
+            new(&mut group.id);
+            apply(&mut group.nodes, &mut group.connections, &mut group.groups, ids);
+        }
+    }
+    let mut ids = HashMap::new();
+    number(&patch.nodes, &patch.groups, &mut ids);
+    let mut patch = patch.clone();
+    apply(&mut patch.nodes, &mut patch.connections, &mut patch.groups, &ids);
+    for mapping in &mut patch.midi_mappings {
+        mapping.node_id = ids.get(&mapping.node_id).copied().unwrap_or(mapping.node_id);
+    }
+    patch
+}
+
 /// The names of the files `patch` plays that don't ship with the app, in
 /// the order they're met, each once.
 pub fn own_files(patch: &Patch) -> Vec<String> {
@@ -155,8 +201,11 @@ mod tests {
             keyed(&mut patch);
             let link = link(&patch).unwrap_or_else(|e| panic!("{}: {e}", example.name));
             let (_, fragment) = link.split_once('#').unwrap();
+            let patch = renumbered(&patch);
             assert_eq!(patch_from_fragment(fragment).unwrap(), patch, "{}", example.name);
             assert_eq!(patch_from_fragment(&format!("#{fragment}")).unwrap(), patch);
+            // Already numbered as a link numbers it, it makes the same link
+            assert_eq!(super::link(&patch).unwrap(), link, "{}", example.name);
             lengths.push((link.len(), example.name));
         }
         // `cargo test --lib patch_link -- --nocapture` lists them, for the PR
@@ -164,6 +213,42 @@ mod tests {
         for (length, name) in &lengths {
             println!("{:>7} chars  {name}", length);
         }
+    }
+
+    #[test]
+    fn a_link_numbers_its_modules_in_order() {
+        use crate::persistence::{ConnectionData, GroupData, MidiMapping};
+        use std::collections::BTreeMap;
+        // As the editor saves it after other patches: IDs from far along
+        let mut patch = Patch::new("late");
+        let mut scenes = NodeData::new(70, "util.scenes", (0.0, 0.0));
+        scenes.scenes.insert("A".into(), BTreeMap::from([(40, BTreeMap::from([("Cutoff".to_string(), 0.5)]))]));
+        patch.nodes = vec![NodeData::new(40, "filter.svf", (0.0, 0.0)), scenes];
+        let mut group = GroupData {
+            id: 90,
+            name: "Voice".into(),
+            position: (0.0, 0.0),
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            inputs_position: (0.0, 0.0),
+            outputs_position: (0.0, 0.0),
+            nodes: vec![NodeData::new(55, "osc.sine", (0.0, 0.0))],
+            connections: Vec::new(),
+            groups: Vec::new(),
+        };
+        group.connections.push(ConnectionData::new(55, "Out", 90, "Out"));
+        patch.groups.push(group);
+        patch.connections.push(ConnectionData::new(90, "Out", 40, "In"));
+        patch.midi_mappings.push(MidiMapping::new(1, 0, 40, 0, "Cutoff", 0.0, 1.0));
+
+        let link = renumbered(&patch);
+        assert_eq!(link.nodes.iter().map(|n| n.id).collect::<Vec<_>>(), [1, 2]);
+        assert_eq!((link.groups[0].id, link.groups[0].nodes[0].id), (3, 4));
+        assert_eq!((link.groups[0].connections[0].from_node, link.groups[0].connections[0].to_node), (4, 3));
+        assert_eq!((link.connections[0].from_node, link.connections[0].to_node), (3, 1));
+        assert_eq!(link.midi_mappings[0].node_id, 1);
+        assert!(link.nodes[1].scenes["A"].contains_key(&1));
+        assert_eq!(renumbered(&link), link);
     }
 
     #[test]
