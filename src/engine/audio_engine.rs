@@ -154,18 +154,27 @@ fn system_host() -> Result<Host, AudioError> {
 /// page's own thread, between drawing frames. Firefox runs late now and then
 /// at the default 2048 frames (it drops a buffer every few seconds on Lush
 /// Pad), and not at all at 4096; Chrome and Safari keep up at 2048, with
-/// half the delay. An AudioWorklet renders the browser's own quantum, 128
-/// frames, on its audio thread (#375).
+/// half the delay. An embed (`?patch=`) takes 4096 everywhere: drawing a
+/// big patch can take longer than a 2048-frame buffer leaves spare, and
+/// index.html holds frames back only while one fits (#387). An embed is for
+/// listening, so the delay matters less there. An AudioWorklet renders the
+/// browser's own quantum, 128 frames, on its audio thread (#375).
 #[cfg(target_arch = "wasm32")]
 fn web_buffer() -> BufferSize {
     #[cfg(all(feature = "web-worklet", target_feature = "atomics"))]
     if cpal::host_from_id(cpal::HostId::AudioWorklet).is_ok() {
         return BufferSize::Default;
     }
-    let firefox = web_sys::window()
+    let window = web_sys::window();
+    let firefox = window
+        .as_ref()
         .and_then(|w| w.navigator().user_agent().ok())
         .is_some_and(|agent| agent.contains("Firefox/"));
-    if firefox { BufferSize::Fixed(4096) } else { BufferSize::Default }
+    let embed = window
+        .and_then(|w| w.location().search().ok())
+        .and_then(|search| web_sys::UrlSearchParams::new_with_str(&search).ok())
+        .is_some_and(|params| params.has("patch"));
+    if firefox || embed { BufferSize::Fixed(4096) } else { BufferSize::Default }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

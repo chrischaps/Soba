@@ -184,7 +184,7 @@
             // moved on by however late it fell, leaving one gap (a dropout)
             // instead of garbled sound from then on. The dropouts are counted
             // in sobaAudioStats, for the browser tests.
-            const stats = { buffers: 0, late: 0, lagMs: 0, peak: 0, renderMs: 0, renderMaxMs: 0, load: 0 };
+            const stats = { buffers: 0, late: 0, lagMs: 0, peak: 0, renderMs: 0, renderMaxMs: 0, load: 0, frames: 0, heldFrames: 0, frameMs: 0 };
             window.sobaAudioStats = () => worklet ? { ...worklet, host: "audioworklet", renderMs: +renderMs.toFixed(2), renderMaxMs: +renderMax.toFixed(2), contexts: contexts.map((c) => c.state) } : ({ ...stats, host: "webaudio", lagMs: Math.round(stats.lagMs), renderMs: +stats.renderMs.toFixed(1), renderMaxMs: +stats.renderMaxMs.toFixed(1), load: Math.round(stats.load * 100), contexts: contexts.map((c) => c.state) });
             // The status bar's meter (src/app/web.rs): how much of each
             // buffer's time went to the page, as a percentage. A buffer's
@@ -212,10 +212,12 @@
                 if (type !== "ended") return listen.call(this, type, fn, ...rest);
                 return listen.call(this, type, function (...args) {
                     const end = ends.get(this);
+                    playing.delete(this);
                     const waitMs = end === undefined ? 0 : Math.max(0, this.context.currentTime - end) * 1000;
                     const t0 = performance.now();
                     const result = fn.apply(this, args);
                     const ms = performance.now() - t0;
+                    releaseFrames();
                     stats.renderMs = stats.renderMs * 0.95 + ms * 0.05;
                     stats.renderMaxMs = Math.max(stats.renderMaxMs, ms);
                     if (this.buffer) {
@@ -241,12 +243,80 @@
                     }
                     when += shift;
                 }
-                if (this.buffer) ends.set(this, Math.max(when, ctx.currentTime) + this.buffer.duration);
+                if (this.buffer) {
+                    ends.set(this, Math.max(when, ctx.currentTime) + this.buffer.duration);
+                    playing.add(this);
+                }
                 stats.buffers += 1;
                 if (this.buffer && stats.buffers % 8 === 0) {
                     for (const x of this.buffer.getChannelData(0)) stats.peak = Math.max(stats.peak, Math.abs(x));
                 }
                 return start.call(this, when, ...rest);
+            };
+
+            // Frames wait for the sound (#387). The next buffer is rendered
+            // when the one before it ends, and a frame still drawing then
+            // makes it wait: drawing a big patch can take longer than the
+            // buffer has to spare. So a frame that would still be drawing
+            // when a buffer is due holds back until that buffer is rendered,
+            // then draws in the next one's long gap. The picture loses a
+            // frame now and then; the sound stops dropping out. In an
+            // AudioWorklet nothing plays through here, so nothing is held.
+            const playing = new Set();
+            const nativeFrame = window.requestAnimationFrame.bind(window);
+            const nativeCancel = window.cancelAnimationFrame.bind(window);
+            // A recent long frame: it jumps to a slow one and eases down
+            let frameMs = 0;
+            // The app's frame ids, as the browser's or held for a buffer
+            let nextFrame = 1;
+            const frames = new Map(), held = new Map();
+            // How long until the next buffer ends, in ms
+            const dueMs = () => {
+                let due = Infinity;
+                for (const source of playing) {
+                    if (source.context.state !== "running") continue;
+                    due = Math.min(due, (ends.get(source) - source.context.currentTime) * 1000);
+                }
+                return due;
+            };
+            const draw = (id, fn, time) => {
+                frames.delete(id);
+                stats.frames += 1;
+                const t0 = performance.now();
+                try {
+                    fn(time);
+                } finally {
+                    frameMs = Math.max(performance.now() - t0, frameMs * 0.95);
+                    stats.frameMs = Math.round(frameMs);
+                }
+            };
+            const later = (id, fn) => frames.set(id, nativeFrame((time) => draw(id, fn, time)));
+            const releaseFrames = () => {
+                for (const [id, { fn, timer }] of held) {
+                    clearTimeout(timer);
+                    later(id, fn);
+                }
+                held.clear();
+            };
+            window.requestAnimationFrame = (fn) => {
+                const id = nextFrame++;
+                frames.set(id, nativeFrame((time) => {
+                    const due = dueMs();
+                    // steadiness.mjs --no-hold turns this off, to compare
+                    if (due >= frameMs + 3 || window.sobaHoldFrames === false) return draw(id, fn, time);
+                    // Never for long, in case the buffer's end never comes
+                    frames.delete(id);
+                    stats.heldFrames += 1;
+                    const timer = setTimeout(() => held.delete(id) && later(id, fn), Math.max(due, 0) + 30);
+                    held.set(id, { fn, timer });
+                }));
+                return id;
+            };
+            window.cancelAnimationFrame = (id) => {
+                if (frames.has(id)) nativeCancel(frames.get(id));
+                if (held.has(id)) clearTimeout(held.get(id).timer);
+                frames.delete(id);
+                held.delete(id);
             };
         })();
 

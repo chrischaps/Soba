@@ -9,7 +9,11 @@
 //   (cd tools/web && npm install && npx playwright install firefox)
 //   trunk build --release
 //   node tools/web/steadiness.mjs [--dist dist] [--browsers chrome,firefox]
-//        [--patches canopy,orrery] [--seconds 30] [--isolated]
+//        [--patches canopy,orrery] [--seconds 30] [--isolated] [--no-hold] [--headed]
+//
+// --no-hold draws every frame when it comes, as the page did before #387,
+// rather than holding one back for a buffer about to be rendered. --headed
+// shows the browsers: headless, Chrome draws without the GPU, far slower.
 //
 // --isolated serves the page cross-origin isolated (COOP and COEP headers),
 // as isolate-sw.js makes it on soba.chaps.dev, so a threaded build
@@ -37,6 +41,8 @@ const patches = option("patches", "lush-pad,canopy,clair-de-satellite,orrery").s
 const seconds = Number(option("seconds", "30"));
 const held = option("keys", "lush-pad").split(",");
 const isolated = args.includes("--isolated");
+const noHold = args.includes("--no-hold");
+const headless = !args.includes("--headed");
 const ISOLATION = { "cross-origin-opener-policy": "same-origin", "cross-origin-embedder-policy": "require-corp" };
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".wav": "audio/wav", ".json": "application/json" };
@@ -55,9 +61,9 @@ await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
 const origin = `http://127.0.0.1:${server.address().port}`;
 
 const launch = {
-    chrome: () => chromium.launch({ channel: "chrome", args: ["--autoplay-policy=no-user-gesture-required"] }),
-    edge: () => chromium.launch({ channel: "msedge", args: ["--autoplay-policy=no-user-gesture-required"] }),
-    firefox: () => firefox.launch({ firefoxUserPrefs: { "media.autoplay.default": 0 } }),
+    chrome: () => chromium.launch({ headless, channel: "chrome", args: ["--autoplay-policy=no-user-gesture-required"] }),
+    edge: () => chromium.launch({ headless, channel: "msedge", args: ["--autoplay-policy=no-user-gesture-required"] }),
+    firefox: () => firefox.launch({ headless, firefoxUserPrefs: { "media.autoplay.default": 0 } }),
 };
 
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
@@ -74,12 +80,16 @@ const spread = (all, from, to) => {
     return [mean.toFixed(1), (times[Math.floor(times.length * 0.95)] ?? 0).toFixed(1)];
 };
 
+// The page's thread only: in a worklet build frames aren't counted
+const fps = (from, to, secs) => from.frames === undefined ? "n/a" : Math.round((to.frames - from.frames) / secs);
+
 async function measure(browserName, patch) {
     const browser = await launch[browserName]();
     const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
     // Every buffer's render time, not just index.html's running average:
     // this wraps the "ended" handler before index.html's own wrapper does
-    await page.addInitScript(() => {
+    await page.addInitScript((noHold) => {
+        if (noHold) window.sobaHoldFrames = false;
         window.sobaRenders = [];
         const listen = AudioBufferSourceNode.prototype.addEventListener;
         AudioBufferSourceNode.prototype.addEventListener = function (type, fn, ...rest) {
@@ -91,7 +101,7 @@ async function measure(browserName, patch) {
                 return result;
             }, ...rest);
         };
-    });
+    }, noHold);
     await page.goto(`${origin}/?patch=${patch}`);
     // The app is up once it has taken the loading screen away
     await page.waitForFunction(() => !document.getElementById("loading") || document.getElementById("loading").style.display === "none" || !document.getElementById("loading").isConnected, null, { timeout: 120000 }).catch(() => {});
@@ -133,6 +143,11 @@ async function measure(browserName, patch) {
         // The status bar's meter (#374): the page's share of each buffer, smoothed
         loadStill: still.load,
         loadMoving: moving.load,
+        // Frames drawn a second, and frames held back for a buffer (index.html, #387)
+        fpsStill: fps(begin, still, seconds / 2),
+        fpsMoving: fps(still, moving, seconds / 2),
+        held: (moving.heldFrames ?? 0) - (begin.heldFrames ?? 0),
+        frameMs: moving.frameMs,
         peak: +moving.peak.toFixed(3),
         contexts: moving.contexts.join(","),
         host: moving.host,
@@ -149,8 +164,8 @@ for (const browserName of browsers) {
     }
 }
 server.close();
-console.log("\n| Browser | Host | Patch | Late (still) | Late (dragging) | Render still (mean, p95) | Render dragging (mean, p95) | Load (still, dragging) | Buffers | Peak |");
-console.log("|---|---|---|---|---|---|---|---|---|---|");
+console.log("\n| Browser | Host | Patch | Late (still) | Late (dragging) | Render still (mean, p95) | Render dragging (mean, p95) | Load (still, dragging) | Frames/s (still, dragging) | Held | Buffers | Peak |");
+console.log("|---|---|---|---|---|---|---|---|---|---|---|---|");
 for (const r of rows) {
-    console.log(`| ${r.browser} | ${r.host} | ${r.patch} | ${r.lateStill} | ${r.lateMoving} | ${r.renderStill.join(", ")} ms | ${r.renderMoving.join(", ")} ms | ${r.loadStill}%, ${r.loadMoving}% | ${r.buffers} | ${r.peak} |`);
+    console.log(`| ${r.browser} | ${r.host} | ${r.patch} | ${r.lateStill} | ${r.lateMoving} | ${r.renderStill.join(", ")} ms | ${r.renderMoving.join(", ")} ms | ${r.loadStill}%, ${r.loadMoving}% | ${r.fpsStill}, ${r.fpsMoving} | ${r.held} | ${r.buffers} | ${r.peak} |`);
 }

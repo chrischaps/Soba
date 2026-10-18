@@ -214,7 +214,9 @@ of late buffers in 30 seconds, then of the time to render one:
 
 Rendering alone takes a quarter to a half of each buffer, sometimes more,
 and drawing a graph this size shares the thread with it, so a long frame
-or two misses the next buffer. #387 has the ways out.
+or two misses the next buffer. The full app now renders elsewhere (see
+"Sound on the audio thread" below); embeds are steadied on the page's
+thread instead ("Frames wait for the sound").
 
 The browser build is compiled with wasm's 128-bit SIMD (`+simd128`, in
 `.cargo/config.toml`) and `wasm-opt -O3`. Every browser that runs Soba has
@@ -278,8 +280,8 @@ page thread may not wait on a lock at all (it traps), so the UI side spins
 on `try_lock` in the threaded build (`lock_processor`). The allocator's lock
 on wasm already spins.
 
-Embeds on docs.chaps.dev are unchanged: the plain build, on the page's
-thread. Isolating them would take the docs site isolating its own pages
+Embeds on docs.chaps.dev stay on the plain build, on the page's thread
+(steadied there as below). Isolating them would take the docs site isolating its own pages
 too, and every iframe opting in.
 
 ### How steady it is there
@@ -327,6 +329,46 @@ machine these were measured on, a bare AudioContext playing a sine reports
 
 Not tested: Safari (the plain build still), a phone, and the docs site's
 embeds isolated.
+
+## Frames wait for the sound
+
+An embed can't use the worklet, so it keeps rendering on the page's thread,
+in the `ended` event of the buffer before. A frame of a big patch takes
+30–45 ms to draw in Chrome and Firefox, headless or not, and a frame still
+drawing when a buffer ends makes the next one late. Two changes steady it
+(#387):
+
+- **Frames wait for a buffer.** `index.html` wraps `requestAnimationFrame`:
+  when a frame comes while the next buffer is due sooner than a recent long
+  frame took to draw, it's held until that buffer has been rendered, then
+  drawn in the long gap after. A frame is never held more than 30 ms past
+  the buffer's end, in case that end never comes. In a worklet nothing
+  plays through `AudioBufferSourceNode`, so nothing is held.
+- **Embeds take 4096-frame buffers everywhere** (`web_buffer`), as Firefox
+  already did. At 2048 a 43 ms buffer leaves about 30 ms after its render,
+  less than a heavy frame, so no frame fits between buffers. 4096 leaves
+  about 65 ms, for about 45 ms more delay, which an embed, made for
+  listening, can spare.
+
+`tools/web/steadiness.mjs` in both browsers, headless, as embeds; each cell
+is late buffers while still, then while dragging, and frames drawn a second
+while dragging. `--no-hold` is the same build with frames drawn as they
+come:
+
+| Browser | Frames | Lush Pad | Canopy | Clair de Satellite | Orrery |
+|---|---|---|---|---|---|
+| Chrome, 2048 (before) | as they come | 0, 0 | 106, 136 | 47, 122 | 79, 143 |
+| Chrome, 4096 | as they come | 0, 0; 60 fps | 17, 3; 19 fps | 0, 0; 24 fps | 0, 3; 17 fps |
+| Chrome, 4096 | **held** | 0, 0; 54 fps | **0, 0**; 12 fps | **0, 0**; 13 fps | **0, 0**; 12 fps |
+| Firefox, 4096 (before) | as they come | 0, 0 | 1, 41 | 0, 3 | 0, 1 |
+| Firefox, 4096 | **held** | 0, 0; 53 fps | **0, 0**; 12 fps | **0, 0**; 14 fps | **0, 0**; 12 fps |
+
+The price is the picture: a heavy patch draws at 12–14 frames a second
+while it plays, against 17–24 drawing as they come, because the gap after
+each buffer fits one long frame. Holding at 2048 alone helped (Chrome's
+Canopy went from 214 late to 6) but couldn't fit Orrery's frames while
+dragging (67 late), hence the bigger buffer too. Not measured: Safari, and
+a phone, whose frames are slower still.
 
 ## MIDI devices
 
