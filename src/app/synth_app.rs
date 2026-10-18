@@ -2378,19 +2378,34 @@ impl SynthApp {
     /// one without a window, and the plugin (`plugin/`) in its own.
     pub fn draw_frame(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
-        // Apply theme on first frame
-        if !self.theme_applied {
-            theme::apply_theme(ctx);
-            // This frame's Ui was made before the theme, so it takes it now
-            ui.set_style(ctx.global_style());
-            self.theme_applied = true;
-            // MIDI arriving draws a frame, so the pianos, Monitor and Learn
-            // follow it without the UI drawing all the time
-            if let Some(midi) = &self.midi.engine {
-                midi.set_waker(ctx);
-            }
-        }
+        self.apply_theme_once(ui);
+        self.before_drawing(ctx);
+        let mut actions = self.take_shortcuts(ctx);
+        self.draw_panels(ui, &mut actions);
+        self.after_drawing(ctx, actions);
+    }
 
+    /// Apply theme on first frame
+    fn apply_theme_once(&mut self, ui: &mut egui::Ui) {
+        if self.theme_applied {
+            return;
+        }
+        let ctx = ui.ctx().clone();
+        theme::apply_theme(&ctx);
+        // This frame's Ui was made before the theme, so it takes it now
+        ui.set_style(ctx.global_style());
+        self.theme_applied = true;
+        // MIDI arriving draws a frame, so the pianos, Monitor and Learn
+        // follow it without the UI drawing all the time
+        if let Some(midi) = &self.midi.engine {
+            midi.set_waker(&ctx);
+        }
+    }
+
+    /// Before anything is drawn: a capture's audio, what the browser handed
+    /// over, the engine's events, the devices, the status bar's clock and
+    /// the meters.
+    fn before_drawing(&mut self, ctx: &egui::Context) {
         // A capture renders this frame's audio before anything is drawn
         self.step_capture(ctx);
 
@@ -2465,7 +2480,11 @@ impl SynthApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.request(ctx, Discard::Quit);
         }
+    }
 
+    /// The keys pressed this frame: the shortcuts sheet's, the app's (as
+    /// actions, returned), editing's and the musical keyboard's.
+    fn take_shortcuts(&mut self, ctx: &egui::Context) -> Vec<AppAction> {
         let prompt_open = self.prompt_open();
         // F1 shows the shortcuts. Escape puts them away before it does
         // anything else, unless a text field or the palette has it
@@ -2479,7 +2498,7 @@ impl SynthApp {
         // bypass, record and play only on the canvas (see actions::KEYS)
         let typing = crate::widgets::typing(ctx);
         let on_canvas = !typing && self.quick_add.is_none() && !prompt_open;
-        let mut actions = if prompt_open {
+        let actions = if prompt_open {
             Vec::new()
         } else {
             actions::pressed(ctx, typing, on_canvas, self.hosted.is_some())
@@ -2498,7 +2517,13 @@ impl SynthApp {
 
         // Handle musical keyboard input (QWERTY to notes)
         self.handle_keyboard_events(ctx);
+        actions
+    }
 
+    /// The toolbar, the status bar and the canvas, or an embed's bar over
+    /// the canvas. What their buttons ask for joins `actions`.
+    fn draw_panels(&mut self, ui: &mut egui::Ui, actions: &mut Vec<AppAction>) {
+        let ctx = &ui.ctx().clone();
         if !self.embedded {
             // Top toolbar panel
             let toolbar_actions = egui::Panel::top("toolbar")
@@ -2533,7 +2558,11 @@ impl SynthApp {
         if self.embedded && self.draw_embed_bar(ctx) {
             actions.push(AppAction::TogglePlaying);
         }
+    }
 
+    /// Once the window is drawn: what it asked for, the notes and prompts
+    /// over it, the engine brought up to date, and the undo step.
+    fn after_drawing(&mut self, ctx: &egui::Context, actions: Vec<AppAction>) {
         // Followers take their leaders' sections, in the same undo step
         self.follow_arrangers();
         self.user_state.poly_note_ins = crate::graph::note_in_face::poly_note_ins(&self.graph_state.graph);
@@ -2550,6 +2579,44 @@ impl SynthApp {
         // Process pending MIDI events
         self.process_midi_events(ctx.input(|i| i.time));
 
+        self.show_notes(ctx);
+
+        // Help ▸ Keyboard Shortcuts, its piano lit by the keys held
+        if self.shortcuts.open {
+            let held: Vec<i32> = self.pressed_keys.iter().map(|(note, _)| *note).collect();
+            self.shortcuts.show(ctx, self.editor_rect, &held);
+        }
+        self.show_variations(ctx);
+        // A lesson's caption, glows and ghost, over the editor
+        self.tend_lesson(ctx);
+
+        // "Save changes?" and crash recovery, over everything else
+        self.show_prompts(ctx);
+
+        self.sync_engine(ctx);
+
+        // The title names the patch, with a dot while it has unsaved changes
+        if let Some(title) = self.document.new_window_title(self.has_unsaved_changes()) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
+        }
+
+        if let Some(capture) = self.capture.as_mut() {
+            capture.draw_cursor(ctx);
+            capture.end_frame(ctx);
+            if capture.finish() {
+                // A take the script recorded isn't the patch's to keep
+                #[cfg(not(target_arch = "wasm32"))]
+                self.tidy_takes_on_leave();
+                self.document.allow_close = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        }
+        // Then the frames of a long warmup that would look no different
+        self.fast_forward_capture(ctx);
+    }
+
+    /// The notes stacked in the corner: a finished take, a link, and new versions.
+    fn show_notes(&mut self, ctx: &egui::Context) {
         // A stopped take's note, once its file is finished
         self.poll_recording(ctx);
         let mut corner = 0.0;
@@ -2585,19 +2652,11 @@ impl SynthApp {
             self.run_updates(ctx, corner);
         }
         let _ = corner;
+    }
 
-        // Help ▸ Keyboard Shortcuts, its piano lit by the keys held
-        if self.shortcuts.open {
-            let held: Vec<i32> = self.pressed_keys.iter().map(|(note, _)| *note).collect();
-            self.shortcuts.show(ctx, self.editor_rect, &held);
-        }
-        self.show_variations(ctx);
-        // A lesson's caption, glows and ghost, over the editor
-        self.tend_lesson(ctx);
-
-        // "Save changes?" and crash recovery, over everything else
-        self.show_prompts(ctx);
-
+    /// Brings the engine up to date with whatever this frame did: its
+    /// cables, Samplers and input latency, and the undo step, then ships it.
+    fn sync_engine(&mut self, ctx: &egui::Context) {
         // The engine's cables follow whatever this frame did to the graph's
         self.sync_cables();
         // ...and its Samplers the files their nodes name. One the browser is
@@ -2638,25 +2697,6 @@ impl SynthApp {
                 ctx.request_repaint_after(std::time::Duration::from_millis(15));
             }
         }
-
-        // The title names the patch, with a dot while it has unsaved changes
-        if let Some(title) = self.document.new_window_title(self.has_unsaved_changes()) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
-        }
-
-        if let Some(capture) = self.capture.as_mut() {
-            capture.draw_cursor(ctx);
-            capture.end_frame(ctx);
-            if capture.finish() {
-                // A take the script recorded isn't the patch's to keep
-                #[cfg(not(target_arch = "wasm32"))]
-                self.tidy_takes_on_leave();
-                self.document.allow_close = true;
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-        }
-        // Then the frames of a long warmup that would look no different
-        self.fast_forward_capture(ctx);
     }
 }
 
