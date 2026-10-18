@@ -142,7 +142,7 @@ impl SynthApp {
         self.stop_listening_audition();
         let opened = patch_link::patch_from_fragment(link).and_then(|patch| {
             let channels = crate::engine::audition_channels(&patch);
-            self.open_linked(patch)?;
+            self.open_linked(patch, None)?;
             Ok(channels)
         });
         match opened {

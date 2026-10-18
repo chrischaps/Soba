@@ -57,9 +57,9 @@ enum NoteKind {
     OwnFiles(Vec<String>),
     /// Something went wrong: what, and why.
     Failed(&'static str, String),
-    /// Fetching the patch a short link names. At launch nothing else is
-    /// open yet, so First Sound opens if it can't be had.
-    Opening { answer: Receiver<Answer>, launch: bool },
+    /// Fetching the patch the short link `id` names. At launch nothing else
+    /// is open yet, so First Sound opens if it can't be had.
+    Opening { answer: Receiver<Answer>, id: String, launch: bool },
     /// It was opened from a link, and is waiting to be played.
     Opened(String),
 }
@@ -78,8 +78,9 @@ enum Copied {
 pub(super) enum ShareAction {
     SaveAs,
     Play,
-    /// Open this long link's fragment (`p=1.…`), asking first about unsaved changes.
-    OpenLink(String),
+    /// Open this long link's fragment (`p=1.…`), asking first about unsaved
+    /// changes: the patch the short link with this ID named.
+    OpenLink(String, String),
     /// A link at launch couldn't be opened: open what launching would.
     OpenOnLaunch,
 }
@@ -106,18 +107,29 @@ impl SynthApp {
     /// Opens the patch a link's fragment holds (`p=1.…`), stopped, or says
     /// why it can't, leaving the patch that's open as it was.
     pub fn open_from_link(&mut self, fragment: &str) -> Result<(), String> {
-        self.open_linked(patch_link::patch_from_fragment(fragment)?)
+        self.open_linked(patch_link::patch_from_fragment(fragment)?, None)
     }
 
-    /// Opens `patch`, from a link, stopped, or says why it can't.
-    pub(super) fn open_linked(&mut self, patch: Patch) -> Result<(), String> {
+    /// Opens the patch a link's fragment holds, as `open_from_link` does,
+    /// remembering the short link `grown_from` it came by, if it did (#395).
+    pub(super) fn open_from_link_by(&mut self, fragment: &str, grown_from: Option<String>) -> Result<(), String> {
+        self.open_linked(patch_link::patch_from_fragment(fragment)?, grown_from)
+    }
+
+    /// Opens `patch`, from a link, stopped, or says why it can't. A short
+    /// link's ID is `grown_from`.
+    pub(super) fn open_linked(&mut self, patch: Patch, grown_from: Option<String>) -> Result<(), String> {
         let warnings = self.load_patch(&patch, SampleBase::Keys).map_err(|e| e.to_string())?;
         // Opened from a link, it plays when asked, as an example does
         self.set_playing(false);
         self.fit_on_web();
         // In the browser it's remembered by name only, to offer when it's
         // saved. The desktop asks where, as for an example
-        self.document.opened(WEB.then(|| PathBuf::from(format!("{}.json", patch.name))));
+        let name = WEB.then(|| PathBuf::from(format!("{}.json", patch.name)));
+        match grown_from {
+            Some(id) => self.document.opened_short_link(name, id),
+            None => self.document.opened(name),
+        }
         self.status_message = Some(format!("Opened a shared patch: {}", patch.name));
         self.show_load_warnings(warnings);
         self.share_note = Some(ShareNote { shown_at: 0.0, kind: NoteKind::Opened(patch.name) });
@@ -129,8 +141,14 @@ impl SynthApp {
     pub fn open_short_link(&mut self, ctx: &egui::Context, id: &str, launch: bool) {
         let wake = ctx.clone();
         let answer = short_link::resolve(id.to_string(), move || wake.request_repaint());
+        self.await_short_link(ctx, id, answer, launch);
+    }
+
+    /// Waits for `answer`, the patch the short link `id` names.
+    fn await_short_link(&mut self, ctx: &egui::Context, id: &str, answer: Receiver<Answer>, launch: bool) {
         self.status_message = Some("Opening a shared patch…".to_string());
-        self.share_note = Some(ShareNote { shown_at: ctx.input(|i| i.time), kind: NoteKind::Opening { answer, launch } });
+        let kind = NoteKind::Opening { answer, id: id.to_string(), launch };
+        self.share_note = Some(ShareNote { shown_at: ctx.input(|i| i.time), kind });
     }
 
     /// Says why a link couldn't be opened.
@@ -169,8 +187,8 @@ impl SynthApp {
                 self.share_note = Some(ShareNote { shown_at: now, kind: NoteKind::Copied(copied) });
                 None
             }
-            NoteKind::Opening { launch, .. } => match answer {
-                Ok(payload) => Some(ShareAction::OpenLink(format!("p={payload}"))),
+            NoteKind::Opening { id, launch, .. } => match answer {
+                Ok(payload) => Some(ShareAction::OpenLink(format!("p={payload}"), id)),
                 Err(why) => {
                     self.link_refused(ctx, why);
                     launch.then_some(ShareAction::OpenOnLaunch)
@@ -332,6 +350,7 @@ impl SynthApp {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod round {
     use super::*;
+    use super::super::Discard;
     use crate::persistence::EXAMPLES;
 
     /// The patch with its modules numbered from 0, in order: the engine's
@@ -368,6 +387,47 @@ mod round {
         shared(&mut app, "Orrery");
         assert_eq!(shared(&mut app, "Breakdown"), fresh[0]);
         assert_eq!(shared(&mut app, "Canopy"), fresh[1]);
+    }
+
+    #[test]
+    fn a_patch_from_a_short_link_remembers_it_until_replaced() {
+        let ctx = egui::Context::default();
+        let mut app = SynthApp::with_devices(Err(crate::engine::AudioError::NoOutputDevice), None);
+        let fragment = shared(&mut app, "Lush Pad");
+
+        // `/s/<id>`, `#s=<id>` and a pasted short link all wait the same way
+        let (service, answer) = std::sync::mpsc::channel();
+        app.await_short_link(&ctx, "a1b2c3d4", answer, false);
+        service.send(Ok(fragment.strip_prefix("p=").unwrap().to_string())).unwrap();
+        let Some(ShareAction::OpenLink(link, id)) = app.follow_link_service(&ctx) else { panic!("the patch came") };
+        app.request(&ctx, Discard::OpenLink(link, Some(id)));
+        assert_eq!(app.document.grown_from.as_deref(), Some("a1b2c3d4"));
+
+        // Edited, it's still the link's, and so is its autosave
+        let node = app.graph_state.graph.nodes.keys().next().unwrap();
+        app.graph_state.graph.remove_node(node);
+        app.sync_history();
+        assert!(app.has_unsaved_changes());
+        assert_eq!(app.document.grown_from.as_deref(), Some("a1b2c3d4"));
+        let autosave = app.document.autosave(&app.create_patch("Lush Pad")).unwrap();
+        assert_eq!(autosave.grown_from.as_deref(), Some("a1b2c3d4"));
+        // ...and not the patch's: the file format is the same
+        assert!(!serde_json::to_string(&app.create_patch("Lush Pad")).unwrap().contains("a1b2c3d4"));
+
+        // New, a file, an example and a long link (which has no ID) let it go
+        let replace: [fn(&mut SynthApp, &egui::Context, &str); 4] = [
+            |app, ctx, _| app.perform(ctx, Discard::New),
+            |app, ctx, _| app.perform(ctx, Discard::OpenFile("patches/fm-synthesis.json".into())),
+            |app, ctx, _| app.perform(ctx, Discard::OpenExample(example("Orrery"))),
+            |app, ctx, fragment| app.paste_modules(ctx, &format!("{}#{fragment}", patch_link::PLAY_URL)),
+        ];
+        for replace in replace {
+            app.document.grown_from = Some("a1b2c3d4".into());
+            app.sync_history();
+            replace(&mut app, &ctx, &fragment);
+            assert_eq!(app.document.grown_from, None);
+        }
+        assert!(matches!(&app.share_note, Some(ShareNote { kind: NoteKind::Opened(_), .. })), "the long link opened");
     }
 
     #[test]

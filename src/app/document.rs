@@ -23,6 +23,11 @@ pub struct Document {
     pub path: Option<PathBuf>,
     /// The example the patch was opened from, until it's saved as a file or replaced.
     pub example: Option<&'static Example>,
+    /// The short link the patch was opened from, by ID (#395): through
+    /// `/s/<id>`, `#s=<id>` or a short link pasted onto the canvas. Planting
+    /// the patch names it as the parent. Kept through edits and saves, and
+    /// let go when another patch replaces it. Never written into the patch.
+    pub grown_from: Option<String>,
     /// What loading the file left out (a newer Soba's modules, say), which
     /// saving over it would lose. See `lossy_load`.
     pub dropped_on_load: Vec<String>,
@@ -43,12 +48,21 @@ impl Document {
     pub fn opened(&mut self, path: Option<PathBuf>) {
         self.path = path;
         self.example = None;
+        self.grown_from = None;
+    }
+
+    /// The patch is the one the short link `id` names, with no file yet
+    /// (in the browser, `name` alone, to offer when it's saved).
+    pub fn opened_short_link(&mut self, name: Option<PathBuf>, id: String) {
+        self.opened(name);
+        self.grown_from = Some(id);
     }
 
     /// The patch is `example`'s, with no file.
     pub fn opened_example(&mut self, example: &'static Example) {
         self.path = None;
         self.example = Some(example);
+        self.grown_from = None;
     }
 
     /// A new patch: no file, no example, nothing left out.
@@ -58,10 +72,12 @@ impl Document {
     }
 
     /// The patch was saved to its file, `path`, which now holds all of it.
+    /// It still grew from the link it did.
     pub fn saved(&mut self, path: PathBuf) {
         self.dropped_on_load.clear();
         self.recent.push(&path);
-        self.opened(Some(path));
+        self.path = Some(path);
+        self.example = None;
     }
 
     /// The patch's name: its file's, its example's, or "Untitled".
@@ -110,20 +126,21 @@ impl Document {
         self.pending.is_some() || self.recovery.is_some()
     }
 
-    /// `patch` kept as this document's autosave: its file, its example
-    /// and what its file had that it doesn't.
+    /// `patch` kept as this document's autosave: its file, its example,
+    /// the link it grew from and what its file had that it doesn't.
     pub fn autosave(&self, patch: &Patch) -> Result<Autosave, String> {
         let example = self.example.map(|e| e.name.to_string());
         let autosave = Autosave::new(patch, self.path.clone(), example).map_err(|e| e.to_string())?;
-        Ok(autosave.with_dropped(self.dropped_on_load.clone()))
+        Ok(autosave.with_dropped(self.dropped_on_load.clone()).grown_from(self.grown_from.clone()))
     }
 
-    /// The document an autosave was of, back: its file, its example and
-    /// what its file had that it doesn't.
+    /// The document an autosave was of, back: its file, its example, the
+    /// link it grew from and what its file had that it doesn't.
     pub fn recovered(&mut self, autosave: &Autosave) {
         self.path = autosave.path.clone();
         self.example = autosave.example.as_deref().and_then(|name| EXAMPLES.iter().find(|e| e.name == name));
         self.dropped_on_load = autosave.dropped.clone();
+        self.grown_from = autosave.grown_from.clone();
     }
 }
 
@@ -163,6 +180,41 @@ mod tests {
         doc.dropped_on_load = vec!["x".into()];
         doc.untitled();
         assert!(doc.path.is_none() && doc.dropped_on_load.is_empty());
+    }
+
+    #[test]
+    fn a_patch_grown_from_a_short_link_keeps_it_until_another_replaces_it() {
+        let mut doc = Document::default();
+        doc.opened_short_link(None, "a1b2c3d4".into());
+        assert_eq!(doc.grown_from.as_deref(), Some("a1b2c3d4"));
+        doc.saved(PathBuf::from("mine.json"));
+        assert_eq!(doc.grown_from.as_deref(), Some("a1b2c3d4"), "saving it doesn't change where it grew from");
+
+        // Through a crash and back
+        let patch = Patch::new("mine");
+        let autosave = doc.autosave(&patch).unwrap();
+        let json = serde_json::to_string(&autosave).unwrap();
+        let mut after = Document::default();
+        after.recovered(&serde_json::from_str(&json).unwrap());
+        assert_eq!(after.grown_from.as_deref(), Some("a1b2c3d4"));
+
+        // Anything else that replaces the patch lets it go
+        let replace: [fn(&mut Document); 3] = [
+            |d| d.untitled(),
+            |d| d.opened(Some(PathBuf::from("other.json"))),
+            |d| d.opened_example(&EXAMPLES[0]),
+        ];
+        for replace in replace {
+            let mut doc = Document::default();
+            doc.opened_short_link(None, "a1b2c3d4".into());
+            replace(&mut doc);
+            assert_eq!(doc.grown_from, None);
+        }
+        // An autosave from before it was kept has none
+        let mut old = serde_json::to_value(&autosave).unwrap();
+        old.as_object_mut().unwrap().remove("grown_from");
+        doc.recovered(&serde_json::from_value(old).unwrap());
+        assert_eq!(doc.grown_from, None);
     }
 
     #[test]

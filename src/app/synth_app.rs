@@ -1429,7 +1429,7 @@ impl SynthApp {
     fn paste_modules(&mut self, ctx: &egui::Context, text: &str) {
         // A link to a patch opens it, as following the link would
         if let Some(fragment) = crate::persistence::patch_link::fragment_of(text) {
-            self.request(ctx, Discard::OpenLink(fragment.to_string()));
+            self.request(ctx, Discard::OpenLink(fragment.to_string(), None));
             return;
         }
         if let Some(id) = crate::persistence::short_link::id_of(text) {
@@ -2088,8 +2088,8 @@ impl SynthApp {
             Discard::OpenFile(path) => self.open_file(&path),
             Discard::OpenExample(example) => self.open_example(example),
             Discard::OpenLesson(lesson) => self.open_lesson(lesson),
-            Discard::OpenLink(fragment) => {
-                if let Err(e) = self.open_from_link(&fragment) {
+            Discard::OpenLink(fragment, grown_from) => {
+                if let Err(e) = self.open_from_link_by(&fragment, grown_from) {
                     self.link_refused(ctx, e);
                 }
             }
@@ -2435,7 +2435,7 @@ impl SynthApp {
         if let Some(fragment) = web::take_new_fragment() {
             if crate::persistence::patch_link::holds_patch(&fragment) {
                 web::forget_fragment();
-                self.request(ctx, Discard::OpenLink(fragment));
+                self.request(ctx, Discard::OpenLink(fragment, None));
             } else if let Some(id) = crate::persistence::short_link::id_in_fragment(&fragment) {
                 web::forget_fragment();
                 self.open_short_link(ctx, id, false);
@@ -2653,7 +2653,7 @@ impl SynthApp {
                 self.show_save_dialog();
             }
             Some(share::ShareAction::Play) => self.set_playing(true),
-            Some(share::ShareAction::OpenLink(fragment)) => self.request(ctx, Discard::OpenLink(fragment)),
+            Some(share::ShareAction::OpenLink(fragment, id)) => self.request(ctx, Discard::OpenLink(fragment, Some(id))),
             Some(share::ShareAction::OpenOnLaunch) => self.open_on_launch(None),
             None => {}
         }

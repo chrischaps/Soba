@@ -39,8 +39,9 @@ pub enum Discard {
     OpenExample(&'static Example),
     /// Start a lesson, which opens its own patch.
     OpenLesson(&'static LessonFile),
-    /// Open the patch a link holds: its fragment, `p=1.…`.
-    OpenLink(String),
+    /// Open the patch a link holds: its fragment, `p=1.…`, and the short
+    /// link's ID if it came by one.
+    OpenLink(String, Option<String>),
     Quit,
     /// Restart into a downloaded update.
     #[cfg(not(target_arch = "wasm32"))]
@@ -150,6 +151,9 @@ pub struct Autosave {
     /// What loading `path` left out, which saving over it would lose.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dropped: Vec<String>,
+    /// The short link the patch grew from, by ID (#395).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grown_from: Option<String>,
 }
 
 impl Autosave {
@@ -161,12 +165,18 @@ impl Autosave {
             example,
             patch: serde_json::to_string(patch)?,
             dropped: Vec::new(),
+            grown_from: None,
         })
     }
 
     /// The autosave of a patch whose file has `dropped`, which loading it left out.
     pub fn with_dropped(self, dropped: Vec<String>) -> Self {
         Self { dropped, ..self }
+    }
+
+    /// The autosave of a patch opened from the short link `id`.
+    pub fn grown_from(self, grown_from: Option<String>) -> Self {
+        Self { grown_from, ..self }
     }
 
     pub fn patch(&self) -> Result<Patch, PatchError> {
