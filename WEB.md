@@ -129,7 +129,8 @@ payload (`1.<data>`) under an ID worked out from the patch, at
 (`persistence/short_link.rs`).
 
 - **Sharing** posts the payload and copies the short link. The note says
-  the patch is kept on soba.chaps.dev and offers **Copy the long link
+  the patch is kept on soba.chaps.dev, where anyone with the link can open
+  it (but nobody can find it without), and offers **Copy the long link
   instead**. If the service doesn't answer in 4 seconds, or refuses, the
   long link is copied with a quiet word, never an error.
 - **Opening one:** GitHub Pages serves `packaging/web/404.html` (copied in by
@@ -145,8 +146,24 @@ payload (`1.<data>`) under an ID worked out from the patch, at
   --ignored` checks the app's side against it. `npx wrangler deploy`
   publishes it. That's done by hand, as it changes rarely.
 
-Not yet: a hosted gallery of shared patches with listen-first previews
-rendered by the `render` bin.
+### The Patch Garden
+
+**🌱 Plant** (beside Share, on the desktop too, #396) publishes the patch at
+`soba.chaps.dev/garden`. It asks, in a note, for a title (40 characters) and an
+optional name, kept in the app's storage, and posts
+`{payload, title, name, parent}` to `POST /v1/plants` as `text/plain`, so the
+browser sends no preflight. `parent` is the short link the patch was opened
+from (`Document::grown_from`, #395). Planting goes the way Share does: `ureq` on
+a thread, `fetch` on the web, the note polling an `mpsc` receiver
+(`app/synth_app/plant.rs`).
+
+- **Sharing stores a patch behind a link; planting publishes it.** The note
+  says so before anything is sent, and that a plant appears once approved.
+- **A busy or absent service** (429, a 5xx, no answer in 15 s) gets a quiet
+  note that fades. Words the service turns away come back in the form, in
+  the service's own words. Own files are refused as Share refuses them.
+- **Visit the garden** (in the note, and at the foot of Examples) opens the
+  page in the browser. The desktop has no garden of its own.
 
 This page is the spike report for issue #90: what stood in the way, what
 was done about each, and how steady the sound is.

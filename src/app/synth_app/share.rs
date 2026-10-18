@@ -38,8 +38,7 @@ const MAKING_SECONDS: f64 = 4.0;
 /// How long opening a short link waits for its patch.
 const OPENING_SECONDS: f64 = 15.0;
 
-/// Waited for, and nothing came.
-const UNANSWERED: &str = "the link service didn't answer in time";
+use short_link::UNANSWERED;
 
 /// The note in the corner about sharing.
 pub(super) struct ShareNote {
@@ -149,6 +148,12 @@ impl SynthApp {
         self.status_message = Some("Opening a shared patch…".to_string());
         let kind = NoteKind::Opening { answer, id: id.to_string(), launch };
         self.share_note = Some(ShareNote { shown_at: ctx.input(|i| i.time), kind });
+    }
+
+    /// Says that the patch plays these files of its own, so it can't go by
+    /// link, and offers Save As. Planting (#396) refuses it the same way.
+    pub(super) fn cant_go_by_link(&mut self, ctx: &egui::Context, names: Vec<String>) {
+        self.share_note = Some(ShareNote { shown_at: ctx.input(|i| i.time), kind: NoteKind::OwnFiles(names) });
     }
 
     /// Says why a link couldn't be opened.

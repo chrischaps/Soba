@@ -12,6 +12,10 @@
 //!
 //! Unlike a long link, a short one reaches a server, which keeps the patch.
 //! Share says so, and keeps the long link on offer.
+//!
+//! Planting (#396) goes further: it publishes the patch in the Patch Garden,
+//! `soba.chaps.dev/garden`, with a title, a name and the short link it grew
+//! from. A plant is a short link too, so it's the same ID Share would make.
 
 use std::sync::mpsc::{self, Receiver};
 
@@ -24,6 +28,14 @@ pub const URL_OVERRIDE: &str = "SOBA_LINKS_URL";
 
 /// What a short link is, before its ID.
 pub const SHORT_URL: &str = "https://soba.chaps.dev/s/";
+
+/// The Patch Garden, where planted patches are heard.
+pub const GARDEN_URL: &str = "https://soba.chaps.dev/garden/";
+
+/// Most characters a plant's title may have, and its planter's name: the
+/// service refuses longer.
+pub const TITLE_LENGTH: usize = 40;
+pub const NAME_LENGTH: usize = 24;
 
 /// The fragment key a short link's ID is kept under, once the static page
 /// has handed it to the app.
@@ -87,6 +99,30 @@ pub fn resolve(id: String, wake: impl Fn() + Send + 'static) -> Receiver<Answer>
     receiver
 }
 
+/// What planting sends: the payload a short link keeps (`1.<data>`), a
+/// title, the planter's name if they gave one, and the short link's ID the
+/// patch grew from, if it did.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Plant {
+    pub payload: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    pub parent: Option<String>,
+}
+
+/// Plants a patch in the garden. Its ID arrives on the receiver, and `wake`
+/// is called when it has.
+pub fn plant(plant: &Plant, wake: impl Fn() + Send + 'static) -> Receiver<Answer> {
+    let (sender, receiver) = mpsc::channel();
+    let body = serde_json::to_string(plant).unwrap_or_default();
+    net::plant(api(), body, move |answer| {
+        let _ = sender.send(answer);
+        wake();
+    });
+    receiver
+}
+
 fn api() -> String {
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(url) = std::env::var(URL_OVERRIDE).ok().filter(|url| !url.trim().is_empty()) {
@@ -108,9 +144,13 @@ fn id_from_answer(body: &str) -> Answer {
         .ok_or_else(|| "the link service answered with something else".to_string())
 }
 
-/// Why the service said no, from its status.
-fn refusal(status: u16) -> String {
+/// Why the service said no, from its status and what it said. It says
+/// why it turned a plant away (a title too long, or words it won't keep)
+/// in a short line, which is passed on.
+fn refusal(status: u16, said: &str) -> String {
+    let said = said.trim();
     match status {
+        400 if !said.is_empty() && said.len() <= 80 && !said.contains(['\n', '<']) => said.to_string(),
         404 => "no patch has that link (was it cut short?)".into(),
         410 => "it was taken down".into(),
         413 => "it's too large for a short link".into(),
@@ -121,6 +161,15 @@ fn refusal(status: u16) -> String {
 
 /// The service didn't answer at all.
 const UNREACHABLE: &str = "the link service didn't answer (offline?)";
+
+/// Waited for, and nothing came.
+pub const UNANSWERED: &str = "the link service didn't answer in time";
+
+/// Whether `why` is the service being away or busy, which passes: worth
+/// trying again later, not changing anything.
+pub fn passes(why: &str) -> bool {
+    why == UNREACHABLE || why == UNANSWERED || why == refusal(429, "") || why.starts_with("the link service answered 5")
+}
 
 /// The requests, on a worker thread: they block.
 #[cfg(not(target_arch = "wasm32"))]
@@ -133,38 +182,41 @@ mod net {
         ureq::Agent::config_builder()
             .timeout_connect(Some(Duration::from_secs(3)))
             .timeout_global(Some(Duration::from_secs(8)))
+            .http_status_as_error(false)
             .user_agent(concat!("soba/", env!("CARGO_PKG_VERSION")))
             .build()
             .into()
     }
 
-    fn describe(error: ureq::Error) -> String {
-        match error {
-            ureq::Error::StatusCode(code) => refusal(code),
-            _ => UNREACHABLE.into(),
-        }
+    /// The answer's body, or why there isn't one.
+    fn read(got: Result<ureq::http::Response<ureq::Body>, ureq::Error>) -> Answer {
+        let mut response = got.map_err(|_| UNREACHABLE.to_string())?;
+        let status = response.status().as_u16();
+        let body = response.body_mut().read_to_string().map_err(|_| UNREACHABLE.to_string())?;
+        if (200..300).contains(&status) { Ok(body) } else { Err(refusal(status, &body)) }
+    }
+
+    /// Posts `body` as plain text, which is how the service takes a plant's
+    /// JSON too.
+    fn post(url: String, body: String) -> Answer {
+        read(agent().post(&url).header("Content-Type", "text/plain; charset=utf-8").send(&body))
     }
 
     pub fn create(api: String, payload: String, answer: impl FnOnce(Answer) + Send + 'static) {
-        std::thread::spawn(move || {
-            let sent = agent()
-                .post(&format!("{api}/v1/patches"))
-                .header("Content-Type", "text/plain; charset=utf-8")
-                .send(&payload);
-            answer(sent.map_err(describe).and_then(|mut r| r.body_mut().read_to_string().map_err(|_| UNREACHABLE.into())).and_then(|b| id_from_answer(&b)));
-        });
+        std::thread::spawn(move || answer(post(format!("{api}/v1/patches"), payload).and_then(|b| id_from_answer(&b))));
+    }
+
+    pub fn plant(api: String, body: String, answer: impl FnOnce(Answer) + Send + 'static) {
+        std::thread::spawn(move || answer(post(format!("{api}/v1/plants"), body).and_then(|b| id_from_answer(&b))));
     }
 
     pub fn resolve(api: String, id: String, answer: impl FnOnce(Answer) + Send + 'static) {
-        std::thread::spawn(move || {
-            let got = agent().get(&format!("{api}/v1/patches/{id}")).call();
-            answer(got.map_err(describe).and_then(|mut r| r.body_mut().read_to_string().map_err(|_| UNREACHABLE.into())));
-        });
+        std::thread::spawn(move || answer(read(agent().get(&format!("{api}/v1/patches/{id}")).call())));
     }
 }
 
 /// The requests, through the page's `fetch`. A POST of plain text is a
-/// simple request, so it needs no preflight.
+/// simple request, so it needs no preflight: a plant's JSON goes as one.
 #[cfg(target_arch = "wasm32")]
 mod net {
     use wasm_bindgen::{JsCast, JsValue};
@@ -181,16 +233,24 @@ mod net {
         }
         let response = JsFuture::from(window.fetch_with_str_and_init(&url, &init)).await.map_err(|_| UNREACHABLE)?;
         let response: web_sys::Response = response.unchecked_into();
-        if !response.ok() {
-            return Err(refusal(response.status()));
-        }
         let text = JsFuture::from(response.text().map_err(|_| UNREACHABLE)?).await.map_err(|_| UNREACHABLE)?;
-        text.as_string().ok_or_else(|| UNREACHABLE.to_string())
+        let text = text.as_string().ok_or(UNREACHABLE)?;
+        if !response.ok() {
+            return Err(refusal(response.status(), &text));
+        }
+        Ok(text)
     }
 
     pub fn create(api: String, payload: String, answer: impl FnOnce(Answer) + 'static) {
         wasm_bindgen_futures::spawn_local(async move {
             let body = fetch(format!("{api}/v1/patches"), Some(payload)).await;
+            answer(body.and_then(|b| id_from_answer(&b)));
+        });
+    }
+
+    pub fn plant(api: String, body: String, answer: impl FnOnce(Answer) + 'static) {
+        wasm_bindgen_futures::spawn_local(async move {
+            let body = fetch(format!("{api}/v1/plants"), Some(body)).await;
             answer(body.and_then(|b| id_from_answer(&b)));
         });
     }
@@ -229,8 +289,20 @@ mod tests {
         assert_eq!(id_from_answer(r#"{"id":"haVBqXhw","url":"https://soba.chaps.dev/s/haVBqXhw"}"#), Ok("haVBqXhw".into()));
         assert!(id_from_answer(r#"{"id":"<script>"}"#).is_err());
         assert!(id_from_answer("<html>").is_err());
-        assert!(refusal(410).contains("taken down"));
-        assert!(refusal(404).contains("no patch"));
+        assert!(refusal(410, "this patch was taken down").contains("taken down"));
+        assert!(refusal(404, "").contains("no patch"));
+        // A plant turned away says why in its own words, unless they're a page
+        assert_eq!(refusal(400, "please choose other words\n"), "please choose other words");
+        assert_eq!(refusal(400, "<html>…</html>"), "the link service answered 400");
+    }
+
+    #[test]
+    fn a_plant_is_sent_as_the_service_reads_it() {
+        let mut plant = Plant { payload: "1.AAAA".into(), title: "Dusk".into(), name: String::new(), parent: None };
+        assert_eq!(serde_json::to_string(&plant).unwrap(), r#"{"payload":"1.AAAA","title":"Dusk","parent":null}"#);
+        plant.name = "Chris".into();
+        plant.parent = Some("haVBqXhw".into());
+        assert_eq!(serde_json::to_string(&plant).unwrap(), r#"{"payload":"1.AAAA","title":"Dusk","name":"Chris","parent":"haVBqXhw"}"#);
     }
 
     /// The answer `receiver` gets, or a timeout.

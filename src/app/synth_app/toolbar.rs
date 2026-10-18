@@ -225,6 +225,10 @@ impl SynthApp {
                     actions.push(AppAction::Share);
                     ui.close();
                 }
+                if ui.button("🌱 Plant in the garden").on_hover_text(plant::PLANT_HINT).clicked() {
+                    actions.push(AppAction::Plant);
+                    ui.close();
+                }
             });
         } else {
             if ui.button("📄 New").on_hover_text(bar.keys("Start an empty patch (Ctrl+N)")).clicked() {
@@ -253,6 +257,12 @@ impl SynthApp {
                     }
                 }
             }
+            // More to hear: what people have planted
+            ui.separator();
+            if ui.button("🌱 Visit the garden").on_hover_text(plant::GARDEN_HINT).clicked() {
+                ui.ctx().open_url(egui::OpenUrl::new_tab(crate::persistence::short_link::GARDEN_URL));
+                ui.close();
+            }
         });
 
         if !bar.compact {
@@ -266,6 +276,10 @@ impl SynthApp {
 
             if ui.button("🔗 Share").on_hover_text(SHARE_HINT).clicked() {
                 actions.push(AppAction::Share);
+            }
+
+            if ui.button("🌱 Plant").on_hover_text(plant::PLANT_HINT).clicked() {
+                actions.push(AppAction::Plant);
             }
         }
     }

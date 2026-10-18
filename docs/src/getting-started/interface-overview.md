@@ -12,7 +12,7 @@ From left to right:
 | Group | Controls |
 |-------|----------|
 | **Transport** | **▶ Play** starts the patch; **⏹ Stop** stops it. The app opens stopped. **● Rec** records what you hear: see [Recording](#recording). |
-| **File** | **📄 New**, **📂 Open**, **🕘 Recent**, **📚 Examples**, **💾 Save**, **💾 Save As**, **🔗 Share**: see [Sharing a patch by link](#sharing-a-patch-by-link) |
+| **File** | **📄 New**, **📂 Open**, **🕘 Recent**, **📚 Examples**, **💾 Save**, **💾 Save As**, **🔗 Share**: see [Sharing a patch by link](#sharing-a-patch-by-link), and **🌱 Plant**: see [Planting it in the garden](#planting-it-in-the-garden). At the foot of **📚 Examples**, **🌱 Visit the garden** opens the Patch Garden in your browser |
 | **Edit** | **↩ Undo** and **↪ Redo**. Hover either to see which edit it will undo or redo. |
 | **〰 Cables** | How signal flow is drawn along cables: **Chevrons**, **Dots** or **Comets**. **Under modules and labels** sets how much of a cable shows through a module, frame title or note it passes behind (5% at first). **Patch under a probe** sets how far the patch is turned down while you [probe a cable](#probing-a-cable) |
 | **◉ Knobs** | How knobs are drawn: **LED ring**, **Hybrid**, **Arc**, **Machined** or **Classic** |
@@ -301,6 +301,14 @@ To keep the link short, the patch is kept on soba.chaps.dev, where anyone with t
 A link carries the patch and the samples that come with Soba's examples, and nothing else. If a Sampler plays a file of your own, Share says which files, and offers **Save As** instead, to send the patch as a folder with its samples (in the browser, Save downloads it as a zip with them).
 
 Long links come to a few thousand characters for most patches. The biggest songs come to 30,000 or so, which some chat apps cut short; email or a document carries them whole. Pasting a Soba link of either kind onto the canvas opens it too, asking first if there are unsaved changes.
+
+### Planting it in the garden
+
+The [Patch Garden](https://soba.chaps.dev/garden/) is a page of patches people have planted, each drawn as its own cable diagram, to hear and open. **🌱 Plant**, beside Share, puts the patch you have open there. Give it a title (40 characters at most) and, if you like, your name, which is remembered for next time, and press **🌱 Plant** or `Enter`.
+
+**Sharing keeps a patch behind a link; planting publishes it.** A shared patch can only be found by someone you send its link to. A planted one is listed in the garden for anyone to hear, open and grow their own from. A new plant appears once it's been approved, and the note that says it's planted gives its short link, which plays it right away. Planting the same patch again changes nothing: it keeps its first title.
+
+If you opened the patch from a short link, the garden remembers which, and shows your patch as a branch growing from that one. Change something first: the very patch you were sent is already that link. A patch that plays files of your own can't be planted, as it can't be shared, and Soba offers **Save As** instead. When the garden is busy or can't be reached, a quiet note says so and goes away by itself; nothing has changed, so plant it again in a while.
 
 ### Recent patches
 

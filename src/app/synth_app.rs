@@ -76,6 +76,7 @@ mod main_area;
 mod mutating;
 mod out_of_sight;
 mod page_audio;
+mod plant;
 mod scenes;
 mod share;
 mod probe;
@@ -208,6 +209,8 @@ pub struct SynthApp {
     record_toast: Option<Toast>,
     /// The note about a link to the patch: copied, refused, or opened.
     share_note: Option<share::ShareNote>,
+    /// Planting the patch in the garden: the note, and the name to sign with.
+    planting: plant::Planting,
 
     // --- Loops ---
     /// Each Looper's loop as the patch last saved it, by engine node.
@@ -400,6 +403,7 @@ impl SynthApp {
             recordings_folder: None,
             record_toast: None,
             share_note: None,
+            planting: Default::default(),
             kept_loops: HashMap::new(),
             loop_files: std::collections::HashSet::new(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -2175,6 +2179,7 @@ impl SynthApp {
         }
         if let Some(storage) = storage {
             self.probe.load(storage);
+            self.planting.load(storage);
         }
         if let Some(glyph) = storage.and_then(|s| s.get_string(FLOW_GLYPH_KEY)) {
             self.user_state.flow_glyph = FlowGlyph::ALL
@@ -2657,6 +2662,8 @@ impl SynthApp {
             Some(share::ShareAction::OpenOnLaunch) => self.open_on_launch(None),
             None => {}
         }
+        // Planting it in the garden
+        corner = self.show_plant_note(ctx, corner);
         // New versions: the daily check, and its note above the take's
         // A plugin is updated with the app, not from inside the DAW
         #[cfg(not(target_arch = "wasm32"))]
@@ -2752,6 +2759,7 @@ impl eframe::App for SynthApp {
         storage.set_string(FLOW_GLYPH_KEY, self.user_state.flow_glyph.name().to_string());
         storage.set_string(CABLE_THROUGH_KEY, self.user_state.cable_through.to_string());
         self.probe.store(storage);
+        self.planting.store(storage);
         storage.set_string(KNOB_STYLE_KEY, self.user_state.knob_style.name().to_string());
         storage.set_string(MIDI_OUT_PORTS_KEY, crate::link::midi::MIDI.setting());
         if let Ok(engine) = &self.audio.engine {

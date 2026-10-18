@@ -111,6 +111,10 @@ If the service didn't answer:
 The manual's privacy line and WEB.md get the same two sentences. Patches that
 play the user's own files still can't go by link of either kind.
 
+Planting (#396) says the other half before anything is sent: sharing stores a
+patch behind a link, and planting publishes it, for anyone to hear and remix
+once it's approved.
+
 ## Desktop
 
 Share posts with `ureq` (already a dependency for updates) on a thread, with a

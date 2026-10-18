@@ -40,6 +40,8 @@ pub(super) enum AppAction {
     Save,
     SaveAs,
     Share,
+    /// Plant the patch in the garden.
+    Plant,
     OpenExample(&'static Example),
     OpenLesson(&'static LessonFile),
     OpenRecent(PathBuf),
@@ -202,6 +204,7 @@ impl SynthApp {
                 self.show_save_dialog();
             }
             AppAction::Share => self.share_patch(ctx),
+            AppAction::Plant => self.plant_patch(ctx),
             AppAction::OpenExample(example) => self.request(ctx, Discard::OpenExample(example)),
             AppAction::OpenLesson(lesson) => self.request(ctx, Discard::OpenLesson(lesson)),
             AppAction::OpenRecent(path) => self.request(ctx, Discard::OpenFile(path)),
