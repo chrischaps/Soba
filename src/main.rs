@@ -131,6 +131,11 @@ fn main() {
                 Box::new(|cc| {
                     soba::app::theme::install_fonts(&cc.egui_ctx);
                     let mut app = SynthApp::new();
+                    // `?listen`: a page's player, keeping and drawing nothing (app/listen.rs)
+                    if web::query_param("listen").is_some() {
+                        app.start_listening(&cc.egui_ctx);
+                        return Ok(Box::new(app));
+                    }
                     let (patch, open) = (web::query_param("patch"), web::query_param("open"));
                     // A shared patch (`#p=1.…`, see persistence/patch_link.rs),
                     // taken out of the address so a reload picks up the

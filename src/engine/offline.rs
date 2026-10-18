@@ -403,29 +403,36 @@ impl OfflineRenderer {
     /// hears MIDI; a patch with Note Ins of each kind gets both. Each note
     /// lands on its sample.
     pub fn render_audition(&mut self, patch: &Patch, seconds: f32) -> StereoBuffer {
-        let sources: Vec<Source> = patch
-            .all_nodes()
-            .into_iter()
-            .filter(|n| n.module_id == note_in::ID)
-            .map(|n| {
-                let source = n.parameters.iter().find(|p| p.name == "Source").map_or(0.0, |p| p.value.as_f32());
-                Source::from_param(source)
-            })
-            .collect();
-        let as_keys = sources.iter().any(|&s| s != Source::Midi);
-        let as_midi = sources.contains(&Source::Midi) || !as_keys && !sources.is_empty();
-        let channels = [(as_keys, KEYS_CHANNEL), (as_midi, 0)];
-
+        let channels = audition_channels(patch);
         let (start, sample_rate) = (self.position, self.context.sample_rate);
         let frame = |seconds: f32| start + (seconds * sample_rate).round() as u64;
         for &(note, at, length) in AUDITION {
-            for &(_, channel) in channels.iter().filter(|(plays, _)| *plays) {
+            for &channel in &channels {
                 self.queue_midi(frame(at), channel, MidiMessage::NoteOn { note, velocity: 100 });
                 self.queue_midi(frame(at + length), channel, MidiMessage::NoteOff { note, velocity: 0 });
             }
         }
         self.render_seconds(seconds)
     }
+}
+
+/// The channels [`AUDITION`] is played into `patch` on, so every Note In
+/// hears it: the computer keys' ([`KEYS_CHANNEL`]) when every one hears
+/// them, MIDI channel 1 when every one hears MIDI, and both for a patch with
+/// Note Ins of each kind. None for a patch without a Note In.
+pub fn audition_channels(patch: &Patch) -> Vec<u8> {
+    let sources: Vec<Source> = patch
+        .all_nodes()
+        .into_iter()
+        .filter(|n| n.module_id == note_in::ID)
+        .map(|n| {
+            let source = n.parameters.iter().find(|p| p.name == "Source").map_or(0.0, |p| p.value.as_f32());
+            Source::from_param(source)
+        })
+        .collect();
+    let as_keys = sources.iter().any(|&s| s != Source::Midi);
+    let as_midi = sources.contains(&Source::Midi) || !as_keys && !sources.is_empty();
+    [(as_keys, KEYS_CHANNEL), (as_midi, 0)].into_iter().filter(|(plays, _)| *plays).map(|(_, channel)| channel).collect()
 }
 
 /// The phrase [`OfflineRenderer::render_audition`] plays, as (MIDI note,

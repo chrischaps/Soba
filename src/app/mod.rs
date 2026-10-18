@@ -13,6 +13,7 @@ pub mod engine_sync;
 mod input_device;
 pub mod lesson;
 pub mod library;
+pub mod listen;
 mod long_press;
 pub mod midi_mappings;
 mod midi_session;

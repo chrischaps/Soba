@@ -145,6 +145,16 @@ impl MidiSession {
         }
     }
 
+    /// Sends `event` from the UI, as [`play_note`](Self::play_note) sends a
+    /// key's, but on any channel: a `?listen` audition plays MIDI Note Ins too.
+    #[cfg(target_arch = "wasm32")]
+    pub fn send_ui(&mut self, event: MidiEvent) {
+        if let Some(notes) = self.notes.as_mut() {
+            notes.send(event);
+            self.played.push(event);
+        }
+    }
+
     /// Takes every event waiting, and the notes the UI played, handing
     /// each to `each` (the MIDI Monitor's log) as it's heard.
     pub fn drain(&mut self, mut each: impl FnMut(MidiEvent)) -> Heard {

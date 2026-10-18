@@ -68,6 +68,8 @@ mod launch;
 mod lessons;
 #[cfg(feature = "ableton-link")]
 mod link_follow;
+#[cfg(target_arch = "wasm32")]
+mod listening;
 mod loops;
 mod lossy_load;
 mod main_area;
@@ -269,6 +271,9 @@ pub struct SynthApp {
     /// Embedded in a page (`?patch=` in the address): just the canvas, with
     /// a Play button and a way to the full app.
     embedded: bool,
+    /// A page's listener (`?listen`): nothing drawn, patches from its messages
+    #[cfg(target_arch = "wasm32")]
+    listener: Option<listening::Listener>,
     /// Frames left to keep zooming a just-opened patch to fit the view, as
     /// its modules are drawn and measured; 0 when no fit is under way. Patches
     /// opened in the browser fit, where a phone shows only a corner of one.
@@ -419,6 +424,8 @@ impl SynthApp {
             dive: None,
             miniature_places: HashMap::new(),
             embedded: false,
+            #[cfg(target_arch = "wasm32")]
+            listener: None,
             fit_pending: 0,
             glide: None,
             touch_panning: false,
@@ -2379,6 +2386,11 @@ impl SynthApp {
     pub fn draw_frame(&mut self, ui: &mut egui::Ui) {
         let ctx = &ui.ctx().clone();
         self.apply_theme_once(ui);
+        #[cfg(target_arch = "wasm32")]
+        if self.listener.is_some() {
+            self.draw_listening(ctx);
+            return;
+        }
         self.before_drawing(ctx);
         let mut actions = self.take_shortcuts(ctx);
         self.draw_panels(ui, &mut actions);

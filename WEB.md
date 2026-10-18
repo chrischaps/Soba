@@ -26,6 +26,7 @@ the plain one alone.
 | `/?patch=lush-pad` | An **embed**: just the canvas and a Play bar, for an iframe. Any example's file name works |
 | `/?open=lush-pad` | That example in the full app (the embed's **Open in Soba** link) |
 | `/?lesson=first-sound` | A lesson from the manual's Lessons page, in the full app |
+| `/?listen` | A **listener**: a hidden player a page sends patches to, and hears their level from (see below) |
 | `/#p=1.…` | A **patch link**: the patch inside the address, in the full app, stopped with a Play prompt (see below) |
 | `/s/<id>` | A **short patch link**: `404.html` turns it into `/#s=<id>`, and the app fetches the patch (see below) |
 
@@ -53,6 +54,37 @@ site's data, to save the patch from before carrying on.
 
 An embed keeps nothing: it doesn't restore or autosave a session, so playing
 with a recipe never leaves an autosave for the full app to offer back.
+
+## Listeners
+
+`?listen` is one copy of the app a page keeps out of sight and plays
+patches through: the Patch Garden's cards play this way as they're hovered
+(#391, `src/app/listen.rs`). It draws nothing (a blank canvas), keeps no
+session and opens nothing until it's asked. It takes `window` messages
+from `https://soba.chaps.dev`, or from `http://localhost` and
+`http://127.0.0.1` on any port (`trunk serve`), and ignores the rest:
+
+| The page sends | It does |
+|---|---|
+| `{type: "load", payload: "1.<data>"}` | Opens the patch in a patch link (what follows `#p=`), stopped. Sent while one plays, the sound fades out (150 ms), the patch is swapped, and the new one plays, fading in once the old one's sound already on its way has passed |
+| `{type: "play"}` | Plays it. A patch with Note Ins hears `engine::AUDITION` (the phrase `render --audition` plays) over and over, played as the computer keys play |
+| `{type: "stop"}` | Stops it |
+
+| It answers | When |
+|---|---|
+| `{type: "level", rms}` | 20 times a second while playing: the output's level, 0 to 1, as the Audio Output's meter reads it (its peak, falling as the meter falls) |
+| `{type: "blocked"}` | Half a second after Play, if the browser is still holding the sound (its autoplay rule) |
+| `{type: "error", why}` | For a patch that won't open. The one open before carries on |
+
+Messages sent before the app has started wait in `index.html` for it, so a
+page can send as soon as the frame exists. The frame needs
+`allow="autoplay"`, and its sound starts on Play only once the page around
+it has been clicked. Keep it in the viewport (1×1 pixels, `opacity: 0`
+will do): a browser may stop drawing frames in a cross-origin frame it
+can't see, and the listener hears messages and plays the audition as it
+draws. Like an embed it renders sound in 4096-frame buffers on the page's
+thread. The fade is a gain `index.html` puts between the app's sound and
+the speakers, ramped on the audio's own clock (`sobaFade`).
 
 ## Patch links
 

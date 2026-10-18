@@ -154,7 +154,7 @@ fn system_host() -> Result<Host, AudioError> {
 /// page's own thread, between drawing frames. Firefox runs late now and then
 /// at the default 2048 frames (it drops a buffer every few seconds on Lush
 /// Pad), and not at all at 4096; Chrome and Safari keep up at 2048, with
-/// half the delay. An embed (`?patch=`) takes 4096 everywhere: drawing a
+/// half the delay. An embed (`?patch=`, or a `?listen` player) takes 4096 everywhere: drawing a
 /// big patch can take longer than a 2048-frame buffer leaves spare, and
 /// index.html holds frames back only while one fits (#387). An embed is for
 /// listening, so the delay matters less there. An AudioWorklet renders the
@@ -173,7 +173,7 @@ fn web_buffer() -> BufferSize {
     let embed = window
         .and_then(|w| w.location().search().ok())
         .and_then(|search| web_sys::UrlSearchParams::new_with_str(&search).ok())
-        .is_some_and(|params| params.has("patch"));
+        .is_some_and(|params| params.has("patch") || params.has("listen"));
     if firefox || embed { BufferSize::Fixed(4096) } else { BufferSize::Default }
 }
 

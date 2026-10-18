@@ -6,7 +6,8 @@
     trunk build --release  # into dist/
     python tools/web/build.py  # into dist/ with the threaded build too, for soba.chaps.dev
   Add ?patch=lush-pad to embed an example (just the canvas and a Play
-  button), or ?open=lush-pad to open it in the full app.
+  button), or ?open=lush-pad to open it in the full app. ?listen is a
+  hidden player a page sends patches to (src/app/listen.rs, WEB.md).
 -->
 <head>
     <meta charset="utf-8" />
@@ -36,7 +37,8 @@
             if (window.crossOriginIsolated) return use(true);
             const agent = navigator.userAgent;
             const safari = /AppleWebKit/.test(agent) && !/Chrome|Chromium|Edg/.test(agent);
-            const embed = new URLSearchParams(location.search).has("patch");
+            const params = new URLSearchParams(location.search);
+            const embed = params.has("patch") || params.has("listen");
             const workers = navigator.serviceWorker;
             if (embed || safari || !workers || !window.isSecureContext) return use(false);
             // Once a tab: a browser that won't isolate the page this way isn't
@@ -78,11 +80,44 @@
             const contexts = [];
             const Native = window.AudioContext || window.webkitAudioContext;
             if (!Native) return;
+            // A listener (?listen, src/app/listen.rs) swaps patches under a
+            // fade: its sound goes through a gain on the way out, which
+            // sobaFade ramps on the audio's own clock
+            const listening = new URLSearchParams(location.search).has("listen");
+            const gains = new Map();
+            const connect = AudioNode.prototype.connect;
             class TrackedAudioContext extends Native {
                 constructor(...args) {
                     super(...args);
                     contexts.push(this);
+                    if (listening) {
+                        const gain = this.createGain();
+                        connect.call(gain, this.destination);
+                        gains.set(this, gain);
+                    }
                 }
+            }
+            if (listening) {
+                AudioNode.prototype.connect = function (target, ...rest) {
+                    const gain = target instanceof AudioDestinationNode && gains.get(target.context);
+                    return connect.call(this, gain || target, ...rest);
+                };
+                window.sobaFade = (to, seconds, after) => gains.forEach((gain, context) => {
+                    const now = context.currentTime, level = gain.gain;
+                    level.cancelScheduledValues(now);
+                    level.setValueAtTime(level.value, now);
+                    level.setValueAtTime(level.value, now + after);
+                    level.linearRampToValueAtTime(to, now + after + seconds);
+                });
+                // The page around may let this frame's sound start
+                // (allow="autoplay", once it's been clicked): Play asks
+                window.sobaResume = () => contexts.forEach((c) => c.state === "suspended" && c.resume().catch(() => {}));
+                // The page's messages wait here for the app, which wakes to take them
+                window.sobaListenQueue = [];
+                window.addEventListener("message", (e) => {
+                    window.sobaListenQueue.push({ origin: e.origin, data: e.data });
+                    if (window.sobaListenWake) window.sobaListenWake();
+                });
             }
             window.AudioContext = TrackedAudioContext;
             const resume = () => contexts.forEach((c) => c.state === "suspended" && c.resume());
@@ -342,8 +377,9 @@
             // A hidden tab's timers can slow to one a minute
             const GONE_AFTER_MS = 3 * 60 * 1000;
             const me = ALIVE + Math.random().toString(36).slice(2);
-            // An embed (?patch=) keeps nothing, so it needn't be waited for
-            if (!new URLSearchParams(location.search).has("patch")) {
+            // An embed (?patch=) or a listener (?listen) keeps nothing, so it needn't be waited for
+            const params = new URLSearchParams(location.search);
+            if (!params.has("patch") && !params.has("listen")) {
                 const beat = () => { try { localStorage.setItem(me, String(Date.now())); } catch (e) {} };
                 beat();
                 setInterval(beat, 5000);

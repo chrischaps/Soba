@@ -19,6 +19,7 @@ use std::time::Duration;
 use eframe::egui::{self, RichText};
 
 use crate::persistence::patch_link::{self, ShareError};
+use crate::persistence::Patch;
 use crate::persistence::sample_files::SampleBase;
 use crate::persistence::short_link::{self, Answer};
 use super::super::notice::Notice;
@@ -105,7 +106,11 @@ impl SynthApp {
     /// Opens the patch a link's fragment holds (`p=1.…`), stopped, or says
     /// why it can't, leaving the patch that's open as it was.
     pub fn open_from_link(&mut self, fragment: &str) -> Result<(), String> {
-        let patch = patch_link::patch_from_fragment(fragment)?;
+        self.open_linked(patch_link::patch_from_fragment(fragment)?)
+    }
+
+    /// Opens `patch`, from a link, stopped, or says why it can't.
+    pub(super) fn open_linked(&mut self, patch: Patch) -> Result<(), String> {
         let warnings = self.load_patch(&patch, SampleBase::Keys).map_err(|e| e.to_string())?;
         // Opened from a link, it plays when asked, as an example does
         self.set_playing(false);
