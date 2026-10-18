@@ -355,20 +355,25 @@ impl Builder<'_> {
                 .iter()
                 .find(|(name, id)| *name == conn.to_port && port_mapping::is_connectable(graph.get_input(*id).kind))
                 .map(|(_, id)| *id);
+            // As the loop warning names a cable: each end's module, patch ID and port
+            let cable = |graph: &SynthGraph| {
+                format!(
+                    "{} (node {}) '{}' -> {} (node {}) '{}'",
+                    graph[from].label, conn.from_node, conn.from_port, graph[to].label, conn.to_node, conn.to_port
+                )
+            };
             let (Some(output), Some(input)) = (output, input) else {
-                self.warnings.push(format!(
-                    "Skipped connection '{}' -> '{}': no such port",
-                    conn.from_port, conn.to_port
-                ));
+                let missing = match output {
+                    None => format!("{} has no output '{}'", graph[from].label, conn.from_port),
+                    Some(_) => format!("{} has no input '{}'", graph[to].label, conn.to_port),
+                };
+                self.warnings.push(format!("Skipped connection {}: {missing}", cable(graph)));
                 continue;
             };
 
             let result = validate_connection(graph.get_output(output).typ.0, graph.get_input(input).typ.0);
             if let Some(error) = result.error_message() {
-                self.warnings.push(format!(
-                    "Skipped connection '{}' -> '{}': {}",
-                    conn.from_port, conn.to_port, error
-                ));
+                self.warnings.push(format!("Skipped connection {}: {error}", cable(graph)));
                 continue;
             }
 

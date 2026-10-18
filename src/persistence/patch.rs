@@ -802,7 +802,56 @@ pub fn patch_from_json(json: &str) -> Result<Patch, PatchError> {
     let mut patch = if patch.version < 5 { migrate_v4_to_v5(patch) } else { patch };
     keep_fixed_sequencer_gates(&mut patch.nodes, &mut patch.groups);
     old_note_inputs_to_note_in(&mut patch);
+    mixer_mono_out_through_a_mix(&mut patch);
     Ok(patch)
+}
+
+/// The Mixer's mono Out, the sum of its channels at their levels ignoring
+/// pan, went in b3ee02f (#373). Each Mixer an old patch cabled from it gets
+/// a Mix beside it adding Out L and Out R, and those cables leave from the
+/// Mix. Its levels undo the equal-power pan's 3 dB, so a centred channel
+/// comes out as it did; one panned hard to a side is 3 dB quieter.
+///
+/// No version marks this: only an old patch has a cable from a Mixer's Out.
+fn mixer_mono_out_through_a_mix(patch: &mut Patch) {
+    fn last_id(nodes: &[NodeData], groups: &[GroupData]) -> u64 {
+        let here = nodes.iter().map(|n| n.id).chain(groups.iter().map(|g| g.id)).max().unwrap_or(0);
+        groups.iter().map(|g| last_id(&g.nodes, &g.groups)).fold(here, u64::max)
+    }
+
+    fn migrate(nodes: &mut Vec<NodeData>, connections: &mut Vec<ConnectionData>, groups: &mut [GroupData], next: &mut u64) {
+        // Each Mixer cabled from its Out, and the Mix that takes its place
+        let mut mixes: Vec<(u64, u64)> = Vec::new();
+        for conn in connections.iter_mut().filter(|c| c.from_port == "Out") {
+            if !nodes.iter().any(|n| n.id == conn.from_node && n.module_id == crate::modules::mixer::ID) {
+                continue;
+            }
+            let mix = match mixes.iter().find(|(mixer, _)| *mixer == conn.from_node) {
+                Some(&(_, mix)) => mix,
+                None => {
+                    *next += 1;
+                    mixes.push((conn.from_node, *next));
+                    *next
+                }
+            };
+            conn.from_node = mix;
+        }
+        for &(mixer, mix) in &mixes {
+            let (x, y) = nodes.iter().find(|n| n.id == mixer).map_or((0.0, 0.0), |n| n.position);
+            let mut node = NodeData::new(mix, crate::modules::mix::ID, (x + 440.0, y));
+            let level = || ParameterValue::Number(std::f32::consts::FRAC_1_SQRT_2);
+            node.parameters = vec![NamedParameter::new("Level 1", level()), NamedParameter::new("Level 2", level())];
+            nodes.push(node);
+            connections.push(ConnectionData::new(mixer, "Out L", mix, "In 1"));
+            connections.push(ConnectionData::new(mixer, "Out R", mix, "In 2"));
+        }
+        for group in groups {
+            migrate(&mut group.nodes, &mut group.connections, &mut group.groups, next);
+        }
+    }
+
+    let mut next = last_id(&patch.nodes, &patch.groups);
+    migrate(&mut patch.nodes, &mut patch.connections, &mut patch.groups, &mut next);
 }
 
 /// A patch as the JSON its files hold.

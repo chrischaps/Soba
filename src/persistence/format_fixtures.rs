@@ -30,14 +30,6 @@ const FIXTURES: [(u32, &str); 4] = [
     (6, include_str!("fixtures/patch_v6.json")),
 ];
 
-/// Cables older patches lose on loading, by module and port. Each is a
-/// break waiting on a migration: fix it, take it out of here, and the test
-/// holds that fixture to loading without a warning.
-const KNOWN_DROPS: &[(&str, &str, &str)] = &[
-    // #373: the Mixer's mono Out went in b3ee02f
-    ("util.mixer", "Out", "no such port"),
-];
-
 fn fixture(version: u32) -> Patch {
     let (_, json) = FIXTURES.iter().find(|(v, _)| *v == version).unwrap();
     patch_from_json(json).unwrap()
@@ -59,19 +51,6 @@ fn only<'a>(patch: &'a Patch, module_id: &str) -> &'a NodeData {
     node
 }
 
-/// The warnings a patch's known drops give, one a cable.
-fn known_drops(patch: &Patch) -> Vec<String> {
-    let module = |id| patch.nodes.iter().find(|n| n.id == id).map(|n| n.module_id.as_str());
-    patch
-        .connections
-        .iter()
-        .filter_map(|c| {
-            let (_, _, why) = KNOWN_DROPS.iter().find(|(m, port, _)| module(c.from_node) == Some(*m) && c.from_port == *port)?;
-            Some(format!("Skipped connection '{}' -> '{}': {}", c.from_port, c.to_port, why))
-        })
-        .collect()
-}
-
 #[test]
 fn test_every_format_loads_whole_and_without_warnings() {
     for (version, json) in FIXTURES {
@@ -80,14 +59,9 @@ fn test_every_format_loads_whole_and_without_warnings() {
 
         let patch = patch_from_json(json).unwrap();
         let (saved, warnings) = reload(&patch, 1);
-        let expected = known_drops(&patch);
-        assert_eq!(warnings, expected, "v{version}");
+        assert!(warnings.is_empty(), "v{version}: {warnings:#?}");
         assert_eq!(saved.all_nodes().len(), patch.all_nodes().len(), "v{version}: modules");
-        assert_eq!(
-            cables(&saved.connections, &saved.groups),
-            cables(&patch.connections, &patch.groups) - expected.len(),
-            "v{version}: cables"
-        );
+        assert_eq!(cables(&saved.connections, &saved.groups), cables(&patch.connections, &patch.groups), "v{version}: cables");
         let mappings: Vec<_> = saved.midi_mappings.iter().map(|m| (m.cc_number, m.param_name.as_str())).collect();
         assert_eq!(mappings, [(74, "Cutoff"), (71, "Resonance"), (20, "Drive")], "v{version}");
     }
@@ -216,6 +190,27 @@ fn test_keyboards_and_midi_notes_open_as_one_voice_note_ins() {
         assert_eq!(param(keyboard, "Key Velocity"), 0.5, "v{version}: the Keyboard's Velocity");
         assert_eq!(param(midi_note, "Retrigger"), 1.0, "v{version}");
     }
+}
+
+#[test]
+fn test_a_mixers_mono_out_comes_through_a_mix() {
+    for version in [3, 4, 5] {
+        let (patch, _) = reload(&fixture(version), 1);
+        let (mixer, mix) = (only(&patch, "util.mixer").id, only(&patch, "util.mix"));
+        let from = |node, port: &str| patch.connections.iter().filter(|c| c.from_node == node && c.from_port == port).map(|c| c.to_port.as_str()).collect::<Vec<_>>();
+        let to_mix: Vec<_> = patch.connections.iter().filter(|c| c.to_node == mix.id).map(|c| (c.from_node, c.from_port.as_str(), c.to_port.as_str())).collect();
+        assert_eq!(to_mix, [(mixer, "Out L", "In 1"), (mixer, "Out R", "In 2")], "v{version}");
+        assert!(from(mixer, "Out").is_empty(), "v{version}");
+        assert_eq!(from(mix.id, "Out"), ["In L"], "v{version}");
+        // A centred channel's L + R is √2 of it, so this gives back the old sum
+        for level in ["Level 1", "Level 2"] {
+            assert!((param(mix, level) - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6, "v{version}");
+        }
+    }
+    // Saved with no mono Out, so nothing to do
+    let (_, v6) = FIXTURES[3];
+    let saved_as: Patch = serde_json::from_str(v6).unwrap();
+    assert_eq!(fixture(6).all_nodes().len(), saved_as.all_nodes().len());
 }
 
 #[test]
