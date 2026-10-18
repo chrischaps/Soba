@@ -1,0 +1,202 @@
+/* The Patch Garden's page (#393). The colours are docs/theme/custom.css's
+   tokens, and the page's own dark blues are the app's and 404.html's */
+:root {
+    color-scheme: dark;
+
+    /* Signal colors, from SignalType::color() in src/dsp/signal.rs */
+    --signal-audio: #4287f5;
+    --signal-control: #f59e42;
+    --signal-gate: #42f587;
+    --signal-midi: #b266ff;
+    --signal-bus: #c8cdd7;
+
+    /* Header colors, from ModuleCategory::color() in src/dsp/module_trait.rs */
+    --category-source: #42a5f5;
+    --category-filter: #26a69a;
+    --category-modulation: #ffb74d;
+    --category-effect: #4dd0e1;
+    --category-utility: #9e9e9e;
+    --category-output: #7e57c2;
+
+    --page: #1a1a2e;
+    --card: #22223a;
+    --edge: #2e2e4a;
+    --ink: #c8c8d8;
+    --faint: #8a8aa6;
+    --bright: #ececf6;
+    --heavy: var(--category-modulation);
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--page) radial-gradient(circle at 1px 1px, #ffffff0d 1px, transparent 0) 0 0 / 24px 24px;
+    color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.masthead, main {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 0 16px;
+}
+
+.masthead { padding-top: 32px; padding-bottom: 8px; }
+.home {
+    color: var(--faint);
+    text-decoration: none;
+    font-size: 0.875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.home:hover { color: var(--bright); }
+h1 {
+    margin: 4px 0 8px;
+    color: var(--bright);
+    font-size: clamp(1.75rem, 5vw, 2.5rem);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+.lede { margin: 0; max-width: 38rem; color: var(--ink); }
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.8125rem;
+    color: var(--faint);
+}
+.legend li::before {
+    content: "";
+    display: inline-block;
+    width: 18px;
+    height: 3px;
+    margin-right: 6px;
+    vertical-align: middle;
+    border-radius: 2px;
+    background: currentColor;
+    box-shadow: 0 0 6px currentColor;
+}
+.legend li { color: var(--faint); }
+.legend .audio::before { background: var(--signal-audio); box-shadow: 0 0 6px var(--signal-audio); }
+.legend .control::before { background: var(--signal-control); box-shadow: 0 0 6px var(--signal-control); }
+.legend .gate::before { background: var(--signal-gate); box-shadow: 0 0 6px var(--signal-gate); }
+.legend .midi::before { background: var(--signal-midi); box-shadow: 0 0 6px var(--signal-midi); }
+.legend .bus::before { background: var(--signal-bus); box-shadow: 0 0 6px var(--signal-bus); }
+
+/* One card to a row on a phone, two from about 480 px, more on a desk */
+.garden {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    margin-top: 24px;
+}
+@media (min-width: 480px) { .garden { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .garden { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; } }
+@media (min-width: 1320px) { .garden { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--card);
+    border: 1px solid var(--edge);
+    border-radius: 10px;
+    overflow: hidden;
+    animation: sprout 420ms ease-out both;
+    transition: border-color 160ms ease, transform 160ms ease;
+}
+.card:hover { border-color: #43436a; }
+@keyframes sprout {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .card { animation: none; transition: none; }
+}
+
+.drawing {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #16162a radial-gradient(circle at 1px 1px, #ffffff0a 1px, transparent 0) 0 0 / 12px 12px;
+    border-bottom: 1px solid var(--edge);
+}
+.drawing svg { display: block; width: 100%; height: 100%; }
+.cable { fill: none; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.cable.glow { stroke-width: 4px; opacity: 0.22; }
+.cable.line { stroke-width: 1.25px; opacity: 0.95; }
+.frame { vector-effect: non-scaling-stroke; stroke-width: 1px; }
+
+.about {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    padding: 12px 14px 14px;
+}
+.about h2 {
+    margin: 0;
+    color: var(--bright);
+    font-size: 1.0625rem;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+.by { margin: 0; color: var(--ink); font-size: 0.875rem; overflow-wrap: anywhere; }
+.meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    margin: 2px 0 0;
+    color: var(--faint);
+    font-size: 0.8125rem;
+}
+.badge {
+    padding: 0 7px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+.badge.heavy { color: var(--heavy); }
+
+.open {
+    align-self: flex-start;
+    margin-top: auto;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #4fc3f7;
+    color: #4fc3f7;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 120ms ease, color 120ms ease;
+}
+.about .open { margin-top: 12px; }
+.open:hover { background: #4fc3f7; color: var(--page); }
+.open:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+.status {
+    margin: 32px 0 48px;
+    text-align: center;
+    color: var(--faint);
+    font-size: 0.9375rem;
+}
+.status button {
+    margin-left: 8px;
+    padding: 2px 10px;
+    border: 1px solid var(--faint);
+    border-radius: 6px;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+}
+#more { height: 1px; }

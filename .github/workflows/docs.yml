@@ -124,6 +124,8 @@ jobs:
           cp -r ../dist/. .
           # Short patch links, /s/<id>, have no file: this hands them to the app
           cp ../packaging/web/404.html .
+          # The Patch Garden, soba.chaps.dev/garden/ (#393)
+          cp -r ../packaging/web/garden .
           echo soba.chaps.dev > CNAME
           touch .nojekyll
           git config user.name "github-actions[bot]"

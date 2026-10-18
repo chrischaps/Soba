@@ -155,8 +155,15 @@ If the service ever shuts down, the short links die with it unless they're carri
 
 ## Patch Garden
 
-*The seed bed, #388. The page and planting from the app come later
-(`docs/Patch Garden — Proposal.md`).*
+*The seed bed, #388, and the page, #393. Listening and planting from the app
+come later (`docs/Patch Garden — Proposal.md`).*
+
+**The page** is `packaging/web/garden/`, published at `soba.chaps.dev/garden/`
+by `docs.yml`. It pages through `GET /v1/garden`, inflates each payload and
+draws the patch as an SVG cable diagram from `modules.json` (#390), skipping any
+it can't read. To try it against `wrangler dev`, serve `packaging/web` at
+`127.0.0.1:8080` and open `/garden/?api=http://127.0.0.1:8787` (`?api=` works
+only on a local page).
 
 A plant is a short link with a title. **Planting publishes a patch; sharing
 still never does.** Only `POST /v1/plants` puts a patch in the garden.
