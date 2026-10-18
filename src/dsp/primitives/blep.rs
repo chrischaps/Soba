@@ -38,6 +38,28 @@ fn corner_residual(x: f32) -> f32 {
     }
 }
 
+/// Where the phase meets breakpoint `b` between `p0` and `p1`, as the
+/// unwrapped phase of the crossing. A phase of exactly 1.0 sits before the
+/// wrap and 0.0 after it, so leaving either of them across the wrap counts.
+#[inline]
+pub fn crossing(p0: f32, p1: f32, b: f32) -> Option<f32> {
+    if p1 > p0 {
+        let mut target = b + (p0 - b).ceil();
+        if target == p0 && p0 < 1.0 {
+            target += 1.0;
+        }
+        (target <= p1).then_some(target)
+    } else if p1 < p0 {
+        let mut target = b + (p0 - b).floor();
+        if target == p0 && p0 > 0.0 {
+            target -= 1.0;
+        }
+        (target >= p1).then_some(target)
+    } else {
+        None
+    }
+}
+
 /// One output's correction state. Feed it events for the interval between
 /// the newest held sample and the next one, then push the next naive sample.
 #[derive(Clone, Copy, Debug, Default)]
@@ -84,6 +106,12 @@ impl BlepDelay {
         self.held = [self.held[1], naive + self.pending[0]];
         self.pending = [self.pending[1], 0.0];
         out
+    }
+
+    /// Holds `value` as if it had been coming in all along, so a waveform
+    /// can start without a step up from silence.
+    pub fn fill(&mut self, value: f32) {
+        *self = Self { held: [value; 2], pending: [0.0; 2] };
     }
 
     pub fn reset(&mut self) {

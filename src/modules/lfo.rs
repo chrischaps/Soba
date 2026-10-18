@@ -10,6 +10,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::ParameterDefinition,
     port::PortDefinition,
+    primitives::{blep::crossing, BlepDelay},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     tempo::{self, Division},
@@ -91,6 +92,14 @@ pub const ID: &str = "mod.lfo";
 /// - **Waveform** (0-3): Shape of the output (Sine, Triangle, Square, Saw).
 /// - **Phase** (0-360°): Phase offset for waveform start point.
 /// - **Bipolar** (toggle): When on, output is -1 to +1. When off, output is 0 to +1.
+///
+/// Out is band-limited: the Square's and Saw's steps, the Triangle's corners
+/// and every restart are spread over the samples either side of them, so an
+/// LFO run up at audio rates doesn't alias. The corrections hold Out
+/// [`BlepDelay::LATENCY`] samples back: synced, it reads the beat that far
+/// ahead to make up for it, so Out still lands on the beat, but a Sync edge
+/// or a jump in the transport reaches Out (and, running free, Phase) that
+/// many samples late.
 /// - **Tempo Sync** (choice): Off runs free at Rate. A division (4 bars to
 ///   1/32, dotted and triplet) locks the cycle to the patch's beat, so
 ///   every synced LFO keeps in step with the Clock and restarts on its
@@ -115,6 +124,15 @@ pub struct Lfo {
     running_rate: f32,
     /// The sync input, for its rising edges.
     sync: Edge,
+    /// The waveform of the last block, to notice it changing.
+    waveform: LfoWaveform,
+    /// The effective phase and the naive bipolar sample at the last sample,
+    /// or `None` until a first sample after a reset.
+    last: Option<(f32, f32)>,
+    /// Band-limiting corrections for Out.
+    blep: BlepDelay,
+    /// Phase, held back as far as Out. No events go in: it's just a delay.
+    phase_delay: BlepDelay,
     /// Sample rate from last prepare() call.
     sample_rate: f32,
     /// Port definitions.
@@ -139,6 +157,10 @@ impl Lfo {
             synced: None,
             running_rate: 0.0,
             sync: Edge::LOW,
+            waveform: LfoWaveform::Sine,
+            last: None,
+            blep: BlepDelay::new(),
+            phase_delay: BlepDelay::new(),
             sample_rate,
             ports: vec![
                 // Input ports
@@ -240,6 +262,46 @@ impl Lfo {
         }
     }
 
+    /// A phase moving further than this in one sample has jumped: no LFO
+    /// runs at a quarter of the sample rate.
+    const MAX_STEP: f32 = 0.25;
+
+    /// Corrects for every step and corner the phase passes moving from `p0`
+    /// to `p1`, the shorter way round. The jumps and kinks are in the
+    /// bipolar output per unit phase, crossing forwards.
+    fn band_limit(blep: &mut BlepDelay, waveform: LfoWaveform, p0: f32, p1: f32) {
+        let delta = (p1 - p0 + 0.5).rem_euclid(1.0) - 0.5;
+        if delta == 0.0 {
+            return;
+        }
+        let end = p0 + delta;
+        let mut breakpoint = |b: f32, jump: f32, kink: f32| {
+            if let Some(target) = crossing(p0, end, b) {
+                let d = (target - p0) / delta;
+                if jump != 0.0 {
+                    // Crossing backwards undoes the jump
+                    blep.step(d, jump * delta.signum());
+                }
+                if kink != 0.0 {
+                    // A corner bends the same way in either direction
+                    blep.corner(d, kink * delta.abs());
+                }
+            }
+        };
+        match waveform {
+            LfoWaveform::Sine => {}
+            LfoWaveform::Triangle => {
+                breakpoint(0.25, 0.0, -8.0);
+                breakpoint(0.75, 0.0, 8.0);
+            }
+            LfoWaveform::Square => {
+                breakpoint(0.0, 2.0, 0.0);
+                breakpoint(0.5, -2.0, 0.0);
+            }
+            LfoWaveform::Saw => breakpoint(0.0, -2.0, 0.0),
+        }
+    }
+
     /// Convert bipolar signal (-1 to +1) to unipolar (0 to +1).
     #[inline]
     pub(crate) fn to_unipolar(value: f32) -> f32 {
@@ -293,12 +355,16 @@ impl DspModule for Lfo {
         // Discrete parameters don't need smoothing
         let waveform = LfoWaveform::from_param(params[Self::PARAM_WAVEFORM]);
         let is_bipolar = params[Self::PARAM_BIPOLAR] > 0.5;
+        let reshaped = waveform != self.waveform;
+        self.waveform = waveform;
 
         // Locked to the beat, at a division
         let sync_beats = sync_beats(params.get(Self::PARAM_TEMPO_SYNC).copied().unwrap_or(0.0));
         let transport = context.transport;
         let tempo = transport.tempo_bpm.unwrap_or(120.0);
         self.synced = sync_beats.map(|beats| (beats, tempo));
+        // While synced without a Clock: our own beat's step per sample
+        let free_step = tempo as f64 / 60.0 / self.sample_rate as f64;
 
         // Get input buffers
         let rate_cv = inputs.get(Self::PORT_RATE_CV);
@@ -312,14 +378,23 @@ impl DspModule for Lfo {
 
             // Check for sync reset (rising edge detection)
             let sync_rising = self.sync.rising(sync_in.map_or(0.0, |buf| buf.at(i)));
+            // Whether the phase (or the shape) jumps at this sample
+            let mut jumped = sync_rising || (reshaped && i == 0);
 
-            if let Some(cycle_beats) = sync_beats {
+            // Out is held back by its band-limiting, so it's generated from
+            // the phase that far ahead. While synced the phase at this
+            // sample is known as well, for the Phase output
+            let (ahead, now) = if let Some(cycle_beats) = sync_beats {
                 // The phase is where the beat is in the cycle, so it can't
                 // drift from the Clock, nor from other synced LFOs
                 let beat = transport.beat_at(i, self.sample_rate).unwrap_or(self.free_beats);
+                let beat_ahead = transport
+                    .beat_at(i + BlepDelay::LATENCY, self.sample_rate)
+                    .unwrap_or(self.free_beats + BlepDelay::LATENCY as f64 * free_step);
                 if beat < self.last_beat - Self::RESTART_BEATS {
                     // The transport went back to the top: so do we
                     self.origin = 0.0;
+                    jumped = true;
                 }
                 if sync_rising {
                     // Cycles now start from this beat
@@ -327,16 +402,40 @@ impl DspModule for Lfo {
                 }
                 self.last_beat = beat;
                 self.phase = ((beat - self.origin) / cycle_beats).rem_euclid(1.0);
-            } else if sync_rising {
-                // Reset phase on sync rising edge
-                self.phase = 0.0;
-            }
+                let ahead = ((beat_ahead - self.origin) / cycle_beats).rem_euclid(1.0);
+                (ahead as f32, Some(self.phase as f32))
+            } else {
+                if sync_rising {
+                    // Reset phase on sync rising edge
+                    self.phase = 0.0;
+                }
+                (self.phase as f32, None)
+            };
 
             // Calculate effective phase with offset
-            let effective_phase = (self.phase as f32 + phase_offset).fract();
+            let effective_phase = (ahead + phase_offset).fract();
 
-            // Generate the waveform sample
-            let sample = Self::generate_sample(effective_phase, waveform);
+            // Generate the waveform sample, and band-limit whatever came
+            // between the last one and this
+            let naive = Self::generate_sample(effective_phase, waveform);
+            match self.last {
+                None => {
+                    // Start as if it had always been here
+                    self.blep.fill(naive);
+                    self.phase_delay.fill(effective_phase);
+                }
+                Some((last_phase, last_naive)) => {
+                    let moved = (effective_phase - last_phase + 0.5).rem_euclid(1.0) - 0.5;
+                    if jumped || moved.abs() > Self::MAX_STEP {
+                        // A restart lands on this sample
+                        self.blep.step(1.0, naive - last_naive);
+                    } else {
+                        Self::band_limit(&mut self.blep, waveform, last_phase, effective_phase);
+                    }
+                }
+            }
+            self.last = Some((effective_phase, naive));
+            let sample = self.blep.push(naive);
 
             // Apply bipolar/unipolar scaling and write to main output
             outputs[Self::PORT_OUT].samples[i] = if is_bipolar {
@@ -345,13 +444,14 @@ impl DspModule for Lfo {
                 Self::to_unipolar(sample)
             };
 
-            // Write current phase to phase output (0-1 range)
-            outputs[Self::PORT_PHASE].samples[i] = effective_phase;
+            // Write current phase to phase output (0-1 range), in step with Out
+            let held = self.phase_delay.push(effective_phase);
+            outputs[Self::PORT_PHASE].samples[i] = now.map_or(held, |phase| (phase + phase_offset).fract());
 
             if sync_beats.is_some() {
                 // Without a Clock to follow, keep a beat of our own
                 if transport.beat_position.is_none() {
-                    self.free_beats += tempo as f64 / 60.0 / self.sample_rate as f64;
+                    self.free_beats += free_step;
                 }
                 continue;
             }
@@ -383,6 +483,9 @@ impl DspModule for Lfo {
         self.last_beat = 0.0;
         self.free_beats = 0.0;
         self.sync.reset();
+        self.last = None;
+        self.blep.reset();
+        self.phase_delay.reset();
         // Reset smoothed parameters to their current targets
         self.rate_smooth.reset(self.rate_smooth.target());
         self.phase_offset_smooth.reset(self.phase_offset_smooth.target());
@@ -554,11 +657,13 @@ mod tests {
         let ctx2 = ProcessContext::new(44100.0, 100);
         lfo.process(&[&rate_cv, &sync], &mut outputs2, &[1.0, 0.0, 0.0, 1.0], &ctx2);
 
-        // After sync, sine should be near 0 (sin(0) = 0)
+        // After sync, sine should be near 0 (sin(0) = 0), once the
+        // band-limiting lets it through
+        let after = 51 + BlepDelay::LATENCY;
         assert!(
-            outputs2[0].samples[51].abs() < 0.1,
+            outputs2[0].samples[after].abs() < 0.1,
             "Sine should be near 0 after sync reset, got {}",
-            outputs2[0].samples[51]
+            outputs2[0].samples[after]
         );
     }
 
@@ -985,5 +1090,95 @@ mod tests {
         let synced_end = *out[1].samples.last().unwrap();
         lfo.process(&[], &mut out, &[1.0, 3.0, 0.0, 1.0, 0.0], &ProcessContext::with_transport(48000.0, 256, transport));
         assert!((out[1].samples[0] - synced_end).abs() < 1e-3, "{} then {}", synced_end, out[1].samples[0]);
+    }
+
+    /// Runs a free LFO for `seconds` at 48 kHz, at `rate` Hz (past the
+    /// knob's 100 Hz through Rate CV) in `waveform`, and returns Out.
+    fn run_free(rate: f32, waveform: LfoWaveform, seconds: f32) -> Vec<f32> {
+        const BLOCK: usize = 480;
+        let mut lfo = Lfo::new();
+        lfo.prepare(48000.0, BLOCK);
+        let mut rate_cv = SignalBuffer::control(BLOCK);
+        rate_cv.fill((rate / 100.0).log2());
+        let sync = SignalBuffer::control(BLOCK);
+        let mut out = vec![SignalBuffer::control(BLOCK); 2];
+        let ctx = ProcessContext::new(48000.0, BLOCK);
+        let params = [100.0, waveform as usize as f32, 0.0, 1.0, 0.0];
+        let mut samples = Vec::new();
+        for _ in 0..(seconds * 48000.0) as usize / BLOCK {
+            lfo.process(&[&rate_cv, &sync], &mut out, &params, &ctx);
+            samples.extend_from_slice(&out[0].samples);
+        }
+        samples
+    }
+
+    /// The level of `samples` at `freq` Hz, at 48 kHz.
+    fn level_at(samples: &[f32], freq: f32) -> f32 {
+        let w = TAU * freq / 48000.0;
+        let (re, im) = samples.iter().enumerate().fold((0.0f64, 0.0f64), |(re, im), (n, &x)| {
+            let a = (w * n as f32) as f64;
+            (re + x as f64 * a.cos(), im - x as f64 * a.sin())
+        });
+        ((re * re + im * im).sqrt() * 2.0 / samples.len() as f64) as f32
+    }
+
+    #[test]
+    fn test_fast_saw_and_square_dont_alias() {
+        // At 937 Hz the 30th harmonic, 28.1 kHz, folds back to 19.9 kHz.
+        // A naive ramp puts its whole 2/(30π) there; band-limited it's a
+        // small fraction of that
+        let rate = 937.0;
+        let alias = 48000.0 - 30.0 * rate;
+        for waveform in [LfoWaveform::Saw, LfoWaveform::Square] {
+            let out = run_free(rate, waveform, 0.5);
+            let naive: Vec<f32> = (0..out.len())
+                .map(|n| Lfo::generate_sample((n as f64 * rate as f64 / 48000.0).fract() as f32, waveform))
+                .collect();
+            let (ours, theirs) = (level_at(&out, alias), level_at(&naive, alias));
+            assert!(ours < theirs * 0.1, "{waveform:?}: {ours} at {alias} Hz, naive {theirs}");
+            // The fundamental's still all there
+            assert!((level_at(&out, rate) - level_at(&naive, rate)).abs() < 0.01, "{waveform:?}");
+        }
+    }
+
+    #[test]
+    fn test_band_limiting_never_overshoots() {
+        for waveform in [LfoWaveform::Triangle, LfoWaveform::Square, LfoWaveform::Saw] {
+            let out = run_free(700.0, waveform, 0.1);
+            assert!(out.iter().all(|x| x.abs() <= 1.0), "{waveform:?}");
+        }
+    }
+
+    #[test]
+    fn test_slow_square_stays_square() {
+        // At 1 Hz only the four samples around each edge are touched
+        let out = run_free(1.0, LfoWaveform::Square, 2.0);
+        let between = out.iter().filter(|x| x.abs() != 1.0).count();
+        assert!(between <= 4 * 4, "{between} samples off the rails");
+        assert_eq!(out[100], 1.0);
+        assert_eq!(out[24100], -1.0);
+    }
+
+    #[test]
+    fn test_sync_restart_is_smoothed() {
+        // A Saw restarted three quarters of the way up falls back to -1
+        // over a few samples, not in one
+        let mut lfo = Lfo::new();
+        lfo.prepare(48000.0, 256);
+        let mut out = vec![SignalBuffer::control(256); 2];
+        let ctx = ProcessContext::new(48000.0, 256);
+        let rate_cv = SignalBuffer::control(256);
+        let quiet = SignalBuffer::control(256);
+        let params = [10.0, 3.0, 0.0, 1.0, 0.0];
+        for _ in 0..14 {
+            // 3584 samples: three quarters of a 10 Hz cycle and a bit
+            lfo.process(&[&rate_cv, &quiet], &mut out, &params, &ctx);
+        }
+        let mut sync = SignalBuffer::control(256);
+        sync.samples[100] = 1.0;
+        lfo.process(&[&rate_cv, &sync], &mut out, &params, &ctx);
+        let biggest = out[0].samples.windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0, f32::max);
+        assert!(biggest < 0.75, "a step of {biggest}");
+        assert!(out[0].samples[100] > 0.4 && out[0].samples[110] < -0.9, "{:?}", &out[0].samples[98..106]);
     }
 }

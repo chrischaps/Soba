@@ -882,10 +882,12 @@ mod tests {
 
         // A beat every half second, each on its sample, for a minute
         // The downbeat opens the first edge as playing starts, after the
-        // output stage's latency
+        // output stage's latency. That one rises from silence; the rest
+        // rise from -1, through 0 on the beat, so they pass the threshold
+        // a sample later: time them from the second
         let edges = onsets(&r.render_seconds(60.0).left, 0.5, sr);
         assert_eq!(edges.len(), 120, "{edges:?}");
-        let latency = edges[0];
+        let latency = edges[1] - 0.5;
         for (n, &edge) in edges.iter().enumerate() {
             let beat = n as f32 * 0.5;
             assert!((edge - latency - beat).abs() * sr <= 1.0, "beat {n} at {edge} s");

@@ -17,7 +17,7 @@ use crate::dsp::{
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
-    primitives::{BlepDelay, Downsampler2x},
+    primitives::{blep::crossing, BlepDelay, Downsampler2x},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
     connected_input, ParameterDisplay, Readout, SignalType,
@@ -91,28 +91,6 @@ impl OscWaveform {
 
 /// Largest phase step per oversampled sample (a little under its Nyquist).
 const MAX_DT: f32 = 0.45;
-
-/// Where the phase meets breakpoint `b` between `p0` and `p1`, as the
-/// unwrapped phase of the crossing. A phase of exactly 1.0 sits before the
-/// wrap and 0.0 after it, so leaving either of them across the wrap counts.
-#[inline]
-fn crossing(p0: f32, p1: f32, b: f32) -> Option<f32> {
-    if p1 > p0 {
-        let mut target = b + (p0 - b).ceil();
-        if target == p0 && p0 < 1.0 {
-            target += 1.0;
-        }
-        (target <= p1).then_some(target)
-    } else if p1 < p0 {
-        let mut target = b + (p0 - b).floor();
-        if target == p0 && p0 > 0.0 {
-            target -= 1.0;
-        }
-        (target >= p1).then_some(target)
-    } else {
-        None
-    }
-}
 
 /// Folds an advanced phase back into 0..=1. Landing exactly on the wrap
 /// counts as having crossed it.

@@ -146,6 +146,7 @@ Each Clock pulse freezes wherever the LFO happens to be, and [Sample & Hold](../
 
 - The LFO is monophonic. One LFO patched into a polyphonic module moves every voice together. See [Polyphony](../../concepts/polyphony.md).
 - The Rate and Phase knobs are smoothed, so turning them while the LFO runs doesn't click or jump.
+- Run up into the audio range with Rate CV (it goes to 1 kHz), the LFO still sounds clean: the Square's and Saw's jumps, the Triangle's corners and each Sync restart are smoothed over a few samples, so they don't alias or click. At ordinary rates that touches only the samples right at each edge.
 - Pressing **Play** starts every LFO from the beginning of its cycle.
 - See [Tempo and Sync](../../concepts/tempo-and-sync.md) for how the patch's tempo and beat reach the LFO.
 
