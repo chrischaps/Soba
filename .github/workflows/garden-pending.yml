@@ -1,0 +1,107 @@
+name: Garden Pending
+
+# Every day, counts the plants waiting for the garden (`pending`, #388) and
+# keeps one issue labelled garden-pending saying how many, so Chris hears of
+# them without asking (#410). More plants than last time add a comment, which
+# notifies; fewer only retitle it, quietly; none closes it.
+#
+# This repo is public and a waiting plant isn't curated yet, so the issue
+# never names one: only the count, how long the oldest has waited, and the
+# commands that list and show them (docs/SHORT_LINKS.md's Patch Garden)
+on:
+  schedule:
+    - cron: '7 15 * * *'   # 15:07 UTC, the morning in the US
+  workflow_dispatch:
+
+concurrency:
+  group: garden-pending
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      WRANGLER_SEND_METRICS: 'false'
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # As the archive does: no token says so and stops, rather than failing daily
+      - name: Is the token set?
+        id: setup
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::No CLOUDFLARE_API_TOKEN secret: the waiting plants weren't counted"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout Soba
+        if: steps.setup.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - name: Install wrangler
+        if: steps.setup.outputs.ready == 'true'
+        working-directory: packaging/shortlinks
+        run: npm ci --no-audit --no-fund
+
+      # Only the count and the oldest's time leave the database: no IDs or titles
+      - name: Count the waiting plants
+        if: steps.setup.outputs.ready == 'true'
+        id: count
+        working-directory: packaging/shortlinks
+        run: |
+          npx wrangler d1 execute soba-links --remote --json --command \
+            "SELECT COUNT(*) AS waiting, COALESCE(MIN(planted_at), 0) AS oldest FROM plants JOIN patches ON patches.id = plants.id WHERE status = 'pending' AND removed = 0" \
+            > "$RUNNER_TEMP/count.json"
+          waiting=$(jq -er '.[0].results[0].waiting' "$RUNNER_TEMP/count.json")
+          oldest=$(jq -er '.[0].results[0].oldest' "$RUNNER_TEMP/count.json")
+          echo "waiting=$waiting" >> "$GITHUB_OUTPUT"
+          echo "oldest=$oldest" >> "$GITHUB_OUTPUT"
+          echo "$waiting plants waiting"
+
+      - name: Open, update or close the garden-pending issue
+        if: steps.setup.outputs.ready == 'true'
+        env:
+          WAITING: ${{ steps.count.outputs.waiting }}
+          OLDEST: ${{ steps.count.outputs.oldest }}
+        run: |
+          open=$(gh issue list --label garden-pending --state open --json number,title \
+            -q '.[0] | select(.) | "\(.number) \(.title)"')
+          number=${open%% *}
+          # The last count is the title's first number: "Garden: 3 plants waiting"
+          before=$(echo "${open#* }" | grep -o '[0-9]\+' | head -1)
+          if [ "$WAITING" -eq 0 ]; then
+            if [ -n "$open" ]; then gh issue close "$number" --comment "Nothing waits for the garden now."; fi
+            exit 0
+          fi
+
+          if [ "$WAITING" -eq 1 ]; then title="Garden: 1 plant waiting"; else title="Garden: $WAITING plants waiting"; fi
+          since=$(date -u -d "@$((OLDEST / 1000))" '+%Y-%m-%d %H:%M UTC')
+          body=$(printf '%s\n' \
+            "Plants are waiting to be shown in the garden. The oldest was planted $since." \
+            "" \
+            "From \`packaging/shortlinks/\`:" \
+            "" \
+            '```' \
+            "npm run garden:pending       # each waiting plant, with its short link to listen to" \
+            "npm run garden:show <id> …   # into the garden" \
+            "npm run garden:hide <id> …   # kept out" \
+            '```' \
+            "" \
+            "This issue never names a plant, as this repo is public and a waiting plant isn't curated yet." \
+            "It's a notice, not a ticket. \`garden-pending.yml\` updates it daily and closes it when nothing waits.")
+
+          if [ -z "$open" ]; then
+            gh issue create --title "$title" --label garden-pending --body "$body"
+          else
+            gh issue edit "$number" --title "$title" --body "$body"
+            if [ "$WAITING" -gt "${before:-0}" ]; then
+              gh issue comment "$number" --body "More plants arrived: $WAITING waiting now (${before:-0} before)."
+            fi
+          fi

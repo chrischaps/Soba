@@ -232,6 +232,13 @@ npm run garden:hide <id> …   # out of it again; its short link still works
 database.) A whole takedown is still `patches.removed`, which also takes the
 plant out of the garden.
 
+**Hearing of them** (#410): every day `garden-pending.yml` counts the waiting
+plants with the `CLOUDFLARE_API_TOKEN` secret and keeps one issue labelled
+`garden-pending`, titled with the count. More plants than last time add a
+comment, which notifies; none closes it. The repo is public, so the issue never
+names a plant, only how many wait and since when. Run it from the Actions tab
+to check now.
+
 **Seeded with the examples** (#392), so the garden is never empty:
 
 ```

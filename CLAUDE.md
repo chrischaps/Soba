@@ -112,10 +112,10 @@ When asked to implement the next issue, follow this workflow:
 ### 1. Find the Next Issue
 
 ```bash
-gh issue list --state open --limit 100 --search "-label:deferred -label:claimed"
+gh issue list --state open --limit 100 --search "-label:deferred -label:claimed -label:garden-pending"
 ```
 
-The **lowest issue number** is the next to implement. Issues are ordered by phase and dependency. Issues labeled `deferred` are parked: skip them unless Chris asks for one by number. Issues labeled `claimed` are taken (`gh issue list --label claimed` lists them). If the lowest one is already claimed on this machine (see `git worktree list` / `git branch`), take the next one that doesn't depend on it. Then claim yours: `python tools/claim.py <n>`. An open `ci-failure` or `nightly-failure` issue comes before all of them, because master is broken.
+The **lowest issue number** is the next to implement. Issues are ordered by phase and dependency. Issues labeled `deferred` are parked: skip them unless Chris asks for one by number. A `garden-pending` issue is a notice for Chris that plants wait for the garden, not a ticket. Issues labeled `claimed` are taken (`gh issue list --label claimed` lists them). If the lowest one is already claimed on this machine (see `git worktree list` / `git branch`), take the next one that doesn't depend on it. Then claim yours: `python tools/claim.py <n>`. An open `ci-failure` or `nightly-failure` issue comes before all of them, because master is broken.
 
 ### 2. Read the Issue Details
 
