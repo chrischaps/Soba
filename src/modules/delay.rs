@@ -17,8 +17,16 @@ use crate::dsp::{
     connected_input, ParameterDisplay, SignalType,
 };
 
-/// Maximum delay time in seconds.
-const MAX_DELAY_SECONDS: f32 = 2.0;
+/// Longest free delay time: the top of the Time knob, CV included.
+const MAX_TIME_MS: f32 = 2000.0;
+
+/// Longest synced delay: the longest division (1/4D, 1.5 beats) at the
+/// Clock's slowest tempo, 4.5 s. The line is sized for it, so Sync stays on
+/// the grid all the way down to 20 BPM.
+const MAX_SYNCED_MS: f32 = 1.5 * 60000.0 / crate::modules::clock::Clock::MIN_TEMPO as f32;
+
+/// Maximum delay time in seconds, the length the line is allocated for.
+const MAX_DELAY_SECONDS: f32 = MAX_SYNCED_MS / 1000.0;
 
 /// Line kept beyond the longest delay so wow can swing past it.
 const WOW_HEADROOM_SECONDS: f32 = 0.005;
@@ -348,7 +356,7 @@ impl DspModule for StereoDelay {
             // Follow the patch tempo (set by a Clock), or 120 BPM without one
             let bpm = context.transport.tempo_bpm.unwrap_or(120.0);
             let ms_per_beat = 60000.0 / bpm;
-            (beats * ms_per_beat).clamp(1.0, 2000.0)
+            (beats * ms_per_beat).clamp(1.0, MAX_SYNCED_MS)
         } else {
             time_ms
         };
@@ -391,6 +399,8 @@ impl DspModule for StereoDelay {
         let out_right = &mut out_right_slice[0];
 
         let max_delay_samples = MAX_DELAY_SECONDS * self.sample_rate;
+        // Synced time can run past the Time knob's 2 s; free time stops there
+        let max_time_ms = if Self::sync_to_beats(sync_index).is_some() { MAX_SYNCED_MS } else { MAX_TIME_MS };
         let (mut time_now_ms, mut loop_gain_now, mut wow_now) = (self.time_now_ms, self.loop_gain_now, 0.0);
 
         // Process each sample
@@ -407,7 +417,7 @@ impl DspModule for StereoDelay {
             let time_mod = time_cv
                 .map(|buf| buf.at(i))
                 .unwrap_or(0.0);
-            let modulated_time_ms = (time_ms_smoothed * (1.0 + time_mod * 0.5)).clamp(1.0, 2000.0);
+            let modulated_time_ms = (time_ms_smoothed * (1.0 + time_mod * 0.5)).clamp(1.0, max_time_ms);
 
             // Apply feedback CV modulation. Plain mode stops short of unity;
             // Tape mode goes past it and leans on the record head instead.
@@ -780,6 +790,27 @@ mod tests {
                 "sync {sync}: echo at {arrival}, expected {expected}"
             );
         }
+    }
+
+    #[test]
+    fn test_slowest_dotted_quarter_stays_on_the_tempo() {
+        // 1/4D at the Clock's slowest tempo is 4.5 s, past the Time knob's 2 s
+        let sr = 48000.0;
+        let bpm = crate::modules::clock::Clock::MIN_TEMPO as f32;
+        let expected = 1.5 * 60.0 / bpm * sr;
+        let ctx = ProcessContext::with_transport(sr, 480, TransportState::playing_at(bpm));
+        let mut p = params(500.0, 0.0, 1.0);
+        p[StereoDelay::PARAM_SYNC] = 7.0;
+
+        let mut delay = StereoDelay::new();
+        delay.prepare(sr, 480);
+        run(&mut delay, &vec![0.0; 48000], &p, &ctx);
+
+        let mut input = vec![0.0; 240000];
+        input[0] = 1.0;
+        let out = run(&mut delay, &input, &p, &ctx);
+        let arrival = (0..out.len()).max_by(|&a, &b| out[a].abs().total_cmp(&out[b].abs())).unwrap();
+        assert!((arrival as f32 - expected).abs() <= 1.0, "echo at {arrival}, expected {expected}");
     }
 
     #[test]

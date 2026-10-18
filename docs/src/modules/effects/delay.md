@@ -78,7 +78,7 @@ Set **Sync** to a note length and the delay time follows the patch tempo. A [Clo
 | 1/16T | ⅙ | 83 ms |
 | 1/32 | ⅛ | 62.5 ms |
 
-Synced times are capped at 2 seconds. **Time CV** still works while synced, swinging the synced time.
+Synced times can run past the **Time** knob's 2 seconds, up to 4.5 seconds: long enough for 1/4D at the Clock's slowest 20 BPM, so every division stays on the beat. **Time CV** still works while synced, swinging the synced time.
 
 ## Tape mode
 
