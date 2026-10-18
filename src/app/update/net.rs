@@ -24,43 +24,62 @@ pub fn releases_url() -> String {
         .unwrap_or_else(|| format!("https://api.github.com/repos/{REPO}/releases?per_page=20"))
 }
 
-fn agent() -> ureq::Agent {
-    ureq::AgentBuilder::new()
-        .timeout_connect(Duration::from_secs(10))
-        .timeout_read(Duration::from_secs(30))
+/// An agent whose response bodies must arrive within `body`. ureq times a
+/// body as a whole, not read by read, so a download gets longer than a page.
+fn agent(body: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(10)))
+        .timeout_recv_response(Some(Duration::from_secs(30)))
+        .timeout_recv_body(Some(body))
         .user_agent(concat!("soba/", env!("CARGO_PKG_VERSION")))
         .build()
+        .into()
+}
+
+/// How long the list of releases or a checksum file may take.
+const PAGE: Duration = Duration::from_secs(30);
+/// How long a release's zip may take: a backstop for a stalled connection,
+/// long enough for a slow one.
+const DOWNLOAD: Duration = Duration::from_secs(20 * 60);
+
+const OFFLINE: &str = "couldn't reach GitHub (offline?)";
+
+/// An I/O error that means the network or the server isn't there. ureq 3
+/// reports a refused connection this way, not as `ConnectionFailed`.
+fn unreachable(kind: std::io::ErrorKind) -> bool {
+    use std::io::ErrorKind::*;
+    matches!(kind, ConnectionRefused | ConnectionReset | ConnectionAborted | NotConnected | TimedOut | HostUnreachable | NetworkUnreachable)
 }
 
 /// Why a request didn't work, in words for the toast.
 fn describe(error: ureq::Error) -> String {
     match error {
-        ureq::Error::Status(403 | 429, _) => "GitHub is limiting requests from this network; try again in an hour".into(),
-        ureq::Error::Status(404, _) => "the releases weren't found".into(),
-        ureq::Error::Status(code, _) => format!("GitHub answered {code}"),
-        ureq::Error::Transport(t) => match t.kind() {
-            ureq::ErrorKind::Dns | ureq::ErrorKind::ConnectionFailed => "couldn't reach GitHub (offline?)".into(),
-            _ => t.to_string(),
-        },
+        ureq::Error::StatusCode(403 | 429) => "GitHub is limiting requests from this network; try again in an hour".into(),
+        ureq::Error::StatusCode(404) => "the releases weren't found".into(),
+        ureq::Error::StatusCode(code) => format!("GitHub answered {code}"),
+        ureq::Error::HostNotFound | ureq::Error::ConnectionFailed | ureq::Error::Timeout(_) => OFFLINE.into(),
+        ureq::Error::Io(e) if unreachable(e.kind()) => OFFLINE.into(),
+        other => other.to_string(),
     }
 }
 
 /// Every published release, newest first.
 pub fn fetch_releases() -> Result<Vec<Release>, String> {
     let url = releases_url();
-    let body = agent()
+    let body = agent(PAGE)
         .get(&url)
-        .set("Accept", "application/vnd.github+json")
+        .header("Accept", "application/vnd.github+json")
         .call()
         .map_err(describe)?
-        .into_string()
+        .body_mut()
+        .read_to_string()
         .map_err(|e| format!("the answer was cut off: {e}"))?;
     release::parse_releases(&body).map_err(|e| e.to_string())
 }
 
 /// A small text file, such as `SHA256SUMS`.
 pub fn fetch_text(url: &str) -> Result<String, String> {
-    agent().get(url).call().map_err(describe)?.into_string().map_err(|e| e.to_string())
+    agent(PAGE).get(url).call().map_err(describe)?.body_mut().read_to_string().map_err(|e| e.to_string())
 }
 
 /// How far a download has got, shared with the UI.
@@ -90,12 +109,12 @@ pub const CANCELLED: &str = "cancelled";
 /// Downloads `url` into `dest`, returning its SHA-256 in lower-case hex.
 /// `size` is what the release says, used when the server doesn't.
 pub fn download(url: &str, dest: &Path, size: u64, progress: &Progress) -> Result<String, String> {
-    let response = agent().get(url).call().map_err(describe)?;
-    let total = response.header("Content-Length").and_then(|l| l.parse().ok()).unwrap_or(size);
+    let response = agent(DOWNLOAD).get(url).call().map_err(describe)?;
+    let total = response.body().content_length().unwrap_or(size);
     progress.total.store(total, Ordering::Relaxed);
 
     let mut file = std::fs::File::create(dest).map_err(|e| format!("couldn't write {}: {e}", dest.display()))?;
-    let mut reader = response.into_reader();
+    let mut reader = response.into_body().into_reader();
     let mut hasher = Sha256::new();
     let mut buffer = vec![0u8; 64 * 1024];
     loop {
@@ -137,5 +156,54 @@ mod tests {
         std::fs::write(&path, b"abc").unwrap();
         assert_eq!(sha256_file(&path).unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
         let _ = std::fs::remove_file(path);
+    }
+
+    /// A server on a free local port that answers one request with
+    /// `response`, and the URL to ask it at.
+    fn answer_once(response: &'static [u8]) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/file", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = Vec::new();
+            let mut byte = [0u8];
+            while !request.ends_with(b"\r\n\r\n") && stream.read(&mut byte).unwrap() == 1 {
+                request.push(byte[0]);
+            }
+            stream.write_all(response).unwrap();
+        });
+        url
+    }
+
+    #[test]
+    fn downloads_report_their_size_and_hash() {
+        let url = answer_once(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc");
+        let path = std::env::temp_dir().join("soba-download-test.bin");
+        let progress = Progress::default();
+        let hash = download(&url, &path, 0, &progress).unwrap();
+        assert_eq!(hash, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        assert_eq!(std::fs::read(&path).unwrap(), b"abc");
+        assert_eq!(progress.fraction(), Some(1.0));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn text_is_read_whole() {
+        let url = answer_once(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\nConnection: close\r\n\r\nabc  a.zip\n");
+        assert_eq!(fetch_text(&url).unwrap(), "abc  a.zip\n");
+    }
+
+    #[test]
+    fn refusals_are_put_in_words() {
+        let url = answer_once(b"HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        assert!(fetch_text(&url).unwrap_err().starts_with("GitHub is limiting"));
+        let url = answer_once(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        assert_eq!(fetch_text(&url).unwrap_err(), "GitHub answered 500");
+    }
+
+    #[test]
+    fn nobody_listening_is_offline() {
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        assert_eq!(fetch_text(&format!("http://127.0.0.1:{port}/")).unwrap_err(), "couldn't reach GitHub (offline?)");
     }
 }

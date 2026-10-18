@@ -57,7 +57,7 @@ base64 = "0.22"
 # Updates (src/app/update): one request to GitHub's releases API, then the
 # release's zip, checked against its SHA256SUMS before it's unpacked
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ureq = "2.12"
+ureq = "3.4"
 semver = { version = "1", features = ["serde"] }
 sha2 = "0.10"
 zip = { version = "2.4", default-features = false, features = ["deflate"] }

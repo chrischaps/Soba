@@ -130,17 +130,18 @@ mod net {
     use super::{id_from_answer, refusal, Answer, UNREACHABLE};
 
     fn agent() -> ureq::Agent {
-        ureq::AgentBuilder::new()
-            .timeout_connect(Duration::from_secs(3))
-            .timeout(Duration::from_secs(8))
+        ureq::Agent::config_builder()
+            .timeout_connect(Some(Duration::from_secs(3)))
+            .timeout_global(Some(Duration::from_secs(8)))
             .user_agent(concat!("soba/", env!("CARGO_PKG_VERSION")))
             .build()
+            .into()
     }
 
     fn describe(error: ureq::Error) -> String {
         match error {
-            ureq::Error::Status(code, _) => refusal(code),
-            ureq::Error::Transport(_) => UNREACHABLE.into(),
+            ureq::Error::StatusCode(code) => refusal(code),
+            _ => UNREACHABLE.into(),
         }
     }
 
@@ -148,16 +149,16 @@ mod net {
         std::thread::spawn(move || {
             let sent = agent()
                 .post(&format!("{api}/v1/patches"))
-                .set("Content-Type", "text/plain; charset=utf-8")
-                .send_string(&payload);
-            answer(sent.map_err(describe).and_then(|r| r.into_string().map_err(|_| UNREACHABLE.into())).and_then(|b| id_from_answer(&b)));
+                .header("Content-Type", "text/plain; charset=utf-8")
+                .send(&payload);
+            answer(sent.map_err(describe).and_then(|mut r| r.body_mut().read_to_string().map_err(|_| UNREACHABLE.into())).and_then(|b| id_from_answer(&b)));
         });
     }
 
     pub fn resolve(api: String, id: String, answer: impl FnOnce(Answer) + Send + 'static) {
         std::thread::spawn(move || {
             let got = agent().get(&format!("{api}/v1/patches/{id}")).call();
-            answer(got.map_err(describe).and_then(|r| r.into_string().map_err(|_| UNREACHABLE.into())));
+            answer(got.map_err(describe).and_then(|mut r| r.body_mut().read_to_string().map_err(|_| UNREACHABLE.into())));
         });
     }
 }
