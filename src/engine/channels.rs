@@ -277,14 +277,19 @@ impl UiHandle {
             EngineCommand::SetParameter { node_id, param_index, value } => {
                 self.graph.set_parameter(node_id, param_index, value);
                 let message = AudioMessage::Plan(PlanMessage::SetParameter { node_id, param_index, value });
-                if self.message_tx.push(message).is_err() {
-                    // Make sure the value travels with the next plan instead
+                // If the queue is full, the value travels with the next plan
+                // instead. A held-back plan has the value from when it was
+                // compiled and would undo this one when it's installed, so a
+                // newer plan has to follow it
+                if self.message_tx.push(message).is_err() || self.unsent_plan.is_some() {
                     self.graph.mark_dirty();
                 }
             }
             EngineCommand::SetBypass { node_id, bypassed } => {
                 self.graph.set_bypass(node_id, bypassed);
-                if self.message_tx.push(AudioMessage::Plan(PlanMessage::SetBypass { node_id, bypassed })).is_err() {
+                if self.message_tx.push(AudioMessage::Plan(PlanMessage::SetBypass { node_id, bypassed })).is_err()
+                    || self.unsent_plan.is_some()
+                {
                     self.graph.mark_dirty();
                 }
             }
@@ -872,6 +877,50 @@ mod tests {
         // The held play waits for the plan made before it
         assert_eq!(run_audio_side(&mut engine, &mut plan), vec!["plan", "play"]);
         assert_eq!(plan.len(), 1);
+    }
+
+    /// Leaves a plan held back for want of room, then lets the queue drain
+    /// so that a message sent now gets in ahead of it.
+    fn hold_back_a_plan(ui: &mut UiHandle, engine: &mut EngineHandle, plan: &mut Box<GraphPlan>, node_id: NodeId) {
+        ui.send_command(EngineCommand::SetParameter { node_id: 1, param_index: 0, value: 100.0 });
+        ui.send_command(add(node_id, "osc.sine"));
+        assert!(!ui.flush(), "no room for the plan yet");
+        assert_eq!(run_audio_side(engine, plan), vec!["param"]);
+    }
+
+    fn flush_everything(ui: &mut UiHandle, engine: &mut EngineHandle, plan: &mut Box<GraphPlan>) {
+        let mut frames = 0;
+        while !ui.flush() {
+            run_audio_side(engine, plan);
+            frames += 1;
+            assert!(frames < 10, "edits still held back after {frames} frames");
+        }
+        run_audio_side(engine, plan);
+    }
+
+    #[test]
+    fn test_held_back_plan_doesnt_undo_a_later_knob_or_bypass() {
+        let (mut ui, mut engine) = EngineChannels::new(1, 8).split();
+        let mut plan = Box::new(GraphPlan::empty(256));
+        // A delay, since an oscillator can't be bypassed
+        ui.send_command(add(1, "fx.delay"));
+        assert!(ui.flush());
+        run_audio_side(&mut engine, &mut plan);
+
+        // The held-back plan still has 100
+        hold_back_a_plan(&mut ui, &mut engine, &mut plan, 2);
+        ui.send_command(EngineCommand::SetParameter { node_id: 1, param_index: 0, value: 200.0 });
+        flush_everything(&mut ui, &mut engine, &mut plan);
+        assert_eq!(plan.len(), 2);
+        let delay = plan.nodes.iter().find(|n| n.node_id == 1).unwrap();
+        assert_eq!(delay.params[0], 200.0, "the held-back plan undid the knob");
+
+        // The held-back plan still has the delay playing
+        hold_back_a_plan(&mut ui, &mut engine, &mut plan, 3);
+        ui.send_command(EngineCommand::SetBypass { node_id: 1, bypassed: true });
+        flush_everything(&mut ui, &mut engine, &mut plan);
+        assert_eq!(plan.len(), 3);
+        assert_eq!(plan.is_bypassed(1), Some(true), "the held-back plan undid the bypass");
     }
 
     #[test]
