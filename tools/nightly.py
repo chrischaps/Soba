@@ -1,6 +1,7 @@
 """Runs the checks too slow for every ticket, against the tip of origin/master.
 
     python tools/nightly.py                    every step, if master has moved since the last green run
+                                               by more than pictures (its own [Docs] push among them)
     python tools/nightly.py --force            every step, even if it hasn't
     python tools/nightly.py --only layout,images
     python tools/nightly.py --ref <commit>     check that commit instead: files no issues, pushes nothing
@@ -233,6 +234,18 @@ def push_pictures(worktree, short, log):
     return f"re-shot {', '.join(names)}, but the push was rejected three times; nothing pushed"
 
 
+def only_pictures_since(green, sha, checkout):
+    """Whether every file changed from the green commit to sha is a picture in docs/src/images.
+
+    The images step's own [Docs] push moves master by pictures alone; going by
+    the diff rather than recording the pushed sha keeps any commit it rebased
+    onto from counting as tested. False if git can't tell (a green commit it
+    no longer has)."""
+    diff = run("git", "diff", "--name-only", green, sha, cwd=checkout, check=False)
+    paths = diff.stdout.splitlines()
+    return diff.returncode == 0 and bool(paths) and all(p.startswith("docs/src/images/") for p in paths)
+
+
 def bench_examples(worktree, log, env):
     """Times each of PERF_PATCHES with render --bench: {name: seconds}, or None if the build fails."""
     if step_run(["cargo", "build", "--release", "--bin", "render"], log, worktree, env) != 0:
@@ -425,9 +438,17 @@ def main():
                else run("git", "rev-parse", "origin/master", cwd=checkout).stdout.strip())
         last_green = git_dir / "soba-nightly-last-green"
         whole = steps == STEPS and ref is None
-        if whole and not force and last_green.exists() and last_green.read_text().strip() == sha:
-            print(f"nothing new: {sha[:7]} passed every step last time (--force runs it anyway)")
-            return 0
+        if whole and not force and last_green.exists():
+            green = last_green.read_text().strip()
+            if green == sha:
+                print(f"nothing new: {sha[:7]} passed every step last time (--force runs it anyway)")
+                return 0
+            if only_pictures_since(green, sha, checkout):
+                # Most likely last night's own [Docs] push: it holds the run's verdict
+                last_green.write_text(sha + "\n")
+                print(f"nothing new: only pictures changed since {green[:7]} passed every step"
+                      " (--force runs it anyway)")
+                return 0
 
         stamp = datetime.datetime.now().strftime("%Y-%m-%d-%H%M")
         logs = checkout / "target" / "nightly" / stamp
