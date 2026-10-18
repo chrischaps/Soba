@@ -1,0 +1,91 @@
+name: Archive Short Links
+
+# Once a week, the short-link database (the `patches` table, the garden's
+# `plants` and anything added later) goes as one SQL dump into a private repo,
+# chrischaps/soba-links-archive, so every link outlives the service (#389,
+# docs/SHORT_LINKS.md's Durability). The dump is a list of shared patches, so
+# it never touches this public repo or the run's log: it's written straight
+# into the archive's checkout, and only its size is printed. A dump that
+# hasn't changed since last week commits nothing
+on:
+  schedule:
+    - cron: '17 4 * * 0'   # Sundays, 04:17 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: links-archive
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ARCHIVE_KEY: ${{ secrets.LINKS_ARCHIVE_DEPLOY_KEY }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      # Until both secrets exist the run says so and stops, rather than
+      # failing every week. With only one of them it fails: half set up
+      # means a backup that isn't happening
+      - name: Is the archive set up?
+        id: setup
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] && [ -z "$ARCHIVE_KEY" ]; then
+            echo "::warning::No CLOUDFLARE_API_TOKEN or LINKS_ARCHIVE_DEPLOY_KEY secret yet: nothing archived (see docs/SHORT_LINKS.md)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$ARCHIVE_KEY" ]; then
+            echo "::error::Only one of CLOUDFLARE_API_TOKEN and LINKS_ARCHIVE_DEPLOY_KEY is set"
+            exit 1
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout Soba
+        if: steps.setup.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - name: Checkout the archive
+        if: steps.setup.outputs.ready == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: chrischaps/soba-links-archive
+          ssh-key: ${{ secrets.LINKS_ARCHIVE_DEPLOY_KEY }}
+          path: archive
+
+      - name: Install wrangler
+        if: steps.setup.outputs.ready == 'true'
+        working-directory: packaging/shortlinks
+        run: npm ci --no-audit --no-fund
+
+      # wrangler.toml names the database. A token that sees more than one
+      # account also needs CLOUDFLARE_ACCOUNT_ID, which is optional here
+      - name: Export the database
+        if: steps.setup.outputs.ready == 'true'
+        working-directory: packaging/shortlinks
+        env:
+          ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$ACCOUNT_ID" ]; then export CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID"; fi
+          npx wrangler d1 export soba-links --remote --output "$GITHUB_WORKSPACE/archive/soba-links.sql" > /dev/null
+          dump="$GITHUB_WORKSPACE/archive/soba-links.sql"
+          test -s "$dump"
+          echo "Exported $(wc -c < "$dump") bytes:" \
+            "$(grep -c '^INSERT INTO "\?patches"\? ' "$dump" || true) patches," \
+            "$(grep -c '^INSERT INTO "\?plants"\? ' "$dump" || true) plants"
+
+      - name: Commit it if it changed
+        if: steps.setup.outputs.ready == 'true'
+        working-directory: archive
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add soba-links.sql
+          if git diff --staged --quiet; then
+            echo "Unchanged since the last archive"
+            exit 0
+          fi
+          git commit --quiet -m "Short links as of $(date -u +%Y-%m-%d)"
+          git push --quiet

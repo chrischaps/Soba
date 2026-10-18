@@ -121,8 +121,31 @@ Share posts with `ureq` (already a dependency for updates) on a thread, with a
 ## Durability
 
 If the service ever shuts down, the short links die with it unless they're carried over:
-- A scheduled GitHub Action runs `wrangler d1 export` into a **private** archive
-  repo every week.
+- **Every Sunday the whole database goes to a private repo**,
+  [`chrischaps/soba-links-archive`](https://github.com/chrischaps/soba-links-archive),
+  as one SQL file, `soba-links.sql`: the `patches` table, the garden's `plants`
+  and whatever comes later. The workflow is `.github/workflows/links-archive.yml`
+  (#389). It runs `wrangler d1 export soba-links --remote` and commits the dump only when it
+  changed, so the archive's history is a week-by-week record. The dump goes straight into the
+  archive's checkout and the log shows only its size and row counts. It never reaches this
+  public repo. **Run workflow** on the Actions tab takes a backup at any time.
+- **What it needs** (secrets on this repo):
+  - `LINKS_ARCHIVE_DEPLOY_KEY`: the private half of an SSH key whose public half is a
+    deploy key, with write access, on the archive repo. Create the repo with a README, so it has a
+    branch to check out.
+  - `CLOUDFLARE_API_TOKEN`: a token for the account holding `soba-links`, with
+    **Account › D1 › Edit**. The export API takes a POST, and a read-only D1 token may be refused.
+  - `CLOUDFLARE_ACCOUNT_ID` (optional): needed only if the token can see more than one account.
+
+  Until the first two exist, the run leaves a warning and stops. With only one of them it fails.
+- **Restoring** into a new database, from `packaging/shortlinks/`:
+  ```
+  npx wrangler d1 create soba-links        # then put its database_id in wrangler.toml
+  npx wrangler d1 execute soba-links --remote --file path/to/soba-links-archive/soba-links.sql
+  npx wrangler deploy
+  ```
+  The dump holds its own `CREATE TABLE`s, so it goes into an empty database. Every row keeps
+  its ID, so every link answers as it did.
 - If the service has to go, the archive is written out as static files,
   `soba.chaps.dev/s/<id>.txt`, and the app tries that same-origin path
   when the API doesn't answer. Every link keeps working on GitHub Pages alone.
