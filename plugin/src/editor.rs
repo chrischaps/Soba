@@ -1,8 +1,8 @@
 //! The plugin's editor: the app, drawn in a window the DAW gives it.
 //!
-//! nih_plug_egui does this for egui 0.31; Soba is on 0.30, so this is the
-//! same glue over egui-baseview's egui 0.30 release, with the app's frame
-//! as the editor's update.
+//! nih_plug_egui does this, but it lags egui; this is the same glue over our
+//! fork of egui-baseview (see plugin/Cargo.toml), which follows the egui Soba
+//! is on, with the app's frame as the editor's update.
 
 use baseview::gl::GlConfig;
 use baseview::{Size, WindowHandle, WindowOpenOptions, WindowScalePolicy};
