@@ -197,7 +197,7 @@ fn chip(ui: &mut egui::Ui, variation: &Variation, current: bool, original: bool)
     } else {
         Stroke::new(1.0_f32, theme::background::WIDGET_ACTIVE)
     };
-    painter.rect_stroke(rect, 6.0, ring);
+    painter.rect_stroke(rect, 6.0, ring, egui::StrokeKind::Middle);
 
     let tick: Color32 = if original { theme::text::QUIET } else { theme::signal::CONTROL };
     let inner = rect.shrink2(vec2(6.0, 5.0));

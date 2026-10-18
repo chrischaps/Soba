@@ -452,7 +452,7 @@ fn button(ui: &egui::Ui, painter: &egui::Painter, rect: Rect, id: impl std::hash
     } else {
         (theme::background::WIDGET, theme::background::WIDGET_ACTIVE, theme::text::SECONDARY)
     };
-    painter.rect(rect, 3.0 * z, fill, Stroke::new(1.0 * z, stroke));
+    painter.rect(rect, 3.0 * z, fill, Stroke::new(1.0 * z, stroke), egui::StrokeKind::Middle);
     painter.text(rect.center(), egui::Align2::CENTER_CENTER, text, egui::FontId::proportional(8.0 * z), ink);
     let clicked = response.clicked();
     response.on_hover_text(tip);
@@ -471,7 +471,7 @@ struct Lights<'a> {
 /// Draws one channel's lane of the stereo field.
 fn draw_lane(painter: &egui::Painter, lane: Rect, strip: &StripView, lights: Lights, z: f32) {
     let Lights { hue, is_heard, meter, playing } = lights;
-    painter.rect(lane, 4.0 * z, theme::background::MAIN, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
+    painter.rect(lane, 4.0 * z, theme::background::MAIN, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
     let inset = 7.0 * z;
     let (x_left, x_right) = (lane.left() + inset, lane.right() - inset);
     let x_at = |pan: f32| x_left + (x_right - x_left) * (pan + 1.0) * 0.5;

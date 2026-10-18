@@ -128,7 +128,7 @@ pub fn cloud_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
         painter.rect_filled(Rect::from_x_y_ranges(edge..=plot.right(), plot.y_range()), 0.0, with_alpha(display_frame::PANEL, 200));
     }
     if frozen {
-        painter.rect_stroke(rect.shrink(0.5 * z), 3.0 * z, Stroke::new(1.0 * z, with_alpha(ICE, 120)));
+        painter.rect_stroke(rect.shrink(0.5 * z), 3.0 * z, Stroke::new(1.0 * z, with_alpha(ICE, 120)), egui::StrokeKind::Middle);
     }
 
     // Every grain a spark: its place across, its pan up and down
@@ -158,7 +158,7 @@ pub fn cloud_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     display_frame::header(&painter, rect, z, Some(source), count);
 
     if drop_here {
-        painter.rect_stroke(rect.shrink(1.0 * z), 3.0 * z, Stroke::new(1.5 * z, theme::text::ACCENT));
+        painter.rect_stroke(rect.shrink(1.0 * z), 3.0 * z, Stroke::new(1.5 * z, theme::text::ACCENT), egui::StrokeKind::Middle);
     }
     if response.clicked() && !live {
         responses.push(SynthResponse::OpenSample(node_id));
@@ -203,7 +203,7 @@ pub fn cloud_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     let open = ui.interact(button, ui.id().with(("cloud_open", node_id)), Sense::click());
     super::marks::mark(ui.ctx(), node_id, "file", button);
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
-    ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
+    ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
     ui.painter().text(button.center(), egui::Align2::CENTER_CENTER, "Open…", small, theme::text::PRIMARY);
     if open.on_hover_text("Open a WAV, MP3, FLAC or Ogg file for this Cloud").clicked() {
         responses.push(SynthResponse::OpenSample(node_id));

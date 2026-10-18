@@ -383,7 +383,7 @@ fn lane_rows(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, at
             let fill = Rect::from_min_max(Pos2::new(pad.left(), pad.bottom() - pad.height() * share.max(0.12)), pad.max);
             painter.rect_filled(fill, round, color.gamma_multiply(fade));
             if s.probability < 100 {
-                painter.rect_stroke(pad.shrink(0.5 * z), round, Stroke::new(1.0 * z, color.gamma_multiply(0.8 * fade)));
+                painter.rect_stroke(pad.shrink(0.5 * z), round, Stroke::new(1.0 * z, color.gamma_multiply(0.8 * fade)), egui::StrokeKind::Middle);
             }
             // A ratchet splits the pad into its hits
             for cut in 1..s.ratchet {
@@ -398,7 +398,7 @@ fn lane_rows(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, at
         }
         if here {
             let strength = if playing { 0.85 } else { 0.3 };
-            painter.rect_stroke(pad.expand(0.5 * z), round, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(strength)));
+            painter.rect_stroke(pad.expand(0.5 * z), round, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(strength)), egui::StrokeKind::Middle);
         }
         // The end of a lane that loops on its own
         if length > 0 && step + 1 == length {
@@ -661,7 +661,7 @@ pub(super) fn pattern_tabs(
         let fill = if selected { theme::background::WIDGET_ACTIVE } else { theme::background::WIDGET };
         painter.rect_filled(rect, 3.0 * z, fill);
         if selected {
-            painter.rect_stroke(rect, 3.0 * z, Stroke::new(1.0 * z, theme::text::SECONDARY));
+            painter.rect_stroke(rect, 3.0 * z, Stroke::new(1.0 * z, theme::text::SECONDARY), egui::StrokeKind::Middle);
         }
         let ink = if selected { theme::text::PRIMARY } else { theme::text::SECONDARY };
         painter.text(rect.center() - Vec2::new(2.0 * z, 0.0), egui::Align2::CENTER_CENTER, letter, letter_font.clone(), ink);
@@ -756,7 +756,7 @@ pub(super) fn pattern_tabs(
             .on_hover_cursor(CursorIcon::PointingHand)
             .on_hover_text(format!("Add a bar of {} to the chain", PATTERN_NAMES[editing]));
         let ink = if response.hovered() { theme::text::PRIMARY } else { theme::text::DISABLED };
-        painter.rect_stroke(rect.shrink(0.5 * z), 2.5 * z, Stroke::new(1.0 * z, ink.gamma_multiply(fade)));
+        painter.rect_stroke(rect.shrink(0.5 * z), 2.5 * z, Stroke::new(1.0 * z, ink.gamma_multiply(fade)), egui::StrokeKind::Middle);
         painter.text(rect.center(), egui::Align2::CENTER_CENTER, "+", letter_font.clone(), ink.gamma_multiply(fade));
         x += slot_size.x + 2.0 * z;
         if response.clicked() {
@@ -813,7 +813,7 @@ fn follow_toggle(ui: &mut egui::Ui, node_id: NodeId, z: f32, rect: Rect, playing
         (theme::background::WIDGET, Color32::TRANSPARENT, theme::text::SECONDARY)
     };
     painter.rect_filled(rect, 3.0 * z, fill);
-    painter.rect_stroke(rect, 3.0 * z, Stroke::new(1.0 * z, stroke));
+    painter.rect_stroke(rect, 3.0 * z, Stroke::new(1.0 * z, stroke), egui::StrokeKind::Middle);
     // A playhead's arrow, filled green while it follows
     let tip = Pos2::new(rect.left() + 10.0 * z, rect.center().y);
     let arrow = vec![tip + Vec2::new(-4.0 * z, -3.5 * z), tip + Vec2::new(1.0 * z, 0.0), tip + Vec2::new(-4.0 * z, 3.5 * z)];

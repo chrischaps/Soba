@@ -117,7 +117,7 @@ pub fn noise_display(ui: &mut Ui, config: &NoiseDisplayConfig) -> Response {
         );
     }
 
-    painter.rect_stroke(rect, 2.0 * scale, Stroke::new(1.0 * scale, Color32::from_rgb(50, 55, 70)));
+    painter.rect_stroke(rect, 2.0 * scale, Stroke::new(1.0 * scale, Color32::from_rgb(50, 55, 70)), egui::StrokeKind::Middle);
 
     if config.playing {
         crate::app::pace::animate(ui.ctx());

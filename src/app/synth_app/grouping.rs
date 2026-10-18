@@ -584,11 +584,11 @@ impl SynthApp {
             .fixed_pos(self.editor_rect.left_top() + vec2(14.0, 12.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(theme::background::PANEL.gamma_multiply(0.96))
                     .stroke(egui::Stroke::new(1.0_f32, rose.gamma_multiply(0.55)))
-                    .rounding(16.0)
-                    .inner_margin(egui::Margin::symmetric(14.0, 7.0))
+                    .corner_radius(16.0)
+                    .inner_margin(egui::Margin::symmetric(14, 7))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 8.0;
@@ -631,7 +631,7 @@ impl SynthApp {
             FontId::new(72.0, egui::FontFamily::Name(theme::TITLE_FAMILY.into())),
             rose.gamma_multiply(0.07),
         );
-        painter.rect_stroke(rect.shrink(1.0), 0.0, egui::Stroke::new(2.0_f32, rose.gamma_multiply(0.35)));
+        painter.rect_stroke(rect.shrink(1.0), 0.0, egui::Stroke::new(2.0_f32, rose.gamma_multiply(0.35)), egui::StrokeKind::Middle);
     }
 }
 

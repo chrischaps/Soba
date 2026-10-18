@@ -99,7 +99,7 @@ pub fn logic_display(
     // --- The column, at the right: CV against Threshold ---
     let column = Rect::from_x_y_ranges(rect.right() - 12.0 * z..=rect.right() - 2.0 * z, rect.top() + 1.0 * z..=rect.bottom() - 10.0 * z);
     let y_at = |value: f32| column.bottom() - column.height() * ((value + 1.0) / 2.0).clamp(0.0, 1.0);
-    painter.rect(column, 3.0 * z, theme::background::MAIN, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
+    painter.rect(column, 3.0 * z, theme::background::MAIN, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
     let level = Rect::from_x_y_ranges(column.shrink(2.0 * z).x_range(), y_at(cv)..=column.bottom() - 2.0 * z);
     if level.height() > 0.0 {
         painter.rect_filled(level, 2.0 * z, if above { green } else { orange.gamma_multiply(0.6) });
@@ -135,10 +135,10 @@ pub fn logic_display(
         let lamp = Rect::from_min_size(min, lamp_size);
         let lit = engine_node_id.and_then(|id| user_state.get_output_value(id, port)).is_some_and(|v| v > 0.5);
         if lit {
-            painter.rect(lamp, 4.0 * z, green.gamma_multiply(0.8), Stroke::new(1.0 * z, green));
+            painter.rect(lamp, 4.0 * z, green.gamma_multiply(0.8), Stroke::new(1.0 * z, green), egui::StrokeKind::Middle);
             painter.text(lamp.center(), egui::Align2::CENTER_CENTER, label, small.clone(), Color32::WHITE);
         } else {
-            painter.rect(lamp, 4.0 * z, theme::background::MAIN, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
+            painter.rect(lamp, 4.0 * z, theme::background::MAIN, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
             painter.text(lamp.center(), egui::Align2::CENTER_CENTER, label, small.clone(), theme::text::DISABLED);
         }
     }

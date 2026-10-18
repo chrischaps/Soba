@@ -8,7 +8,7 @@
 //! where it's playing, it plays on. Desktop only: the browser says what's
 //! dragged only when it's dropped.
 
-use eframe::egui::{self, Color32, Pos2, Rect, Stroke};
+use eframe::egui::{self, Color32, CornerRadius, Pos2, Rect, Stroke};
 
 use crate::app::theme;
 use crate::dsp::ModuleCategory;
@@ -80,13 +80,13 @@ impl SynthApp {
         let blue = ModuleCategory::Source.color();
         let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::new("ghost sampler"));
         let painter = ctx.layer_painter(layer).with_clip_rect(self.editor_rect);
-        let rounding = theme::ROUNDING.nw * z;
+        let rounding = CornerRadius::from(theme::ROUNDING.nw as f32 * z);
         painter.rect_filled(card, rounding, Color32::from_gray(63).gamma_multiply(0.75));
         let header = Rect::from_min_size(card.min, egui::vec2(card.width(), GHOST_HEADER * z));
-        painter.rect_filled(header, egui::Rounding { nw: rounding, ne: rounding, sw: 0.0, se: 0.0 }, blue.gamma_multiply(0.35));
+        painter.rect_filled(header, CornerRadius { sw: 0, se: 0, ..rounding }, blue.gamma_multiply(0.35));
         let title = egui::FontId::proportional(13.0 * z);
         painter.text(header.left_center() + egui::vec2(8.0 * z, 0.0), egui::Align2::LEFT_CENTER, "Sampler", title, Color32::WHITE.gamma_multiply(0.7));
-        painter.rect_stroke(card, rounding, Stroke::new(1.0 * z, blue.gamma_multiply(0.6)));
+        painter.rect_stroke(card, rounding, Stroke::new(1.0 * z, blue.gamma_multiply(0.6)), egui::StrokeKind::Middle);
 
         let panel = Rect::from_min_size(card.min + GHOST_PANEL.min.to_vec2() * z, GHOST_PANEL.size() * z);
         let plot = panel.shrink2(egui::vec2(4.0 * z, 3.0 * z));
@@ -98,7 +98,7 @@ impl SynthApp {
             }
             // Still being read: an empty panel, as a Sampler's is before it's loaded
             None => {
-                painter.rect_stroke(plot, 2.0 * z, Stroke::new(1.0 * z, blue.gamma_multiply(0.4)));
+                painter.rect_stroke(plot, 2.0 * z, Stroke::new(1.0 * z, blue.gamma_multiply(0.4)), egui::StrokeKind::Middle);
             }
         }
     }

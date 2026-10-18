@@ -1757,7 +1757,7 @@ impl SynthApp {
         let mut editor_rect = egui::Rect::NOTHING;
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::none())
+            .frame(egui::Frame::NONE)
             .show(ctx, |ui| {
                 // Store editor rect for coordinate conversion
                 editor_rect = ui.available_rect_before_wrap();
@@ -2903,15 +2903,15 @@ impl SynthApp {
             .anchor(egui::Align2::LEFT_TOP, egui::vec2(12.0, 12.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(theme::background::PANEL)
                     .stroke(egui::Stroke::new(1.0_f32, theme::background::PANEL.gamma_multiply(1.6)))
-                    .rounding(10.0)
-                    .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+                    .corner_radius(10.0)
+                    .inner_margin(egui::Margin::symmetric(10, 8))
                     .shadow(egui::epaint::Shadow {
-                        offset: egui::vec2(0.0, 4.0),
-                        blur: 16.0,
-                        spread: 0.0,
+                        offset: [0, 4],
+                        blur: 16,
+                        spread: 0,
                         color: egui::Color32::from_black_alpha(90),
                     })
                     .show(ui, |ui| {
@@ -3762,9 +3762,9 @@ impl SynthApp {
         if !self.embedded {
             // Top toolbar panel
             let toolbar_actions = egui::TopBottomPanel::top("toolbar")
-                .frame(egui::Frame::none()
+                .frame(egui::Frame::NONE
                     .fill(theme::background::PANEL)
-                    .inner_margin(egui::Margin::symmetric(8.0, 8.0)))
+                    .inner_margin(egui::Margin::symmetric(8, 8)))
                 .show(ctx, |ui| {
                     self.draw_toolbar(ui)
                 })
@@ -3772,9 +3772,9 @@ impl SynthApp {
 
             // Bottom status bar
             egui::TopBottomPanel::bottom("status_bar")
-                .frame(egui::Frame::none()
+                .frame(egui::Frame::NONE
                     .fill(theme::background::PANEL)
-                    .inner_margin(egui::Margin::symmetric(0.0, 4.0)))
+                    .inner_margin(egui::Margin::symmetric(0, 4)))
                 .show(ctx, |ui| {
                     self.draw_status_bar(ui);
                 });

@@ -145,6 +145,7 @@ pub fn oscilloscope_display(
             rect,
             4.0 * zoom_scale,
             Stroke::new(1.0 * zoom_scale, Color32::from_rgb(60, 65, 80)),
+            egui::StrokeKind::Middle,
         );
     }
 

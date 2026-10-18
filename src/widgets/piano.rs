@@ -266,6 +266,7 @@ pub fn piano_keys(ui: &mut Ui, data: &PianoData, config: &PianoConfig) -> (Respo
                 key_rect,
                 2.0,
                 egui::Stroke::new(0.5_f32, Color32::from_gray(if lit { 120 } else { 60 })),
+                egui::StrokeKind::Middle,
             );
 
             // Add subtle 3D effect (top highlight)
@@ -279,7 +280,7 @@ pub fn piano_keys(ui: &mut Ui, data: &PianoData, config: &PianoConfig) -> (Respo
 
             mark(Pos2::new(key_rect.center().x, key_rect.bottom() - 6.0 * scale), semitone, is_active);
             if config.clickable && hovered == Some(semitone) {
-                painter.rect_stroke(key_rect.shrink(0.75 * scale), 2.0, hover_stroke);
+                painter.rect_stroke(key_rect.shrink(0.75 * scale), 2.0, hover_stroke, egui::StrokeKind::Middle);
             }
         };
 
@@ -287,14 +288,14 @@ pub fn piano_keys(ui: &mut Ui, data: &PianoData, config: &PianoConfig) -> (Respo
         // both sides, and grows with the keyboard. It stays on the keys: the
         // glow is clipped to the keyboard rather than bleeding onto the module.
         let glow_painter = painter.with_clip_rect(painter.clip_rect().intersect(keyboard_rect));
+        // Built as Shadow::as_shape builds it, but with the blur and spread
+        // unrounded: Shadow holds them in whole points, which would step as
+        // the keyboard zooms
         let glow = |key_rect: Rect, rounding: f32| {
-            let shadow = egui::epaint::Shadow {
-                offset: Vec2::ZERO,
-                blur: 6.0 * scale,
-                spread: 1.0 * scale,
-                color: config.glow_color.gamma_multiply(0.75),
-            };
-            glow_painter.add(shadow.as_shape(key_rect, rounding));
+            let spread = 1.0 * scale;
+            let shape = egui::epaint::RectShape::filled(key_rect.expand(spread), rounding + spread, config.glow_color.gamma_multiply(0.75))
+                .with_blur_width(6.0 * scale);
+            glow_painter.add(shape);
         };
 
         // White keys first; then the pressed ones' glow over their neighbours,
@@ -340,7 +341,7 @@ pub fn piano_keys(ui: &mut Ui, data: &PianoData, config: &PianoConfig) -> (Respo
 
             mark(Pos2::new(key_rect.center().x, key_rect.bottom() - 5.0 * scale), semitone, is_active);
             if config.clickable && hovered == Some(semitone) {
-                painter.rect_stroke(key_rect, 1.5, hover_stroke);
+                painter.rect_stroke(key_rect, 1.5, hover_stroke, egui::StrokeKind::Middle);
             }
         }
 

@@ -525,7 +525,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
             };
             painter.rect_filled(*rect, 4.0 * z, fill);
             if playing {
-                painter.rect_stroke(*rect, 4.0 * z, Stroke::new(2.0 * z, Color32::WHITE));
+                painter.rect_stroke(*rect, 4.0 * z, Stroke::new(2.0 * z, Color32::WHITE), egui::StrokeKind::Middle);
             }
             // Velocity, along the foot
             if on {
@@ -579,7 +579,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
         }
 
         let Some(mut open) = entry else { return };
-        painter.rect_stroke(cells[open.step].0.expand(2.0 * z), 5.0 * z, Stroke::new(2.0_f32, theme::signal::CONTROL));
+        painter.rect_stroke(cells[open.step].0.expand(2.0 * z), 5.0 * z, Stroke::new(2.0_f32, theme::signal::CONTROL), egui::StrokeKind::Middle);
 
         let (back, on, escape) = ui.input_mut(|i| {
             (

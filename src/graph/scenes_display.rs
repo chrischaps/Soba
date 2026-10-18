@@ -111,7 +111,7 @@ pub fn scenes_display(
         } else {
             Stroke::new(1.0 * z, theme::background::WIDGET_ACTIVE)
         };
-        painter.rect_stroke(pad, 3.0 * z, ring);
+        painter.rect_stroke(pad, 3.0 * z, ring, egui::StrokeKind::Middle);
 
         let letter = scenes::letter(slot);
         match scene {

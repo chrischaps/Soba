@@ -248,7 +248,7 @@ fn draw_stack(painter: &egui::Painter, center: Pos2, size: f32, ink: Color32) {
     let back = Rect::from_center_size(center + vec2(size * 0.14, -size * 0.14), vec2(side, side));
     let front = Rect::from_center_size(center + vec2(-size * 0.12, size * 0.12), vec2(side, side));
     let rounding = size * 0.12;
-    painter.rect_stroke(back, rounding, Stroke::new((size * 0.1).max(1.0), ink.gamma_multiply(0.75)));
+    painter.rect_stroke(back, rounding, Stroke::new((size * 0.1).max(1.0), ink.gamma_multiply(0.75)), egui::StrokeKind::Middle);
     painter.rect_filled(front.expand(size * 0.07), rounding, theme::module::GROUP);
     painter.rect_filled(front, rounding, ink);
 }
@@ -358,7 +358,7 @@ pub fn miniature_transform(rect: Rect, preview: &Preview, zoom: f32) -> Option<T
 pub fn paint_miniature(painter: &egui::Painter, rect: Rect, preview: &Preview, zoom: f32, lit: bool) {
     let rounding = 6.0 * zoom;
     let rose = theme::module::GROUP;
-    painter.rect(rect, rounding, PREVIEW_FILL, Stroke::new(1.0_f32, rose.gamma_multiply(if lit { 0.8 } else { 0.3 })));
+    painter.rect(rect, rounding, PREVIEW_FILL, Stroke::new(1.0_f32, rose.gamma_multiply(if lit { 0.8 } else { 0.3 })), egui::StrokeKind::Middle);
 
     let Some(to_face) = miniature_transform(rect, preview, zoom) else {
         painter.text(rect.center(), Align2::CENTER_CENTER, "Empty", FontId::proportional(11.0 * zoom), theme::text::DISABLED);
@@ -393,7 +393,7 @@ pub fn paint_open_pill(painter: &egui::Painter, rect: Rect, zoom: f32) {
     let galley = painter.layout_no_wrap(label.to_string(), font, theme::text::PRIMARY);
     let pill = Rect::from_center_size(rect.center(), galley.size() + vec2(18.0, 8.0) * zoom);
     painter.rect_filled(pill, pill.height() / 2.0, Color32::from_black_alpha(190));
-    painter.rect_stroke(pill, pill.height() / 2.0, Stroke::new(1.0_f32, rose.gamma_multiply(0.9)));
+    painter.rect_stroke(pill, pill.height() / 2.0, Stroke::new(1.0_f32, rose.gamma_multiply(0.9)), egui::StrokeKind::Middle);
     painter.galley(pill.center() - galley.size() / 2.0, galley, theme::text::PRIMARY);
 }
 

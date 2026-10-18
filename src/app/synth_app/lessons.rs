@@ -317,12 +317,12 @@ impl SynthApp {
             .order(egui::Order::Foreground)
             .fixed_pos(pos2(x, y))
             .show(ctx, |ui| {
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(theme::background::PANEL.gamma_multiply(0.98))
                     .stroke(Stroke::new(1.0_f32, GOLD.gamma_multiply(if met { 0.9 } else { 0.55 })))
-                    .rounding(12.0)
-                    .shadow(egui::epaint::Shadow { offset: vec2(0.0, 6.0), blur: 22.0, spread: 0.0, color: Color32::from_black_alpha(110) })
-                    .inner_margin(egui::Margin::symmetric(16.0, 13.0))
+                    .corner_radius(12.0)
+                    .shadow(egui::epaint::Shadow { offset: [0, 6], blur: 22, spread: 0, color: Color32::from_black_alpha(110) })
+                    .inner_margin(egui::Margin::symmetric(16, 13))
                     .show(ui, |ui| {
                         ui.set_width(CARD_WIDTH - 32.0);
                         // Which lesson, how far, and the way out
@@ -454,7 +454,7 @@ fn glow(painter: &egui::Painter, rect: Rect, breath: f32) {
     } else {
         let rect = rect.expand(6.0 + 2.0 * breath);
         for (grow, width, a) in [(6.0, 7.0, 0.10), (3.0, 4.0_f32, 0.2), (0.0, 1.8, 0.85)] {
-            painter.rect_stroke(rect.expand(grow), 14.0 + grow, Stroke::new(width, GOLD.gamma_multiply(a * alpha)));
+            painter.rect_stroke(rect.expand(grow), 14.0 + grow, Stroke::new(width, GOLD.gamma_multiply(a * alpha)), egui::StrokeKind::Middle);
         }
     }
 }
@@ -616,7 +616,7 @@ fn gold_button(ui: &mut egui::Ui, text: &str) -> egui::Response {
     ui.add(
         egui::Button::new(egui::RichText::new(text).color(Color32::from_rgb(40, 30, 10)).strong())
             .fill(GOLD)
-            .rounding(6.0),
+            .corner_radius(6.0),
     )
 }
 

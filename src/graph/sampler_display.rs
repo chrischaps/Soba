@@ -314,7 +314,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
 
     // A file dragged over: this is where it lands
     if drop_here {
-        painter.rect_stroke(rect.shrink(0.5 * z), 3.0 * z, Stroke::new(1.5 * z, blue));
+        painter.rect_stroke(rect.shrink(0.5 * z), 3.0 * z, Stroke::new(1.5 * z, blue), egui::StrokeKind::Middle);
         if loaded.is_some() {
             painter.rect_filled(rect, 3.0 * z, Color32::from_rgba_unmultiplied(blue.r(), blue.g(), blue.b(), 28));
             painter.text(rect.center(), egui::Align2::CENTER_CENTER, "Drop to replace", egui::FontId::proportional(10.0 * z), Color32::WHITE);
@@ -366,7 +366,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     };
     if let Some((from, to)) = pointed.zip(slices).map(|(index, slices)| span_of(slices, index)).or(let_go) {
         let heard = Rect::from_x_y_ranges(x_at(from)..=x_at(to), plot.y_range());
-        painter.rect_stroke(heard, 1.0 * z, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.6)));
+        painter.rect_stroke(heard, 1.0 * z, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.6)), egui::StrokeKind::Middle);
     } else if let (true, Some(_), Some(p), None, false) = (alt, shown, response.hover_pos(), dragging, slice_dragging) {
         let x = x_at(place_at(p.x));
         let line = [Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())];
@@ -512,7 +512,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             (false, true) => theme::background::WIDGET_HOVERED,
             (false, false) => theme::background::WIDGET,
         };
-        ui.painter().rect(play, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
+        ui.painter().rect(play, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
         let c = play.center();
         let icon = theme::text::PRIMARY;
         if cue.is_some() {
@@ -552,7 +552,7 @@ pub fn sampler_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     let open = ui.interact(button, ui.id().with(("sampler_open", node_id)), Sense::click());
     super::marks::mark(ui.ctx(), node_id, "file", button);
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
-    ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
+    ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
     ui.painter().text(button.center(), egui::Align2::CENTER_CENTER, "Open…", small, theme::text::PRIMARY);
     if open.on_hover_text("Open a WAV, MP3, FLAC or Ogg file for this Sampler").clicked() {
         responses.push(SynthResponse::OpenSample(node_id));

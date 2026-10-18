@@ -443,7 +443,7 @@ pub(super) fn step_grid(
             };
             painter.rect_filled(*step_rect, 3.0 * zoom, color);
             if is_current {
-                painter.rect_stroke(*step_rect, 3.0 * zoom, egui::Stroke::new(2.0 * zoom, Color32::WHITE));
+                painter.rect_stroke(*step_rect, 3.0 * zoom, egui::Stroke::new(2.0 * zoom, Color32::WHITE), egui::StrokeKind::Middle);
             }
 
             // Note name below
@@ -513,7 +513,7 @@ pub(super) fn step_grid(
             return;
         };
         // The step the next key writes
-        painter.rect_stroke(cells[open.step].0.expand(2.0 * zoom), 4.0, egui::Stroke::new(2.0_f32, theme::signal::CONTROL));
+        painter.rect_stroke(cells[open.step].0.expand(2.0 * zoom), 4.0, egui::Stroke::new(2.0_f32, theme::signal::CONTROL), egui::StrokeKind::Middle);
 
         let (back, on, escape) = ui.input_mut(|i| {
             (

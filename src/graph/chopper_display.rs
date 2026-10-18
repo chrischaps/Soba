@@ -308,7 +308,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     }
 
     if drop_here {
-        painter.rect_stroke(wave_rect.shrink(0.5 * z), 3.0 * z, Stroke::new(1.5 * z, blue));
+        painter.rect_stroke(wave_rect.shrink(0.5 * z), 3.0 * z, Stroke::new(1.5 * z, blue), egui::StrokeKind::Middle);
         if loaded.is_some() {
             painter.rect_filled(wave_rect, 3.0 * z, blue.gamma_multiply(0.11));
             painter.text(wave_rect.center(), egui::Align2::CENTER_CENTER, "Drop to replace", FontId::proportional(10.0 * z), Color32::WHITE);
@@ -355,7 +355,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         let pointed = in_hand.or_else(|| pointer.and_then(|p| slices.at(place_at(p.x) as f64, 0.0, 1.0)));
         if let (true, Some(index)) = (alt, pointed) {
             let (from, to) = span_of(index);
-            painter.rect_stroke(Rect::from_x_y_ranges(x_at(from)..=x_at(to), plot.y_range()), 1.0 * z, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.6)));
+            painter.rect_stroke(Rect::from_x_y_ranges(x_at(from)..=x_at(to), plot.y_range()), 1.0 * z, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.6)), egui::StrokeKind::Middle);
             if wave.clicked() {
                 responses.push(SynthResponse::CueSample { node_id, from, to });
             }
@@ -499,7 +499,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
             (false, true) => theme::background::WIDGET_HOVERED,
             (false, false) => theme::background::WIDGET,
         };
-        ui.painter().rect(play, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
+        ui.painter().rect(play, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
         let c = play.center();
         if cue.is_some() {
             ui.painter().rect_filled(Rect::from_center_size(c, Vec2::splat(5.0 * z)), 0.5 * z, theme::text::PRIMARY);
@@ -549,7 +549,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
     }
     let open = ui.interact(button, ui.id().with(("chopper_open", node_id)), Sense::click());
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
-    ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
+    ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
     ui.painter().text(button.center(), egui::Align2::CENTER_CENTER, "Open…", small, theme::text::PRIMARY);
     if open.on_hover_text("Open a loop (WAV, MP3, FLAC or Ogg) for this Chopper").clicked() {
         responses.push(SynthResponse::OpenSample(node_id));
@@ -603,7 +603,7 @@ fn draw_step(painter: &egui::Painter, cell: Rect, at: &StepAt, here: bool, z: f3
     let round = 2.0 * z.min(cell.width() / 4.0);
     if !step.plays {
         painter.rect_filled(cell, round, theme::background::WIDGET.gamma_multiply(0.5));
-        painter.rect_stroke(cell.shrink(0.5 * z), round, Stroke::new(1.0 * z, hue.gamma_multiply(0.35)));
+        painter.rect_stroke(cell.shrink(0.5 * z), round, Stroke::new(1.0 * z, hue.gamma_multiply(0.35)), egui::StrokeKind::Middle);
     } else {
         let color = if here { hue.lerp_to_gamma(Color32::WHITE, 0.4) } else { hue.gamma_multiply(0.85) };
         if here {
@@ -638,7 +638,7 @@ fn draw_step(painter: &egui::Painter, cell: Rect, at: &StepAt, here: bool, z: f3
         painter.circle_filled(Pos2::new(cell.right() - r - 0.8 * z, cell.top() + r + 0.8 * z), r, Color32::WHITE.gamma_multiply(0.9));
     }
     if here {
-        painter.rect_stroke(cell.expand(0.5 * z), round, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(0.85)));
+        painter.rect_stroke(cell.expand(0.5 * z), round, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(0.85)), egui::StrokeKind::Middle);
     }
 }
 

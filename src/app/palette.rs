@@ -360,15 +360,15 @@ impl QuickAdd {
 
 /// The palette's panel: the toolbar's colour, lifted off the graph.
 fn palette_frame() -> egui::Frame {
-    egui::Frame::none()
+    egui::Frame::NONE
         .fill(theme::background::PANEL)
         .stroke(egui::Stroke::new(1.0_f32, theme::background::WIDGET_ACTIVE))
-        .rounding(10.0)
-        .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+        .corner_radius(10.0)
+        .inner_margin(egui::Margin::symmetric(10, 8))
         .shadow(egui::epaint::Shadow {
-            offset: Vec2::new(0.0, 6.0),
-            blur: 24.0,
-            spread: 0.0,
+            offset: [0, 6],
+            blur: 24,
+            spread: 0,
             color: Color32::from_black_alpha(140),
         })
 }

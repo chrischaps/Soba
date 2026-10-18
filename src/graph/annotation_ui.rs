@@ -12,7 +12,7 @@
 
 use egui::text::{CCursor, CCursorRange, LayoutJob, TextFormat};
 use egui::{
-    pos2, vec2, Color32, Mesh, CursorIcon, FontFamily, FontId, Id, PointerButton, Pos2, Rect, Rounding, Sense,
+    pos2, vec2, Color32, Mesh, CursorIcon, FontFamily, FontId, Id, PointerButton, Pos2, Rect, CornerRadius, Sense,
     Shape, Stroke, Ui, UiBuilder, Vec2,
 };
 use egui::emath::TSTransform;
@@ -442,7 +442,8 @@ fn paint_frame(ui: &Ui, slot: egui::layers::ShapeIdx, labels: &mut Vec<Shape>, t
     // A faint wash of the tint, a little deeper across the title band
     let wash = tint.gamma_multiply(if selected { 0.095 } else { 0.07 });
     shapes.push(Shape::rect_filled(screen, rounding, wash));
-    let band_rounding = Rounding { nw: rounding, ne: rounding, sw: 0.0, se: 0.0 };
+    let r = CornerRadius::from(rounding);
+    let band_rounding = CornerRadius { sw: 0, se: 0, ..r };
     let band_wash = tint.gamma_multiply(if hovered { 0.12 } else { 0.07 });
     shapes.push(Shape::rect_filled(band, band_rounding, band_wash));
     let outline = if selected {
@@ -452,7 +453,7 @@ fn paint_frame(ui: &Ui, slot: egui::layers::ShapeIdx, labels: &mut Vec<Shape>, t
     } else {
         Stroke::new(1.0_f32, tint.gamma_multiply(0.28))
     };
-    shapes.push(Shape::rect_stroke(screen, rounding, outline));
+    shapes.push(Shape::rect_stroke(screen, rounding, outline, egui::StrokeKind::Middle));
 
     // The title, in spaced capitals, and a hairline ruled on from it to the
     // edge, as sections are marked out on a printed panel. The title sits
@@ -770,9 +771,9 @@ fn note_ui(
     );
     shapes.push(Shape::rect_filled(mark, NOTE_MARK_WIDTH * zoom * 0.5, NOTE_MARK.gamma_multiply(0.55)));
     if selected || editing {
-        shapes.push(Shape::rect_stroke(card, rounding, Stroke::new(1.0_f32, NOTE_MARK.gamma_multiply(0.7))));
+        shapes.push(Shape::rect_stroke(card, rounding, Stroke::new(1.0_f32, NOTE_MARK.gamma_multiply(0.7)), egui::StrokeKind::Middle));
     } else if body.hovered() || widen.hovered() {
-        shapes.push(Shape::rect_stroke(card, rounding, Stroke::new(1.0_f32, NOTE_INK.gamma_multiply(0.18))));
+        shapes.push(Shape::rect_stroke(card, rounding, Stroke::new(1.0_f32, NOTE_INK.gamma_multiply(0.18)), egui::StrokeKind::Middle));
     }
     if let Some(text) = lettered {
         // A note is lettered over the cables, as a frame's title is

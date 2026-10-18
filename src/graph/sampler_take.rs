@@ -361,7 +361,7 @@ pub fn rec_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, user_state: &S
         (_, _, true) => theme::background::WIDGET_HOVERED,
         _ => theme::background::WIDGET,
     };
-    ui.painter().rect(rect, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
+    ui.painter().rect(rect, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
     // Recording, it's a stop button, as ▶ is while cueing
     if view.state == RecState::Recording {
         ui.painter().rect_filled(Rect::from_center_size(rect.center(), Vec2::splat(5.0 * z)), 0.5 * z, Color32::WHITE);

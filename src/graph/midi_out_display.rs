@@ -149,7 +149,7 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         let patched = value >= 0.0;
         let number = display_frame::value_of(graph, node_id, ["CC 1 #", "CC 2 #", "CC 3 #", "CC 4 #"][lane]).unwrap_or(0.0).round();
         let slot = Rect::from_min_size(Pos2::new(row.left() + pitch * lane as f32 + 2.0 * z, row.top()), Vec2::new(pitch - 4.0 * z, 5.0 * z));
-        painter.rect(slot, 2.0 * z, theme::background::MAIN, Stroke::new(0.5 * z, theme::background::GRID_MAJOR));
+        painter.rect(slot, 2.0 * z, theme::background::MAIN, Stroke::new(0.5 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
         if patched {
             let fill = Rect::from_min_size(slot.min, Vec2::new(slot.width() * value / 127.0, slot.height())).shrink(0.8 * z);
             if fill.width() > 0.2 * z {

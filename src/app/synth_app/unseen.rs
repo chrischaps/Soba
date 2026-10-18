@@ -142,7 +142,7 @@ mod tests {
         let screen = Rect::from_min_size(Pos2::ZERO, vec2(1600.0, 1000.0));
         let input = egui::RawInput { time: Some(time), screen_rect: Some(screen), ..Default::default() };
         let _ = ctx.run(input, |ctx| {
-            egui::CentralPanel::default().frame(egui::Frame::none()).show(ctx, |ui| add_contents(ui));
+            egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |ui| add_contents(ui));
         });
     }
 

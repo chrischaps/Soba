@@ -105,8 +105,8 @@ fn card(ui: &egui::Ui) -> egui::Frame {
     egui::Frame::popup(ui.style())
         .fill(theme::background::PANEL)
         .stroke(egui::Stroke::new(1.0_f32, theme::background::WIDGET_ACTIVE))
-        .rounding(theme::ROUNDING)
-        .inner_margin(egui::Margin::same(14.0))
+        .corner_radius(theme::ROUNDING)
+        .inner_margin(egui::Margin::same(14))
 }
 
 /// A small painted cross (the UI font has no ✕).

@@ -85,7 +85,7 @@ pub fn link_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user
             Vec2::new((pitch - 4.0 * z).max(2.0 * z), lanes.height()),
         );
         let live = patched & (1 << lane) != 0;
-        painter.rect(column, 2.0 * z, theme::background::MAIN, Stroke::new(0.5 * z, theme::background::GRID_MAJOR));
+        painter.rect(column, 2.0 * z, theme::background::MAIN, Stroke::new(0.5 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
         painter.hline(column.x_range(), middle, Stroke::new(0.5 * z, theme::background::GRID_MAJOR));
         if live {
             let value = values[LinkOut::READOUT_CV + lane];

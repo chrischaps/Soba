@@ -180,6 +180,7 @@ pub fn cpu_meter(ui: &mut Ui, cpu_load: f32, peak: f32, config: &CpuMeterConfig)
             bar_rect,
             2.0,
             egui::Stroke::new(1.0_f32, theme::background::WIDGET_HOVERED),
+            egui::StrokeKind::Middle,
         );
 
         // The slowest callback, a tick standing a little proud of the bar:

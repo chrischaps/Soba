@@ -208,12 +208,12 @@ impl CableProbe {
             .fixed_pos(at)
             .interactable(false)
             .show(ctx, |ui| {
-                egui::Frame::none()
+                egui::Frame::NONE
                     .fill(theme::node::BODY_FILL.gamma_multiply(0.96))
                     .stroke(Stroke::new(1.0_f32, color.gamma_multiply(0.6)))
-                    .rounding(theme::ROUNDING_SMALL)
-                    .inner_margin(egui::Margin::same(8.0))
-                    .shadow(egui::epaint::Shadow { offset: Vec2::new(0.0, 4.0), blur: 12.0, spread: 0.0, color: Color32::from_black_alpha(110) })
+                    .corner_radius(theme::ROUNDING_SMALL)
+                    .inner_margin(egui::Margin::same(8))
+                    .shadow(egui::epaint::Shadow { offset: [0, 4], blur: 12, spread: 0, color: Color32::from_black_alpha(110) })
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             let (dot, _) = ui.allocate_exact_size(Vec2::splat(10.0), egui::Sense::hover());

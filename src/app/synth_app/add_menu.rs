@@ -128,7 +128,7 @@ impl SynthApp {
         // Show submenu for open category
         let mut submenu_rect: Option<Rect> = None;
         if let Some(index) = self.user_state.context_menu_open_category.filter(|_| !self.add_menu.drilled) {
-            let top = row_tops.get(index).map_or(menu_rect.top(), |top| top - ctx.style().spacing.menu_margin.top);
+            let top = row_tops.get(index).map_or(menu_rect.top(), |top| top - ctx.style().spacing.menu_margin.top as f32);
             let area = egui::Area::new(submenu_id).order(egui::Order::Foreground);
             let area = match place(menu_rect, submenu_width, screen) {
                 Place::Left => area.pivot(egui::Align2::RIGHT_TOP).fixed_pos(Pos2::new(menu_rect.left() - GAP, top)),

@@ -224,7 +224,7 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     } else {
         ("INT", theme::text::SECONDARY, theme::background::WIDGET, theme::background::GRID_MAJOR)
     };
-    painter.rect(badge, 8.0 * z, fill, Stroke::new(1.0 * z, stroke));
+    painter.rect(badge, 8.0 * z, fill, Stroke::new(1.0 * z, stroke), egui::StrokeKind::Middle);
     painter.text(
         badge.center(),
         egui::Align2::CENTER_CENTER,
@@ -265,14 +265,14 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
             let glow = peak * (1.0 - 0.75 * through);
             painter.rect_filled(lamp, 3.0 * z, green.gamma_multiply(glow));
             if n == 0 {
-                painter.rect_stroke(lamp.expand(1.0 * z), 4.0 * z, Stroke::new(1.0 * z, green.gamma_multiply(0.5 * glow)));
+                painter.rect_stroke(lamp.expand(1.0 * z), 4.0 * z, Stroke::new(1.0 * z, green.gamma_multiply(0.5 * glow)), egui::StrokeKind::Middle);
             }
         } else if n == current && readout != Readout::default() {
             // Stopped: where it'll carry on from, faintly
-            painter.rect_stroke(lamp, 3.0 * z, Stroke::new(1.0 * z, green.gamma_multiply(0.35)));
+            painter.rect_stroke(lamp, 3.0 * z, Stroke::new(1.0 * z, green.gamma_multiply(0.35)), egui::StrokeKind::Middle);
         } else {
             let rim = if n == 0 { theme::background::GRID_MAJOR.gamma_multiply(1.6) } else { theme::background::GRID_MAJOR };
-            painter.rect_stroke(lamp, 3.0 * z, Stroke::new(1.0 * z, rim));
+            painter.rect_stroke(lamp, 3.0 * z, Stroke::new(1.0 * z, rim), egui::StrokeKind::Middle);
         }
     }
     let sweep_y = rect.bottom() - 2.0 * z;

@@ -22,12 +22,13 @@ vst3 = ["nih_plug/vst3"]
 soba = { path = ".." }
 # CLAP, and VST3 with the vst3 feature (its wrapper is GPL)
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "de421011f41a6d10fc8c7a6084e4f4dee0143683", default-features = false }
-# nih_plug_egui pins egui 0.31; this is the same glue on the egui Soba uses
-# (0.30), at the baseview nih-plug's own editors use
-egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", rev = "eed0cb69cd63f2cacc0e8a1afc227e79ab59393e", default-features = false, features = ["opengl", "default_fonts"] }
+# The egui glue nih_plug_egui uses (egui 0.31), at the same rev, with the
+# baseview nih-plug's own editors use. The egui_31 branch's head doesn't build
+# on its own (its log macros aren't imported)
+egui-baseview = { git = "https://github.com/BillyDM/egui-baseview.git", rev = "ec70c3fe6b2f070dcacbc22924431edbe24bd1c0", default-features = false, features = ["opengl", "default_fonts"] }
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "9a0b42c09d712777b2edb4c5e0cb6baf21e988f0" }
 raw-window-handle = "0.5"
-egui = "0.30"
+egui = "0.31"
 parking_lot = "0.12"
 rtrb = "0.3"
 serde_json = "1.0"

@@ -976,10 +976,10 @@ fn sections(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, now: Now
             tl.hline(rect.x_range(), rect.top() + 0.75 * z, Stroke::new(1.5 * z, green));
         }
         if queued {
-            tl.rect_stroke(rect, round, Stroke::new(1.0 * z, green.gamma_multiply(0.8)));
+            tl.rect_stroke(rect, round, Stroke::new(1.0 * z, green.gamma_multiply(0.8)), egui::StrokeKind::Middle);
         }
         if section == selected {
-            tl.rect_stroke(rect.expand(0.5 * z), round, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(0.75)));
+            tl.rect_stroke(rect.expand(0.5 * z), round, Stroke::new(1.2 * z, Color32::WHITE.gamma_multiply(0.75)), egui::StrokeKind::Middle);
         }
 
         let name = section_name(graph, node_id, section);
@@ -1067,7 +1067,7 @@ fn sections(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, now: Now
         let size = galley.size() + 2.0 * pad;
         let x = shown.left().min(block.right() - size.x).max(block.left());
         let tag = Rect::from_min_size(Pos2::new(x, shown.top() - size.y - 1.0 * z), size);
-        painter.rect(tag, 3.0 * z, theme::background::PANEL, Stroke::new(1.0_f32, theme::background::WIDGET_ACTIVE));
+        painter.rect(tag, 3.0 * z, theme::background::PANEL, Stroke::new(1.0_f32, theme::background::WIDGET_ACTIVE), egui::StrokeKind::Middle);
         painter.galley(tag.min + pad, galley, theme::text::PRIMARY);
     }
 }
@@ -1107,7 +1107,7 @@ fn overview(painter: &egui::Painter, song: &Song, layout: &Layout, view: &View, 
         painter.rect_filled(Rect::from_x_y_ranges(strip.left()..=a, strip.y_range()), 0.0, shade);
         painter.rect_filled(Rect::from_x_y_ranges(b..=strip.right(), strip.y_range()), 0.0, shade);
         let window = Rect::from_x_y_ranges(a..=b, strip.y_range()).expand(0.75 * z);
-        painter.rect_stroke(window, 1.5 * z, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.8)));
+        painter.rect_stroke(window, 1.5 * z, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.8)), egui::StrokeKind::Middle);
     }
 }
 

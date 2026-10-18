@@ -588,6 +588,7 @@ impl SynthNodeData {
                     egui::Rect::from_center_size(egui::pos2(center.x - s * 0.3, center.y), egui::vec2(s * 0.4, s * 0.6)),
                     0.0,
                     egui::Stroke::new(1.5_f32, color),
+                    egui::StrokeKind::Middle,
                 );
                 let cone = vec![
                     egui::pos2(center.x - s * 0.1, center.y - s * 0.3),
@@ -1596,7 +1597,7 @@ impl NodeDataTrait for SynthNodeData {
         let shapes = vec![
             egui::Shape::galley(egui::pos2(rect.min.x, text_top(rect)), galley, text_color),
             egui::Shape::rect_filled(badge, badge_size.y / 2.0, color.gamma_multiply(0.22)),
-            egui::Shape::rect_stroke(badge, badge_size.y / 2.0, egui::Stroke::new(1.0_f32, color.gamma_multiply(0.7))),
+            egui::Shape::rect_stroke(badge, badge_size.y / 2.0, egui::Stroke::new(1.0_f32, color.gamma_multiply(0.7)), egui::StrokeKind::Middle),
             egui::Shape::galley(egui::pos2(badge.min.x + pad.x, badge.center().y - badge_galley.size().y / 2.0), badge_galley, badge_text),
         ];
         defer_output_label(ui, node_id, param_name, rect, shapes);

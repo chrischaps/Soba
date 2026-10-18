@@ -314,8 +314,8 @@ fn prompt<R>(ctx: &egui::Context, id: &str, content: impl FnOnce(&mut egui::Ui) 
         .frame(
             egui::Frame::popup(&ctx.style())
                 .fill(theme::background::PANEL)
-                .rounding(theme::ROUNDING)
-                .inner_margin(egui::Margin::same(20.0)),
+                .corner_radius(theme::ROUNDING)
+                .inner_margin(egui::Margin::same(20)),
         )
         .show(ctx, |ui| {
             ui.set_width(380.0);

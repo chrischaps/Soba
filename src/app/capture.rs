@@ -1041,7 +1041,7 @@ impl Capture {
         for (at, cue, p) in std::mem::take(&mut self.presses) {
             let Some(layer) = ctx.layer_id_at(p) else { continue };
             let (hit, nearby): (Vec<Rect>, Vec<Rect>) = ctx.viewport(|v| {
-                let clickable = |w: &&egui::WidgetRect| w.enabled && (w.sense.click || w.sense.drag);
+                let clickable = |w: &&egui::WidgetRect| w.enabled && (w.sense.senses_click() || w.sense.senses_drag());
                 let hovered = &v.interact_widgets.hovered;
                 let widgets = || v.prev_pass.widgets.get_layer(layer).filter(clickable);
                 (
@@ -1206,7 +1206,7 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
             let mut modifiers = egui::Modifiers::default();
             for part in parts {
                 match part {
-                    "Ctrl" => modifiers = modifiers | egui::Modifiers::COMMAND,
+                    "Ctrl" => modifiers |= egui::Modifiers::COMMAND,
                     "Shift" => modifiers.shift = true,
                     "Alt" => modifiers.alt = true,
                     _ => return Err(err("unknown modifier")),

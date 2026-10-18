@@ -3,7 +3,7 @@
 //! Provides color constants, styling utilities, and theme configuration
 //! for a dark, audio-software aesthetic.
 
-use eframe::egui::{self, Color32, Stroke, Rounding, Vec2};
+use eframe::egui::{self, Color32, CornerRadius, Stroke, Vec2};
 
 /// Background colors
 pub mod background {
@@ -170,20 +170,10 @@ pub const GRID_SPACING: f32 = 20.0;
 pub const GRID_MAJOR_EVERY: i64 = 5;
 
 /// Standard rounding for UI elements
-pub const ROUNDING: Rounding = Rounding {
-    nw: 6.0,
-    ne: 6.0,
-    sw: 6.0,
-    se: 6.0,
-};
+pub const ROUNDING: CornerRadius = CornerRadius::same(6);
 
 /// Smaller rounding for compact elements
-pub const ROUNDING_SMALL: Rounding = Rounding {
-    nw: 4.0,
-    ne: 4.0,
-    sw: 4.0,
-    se: 4.0,
-};
+pub const ROUNDING_SMALL: CornerRadius = CornerRadius::same(4);
 
 /// Module titles are set in Space Grotesk SemiBold: heavy enough to hold its
 /// own on a bright header, with a little of an instrument panel's character
@@ -234,7 +224,7 @@ pub fn apply_theme(ctx: &egui::Context) {
     // Window styling
     visuals.window_fill = background::PANEL;
     visuals.window_stroke = Stroke::new(1.0_f32, Color32::from_rgb(60, 60, 80));
-    visuals.window_rounding = ROUNDING;
+    visuals.window_corner_radius = ROUNDING;
 
     // Panel styling
     visuals.panel_fill = background::MAIN;
@@ -242,23 +232,23 @@ pub fn apply_theme(ctx: &egui::Context) {
     // Widget styling
     visuals.widgets.noninteractive.bg_fill = background::WIDGET;
     visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, text::SECONDARY);
-    visuals.widgets.noninteractive.rounding = ROUNDING_SMALL;
+    visuals.widgets.noninteractive.corner_radius = ROUNDING_SMALL;
 
     visuals.widgets.inactive.bg_fill = background::WIDGET;
     visuals.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, text::PRIMARY);
-    visuals.widgets.inactive.rounding = ROUNDING_SMALL;
+    visuals.widgets.inactive.corner_radius = ROUNDING_SMALL;
 
     visuals.widgets.hovered.bg_fill = background::WIDGET_HOVERED;
     visuals.widgets.hovered.fg_stroke = Stroke::new(1.0_f32, text::PRIMARY);
-    visuals.widgets.hovered.rounding = ROUNDING_SMALL;
+    visuals.widgets.hovered.corner_radius = ROUNDING_SMALL;
 
     visuals.widgets.active.bg_fill = background::WIDGET_ACTIVE;
     visuals.widgets.active.fg_stroke = Stroke::new(1.5_f32, accent::PRIMARY);
-    visuals.widgets.active.rounding = ROUNDING_SMALL;
+    visuals.widgets.active.corner_radius = ROUNDING_SMALL;
 
     visuals.widgets.open.bg_fill = background::WIDGET_ACTIVE;
     visuals.widgets.open.fg_stroke = Stroke::new(1.0_f32, text::PRIMARY);
-    visuals.widgets.open.rounding = ROUNDING_SMALL;
+    visuals.widgets.open.corner_radius = ROUNDING_SMALL;
 
     // Selection styling
     visuals.selection.bg_fill = accent::PRIMARY.gamma_multiply(0.3);
@@ -276,7 +266,7 @@ pub fn apply_theme(ctx: &egui::Context) {
     // Spacing
     style.spacing.item_spacing = Vec2::new(8.0, 6.0);
     style.spacing.button_padding = Vec2::new(12.0, 6.0);
-    style.spacing.window_margin = egui::Margin::same(12.0);
+    style.spacing.window_margin = egui::Margin::same(12);
 
     style.text_styles.insert(
         title_text_style(),
@@ -284,6 +274,15 @@ pub fn apply_theme(ctx: &egui::Context) {
     );
 
     ctx.set_style(style);
+
+    // egui 0.31 snaps rects and straight lines to whole pixels. The patch
+    // zooms smoothly, and parts of a face snapping one by one would shift
+    // against each other a pixel at a time as it does (#255), so shapes are
+    // drawn where they fall, as they were before
+    ctx.tessellation_options_mut(|options| {
+        options.round_rects_to_pixels = false;
+        options.round_line_segments_to_pixels = false;
+    });
 }
 
 /// Draws the editor background: the main fill and a grid that pans and

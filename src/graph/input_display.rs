@@ -94,7 +94,7 @@ pub fn input_display(
 
     // --- The trace ---
     let panel = Rect::from_x_y_ranges(rect.left() + 20.0 * z..=rect.right(), rect.top()..=rect.bottom());
-    painter.rect(panel, 4.0 * z, theme::background::MAIN, Stroke::new(1.0 * z, theme::background::GRID_MAJOR));
+    painter.rect(panel, 4.0 * z, theme::background::MAIN, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
     let inner = panel.shrink2(Vec2::new(3.0 * z, 4.0 * z));
     let y_at = |follow: f32| inner.bottom() - inner.height() * follow.clamp(0.0, 1.0);
 
