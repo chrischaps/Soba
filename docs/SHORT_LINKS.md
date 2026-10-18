@@ -135,9 +135,9 @@ If the service ever shuts down, the short links die with it unless they're carri
     branch to check out.
   - `CLOUDFLARE_API_TOKEN`: a token for the account holding `soba-links`, with
     **Account › D1 › Edit**. The export API takes a POST, and a read-only D1 token may be refused.
-  - `CLOUDFLARE_ACCOUNT_ID` (optional): needed only if the token can see more than one account.
+    A D1-only token can't list accounts, so `wrangler.toml` names the account (`account_id`).
 
-  Until the first two exist, the run leaves a warning and stops. With only one of them it fails.
+  Until both exist, the run leaves a warning and stops. With only one of them it fails.
 - **Restoring** into a new database, from `packaging/shortlinks/`:
   ```
   npx wrangler d1 create soba-links        # then put its database_id in wrangler.toml

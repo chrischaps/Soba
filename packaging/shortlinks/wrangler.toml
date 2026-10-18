@@ -3,6 +3,9 @@
 name = "soba-links"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
+# Named, so a D1-only API token (the archive workflow's, #389) needn't be
+# allowed to list accounts to find it. An account ID isn't a secret
+account_id = "a2ad79871aad2f54eb9d36d0138e7a7e"
 
 [[d1_databases]]
 binding = "DB"
