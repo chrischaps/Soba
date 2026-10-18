@@ -5,9 +5,11 @@
 //! opening a file, dropping one on the node, undo, paste and opening a
 //! patch all just set the key. Once a frame, [`SynthApp::sync_samples`]
 //! makes the engine match: each Sampler gets the recording its key names,
-//! decoded and resampled to the engine's rate on this thread, whenever
-//! that isn't what it already has. A device that changes rate gets every
-//! recording again, resampled from the file's own.
+//! decoded and resampled to the engine's rate (on a thread of its own, see
+//! [`crate::graph::sample_shelf`]), whenever that isn't what it already
+//! has. A device that changes rate gets every recording again, resampled
+//! from the file's own. Whatever there is to say about a file (loaded, cut
+//! short, couldn't be read) is said once it's been read.
 //!
 //! A Looper's file is its loop as last saved (see [`super::loops`]). The
 //! loop it holds is the player's, so it's only given the file when it's
@@ -17,7 +19,7 @@
 //! Patch files keep paths relative to themselves where they can, so Save and
 //! Save As copy samples from elsewhere into a folder beside the patch.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
@@ -52,6 +54,20 @@ pub(super) enum WhenLarge {
     /// ask again on every Ctrl+S once the answer was no.
     Warn,
 }
+
+/// What to say about a sample file once it's been read.
+#[derive(Clone, Debug)]
+enum Awaiting {
+    /// Chosen for a Sampler (opened or dropped): say it loaded, or why
+    /// not, and play it once from the face of the node, if any, still naming it.
+    Chosen { cue: Option<NodeId> },
+    /// Named by a patch just opened: warn if it couldn't be read or was cut.
+    Opened { saved: String, looper: bool },
+}
+
+/// The sample files still being read that there's something to say about, by key.
+#[derive(Default)]
+pub(super) struct Awaited(HashMap<String, Awaiting>);
 
 impl SynthApp {
     /// Asks for a sound file and loads it into a Sampler.
@@ -91,12 +107,26 @@ impl SynthApp {
     }
 
     /// Reads the file a key names onto the shelf, saying in the status bar
-    /// if it couldn't be read or was cut short. Returns whether it can play.
+    /// if it couldn't be read or was cut short (once it has been, if it's
+    /// read on a thread). Returns whether it can play, as far as is known.
     fn check_sample(&mut self, key: &str) -> bool {
-        let name = sample_files::file_name(key).to_string();
-        match self.user_state.samples.load(key) {
-            Ok(shelved) => {
-                self.status_message = Some(if shelved.truncated {
+        let read = self.user_state.samples.load(key).map(|shelved| shelved.truncated);
+        match read {
+            Err(e) if sample_files::is_loading(&e) => {
+                self.awaited_samples.0.insert(key.to_string(), Awaiting::Chosen { cue: None });
+                true
+            }
+            read => self.say_chosen_sample(key, read),
+        }
+    }
+
+    /// Says in the status bar that a file chosen for a Sampler loaded (and
+    /// whether it was cut short), or why it didn't. Returns whether it did.
+    fn say_chosen_sample(&mut self, key: &str, read: Result<bool, String>) -> bool {
+        let name = sample_files::file_name(key);
+        match read {
+            Ok(truncated) => {
+                self.status_message = Some(if truncated {
                     format!("Loaded {name}: cut to the 5 minutes a Sampler keeps")
                 } else {
                     format!("Loaded {name}")
@@ -112,15 +142,50 @@ impl SynthApp {
 
     /// Points a Sampler at a file, as one undo step, and plays it once
     /// from its face, so you hear what you chose (or lets it play on, if it
-    /// was heard while dragged over).
+    /// was heard while dragged over). A file still being read plays once it's come.
     fn set_sample(&mut self, node_id: NodeId, key: String) {
         let name = sample_files::file_name(&key).to_string();
         self.forget_slice_markers(node_id);
         if let Some(node) = self.graph_state.graph.nodes.get_mut(node_id) {
             node.user_data.file = Some(key.clone());
             self.history.name_next(format!("Load {name}"));
-            if !self.keep_dropped_cue(node_id, &key) {
+            if let Some(Awaiting::Chosen { cue }) = self.awaited_samples.0.get_mut(&key) {
+                *cue = Some(node_id);
+            } else if !self.keep_dropped_cue(node_id, &key) {
                 self.cue_start_to_end(node_id);
+            }
+        }
+    }
+
+    /// Says what there is to say about each awaited file that's been read
+    /// since the last frame. Forgets those no longer on the shelf.
+    fn report_read_samples(&mut self) {
+        let shelf = &self.user_state.samples;
+        let read: Vec<(String, Awaiting, Result<bool, String>)> = self
+            .awaited_samples
+            .0
+            .iter()
+            .filter_map(|(key, awaiting)| match shelf.get(key)? {
+                Err(e) if sample_files::is_loading(e) => None,
+                read => Some((key.clone(), awaiting.clone(), read.as_ref().map(|shelved| shelved.truncated).map_err(Clone::clone))),
+            })
+            .collect();
+        self.awaited_samples.0.retain(|key, _| shelf.get(key).is_some_and(|entry| entry.as_ref().is_err_and(|e| sample_files::is_loading(e))));
+        for (key, awaiting, read) in read {
+            match awaiting {
+                Awaiting::Chosen { cue } => {
+                    let loaded = self.say_chosen_sample(&key, read);
+                    let still_named = |app: &Self, node_id| app.graph_state.graph.nodes.get(node_id).is_some_and(|n| n.user_data.file.as_deref() == Some(key.as_str()));
+                    if let Some(node_id) = cue.filter(|&node_id| loaded && still_named(self, node_id)) {
+                        self.cue_start_to_end(node_id);
+                    }
+                }
+                Awaiting::Opened { saved, looper } => {
+                    if let Some(warning) = opening_warning(&saved, looper, read) {
+                        eprintln!("Patch load warning: {warning}");
+                        self.load_warnings.push(warning);
+                    }
+                }
             }
         }
     }
@@ -130,6 +195,11 @@ impl SynthApp {
     /// its file holds; and lets go of recordings no node plays any more.
     /// Call once a frame, after the frame's edits.
     pub(super) fn sync_samples(&mut self) {
+        let rate = self.engine_rate();
+        self.user_state.samples.set_rate(rate);
+        self.user_state.samples.collect_all();
+        self.report_read_samples();
+
         let samplers: Vec<(NodeId, Option<String>)> = self
             .graph_state
             .graph
@@ -169,6 +239,10 @@ impl SynthApp {
                     continue;
                 }
                 let wanted = key.as_deref().and_then(|key| self.user_state.samples.playing(key, rate));
+                // Read again (opened afresh): it plays what it has until the new one comes
+                if wanted.is_none() && key.as_deref().is_some_and(|key| self.user_state.samples.is_reading(key)) {
+                    continue;
+                }
                 let same = match (&wanted, graph.sample(engine_id)) {
                     (Some(wanted), Some(has)) => Arc::ptr_eq(wanted, has),
                     (None, None) => true,
@@ -202,6 +276,8 @@ impl SynthApp {
     pub(super) fn resolve_samples(&mut self, nodes: &[StagedNode], base: SampleBase) -> Vec<String> {
         let mut warnings = Vec::new();
         let mut checked = HashSet::new();
+        // Made ready to play as they're read
+        self.user_state.samples.set_rate(self.engine_rate());
         for node in nodes {
             let Some(data) = self.graph_state.graph.nodes.get_mut(node.graph_id).map(|n| &mut n.user_data) else { continue };
             let Some(saved) = data.file.clone() else { continue };
@@ -211,15 +287,12 @@ impl SynthApp {
             if !checked.insert(key.clone()) {
                 continue;
             }
-            match self.user_state.samples.load(&key) {
-                Ok(shelved) if shelved.truncated && !looper => {
-                    warnings.push(format!("Sample {saved} is longer than the 5 minutes a Sampler keeps, and was cut"));
+            match self.user_state.samples.load(&key).map(|shelved| shelved.truncated) {
+                // Read in a moment, and the Sampler says so meanwhile
+                Err(e) if sample_files::is_loading(&e) => {
+                    self.awaited_samples.0.insert(key, Awaiting::Opened { saved, looper });
                 }
-                Ok(_) => {}
-                // In the browser: fetched in a moment, and the Sampler says so meanwhile
-                Err(e) if sample_files::is_loading(&e) => {}
-                Err(e) if looper => warnings.push(format!("Couldn't load loop {saved}: {e}. The Looper opens empty")),
-                Err(e) => warnings.push(format!("Couldn't load sample {saved}: {e}")),
+                read => warnings.extend(opening_warning(&saved, looper, read)),
             }
         }
         warnings
@@ -380,6 +453,7 @@ impl SynthApp {
                 continue;
             }
             // Read it first: a file that won't play doesn't make a Sampler
+            // (unless it's still being read, and says so once it has been)
             let key = match (&file.path, &file.bytes) {
                 (Some(path), _) => {
                     let key = path.to_string_lossy().into_owned();
@@ -442,6 +516,18 @@ impl SynthApp {
                 && self.graph_state.graph.nodes.get(node_id).is_some_and(|n| plays_a_sample(n.user_data.module_id))
                 && ctx.read_response(egui::Id::new((node_id, "window"))).is_some_and(|r| r.rect.contains(screen))
         })
+    }
+}
+
+/// The warning for a file a patch just opened names, `saved` as the patch
+/// names it, by what reading it came to (whether it was cut short, or why
+/// it couldn't be read), if there's anything to warn of.
+fn opening_warning(saved: &str, looper: bool, read: Result<bool, String>) -> Option<String> {
+    match read {
+        Ok(true) if !looper => Some(format!("Sample {saved} is longer than the 5 minutes a Sampler keeps, and was cut")),
+        Ok(_) => None,
+        Err(e) if looper => Some(format!("Couldn't load loop {saved}: {e}. The Looper opens empty")),
+        Err(e) => Some(format!("Couldn't load sample {saved}: {e}")),
     }
 }
 
@@ -545,6 +631,40 @@ mod tests {
         assert!(!Path::new(&file).is_absolute(), "and the patch names the copy relative to itself: {file}");
         assert!(app.load_warnings.is_empty(), "{:?}", app.load_warnings);
         assert!(kick.is_file(), "the original stays where it was");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn files_read_aside_are_reported_once_they_come() {
+        let root = folder("read-aside");
+        let kick = root.join("kick.wav");
+        write_wav(&kick);
+        let path = root.join("Song.json");
+        let mut patch = Patch::new("Song");
+        for (id, file) in [(1, "kick.wav"), (2, "gone.wav")] {
+            let mut sampler = NodeData::new(id, sampler::ID, (0.0, 0.0));
+            sampler.file = Some(file.to_string());
+            patch.nodes.push(sampler);
+        }
+        save_to_file(&patch, &path).unwrap();
+
+        let mut app = SynthApp::new();
+        app.user_state.samples = crate::graph::sample_shelf::SampleShelf::reading_aside();
+        app.open_file(&path);
+        assert!(app.user_state.samples.waiting(), "opening doesn't wait for its files");
+        app.user_state.samples.wait_for_reads();
+        app.sync_samples();
+        assert!(app.load_warnings.iter().any(|w| w.contains("Couldn't load sample gone.wav")), "{:?}", app.load_warnings);
+        assert_eq!(app.load_warnings.len(), 1, "{:?}", app.load_warnings);
+
+        // A file chosen for a Sampler says it loaded once it has
+        let key = kick.to_string_lossy().into_owned();
+        app.user_state.samples.forget(&key);
+        assert!(app.check_sample(&key), "a file still being read may play");
+        app.status_message = None;
+        app.user_state.samples.wait_for_reads();
+        app.sync_samples();
+        assert_eq!(app.status_message.as_deref(), Some("Loaded kick.wav"));
         let _ = std::fs::remove_dir_all(&root);
     }
 }

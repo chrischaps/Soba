@@ -156,6 +156,8 @@ pub struct SynthApp {
 
     /// Problems skipped while loading the current patch, shown in the status bar.
     load_warnings: Vec<String>,
+    /// Sample files still being read, and what to say once they are.
+    awaited_samples: samples::Awaited,
 
     /// The computer keys held, and the piano key the pointer holds, as
     /// (note above the keyboard's C, key) in order of press.
@@ -399,6 +401,7 @@ impl SynthApp {
             status_message: None,
             status: None,
             load_warnings: Vec::new(),
+            awaited_samples: Default::default(),
             pressed_keys: Vec::new(),
             auditioning: None,
             shortcuts: ShortcutsSheet::default(),
@@ -460,6 +463,8 @@ impl SynthApp {
         let engine = self.audio.engine.as_mut().map_err(|e| e.to_string())?;
         engine.go_offline(config.sample_rate as f32).map_err(|e| e.to_string())?;
         self.capture = Some(Capture::start(config)?);
+        // Every frame holds what it did when filmed again
+        self.user_state.samples.read_in_place();
         Ok(())
     }
 
