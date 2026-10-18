@@ -12,7 +12,7 @@ The browser version runs the same engine and modules, and every example is in it
 
 - **Audio input.** In the browser, the computer keyboard, the on-screen pianos and MIDI devices play the patch. MIDI devices work in Chrome, Edge and Firefox, after **🎹 Connect MIDI** (see [MIDI](./interface-overview.md#midi)); Safari has no MIDI.
 - **Recording** to a WAV, and **My Modules**, which keep files in a folder.
-- **Low latency.** The browser plays sound through larger buffers, about a tenth of a second behind your playing, and twice that in Firefox. That's fine for listening and exploring, and loose for playing live.
+- **The lowest latency.** The browser adds its own delay on the way to the speakers, which the desktop app doesn't have. In Chrome, Edge and Firefox the full app renders its sound on the browser's audio thread in small buffers, so heavy patches play steadily and the keys answer as fast as the browser lets them. Safari, and the patches embedded in this manual, play through larger buffers: about a tenth of a second more behind your playing. That's fine for listening and exploring, and loose for playing live.
 
 On a phone or tablet, a patch opens zoomed out to fit the screen: pinch to zoom in, and drag the canvas to move around.
 

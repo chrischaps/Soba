@@ -10,7 +10,15 @@ rustup target add wasm32-unknown-unknown
 cargo install --locked trunk
 trunk serve                 # http://127.0.0.1:8080, rebuilt on save
 trunk build --release       # into dist/
+python tools/web/build.py   # into dist/, with the threaded build too: what soba.chaps.dev serves
 ```
+
+The published site holds two builds of the app (see
+[Sound on the audio thread](#sound-on-the-audio-thread)): a threaded one
+that renders sound in an AudioWorklet, which the full app runs in Chrome,
+Edge and Firefox, and the plain one `trunk` makes, which renders it on the
+page's own thread, for embeds, Safari and anywhere else. `trunk serve` is
+the plain one alone.
 
 | Address | Opens |
 |---|---|
@@ -120,7 +128,7 @@ One `wasm32` cfg gate keeps the desktop build exactly as it was; the
 |---|---|---|
 | **Entry point** | `run_native`, command-line arguments | `main.rs` has a second `main` for wasm32: `eframe::WebRunner` on `index.html`'s canvas, reading `?patch=` / `?open=` |
 | **Clocks** | `std::time::Instant` and `SystemTime` panic on wasm32 | `web-time` everywhere (on the desktop it *is* `std::time`) |
-| **Audio** | cpal needs a host | cpal's `wasm-bindgen` feature: the WebAudio host. A browser without Web Audio shows "No sound in this browser" instead of cpal's panic |
+| **Audio** | cpal needs a host | cpal's `wasm-bindgen` feature: the WebAudio host. A browser without Web Audio shows "No sound in this browser" instead of cpal's panic. The threaded build uses cpal's `audioworklet` host instead, where the page can have it (see below) |
 | **Autoplay** | Browsers hold an `AudioContext` until a gesture, and Safari only releases it *inside* the gesture | `index.html` notes every context and resumes it from the first pointer or key event; the status bar says "Click to start sound" until then |
 | **F1** | Chrome, Edge and Firefox open their own help on `F1`, and eframe only stops the browser's default for Tab, Space, Backspace and the arrows | `index.html` calls `preventDefault` on `F1` itself, so it only toggles the Keyboard Shortcuts sheet |
 | **MIDI** | The scanner thread holds a non-`Send` Web MIDI handle; Web MIDI needs a permission prompt and Safari has none; MIDI Out's sender is a thread that wakes every millisecond | **Connect MIDI** (the toolbar's MIDI In, and a MIDI Out's device menu) asks for Web MIDI from a click, without sysex (`engine/web_midi.rs`). Its `statechange` stands in for the scanner. Inputs feed the desktop's queues, so MIDI Note, Poly MIDI, the Monitor, MIDI Learn, MIDI clock in and step-record work unchanged. MIDI Out's sender runs on a `setTimeout` (`link/web_sender.rs`) and hands each message over up to 100 ms early, stamped for when its sample is heard; the browser keeps to the stamp. Safari says it has no Web MIDI. See below |
@@ -222,19 +230,103 @@ trunk build --release
 node tools/web/steadiness.mjs --dist dist --browsers chrome,firefox
 ```
 
-## The AudioWorklet route
+## Sound on the audio thread
 
-cpal's other web host, `audioworklet`, renders in the browser's audio thread,
-off the page's thread, so drawing could never delay the sound and buffers
-could shrink to 128 frames. It needs wasm threads: a nightly toolchain with
-`-Z build-std` and the `atomics` target feature, and a cross-origin isolated
-page (`Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy`
-headers) for `SharedArrayBuffer`. The docs site is static hosting that can't
-set headers, so it would need the `coi-serviceworker` workaround, and an
-isolated page can only be embedded by pages that opt in too.
+The heavy examples drop out on the page's thread however fast the DSP gets,
+because a long enough frame always finds a buffer's deadline. So the full
+app renders its sound somewhere drawing can't reach: in an AudioWorklet, on
+the browser's own audio thread (#375). That's cpal's `audioworklet` host,
+behind Soba's `web-worklet` feature.
 
-Not worth it while the WebAudio host plays cleanly everywhere tested. It's
-the step to take if the browser build is ever for playing live.
+It takes three things the plain build doesn't have:
+
+- **wasm threads.** The page and the worklet run one wasm module on one
+  shared memory, so the engine's queues (rtrb) and atomics work between them
+  as they do between the desktop's threads. That needs std rebuilt with the
+  `atomics` feature: a nightly toolchain with `-Z build-std`, pinned in
+  `tools/web/build.py` and the workflows, plus linker flags for the shared,
+  imported memory (2 GB at most) and wasm-bindgen's per-thread setup.
+  `build.py` sets them all and builds into `target/web-threads/`.
+- **A cross-origin isolated page,** for `SharedArrayBuffer`. That takes two
+  response headers, COOP and COEP, and GitHub Pages can't send them. So
+  `packaging/web/isolate-sw.js`, a service worker, adds them to the page as
+  it's served. The first visit registers it and loads the page once more,
+  through it, before the app starts: a patch link's fragment survives that.
+  `sobaIsolate()` in `index.html` does it, once a tab, so a browser that
+  won't isolate this way isn't reloaded again (nor is a hard reload, which
+  bypasses the worker). `?patch=` embeds aren't isolated: the page around
+  one isn't, so it couldn't be.
+- **A clock in the worklet.** web-time's `Instant` reads `performance`,
+  which an AudioWorklet's scope has in neither Chrome nor Firefox, so the
+  engine would panic there. `index.html` loads a module into the worklet
+  before cpal's that stands one in from `Date`, set to agree with the page's
+  `timeOrigin + now()`. MIDI stamped on the page lands where it should, to a
+  millisecond, which is all `Date` resolves. The same module times each
+  render for `sobaAudioStats()` and the status bar's meter.
+
+`build.py` runs `trunk` twice, puts both builds in `dist/`, and swaps
+trunk's loader for one that runs the threaded build on an isolated page and
+the plain one anywhere else: embeds, Safari (until someone hears it on real
+hardware) and browsers without service workers (Firefox's private windows).
+The plain build is exactly what it was, so those play as before.
+
+On the Rust side, the audio callback was already lock-free. The one lock
+the two threads share, the `AudioProcessor`'s, is only ever `try_lock`ed by
+the callback, and the UI takes it only once the stream is gone. But a
+worklet's context closes a moment after its stream drops, and a browser's
+page thread may not wait on a lock at all (it traps), so the UI side spins
+on `try_lock` in the threaded build (`lock_processor`). The allocator's lock
+on wasm already spins.
+
+Embeds on docs.chaps.dev are unchanged: the plain build, on the page's
+thread. Isolating them would take the docs site isolating its own pages
+too, and every iframe opting in.
+
+### How steady it is there
+
+The same runs as above (`tools/web/steadiness.mjs --isolated`, which serves
+the COOP and COEP headers itself). In the worklet there's no `ended` event
+to be late, so a **late** buffer is one the browser played silence for:
+Chrome counts them (`AudioContext.playbackStats.underrunEvents`), and
+Firefox, which doesn't, by the audio clock falling behind the wall clock
+(each dropout leaves it further behind for good). **Render** is one 128-frame
+quantum, 2.7 ms at 48 kHz, timed by `Date` to the millisecond, so the mean
+is fair and the 95th percentile is a whole number.
+
+Each cell is late buffers while still, then while dragging, and the mean
+and 95th percentile render. Below it, the plain build in the same session,
+for comparison (its renders are a whole buffer each):
+
+| Browser | Build | Lush Pad | Canopy | Clair de Satellite | Orrery |
+|---|---|---|---|---|---|
+| Chrome 155 | threaded, 128 frames | 0, 0; 0.2 / 1 ms | 0, 0; 1.0 / 2 ms | 0, 0; 0.7 / 1 ms | 0, 0; 0.7 / 1 ms |
+| Firefox 155 | threaded, 128 frames | 0, 0; 0.2 / 1 ms | 0, 0; 0.8 / 2 ms | 0, 0; 0.7 / 1 ms | 0, 0; 0.7 / 1 ms |
+| Chrome 155 | plain, 2048 | 0, 0; 3.6 / 4.8 ms | 1, 2; 11.5 / 13 ms | 0, 1; 10.0 / 11 ms | 0, 2; 9.8 / 11 ms |
+| Firefox 155 | plain, 4096 | 0, 0; 6.8 / 8 ms | 0, 0; 22.6 / 24 ms | 0, 0; 19.8 / 21 ms | 0, 0; 19.0 / 20 ms |
+
+This run of the plain build dropped far fewer than #349's above, on a
+quieter machine, which is the point: on the page's thread the sound is as
+steady as the page is idle. In the worklet, dragging the whole graph around
+changes nothing. A frame costs a little more there than on the page's
+thread (Canopy 7.8 µs against 5.6 µs in Chrome), the overhead of a callback
+per 128 frames and of atomics, but that's still under 40% of the audio
+thread.
+
+Do the counters see a dropout? A copy of the build whose worklet stalls for
+60 ms every 4 seconds, playing Orrery for 30 seconds: Firefox's clock
+counted 7 gaps, and in Chrome the clock counted 7 too, while Chrome's own
+count was 38, as it counts every device callback it fills with silence,
+several to a stall. The status bar's count shows Chrome's.
+
+With the buffers this small, the delay from a key to the sound is a
+128-frame quantum plus the browser's and device's own output latency, where
+the plain build adds two of its buffers: about 85 ms in Chrome and 170 ms
+in Firefox gone. (The output latency itself is the device's. On the
+machine these were measured on, a bare AudioContext playing a sine reports
+220–240 ms in both browsers, so that's no number to quote for Soba.)
+
+Not tested: Safari (the plain build still), a phone, and the docs site's
+embeds isolated.
 
 ## MIDI devices
 
@@ -266,7 +358,8 @@ devices"), doesn't hear `statechange`, and sends without a timestamp.
 
 ## Next steps
 
-- Check Safari and a phone on real hardware.
+- Check Safari and a phone on real hardware, and then let Safari have the
+  threaded build (`sobaIsolate()` in `index.html` holds it back).
 - Scrolling: over an embed, the wheel and a dragging finger move the patch,
   not the page.
 - Recording in the browser: render to memory and download the WAV.

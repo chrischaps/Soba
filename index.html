@@ -3,7 +3,8 @@
 <!--
   Soba in the browser. Build with trunk (https://trunkrs.dev):
     trunk serve            # http://127.0.0.1:8080, rebuilt on save
-    trunk build --release  # into dist/, for soba.chaps.dev
+    trunk build --release  # into dist/
+    python tools/web/build.py  # into dist/ with the threaded build too, for soba.chaps.dev
   Add ?patch=lush-pad to embed an example (just the canvas and a Play
   button), or ?open=lush-pad to open it in the full app.
 -->
@@ -19,6 +20,53 @@
     <!-- The examples' samples, fetched when a patch first plays one rather
          than carried in the wasm (src/persistence/example_fetch.rs) -->
     <link data-trunk rel="copy-dir" href="patches/samples" />
+    <link data-trunk rel="copy-file" href="packaging/web/isolate-sw.js" />
+
+    <script>
+        // Whether to run the threaded build, which renders sound on the
+        // browser's audio thread (#375). It needs a cross-origin isolated
+        // page, which isolate-sw.js makes this one: the first visit
+        // registers it and loads the page again, through it, and this
+        // promise never settles meanwhile. tools/web/build.py's loader asks;
+        // a plain trunk build doesn't, and runs as before.
+        //
+        // Embeds stay as they were (the page around one isn't isolated), and
+        // so does Safari until it's been heard on real hardware (WEB.md).
+        window.sobaIsolate = () => new Promise((use) => {
+            if (window.crossOriginIsolated) return use(true);
+            const agent = navigator.userAgent;
+            const safari = /AppleWebKit/.test(agent) && !/Chrome|Chromium|Edg/.test(agent);
+            const embed = new URLSearchParams(location.search).has("patch");
+            const workers = navigator.serviceWorker;
+            if (embed || safari || !workers || !window.isSecureContext) return use(false);
+            // Once a tab: a browser that won't isolate the page this way isn't
+            // loaded over and over (nor is a hard reload, which skips the worker)
+            try {
+                if (sessionStorage.getItem("soba-isolating")) return use(false);
+                sessionStorage.setItem("soba-isolating", "1");
+            } catch (e) {
+                return use(false);
+            }
+            // Anything unexpected on the way runs the plain build instead
+            workers.register("./isolate-sw.js").then((registration) => {
+                const worker = registration && (registration.installing || registration.waiting || registration.active);
+                if (!worker) return use(false);
+                // A worker that never starts mustn't keep the app from it, nor
+                // reload it later, once it's running
+                let waiting = true;
+                const settle = () => {
+                    if (!waiting) return;
+                    if (worker.state === "activated") location.reload();
+                    else if (worker.state === "redundant") use(false);
+                    else return;
+                    waiting = false;
+                };
+                worker.addEventListener("statechange", settle);
+                settle();
+                setTimeout(() => { if (waiting) { waiting = false; use(false); } }, 5000);
+            }).catch(() => use(false));
+        });
+    </script>
 
     <script>
         // Browsers hold a page's sound until it's clicked or a key is pressed
@@ -43,6 +91,91 @@
             }
             window.sobaAudioBlocked = () => contexts.some((c) => c.state === "suspended");
 
+            // A threaded build on a cross-origin isolated page renders in an
+            // AudioWorklet, on the browser's audio thread (#375). Before
+            // cpal's processor module loads, this one gives that thread a
+            // clock and times each render for sobaAudioStats.
+            if (window.AudioWorklet) {
+                const shim = (offset) => {
+                    // web-time's Instant reads performance, which a worklet's
+                    // scope may lack: Date's clock stands in, set to agree
+                    // with the page's (timeOrigin + now), so MIDI stamped on
+                    // the page lands where it should
+                    const native = typeof globalThis.performance !== "undefined";
+                    if (!native) globalThis.performance = { timeOrigin: offset, now: () => Date.now() };
+                    const register = globalThis.registerProcessor;
+                    globalThis.registerProcessor = (name, Processor) => register(name, class extends Processor {
+                        constructor(...args) {
+                            super(...args);
+                            this.stats = { buffers: 0, slow: 0, gaps: 0, gapMs: 0, peak: 0, renders: [], budgetMs: 0, clock: native ? "performance" : "Date" };
+                            this.behind = Infinity;
+                        }
+                        process(inputs, outputs, parameters) {
+                            const t0 = performance.now();
+                            const result = super.process(inputs, outputs, parameters);
+                            const ms = performance.now() - t0;
+                            const stats = this.stats;
+                            const channel = outputs[0][0] ?? [];
+                            // Longer than the quantum lasts: the thread fell behind
+                            const budget = (1000 * channel.length) / sampleRate;
+                            if (ms > budget) stats.slow += 1;
+                            stats.budgetMs += budget;
+                            // The audio clock counts only the sound made, so a
+                            // dropout leaves it further behind the wall clock
+                            // for good. Quanta come in bursts, a device buffer
+                            // at a time, so only a step past that counts
+                            const behind = Date.now() - currentTime * 1000;
+                            if (behind > this.behind + 30) {
+                                stats.gaps += 1;
+                                stats.gapMs += behind - this.behind;
+                                this.behind = behind;
+                            }
+                            this.behind = Math.min(this.behind, behind);
+                            stats.buffers += 1;
+                            stats.renders.push(ms);
+                            if (stats.buffers % 8 === 0) for (const x of channel) stats.peak = Math.max(stats.peak, Math.abs(x));
+                            if (stats.buffers % 64 === 0) {
+                                this.port.postMessage({ sobaStats: stats });
+                                stats.renders = [];
+                                stats.budgetMs = 0;
+                            }
+                            return result;
+                        }
+                    });
+                };
+                const addModule = AudioWorklet.prototype.addModule;
+                AudioWorklet.prototype.addModule = function (url, ...rest) {
+                    const offset = performance.timeOrigin + performance.now() - Date.now();
+                    const module = URL.createObjectURL(new Blob([`(${shim})(${offset});`], { type: "text/javascript" }));
+                    return addModule.call(this, module).then(() => addModule.call(this, url, ...rest));
+                };
+                // The processor's numbers arrive on its node's port
+                const NativeNode = window.AudioWorkletNode;
+                window.AudioWorkletNode = class extends NativeNode {
+                    constructor(context, ...args) {
+                        super(context, ...args);
+                        this.port.onmessage = (e) => {
+                            const s = e.data && e.data.sobaStats;
+                            if (!s) return;
+                            for (const ms of s.renders) {
+                                renderMs = renderMs * 0.995 + ms * 0.005;
+                                renderMax = Math.max(renderMax, ms);
+                            }
+                            (window.sobaWorkletRenders ??= []).push(...s.renders);
+                            // The load over the batch, as Date's whole
+                            // milliseconds add up truly over many renders
+                            const load = s.renders.reduce((a, b) => a + b, 0) / s.budgetMs;
+                            workletLoad = workletLoad * 0.8 + load * 0.2;
+                            workletLoadPeak = Math.max(workletLoadPeak, load);
+                            // Chrome counts its own underruns
+                            const playback = context.playbackStats;
+                            worklet = { ...s, renders: undefined, budgetMs: undefined, load: Math.round(workletLoad * 100), underruns: playback ? playback.underrunEvents : undefined, latencyMs: Math.round((context.baseLatency + (context.outputLatency || 0)) * 1000) };
+                        };
+                    }
+                };
+            }
+            let worklet = null, renderMs = 0, renderMax = 0, workletLoad = 0, workletLoadPeak = 0;
+
             // The app's sound arrives as buffers, each scheduled to start as
             // the one before ends (cpal's WebAudio host). If the page is busy
             // for longer than a buffer, one is scheduled for a moment already
@@ -52,16 +185,21 @@
             // instead of garbled sound from then on. The dropouts are counted
             // in sobaAudioStats, for the browser tests.
             const stats = { buffers: 0, late: 0, lagMs: 0, peak: 0, renderMs: 0, renderMaxMs: 0, load: 0 };
-            window.sobaAudioStats = () => ({ ...stats, lagMs: Math.round(stats.lagMs), renderMs: +stats.renderMs.toFixed(1), renderMaxMs: +stats.renderMaxMs.toFixed(1), load: Math.round(stats.load * 100), contexts: contexts.map((c) => c.state) });
+            window.sobaAudioStats = () => worklet ? { ...worklet, host: "audioworklet", renderMs: +renderMs.toFixed(2), renderMaxMs: +renderMax.toFixed(2), contexts: contexts.map((c) => c.state) } : ({ ...stats, host: "webaudio", lagMs: Math.round(stats.lagMs), renderMs: +stats.renderMs.toFixed(1), renderMaxMs: +stats.renderMaxMs.toFixed(1), load: Math.round(stats.load * 100), contexts: contexts.map((c) => c.state) });
             // The status bar's meter (src/app/web.rs): how much of each
             // buffer's time went to the page, as a percentage. A buffer's
             // `ended` must render the next one before the buffer playing
             // now runs out, so the time it waited for the page to finish a
             // frame counts as well as the render: at 100% a buffer comes out
-            // late. `peak` is the busiest buffer since the last call.
+            // late. `peak` is the busiest buffer since the last call. In an
+            // AudioWorklet it's the audio thread's share instead, its renders
+            // only, and its dropouts.
             let loadPeak = 0;
             window.sobaAudioLoad = () => {
-                const load = { late: stats.late, average: stats.load * 100, peak: loadPeak * 100 };
+                const load = worklet
+                    ? { late: worklet.underruns ?? worklet.gaps, average: workletLoad * 100, peak: workletLoadPeak * 100 }
+                    : { late: stats.late, average: stats.load * 100, peak: loadPeak * 100 };
+                workletLoadPeak = 0;
                 loadPeak = 0;
                 return load;
             };

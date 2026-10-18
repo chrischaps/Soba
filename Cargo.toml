@@ -20,6 +20,10 @@ asio = ["cpal/asio", "dep:image"]
 # Link peers on the network. The Link SDK is GPLv2+, so builds with it are
 # too. Needs CMake and LLVM (libclang); see docs/src/getting-started/installation.md
 ableton-link = ["dep:rusty_link"]
+# The browser build's sound from the browser's audio thread, in an
+# AudioWorklet, rather than between the page's frames (#375). Needs wasm
+# threads: a nightly toolchain and tools/web/build.py (WEB.md)
+web-worklet = ["cpal/audioworklet"]
 
 # CI runs `cargo clippy --workspace --all-targets -- -D warnings`. These two
 # are matters of taste here: index loops over parallel tables read better than

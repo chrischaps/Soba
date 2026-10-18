@@ -106,6 +106,28 @@ jobs:
           RUSTFLAGS: -D warnings
         run: cargo check --locked --target wasm32-unknown-unknown --bin soba
 
+  # The threaded browser build (tools/web/build.py, #375), on the nightly it
+  # pins: check it still compiles, warning-free
+  web-threads:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-10-17
+          targets: wasm32-unknown-unknown
+          components: rust-src
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check the threaded web build
+        run: python3 tools/web/build.py --check
+
   # The releases build two macOS targets (release.yml): check they still
   # compile, warning-free, before a tag finds out
   macos:
@@ -131,7 +153,7 @@ jobs:
   # comments on the one already open, so the next session sees it without
   # watching CI. The next green push to master closes it
   report:
-    needs: [test, web, macos]
+    needs: [test, web, web-threads, macos]
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:

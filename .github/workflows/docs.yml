@@ -55,7 +55,7 @@ jobs:
             deploy=false
           elif [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && git diff --quiet "$deployed" "$SHA" -- \
               docs src patches assets index.html Trunk.toml Cargo.toml Cargo.lock \
-              packaging/web .github/workflows/docs.yml; then
+              packaging/web tools/web/build.py .github/workflows/docs.yml; then
             echo "Nothing the site shows changed between ${deployed::7} and ${SHA::7}"
             deploy=false
           fi
@@ -70,6 +70,16 @@ jobs:
       - name: Build docs
         if: steps.check.outputs.deploy == 'true'
         run: mdbook build docs
+
+      # The threaded build needs a nightly for -Z build-std (tools/web/build.py
+      # names the same one). Installed first, so stable is left the default
+      - name: Install the nightly for the threaded build
+        if: steps.check.outputs.deploy == 'true'
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-10-17
+          targets: wasm32-unknown-unknown
+          components: rust-src
 
       - name: Install Rust toolchain
         if: steps.check.outputs.deploy == 'true'
@@ -88,9 +98,11 @@ jobs:
           curl -sSL https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xz
           sudo mv trunk /usr/local/bin/
 
+      # Twice, into one dist/: threaded for a cross-origin isolated page, which
+      # renders sound in an AudioWorklet, and plain for the rest (#375)
       - name: Build the app for the browser
         if: steps.check.outputs.deploy == 'true'
-        run: trunk build --release
+        run: python3 tools/web/build.py
 
       # soba.chaps.dev is GitHub Pages on its own repo, whose CNAME file names
       # the domain. Trunk.toml's relative public_url serves from the root.

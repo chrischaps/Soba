@@ -13,7 +13,7 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{BufferSize, Device, FromSample, Host, SampleFormat, SizedSample, Stream, StreamConfig, SupportedBufferSize};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use web_time::Instant;
 
@@ -136,9 +136,14 @@ fn system_host() -> Result<Host, AudioError> {
 }
 
 /// The browser's Web Audio, if it has it: cpal's default host would panic
-/// without.
+/// without. A threaded build on a cross-origin isolated page renders in the
+/// browser's audio thread (#375), and otherwise on the page's own.
 #[cfg(target_arch = "wasm32")]
 fn system_host() -> Result<Host, AudioError> {
+    #[cfg(all(feature = "web-worklet", target_feature = "atomics"))]
+    if let Ok(host) = cpal::host_from_id(cpal::HostId::AudioWorklet) {
+        return Ok(host);
+    }
     cpal::available_hosts()
         .into_iter()
         .find_map(|id| cpal::host_from_id(id).ok())
@@ -149,9 +154,14 @@ fn system_host() -> Result<Host, AudioError> {
 /// page's own thread, between drawing frames. Firefox runs late now and then
 /// at the default 2048 frames (it drops a buffer every few seconds on Lush
 /// Pad), and not at all at 4096; Chrome and Safari keep up at 2048, with
-/// half the delay.
+/// half the delay. An AudioWorklet renders the browser's own quantum, 128
+/// frames, on its audio thread (#375).
 #[cfg(target_arch = "wasm32")]
 fn web_buffer() -> BufferSize {
+    #[cfg(all(feature = "web-worklet", target_feature = "atomics"))]
+    if cpal::host_from_id(cpal::HostId::AudioWorklet).is_ok() {
+        return BufferSize::Default;
+    }
     let firefox = web_sys::window()
         .and_then(|w| w.navigator().user_agent().ok())
         .is_some_and(|agent| agent.contains("Firefox/"));
@@ -510,7 +520,7 @@ impl AudioEngine {
     fn restart_stream(&mut self) -> Result<(), AudioError> {
         let Some(processor) = self.processor.clone() else { return Ok(()) };
         // The old stream is gone, so this lock is uncontended
-        if let Ok(mut proc) = processor.lock() {
+        if let Some(mut proc) = lock_processor(&processor) {
             proc.set_sample_rate(self.config.sample_rate as f32);
         }
         self.build_processor_stream(processor)
@@ -848,7 +858,7 @@ impl AudioEngine {
     /// by hand.
     pub fn go_offline(&mut self, sample_rate: f32) -> Result<(), AudioError> {
         self.stop()?;
-        if let Some(Ok(mut processor)) = self.processor.as_ref().map(|p| p.lock()) {
+        if let Some(mut processor) = self.processor.as_deref().and_then(lock_processor) {
             processor.set_sample_rate(sample_rate);
         }
         Ok(())
@@ -858,8 +868,8 @@ impl AudioEngine {
     /// audio input, after [`go_offline`](Self::go_offline). Returns false
     /// with no processor.
     pub fn render_offline(&self, output: &mut [f32], channels: usize, midi: &mut [MidiEvent], input: InputAudio<'_>) -> bool {
-        match self.processor.as_ref().map(|p| p.lock()) {
-            Some(Ok(mut processor)) => {
+        match self.processor.as_deref().and_then(lock_processor) {
+            Some(mut processor) => {
                 processor.process_offline(output, channels, midi, input);
                 true
             }
@@ -988,6 +998,24 @@ fn largest_buffer(device: &Device) -> usize {
         Ok(SupportedBufferSize::Range { max, .. }) => (max as usize).clamp(4096, 16384),
         _ => 8192,
     }
+}
+
+/// The processor's lock, from the UI's side. A threaded browser build's
+/// audio thread can still be finishing a buffer for a stream just dropped
+/// (its AudioContext closes a moment later), and the page's own thread may
+/// not wait on a lock, which browsers forbid: it spins for that moment
+/// instead.
+fn lock_processor(processor: &Mutex<AudioProcessor>) -> Option<MutexGuard<'_, AudioProcessor>> {
+    #[cfg(target_feature = "atomics")]
+    loop {
+        match processor.try_lock() {
+            Ok(guard) => return Some(guard),
+            Err(std::sync::TryLockError::WouldBlock) => std::hint::spin_loop(),
+            Err(std::sync::TryLockError::Poisoned(_)) => return None,
+        }
+    }
+    #[cfg(not(target_feature = "atomics"))]
+    processor.lock().ok()
 }
 
 /// Explains a stream that wouldn't build.

@@ -9,7 +9,14 @@
 //   (cd tools/web && npm install && npx playwright install firefox)
 //   trunk build --release
 //   node tools/web/steadiness.mjs [--dist dist] [--browsers chrome,firefox]
-//        [--patches canopy,orrery] [--seconds 30]
+//        [--patches canopy,orrery] [--seconds 30] [--isolated]
+//
+// --isolated serves the page cross-origin isolated (COOP and COEP headers),
+// as isolate-sw.js makes it on soba.chaps.dev, so a threaded build
+// (tools/web/build.py) renders in an AudioWorklet (#375). There a late
+// buffer is an underrun Chrome counts (AudioContext.playbackStats), and in
+// Firefox, which doesn't say, the audio clock falling behind the wall clock
+// (index.html's worklet shim).
 //
 // Chrome and Edge are the installed ones; Firefox is Playwright's own.
 // Patches with a Keyboard are played with three keys held (Z, C, B).
@@ -29,6 +36,8 @@ const browsers = option("browsers", "chrome,firefox").split(",");
 const patches = option("patches", "lush-pad,canopy,clair-de-satellite,orrery").split(",");
 const seconds = Number(option("seconds", "30"));
 const held = option("keys", "lush-pad").split(",");
+const isolated = args.includes("--isolated");
+const ISOLATION = { "cross-origin-opener-policy": "same-origin", "cross-origin-embedder-policy": "require-corp" };
 
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".wav": "audio/wav", ".json": "application/json" };
 const server = createServer(async (req, res) => {
@@ -36,7 +45,7 @@ const server = createServer(async (req, res) => {
     try {
         const file = path || "index.html";
         const body = await readFile(join(dist, file));
-        res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream" });
+        res.writeHead(200, { "content-type": TYPES[extname(file)] ?? "application/octet-stream", ...(isolated ? ISOLATION : {}) });
         res.end(body);
     } catch {
         res.writeHead(404).end();
@@ -52,7 +61,12 @@ const launch = {
 };
 
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
-const stats = (page) => page.evaluate(() => ({ ...window.sobaAudioStats(), renders: window.sobaRenders.length }));
+// In a worklet, index.html's shim times each render on the audio thread
+const stats = (page) => page.evaluate(() => {
+    const s = window.sobaAudioStats();
+    const late = s.host === "audioworklet" ? s.underruns ?? s.gaps : s.late;
+    return { ...s, late, renders: (window.sobaWorkletRenders ?? window.sobaRenders).length };
+});
 // The mean and 95th percentile of the buffers rendered between two snapshots
 const spread = (all, from, to) => {
     const times = all.slice(from, to).sort((a, b) => a - b);
@@ -105,7 +119,7 @@ async function measure(browserName, patch) {
     }
     await page.mouse.up({ button: "middle" });
     const moving = await stats(page);
-    const renders = await page.evaluate(() => window.sobaRenders);
+    const renders = await page.evaluate(() => window.sobaWorkletRenders ?? window.sobaRenders);
     if (option("shot")) await page.screenshot({ path: `${option("shot")}-${browserName}-${patch}.png` });
     await browser.close();
     return {
@@ -121,6 +135,8 @@ async function measure(browserName, patch) {
         loadMoving: moving.load,
         peak: +moving.peak.toFixed(3),
         contexts: moving.contexts.join(","),
+        host: moving.host,
+        gaps: moving.host === "audioworklet" ? moving.gaps - begin.gaps : undefined,
     };
 }
 
@@ -133,8 +149,8 @@ for (const browserName of browsers) {
     }
 }
 server.close();
-console.log("\n| Browser | Patch | Late (still) | Late (dragging) | Render still (mean, p95) | Render dragging (mean, p95) | Load (still, dragging) | Buffers | Peak |");
-console.log("|---|---|---|---|---|---|---|---|---|");
+console.log("\n| Browser | Host | Patch | Late (still) | Late (dragging) | Render still (mean, p95) | Render dragging (mean, p95) | Load (still, dragging) | Buffers | Peak |");
+console.log("|---|---|---|---|---|---|---|---|---|---|");
 for (const r of rows) {
-    console.log(`| ${r.browser} | ${r.patch} | ${r.lateStill} | ${r.lateMoving} | ${r.renderStill.join(", ")} ms | ${r.renderMoving.join(", ")} ms | ${r.loadStill}%, ${r.loadMoving}% | ${r.buffers} | ${r.peak} |`);
+    console.log(`| ${r.browser} | ${r.host} | ${r.patch} | ${r.lateStill} | ${r.lateMoving} | ${r.renderStill.join(", ")} ms | ${r.renderMoving.join(", ")} ms | ${r.loadStill}%, ${r.loadMoving}% | ${r.buffers} | ${r.peak} |`);
 }
