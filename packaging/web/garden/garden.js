@@ -232,6 +232,16 @@ async function main() {
         status.textContent = "The garden couldn't load what it draws with. Try again in a moment.";
         return;
     }
+    // Every card, in the garden and on a vine (vine.js, #397), and each one
+    // plays as the garden's do
+    const grow = (plant, patch) => {
+        const grown = card(table, plant, patch);
+        listening.attach(grown, plant.payload, grown.classList.contains("heavy"));
+        return grown;
+    };
+    const vine = new Vine(base, grow);
+    listening.watch(vine.body);
+    vine.dialog.addEventListener("close", () => listening.stop());
 
     let before = "";
     let loading = false;
@@ -249,9 +259,7 @@ async function main() {
             plants.forEach((plant, i) => {
                 if (!patches[i]) return;
                 try {
-                    const grown = card(table, plant, patches[i]);
-                    garden.appendChild(grown);
-                    listening.attach(grown, plant.payload, grown.classList.contains("heavy"));
+                    garden.appendChild(vine.entwine(grow(plant, patches[i]), plant));
                     shown += 1;
                 } catch {
                     // A patch the drawing can't make sense of is left out

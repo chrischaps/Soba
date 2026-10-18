@@ -6,6 +6,7 @@
 //   GET  /v1/patches/<id>                                        ->  1.<data>
 //   POST /v1/plants         body: {payload, title, name?, parent?} ->  { id, url }
 //   GET  /v1/garden?before=<planted_at>                          ->  { plants, before }
+//   GET  /v1/plants/<id>/lineage                                 ->  { id, root, cut }
 //
 // The ID is content-addressed: the SHA-256 of the patch's JSON, in base62,
 // cut to 8 characters (longer only if two patches ever share a prefix). So
@@ -44,6 +45,8 @@ export default {
       if (match && request.method === "GET") return await fetchPatch(match[1], env, cors);
       if (url.pathname === "/v1/plants" && request.method === "POST") return await plant(request, env, cors);
       if (url.pathname === "/v1/garden" && request.method === "GET") return await garden(url, env, cors);
+      const vine = url.pathname.match(/^\/v1\/plants\/([^/]+)\/lineage$/);
+      if (vine && request.method === "GET") return await lineage(vine[1], url, env, cors);
       return text("not found", 404, cors);
     } catch (e) {
       return text("the link service failed", 500, cors);
@@ -168,22 +171,116 @@ async function garden(url, env, cors) {
   if (asked !== null && !/^[0-9]{1,16}$/.test(asked)) return text("before is a planted_at", 400, cors);
   const before = asked === null ? Number.MAX_SAFE_INTEGER : Number(asked);
 
-  // Cached without CORS headers, which are added for whoever asks
-  const key = new Request(`${url.origin}/v1/garden?before=${asked ?? ""}`);
-  const cache = typeof caches === "undefined" ? null : caches.default;
-  let answer = cache && await cache.match(key);
-  if (!answer) {
+  return cached(`${url.origin}/v1/garden?before=${asked ?? ""}`, cors, async () => {
+    // Each plant's `stems`, the shown plants grown from it and from those,
+    // and its parent's title when the parent is a shown plant too
     const { results } = await env.DB.prepare(
-      `SELECT plants.id, title, name, planted_at, bytes, parent, payload
-       FROM plants JOIN patches ON patches.id = plants.id
-       WHERE status = 'shown' AND removed = 0 AND planted_at < ?
-       ORDER BY planted_at DESC LIMIT ?`,
-    ).bind(before, GARDEN_PAGE).all();
+      `WITH RECURSIVE page AS (
+         SELECT plants.id, title, name, planted_at, bytes, parent, payload
+         FROM plants JOIN patches ON patches.id = plants.id
+         WHERE ${SHOWN} AND planted_at < ?
+         ORDER BY planted_at DESC LIMIT ?
+       ),
+       down(root, id, depth) AS (
+         SELECT id, id, 0 FROM page
+         UNION
+         SELECT down.root, plants.id, down.depth + 1
+         FROM down JOIN plants ON plants.parent = down.id JOIN patches ON patches.id = plants.id
+         WHERE ${SHOWN} AND down.depth < ?
+       )
+       SELECT page.*,
+         (SELECT COUNT(DISTINCT id) FROM down WHERE down.root = page.id AND down.id != page.id) AS stems,
+         (SELECT title FROM plants JOIN patches ON patches.id = plants.id
+          WHERE plants.id = page.parent AND ${SHOWN}) AS parent_title
+       FROM page ORDER BY planted_at DESC`,
+    ).bind(before, GARDEN_PAGE, VINE_DEPTH).all();
     const next = results.length === GARDEN_PAGE ? results[results.length - 1].planted_at : null;
-    answer = new Response(JSON.stringify({ plants: results, before: next }), {
+    return { plants: results, before: next };
+  });
+}
+
+// A plant anyone may see: shown, and its patch not taken down
+const SHOWN = "plants.status = 'shown' AND patches.removed = 0";
+// How far a lineage reaches up or down, and how many remixes it lists. Also
+// what keeps a loop (A grown from B, then B planted from A) from running on
+const VINE_DEPTH = 32;
+const VINE_REMIXES = 48;
+
+/// A shown plant's lineage: the shown plants it grew from, back to the first
+/// whose parent isn't one, and those grown from it, as a tree from that first
+/// plant down. Each node is a garden row with its `children`, oldest first.
+/// The tree reaches no further than a hidden plant, up or down. `cut` says
+/// there were more remixes than it holds.
+async function lineage(id, url, env, cors) {
+  if (!ID.test(id)) return text("not found", 404, cors);
+  const row = `plants.id, title, name, planted_at, bytes, parent, payload`;
+  const found = await env.DB.prepare(`SELECT ${row} FROM plants JOIN patches ON patches.id = plants.id WHERE plants.id = ? AND ${SHOWN}`)
+    .bind(id).first();
+  if (!found) return text("no plant in the garden has that link", 404, cors);
+  return cached(`${url.origin}/v1/plants/${id}/lineage`, cors, async () => {
+    const [up, down] = await env.DB.batch([
+      env.DB.prepare(
+        `WITH RECURSIVE up(id, depth) AS (
+           SELECT parent, 1 FROM plants WHERE id = ?
+           UNION
+           SELECT plants.parent, up.depth + 1
+           FROM up JOIN plants ON plants.id = up.id JOIN patches ON patches.id = plants.id
+           WHERE ${SHOWN} AND up.depth < ?
+         )
+         SELECT ${row}, depth FROM up JOIN plants ON plants.id = up.id JOIN patches ON patches.id = plants.id
+         WHERE ${SHOWN} ORDER BY depth`,
+      ).bind(id, VINE_DEPTH),
+      env.DB.prepare(
+        `WITH RECURSIVE down(id, depth) AS (
+           SELECT ?, 0
+           UNION
+           SELECT plants.id, down.depth + 1
+           FROM down JOIN plants ON plants.parent = down.id JOIN patches ON patches.id = plants.id
+           WHERE ${SHOWN} AND down.depth < ?
+         )
+         SELECT DISTINCT ${row} FROM down JOIN plants ON plants.id = down.id JOIN patches ON patches.id = plants.id
+         WHERE down.depth > 0 ORDER BY planted_at LIMIT ?`,
+      ).bind(id, VINE_DEPTH, VINE_REMIXES + 1),
+    ]);
+
+    // Up the chain while each step is new: a loop ends where it comes round
+    const seen = new Set([id]);
+    const ancestors = [];
+    let depth = 1;
+    for (const plant of up.results) {
+      if (plant.depth !== depth++ || seen.has(plant.id)) break;
+      seen.add(plant.id);
+      const { depth: _, ...fields } = plant;
+      ancestors.push(fields);
+    }
+
+    const nodes = new Map([[id, { ...found, children: [] }]]);
+    const remixes = down.results.filter((plant) => !seen.has(plant.id));
+    const cut = remixes.length > VINE_REMIXES;
+    for (const plant of remixes.slice(0, VINE_REMIXES)) nodes.set(plant.id, { ...plant, children: [] });
+    // Oldest first, so each parent's children are too. A remix whose parent
+    // didn't make the cut is left out with it
+    for (const node of nodes.values()) {
+      if (node.id !== id) nodes.get(node.parent)?.children.push(node);
+    }
+
+    let root = nodes.get(id);
+    for (const plant of ancestors) root = { ...plant, children: [root] };
+    return { id, root, cut };
+  });
+}
+
+/// The JSON `compute` makes, cached at the edge for a minute under `key`.
+/// Cached without CORS headers, which are added for whoever asks.
+async function cached(key, cors, compute) {
+  const request = new Request(key);
+  const cache = typeof caches === "undefined" ? null : caches.default;
+  let answer = cache && await cache.match(request);
+  if (!answer) {
+    answer = new Response(JSON.stringify(await compute()), {
       headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${GARDEN_CACHE_SECONDS}` },
     });
-    if (cache) await cache.put(key, answer.clone());
+    if (cache) await cache.put(request, answer.clone());
   }
   const headers = new Headers(answer.headers);
   for (const [name, value] of Object.entries(cors)) headers.set(name, value);

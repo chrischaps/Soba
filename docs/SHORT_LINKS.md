@@ -155,13 +155,14 @@ If the service ever shuts down, the short links die with it unless they're carri
 
 ## Patch Garden
 
-*The seed bed, #388, the page, #393, and listening, #394. Planting from the
-app comes later (`docs/Patch Garden — Proposal.md`).*
+*The seed bed, #388, the page, #393, listening, #394, and vines, #397. Planting
+from the app comes later (`docs/Patch Garden — Proposal.md`).*
 
 **The page** is `packaging/web/garden/`, published at `soba.chaps.dev/garden/`
 by `docs.yml`. It pages through `GET /v1/garden`, inflates each payload and
 draws the patch as an SVG cable diagram from `modules.json` (#390), skipping any
-it can't read. To try it against `wrangler dev`, serve `packaging/web` at
+it can't read. A card says what it was grown from and how many remixes grew
+from it, and either opens its vine (`vine.js`). To try it against `wrangler dev`, serve `packaging/web` at
 `127.0.0.1:8080` and open `/garden/?api=http://127.0.0.1:8787` (`?api=` works
 only on a local page).
 
@@ -196,11 +197,23 @@ plants(id      TEXT PRIMARY KEY REFERENCES patches(id),
   be planted (410).
 - **`GET /v1/garden?before=<planted_at>`**: the 48 newest shown plants planted
   before `before` (or the newest of all), each
-  `{id, title, name, planted_at, bytes, parent, payload}`, and `before` for the
+  `{id, title, name, planted_at, bytes, parent, payload, stems, parent_title}`,
+  and `before` for the
   next page (null at the end). Pages are cached at the edge for 60 s. A patch
   that was taken down is never listed. Each plant is planted at least a
   millisecond after the last, so paging never skips one. Anything that seeds
-  the table by hand should keep `planted_at` distinct too.
+  the table by hand should keep `planted_at` distinct too. `stems` counts the
+  shown plants grown from it, and from those, but never past a hidden one.
+  `parent_title` is the parent's title if the parent is a shown plant, and
+  null if it's a shared link that isn't (or a plant that isn't shown).
+- **`GET /v1/plants/<id>/lineage`**: a shown plant's vine, `{id, root, cut}`.
+  `root` is the oldest shown plant it grew from, and each node is a garden row
+  with its `children`, oldest first: down the line to the plant, then
+  everything grown from it. Only shown plants, so a hidden one ends its branch.
+  It reaches 32 generations up or down and holds 48 remixes (`cut` says there
+  were more). A loop, which two patches planted from each other can make, ends
+  where it comes round. 404 for anything that isn't a shown plant. Cached at
+  the edge for 60 s.
 
 **Curated at launch.** A new plant is `pending` and isn't listed until Chris
 shows it, from `packaging/shortlinks/` against the deployed database:

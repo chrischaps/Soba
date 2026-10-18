@@ -146,5 +146,48 @@ check(after[0]?.id === three[1] && !listed({ plants: after }, three[2]), "before
 check(top.length <= 48 && new Set(top.map((p) => p.planted_at)).size === top.length, "no two plants share a planted_at");
 check((await gardenBefore("soon")).response.status === 400, "before must be a time");
 
+// Vines: a plant grown from a shared patch, two remixes of it, a remix of
+// one of those, and a hidden remix whose own remix it hides too
+const vineFrom = async (title, parent, n, show = true) => {
+  const { id } = await (await plantFrom({ payload: fresh(`vine ${n}`), title, parent }, `10.9.${run}.${n}`)).json();
+  if (show) curate("show", id);
+  return id;
+};
+const { id: shared } = await (await post(fresh("shared"), `10.9.${run}.100`)).json();
+const vineA = await vineFrom("Vine root", shared, 1);
+const vineB = await vineFrom("Vine first remix", vineA, 2);
+const vineC = await vineFrom("Vine remix of a remix", vineB, 3);
+const vineD = await vineFrom("Vine second remix", vineA, 4);
+const vineE = await vineFrom("Vine hidden remix", vineD, 5, false);
+await vineFrom("Vine under the hidden", vineE, 6);
+const vinePage = (await gardenBefore()).page.plants;
+const vineRow = (id) => vinePage.find((p) => p.id === id);
+check(vineRow(vineA)?.stems === 3 && vineRow(vineD)?.stems === 0 && vineRow(vineC)?.stems === 0,
+  `stems count shown remixes, not past a hidden one: ${[vineA, vineB, vineC, vineD].map((id) => vineRow(id)?.stems)}`);
+check(vineRow(vineB)?.parent_title === "Vine root" && vineRow(vineA)?.parent === shared && vineRow(vineA)?.parent_title === null,
+  "a remix names the plant it grew from, and a shared patch has no title");
+const lineageOf = async (id) => {
+  const response = await fetch(`${API}/v1/plants/${id}/lineage`, { headers: { Origin: "https://soba.chaps.dev" } });
+  return { response, vine: response.ok ? await response.json() : null };
+};
+const shape = (node) => node.children.length ? `${node.title}(${node.children.map(shape).join(",")})` : node.title;
+const whole = await lineageOf(vineA);
+check(whole.response.headers.get("access-control-allow-origin") === "https://soba.chaps.dev" && whole.vine.root.payload
+  && shape(whole.vine.root) === "Vine root(Vine first remix(Vine remix of a remix),Vine second remix)" && !whole.vine.cut,
+  `a root's lineage is everything grown from it: ${whole.vine && shape(whole.vine.root)}`);
+const leaf = await lineageOf(vineC);
+check(leaf.vine?.id === vineC && shape(leaf.vine.root) === "Vine root(Vine first remix(Vine remix of a remix))",
+  `a remix's lineage is its line back to the root: ${leaf.vine && shape(leaf.vine.root)}`);
+check((await lineageOf(vineE)).response.status === 404, "a hidden plant has no lineage");
+check((await lineageOf(shared)).response.status === 404, "a short link that isn't a plant has no lineage");
+// A loop: X planted from the link Y, then Y planted from X
+const loopY = fresh("loop y");
+const { id: loopYId } = await (await post(loopY, `10.9.${run}.101`)).json();
+const loopX = await vineFrom("Loop X", loopYId, 7);
+const { id: loopYPlant } = await (await plantFrom({ payload: loopY, title: "Loop Y", parent: loopX }, `10.9.${run}.8`)).json();
+curate("show", loopYPlant);
+const loop = await lineageOf(loopX);
+check(loop.response.ok && shape(loop.vine.root) === "Loop Y(Loop X)", `a loop ends where it comes round: ${loop.vine && shape(loop.vine.root)}`);
+
 console.log(failures ? `${failures} failed` : "all passed");
 process.exit(failures ? 1 : 0);
