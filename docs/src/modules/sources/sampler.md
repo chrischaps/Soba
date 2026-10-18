@@ -151,7 +151,7 @@ Patch a sequencer's **Gate** into **Gate**, and its **Velocity** into **Velocity
 
 ### Across the keyboard
 
-Patch [Poly MIDI](../midi/poly-midi.md)'s **Pitch**, **Gate** and **Velocity** into **V/Oct**, **Gate** and **Velocity**, and set **Root** to the note the file was recorded at. Each key plays the recording faster or slower: an octave up is twice as fast and half as long, as on tape. Set **Mode** to **Gated** so that letting go of a key lets its note go, over **Rel**.
+Patch [Note In](../midi/note-in.md)'s **Pitch**, **Gate** and **Velocity** into **V/Oct**, **Gate** and **Velocity**, and set **Root** to the note the file was recorded at. Each key plays the recording faster or slower: an octave up is twice as fast and half as long, as on tape. Set **Mode** to **Gated** so that letting go of a key lets its note go, over **Rel**.
 
 ### Pitch and speed
 
@@ -202,7 +202,7 @@ The hits are found once, when the file loads. Turning **Sens** only chooses amon
 
 ## Voices
 
-Sampler is polyphonic. Each channel of the **Gate** cable is a voice of its own, with its own pitch, velocity and place in the recording. [Poly MIDI](../midi/poly-midi.md) hands each new note the next voice. When all its voices are busy, it takes the oldest note's voice, which lets go of the old note over 5 ms as the new one starts. Retriggering a note that's still sounding does the same, so fast repeated notes never click.
+Sampler is polyphonic. Each channel of the **Gate** cable is a voice of its own, with its own pitch, velocity and place in the recording. [Note In](../midi/note-in.md) hands each new note the next voice. When all its voices are busy, it takes the oldest note's voice, which lets go of the old note over 5 ms as the new one starts. Retriggering a note that's still sounding does the same, so fast repeated notes never click.
 
 Loading a new file while notes play fades them out over 5 ms. The next notes play the new file.
 
@@ -282,7 +282,7 @@ Patch a slow [LFO](../modulation/lfo.md) into **Start**, and a Clock into **Gate
 
 ## Related modules
 
-- [Poly MIDI](../midi/poly-midi.md): plays the Sampler as an instrument, a voice per key
+- [Note In](../midi/note-in.md): plays the Sampler as an instrument, a voice per key
 - [Trigger Sequencer](../utilities/trigger-sequencer.md) and [Step Sequencer](../utilities/sequencer.md): one-shots in time
 - [Audio Input](./audio-input.md): outside sound live, as it happens. Patched into **In**, the Sampler records it
 - [Looper](../utilities/looper.md): records and layers live loops, where the Sampler records a take to play from a key or a gate

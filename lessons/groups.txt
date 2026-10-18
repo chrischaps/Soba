@@ -3,7 +3,7 @@ title Groups
 about Fold modules into one, go inside, and come back out
 patch groups.json
 
-say Here's the voice from **Your First Patch**: a Keyboard and an Audio Output, with four modules between them. Press **▶ Play**.
+say Here's the voice from **Your First Patch**: a Note In and an Audio Output, with four modules between them. Press **▶ Play**.
 wait play
 
 say Play a few notes on the `Z` to `M` keys.

@@ -40,7 +40,7 @@ The node draws the rise and the fall side by side, each as wide as its share of 
 
 ### Rates, not times
 
-Rise and Fall are **rates**: the time to move a whole unit, from 0 to 1. A trigger always runs a whole unit, so its rise takes exactly **Rise** and its fall exactly **Fall**. Following In, a smaller move takes less time: half a unit takes half the time. Pitch is in octaves, so with **Rise** at 60 ms an octave leap glides in 60 ms and a semitone in 5 ms. That's the analog way, and it's different from the **Glide** on the [Keyboard](../midi/keyboard.md#glide) and the MIDI modules, which takes the same time for any interval.
+Rise and Fall are **rates**: the time to move a whole unit, from 0 to 1. A trigger always runs a whole unit, so its rise takes exactly **Rise** and its fall exactly **Fall**. Following In, a smaller move takes less time: half a unit takes half the time. Pitch is in octaves, so with **Rise** at 60 ms an octave leap glides in 60 ms and a semitone in 5 ms. That's the analog way, and it's different from the **Glide** on [Note In](../midi/note-in.md#glide), which takes the same time for any interval.
 
 With the linear Shape, Out moves at a constant rate. When it reaches In it stops on it exactly, to the last bit, and stays there for as long as In holds still.
 
@@ -80,7 +80,7 @@ With **Cycle** on, the end of each fall starts the next rise, so the Slope runs 
 [Slope Out] ──> [Oscillator V/Oct]
 ```
 
-Every note slides into the next: an octave in 60 ms, a fifth in 35 ms. Set Rise and Fall apart for a line that swoops up and drops down, or the other way round. [Rhythmic Sequence](../../recipes/rhythmic-sequence.md#variations) has this as a variation. Because it's polyphonic, a chord from [Poly MIDI](../midi/poly-midi.md) glides voice by voice, each at its own pace.
+Every note slides into the next: an octave in 60 ms, a fifth in 35 ms. Set Rise and Fall apart for a line that swoops up and drops down, or the other way round. [Rhythmic Sequence](../../recipes/rhythmic-sequence.md#variations) has this as a variation. Because it's polyphonic, a chord from [Note In](../midi/note-in.md) glides voice by voice, each at its own pace.
 
 ### Trigger drums
 

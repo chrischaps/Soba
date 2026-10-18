@@ -20,9 +20,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Chopper](./sources/chopper.md) | `source.chopper` | Plays a sliced break in time with the Clock, at any tempo, rearranged step by step |
 | [Cloud](./sources/cloud.md) | `source.cloud` | Granular: clouds of small grains from a file or live audio, with Freeze, and a cloud per voice of a chord |
 | [Audio Input](./sources/audio-input.md) | `source.audio_input` | A microphone, guitar or line input, with an envelope follower and a gate |
-| [Keyboard](./midi/keyboard.md) | `input.keyboard` | Play notes from your computer keyboard |
-| [MIDI Note](./midi/midi-note.md) | `input.midi_note` | One voice of pitch, gate, velocity and aftertouch from a MIDI controller |
-| [Poly MIDI](./midi/poly-midi.md) | `input.poly_midi` | Up to eight voices from a MIDI controller, for chords |
+| [Note In](./midi/note-in.md) | `input.poly_midi` | Play notes from the computer keyboard, its piano or a MIDI controller: one voice, or up to eight for chords |
 
 ### Filter
 
@@ -98,18 +96,18 @@ Header colors describe what a module *is*. The colors of its jacks and cables de
 
 ## Polyphonic modules
 
-The Oscillator, Noise, Drum, Resonator, both filters, the ADSR Envelope, Slope, the VCA, the Attenuverter, Mix, Sample & Hold and the Quantizer run one voice per channel when a polyphonic cable reaches them. Everything else treats a polyphonic cable as one signal. Poly MIDI and the Chord Sequencer are where polyphonic cables start. See [Polyphony](../concepts/polyphony.md).
+The Oscillator, Noise, Drum, Resonator, both filters, the ADSR Envelope, Slope, the VCA, the Attenuverter, Mix, Sample & Hold and the Quantizer run one voice per channel when a polyphonic cable reaches them. Everything else treats a polyphonic cable as one signal. Note In and the Chord Sequencer are where polyphonic cables start. See [Polyphony](../concepts/polyphony.md).
 
 ## Common signal chains
 
 The classic subtractive voice: an oscillator, a filter to shape its tone, and a VCA opened by an envelope.
 
 ```text
-[Keyboard Pitch]     ──> [Oscillator V/Oct]
+[Note In Pitch]      ──> [Oscillator V/Oct]
 [Oscillator Out]     ──> [SVF Filter In]
 [SVF Filter LowPass] ──> [VCA In]
 [VCA Out]            ──> [Audio Output Mono]
-[Keyboard Gate]      ──> [ADSR Gate]
+[Note In Gate]       ──> [ADSR Gate]
 [ADSR Out]           ──> [VCA CV]
 ```
 
@@ -137,8 +135,8 @@ Drive a voice from a sequence instead of a keyboard:
 | Make drums, wind or breath | [Noise](./sources/noise.md) through a filter and an envelope |
 | Play a microphone or guitar through the patch | [Audio Input](./sources/audio-input.md) |
 | Let a live sound or drum loop move or trigger the patch | [Audio Input](./sources/audio-input.md)'s **Follow** and **Gate** |
-| Play notes | [Keyboard](./midi/keyboard.md), [MIDI Note](./midi/midi-note.md), or [Poly MIDI](./midi/poly-midi.md) for chords |
-| Slide from note to note | **Glide** on [Keyboard](./midi/keyboard.md#glide), [MIDI Note](./midi/midi-note.md#glide) or [Poly MIDI](./midi/poly-midi.md#glide); a [Slope](./modulation/slope.md) on any pitch, a sequencer's included |
+| Play notes | [Note In](./midi/note-in.md), from the computer keys or MIDI, one voice or chords |
+| Slide from note to note | **Glide** on [Note In](./midi/note-in.md#glide); a [Slope](./modulation/slope.md) on any pitch, a sequencer's included |
 | Darken or brighten a sound | [SVF Filter](./filters/svf-filter.md) or [Ladder Filter](./filters/ladder-filter.md) |
 | Give each note a shape in time | [ADSR Envelope](./modulation/adsr.md) into a [VCA](./utilities/vca.md) |
 | Play a whole envelope from a short trigger | [Slope](./modulation/slope.md) |

@@ -91,12 +91,7 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
         compiled.commands.push(EngineCommand::SeedModule { node_id: engine_node_id, seed: node.patch_id });
 
         // Send every parameter the way the editor's initial parameter sync does
-        let skip = port_mapping::live_input_parameter_count(node.template.module_id());
-        for (param_index, input_id) in port_mapping::parameter_inputs(graph, node.graph_id)
-            .into_iter()
-            .enumerate()
-            .skip(skip)
-        {
+        for (param_index, input_id) in port_mapping::parameter_inputs(graph, node.graph_id).into_iter().enumerate() {
             compiled.commands.push(EngineCommand::SetParameter {
                 node_id: engine_node_id,
                 param_index,

@@ -159,7 +159,7 @@ Before the Arranger has seen two clock pulses it can't measure a step. For the f
 
 After the last section, the song goes back to **Loop to**, and **End** fires. With **Loop to** off, **End** fires and the song stops where it is. The lanes keep their last levels, and the bars stop counting, until a Reset, a Jump or the next Play.
 
-**Jump** waits for the next bar line, so a live change of section always lands on the beat. Patch a button, a [Keyboard](../midi/keyboard.md) gate or a [Logic](./logic.md) decision into **Jump**, and a constant or a [Sample & Hold](./sample-hold.md) into **Jump To**. While a Jump waits, the section it's going to is outlined green.
+**Jump** waits for the next bar line, so a live change of section always lands on the beat. Patch a button, a [Note In](../midi/note-in.md) gate or a [Logic](./logic.md) decision into **Jump**, and a constant or a [Sample & Hold](./sample-hold.md) into **Jump To**. While a Jump waits, the section it's going to is outlined green.
 
 ## How patches store it
 

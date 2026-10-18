@@ -115,7 +115,7 @@ fn render(patch: &Patch) -> Vec<f32> {
     // Examples' samples ship inside the app
     let missing = renderer.load_samples(&compiled, SampleBase::Example);
     assert!(missing.is_empty(), "{}: {:?}", patch.name, missing);
-    let out = renderer.render_audition(patch, &compiled, 3.0);
+    let out = renderer.render_audition(patch, 3.0);
     out.left.into_iter().chain(out.right).collect()
 }
 

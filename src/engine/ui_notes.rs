@@ -9,13 +9,12 @@
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
+use crate::dsp::KEYS_CHANNEL;
+
 use super::midi_engine::{MidiEvent, TimestampedMidiEvent};
 
-/// The channel UI-made notes are sent on (MIDI channel 1), so a module can
-/// tell them from a device's later on.
-pub const UI_CHANNEL: u8 = 0;
-
-/// How hard UI-made notes are played.
+/// How hard UI-made notes are sent. Note In plays them at its own Key
+/// Velocity instead; this is what the MIDI Monitor shows.
 pub const UI_VELOCITY: u8 = 100;
 
 /// Room for a burst of keys, a chord or two, with plenty to spare.
@@ -35,13 +34,13 @@ pub fn ui_notes() -> (UiNotes, Consumer<TimestampedMidiEvent>) {
 }
 
 impl UiNotes {
-    /// Plays `note` (0-127), or lets it go, on [`UI_CHANNEL`] at
+    /// Plays `note` (0-127), or lets it go, on [`KEYS_CHANNEL`] at
     /// [`UI_VELOCITY`]. Returns the event sent.
     pub fn note(&mut self, note: u8, on: bool) -> MidiEvent {
         let event = if on {
-            MidiEvent::NoteOn { channel: UI_CHANNEL, note, velocity: UI_VELOCITY }
+            MidiEvent::NoteOn { channel: KEYS_CHANNEL, note, velocity: UI_VELOCITY }
         } else {
-            MidiEvent::NoteOff { channel: UI_CHANNEL, note, velocity: 0 }
+            MidiEvent::NoteOff { channel: KEYS_CHANNEL, note, velocity: 0 }
         };
         self.send(event);
         event

@@ -794,7 +794,7 @@ mod tests {
         let len = 96000;
         let mut osc = Oscillator::new();
         osc.prepare(SR, 256);
-        let inputs = patched(Oscillator::PORT_V_OCT, vec![crate::modules::MidiNote::midi_to_voct(69.0); len]);
+        let inputs = patched(Oscillator::PORT_V_OCT, vec![crate::modules::NoteIn::midi_to_voct(69.0); len]);
         let out = run(&mut osc, &defaults(), &inputs, len);
         let c = cents(measured_hz(&out[0][4800..]), 440.0);
         assert!(c.abs() < 0.1, "MIDI 69 measured {c:+.4} cents from 440 Hz");

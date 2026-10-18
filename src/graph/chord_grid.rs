@@ -80,8 +80,6 @@ const KEY_HEIGHT: f32 = 44.0;
 /// The order the popover lists the chord types in: as the Type dropdown,
 /// but with each one beside its kin, where a later type joined the list.
 const TYPE_ORDER: [usize; 19] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 13, 14, 15, 16, 17];
-/// Modules that play a MIDI keyboard's notes themselves.
-pub(super) const MIDI_MODULES: [&str; 2] = ["input.midi_note", "input.poly_midi"];
 /// Room left of the pattern tabs for their captions, before zoom.
 const TAB_INSET: f32 = 34.0;
 const HINT: &str = "Click: chord on/off · Shift+click: tie\nDrag up or down: root (Shift: by octave)\nRight-click: edit the chord";
@@ -621,7 +619,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
             listening.last = Some(chord);
         }
         // Heard while the hand is down, unless the patch already plays it
-        let plays_midi = graph.nodes.iter().any(|(_, node)| MIDI_MODULES.contains(&node.user_data.module_id));
+        let plays_midi = super::note_in_face::plays_midi(graph);
         let hand = Hand { notes: listening.ear.gathering().to_vec(), velocity: listening.ear.velocity() };
         let by_hand = (listening.ear.keyed() || !plays_midi).then(|| audition_of(hand, open.step, &pattern)).flatten();
 

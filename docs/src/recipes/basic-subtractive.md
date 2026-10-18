@@ -19,7 +19,7 @@ A saw wave through a lowpass filter, with one envelope shaping its brightness an
 
 | Module | Settings |
 |--------|----------|
-| [Keyboard](../modules/midi/keyboard.md) | Defaults |
+| [Note In](../modules/midi/note-in.md) | **Source** Keys, **Voices** 1, **Key Vel** 100% |
 | [Oscillator](../modules/sources/oscillator.md) | **Wave** Saw |
 | [SVF Filter](../modules/filters/svf-filter.md) | **Cutoff** 700 Hz, **Res** 30% |
 | [ADSR Envelope](../modules/modulation/adsr.md) (filter) | **Atk** 1 ms, **Dec** 300 ms, **Sus** 30%, **Rel** 200 ms |
@@ -32,7 +32,7 @@ A saw wave through a lowpass filter, with one envelope shaping its brightness an
 ### The audio path
 
 ```text
-[Keyboard Pitch] ──> [Oscillator V/Oct]
+[Note In Pitch] ──> [Oscillator V/Oct]
 [Oscillator Out] ──> [SVF Filter In]
 [SVF Filter LowPass] ──> [VCA In]
 [VCA Out] ──> [Audio Output Mono]
@@ -43,13 +43,13 @@ The saw wave contains every harmonic, so it's the richest raw material for a fil
 ### Two envelopes from one gate
 
 ```text
-[Keyboard Gate] ──> [ADSR (filter) Gate]
-                ──> [ADSR (amp) Gate]
+[Note In Gate] ──> [ADSR (filter) Gate]
+               ──> [ADSR (amp) Gate]
 [ADSR (filter) Out] ──> [SVF Filter Cutoff]
 [ADSR (amp) Out] ──> [VCA CV]
 ```
 
-One output can feed any number of inputs, so the Keyboard's gate starts both envelopes at once.
+One output can feed any number of inputs, so Note In's gate starts both envelopes at once.
 
 The **amp envelope** shapes the volume through the VCA. It rises in 5 ms, which is quick but not a click, falls to 70% over 200 ms, and fades out over 300 ms after you let go.
 
@@ -57,7 +57,7 @@ The **filter envelope** shapes the brightness. The SVF's **Cutoff** input works 
 
 ## Variations
 
-**Fatter bass.** Replace the SVF with a [Ladder Filter](../modules/filters/ladder-filter.md) and use its **LP24** output. Turn **Oct** on the Keyboard down to −1, set the Ladder's **Drive** to about 2x, and lower its **Cutoff** to 300 Hz.
+**Fatter bass.** Replace the SVF with a [Ladder Filter](../modules/filters/ladder-filter.md) and use its **LP24** output. Turn **Oct** on Note In down to −1, set the Ladder's **Drive** to about 2x, and lower its **Cutoff** to 300 Hz.
 
 **Acid squelch.** Raise **Res** to 70% and lower **Cutoff** to 400 Hz. The filter envelope now sweeps a sharp resonant peak across each note.
 

@@ -61,8 +61,8 @@ For the same reason, an audio-rate oscillator into CV doesn't give true ring mod
 The VCA's main job. The envelope opens it on each key press and closes it on release:
 
 ```text
-[Keyboard Pitch] ──> [Oscillator V/Oct]
-[Keyboard Gate] ──> [ADSR Gate]
+[Note In Pitch] ──> [Oscillator V/Oct]
+[Note In Gate] ──> [ADSR Gate]
 [Oscillator Out] ──> [VCA In]
 [ADSR Out] ──> [VCA CV]
 [VCA Out] ──> [Audio Output Mono]
@@ -91,10 +91,10 @@ Put an LFO through the VCA and let an envelope set how much of it reaches the fi
 
 ### A polyphonic voice
 
-With [Poly MIDI](../midi/poly-midi.md) feeding a polyphonic oscillator and envelope, one VCA handles every voice. Each voice's envelope opens its own channel:
+With [Note In](../midi/note-in.md) feeding a polyphonic oscillator and envelope, one VCA handles every voice. Each voice's envelope opens its own channel:
 
 ```text
-[Poly MIDI Gate] ──> [ADSR Gate]
+[Note In Gate] ──> [ADSR Gate]
 [Oscillator Out] ──> [VCA In]
 [ADSR Out] ──> [VCA CV]
 [VCA Out] ──> [Audio Output Mono]

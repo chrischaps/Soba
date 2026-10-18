@@ -20,7 +20,7 @@ Keep audio within ±1.0 and it passes through the output untouched. Louder than 
 
 ## Control
 
-Control signals, often called CV (control voltage), move a parameter instead of making a sound. They come from envelopes, LFOs, the sequencer, the keyboard and MIDI modules, and they go into jacks such as a filter's **Cutoff** or an oscillator's **FM**.
+Control signals, often called CV (control voltage), move a parameter instead of making a sound. They come from envelopes, LFOs, the sequencer and Note In, and they go into jacks such as a filter's **Cutoff** or an oscillator's **FM**.
 
 A control signal is either:
 
@@ -41,7 +41,7 @@ Pitch travels as a control signal on a 1-per-octave scale, the digital version o
 | 1.0 | C5 |
 | 2.0 | C6 |
 
-One semitone is 1/12. The **Pitch** outputs of [Keyboard](../modules/midi/keyboard.md), [MIDI Note](../modules/midi/midi-note.md), [Poly MIDI](../modules/midi/poly-midi.md) and the [Step Sequencer](../modules/utilities/sequencer.md) all use this scale, so they play an [Oscillator](../modules/sources/oscillator.md) in tune with nothing to calibrate. Both filters take their **Cutoff** CV on the same scale, so a pitch cable patched into Cutoff makes the filter track the keyboard exactly.
+One semitone is 1/12. The **Pitch** outputs of [Note In](../modules/midi/note-in.md) and the [Step Sequencer](../modules/utilities/sequencer.md) both use this scale, so they play an [Oscillator](../modules/sources/oscillator.md) in tune with nothing to calibrate. Both filters take their **Cutoff** CV on the same scale, so a pitch cable patched into Cutoff makes the filter track the keyboard exactly.
 
 ## Gate
 
@@ -49,11 +49,11 @@ A gate is either on (1.0) or off (0.0). It says *when*: a key held down, a step 
 
 A short gate is often called a trigger. Modules that only care about the moment a gate begins, such as the clock input of the Step Sequencer or the **Trig** input of [Sample & Hold](../modules/utilities/sample-hold.md), treat both the same way.
 
-Gates come from the **Gate** outputs of Keyboard, MIDI Note, Poly MIDI, the [Clock](../modules/modulation/clock.md) and the Step Sequencer (which also has an **EOC**, end-of-cycle, gate).
+Gates come from the **Gate** outputs of Note In, the [Clock](../modules/modulation/clock.md) and the Step Sequencer (which also has an **EOC**, end-of-cycle, gate).
 
 ## MIDI
 
-MIDI is the purple signal type, and today no jack uses it. MIDI from your controller doesn't arrive over a cable. It goes straight into the modules that listen for it: MIDI Note, Poly MIDI and the [MIDI Monitor](../modules/midi/midi-monitor.md). Those modules turn notes into ordinary **Pitch**, **Gate** and **Velocity** signals that the rest of the patch understands. The Keyboard module does the same for your computer keyboard.
+MIDI is the purple signal type, and today no jack uses it. MIDI from your controller doesn't arrive over a cable. It goes straight into the modules that listen for it: Note In and the [MIDI Monitor](../modules/midi/midi-monitor.md). Note In turns notes into ordinary **Pitch**, **Gate** and **Velocity** signals that the rest of the patch understands, and does the same for your computer keyboard.
 
 ## Bus
 

@@ -222,19 +222,15 @@ pub struct SynthGraphState {
     /// Running inside a DAW as the plugin: knobs offer the host's macros.
     pub hosted: bool,
 
-    /// Active notes for Keyboard module display (MIDI note numbers).
-    /// Updated by the keyboard input handler.
-    pub keyboard_active_notes: Vec<u8>,
-
-    /// Active notes for MIDI Note module display (MIDI note numbers).
-    /// Updated by the MIDI event handler.
+    /// The notes held, from MIDI or the keys, for Note In's piano (MIDI
+    /// note numbers). Updated by the MIDI event handler.
     pub midi_active_notes: Vec<u8>,
 
     /// How hard each of `midi_active_notes` was struck (1 to 127), in the
     /// same order.
     pub midi_active_velocities: Vec<u8>,
 
-    /// The key of a Keyboard or Poly MIDI module's piano held down with the
+    /// The key of a Note In's piano held down with the
     /// mouse or a finger, as a note from C like a computer key's (0 is C).
     /// Set as the piano is drawn, and played on the next frame.
     pub piano_pointer: Option<i32>,
@@ -311,6 +307,10 @@ pub struct SynthGraphState {
     /// the app each frame: see [`super::arranger_follow`].
     pub arranger_leaders: HashMap<NodeId, NodeId>,
 
+    /// The Note In modules set to more than one voice, whose one-voice
+    /// controls fade. Set by the app each frame: see [`super::note_in_face`].
+    pub poly_note_ins: std::collections::HashSet<NodeId>,
+
     /// Samplers whose last take was tidied as it was kept: what tidying did
     /// ("−0.42 s, +5.2 dB"), and when, for the face to say for a moment.
     pub tidied_takes: HashMap<NodeId, (String, Instant)>,
@@ -352,7 +352,6 @@ impl Default for SynthGraphState {
             is_playing: false,
             focused: true,
             hosted: false,
-            keyboard_active_notes: Vec::new(),
             midi_active_notes: Vec::new(),
             midi_active_velocities: Vec::new(),
             piano_pointer: None,
@@ -375,6 +374,7 @@ impl Default for SynthGraphState {
             renaming: None,
             engine_cables: Default::default(),
             arranger_leaders: HashMap::new(),
+            poly_note_ins: Default::default(),
             tidied_takes: HashMap::new(),
         }
     }
@@ -491,7 +491,6 @@ impl SynthGraphState {
         self.midi_learn_target = None;
         self.widget_context_menu_open = false;
         self.scope_data.clear();
-        self.keyboard_active_notes.clear();
         self.midi_active_notes.clear();
         self.midi_active_velocities.clear();
         self.output_meter = LevelMeter::default();
@@ -692,16 +691,6 @@ impl SynthGraphState {
         self.scope_data.remove(&engine_node_id);
     }
 
-    /// Set the active notes for the Keyboard module display.
-    pub fn set_keyboard_active_notes(&mut self, notes: Vec<u8>) {
-        self.keyboard_active_notes = notes;
-    }
-
-    /// Get the active notes for the Keyboard module display.
-    pub fn keyboard_active_notes(&self) -> &[u8] {
-        &self.keyboard_active_notes
-    }
-
     /// Set the notes held on the MIDI keyboard, each with how hard it was
     /// struck.
     pub fn set_midi_active_notes(&mut self, held: &[(u8, u8)]) {
@@ -709,7 +698,7 @@ impl SynthGraphState {
         self.midi_active_velocities = held.iter().map(|&(_, velocity)| velocity).collect();
     }
 
-    /// Get the active notes for the MIDI Note module display.
+    /// The notes held, for Note In's piano.
     pub fn midi_active_notes(&self) -> &[u8] {
         &self.midi_active_notes
     }

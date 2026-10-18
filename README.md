@@ -16,12 +16,12 @@ It doesn't imitate hardware panels. Every module is a node with jacks on its sid
 
 - **Colour-coded signals.** Blue cables carry audio, orange carry control voltage, green carry gates, and purple carry MIDI. Connections that can't work are refused as you make them.
 - **Inputs vs. knobs.** Most parameters have a knob and a jack. Patch a cable into the jack and it takes over: the knob dims and follows the incoming signal, as on an analog modular.
-- **Polyphony on a single cable.** Poly MIDI and the Chord Sequencer send up to 8 voices down one cable, and every module after it plays each voice on its own. Poly cables are drawn as a bundle of strands, one per voice.
+- **Polyphony on a single cable.** Note In and the Chord Sequencer send up to 8 voices down one cable, and every module after it plays each voice on its own. Poly cables are drawn as a bundle of strands, one per voice.
 - **44 modules:**
 
   | Category | Modules |
   |---|---|
-  | Sources | Oscillator (BLEP anti-aliasing, sync, through-zero FM, sub, supersaw unison), Noise (white, pink, brown, smooth random), Drum (kick, snare, tom, clap, hats, cymbal, rim, cowbell, shaker, with accent and choke), Resonator (physical models: a Karplus-Strong string, or a bell, bar, glass or wood body of tuned modes, played by a gate or by any sound), Sampler (one-shots, a poly instrument, or slices by note from a WAV, MP3, FLAC or Ogg), Chopper (a sliced break in time with the Clock at any tempo, rearranged step by step), Cloud (granular, from a file or live audio, with Freeze; a cloud per voice of a chord), Audio Input (mic or line in, envelope follower, gate), Keyboard, MIDI Note, Poly MIDI |
+  | Sources | Oscillator (BLEP anti-aliasing, sync, through-zero FM, sub, supersaw unison), Noise (white, pink, brown, smooth random), Drum (kick, snare, tom, clap, hats, cymbal, rim, cowbell, shaker, with accent and choke), Resonator (physical models: a Karplus-Strong string, or a bell, bar, glass or wood body of tuned modes, played by a gate or by any sound), Sampler (one-shots, a poly instrument, or slices by note from a WAV, MP3, FLAC or Ogg), Chopper (a sliced break in time with the Clock at any tempo, rearranged step by step), Cloud (granular, from a file or live audio, with Freeze; a cloud per voice of a chord), Audio Input (mic or line in, envelope follower, gate), Note In (the computer keys, its own piano or MIDI; one voice or chords) |
   | Filters | SVF Filter (self-oscillating, notch), Ladder Filter (oversampled) |
   | Modulation | ADSR Envelope, LFO, Slope (slew, trigger envelopes, cycling with skew, EOR/EOC), Clock |
   | Effects | Stereo Delay (with tape mode), Reverb (8-line FDN), Chorus, Distortion (oversampled, wavefolder), Tape (wow, flutter, saturation, age and hiss for a bus), Slicer (chops a held sound into a rhythm, with a step filter), Compressor, Parametric EQ, Vocoder (8 to 24 bands, formant shift) |
@@ -31,7 +31,7 @@ It doesn't imitate hardware panels. Every module is a node with jacks on its sid
 - **Visual feedback.** Waveform, envelope and filter-response displays sit on their modules, LEDs light on active outputs, and the scope shows what's actually there. Hover any jack or knob to see what it does.
 - **Fast editing.** Space opens a fuzzy quick-add palette at the cursor. Undo and redo cover every edit. Copy, paste and duplicate work across windows, because the clipboard holds patch JSON.
 - **Modules of your own.** `Ctrl+G` collapses a selection into a group: one node with its own jacks, a miniature of what's inside, and the knobs you pin to its face. Open it to edit, and save it to My Modules to use in any patch. The engine only ever sees the modules, so groups cost nothing to run.
-- **A Library of ready-made groups.** Fifteen voices, drums, generators and effects to drop in and open up: a subtractive voice, two FM voices, an electric piano, a supersaw pad, a string machine, a tuned mallet, acid and Reese basses, a drum kit, a random melody, wind, a stereo effects chain, a sidechain pump and an auto-pan. Every voice plays chords from Poly MIDI.
+- **A Library of ready-made groups.** Fifteen voices, drums, generators and effects to drop in and open up: a subtractive voice, two FM voices, an electric piano, a supersaw pad, a string machine, a tuned mallet, acid and Reese basses, a drum kit, a random melody, wind, a stereo effects chain, a sidechain pump and an auto-pan. Every voice plays chords from Note In.
 - **Patches that explain themselves.** Frames group modules under a title, like sections of a front panel, and drag as one. Notes put a word of explanation beside them. Every example is laid out this way, so it reads as a lesson you can play.
 - **Record what you hear.** **● Rec** (`Ctrl+R`) writes the output to a WAV, sample for sample, while you play and tweak. It never gets in the audio's way, and every take is saved with the patch that made it.
 - **Live input.** Put a microphone, guitar or line source through the filters and effects. Audio Input follows its level and opens a gate on loud hits, so a drum loop can play a synth.
@@ -41,7 +41,7 @@ It doesn't imitate hardware panels. Every module is a node with jacks on its sid
 
 ## Getting started
 
-**[Try it in the browser](https://soba.chaps.dev/)**, nothing to install: press **Play**, then play the `Z` to `M` keys or the Keyboard module's piano. The browser build has every module and example, and plays MIDI devices in Chrome, Edge and Firefox after **Connect MIDI**; audio input and recording need the desktop app (see [`WEB.md`](WEB.md)).
+**[Try it in the browser](https://soba.chaps.dev/)**, nothing to install: press **Play**, then play the `Z` to `M` keys or Note In's piano. The browser build has every module and example, and plays MIDI devices in Chrome, Edge and Firefox after **Connect MIDI**; audio input and recording need the desktop app (see [`WEB.md`](WEB.md)).
 
 **[Download it](https://github.com/chrischaps/Soba/releases/latest)** for Windows (an installer, or a zip), macOS (a disk image) or Linux. It tells you when there's a newer version and installs it in place, bringing your patch back where you left it: see [Updates](https://docs.chaps.dev/soba/getting-started/installation.html#updates).
 
@@ -64,7 +64,7 @@ The `render` binary plays a patch to a WAV file without an audio device, and pri
 
 ```bash
 cargo run --release --bin render -- patches/fm-synthesis.json out.wav --seconds 5
-cargo run --release --bin render -- patches/lush-pad.json out.wav --audition  # plays a phrase into Keyboard/MIDI modules
+cargo run --release --bin render -- patches/lush-pad.json out.wav --audition  # plays a phrase into Note In modules
 ```
 
 ### Shortcuts

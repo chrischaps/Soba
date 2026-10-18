@@ -101,7 +101,7 @@ Start with the cutoff around 1000 Hz and **Res** at 20 to 40%, then turn the cut
 ### Filter envelope
 
 ```text
-[Keyboard Gate] ──> [ADSR Gate]
+[Note In Gate] ──> [ADSR Gate]
 [ADSR Out] ──> [SVF Filter Cutoff]
 ```
 
@@ -110,8 +110,8 @@ Set the **Cutoff** knob low (200 to 500 Hz) and **CV Amt** to 2 or 3. The envelo
 ### Keyboard tracking
 
 ```text
-[Keyboard Pitch] ──> [Oscillator V/Oct]
-                 ──> [SVF Filter Cutoff]
+[Note In Pitch] ──> [Oscillator V/Oct]
+                ──> [SVF Filter Cutoff]
 ```
 
 The filter follows the notes you play, so high notes are as bright as low ones. At the default **CV Amt** of 1 the Cutoff input is on the V/Oct scale, so no scaling is needed. Turn **CV Amt** down to 0.5 for half tracking, so high notes come out a little darker.

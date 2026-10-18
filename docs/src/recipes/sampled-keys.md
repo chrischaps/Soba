@@ -13,14 +13,14 @@ A bell you can play across the keyboard, made from one recorded note. The record
 
 - **Sampling.** A recording becomes an instrument. One note, played faster or slower, covers the whole keyboard.
 - **Pitch is speed.** As on tape, an octave up plays twice as fast and lasts half as long. The bell rings shorter at the top of the keyboard and longer at the bottom, as real ones do.
-- **Polyphony from one module.** The Sampler runs a voice for every channel of Poly MIDI's cables.
+- **Polyphony from one module.** The Sampler runs a voice for every channel of Note In's cables.
 - **Resampling with Soba itself.** The bell was rendered from another example with the `render` tool, so the sample has no licence to worry about.
 
 ## Modules
 
 | Module | Settings |
 |--------|----------|
-| [Poly MIDI](../modules/midi/poly-midi.md) | Defaults: 8 voices, Rotate |
+| [Note In](../modules/midi/note-in.md) | Defaults: 8 voices, Rotate |
 | [Sampler](../modules/sources/sampler.md) | `samples/fm-bell-c4.wav`, **Mode** Gated, **Root** C4, **Rel** 700 ms, **Level** 33% |
 | [SVF Filter](../modules/filters/svf-filter.md) | **Cutoff** 5.2 kHz, **Res** 10% |
 | [Reverb](../modules/effects/reverb.md) | **Size** 60%, **Decay** 3 s, **Damp** 50%, **PreD** 25 ms, **Mod** 30%, **Mix** 30% |
@@ -31,12 +31,12 @@ A bell you can play across the keyboard, made from one recorded note. The record
 ### Keys into the Sampler
 
 ```text
-[Poly MIDI Pitch]    ──> [Sampler V/Oct]
-[Poly MIDI Gate]     ──> [Sampler Gate]
-[Poly MIDI Velocity] ──> [Sampler Velocity]
+[Note In Pitch]    ──> [Sampler V/Oct]
+[Note In Gate]     ──> [Sampler Gate]
+[Note In Velocity] ──> [Sampler Velocity]
 ```
 
-Poly MIDI gives each held key a channel of its own. The Sampler plays each channel as a separate voice, starting the recording from the top when that key goes down. **Root** is C4, the note the bell was struck at, so C4 plays the recording exactly as it is. D4 plays it 12% faster, and C5 twice as fast.
+Note In gives each held key a channel of its own. The Sampler plays each channel as a separate voice, starting the recording from the top when that key goes down. **Root** is C4, the note the bell was struck at, so C4 plays the recording exactly as it is. D4 plays it 12% faster, and C5 twice as fast.
 
 **Mode** is Gated: letting go of a key lets its bell go over **Rel**, 700 ms. In One-Shot mode every strike would ring its full three seconds, however briefly you touched the key.
 
@@ -44,7 +44,7 @@ Velocity sets each note's level as it starts, so a soft touch rings quietly.
 
 ### The sample
 
-The bell comes from the FM Synthesis example. Its Keyboard was swapped for a Clock to strike it once, held two seconds, and the `render` tool recorded it at 44.1 kHz. The result was trimmed to three seconds, peaked at -1 dBFS and saved as 16-bit mono. The Sampler resamples it to your device's rate when it loads.
+The bell comes from the FM Synthesis example. Its Note In was swapped for a Clock to strike it once, held two seconds, and the `render` tool recorded it at 44.1 kHz. The result was trimmed to three seconds, peaked at -1 dBFS and saved as 16-bit mono. The Sampler resamples it to your device's rate when it loads.
 
 The patch names its sample by a path relative to itself, `samples/fm-bell-c4.wav`. Save the example somewhere and **Save As** copies the bell into a `samples` folder beside your copy.
 

@@ -65,7 +65,7 @@ Curves change only the *shape* of a stage. Its time stays exactly the knob's.
 
 ## Velocity
 
-Patch a velocity source (the **Velocity** output of [Keyboard Input](../midi/keyboard.md), [MIDI Note](../midi/midi-note.md) or [Poly MIDI](../midi/poly-midi.md)) into **Velocity**, and the **Vel** knob sets how much it matters:
+Patch a velocity source (the **Velocity** output of [Note In](../midi/note-in.md)) into **Velocity**, and the **Vel** knob sets how much it matters:
 
 - **Vel 0%**: every note peaks at 1.0.
 - **Vel 50%**: the softest note peaks at 0.5 and the hardest at 1.0.
@@ -93,7 +93,7 @@ While a stage's jack is patched, its knob shows where the CV has taken it: an or
 ### Volume envelope
 
 ```text
-[Keyboard Gate] ──> [ADSR Gate]
+[Note In Gate] ──> [ADSR Gate]
 [ADSR Out] ──> [VCA CV]
 [Oscillator Out] ──> [VCA In] ──> [Audio Output]
 ```
@@ -103,8 +103,8 @@ The basic shaped note. Without an envelope, an oscillator plays one endless tone
 ### Two envelopes: loudness and brightness
 
 ```text
-[Keyboard Gate] ──> [ADSR 1 Gate]
-                ──> [ADSR 2 Gate]
+[Note In Gate] ──> [ADSR 1 Gate]
+               ──> [ADSR 2 Gate]
 [ADSR 1 Out] ──> [VCA CV]
 [ADSR 2 Out] ──> [SVF Filter Cutoff]
 ```
@@ -114,7 +114,7 @@ Separate envelopes let the brightness move independently of the volume: a long r
 ### Velocity to brightness
 
 ```text
-[Keyboard Velocity] ──> [ADSR 2 Velocity]
+[Note In Velocity] ──> [ADSR 2 Velocity]
 ```
 
 Add this to the two-envelope patch and harder notes come out brighter but no louder.
@@ -131,8 +131,8 @@ The filter closes as the note opens and opens again as it releases, for "backwar
 ### Harder notes ring longer
 
 ```text
-[Keyboard Velocity] ──> [ADSR Velocity]
-                    ──> [ADSR Decay]
+[Note In Velocity] ──> [ADSR Velocity]
+                   ──> [ADSR Decay]
 ```
 
 A struck string rings longer when it's struck harder. With a short decay and no sustain, velocity into **Decay** gives a full-strength note twice the knob's decay and the softest one the knob's own. For a gentler spread, run velocity through an [Attenuverter](../utilities/attenuverter.md) first. Pitch CV into **Decay** through an Attenuverter turned below zero makes high notes shorter, the way a piano's are.
@@ -167,12 +167,12 @@ While the key is held, each clock pulse restarts the attack from the current lev
 
 ## Polyphony
 
-The ADSR Envelope is polyphonic. Patch a polyphonic gate (from [Poly MIDI](../midi/poly-midi.md)) into **Gate** and every voice gets its own envelope, with its own stage and level, so each note of a chord attacks and releases on its own. Polyphonic velocity into **Decay** gives each note its own decay; a mono cable, like an Arranger lane, moves every voice together. The display shows the first voice. See [Polyphony](../../concepts/polyphony.md).
+The ADSR Envelope is polyphonic. Patch a polyphonic gate (from [Note In](../midi/note-in.md)) into **Gate** and every voice gets its own envelope, with its own stage and level, so each note of a chord attacks and releases on its own. Polyphonic velocity into **Decay** gives each note its own decay; a mono cable, like an Arranger lane, moves every voice together. The display shows the first voice. See [Polyphony](../../concepts/polyphony.md).
 
 ## Related modules
 
 - [VCA](../utilities/vca.md) to shape loudness with the envelope
 - [SVF Filter](../filters/svf-filter.md) and [Ladder Filter](../filters/ladder-filter.md) to shape brightness
-- [Keyboard Input](../midi/keyboard.md), [MIDI Note](../midi/midi-note.md) and [Poly MIDI](../midi/poly-midi.md) for gates and velocity
+- [Note In](../midi/note-in.md) for gates and velocity
 - [LFO](./lfo.md) for modulation that repeats instead of following the note
 - [Slope](./slope.md) for an envelope a trigger plays whole, however short the trigger

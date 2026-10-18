@@ -676,10 +676,11 @@ mod tests {
         assert!(registry.contains("util.attenuverter"));
         assert!(registry.contains("output.audio"));
         assert!(registry.contains("mod.lfo"));
-        assert!(registry.contains("input.keyboard"));
         assert!(registry.contains("util.midi_monitor"));
-        assert!(registry.contains("input.midi_note"));
         assert!(registry.contains("input.poly_midi"));
+        // Note In took their place: their IDs live on only in the migration
+        assert!(!registry.contains("input.keyboard"));
+        assert!(!registry.contains("input.midi_note"));
         assert!(registry.contains("util.sample_hold"));
         assert!(registry.contains("util.oscilloscope"));
         assert!(registry.contains("util.dancer"));
@@ -803,16 +804,17 @@ mod tests {
         let (mut notes, notes_input) = crate::engine::ui_notes();
         processor.set_ui_midi_input(notes_input);
 
-        // A sine through a VCA a MIDI Note's gate opens
+        // A sine through a VCA a one-voice Note In's gate opens
         let port = |module_id: &str, name: &str| {
             let module = create_module_registry().create(module_id).unwrap();
             module.ports().iter().position(|p| p.name == name).unwrap()
         };
-        for (node_id, module_id) in [(1, "input.midi_note"), (2, "osc.sine"), (3, "util.vca"), (4, "output.audio")] {
+        for (node_id, module_id) in [(1, crate::modules::note_in::ID), (2, "osc.sine"), (3, "util.vca"), (4, "output.audio")] {
             ui.send_command(EngineCommand::AddModule { node_id, module_id });
         }
+        ui.send_command(EngineCommand::SetParameter { node_id: 1, param_index: crate::modules::NoteIn::PARAM_VOICES, value: 1.0 });
         let cables = [
-            (1, port("input.midi_note", "Gate"), 3, port("util.vca", "CV")),
+            (1, port(crate::modules::note_in::ID, "Gate"), 3, port("util.vca", "CV")),
             (2, port("osc.sine", "Out"), 3, port("util.vca", "In")),
             (3, port("util.vca", "Out"), 4, port("output.audio", "Mono")),
         ];

@@ -118,7 +118,7 @@ Leave **In** empty and use **Offset** as a knob you can patch. One Attenuverter 
 In a polyphonic patch, scale each voice's velocity before it moves the filter, so harder notes are brighter without the filter jumping a full octave. (The filter's own **CV Amt** at 0.5 does the same, if nothing else is patched into its **Cutoff**.)
 
 ```text
-[Poly MIDI Velocity] ──> [Attenuverter In] ──> [SVF Filter Cutoff]
+[Note In Velocity] ──> [Attenuverter In] ──> [SVF Filter Cutoff]
                           (Amt 0.5)
 ```
 

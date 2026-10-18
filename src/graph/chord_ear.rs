@@ -7,7 +7,7 @@
 //! accent goes in with it; the letter keys have no touch to hear.
 //!
 //! While the popover is open the letter keys are its, the way a text field
-//! takes them: the Keyboard modules don't hear them (see [`letter_keys_taken`]),
+//! takes them: the Note In modules don't hear them (see [`letter_keys_taken`]),
 //! so writing a chord doesn't also play the patch's lead. They play the
 //! popover's piano, Z on its lowest C, so its ‹ › move them an octave too,
 //! and the chord sounds through the sequencer's own voices while it's held.
@@ -15,7 +15,7 @@
 
 use eframe::egui::{self, Id, Key};
 
-use crate::modules::keyboard::key_to_note;
+use crate::app::qwerty_keys::key_to_note;
 
 /// What the popover hears.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -118,7 +118,7 @@ pub(super) fn take_letter_keys(ctx: &egui::Context) {
 }
 
 /// Whether a chord popover was open last frame and has the letter keys, so
-/// the Keyboard modules shouldn't hear them. Asked once a frame, before the
+/// the Note In modules shouldn't hear them. Asked once a frame, before the
 /// graph is drawn: the popover marks them again while it's still open.
 pub fn letter_keys_taken(ctx: &egui::Context) -> bool {
     ctx.data_mut(|d| d.remove_temp::<bool>(taken_id())).unwrap_or(false)

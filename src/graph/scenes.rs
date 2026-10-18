@@ -80,14 +80,9 @@ pub fn controls(graph: &SynthGraph, user_state: &SynthGraphState, scenes: NodeId
     for node_id in scope(graph, scenes) {
         let node = &graph[node_id];
         let Some(module) = user_state.get_engine_node_id(node_id) else { continue };
-        // Keyboard and MIDI Note play their first few from live input
-        let live: Vec<InputId> = port_mapping::parameter_inputs(graph, node_id)
-            .into_iter()
-            .take(port_mapping::live_input_parameter_count(node.user_data.module_id))
-            .collect();
         for (param, input) in &node.inputs {
             let value = graph.get_input(*input);
-            if live.contains(input) || matches!(value.kind, InputParamKind::ConnectionOnly) {
+            if matches!(value.kind, InputParamKind::ConnectionOnly) {
                 continue;
             }
             let held = match &value.value {

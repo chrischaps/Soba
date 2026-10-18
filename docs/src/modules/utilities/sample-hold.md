@@ -80,11 +80,11 @@ Trigger from a keyboard gate and each note gets a fresh value that stays put whi
 
 ```text
 [LFO Out] ──> [Sample & Hold In]
-[Keyboard Gate] ──> [Sample & Hold Trig]
+[Note In Gate] ──> [Sample & Hold Trig]
 [Sample & Hold Out] ──> [SVF Filter Cutoff]
 ```
 
-Every note sounds a little different, like a player who never strikes the same way twice. In a polyphonic patch, feed **Trig** from [Poly MIDI](../midi/poly-midi.md)'s **Gate** and each voice holds its own value.
+Every note sounds a little different, like a player who never strikes the same way twice. In a polyphonic patch, feed **Trig** from [Note In](../midi/note-in.md)'s **Gate** and each voice holds its own value.
 
 ### Gliding steps
 

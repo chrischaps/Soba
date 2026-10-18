@@ -1,13 +1,13 @@
 {
-  "name": "MIDI Note close-up",
+  "name": "Note In close-up",
   "version": 5,
   "nodes": [
     {
       "id": 1,
-      "module_id": "input.midi_note",
+      "module_id": "input.poly_midi",
       "position": [400.0, 40.0],
       "parameters": [
-        {"name": "Glide", "type": "Number", "value": 0.04}
+        {"name": "Voices", "type": "Number", "value": 6.0}
       ]
     },
     {
@@ -51,7 +51,8 @@
     {"from_node": 1, "from_port": "Gate", "to_node": 11, "to_port": "Gate"},
     {"from_node": 10, "from_port": "Out", "to_node": 12, "to_port": "In"},
     {"from_node": 11, "from_port": "Out", "to_node": 12, "to_port": "CV"},
-    {"from_node": 12, "from_port": "Out", "to_node": 13, "to_port": "Mono"}
+    {"from_node": 12, "from_port": "Out", "to_node": 13, "to_port": "Mono"},
+    {"from_node": 1, "from_port": "Velocity", "to_node": 11, "to_port": "Velocity"}
   ],
   "midi_mappings": [],
   "frames": [],

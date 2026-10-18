@@ -33,7 +33,7 @@ top-left, below the toolbar.
 
 Better still, a cue aims at a module's part by name: `s.drag_knob(t,
 "filter.svf knob:Cutoff", 60, 4.0)`, `s.click(t, "fx.delay bypass")` or a
-cable dragged from "input.keyboard out:Pitch" to "osc.sine in:V/Oct". The
+cable dragged from "input.poly_midi out:Pitch" to "osc.sine in:V/Oct". The
 app finds the part wherever it was last drawn, so nothing needs measuring
 (see src/app/capture_aim.rs for the names). Points are left for what isn't
 a module's: empty canvas, the toolbar, a menu's items (`by dx dy` from where
@@ -160,7 +160,7 @@ def filter_sweep(s):
     resonance: the response curve and the sound move together."""
     cutoff, res = "filter.svf knob:Cutoff", "filter.svf knob:Resonance"
     s.at(-0.8, "play").look(-0.8, (698, 345), 0.9, 0.05, "Source, Tone and Volume")
-    s.at(-0.8, "param input.keyboard Octave -1")
+    s.at(-0.8, "param input.poly_midi Octave -1")
     # C minor, sixteenths: Z=C X=D D=Eb B=G J=Bb ,=C+ ;=Eb+
     bar = ["Z", "Z", "Comma", "Z", "D", "Z", "J", "Z", "B", "Z", "Comma", "Z", "Semicolon", "Z", "J", "B"]
     t = 0.0
@@ -179,7 +179,7 @@ def filter_sweep(s):
 
 @shot("patches/lush-pad.json")
 def chords(s):
-    """Held chords on Poly MIDI: each voice is its own strand in the cable
+    """Held chords on Note In: each voice is its own strand in the cable
     bundles, lit only while its note sounds."""
     s.at(-1.0, "play").look(-1.0, (700, 410), 0.78, 0.05, "Every voice, and the Mixer")
     progression = [
@@ -196,7 +196,7 @@ def chords(s):
         for k, note in enumerate(chord):
             s.at(t + k * 0.012, f"note {note} {84 - k * 4} {hold - 0.15}")
         t += 3.4
-    # A slow push in on the bundles, from Poly MIDI to the envelope
+    # A slow push in on the bundles, from Note In to the envelope
     s.look(0.0, (500, 300), 1.3, 19, "in on the bundles")
     s.at(5.0, "still chord-bundles")
     s.at(13.0, "still chord-bundles-close")
@@ -208,7 +208,7 @@ def fm_bell(s):
     """One sine bending another's pitch: turning up the FM depth takes a
     pure tone to a bell to a clang."""
     fm = "osc.sine#2 knob:FM Depth"   # the carrier's
-    s.at(-1.0, "play").look(-1.0, (790, 400), 0.8, 0.05, "Keyboard, Modulator, Carrier")
+    s.at(-1.0, "play").look(-1.0, (790, 400), 0.8, 0.05, "Note In, Modulator, Carrier")
     # C major pentatonic, eighths at 84 bpm: Z=C X=D C=E B=G N=A ,=C+ .=D+ /=E+
     phrase = ["Comma", None, "N", None, "B", None, "C", "X",
               ("C", 2), "B", None, ("N", 4),
@@ -309,7 +309,7 @@ def from_nothing(s):
     # A module's top-left lands at the cursor (patch points; the canvas
     # stays at zoom 1). Its jacks sit at fixed offsets from there
     kb, osc, env, vca, out = (40, 70), (270, 25), (530, 150), (800, 60), (990, 40)
-    t = add_module(s, 0.6, *s.on(kb), "keyboard")
+    t = add_module(s, 0.6, *s.on(kb), "note")
     t = add_module(s, t + 0.2, *s.on(osc), "osc")
     t = add_module(s, t + 0.2, *s.on(env), "env")
     t = add_module(s, t + 0.2, *s.on(vca), "vca")
@@ -318,8 +318,8 @@ def from_nothing(s):
     s.at(t + 0.3, "layout placed")
 
     cables = [
-        ("input.keyboard out:Pitch", "osc.sine in:V/Oct"),
-        ("input.keyboard out:Gate", "mod.adsr in:Gate"),
+        ("input.poly_midi out:Pitch", "osc.sine in:V/Oct"),
+        ("input.poly_midi out:Gate", "mod.adsr in:Gate"),
         ("osc.sine out:Out", "util.vca in:In"),
         ("mod.adsr out:Out", "util.vca in:CV"),
         ("util.vca out:Out", "output.audio in:Mono"),
@@ -346,9 +346,9 @@ def from_nothing(s):
 
 @shot("patches/lush-pad.json")
 def cover(s):
-    """A macro of the poly bundles leaving Poly MIDI while a chord rings:
+    """A macro of the poly bundles leaving Note In while a chord rings:
     candidates for the page's cover."""
-    s.at(-1.0, "play").look(-0.9, (300, 270), 2.5, 0.05, "Poly MIDI's lit keys and the bundles leaving it")
+    s.at(-1.0, "play").look(-0.9, (300, 270), 2.5, 0.05, "Note In's lit keys and the bundles leaving it")
     for k, note in enumerate([48, 55, 59, 62, 64, 71]):
         s.at(0.2 + k * 0.012, f"note {note} {90 - k * 5} 5.5")
     for i, t in enumerate([1.2, 2.0, 3.0, 4.0, 5.0]):

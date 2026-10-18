@@ -450,24 +450,9 @@ fn signal_named(name: &str) -> Option<SignalType> {
         .find(|signal| signal.name().eq_ignore_ascii_case(name))
 }
 
-/// Parameters modules no longer have, which older patches still carry.
-/// Loading skips them quietly: there is nothing for the user to fix.
-const RETIRED_PARAMETERS: &[(&str, &[&str])] = &[
-    // MIDI Note's live state, set from the UI thread before MIDI moved to
-    // the audio thread
-    ("input.midi_note", &["Note", "Gate", "Velocity", "Aftertouch"]),
-];
-
-/// Whether `name` is a parameter `module_id` used to have.
-fn is_retired(module_id: &str, name: &str) -> bool {
-    RETIRED_PARAMETERS
-        .iter()
-        .any(|(module, names)| *module == module_id && names.contains(&name))
-}
-
 /// Sets a freshly built node's parameters from the patch, by name.
 fn restore_parameters(graph: &mut SynthGraph, node_id: NodeId, node_data: &NodeData, warnings: &mut Vec<String>) {
-    for saved in node_data.parameters.iter().filter(|p| !is_retired(&node_data.module_id, &p.name)) {
+    for saved in &node_data.parameters {
         let input_id = graph.nodes[node_id]
             .inputs
             .iter()
@@ -699,30 +684,6 @@ mod tests {
 
     fn param(patch: &Patch, module_id: &str, name: &str) -> f32 {
         node(patch, module_id).parameters.iter().find(|p| p.name == name).unwrap().value.as_f32()
-    }
-
-    #[test]
-    fn test_retired_midi_note_parameters_load_quietly() {
-        use crate::persistence::{NamedParameter, ParameterValue};
-
-        // Saved before MIDI moved to the audio thread
-        let mut patch = Patch::new("old midi");
-        let mut midi = NodeData::new(1, "input.midi_note", (0.0, 0.0));
-        midi.parameters = vec![
-            NamedParameter::new("Note", ParameterValue::Number(64.0)),
-            NamedParameter::new("Gate", ParameterValue::Toggle(true)),
-            NamedParameter::new("Velocity", ParameterValue::Number(100.0)),
-            NamedParameter::new("Aftertouch", ParameterValue::Number(0.0)),
-            NamedParameter::new("Channel", ParameterValue::Select(3)),
-            NamedParameter::new("Octave", ParameterValue::Number(1.0)),
-        ];
-        patch.nodes.push(midi);
-
-        let (saved, warnings) = reload(&patch, 0);
-        assert!(warnings.is_empty(), "{:?}", warnings);
-        assert_eq!(param(&saved, "input.midi_note", "Channel"), 3.0);
-        assert_eq!(param(&saved, "input.midi_note", "Octave"), 1.0);
-        assert!(node(&saved, "input.midi_note").parameters.iter().all(|p| p.name != "Note"));
     }
 
     #[test]

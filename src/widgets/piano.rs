@@ -1,7 +1,7 @@
 //! Piano keyboard widget for visual feedback of active notes.
 //!
 //! Provides a one-octave piano keyboard display that shows which notes are
-//! currently pressed. Used by the Keyboard and MIDI Note input modules, and
+//! currently pressed. Used by Note In, and
 //! by the Quantizer, which lights its scale and takes clicks on the keys.
 
 use eframe::egui::{self, Color32, Pos2, Rect, Response, Sense, Ui, Vec2};

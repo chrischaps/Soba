@@ -47,9 +47,6 @@ pub struct ModuleUi {
     pub labels: &'static [(&'static str, &'static str)],
     /// Parameters with no control on the node. A trailing `*` matches a prefix.
     pub hidden: &'static [&'static str],
-    /// Leading parameters driven by live input (the computer keyboard)
-    /// rather than by the graph. Parameter sync leaves these alone.
-    pub live_params: usize,
     /// Output ports the engine reports values for (lit gate ports, phase).
     pub monitor: &'static [&'static str],
     /// Custom visualization drawn above the knob row.
@@ -64,7 +61,6 @@ impl ModuleUi {
         knobs: &[],
         labels: &[],
         hidden: &[],
-        live_params: 0,
         monitor: &[],
         display: NodeDisplay::None,
         knobs_per_row: 0,
@@ -181,7 +177,6 @@ static MODULE_UI: &[ModuleUi] = &[
         monitor: &["Gate"],
         display: NodeDisplay::ChopperRow,
         knobs_per_row: 4,
-        ..ModuleUi::DEFAULT
     },
     ModuleUi {
         module_id: "source.cloud",
@@ -207,32 +202,20 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
-        module_id: "input.keyboard",
-        knobs: &[knob_as("Octave", "Oct"), knob_as("Velocity", "Vel"), knob("Glide")],
-        labels: &[("Glide Mode", "Glide")],
-        hidden: &["Note", "Gate"],
-        live_params: 2,
+        module_id: crate::modules::note_in::ID,
+        // How the voices play, then their pitch offsets and how hard the
+        // keys play
+        knobs: &[
+            knob("Voices"),
+            knob("Glide"),
+            knob_as("Octave", "Oct"),
+            knob_as("Bend Range", "Bend"),
+            knob_as("Key Velocity", "Key Vel"),
+        ],
+        labels: &[("Channel", "Ch"), ("Allocation", "Mode"), ("Glide Mode", "Glide"), ("Retrigger", "Retrig")],
         monitor: &["Gate"],
-        display: NodeDisplay::KeyboardPiano,
-        ..ModuleUi::DEFAULT
-    },
-    ModuleUi {
-        module_id: "input.midi_note",
-        knobs: &[knob_as("Octave", "Oct"), knob_as("Bend Range", "Bend"), knob("Glide")],
-        labels: &[("Channel", "Ch"), ("Retrigger", "Retrig"), ("Glide Mode", "Glide")],
-        monitor: &["Gate"],
-        display: NodeDisplay::MidiPiano,
-        ..ModuleUi::DEFAULT
-    },
-    ModuleUi {
-        module_id: "input.poly_midi",
-        // How the voices play over their pitch offsets, two by two, so the
-        // node stays narrow
-        knobs: &[knob("Voices"), knob("Glide"), knob_as("Octave", "Oct"), knob_as("Bend Range", "Bend")],
-        labels: &[("Channel", "Ch"), ("Allocation", "Mode"), ("Glide Mode", "Glide")],
-        monitor: &["Gate"],
-        display: NodeDisplay::MidiPiano,
-        knobs_per_row: 2,
+        display: NodeDisplay::NotePiano,
+        knobs_per_row: 3,
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
@@ -461,7 +444,6 @@ static MODULE_UI: &[ModuleUi] = &[
         monitor: &["Gate"],
         display: NodeDisplay::SlicerRow,
         knobs_per_row: 4,
-        ..ModuleUi::DEFAULT
     },
     ModuleUi {
         module_id: "fx.reverb",

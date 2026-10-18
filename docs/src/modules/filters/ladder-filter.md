@@ -99,7 +99,7 @@ A saw through LP24 with the cutoff at a few hundred Hz is the classic fat bass. 
 ### Envelope sweep
 
 ```text
-[Keyboard Gate] ──> [ADSR Gate]
+[Note In Gate] ──> [ADSR Gate]
 [ADSR Out] ──> [Ladder Filter Cutoff]
 ```
 
@@ -108,8 +108,8 @@ The envelope's 0-to-1 output raises the cutoff by up to **CV Amt** octaves above
 ### Keyboard tracking
 
 ```text
-[Keyboard Pitch] ──> [Oscillator V/Oct]
-                 ──> [Ladder Filter Cutoff]
+[Note In Pitch] ──> [Oscillator V/Oct]
+                ──> [Ladder Filter Cutoff]
 ```
 
 At the default **CV Amt** of 1, the Cutoff input is 1 per octave, so a pitch CV patched straight in keeps the filter's brightness the same on every note. With the resonance high enough to self-oscillate and nothing patched into **In**, this turns the ladder into a sine oscillator that plays in tune.

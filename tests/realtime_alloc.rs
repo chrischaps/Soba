@@ -4,7 +4,7 @@
 //! plays a patch of more than 30 modules (every built-in module, some
 //! twice), through odd device buffer sizes, while the patch is edited and
 //! its Clock changes tempo under a tempo-synced Delay and its effects are
-//! bypassed and brought back, live MIDI plays its MIDI Note modules, a live
+//! bypassed and brought back, live MIDI plays its Note In modules, a live
 //! audio input feeds its Audio Input module (the input device switched
 //! midway), the output is recorded (one take stopped and a new one
 //! started midway), its Sampler is given new recordings while it plays
@@ -540,7 +540,7 @@ fn poly_patch_never_allocates_with_eight_voices() {
     let (mut keys, keys_input) = soba::engine::ui_notes();
     processor.set_ui_midi_input(keys_input);
 
-    // Poly MIDI -> Slope (a glide per voice) -> osc -> SVF -> ladder -> VCA
+    // Note In -> Slope (a glide per voice) -> osc -> SVF -> ladder -> VCA
     // (opened by an envelope) -> mixer -> chained mixer -> delay -> output.
     // Everything up to the VCA runs 8 voices; the mixer spreads them across
     // its stereo pair, passes its mix on a four-strand Bus to the next, and

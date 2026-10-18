@@ -1,68 +1,68 @@
 0.0000 cursor on
 0.6000 move 40.0 144.7 0.55
 1.3000 key Space 0.05
-1.5000 type keyboard 0.09
-2.4700 still palette-keyboard
-2.5200 key Enter 0.05
-3.0200 move 270.0 99.7 0.55
-3.7200 key Space 0.05
-3.9200 type osc 0.09
-4.4400 still palette-osc
-4.4900 key Enter 0.05
-4.9900 move 530.0 224.7 0.55
-5.6900 key Space 0.05
-5.8900 type env 0.09
-6.4100 still palette-env
-6.4600 key Enter 0.05
-6.9600 move 800.0 134.7 0.55
-7.6600 key Space 0.05
-7.8600 type vca 0.09
-8.3800 still palette-vca
-8.4300 key Enter 0.05
-8.9300 move 990.0 114.7 0.55
-9.6300 key Space 0.05
-9.8300 type output 0.09
-10.6200 still palette-output
-10.6700 key Enter 0.05
-11.2700 still placed
-11.2700 layout placed
-11.5700 move input.keyboard out:Pitch 0.45
-12.1200 drag osc.sine in:V/Oct 0.65
-13.1200 move input.keyboard out:Gate 0.45
-13.6700 drag mod.adsr in:Gate 0.65
-14.6700 move osc.sine out:Out 0.45
-15.2200 drag util.vca in:In 0.65
-16.2200 move mod.adsr out:Out 0.45
-16.7700 drag util.vca in:CV 0.65
-17.7700 move util.vca out:Out 0.45
-18.3200 drag output.audio in:Mono 0.65
-19.3200 still patched
-19.5200 move 158 21 0.7
-20.3000 press
-20.3800 release
-20.7800 move 1100.0 544.7 0.8
-21.0800 key Z 0.2143
-21.3479 key C 0.2143
-21.6157 key B 0.2143
-21.8836 key Comma 0.4286
-22.4193 key N 0.2143
-22.6871 key B 0.2143
-23.2229 key C 0.2143
-23.4907 key B 0.2143
-23.7586 key N 0.2143
-24.0264 key B 0.4286
-24.5621 key C 0.2143
-24.8300 key X 0.4286
-25.3657 key Z 0.2143
-25.6336 key C 0.2143
-25.9014 key B 0.2143
-26.1693 key Comma 0.4286
-26.7050 key Period 0.2143
-26.9729 key Comma 0.2143
-27.2407 key N 0.2143
-27.3836 still playing
-27.5086 key B 0.2143
-27.7764 key C 0.2143
-28.0443 key X 0.2143
-28.3121 key Z 0.8571
-30.5836 end
+1.5000 type note 0.09
+2.1100 still palette-note
+2.1600 key Enter 0.05
+2.6600 move 270.0 99.7 0.55
+3.3600 key Space 0.05
+3.5600 type osc 0.09
+4.0800 still palette-osc
+4.1300 key Enter 0.05
+4.6300 move 530.0 224.7 0.55
+5.3300 key Space 0.05
+5.5300 type env 0.09
+6.0500 still palette-env
+6.1000 key Enter 0.05
+6.6000 move 800.0 134.7 0.55
+7.3000 key Space 0.05
+7.5000 type vca 0.09
+8.0200 still palette-vca
+8.0700 key Enter 0.05
+8.5700 move 990.0 114.7 0.55
+9.2700 key Space 0.05
+9.4700 type output 0.09
+10.2600 still palette-output
+10.3100 key Enter 0.05
+10.9100 still placed
+10.9100 layout placed
+11.2100 move input.poly_midi out:Pitch 0.45
+11.7600 drag osc.sine in:V/Oct 0.65
+12.7600 move input.poly_midi out:Gate 0.45
+13.3100 drag mod.adsr in:Gate 0.65
+14.3100 move osc.sine out:Out 0.45
+14.8600 drag util.vca in:In 0.65
+15.8600 move mod.adsr out:Out 0.45
+16.4100 drag util.vca in:CV 0.65
+17.4100 move util.vca out:Out 0.45
+17.9600 drag output.audio in:Mono 0.65
+18.9600 still patched
+19.1600 move 158 21 0.7
+19.9400 press
+20.0200 release
+20.4200 move 1100.0 544.7 0.8
+20.7200 key Z 0.2143
+20.9879 key C 0.2143
+21.2557 key B 0.2143
+21.5236 key Comma 0.4286
+22.0593 key N 0.2143
+22.3271 key B 0.2143
+22.8629 key C 0.2143
+23.1307 key B 0.2143
+23.3986 key N 0.2143
+23.6664 key B 0.4286
+24.2021 key C 0.2143
+24.4700 key X 0.4286
+25.0057 key Z 0.2143
+25.2736 key C 0.2143
+25.5414 key B 0.2143
+25.8093 key Comma 0.4286
+26.3450 key Period 0.2143
+26.6129 key Comma 0.2143
+26.8807 key N 0.2143
+27.0236 still playing
+27.1486 key B 0.2143
+27.4164 key C 0.2143
+27.6843 key X 0.2143
+27.9521 key Z 0.8571
+30.2236 end

@@ -105,20 +105,11 @@ MODULES = {
         -4.0 play
     """, palette=False),
 
-    # MIDI. C4 and G4 held on the computer keys
-    "keyboard": Module("keyboard", "input.keyboard", 1.0, 336, """
+    # MIDI. A chord held from a MIDI keyboard, and G4 on the computer keys
+    "note-in": Module("note-in", "input.poly_midi", 1.0, 324, """
         -1.5 play
-        -1.2 key Z 3.0
+        -1.0 chord 48,55,60,64 100 3.0
         -0.6 key B 3.0
-    """),
-    "midi-note": Module("midi-note", "input.midi_note", 1.0, 343, """
-        -1.5 play
-        -1.0 note 60 100 3.0
-        -0.5 note 64 100 3.0
-    """),
-    "poly-midi": Module("poly-midi", "input.poly_midi", 1.0, 324, """
-        -1.5 play
-        -1.0 chord 48,55,60,64,67 100 3.0
     """),
     # A phrase and a chord, the newest at the top
     "midi-monitor": Module("midi-monitor", "util.midi_monitor", 1.0, 371, """

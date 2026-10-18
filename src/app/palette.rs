@@ -473,6 +473,9 @@ mod tests {
         assert_eq!(top("svf"), "filter.svf");
         assert_eq!(top("dly"), "fx.delay");
         assert_eq!(top("s&h"), "util.sample_hold");
+        // Note In, by its name or the modules it took the place of
+        assert_eq!(top("note"), "input.poly_midi");
+        assert!(search("keyboard", &[]).iter().any(|f| template(&f.entry).module_id() == "input.poly_midi"));
         // A category's modules come before stray matches in names and descriptions
         let modulation = AllNodeTemplates.all_kinds().into_iter().filter(|t| t.category().name() == "Modulation").count();
         assert!(search("mod", &[]).iter().take(modulation).all(|f| template(&f.entry).category().name() == "Modulation"));

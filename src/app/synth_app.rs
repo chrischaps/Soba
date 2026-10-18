@@ -17,10 +17,9 @@ use crate::engine::{
 use crate::graph::annotation_ui;
 use crate::graph::annotations::{Annotation, AnnotationId, Frame, Note, Tint, DEFAULT_NOTE_WIDTH};
 use crate::graph::{
-    port_mapping, validate_connection, AllNodeTemplates, AnyParameterId, GroupId, SynthDataType, SynthGraphState,
+    validate_connection, AllNodeTemplates, AnyParameterId, GroupId, SynthDataType, SynthGraphState,
     SynthNodeData, SynthNodeTemplate, SynthValueType,
 };
-use crate::modules::keyboard::{relative_to_midi, KeyPriority, KeyboardInput};
 use crate::persistence::{
     capture_patch, examples, load_from_file, renumber_groups, save_to_file, stage_patch, Example, MidiMapping, Patch, PatchError,
     Shelf, EXAMPLES,
@@ -33,7 +32,7 @@ use super::audio_devices::{AudioDevices, AUDIO_STALL, INPUT_GLITCH_HOLD};
 use super::document::Document;
 use super::capture::{Capture, CaptureAction, CaptureConfig};
 use super::pace;
-use super::qwerty_keys;
+use super::qwerty_keys::{self, relative_to_midi};
 use super::editing::{self, Selection};
 use super::engine_sync;
 use super::input_device;
@@ -158,15 +157,9 @@ pub struct SynthApp {
     /// Problems skipped while loading the current patch, shown in the status bar.
     load_warnings: Vec<String>,
 
-    /// Currently pressed keyboard keys for virtual keyboard.
-    /// Stores (relative_note, egui::Key) in order of press for key priority.
+    /// The computer keys held, and the piano key the pointer holds, as
+    /// (note above the keyboard's C, key) in order of press.
     pressed_keys: Vec<(i32, Option<egui::Key>)>,
-
-    /// Timestamp when the gate was last triggered (for minimum gate duration).
-    last_gate_on: Option<Instant>,
-
-    /// Whether the gate is currently being held high (for minimum duration).
-    gate_held_high: bool,
 
     /// The engine node a chord popover is auditioning a chord on, so it
     /// can be stopped if the popover goes without lifting it.
@@ -405,8 +398,6 @@ impl SynthApp {
             status: None,
             load_warnings: Vec::new(),
             pressed_keys: Vec::new(),
-            last_gate_on: None,
-            gate_held_high: false,
             auditioning: None,
             shortcuts: ShortcutsSheet::default(),
             cpu_load: 0.0,
@@ -704,7 +695,7 @@ impl SynthApp {
     /// Hears the UI's copy of the MIDI that came in: the MIDI Monitors log
     /// it, the pianos light, MIDI Learn takes a CC and mapped knobs turn.
     ///
-    /// Notes reach MIDI Note modules on the audio thread, sample-accurately;
+    /// Notes reach Note In modules on the audio thread, sample-accurately;
     /// nothing here affects what they play.
     fn process_midi_events(&mut self, now: f64) {
         let user_state = &mut self.user_state;
@@ -832,8 +823,8 @@ impl SynthApp {
         self.user_state.midi_mappings = self.midi.mappings.badges();
     }
 
-    /// Check if there are any Poly MIDI modules in the graph.
-    fn has_poly_midi_modules(&self) -> bool {
+    /// Whether the patch has a Note In, which the keys play.
+    fn has_note_in_modules(&self) -> bool {
         self.graph_state.graph.nodes.iter()
             .any(|(_, node)| node.user_data.module_id == "input.poly_midi")
     }
@@ -2467,10 +2458,6 @@ impl SynthApp {
                 continue;
             };
 
-            // Keyboard and MIDI Note drive their leading params (Note, Gate, ...)
-            // from live input, not from the graph UI
-            let live_params = port_mapping::live_input_parameter_count(node.user_data.module_id);
-
             // Track which param index we're at (only count ConstantOnly params)
             let mut param_index = 0;
 
@@ -2482,11 +2469,6 @@ impl SynthApp {
                 use egui_node_graph2::InputParamKind;
                 match input.kind {
                     InputParamKind::ConstantOnly | InputParamKind::ConnectionOrConstant => {
-                        if param_index < live_params {
-                            param_index += 1;
-                            continue;
-                        }
-
                         // The engine takes real units: Hz, seconds, dB, ...
                         let actual_value = input.value.actual_value();
 
@@ -2955,8 +2937,8 @@ impl SynthApp {
                                 _ if self.user_state.samples.waiting() => {
                                     ui.label(RichText::new("loading samples…").color(theme::text::SECONDARY).small());
                                 }
-                                // The computer's keys play Keyboard and Poly MIDI modules
-                                _ if self.has_keyboard_modules() || self.has_poly_midi_modules() => {
+                                // The computer's keys play Note In modules
+                                _ if self.has_note_in_modules() => {
                                     ui.label(RichText::new("play its piano, or the Z–M keys").color(theme::text::SECONDARY).small());
                                 }
                                 _ => {}
@@ -3519,13 +3501,8 @@ impl SynthApp {
         }
     }
 
-    /// Check if there are any Keyboard modules in the graph.
-    fn has_keyboard_modules(&self) -> bool {
-        self.graph_state.graph.nodes.iter()
-            .any(|(_, node)| node.user_data.module_id == "input.keyboard")
-    }
-
-    /// Handle keyboard events for the virtual keyboard module.
+    /// Plays the computer keys and the piano held with the pointer into the
+    /// patch's Note In modules.
     ///
     /// Uses raw input events to capture keyboard input before the UI consumes them.
     fn handle_keyboard_events(&mut self, ctx: &egui::Context) {
@@ -3548,9 +3525,8 @@ impl SynthApp {
             || self.quick_add.is_some()
             || chord_popover;
 
-        // With a Poly MIDI module to hear them, the keys also play as MIDI,
-        // so chords can be played without a MIDI keyboard
-        let play_midi = self.has_poly_midi_modules();
+        // With a Note In to hear them, the keys play as MIDI of their own
+        let play_midi = self.has_note_in_modules();
 
         // Raw events, before the UI consumes them. Repeats aren't new notes
         let mut midi_notes: Vec<(i32, bool)> = ctx.input(|i| {
@@ -3566,7 +3542,6 @@ impl SynthApp {
         if !ctx.input(|i| i.focused) {
             midi_notes.extend(qwerty_keys::release_all(&mut self.pressed_keys));
         }
-        let mut keys_changed = !midi_notes.is_empty();
 
         // A piano key held with the mouse or a finger is one more held key,
         // with no computer key behind it (see `SynthGraphState::piano_pointer`)
@@ -3580,118 +3555,14 @@ impl SynthApp {
                 self.pressed_keys.push((note, None));
                 midi_notes.push((note, true));
             }
-            keys_changed = true;
         }
 
-        // On the UI's own ring, so they play with no MIDI device too
-        if play_midi {
-            for (relative_note, pressed) in midi_notes {
-                self.midi.play_note(relative_to_midi(relative_note, 0), pressed);
-            }
-        }
-
-        // Update Keyboard modules if key state changed
-        if keys_changed {
-            self.sync_keyboard_modules();
-        }
-    }
-
-    /// Minimum gate duration in milliseconds to ensure audio thread sees the trigger.
-    const MIN_GATE_DURATION_MS: u64 = 30;
-
-    /// Sync the current keyboard state to all Keyboard modules in the graph.
-    ///
-    /// Updates the Note and Gate parameters based on the currently pressed keys.
-    /// Implements minimum gate duration to ensure reliable triggering.
-    fn sync_keyboard_modules(&mut self) {
-        // Held notes, in the order their keys went down
-        let held: Vec<i32> = self.pressed_keys.iter().map(|(note, _)| *note).collect();
-
-        // Determine actual gate state considering minimum duration. The gate
-        // rises with the first key and stays up while any key is held, so a
-        // change of note under it is legato: the pitch moves, nothing retriggers
-        let gate_value = if !held.is_empty() {
-            if !self.gate_held_high {
-                // New note trigger
-                self.last_gate_on = Some(Instant::now());
-                self.gate_held_high = true;
-            }
-            1.0
-        } else if self.gate_held_high {
-            // Key released but check minimum duration
-            if let Some(gate_time) = self.last_gate_on {
-                let elapsed_ms = gate_time.elapsed().as_millis() as u64;
-                if elapsed_ms < Self::MIN_GATE_DURATION_MS {
-                    // Keep gate high until minimum duration
-                    1.0
-                } else {
-                    // Minimum duration passed, can release
-                    self.gate_held_high = false;
-                    self.last_gate_on = None;
-                    0.0
-                }
-            } else {
-                self.gate_held_high = false;
-                0.0
-            }
-        } else {
-            0.0
-        };
-
-        // Collect Keyboard module engine IDs first to avoid borrow issues
-        let keyboard_nodes: Vec<u64> = self.graph_state.graph.nodes.iter()
-            .filter(|(_, node)| node.user_data.module_id == "input.keyboard")
-            .filter_map(|(node_id, _)| self.user_state.get_engine_node_id(node_id))
-            .collect();
-
-        // Parameters are in order: Note(0), Gate(1), Octave(2), Velocity(3), Priority(4)
-        let note_param_idx = 0;
-        let gate_param_idx = 1;
-
-        // Update all Keyboard modules
-        for engine_node_id in keyboard_nodes {
-            // Each module chooses its note from the held keys by its own
-            // Priority. With nothing held the Note stays where it was, so the
-            // last note rings through the release
-            let priority = self.cached_params
-                .get(&(engine_node_id, KeyboardInput::PARAM_PRIORITY))
-                .map_or(KeyPriority::Last, |&value| KeyPriority::from_param(value));
-            if let Some(note) = priority.select_note(&held) {
-                let note = relative_to_midi(note, 0) as f32;
-                self.send_command(EngineCommand::SetParameter {
-                    node_id: engine_node_id,
-                    param_index: note_param_idx,
-                    value: note,
-                });
-                // Also update the cached params so sync_parameters doesn't overwrite
-                self.cached_params.insert((engine_node_id, note_param_idx), note);
-            }
-
-            // Update Gate parameter
-            self.send_command(EngineCommand::SetParameter {
-                node_id: engine_node_id,
-                param_index: gate_param_idx,
-                value: gate_value,
-            });
-            self.cached_params.insert((engine_node_id, gate_param_idx), gate_value);
-        }
-
-        // Update active notes for piano display (convert relative notes to MIDI notes)
-        let active_notes: Vec<u8> = self.pressed_keys.iter()
-            .map(|(rel, _)| relative_to_midi(*rel, 0))
-            .collect();
-        self.user_state.set_keyboard_active_notes(active_notes);
-    }
-
-    /// Check if gate needs to be released after minimum duration.
-    fn update_gate_timing(&mut self) {
-        if self.gate_held_high && self.pressed_keys.is_empty() {
-            // Key was released, check if we should release the gate now
-            if let Some(gate_time) = self.last_gate_on {
-                if gate_time.elapsed().as_millis() as u64 >= Self::MIN_GATE_DURATION_MS {
-                    // Time to release
-                    self.sync_keyboard_modules();
-                }
+        // On the UI's own ring, so they play with no MIDI device too. A key
+        // let go still goes once the last Note In has, so it doesn't stay lit
+        for (relative_note, pressed) in midi_notes {
+            let note = relative_to_midi(relative_note, 0);
+            if play_midi || (!pressed && self.midi.held().iter().any(|&(held, _)| held == note)) {
+                self.midi.play_note(note, pressed);
             }
         }
     }
@@ -3894,9 +3765,6 @@ impl SynthApp {
         // Handle musical keyboard input (QWERTY to notes)
         self.handle_keyboard_events(ctx);
 
-        // Update gate timing (for minimum gate duration)
-        self.update_gate_timing();
-
         if !self.embedded {
             // Top toolbar panel
             let toolbar_actions = egui::TopBottomPanel::top("toolbar")
@@ -3934,6 +3802,7 @@ impl SynthApp {
 
         // Followers take their leaders' sections, in the same undo step
         self.follow_arrangers();
+        self.user_state.poly_note_ins = crate::graph::note_in_face::poly_note_ins(&self.graph_state.graph);
 
         // Scenes' knobs follow their Morph
         self.glide_scenes(ctx);

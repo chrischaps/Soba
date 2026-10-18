@@ -54,7 +54,7 @@ pub fn voice_pan(pan: f32, width: f32, voice: usize, voices: usize) -> f32 {
 ///
 /// The places are evenly spaced, and the voices take them alternately left
 /// and right from the outside in: the first voice hard left, the second hard
-/// right, the third just inside the first. Poly MIDI hands notes out in
+/// right, the third just inside the first. Note In hands notes out in
 /// turn, and neighbouring voices sit on opposite sides, so even two notes
 /// held on an eight-voice cable land either side of the pan.
 pub fn spread_offset(voice: usize, voices: usize) -> f32 {

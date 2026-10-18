@@ -7,7 +7,7 @@
 
 The MIDI Monitor shows the MIDI arriving from your device as it happens. Use it when you connect new gear, when a note won't play, or to find out which CC number a knob on your controller sends before you map it.
 
-It has no ports and makes no sound. It listens to the same device as every other MIDI module (the one chosen in **MIDI In** on the toolbar; see [Choosing a MIDI device](./midi-note.md#choosing-a-midi-device)), so you can drop it anywhere in a patch without patching anything.
+It has no ports and makes no sound. It listens to the same device as every other MIDI module (the one chosen in **MIDI In** on the toolbar; see [Choosing a MIDI device](./note-in.md#choosing-a-midi-device)), so you can drop it anywhere in a patch without patching anything.
 
 ## Controls
 
@@ -34,15 +34,15 @@ The log shows the most recent events, newest at the top. Each line starts with t
 
 Note names put middle C (MIDI note 60) at C4. Pitch bend runs from −8192 to 8191, with 0 at the center. Pressure and program change can't be filtered out.
 
-The log holds the last few events and applies the filters to those, so turning a filter on hides lines rather than reaching further back. Notes played on the computer keyboard into a [Poly MIDI](./poly-midi.md) module show up here too, on channel 1.
+The log holds the last few events and applies the filters to those, so turning a filter on hides lines rather than reaching further back. Notes played on the computer keys into a [Note In](./note-in.md) module show up here too, marked **Keys** where a channel would be.
 
 ## Uses
 
 **Is anything arriving?** Play a note. If the log still says *No MIDI events*, the problem is upstream: check that the device is selected and connected in **MIDI In**, and that the controller is sending.
 
-**Which channel?** Play each device in turn and read the channel off the log. Then set **Ch** on your [MIDI Note](./midi-note.md) or Poly MIDI modules to match, or leave them on Omni.
+**Which channel?** Play each device in turn and read the channel off the log. Then set **Ch** on your [Note In](./note-in.md) modules to match, or leave them on Omni.
 
-**Which CC?** Move a knob on your controller and read its number after the `#`. You don't need the number for [MIDI Learn](./midi-note.md#midi-learn), which listens for you, but it helps when a controller sends more than you expect.
+**Which CC?** Move a knob on your controller and read its number after the `#`. You don't need the number for [MIDI Learn](./note-in.md#midi-learn), which listens for you, but it helps when a controller sends more than you expect.
 
 **A stuck note?** Look for a Note On without a matching Note Off. If the Note Off never arrives, the controller or its connection dropped it.
 
@@ -50,5 +50,4 @@ The log holds the last few events and applies the filters to those, so turning a
 
 ## Related modules
 
-- [MIDI Note](./midi-note.md) – turns the notes into CV, and covers MIDI Learn
-- [Poly MIDI](./poly-midi.md) – polyphonic MIDI
+- [Note In](./note-in.md) – turns the notes into CV, one voice or chords, and covers MIDI Learn

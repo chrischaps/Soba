@@ -119,11 +119,19 @@ impl SynthApp {
         let now = ctx.input(|i| i.time);
         let Some(run) = self.lesson.as_mut() else { return };
 
+        // A key a Note In plays is held as MIDI too: count it once
+        let mut held: Vec<u8> = self.midi.held().iter().map(|&(note, _)| note).collect();
+        for &(note, _) in &self.pressed_keys {
+            let note = crate::app::qwerty_keys::relative_to_midi(note, 0);
+            if !held.contains(&note) {
+                held.push(note);
+            }
+        }
         let facts = Facts {
             graph: &self.graph_state.graph,
             state: &self.user_state,
             playing: self.is_playing,
-            notes_held: self.pressed_keys.len() + self.midi.held().len(),
+            notes_held: held.len(),
             probing: self.probe.probing(),
         };
         let dt = run.last_time.map_or(0.0, |t| (now - t).clamp(0.0, 0.25));

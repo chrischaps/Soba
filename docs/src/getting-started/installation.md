@@ -4,7 +4,7 @@ Soba runs on Windows, macOS and Linux. You can download a prebuilt release or bu
 
 ## Try it in the browser
 
-**[Open Soba in the browser](https://soba.chaps.dev/)**: the whole app, nothing to install. It opens on the **First Sound** example. Press **▶ Play**, then play the `Z` to `M` keys, or hold the keys of the Keyboard module's piano with the mouse or a finger.
+**[Open Soba in the browser](https://soba.chaps.dev/)**: the whole app, nothing to install. It opens on the **First Sound** example. Press **▶ Play**, then play the `Z` to `M` keys, or hold the keys of Note In's piano with the mouse or a finger.
 
 <iframe class="patch-embed" src="https://soba.chaps.dev/?patch=first-sound" title="First Sound, playable in the browser" allow="autoplay" loading="lazy"></iframe>
 
@@ -171,7 +171,7 @@ Soba's source is MIT, but a binary built with Link includes the SDK, so if you s
 
 Soba also runs inside a DAW, as an instrument on a track. It's a [CLAP](https://cleveraudio.org/) plugin, for Bitwig Studio, REAPER, FL Studio and Studio One, and it can be built as a VST3 for DAWs without CLAP, such as Ardour and Cubase. The plugin is the whole app: the node graph is its window, and the patch plays whatever the track sends it.
 
-- **Notes and CCs** from the track reach **MIDI Note** and **Poly MIDI** modules, the MIDI Monitor and MIDI Learn, as a MIDI device's do in the app.
+- **Notes and CCs** from the track reach **Note In** modules, the MIDI Monitor and MIDI Learn, as a MIDI device's do in the app.
 - **Tempo and transport.** Set a Clock's **Source** to **Host** and it plays at the DAW's tempo, on its beat, starting and stopping with it (see [Playing in a DAW](../modules/modulation/clock.md#playing-in-a-daw)).
 - **Macros.** The plugin offers the DAW eight parameters, **Macro 1** to **Macro 8**, to automate. Right-click a knob, then **Map to Macro**, and the knob follows that macro.
 - **The patch is saved with the project.** Samples are kept by path, as in a patch file, so keep them where they are.
@@ -218,7 +218,7 @@ cargo run --release --bin render -- patches/fm-synthesis.json out.wav --seconds 
 | `--seconds N` | 5 | Length of the render |
 | `--sample-rate HZ` | 48000 | Sample rate of the file |
 | `--block-size N` | 256 | Samples processed per block |
-| `--audition` | off | Plays a short phrase into the patch's Keyboard, MIDI Note and Poly MIDI modules |
+| `--audition` | off | Plays a short phrase into the patch's Note In modules |
 | `--input FILE.wav` | none | What [Audio Input](../modules/sources/audio-input.md) modules hear, in place of an input device. It must be at the render's sample rate |
 | `--cue FILE.txt` | none | Parameter changes to play into the patch as it renders, one per line: `<seconds> param <module>[#n\|@id] <parameter> <value>`, as in a capture script: `#n` is the nth of its kind, `@id` the module with that id in the patch file. Press a [Looper](../modules/utilities/looper.md)'s footswitches this way |
 | `--compare FILE.wav` | none | An earlier render to measure against: prints how far peak, true peak, RMS, loudness and range have moved since |
@@ -278,6 +278,6 @@ To run the test suite, use `cargo test`.
 
 **"Audio unavailable" in the toolbar.** Soba couldn't open an output device. Make sure one is connected and that no other application holds it exclusively, then restart.
 
-**Crackles and dropouts.** Make sure you're running the release build. The toolbar's CPU meter, shown while the patch plays, tells you how close the engine is to its limit. If it's near the top, remove modules or lower the voice count on Poly MIDI and the Oscillator's unison.
+**Crackles and dropouts.** Make sure you're running the release build. The toolbar's CPU meter, shown while the patch plays, tells you how close the engine is to its limit. If it's near the top, remove modules or lower **Voices** on Note In and the Oscillator's unison.
 
 **My MIDI controller does nothing.** Choose it in the toolbar's **MIDI In** menu: Soba doesn't connect to a controller until you do. In the browser, click **🎹 Connect MIDI** there first. A filled dot (●) before the name means it's connected. Connection errors appear in the status bar at the bottom of the window. See [MIDI](./interface-overview.md#midi).

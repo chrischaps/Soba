@@ -24,7 +24,7 @@ use egui_node_graph2::{InputId, InputParamKind, NodeId};
 
 use crate::engine::NodeId as EngineNodeId;
 use crate::graph::groups::{self, GroupIndex, NodeKind};
-use crate::graph::{port_mapping, SynthGraph, SynthGraphState, SynthValueType};
+use crate::graph::{SynthGraph, SynthGraphState, SynthValueType};
 use crate::modules::noise::Pcg32;
 use crate::widgets::knob::KnobConfig;
 
@@ -152,14 +152,9 @@ pub fn knobs(graph: &SynthGraph, user_state: &SynthGraphState, selection: &[Node
         if data.module_id.starts_with("output.") {
             continue;
         }
-        // Keyboard and MIDI Note play their first few from live input
-        let live: Vec<InputId> = port_mapping::parameter_inputs(graph, node_id)
-            .into_iter()
-            .take(port_mapping::live_input_parameter_count(data.module_id))
-            .collect();
         let mut add = |param: &str, input: InputId| {
             let value = &graph.get_input(input).value;
-            if patched(input) || live.contains(&input) || loudness(param, value) {
+            if patched(input) || loudness(param, value) {
                 return;
             }
             knobs.push(Knob { key: KnobKey { module, param: param.to_string() }, from: value.clone() });

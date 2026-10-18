@@ -23,6 +23,10 @@ additional-css = ["theme/custom.css"]
 "/recipes/from-one-sine.html" = "../songs/from-one-sine.html"
 "/recipes/clair-de-satellite.html" = "../songs/clair-de-satellite.html"
 "/recipes/canopy.html" = "../songs/canopy.html"
+# Keyboard, MIDI Note and Poly MIDI became Note In
+"/modules/midi/keyboard.html" = "note-in.html"
+"/modules/midi/midi-note.html" = "note-in.html"
+"/modules/midi/poly-midi.html" = "note-in.html"
 
 [output.html.fold]
 enable = true

@@ -550,7 +550,7 @@ impl Step {
 
                     // Every value goes to the new module, since it starts at defaults
                     let all = 0..state.params().len();
-                    commands.extend(set_params(editor, node_id, engine_id, *template, state.params(), all));
+                    commands.extend(set_params(editor, node_id, engine_id, state.params(), all));
                     node_id
                 }
                 (Body::Group { name, inputs, outputs }, NodeKey::Group(id)) => {
@@ -573,9 +573,9 @@ impl Step {
         for diff in &self.nodes {
             let (Some(before), Some(after)) = (&diff.before, &diff.after) else { continue };
             let Some(&node_id) = graph_ids.get(&diff.key) else { continue };
-            if let (Body::Module { template, .. }, NodeKey::Module(engine_id)) = (&after.body, diff.key) {
+            if let (Body::Module { .. }, NodeKey::Module(engine_id)) = (&after.body, diff.key) {
                 let changed: Vec<usize> = changed_params(before, after).collect();
-                commands.extend(set_params(editor, node_id, engine_id, *template, after.params(), changed));
+                commands.extend(set_params(editor, node_id, engine_id, after.params(), changed));
                 if before.bypassed() != after.bypassed() {
                     editor.graph[node_id].user_data.bypassed = after.bypassed();
                     commands.push(EngineCommand::SetBypass { node_id: engine_id, bypassed: after.bypassed() });
@@ -647,21 +647,17 @@ fn cable_ports(
 }
 
 /// Sets some of a module's parameters to `values`, and returns the
-/// SetParameter commands for them. Live parameters (a Keyboard's Note and
-/// Gate) are the player's, so they're left alone.
+/// SetParameter commands for them.
 fn set_params(
     editor: &mut SynthGraphEditorState,
     node_id: NodeId,
     key: EngineNodeId,
-    template: SynthNodeTemplate,
     values: &[f32],
     indices: impl IntoIterator<Item = usize>,
 ) -> Vec<EngineCommand> {
     let inputs = port_mapping::parameter_inputs(&editor.graph, node_id);
-    let live = template.live_parameter_count();
     indices
         .into_iter()
-        .filter(|&i| i >= live)
         .filter_map(|param_index| {
             let input = editor.graph.inputs.get_mut(*inputs.get(param_index)?)?;
             input.value.set_actual_value(*values.get(param_index)?);

@@ -4,12 +4,12 @@ In this tutorial you build a playable synthesizer voice from an empty canvas: an
 
 > **Rather learn by doing?** The same ground is covered by five short [Lessons](./lessons.md) that run inside Soba (**❓ Help › 🎓 Lessons**). Each one points at what to do next and waits until you've done it.
 
-![The finished patch: Keyboard, Oscillator, SVF Filter, VCA, ADSR Envelope and Audio Output](../images/tutorial-complete-patch.png)
+![The finished patch: Note In, Oscillator, SVF Filter, VCA, ADSR Envelope and Audio Output](../images/tutorial-complete-patch.png)
 *Where you'll end up.*
 
 ## Before you start: First Sound
 
-When Soba opens, it loads the **First Sound** example: a Keyboard, an Oscillator, an ADSR Envelope and a VCA, already patched to the Audio Output. Press **▶ Play** in the toolbar and play the `Z` to `M` keys on your computer keyboard. That patch is a smaller version of the one you're about to build, so it's worth a minute of listening first.
+When Soba opens, it loads the **First Sound** example: a Note In, an Oscillator, an ADSR Envelope and a VCA, already patched to the Audio Output. Press **▶ Play** in the toolbar and play the `Z` to `M` keys on your computer keyboard. That patch is a smaller version of the one you're about to build, so it's worth a minute of listening first.
 
 To start from scratch, click **📄 New** (`Ctrl + N`). The canvas empties; the status bar says *Right-click to add nodes*. Make sure **▶ Play** is still on (the button reads **⏹ Stop** while the patch plays).
 
@@ -33,10 +33,10 @@ Now change the Oscillator's **Wave** menu from **Sine** to **Saw**. The tone tur
 
 A tone that never changes isn't much of an instrument.
 
-1. Add a **Source › Keyboard** to the left of the Oscillator.
-2. Patch the Keyboard's **Pitch** output into the Oscillator's **V/Oct** input.
+1. Add a **Source › Note In** to the left of the Oscillator.
+2. Patch Note In's **Pitch** output into the Oscillator's **V/Oct** input.
 
-Play the bottom row of your computer keyboard: `Z` is C, `X` is D, and so on up to `M` for B, with the sharps on `S`, `D`, `G`, `H` and `J`. The Keyboard's piano lights up the notes you hold, and the Oscillator follows.
+Play the bottom row of your computer keyboard: `Z` is C, `X` is D, and so on up to `M` for B, with the sharps on `S`, `D`, `G`, `H` and `J`. Note In's piano lights up the notes you hold, and the Oscillator follows.
 
 **Pitch** is an orange control cable carrying *volts per octave*: each step of 1.0 is one octave, so the Oscillator stays in tune at every note. But the tone still never stops. For that, you need to shape each note.
 
@@ -55,7 +55,7 @@ Nothing changes yet: with nothing patched into its **CV** input, the VCA lets th
 An **envelope** draws a shape every time a note is played: it rises when the key goes down and falls when the key comes up.
 
 1. Add a **Modulation › ADSR Envelope** below the VCA.
-2. Patch the Keyboard's **Gate** output into the envelope's **Gate** input. Gate is green: it's on while a key is held and off when it's released.
+2. Patch Note In's **Gate** output into the envelope's **Gate** input. Gate is green: it's on while a key is held and off when it's released.
 3. Patch the envelope's **Out** into the VCA's **CV** input.
 
 Now each key plays a note that starts and stops. The envelope runs through four stages, each with a knob:
@@ -94,8 +94,8 @@ For a plucky, percussive bass, set **Atk** to its minimum, **Dec** to about 200 
 ## The finished patch
 
 ```text
-[Keyboard Pitch] ──> [Oscillator V/Oct]
-[Keyboard Gate]  ──> [ADSR Envelope Gate]
+[Note In Pitch] ──> [Oscillator V/Oct]
+[Note In Gate]  ──> [ADSR Envelope Gate]
 [Oscillator Out] ──> [SVF Filter In]
 [SVF Filter LowPass] ──> [VCA In]
 [ADSR Envelope Out]  ──> [VCA CV]
@@ -116,8 +116,8 @@ The signal path runs left to right: the oscillator makes the tone, the filter co
 
 ## Things to try
 
-- **Use separate envelopes.** Add a second ADSR Envelope for the filter, also gated by the Keyboard, so brightness and loudness can have different shapes.
-- **Add velocity.** Patch the Keyboard's **Velocity** into the envelope's **Velocity** input, then lower the Keyboard's **Vel** knob for quieter notes.
+- **Use separate envelopes.** Add a second ADSR Envelope for the filter, also gated by Note In, so brightness and loudness can have different shapes.
+- **Add velocity.** Patch Note In's **Velocity** into the envelope's **Velocity** input, then lower its **Key Vel** knob for quieter notes.
 - **Add movement.** Patch a **Modulation › LFO** into the filter's **Cutoff** for a slow sweep. Its **Out** swings the cutoff **CV Amt** octaves either way.
 - **Add space.** Put an **Effect › Reverb** between the VCA and the Audio Output: VCA **Out** into Reverb **In L**, then the Reverb's **Out L** and **Out R** into the output's **Left** and **Right**.
 - **Watch it.** Patch the VCA's **Out** into a **Utility › Oscilloscope** as well as the output to see the envelope shape the wave.

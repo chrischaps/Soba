@@ -210,6 +210,9 @@ impl WidgetValueTrait for SynthValueType {
         // most types. Only Toggle and Select get inline widgets since they're not
         // suitable for knobs.
         let hint = || Hint::input(node_data.module_id, param_name);
+        // A control the node's other settings leave idle fades, though it
+        // can still be set. Only its own row: the rest of the node draws in `ui`
+        let opacity = if super::note_in_face::fades(node_data.module_id, param_name, node_id, user_state) { 0.4 } else { 1.0 };
         // A dropdown's or toggle's name and its control each open its
         // right-click menu, which pins it to the face of the group it's in
         let name = |ui: &mut egui::Ui, label: &str| {
@@ -226,6 +229,7 @@ impl WidgetValueTrait for SynthValueType {
                 // Toggle gets an inline checkbox - not suitable for knob
                 let zoom = user_state.zoom;
                 ui.horizontal(|ui: &mut egui::Ui| {
+                    ui.multiply_opacity(opacity);
                     let name = name(ui, label);
                     ui.add_space(4.0 * zoom);
                     (name, ui.checkbox(value, ""))
@@ -238,6 +242,7 @@ impl WidgetValueTrait for SynthValueType {
                 // A following Arranger's Loop is its leader's
                 let locked = super::arranger_follow::locks(node_data.module_id, param_name, node_id, user_state);
                 ui.horizontal(|ui: &mut egui::Ui| {
+                    ui.multiply_opacity(opacity);
                     steady_text::steady_dropdowns(ui);
                     let name = name(ui, label);
                     // As wide as its choice would be if fonts scaled

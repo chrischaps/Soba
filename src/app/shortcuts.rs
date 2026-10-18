@@ -15,7 +15,7 @@ use std::borrow::Cow;
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, RichText, Sense, Stroke};
 
 use super::theme;
-use crate::modules::keyboard::key_to_note;
+use crate::app::qwerty_keys::key_to_note;
 
 /// One group of shortcuts, under its heading.
 pub struct Group {
@@ -462,7 +462,7 @@ fn piano(ui: &mut egui::Ui, held: &[i32]) {
     ui.add_space(4.0);
     ui.add(
         egui::Label::new(
-            RichText::new("The letter rows and the numbers above them play every Keyboard module, and Poly MIDI too")
+            RichText::new("The letter rows and the numbers above them play every Note In")
                 .small()
                 .color(theme::text::QUIET),
         )

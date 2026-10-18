@@ -358,12 +358,17 @@ impl MidiMessage {
     }
 }
 
+/// The channel notes played on the computer keys and the on-screen pianos
+/// come on: one past MIDI's sixteen, so a module can tell them from a
+/// device's (see [`crate::engine::ui_notes`]).
+pub const KEYS_CHANNEL: u8 = 16;
+
 /// A MIDI event with timing information.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MidiEvent {
     /// The sample offset within the current buffer where this event occurs.
     pub sample_offset: u32,
-    /// The MIDI channel (0-15).
+    /// The MIDI channel (0-15), or [`KEYS_CHANNEL`] for the keys.
     pub channel: u8,
     /// The MIDI message.
     pub message: MidiMessage,

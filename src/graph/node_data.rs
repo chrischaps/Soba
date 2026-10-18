@@ -173,10 +173,8 @@ pub enum NodeDisplay {
     FilterResponse,
     /// Ladder Filter: frequency response curve.
     LadderResponse,
-    /// Keyboard: piano showing held keys.
-    KeyboardPiano,
-    /// MIDI Note: piano showing incoming notes.
-    MidiPiano,
+    /// Note In: a playable piano lit by the notes held.
+    NotePiano,
     /// Quantizer: piano showing the scale and the note playing; keys toggle.
     ScalePiano,
     /// MIDI Monitor: scrolling event log.
@@ -1391,14 +1389,9 @@ impl NodeDataTrait for SynthNodeData {
             }
             // LFO: its cycle, with a dot where it is
             NodeDisplay::LfoWave => super::lfo_display::lfo_display(ui, node_id, graph, user_state, zoom),
-            NodeDisplay::KeyboardPiano => {
+            NodeDisplay::NotePiano => {
                 category_rule(ui, color, zoom);
-                super::piano_display::keyboard_piano_display(ui, node_id, graph, user_state, zoom);
-            }
-            NodeDisplay::MidiPiano => {
-                category_rule(ui, color, zoom);
-                let playable = self.module_id == "input.poly_midi";
-                super::piano_display::midi_piano_display(ui, node_id, graph, user_state, zoom, playable);
+                super::piano_display::note_piano_display(ui, node_id, graph, user_state, zoom);
             }
             // Quantizer: its scale on a one-octave piano, the notes it plays
             // glowing. Clicking a key adds it to or takes it out of the scale

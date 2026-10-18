@@ -1,5 +1,5 @@
 -1.0000 play
--1.0000 camera -136.5 -81.6 0.8 0.05   # Keyboard, Modulator, Carrier
+-1.0000 camera -136.5 -81.6 0.8 0.05   # Note In, Modulator, Carrier
 0.0000 cursor on
 0.2000 key Comma 0.1786
 0.9143 key N 0.1786

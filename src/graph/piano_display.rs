@@ -1,33 +1,19 @@
-//! The Keyboard's and the MIDI modules' display: a piano of the keys held,
-//! from the octave the Octave knob picks.
+//! Note In's display: a piano of the keys held, from the octave the Octave
+//! knob picks.
 
 use eframe::egui;
 use egui_node_graph2::NodeId;
 
-use crate::widgets::{piano, piano_keys, PianoConfig, PianoData};
+use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
 use super::{SynthGraph, SynthGraphState, SynthValueType};
 
-/// Draws the computer keyboard's piano, playable with the mouse.
-pub fn keyboard_piano_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &mut SynthGraphState, zoom: f32) {
-    let data = held_keys(user_state.keyboard_active_notes(), node_id, graph);
-    let config = PianoConfig::keyboard().with_size(140.0 * zoom, 45.0 * zoom);
-    playable_piano(ui, &data, config, user_state, zoom);
-}
-
-/// Draws the notes a MIDI device holds. Poly MIDI's piano plays it like the
-/// computer keys do; MIDI Note's only shows what its device plays.
-pub fn midi_piano_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &mut SynthGraphState, zoom: f32, playable: bool) {
+/// Draws Note In's piano, lit by the notes held from the keys or MIDI, and
+/// playable like the computer keys with the mouse or a finger.
+pub fn note_piano_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &mut SynthGraphState, zoom: f32) {
     let data = held_keys(user_state.midi_active_notes(), node_id, graph);
     let config = PianoConfig::midi().with_size(140.0 * zoom, 45.0 * zoom);
-    if playable {
-        playable_piano(ui, &data, config, user_state, zoom);
-    } else {
-        ui.horizontal(|ui| {
-            ui.add_space((ui.available_width() - 140.0 * zoom) / 2.0); // Center the display
-            piano(ui, &data, &config);
-        });
-    }
+    playable_piano(ui, &data, config, user_state, zoom);
 }
 
 /// The keys held, on a piano from C4 moved by the node's Octave.

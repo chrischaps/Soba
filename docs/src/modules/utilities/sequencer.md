@@ -22,7 +22,7 @@ The pattern lives on the node itself: a grid of step buttons with each step's no
 
 | Port | Signal Type | Description |
 |------|-------------|-------------|
-| **Pitch** | Control (Orange) | The current step's note as V/Oct. Middle C (C4) is 0.0, the same as the Keyboard and MIDI modules. Glides into a slide step |
+| **Pitch** | Control (Orange) | The current step's note as V/Oct. Middle C (C4) is 0.0, the same as [Note In](../midi/note-in.md). Glides into a slide step |
 | **Gate** | Gate (Green) | High for each step that's switched on, for **Gate** of the step. Stays high across a tie and into a slide |
 | **Velocity** | Control (Orange) | The current step's velocity, 0 to 1 |
 | **Step** | Control (Orange) | The current position as a ramp: 0 on the first step, 1 on the last |
@@ -73,7 +73,7 @@ While the piano is open, you can also play the melody in from a MIDI keyboard or
 
 - **Touch.** A MIDI keyboard writes how hard you played each note into the step's **Velocity**, so a line played with accents keeps them. The letter keys have no touch, so they leave the velocity alone.
 - **Legato.** Hold a note until the next one goes down and the first step ties into the second. Let go first and it doesn't. The phrasing you play is the phrasing written, as on a hardware step-record. A click on the piano has no length, so it never writes a tie.
-- **The letter keys** play the piano with **Z** on its lowest C, so **‹ ›** move them an octave as well. While the piano is open the letter keys belong to it, so the patch's Keyboard modules don't hear them. A MIDI keyboard still plays the patch as usual.
+- **The letter keys** play the piano with **Z** on its lowest C, so **‹ ›** move them an octave as well. While the piano is open the letter keys belong to it, so the patch's Note In modules don't hear them. A MIDI keyboard still plays the patch as usual.
 
 ### Hearing it as you write
 
@@ -81,7 +81,7 @@ Each note you write sounds as it goes in, through whatever the sequencer is patc
 
 - **A key** you hold on the letter keys sounds for as long as you hold it. One struck while another is still down slides the pitch over without a new attack, which is how it's written: tied.
 - **A click** on the piano is a short note, one **Gate Length** long.
-- **A MIDI keyboard** is played by the sequencer only when the patch has no MIDI Note or Poly MIDI module. If it has one, that module already plays your notes, so the sequencer leaves them to it and you hear each note once.
+- **A MIDI keyboard** is played by the sequencer only when no Note In in the patch hears MIDI (one with **Source** on Keys doesn't). If one does, it already plays your notes, so the sequencer leaves them to it and you hear each note once.
 
 Each note sounds as loud as its step will play it. Once you let go, the sequence takes over again at the next note it plays. If the clock was running, the note it played while your hand was down isn't heard.
 
@@ -140,7 +140,7 @@ A held gate (a tie, or **Gate** at 100%) lets go after two steps' time if no clo
 
 A slide step is slurred into from the note before it. Two things happen at its clock:
 
-- **Pitch glides** from the last note to this one over the **Glide** time, instead of jumping. The glide is the Keyboard's [Glide](../midi/keyboard.md): even in pitch, and as quick across an octave as across a semitone, so a sequenced slide and a hand-played one sound alike. **Glide** is the time to get 99% of the way there.
+- **Pitch glides** from the last note to this one over the **Glide** time, instead of jumping. The glide is Note In's [Glide](../midi/note-in.md#glide): even in pitch, and as quick across an octave as across a semitone, so a sequenced slide and a hand-played one sound alike. **Glide** is the time to get 99% of the way there.
 - **The gate stays high.** The note before holds its gate until the slide begins, whatever **Gate** is set to, and the slide carries on from it without a new rising edge. An envelope isn't struck again, so a filter envelope with no sustain keeps falling through the slide instead of snapping open. That's the 303's sound: most notes are plucked, and the slid ones melt into the note before.
 
 A slide needs a note to come from. After a rest, or as the first note after a **Reset**, a slide step is struck like any other and starts on its own pitch. Its slur on the grid is drawn faint after a rest. A slide on a step that's switched off does nothing.

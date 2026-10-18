@@ -57,7 +57,7 @@ The knobs sit in three rows: **tune**, **timbre** and **ensemble**.
 | **Spread** | 0 – 100% | 50% | How wide the unison voices sit across Out L and Out R |
 | **Wave** | Sine / Saw / Square / Tri | Sine | Dropdown on the node |
 
-With every tune knob at 0, the oscillator plays **C4 (261.63 Hz)**. The keyboard and MIDI modules send 0.0 for C4, so they play in tune with nothing else to set. MIDI note 69 plays 440 Hz to within a tenth of a cent.
+With every tune knob at 0, the oscillator plays **C4 (261.63 Hz)**. [Note In](../midi/note-in.md) sends 0.0 for C4, so it plays in tune with nothing else to set. MIDI note 69 plays 440 Hz to within a tenth of a cent.
 
 Pitch is smoothed in octaves, not Hz, so a jump of an octave up takes as long as an octave down.
 
@@ -150,8 +150,8 @@ The **PW** knob stays where you set it, as the centre of the sweep. An orange ar
 ### Sync lead
 
 ```text
-[Keyboard Pitch] ──> [Osc 2 V/Oct]
-                 ──> [Osc 1 V/Oct]   (Osc 1 Oct +1)
+[Note In Pitch] ──> [Osc 2 V/Oct]
+                ──> [Osc 1 V/Oct]   (Osc 1 Oct +1)
 [Osc 2 Out] ──> [Osc 1 Sync]
 [ADSR Out] ──> [Osc 1 Exp FM]
 [Osc 1 Out] ──> [SVF Filter In]
@@ -162,7 +162,7 @@ Each note sweeps Osc 1's pitch up with the envelope, while sync holds it to Osc 
 ### Supersaw pad
 
 ```text
-[Keyboard Pitch] ──> [Oscillator V/Oct]   (Saw, 7 voices)
+[Note In Pitch] ──> [Oscillator V/Oct]   (Saw, 7 voices)
 [Oscillator Out L] ──> [Reverb In L]
 [Oscillator Out R] ──> [Reverb In R]
 [Reverb Out L] ──> [Audio Output Left]
@@ -171,7 +171,7 @@ Each note sweeps Osc 1's pitch up with the envelope, while sync holds it to Osc 
 
 ## Polyphony
 
-The Oscillator is polyphonic. Patch a polyphonic **Pitch** cable from [Poly MIDI](../midi/poly-midi.md) into **V/Oct** and each note gets its own oscillator, with its own phase, sync and unison stack. The knobs are shared by every voice. Unison multiplies the cost: eight notes of a seven-voice supersaw is 56 oscillators. See [Polyphony](../../concepts/polyphony.md).
+The Oscillator is polyphonic. Patch a polyphonic **Pitch** cable from [Note In](../midi/note-in.md) into **V/Oct** and each note gets its own oscillator, with its own phase, sync and unison stack. The knobs are shared by every voice. Unison multiplies the cost: eight notes of a seven-voice supersaw is 56 oscillators. See [Polyphony](../../concepts/polyphony.md).
 
 ## Notes
 

@@ -172,10 +172,9 @@ pub fn reset_parameters(editor: &mut SynthGraphEditorState, node_id: NodeId) -> 
     else {
         return false;
     };
-    let live = template.live_parameter_count();
     let inputs = port_mapping::parameter_inputs(&editor.graph, node_id);
     let mut changed = false;
-    for (input, default) in inputs.into_iter().zip(template.parameter_defaults()).skip(live) {
+    for (input, default) in inputs.into_iter().zip(template.parameter_defaults()) {
         let value = &mut editor.graph.inputs[input].value;
         let before = value.actual_value();
         value.set_actual_value(default);

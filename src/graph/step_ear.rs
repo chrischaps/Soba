@@ -19,7 +19,7 @@
 
 use eframe::egui::{self, Key};
 
-use crate::modules::keyboard::key_to_note;
+use crate::app::qwerty_keys::key_to_note;
 
 /// A note struck on the piano's keys.
 #[derive(Clone, Copy, Debug, PartialEq)]

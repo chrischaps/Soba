@@ -6,9 +6,9 @@ This is the approach VCV Rack takes. You don't build eight copies of your voice.
 
 ## Where voices come from
 
-The [Poly MIDI](../modules/midi/poly-midi.md) module is where polyphony starts when you play. Its **Voices** knob (1 to 8) sets how many channels its **Pitch**, **Gate**, **Velocity** and **Aftertouch** cables carry, and each note you play is given a channel of its own. When a Poly MIDI module is in the patch, your computer keyboard plays it too.
+The [Note In](../modules/midi/note-in.md) module is where polyphony starts when you play. Its **Voices** knob (1 to 8) sets how many channels its **Pitch**, **Gate** and **Velocity** cables carry, and each note you play is given a channel of its own. It plays from your computer keyboard as well as from MIDI.
 
-In a patch that plays itself, the [Chord Sequencer](../modules/utilities/chord-sequencer.md) starts it instead. It sends a progression's chords down the same **Pitch**, **Gate** and **Velocity** cables, one channel per note, so a voice built for Poly MIDI plays it unchanged.
+In a patch that plays itself, the [Chord Sequencer](../modules/utilities/chord-sequencer.md) starts it instead. It sends a progression's chords down the same **Pitch**, **Gate** and **Velocity** cables, one channel per note, so a voice built for Note In plays it unchanged.
 
 ## Polyphonic modules
 
@@ -41,7 +41,7 @@ Output labels show the channel count too: **Out ×8** means that output carries 
 
 ## Mixing mono and poly
 
-A **mono cable into a polyphonic module** is shared by every voice. One LFO into a polyphonic filter's **Cutoff** sweeps all the voices together. To move each voice on its own, use a polyphonic source such as the envelope or Poly MIDI's **Velocity**.
+A **mono cable into a polyphonic module** is shared by every voice. One LFO into a polyphonic filter's **Cutoff** sweeps all the voices together. To move each voice on its own, use a polyphonic source such as the envelope or Note In's **Velocity**.
 
 A **polyphonic cable into a mono module** is folded down to one channel:
 
@@ -55,9 +55,9 @@ Voices add up, so a four-note chord is roughly four times as loud as one note. L
 ## A polyphonic voice
 
 ```text
-[Poly MIDI Pitch]    ──> [Oscillator V/Oct]
-[Poly MIDI Gate]     ──> [ADSR Gate]
-[Poly MIDI Velocity] ──> [ADSR Velocity]
+[Note In Pitch]      ──> [Oscillator V/Oct]
+[Note In Gate]       ──> [ADSR Gate]
+[Note In Velocity]   ──> [ADSR Velocity]
 [Oscillator Out]     ──> [SVF Filter In]
 [ADSR Out]           ──> [SVF Filter Cutoff]
 [SVF Filter LowPass] ──> [VCA In]
@@ -70,4 +70,4 @@ Every module up to the VCA runs one copy per voice. The Reverb hears the voices 
 
 ## Cost
 
-Each voice is a full copy of the module, so eight voices use about eight times the CPU of one. If a patch strains your computer, turn down **Voices** on the Poly MIDI module. With mono cables, a polyphonic module runs a single voice and costs no more than before.
+Each voice is a full copy of the module, so eight voices use about eight times the CPU of one. If a patch strains your computer, turn down **Voices** on the Note In module. With mono cables, a polyphonic module runs a single voice and costs no more than before.

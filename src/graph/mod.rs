@@ -25,6 +25,7 @@ mod output_meter_display;
 mod scope_display;
 mod noise_display;
 mod piano_display;
+pub mod note_in_face;
 mod scale_display;
 mod display_frame;
 mod distortion_display;

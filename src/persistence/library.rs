@@ -7,7 +7,7 @@
 //! file into `library/` and list it here.
 //!
 //! The voices are built only from polyphonic modules, so one voice plays
-//! chords from Poly MIDI as readily as single notes from the Keyboard, and
+//! chords from Note In as readily as single notes, and
 //! they're levelled to sit near one another: one note peaks around -12 dBFS.
 
 use super::{patch_from_json, Patch, PatchError};
@@ -91,7 +91,7 @@ pub const LIBRARY: &[LibraryGroup] = &[
         name: "Supersaw Pad",
         file_name: "supersaw-pad.json",
         section: Section::Voices,
-        description: "Seven detuned saws, a slow swell and a filter that breathes. Hold chords from Poly MIDI",
+        description: "Seven detuned saws, a slow swell and a filter that breathes. Hold chords from Note In",
         json: include_str!("../../library/supersaw-pad.json"),
     },
     LibraryGroup {
@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn voices_are_polyphonic() {
-        // Poly MIDI's chords pass through a voice only if every module in it is
+        // Note In's chords pass through a voice only if every module in it is
         let polyphonic = ["osc.sine", "source.noise", "filter.svf", "filter.ladder", "mod.adsr", "util.vca", "util.attenuverter", "util.mix"];
         for entry in LIBRARY.iter().filter(|g| g.section == Section::Voices) {
             let patch = entry.patch().unwrap();
@@ -293,7 +293,7 @@ mod tests {
         }
     }
 
-    /// A patch that plays `entry`: Poly MIDI into a voice's jacks, a clock
+    /// A patch that plays `entry`: Note In into a voice's jacks, a clock
     /// and dividers into a kit's, a plucked saw into an effect, and a plain
     /// voice to play a generator's notes. Its sound goes to the output.
     fn played(entry: &LibraryGroup) -> Patch {
@@ -375,7 +375,7 @@ mod tests {
             let patch = played(entry);
             let (mut renderer, compiled) = OfflineRenderer::from_patch(&patch, sample_rate, 256).unwrap();
             assert!(compiled.warnings.is_empty(), "{}: {:?}", entry.name, compiled.warnings);
-            let audio = renderer.render_audition(&patch, &compiled, 5.0);
+            let audio = renderer.render_audition(&patch, 5.0);
             for (side, channel) in [("left", &audio.left), ("right", &audio.right)] {
                 assert!(channel.iter().all(|s| s.is_finite()), "{}: {side} isn't finite", entry.name);
                 let (peak_db, rms_db) = (amp_to_db(peak(channel)), amp_to_db(rms(channel)));

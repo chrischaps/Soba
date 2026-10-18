@@ -370,7 +370,7 @@ mod tests {
             if patch.all_nodes().iter().any(|n| n.module_id == "source.audio_input") {
                 renderer.set_audio_input(plucked_audition(48_000.0, 5.0));
             }
-            let audio = renderer.render_audition(&patch, &compiled, 5.0);
+            let audio = renderer.render_audition(&patch, 5.0);
 
             for (side, channel) in [("left", &audio.left), ("right", &audio.right)] {
                 assert!(

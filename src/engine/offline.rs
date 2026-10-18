@@ -6,7 +6,8 @@
 //! [`GraphPlan`] swapping as the live app.
 
 use crate::dsp::denormal::DenormalGuard;
-use crate::dsp::{InputAudio, MidiEvent, MidiMessage, ProcessContext};
+use crate::dsp::{InputAudio, MidiEvent, MidiMessage, ProcessContext, KEYS_CHANNEL};
+use crate::modules::note_in::{self, Source};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -399,71 +400,36 @@ impl OfflineRenderer {
     }
 
     /// Renders `seconds` of audio while [`AUDITION`] is played into every
-    /// Keyboard, MIDI Note and Poly MIDI node of `patch`, so patches that wait
-    /// for a player make sound offline too. `compiled` must be the patch's
-    /// compilation (as returned by [`from_patch`](Self::from_patch)).
+    /// Note In of `patch`, so patches that wait for a player make sound
+    /// offline too.
     ///
-    /// MIDI modules get the notes as MIDI, sample-accurately. Keyboard nodes
-    /// are set the way the editor sets them, at block boundaries, and being
-    /// monophonic they play the most recent held note.
-    pub fn render_audition(&mut self, patch: &Patch, compiled: &CompiledPatch, seconds: f32) -> StereoBuffer {
-        let nodes_of = |module_id: &str| -> Vec<_> {
-            patch
-                .all_nodes()
-                .into_iter()
-                .filter(|n| n.module_id == module_id)
-                .filter_map(|n| compiled.node_ids.get(&n.id).copied())
-                .collect()
-        };
-        let keyboards = nodes_of("input.keyboard");
-        let has_midi = !nodes_of("input.midi_note").is_empty() || !nodes_of("input.poly_midi").is_empty();
+    /// It plays as the computer keys do when every Note In hears them, at
+    /// each one's Key Velocity, and as MIDI at velocity 100 when every one
+    /// hears MIDI; a patch with Note Ins of each kind gets both. Each note
+    /// lands on its sample.
+    pub fn render_audition(&mut self, patch: &Patch, seconds: f32) -> StereoBuffer {
+        let sources: Vec<Source> = patch
+            .all_nodes()
+            .into_iter()
+            .filter(|n| n.module_id == note_in::ID)
+            .map(|n| {
+                let source = n.parameters.iter().find(|p| p.name == "Source").map_or(0.0, |p| p.value.as_f32());
+                Source::from_param(source)
+            })
+            .collect();
+        let as_keys = sources.iter().any(|&s| s != Source::Midi);
+        let as_midi = sources.contains(&Source::Midi) || !as_keys && !sources.is_empty();
+        let channels = [(as_keys, KEYS_CHANNEL), (as_midi, 0)];
 
         let (start, sample_rate) = (self.position, self.context.sample_rate);
         let frame = |seconds: f32| start + (seconds * sample_rate).round() as u64;
-        let mut events: Vec<(u64, u8, bool)> = AUDITION
-            .iter()
-            .flat_map(|&(note, start, length)| [(frame(start), note, true), (frame(start + length), note, false)])
-            .collect();
-        events.sort_by_key(|&(at, _, on)| (at, on));
-
-        if has_midi {
-            for &(at, note, on) in &events {
-                let message = if on {
-                    MidiMessage::NoteOn { note, velocity: 100 }
-                } else {
-                    MidiMessage::NoteOff { note, velocity: 0 }
-                };
-                self.queue_midi(at, 0, message);
+        for &(note, at, length) in AUDITION {
+            for &(_, channel) in channels.iter().filter(|(plays, _)| *plays) {
+                self.queue_midi(frame(at), channel, MidiMessage::NoteOn { note, velocity: 100 });
+                self.queue_midi(frame(at + length), channel, MidiMessage::NoteOff { note, velocity: 0 });
             }
         }
-
-        let end = frame(seconds);
-        let mut out = StereoBuffer::default();
-        let mut held: Vec<u8> = Vec::new();
-        let block = self.context.block_size as u64;
-        for &(at, note, on) in events.iter().filter(|_| !keyboards.is_empty()) {
-            // Whole blocks only, so no rendered frames are dropped between calls
-            let frames = at.min(end).saturating_sub(self.position).div_ceil(block) * block;
-            out.append(self.render(frames as usize));
-
-            held.retain(|&n| n != note);
-            if on {
-                held.push(note);
-            }
-            for &node_id in &keyboards {
-                if let Some(&last) = held.last() {
-                    self.apply(EngineCommand::SetParameter { node_id, param_index: 0, value: last as f32 });
-                }
-                let gate = if held.is_empty() { 0.0 } else { 1.0 };
-                self.apply(EngineCommand::SetParameter { node_id, param_index: 1, value: gate });
-            }
-        }
-        out.append(self.render(end.saturating_sub(self.position) as usize));
-        // The last whole block before an event can run past the end
-        let frames = (end - start) as usize;
-        out.left.truncate(frames);
-        out.right.truncate(frames);
-        out
+        self.render_seconds(seconds)
     }
 }
 
@@ -553,10 +519,21 @@ mod tests {
         assert!(nodes.iter().any(|&(id, ns)| id == osc && ns > 0));
     }
 
-    /// `player` (Keyboard or MIDI Note) playing a sine, gated straight into a VCA.
-    fn played_sine(player: &str) -> Patch {
+    /// A Note In with one voice, playing from `source`.
+    fn note_in(id: u64, source: Source) -> NodeData {
+        let mut node = NodeData::new(id, note_in::ID, (-200.0, 0.0));
+        node.parameters = vec![
+            NamedParameter::new("Voices", ParameterValue::Number(1.0)),
+            NamedParameter::new("Source", ParameterValue::Select(source as usize)),
+        ];
+        node
+    }
+
+    /// A one-voice Note In playing from `source`, playing a sine gated
+    /// straight into a VCA.
+    fn played_sine(source: Source) -> Patch {
         let mut patch = Patch::new("played");
-        patch.nodes.push(NodeData::new(1, player, (0.0, 0.0)));
+        patch.nodes.push(note_in(1, source));
         patch.nodes.push(NodeData::new(2, "osc.sine", (0.0, 0.0)));
         patch.nodes.push(NodeData::new(3, "util.vca", (0.0, 0.0)));
         patch.nodes.push(NodeData::new(4, "output.audio", (0.0, 0.0)));
@@ -568,27 +545,44 @@ mod tests {
     }
 
     #[test]
-    fn test_audition_plays_keyboard_and_midi_patches() {
+    fn test_audition_plays_note_ins_from_the_keys_or_midi() {
         let sr = 48000.0;
-        for player in ["input.keyboard", "input.midi_note"] {
+        for player in [Source::Keys, Source::Midi, Source::Both] {
             let patch = played_sine(player);
-            let (mut r, compiled) = OfflineRenderer::from_patch(&patch, sr, 256).unwrap();
+            let (mut r, _) = OfflineRenderer::from_patch(&patch, sr, 256).unwrap();
             // Not a whole number of blocks, and ending mid-phrase
-            assert_eq!(r.render_audition(&patch, &compiled, 0.7).left.len(), (0.7 * sr) as usize, "{}", player);
+            assert_eq!(r.render_audition(&patch, 0.7).left.len(), (0.7 * sr) as usize, "{:?}", player);
 
-            let (mut r, compiled) = OfflineRenderer::from_patch(&patch, sr, 256).unwrap();
-            let out = r.render_audition(&patch, &compiled, 2.0);
-            assert_eq!(out.left.len(), 2 * sr as usize, "{}", player);
+            let (mut r, _) = OfflineRenderer::from_patch(&patch, sr, 256).unwrap();
+            let out = r.render_audition(&patch, 2.0);
+            assert_eq!(out.left.len(), 2 * sr as usize, "{:?}", player);
 
             let window = |from: f32, to: f32| &out.left[(from * sr) as usize..(to * sr) as usize];
             // The gap between the first two notes is silent, once the VCA's
             // declick has faded the first one out
-            assert!(rms(window(0.44, 0.49)) < 0.01, "{}: gate should be closed between notes", player);
+            assert!(rms(window(0.44, 0.49)) < 0.01, "{:?}: gate should be closed between notes", player);
             // The second note is E4
             let f = Spectrum::of(window(0.55, 0.85), sr).dominant_frequency();
             let cents = 1200.0 * (f / (Oscillator::C4_HZ as f64 * 2f64.powf(4.0 / 12.0))).log2();
-            assert!(cents.abs() < 5.0, "{}: expected E4, measured {:.2} Hz", player, f);
+            assert!(cents.abs() < 5.0, "{:?}: expected E4, measured {:.2} Hz", player, f);
         }
+    }
+
+    #[test]
+    fn test_audition_plays_the_keys_at_their_velocity() {
+        // A Note In played from the keys, its Velocity opening the VCA:
+        // the keys play as hard as its Key Velocity says
+        let level = |key_velocity: f32| {
+            let mut patch = played_sine(Source::Keys);
+            patch.nodes[0].parameters.push(NamedParameter::new("Key Velocity", ParameterValue::Scalar(key_velocity)));
+            patch.connections.retain(|c| c.from_port != "Gate");
+            patch.connections.push(ConnectionData::new(1, "Velocity", 3, "CV"));
+            let (mut r, _) = OfflineRenderer::from_patch(&patch, 48000.0, 256).unwrap();
+            let out = r.render_audition(&patch, 0.4);
+            rms(&out.left[4800..])
+        };
+        let (soft, hard) = (level(0.25), level(1.0));
+        assert!((hard / soft - 4.0).abs() < 0.2, "{soft} and {hard}");
     }
 
     #[test]
@@ -1150,12 +1144,12 @@ mod tests {
         assert!(out.left.iter().chain(&out.right).all(|&s| s == 0.0));
     }
 
-    /// MIDI Note playing an oscillator (chosen waveform) through a VCA
-    /// opened by its gate.
+    /// A one-voice Note In playing an oscillator (chosen waveform) from
+    /// MIDI, through a VCA opened by its gate.
     fn midi_voice_patch(waveform: usize) -> Patch {
         let mut patch = osc_patch(waveform);
         patch.connections.clear();
-        patch.nodes.push(NodeData::new(3, "input.midi_note", (-200.0, 0.0)));
+        patch.nodes.push(note_in(3, Source::Midi));
         patch.nodes.push(NodeData::new(4, "util.vca", (100.0, 0.0)));
         patch.connections.push(ConnectionData::new(3, "Pitch", 1, "V/Oct"));
         patch.connections.push(ConnectionData::new(3, "Gate", 4, "CV"));
@@ -1195,12 +1189,12 @@ mod tests {
         }
     }
 
-    /// Poly MIDI playing a polyphonic voice: sine oscillator through a VCA
+    /// Note In playing a polyphonic voice: sine oscillator through a VCA
     /// opened by an envelope, one of each per note, summed at the output.
     fn poly_voice_patch() -> Patch {
         let mut patch = osc_patch(0);
         patch.connections.clear();
-        patch.nodes.push(NodeData::new(3, "input.poly_midi", (-200.0, 0.0)));
+        patch.nodes.push(NodeData::new(3, note_in::ID, (-200.0, 0.0)));
         let mut env = NodeData::new(4, "mod.adsr", (0.0, 200.0));
         env.parameters = vec![
             NamedParameter::new("Attack", ParameterValue::Number(0.002)),

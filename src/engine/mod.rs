@@ -45,4 +45,4 @@ pub use midi_engine::{
     MidiDeviceInfo, MidiEngine, MidiError, MidiEvent, MidiReceivers, TimestampedMidiEvent,
 };
 pub use midi_scheduler::{MidiScheduler, MAX_MIDI_EVENTS_PER_CALLBACK};
-pub use ui_notes::{ui_notes, UiNotes, UI_CHANNEL, UI_VELOCITY};
+pub use ui_notes::{ui_notes, UiNotes, UI_VELOCITY};

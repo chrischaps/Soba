@@ -14,7 +14,7 @@ Two models share one set of knobs:
 
 A **Gate** plays it, as a finger or a mallet would. So does any sound patched into **In**. A drum, a voice or a burst of noise makes it ring at its own pitch, the way a shout makes a piano's open strings hum. A Drum into a tuned Resonator is a new instrument in itself.
 
-Resonator is polyphonic. A chord on its **V/Oct**, from a [Chord Sequencer](../utilities/chord-sequencer.md) or [Poly MIDI](../midi/poly-midi.md), is a string or a bell for each note, so a chord rings as a chord. One mono drum into **In** rings them all at once.
+Resonator is polyphonic. A chord on its **V/Oct**, from a [Chord Sequencer](../utilities/chord-sequencer.md) or [Note In](../midi/note-in.md), is a string or a bell for each note, so a chord rings as a chord. One mono drum into **In** rings them all at once.
 
 ## The models
 
@@ -126,5 +126,5 @@ A [Clock](../modulation/clock.md) or a sequencer's **Gate** into a Body Bell, wi
 
 - [Drum](./drum.md): the best exciter, and in the [Sympathetic Strings](../../recipes/sympathetic-strings.md) example the only one
 - [Noise](./noise.md): a burst of noise through an envelope into **In** bows a string that never stops
-- [Chord Sequencer](../utilities/chord-sequencer.md) and [Poly MIDI](../midi/poly-midi.md): chords of strings or bells
+- [Chord Sequencer](../utilities/chord-sequencer.md) and [Note In](../midi/note-in.md): chords of strings or bells
 - [Reverb](../effects/reverb.md): a room for them to ring into

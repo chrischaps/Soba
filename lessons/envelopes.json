@@ -4,12 +4,23 @@
   "nodes": [
     {
       "id": 1,
-      "module_id": "input.keyboard",
+      "module_id": "input.poly_midi",
       "position": [
         40.0,
         94.0
       ],
-      "parameters": []
+      "parameters": [
+        {
+          "name": "Voices",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Source",
+          "type": "Select",
+          "value": 1
+        }
+      ]
     },
     {
       "id": 2,
@@ -71,7 +82,5 @@
       "to_port": "Mono"
     }
   ],
-  "midi_mappings": [],
-  "frames": [],
-  "notes": []
+  "midi_mappings": []
 }

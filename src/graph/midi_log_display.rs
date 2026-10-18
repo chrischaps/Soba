@@ -37,15 +37,20 @@ const MIDI_LOG_ROWS: usize = 8;
 /// The longest line the log usually shows, which sets its width.
 const MIDI_LOG_WIDEST: &str = "NoteOn Ch16 C#-1 vel=127";
 
+/// Where a note came from: its MIDI channel, or the computer keys.
+fn note_channel(channel: u8) -> String {
+    if channel == crate::dsp::KEYS_CHANNEL { "Keys".to_string() } else { format!("Ch{}", channel + 1) }
+}
+
 /// Format a MIDI event for display.
 fn format_midi_event(event: &MidiEvent) -> (String, Color32) {
     match event {
         MidiEvent::NoteOn { channel, note, velocity } => (
-            format!("NoteOn Ch{} {} vel={}", channel + 1, note_to_name(*note), velocity),
+            format!("NoteOn {} {} vel={}", note_channel(*channel), note_to_name(*note), velocity),
             midi_colors::NOTE,
         ),
         MidiEvent::NoteOff { channel, note, .. } => (
-            format!("NoteOff Ch{} {}", channel + 1, note_to_name(*note)),
+            format!("NoteOff {} {}", note_channel(*channel), note_to_name(*note)),
             midi_colors::NOTE,
         ),
         MidiEvent::ControlChange { channel, controller, value } => (

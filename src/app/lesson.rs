@@ -725,11 +725,11 @@ wait param seq.step Step * Wobble changed").is_err());
         yes("add osc.sine");
         no("add osc.sine#2");
         no("add filter.svf");
-        yes("connect input.keyboard Pitch -> osc.sine V/Oct");
+        yes("connect input.poly_midi Pitch -> osc.sine V/Oct");
         yes("connect util.vca Out -> output.audio Mono");
         yes("connect osc.sine#1 out:Out -> util.vca in:In");
         no("connect osc.sine Out -> output.audio Mono");
-        no("connect input.keyboard Gate -> util.vca CV");
+        no("connect input.poly_midi Gate -> util.vca CV");
         // First Sound's oscillator plays a triangle
         yes("param osc.sine Waveform = Tri");
         no("param osc.sine Waveform = Saw");

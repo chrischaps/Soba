@@ -126,7 +126,7 @@ fn listen_to(example: &Example) -> Listen {
     let played = patch
         .all_nodes()
         .iter()
-        .any(|n| matches!(n.module_id.as_str(), "input.keyboard" | "input.midi_note" | "input.poly_midi"));
+        .any(|n| n.module_id == soba::modules::note_in::ID);
     match SONGS.iter().find(|(file, _, _)| *file == example.file_name) {
         Some(&(_, bars, bpm)) => Listen { seconds: bars * 4.0 * 60.0 / bpm, hearings: 1, played },
         None if played => Listen { seconds: PLAYED_SECONDS, hearings: 1, played },
@@ -173,7 +173,7 @@ fn hear(example: &Example, seconds: f32, played: bool) -> Hearing {
         renderer.set_audio_input(plucked_audition(seconds));
     }
     let audio = if played {
-        renderer.render_audition(&patch, &compiled, seconds)
+        renderer.render_audition(&patch, seconds)
     } else {
         renderer.render_seconds(seconds)
     };

@@ -1178,10 +1178,10 @@ mod tests {
         }
     }
 
-    /// Keyboard → (Oscillator → SVF Filter → VCA ← ADSR) → Output, with the
-    /// keyboard's gate into the envelope and the VCA into both output sides.
+    /// Note In → (Oscillator → SVF Filter → VCA ← ADSR) → Output, with the
+    /// Note In's gate into the envelope and the VCA into both output sides.
     fn voice(rig: &mut Rig) -> [NodeId; 6] {
-        let keys = rig.add("input.keyboard", pos2(0.0, 0.0));
+        let keys = rig.add(crate::modules::note_in::ID, pos2(0.0, 0.0));
         let osc = rig.add("osc.sine", pos2(200.0, 0.0));
         let filter = rig.add("filter.svf", pos2(400.0, 0.0));
         let env = rig.add("mod.adsr", pos2(400.0, 200.0));
@@ -1280,11 +1280,11 @@ mod tests {
         assert!(graph.remove_connection(pitch_jack, keys_pitch));
         assert!(!rig.leaf().iter().any(|c| c.3 == "V/Oct"));
 
-        // Plugging the keyboard's gate into the jack instead reaches the oscillator
+        // Plugging the Note In's gate into the jack instead reaches the oscillator
         let graph = &mut rig.editor.graph;
         let keys_gate = graph[keys].get_output("Gate").unwrap();
         graph.add_connection(keys_gate, pitch_jack, 0);
-        assert!(rig.leaf().contains(&("Keyboard".into(), "Gate".into(), "Oscillator".into(), "V/Oct".into())));
+        assert!(rig.leaf().contains(&("Note In".into(), "Gate".into(), "Oscillator".into(), "V/Oct".into())));
     }
 
     #[test]
@@ -1399,11 +1399,11 @@ mod tests {
         rig.connect(keys, "Gate", env2, "Gate");
         rig.connect(env2, "Out", vca, "CV");
         let new = rig.group(&[osc, env, env2, vca], "Voice");
-        // The keyboard's Gate feeds both envelopes through one jack
+        // The Note In's Gate feeds both envelopes through one jack
         let graph = &mut rig.editor.graph;
         assert_eq!(hide_port(graph, env2, Side::Input, "Gate"), Some((GroupId(1000), vec![("Gate".to_string(), false)])));
         assert!(graph[new.node].get_input("Gate").is_ok());
-        assert!(rig.leaf().contains(&("Keyboard".into(), "Gate".into(), "ADSR Envelope".into(), "Gate".into())));
+        assert!(rig.leaf().contains(&("Note In".into(), "Gate".into(), "ADSR Envelope".into(), "Gate".into())));
     }
 
     #[test]

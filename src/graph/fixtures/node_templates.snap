@@ -321,42 +321,7 @@ knob Release            "Release" KnobOnly
 monitor [2, 3]
 display InputListen
 
-== input.keyboard "Keyboard" finder="Keyboard" Source
-in   Note               Control  ConstantOnly         inline=false num 60 [0..127]
-in   Gate               Control  ConstantOnly         inline=false toggle false ""
-in   Octave             Control  ConstantOnly         inline=false num 0 [-2..2]
-in   Velocity           Control  ConstantOnly         inline=false num 1 [0..1] %
-in   Priority           Control  ConstantOnly         inline=true  select 0 ["Last", "Lowest", "Highest"] "Priority"
-in   Glide              Control  ConstantOnly         inline=false num 0 [0..2] s log
-in   Glide Mode         Control  ConstantOnly         inline=true  select 1 ["Always", "Legato"] "Glide"
-out  Gate               Gate
-out  Pitch              Control
-out  Velocity           Control
-knob Octave             "Oct" KnobOnly
-knob Velocity           "Vel" KnobOnly
-knob Glide              "Glide" KnobOnly
-monitor [0]
-display KeyboardPiano
-
-== input.midi_note "MIDI Note" finder="MIDI Note" Source
-in   Channel            Control  ConstantOnly         inline=true  select 0 ["Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] "Ch"
-in   Octave             Control  ConstantOnly         inline=false num 0 [-4..4] oct stepped
-in   Priority           Control  ConstantOnly         inline=true  select 0 ["Last", "Low", "High"] "Priority"
-in   Retrigger          Control  ConstantOnly         inline=true  toggle false "Retrig"
-in   Bend Range         Control  ConstantOnly         inline=false num 2 [0..12] st stepped
-in   Glide              Control  ConstantOnly         inline=false num 0 [0..2] s log
-in   Glide Mode         Control  ConstantOnly         inline=true  select 1 ["Always", "Legato"] "Glide"
-out  Pitch              Control
-out  Gate               Gate
-out  Velocity           Control
-out  Aftertouch         Control
-knob Octave             "Oct" KnobOnly
-knob Bend Range         "Bend" KnobOnly
-knob Glide              "Glide" KnobOnly
-monitor [1]
-display MidiPiano
-
-== input.poly_midi "Poly MIDI" finder="Poly MIDI" Source
+== input.poly_midi "Note In" finder="Note In" Source
 in   Channel            Control  ConstantOnly         inline=true  select 0 ["Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] "Ch"
 in   Voices             Control  ConstantOnly         inline=false num 8 [1..8]  stepped
 in   Allocation         Control  ConstantOnly         inline=true  select 0 ["Rotate", "Reuse"] "Mode"
@@ -364,6 +329,10 @@ in   Octave             Control  ConstantOnly         inline=false num 0 [-4..4]
 in   Bend Range         Control  ConstantOnly         inline=false num 2 [0..12] st stepped
 in   Glide              Control  ConstantOnly         inline=false num 0 [0..2] s log
 in   Glide Mode         Control  ConstantOnly         inline=true  select 1 ["Always", "Legato"] "Glide"
+in   Priority           Control  ConstantOnly         inline=true  select 0 ["Last", "Low", "High"] "Priority"
+in   Retrigger          Control  ConstantOnly         inline=true  toggle false "Retrig"
+in   Source             Control  ConstantOnly         inline=true  select 0 ["Both", "Keys", "MIDI"] "Source"
+in   Key Velocity       Control  ConstantOnly         inline=false num 0.78740156 [0..1] %
 out  Pitch              Control
 out  Gate               Gate
 out  Velocity           Control
@@ -372,8 +341,9 @@ knob Voices             "Voices" KnobOnly
 knob Glide              "Glide" KnobOnly
 knob Octave             "Oct" KnobOnly
 knob Bend Range         "Bend" KnobOnly
+knob Key Velocity       "Key Vel" KnobOnly
 monitor [1]
-display MidiPiano
+display NotePiano
 
 == filter.svf "SVF Filter" finder="SVF Filter" Filter
 in   In                 Audio    ConnectionOnly       inline=true  port

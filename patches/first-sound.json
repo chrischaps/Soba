@@ -4,29 +4,19 @@
   "nodes": [
     {
       "id": 1,
-      "module_id": "input.keyboard",
+      "module_id": "input.poly_midi",
       "position": [
         40.0,
         94.0
       ],
       "parameters": [
         {
-          "name": "Note",
-          "type": "Number",
-          "value": 60.0
-        },
-        {
-          "name": "Gate",
-          "type": "Toggle",
-          "value": false
-        },
-        {
           "name": "Octave",
           "type": "Number",
           "value": 0.0
         },
         {
-          "name": "Velocity",
+          "name": "Key Velocity",
           "type": "Number",
           "value": 1.0
         },
@@ -34,6 +24,16 @@
           "name": "Priority",
           "type": "Select",
           "value": 0
+        },
+        {
+          "name": "Voices",
+          "type": "Number",
+          "value": 1.0
+        },
+        {
+          "name": "Source",
+          "type": "Select",
+          "value": 1
         }
       ]
     },

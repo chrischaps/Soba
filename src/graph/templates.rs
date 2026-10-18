@@ -78,12 +78,6 @@ impl SynthNodeTemplate {
         self.spec.parameters.iter().map(|p| p.default).collect()
     }
 
-    /// Number of leading parameters driven by live input (computer keyboard,
-    /// MIDI) rather than by the graph.
-    pub fn live_parameter_count(&self) -> usize {
-        self.ui().live_params
-    }
-
     /// Presentation hints, or the defaults if the module has no entry.
     fn ui(&self) -> &'static ModuleUi {
         module_ui::module_ui(self.module_id()).unwrap_or_else(module_ui::default_ui)
@@ -99,7 +93,7 @@ impl SynthNodeTemplate {
             .parameters
             .iter()
             .enumerate()
-            .filter(|(i, p)| *i >= ui.live_params && is_continuous(p) && !ui.is_hidden(p.name))
+            .filter(|(_, p)| is_continuous(p) && !ui.is_hidden(p.name))
             .map(|(_, p)| KnobHint { param: p.name, label: p.name, modulatable: false })
             .collect()
     }
@@ -539,11 +533,10 @@ mod tests {
             }
 
             // Every continuous parameter needs a control, unless it's deliberately hidden
-            for (index, def) in spec.parameters.iter().enumerate() {
+            for def in &spec.parameters {
                 let controlled = !is_continuous(def)
                     || ui.knobs.iter().any(|k| k.param == def.name)
-                    || ui.is_hidden(def.name)
-                    || index < ui.live_params;
+                    || ui.is_hidden(def.name);
                 assert!(controlled, "{id}: '{}' has no knob and isn't hidden", def.name);
             }
         }

@@ -14,14 +14,14 @@ fn node(id: u64, module_id: &str, params: &[(&str, f32)]) -> NodeData {
     node
 }
 
-/// A MIDI Note playing a sine through a VCA its ADSR opens, a pluck: no
+/// A one-voice Note In playing a sine through a VCA its ADSR opens, a pluck: no
 /// sustain. `extra` adds cables into the ADSR (node 4); node 6 is an
 /// Attenuverter with nothing in, putting out its Offset of `offset`.
 fn pluck(offset: f32, extra: &[(u64, &str, &str)]) -> Patch {
     let mut patch = Patch::new("Pluck");
     patch.nodes = vec![
         node(1, "output.audio", &[("Volume", 1.0)]),
-        node(2, "input.midi_note", &[]),
+        node(2, "input.poly_midi", &[("Voices", 1.0)]),
         node(3, "osc.sine", &[]),
         node(4, "mod.adsr", &[("Attack", 0.001), ("Decay", 0.2), ("Sustain", 0.0), ("Release", 0.1)]),
         node(5, "util.vca", &[("Level", 0.5)]),
@@ -85,7 +85,7 @@ fn attack_time(offset: f32, range: Option<usize>) -> f32 {
     let mut patch = Patch::new("Swell");
     patch.nodes = vec![
         node(1, "output.audio", &[("Volume", 1.0)]),
-        node(2, "input.midi_note", &[]),
+        node(2, "input.poly_midi", &[("Voices", 1.0)]),
         node(3, "osc.sine", &[]),
         node(4, "mod.adsr", &[("Attack", 0.05), ("Decay", 0.2), ("Sustain", 1.0), ("Release", 0.1)]),
         node(5, "util.vca", &[("Level", 0.5)]),

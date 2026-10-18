@@ -20,7 +20,7 @@ A wide, slow-blooming pad for holding chords. Each note fades in over most of a 
 
 | Module | Settings |
 |--------|----------|
-| [Poly MIDI](../modules/midi/poly-midi.md) | Defaults: 8 voices, Rotate |
+| [Note In](../modules/midi/note-in.md) | Defaults: 8 voices, Rotate |
 | [Oscillator](../modules/sources/oscillator.md) | **Wave** Saw, **Voices** 5, **Detune** 30%, **Spread** 60% |
 | [SVF Filter](../modules/filters/svf-filter.md) | **Cutoff** 2.5 kHz, **Res** 15% |
 | [LFO](../modules/modulation/lfo.md) | **Rate** 0.1 Hz, **Wave** Sine, **Bipolar** on |
@@ -33,21 +33,21 @@ A wide, slow-blooming pad for holding chords. Each note fades in over most of a 
 
 ## How it's built
 
-### Voices from Poly MIDI
+### Voices from Note In
 
 ```text
-[Poly MIDI Pitch] ──> [Oscillator V/Oct]
-[Poly MIDI Gate] ──> [ADSR Gate]
-[Poly MIDI Velocity] ──> [ADSR Velocity]
+[Note In Pitch] ──> [Oscillator V/Oct]
+[Note In Gate] ──> [ADSR Gate]
+[Note In Velocity] ──> [ADSR Velocity]
 ```
 
-Poly MIDI gives each held note a channel of its own, and these three cables carry all eight channels. The Oscillator and the ADSR are polyphonic, so they run one copy per channel: a four-note chord is four oscillators and four envelopes, each starting and releasing with its own key. Velocity reaches each note's envelope, so softer notes bloom quieter.
+Note In gives each held note a channel of its own, and these three cables carry all eight channels. The Oscillator and the ADSR are polyphonic, so they run one copy per channel: a four-note chord is four oscillators and four envelopes, each starting and releasing with its own key. Velocity reaches each note's envelope, so softer notes bloom quieter.
 
 ### One note, five saws
 
 The Oscillator stacks five saw waves per note with **Voices** 5, detuned 30% apart. They drift in and out of phase with each other, which gives each note its slow, chorused movement before any effect is added. Only the mono **Out** is used here. The stereo width comes later, from the Mixer, the chorus and the reverb.
 
-Five unison voices on each of eight notes is forty saws. If the patch strains your CPU, turn Poly MIDI's **Voices** down, or the Oscillator's.
+Five unison voices on each of eight notes is forty saws. If the patch strains your CPU, turn Note In's **Voices** down, or the Oscillator's.
 
 ### A filter that breathes
 
@@ -77,7 +77,7 @@ The VCA's **Level** sits at 50%. Voices add up, so a full chord is several times
 [Mixer Out R] ──> [Chorus In R]
 ```
 
-The Mixer hears each voice of the polyphonic cable on its own. With **Width 1** at 80% it fans them out across the stereo field. Poly MIDI hands each new note the next voice, and neighbouring voices sit on opposite sides, so the notes of a chord alternate left and right. Hold a chord and watch the lights on the Mixer's panorama open out.
+The Mixer hears each voice of the polyphonic cable on its own. With **Width 1** at 80% it fans them out across the stereo field. Note In hands each new note the next voice, and neighbouring voices sit on opposite sides, so the notes of a chord alternate left and right. Hold a chord and watch the lights on the Mixer's panorama open out.
 
 Panning costs a centred sound 3 dB on each side, so the Mixer's **Master** sits at +3 dB to win it back. The pad is as loud as it would be summed to mono, only wider.
 
@@ -102,7 +102,7 @@ The Chorus and the Reverb aren't polyphonic: they hear the chord as one stereo p
 
 **Swell.** Lengthen **Atk** to 3 s. Hold a chord and let it rise.
 
-**Each voice its own.** Replace the LFO's cable into the filter's **Cutoff** with Poly MIDI's **Velocity**. The filter is polyphonic, so each note's filter opens by up to an octave according to its own velocity, and harder notes come out brighter.
+**Each voice its own.** Replace the LFO's cable into the filter's **Cutoff** with Note In's **Velocity**. The filter is polyphonic, so each note's filter opens by up to an octave according to its own velocity, and harder notes come out brighter.
 
 **Cheaper.** Set the Oscillator's **Voices** to 1 and add more chorus **Depth**. It's thinner, but costs a fifth of the CPU.
 
@@ -111,5 +111,5 @@ The Chorus and the Reverb aren't polyphonic: they hear the chord as one stereo p
 ## Related
 
 - [Polyphony](../concepts/polyphony.md) – how polyphonic cables work
-- [Poly MIDI](../modules/midi/poly-midi.md) – voice allocation and the sustain pedal
+- [Note In](../modules/midi/note-in.md) – voice allocation and the sustain pedal
 - [Oscillator](../modules/sources/oscillator.md#unison-and-supersaw) – unison in detail

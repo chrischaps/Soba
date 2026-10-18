@@ -14,9 +14,9 @@
     },
     {
       "id": 2,
-      "module_id": "input.keyboard",
+      "module_id": "input.poly_midi",
       "position": [0.0, 640.0],
-      "parameters": []
+      "parameters": [{"name": "Voices", "type": "Number", "value": 1.0}]
     },
     {
       "id": 5,

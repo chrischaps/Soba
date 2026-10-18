@@ -103,7 +103,7 @@ The **Library** is a shelf of ready-made groups that ships with Soba. Each one i
 | **Auto-Pan** | An LFO sweeps a mono sound from side to side. **Tempo** locks the sweep to the Clock | In → Out L, Out R |
 | **Slicer** | The [Slicer](../modules/effects/slicer.md) rebuilt from stock modules, to open and see how a slicer pedal works: a synced LFO clocks a Step Sequencer whose steps open a VCA and a step filter. Its face: **Rate**, **Steps**, **Duty**, **Atk**, **Rel**, **Filter**, **Depth** and **Close** | In, Reset → Out, Gate, Env |
 
-The voices share a shape: plug a [Keyboard](../modules/midi/keyboard.md) or [Poly MIDI](../modules/midi/poly-midi.md) into **Pitch**, **Gate** and **Velocity**, and **Out** into a mixer or the output. They're built from [polyphonic](./polyphony.md) modules, so Poly MIDI, or a [Chord Sequencer](../modules/utilities/chord-sequencer.md), plays chords through any of them. The String Machine's chorus is the one exception: like a real string machine's ensemble, it hears the whole chord at once. They're also levelled to match, so swapping one voice for another doesn't jump in volume.
+The voices share a shape: plug a [Note In](../modules/midi/note-in.md) into **Pitch**, **Gate** and **Velocity**, and **Out** into a mixer or the output. They're built from [polyphonic](./polyphony.md) modules, so Note In, or a [Chord Sequencer](../modules/utilities/chord-sequencer.md), plays chords through any of them. The String Machine's chorus is the one exception: like a real string machine's ensemble, it hears the whole chord at once. They're also levelled to match, so swapping one voice for another doesn't jump in volume.
 
 A Library group you've changed can be saved to My Modules under its own name, like any other group.
 

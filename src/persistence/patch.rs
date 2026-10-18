@@ -693,6 +693,92 @@ fn keep_fixed_sequencer_gates(nodes: &mut [NodeData], groups: &mut [GroupData]) 
     }
 }
 
+/// The modules Note In took the place of (#385), by the IDs patches knew
+/// them by: each becomes a Note In with one voice, played from where it was.
+const NOTE_INPUTS: [(&str, NoteSource); 2] = [("input.keyboard", NoteSource::Keys), ("input.midi_note", NoteSource::Midi)];
+
+/// Where a Note In made from an old module plays from, as its Source.
+#[derive(Clone, Copy)]
+enum NoteSource {
+    Keys = 1,
+    Midi = 2,
+}
+
+/// Keyboard and MIDI Note became Note In with one voice, so the patches
+/// that have them open and play as they did. Keyboard's Velocity is the
+/// velocity its keys play, Note In's Key Velocity; their live state (Note,
+/// Gate and so on, which the player set) goes. A MIDI mapping follows its
+/// knob to its new name and place.
+///
+/// No version marks this: a patch holding either ID is an old one, and an
+/// older app opens a Note In as the Poly MIDI it knows.
+fn old_note_inputs_to_note_in(patch: &mut Patch) {
+    fn migrate(nodes: &mut [NodeData], groups: &mut [GroupData], migrated: &mut Vec<(u64, NoteSource)>) {
+        for node in nodes.iter_mut() {
+            let Some(&(_, source)) = NOTE_INPUTS.iter().find(|(id, _)| *id == node.module_id) else { continue };
+            node.module_id = crate::modules::note_in::ID.to_string();
+            let names = note_in_parameter_names();
+            for param in node.parameters.iter_mut() {
+                param.name = source.renamed(&param.name).to_string();
+            }
+            node.parameters.retain(|p| names.contains(&p.name));
+            node.parameters.push(NamedParameter::new("Voices", ParameterValue::Number(1.0)));
+            node.parameters.push(NamedParameter::new("Source", ParameterValue::Select(source as usize)));
+            node.pinned = std::mem::take(&mut node.pinned)
+                .into_iter()
+                .map(|(name, levels)| (source.renamed(&name).to_string(), levels))
+                .filter(|(name, _)| names.contains(name))
+                .collect();
+            node.face_labels = std::mem::take(&mut node.face_labels)
+                .into_iter()
+                .map(|(name, label)| (source.renamed(&name).to_string(), label))
+                .filter(|(name, _)| names.contains(name))
+                .collect();
+            migrated.push((node.id, source));
+        }
+        for group in groups {
+            migrate(&mut group.nodes, &mut group.groups, migrated);
+        }
+    }
+
+    let mut migrated = Vec::new();
+    migrate(&mut patch.nodes, &mut patch.groups, &mut migrated);
+    if migrated.is_empty() {
+        return;
+    }
+    let names = note_in_parameter_names();
+    patch.midi_mappings.retain_mut(|mapping| {
+        let Some(&(_, source)) = migrated.iter().find(|(id, _)| *id == mapping.node_id) else {
+            return true;
+        };
+        mapping.param_name = source.renamed(&mapping.param_name).to_string();
+        match names.iter().position(|name| *name == mapping.param_name) {
+            Some(index) => {
+                mapping.param_index = index;
+                true
+            }
+            None => false,
+        }
+    });
+}
+
+/// Note In's parameter names, in order.
+fn note_in_parameter_names() -> Vec<String> {
+    SynthNodeTemplate::from_module_id(crate::modules::note_in::ID).map(|t| t.parameter_names()).unwrap_or_default()
+}
+
+impl NoteSource {
+    /// What a parameter of the module this was is called on Note In:
+    /// Keyboard's Velocity is the keys' velocity. (MIDI Note's was the
+    /// note's, live state that goes.)
+    fn renamed(self, name: &str) -> &str {
+        match (self, name) {
+            (NoteSource::Keys, "Velocity") => "Key Velocity",
+            _ => name,
+        }
+    }
+}
+
 /// Parses a patch from JSON, migrating older versions to the current format.
 pub fn patch_from_json(json: &str) -> Result<Patch, PatchError> {
     #[derive(Deserialize)]
@@ -715,6 +801,7 @@ pub fn patch_from_json(json: &str) -> Result<Patch, PatchError> {
     let patch = if patch.version < 4 { migrate_v3_to_v4(patch) } else { patch };
     let mut patch = if patch.version < 5 { migrate_v4_to_v5(patch) } else { patch };
     keep_fixed_sequencer_gates(&mut patch.nodes, &mut patch.groups);
+    old_note_inputs_to_note_in(&mut patch);
     Ok(patch)
 }
 
@@ -1137,6 +1224,101 @@ mod tests {
         }"#;
         let patch = patch_from_json(json).unwrap();
         assert_eq!(patch.nodes[0].parameters[0].value, ParameterValue::Number(5.5));
+    }
+
+    fn param<'a>(node: &'a NodeData, name: &str) -> Option<&'a ParameterValue> {
+        node.parameters.iter().find(|p| p.name == name).map(|p| &p.value)
+    }
+
+    #[test]
+    fn test_keyboard_becomes_a_one_voice_note_in_played_from_the_keys() {
+        let json = r#"{
+            "name": "Old", "version": 5,
+            "nodes": [{"id": 1, "module_id": "input.keyboard", "position": [0.0, 0.0], "parameters": [
+                {"name": "Note", "type": "Number", "value": 64.0},
+                {"name": "Gate", "type": "Toggle", "value": true},
+                {"name": "Octave", "type": "Number", "value": -1.0},
+                {"name": "Velocity", "type": "Scalar", "value": 0.8},
+                {"name": "Priority", "type": "Select", "value": 2},
+                {"name": "Glide", "type": "Time", "value": 0.1},
+                {"name": "Glide Mode", "type": "Select", "value": 0}],
+              "pinned": {"Velocity": 1, "Gate": 1}, "face_labels": {"Velocity": "Touch"}}],
+            "connections": [],
+            "midi_mappings": [
+                {"cc_number": 7, "channel": 0, "node_id": 1, "param_index": 3, "param_name": "Velocity",
+                 "min_value": 0.0, "max_value": 1.0},
+                {"cc_number": 8, "channel": 0, "node_id": 1, "param_index": 1, "param_name": "Gate",
+                 "min_value": 0.0, "max_value": 1.0}
+            ]
+        }"#;
+        let patch = patch_from_json(json).unwrap();
+        let node = &patch.nodes[0];
+        assert_eq!(node.module_id, crate::modules::note_in::ID);
+        assert_eq!(param(node, "Voices"), Some(&ParameterValue::Number(1.0)));
+        assert_eq!(param(node, "Source"), Some(&ParameterValue::Select(1)), "the keys");
+        assert_eq!(param(node, "Key Velocity"), Some(&ParameterValue::Scalar(0.8)));
+        assert_eq!(param(node, "Octave"), Some(&ParameterValue::Number(-1.0)));
+        assert_eq!(param(node, "Priority"), Some(&ParameterValue::Select(2)));
+        assert_eq!(param(node, "Glide"), Some(&ParameterValue::Time(0.1)));
+        assert!(param(node, "Note").is_none() && param(node, "Gate").is_none(), "the player's state goes");
+        assert_eq!(node.pinned.keys().collect::<Vec<_>>(), ["Key Velocity"]);
+        assert_eq!(node.face_labels["Key Velocity"], "Touch");
+
+        // The mapping follows its knob; one to the old live Gate goes
+        assert_eq!(patch.midi_mappings.len(), 1);
+        let mapping = &patch.midi_mappings[0];
+        assert_eq!(mapping.param_name, "Key Velocity");
+        assert_eq!(mapping.param_index, crate::modules::NoteIn::PARAM_KEY_VELOCITY);
+    }
+
+    #[test]
+    fn test_midi_note_becomes_a_one_voice_note_in_played_from_midi() {
+        // Saved with its old live state, from before MIDI moved to the audio thread
+        let json = r#"{
+            "name": "Old", "version": 3,
+            "nodes": [{"id": 1, "module_id": "input.midi_note", "position": [0.0, 0.0], "parameters": [
+                {"name": "Note", "type": "Number", "value": 64.0},
+                {"name": "Velocity", "type": "Number", "value": 100.0},
+                {"name": "Aftertouch", "type": "Number", "value": 0.0},
+                {"name": "Channel", "type": "Select", "value": 3},
+                {"name": "Octave", "type": "Number", "value": 1.0},
+                {"name": "Priority", "type": "Select", "value": 1},
+                {"name": "Retrigger", "type": "Toggle", "value": true},
+                {"name": "Bend Range", "type": "Number", "value": 7.0}]}],
+            "connections": [],
+            "midi_mappings": [
+                {"cc_number": 1, "channel": 0, "node_id": 1, "param_index": 4, "param_name": "Bend Range",
+                 "min_value": 0.0, "max_value": 12.0}
+            ]
+        }"#;
+        let patch = patch_from_json(json).unwrap();
+        let node = &patch.nodes[0];
+        assert_eq!(node.module_id, crate::modules::note_in::ID);
+        assert_eq!(param(node, "Source"), Some(&ParameterValue::Select(2)), "MIDI");
+        assert_eq!(param(node, "Voices"), Some(&ParameterValue::Number(1.0)));
+        assert_eq!(param(node, "Channel"), Some(&ParameterValue::Select(3)));
+        assert_eq!(param(node, "Retrigger"), Some(&ParameterValue::Toggle(true)));
+        assert!(param(node, "Key Velocity").is_none(), "its Velocity was the note's, not the keys'");
+        assert!(param(node, "Note").is_none() && param(node, "Aftertouch").is_none());
+        assert_eq!(patch.midi_mappings[0].param_index, crate::modules::NoteIn::PARAM_BEND_RANGE);
+    }
+
+    #[test]
+    fn test_a_keyboard_in_a_group_is_migrated_and_poly_midi_is_left_alone() {
+        let json = r#"{
+            "name": "Old", "version": 6,
+            "nodes": [{"id": 1, "module_id": "input.poly_midi", "position": [0.0, 0.0], "parameters": [
+                {"name": "Voices", "type": "Number", "value": 4.0}]}],
+            "connections": [],
+            "groups": [{"id": 9, "name": "Voice", "position": [0.0, 0.0], "inputs": [], "outputs": [],
+                "inputs_position": [0.0, 0.0], "outputs_position": [0.0, 0.0], "connections": [],
+                "nodes": [{"id": 2, "module_id": "input.keyboard", "position": [0.0, 0.0], "parameters": []}]}]
+        }"#;
+        let patch = patch_from_json(json).unwrap();
+        assert_eq!(patch.nodes[0].parameters, [NamedParameter::new("Voices", ParameterValue::Number(4.0))]);
+        let inner = &patch.groups[0].nodes[0];
+        assert_eq!(inner.module_id, crate::modules::note_in::ID);
+        assert_eq!(param(inner, "Source"), Some(&ParameterValue::Select(1)));
     }
 
     #[test]

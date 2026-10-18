@@ -23,7 +23,7 @@ Each cable carries one of three kinds of signal, and takes its color from it:
 | <span class="swatch control"></span>Orange | Control | Modulation (CV): envelopes, LFOs, pitch |
 | <span class="swatch gate"></span>Green | Gate | On or off: a key held down, a clock tick |
 
-A cable can also carry up to eight voices at once, which is how Soba plays chords. MIDI doesn't travel on cables: the MIDI modules listen to the controller you choose in the toolbar and turn what you play into pitch, gate and velocity. [Signal Types](./concepts/signal-types.md) and [Polyphony](./concepts/polyphony.md) cover both in depth.
+A cable can also carry up to eight voices at once, which is how Soba plays chords. MIDI doesn't travel on cables: Note In listens to the controller you choose in the toolbar and turns what you play into pitch, gate and velocity. [Signal Types](./concepts/signal-types.md) and [Polyphony](./concepts/polyphony.md) cover both in depth.
 
 ## Modules
 
@@ -31,7 +31,7 @@ There are 44 modules in six categories. A module's header takes its category's c
 
 | Category | Header | Modules |
 |----------|--------|---------|
-| Source | <span class="swatch bar source"></span>Blue | Oscillator, Noise, Drum, Resonator, Sampler, Chopper, Cloud, Audio Input, Keyboard, MIDI Note, Poly MIDI |
+| Source | <span class="swatch bar source"></span>Blue | Oscillator, Noise, Drum, Resonator, Sampler, Chopper, Cloud, Audio Input, Note In |
 | Filter | <span class="swatch bar filter"></span>Teal | SVF Filter, Ladder Filter |
 | Modulation | <span class="swatch bar modulation"></span>Orange | ADSR Envelope, LFO, Slope |
 | Effect | <span class="swatch bar effect"></span>Cyan | Stereo Delay, Reverb, 3-Band EQ, Distortion, Chorus, Tape, Slicer, Compressor, Vocoder |

@@ -14,8 +14,8 @@
 //!
 //! The script drives the app through its real input paths: key presses
 //! reach the QWERTY keyboard, mouse moves and drags reach the node graph and
-//! knobs, MIDI notes reach Poly MIDI and MIDI Note modules at the exact
-//! sample they're scheduled for. Real mouse and keyboard input is ignored
+//! knobs, MIDI notes reach Note In modules at the exact sample they're
+//! scheduled for. Real mouse and keyboard input is ignored
 //! while capturing.
 //!
 //! Output, in `--out`:

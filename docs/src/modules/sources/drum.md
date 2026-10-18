@@ -9,7 +9,7 @@ Drum is one analog drum voice. Its **Type** turns it into a kick, snare, tom, cl
 
 The same five knobs serve every type, and each means what it would on that drum's own panel. **Tune** sets the pitch of a kick and the metal of a hat. **Snap** sets a kick's beater and a snare's wires. The names never change, so a MIDI mapping keeps working when you change the Type.
 
-Drum is polyphonic. A polyphonic gate, from [Poly MIDI](../midi/poly-midi.md) say, plays a new voice for each note, so fast hits ring on over each other instead of cutting each other off.
+Drum is polyphonic. A polyphonic gate, from [Note In](../midi/note-in.md) say, plays a new voice for each note, so fast hits ring on over each other instead of cutting each other off.
 
 ## The types
 
@@ -109,7 +109,7 @@ Patch one sequencer's **Gate** into two Drums, a Snare and a Clap, and mix them.
 
 ### Rolls and flams
 
-From a [Poly MIDI](../midi/poly-midi.md) module, two notes very close together each get a voice, so a flam rings as two hits rather than one cut short. A Clock at 1/16 with a high **Swing** into **Trig** makes a shuffled roll. Patch a falling envelope into **Decay** and the roll tightens as it goes.
+From a [Note In](../midi/note-in.md) module with several voices, two notes very close together each get a voice, so a flam rings as two hits rather than one cut short. A Clock at 1/16 with a high **Swing** into **Trig** makes a shuffled roll. Patch a falling envelope into **Decay** and the roll tightens as it goes.
 
 ## Related modules
 

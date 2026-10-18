@@ -196,8 +196,8 @@ fn key_frame(app: &mut SynthApp, ctx: &egui::Context, time: f64, key: egui::Key,
 }
 
 #[test]
-fn computer_keys_play_poly_midi_with_no_midi_device() {
-    // The pad's Poly MIDI hears the keys, though the plugin has no MIDI
+fn computer_keys_play_note_in_with_no_midi_device() {
+    // The pad's Note In hears the keys, though the plugin has no MIDI
     // engine: they take the UI's own ring to the audio thread
     let (mut app, mut player, ctx) = plugin();
     frame(&mut app, &ctx, 0.0);

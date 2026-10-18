@@ -9,13 +9,13 @@ A Quantizer snaps a pitch to the nearest note of a scale. Random voltages, LFOs 
 
 The node shows its scale on a one-octave piano. Keys in the scale are lit and carry a dot, and the root's dot is ringed. Keys outside the scale are dimmed. The note the Quantizer is playing glows, and its name appears under the keys. **Click a key** to add it to the scale or take it out, and the **Scale** menu switches to **Custom**.
 
-The Quantizer is polyphonic. Patch in a polyphonic cable and each voice is quantized on its own, so a chord from [Poly MIDI](../midi/poly-midi.md) comes out as a chord in the scale. The piano lights every note playing.
+The Quantizer is polyphonic. Patch in a polyphonic cable and each voice is quantized on its own, so a chord from [Note In](../midi/note-in.md) comes out as a chord in the scale. The piano lights every note playing.
 
 ## Inputs
 
 | Port | Signal Type | Description |
 |------|-------------|-------------|
-| **In** | Control (Orange) | The pitch to quantize, in V/Oct: 0 is C4, +1 is C5, -1 is C3, as on [MIDI Note](../midi/midi-note.md) |
+| **In** | Control (Orange) | The pitch to quantize, in V/Oct: 0 is C4, +1 is C5, -1 is C3, as on [Note In](../midi/note-in.md) |
 | **Transpose** | Control (Orange) | Added to the **Transpose** knob, in V/Oct and rounded to whole semitones. A sequencer's **Pitch** here moves the key by the interval it plays |
 
 ## Outputs

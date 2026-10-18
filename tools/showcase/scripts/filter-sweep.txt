@@ -1,6 +1,6 @@
 -0.8000 play
 -0.8000 camera -70.8 -42.3 0.9 0.05   # Source, Tone and Volume
--0.8000 param input.keyboard Octave -1
+-0.8000 param input.poly_midi Octave -1
 0.0000 key Z 0.0711
 0.0000 cursor on
 0.1293 key Z 0.0711

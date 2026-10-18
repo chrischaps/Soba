@@ -101,8 +101,7 @@ fn test_every_saved_value_comes_back() {
         let mut changed = Vec::new();
         for (before, after) in patch.all_nodes().into_iter().zip(saved.all_nodes()) {
             assert_eq!(before.module_id, after.module_id, "v{version}");
-            // MIDI Note's old live state, which loading skips on purpose
-            for p in before.parameters.iter().filter(|p| !is_retired(&before.module_id, &p.name)) {
+            for p in &before.parameters {
                 let Some(now) = after.parameters.iter().find(|q| q.name == p.name).map(|q| q.value.as_f32()) else {
                     changed.push(format!("{} {}: gone", before.module_id, p.name));
                     continue;
@@ -196,6 +195,30 @@ fn test_v6_keeps_groups_files_frames_and_notes() {
 }
 
 #[test]
+fn test_keyboards_and_midi_notes_open_as_one_voice_note_ins() {
+    use crate::modules::note_in::{self, Source};
+    for (version, json) in FIXTURES {
+        let patch = fixture(version);
+        assert!(!json.contains(note_in::ID) || version >= 5, "v{version}: Poly MIDI came in v5");
+        let ids: Vec<&str> = patch.all_nodes().iter().map(|n| n.module_id.as_str()).collect();
+        assert!(!ids.contains(&"input.keyboard") && !ids.contains(&"input.midi_note"), "v{version}");
+
+        // Where the Keyboard and the MIDI Note were, as saved
+        let saved: Patch = serde_json::from_str(json).unwrap();
+        let id_of = |module| saved.nodes.iter().find(|n| n.module_id == module).unwrap().id;
+        let node = |id| *patch.all_nodes().iter().find(|n| n.id == id).unwrap();
+        let (keyboard, midi_note) = (node(id_of("input.keyboard")), node(id_of("input.midi_note")));
+        for (node, source) in [(keyboard, Source::Keys), (midi_note, Source::Midi)] {
+            assert_eq!(node.module_id, note_in::ID, "v{version}");
+            assert_eq!(param(node, "Voices"), 1.0, "v{version}");
+            assert_eq!(param(node, "Source"), source as i32 as f32, "v{version}");
+        }
+        assert_eq!(param(keyboard, "Key Velocity"), 0.5, "v{version}: the Keyboard's Velocity");
+        assert_eq!(param(midi_note, "Retrigger"), 1.0, "v{version}");
+    }
+}
+
+#[test]
 fn test_v5_keeps_bypass() {
     assert!(only(&fixture(5), "fx.delay").bypassed);
 }
@@ -234,7 +257,7 @@ fn write_a_fixture_of_this_format() {
         patch.nodes.push(node);
     }
     let id_of = |patch: &Patch, module: &str| patch.nodes.iter().find(|n| n.module_id == module).unwrap().id;
-    let (filter, output, keyboard) = (id_of(&patch, "filter.svf"), id_of(&patch, "output.audio"), id_of(&patch, "input.keyboard"));
+    let (filter, output, keyboard) = (id_of(&patch, "filter.svf"), id_of(&patch, "output.audio"), id_of(&patch, crate::modules::note_in::ID));
     patch.midi_mappings = vec![
         MidiMapping::new(74, 0, filter, 0, "Cutoff", 200.0, 8000.0),
         MidiMapping::new(71, 1, filter, 0, "Resonance", 0.0, 1.0),
@@ -242,7 +265,7 @@ fn write_a_fixture_of_this_format() {
     ];
 
     // A Rig holding the library's Electric Piano: groups two deep, played
-    // from the Keyboard and heard through the Audio Output
+    // from the Note In and heard through the Audio Output
     let piano = patch_from_json(include_str!("../../library/electric-piano.json")).unwrap().groups.remove(0);
     let jack = |name: &str, signal: &str| JackData { name: name.into(), signal: signal.into() };
     let conn = |from, from_port: &str, to, to_port: &str| ConnectionData::new(from, from_port, to, to_port);

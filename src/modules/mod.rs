@@ -20,7 +20,6 @@ pub mod drum;
 pub mod envelope;
 pub mod eq;
 pub mod filter;
-pub mod keyboard;
 pub mod ladder;
 pub mod lfo;
 pub mod link_out;
@@ -30,12 +29,11 @@ pub mod midi_monitor;
 pub mod midi_out;
 pub mod mix;
 pub mod mixer;
-pub mod midi_note;
 pub mod noise;
+pub mod note_in;
 pub mod oscillator;
 pub mod oscilloscope;
 pub mod output;
-pub mod poly_midi;
 pub mod quantizer;
 pub mod resonator;
 pub mod reverb;
@@ -83,9 +81,7 @@ builtin_modules! {
     Chopper,
     Cloud,
     AudioInput,
-    KeyboardInput,
-    MidiNote,
-    PolyMidi,
+    NoteIn,
     Poly<SvfFilter>,
     Poly<LadderFilter>,
     Poly<AdsrEnvelope>,
@@ -142,7 +138,6 @@ pub use sampler::Sampler;
 pub use envelope::AdsrEnvelope;
 pub use eq::ParametricEq;
 pub use filter::SvfFilter;
-pub use keyboard::KeyboardInput;
 pub use ladder::LadderFilter;
 pub use lfo::Lfo;
 pub use link_out::LinkOut;
@@ -152,12 +147,11 @@ pub use looper::Looper;
 pub use midi_monitor::MidiMonitor;
 pub use mix::Mix;
 pub use mixer::Mixer;
-pub use midi_note::MidiNote;
 pub use noise::Noise;
+pub use note_in::NoteIn;
 pub use oscillator::Oscillator;
 pub use oscilloscope::Oscilloscope;
 pub use output::AudioOutput;
-pub use poly_midi::PolyMidi;
 pub use quantizer::Quantizer;
 pub use resonator::Resonator;
 pub use reverb::Reverb;

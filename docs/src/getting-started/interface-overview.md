@@ -236,7 +236,7 @@ The bottom row of letter keys plays like a piano, starting from C4 (middle C), w
 
 The two pianos overlap: `,` `.` `/` play the same notes as `Q` `W` `E`.
 
-The keys play every [Keyboard](../modules/midi/keyboard.md) module in the patch; use its **Oct** knob to shift it up or down. If the patch has a [Poly MIDI](../modules/midi/poly-midi.md) module, the keys play that too, so you can play chords without a MIDI controller, in the browser and inside a DAW as well. They play on MIDI channel 1 at velocity 100. Keys typed into the quick-add box, or held with `Ctrl` or `Alt`, don't play notes. While a [Chord Sequencer](../modules/utilities/chord-sequencer.md#playing-a-chord-into-a-step)'s chord popover is open, the keys write chords into it instead.
+The keys play every [Note In](../modules/midi/note-in.md#key-layout) module in the patch (unless its **Source** is MIDI), with or without a MIDI controller, in the browser and inside a DAW as well; use its **Oct** knob to shift it up or down. A Note In with more than one voice plays chords from them. How hard they play is set by its **Key Vel** knob, MIDI velocity 100 by default. Keys typed into the quick-add box, or held with `Ctrl` or `Alt`, don't play notes. While a [Chord Sequencer](../modules/utilities/chord-sequencer.md#playing-a-chord-into-a-step)'s chord popover is open, the keys write chords into it instead.
 
 ### MIDI
 
@@ -244,7 +244,7 @@ Choose your controller in the toolbar's **MIDI In** menu; Soba doesn't connect t
 
 **In the browser**, **MIDI In** starts as a **🎹 Connect MIDI** button. A web page may use MIDI only once you allow it, so click it and your browser asks; Firefox first offers a small add-on for the site that allows it. Then the menu lists your controllers, and a controller you plug in later appears by itself, with no Refresh needed. Allowing it lets [MIDI Out](../modules/output/midi-out.md) play your devices too. If you said no, allow MIDI in the site settings (the icon to the left of the address) and click **Connect MIDI** again. Chrome, Edge and Firefox have MIDI; Safari doesn't, and the button says so.
 
-Three modules listen to the controller: [MIDI Note](../modules/midi/midi-note.md) for a single voice, [Poly MIDI](../modules/midi/poly-midi.md) for chords, and [MIDI Monitor](../modules/midi/midi-monitor.md) to see what's arriving.
+Two modules listen to the controller: [Note In](../modules/midi/note-in.md), for one voice or chords, and [MIDI Monitor](../modules/midi/midi-monitor.md) to see what's arriving.
 
 ### MIDI Learn
 

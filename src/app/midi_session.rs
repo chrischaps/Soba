@@ -3,7 +3,7 @@
 //! Kept apart from the frame loop, with no egui in it, so what a note or a
 //! CC does can be tested.
 //!
-//! Notes reach MIDI Note modules on the audio thread, sample-accurately;
+//! Notes reach Note In modules on the audio thread, sample-accurately;
 //! nothing here changes what they play. The UI's copy of each event lights
 //! the pianos and the MIDI Monitor, and turns mapped knobs.
 //!
@@ -273,7 +273,7 @@ mod tests {
 
         let sent: Vec<_> = std::iter::from_fn(|| audio.pop().ok()).map(|e| e.event).collect();
         assert!(matches!(sent[..], [
-            MidiEvent::NoteOn { channel: crate::engine::UI_CHANNEL, note: 60, .. },
+            MidiEvent::NoteOn { channel: crate::dsp::KEYS_CHANNEL, note: 60, .. },
             MidiEvent::NoteOn { note: 64, .. },
             MidiEvent::NoteOff { note: 60, .. },
         ]));

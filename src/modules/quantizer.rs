@@ -107,7 +107,7 @@ pub const ID: &str = "util.quantizer";
 /// # Ports
 ///
 /// **Inputs:**
-/// - **In** (Control): V/Oct pitch to quantize. 0 V is C4, as on MIDI Note.
+/// - **In** (Control): V/Oct pitch to quantize. 0 V is C4, as on Note In.
 /// - **Transpose** (Control): Added to the Transpose knob in V/Oct, so a
 ///   sequencer's pitch moves the key by its own interval.
 ///
@@ -427,8 +427,8 @@ mod tests {
         let (out, _) = run(&mut q, &pitch, &params(0, 1, 0.0));
         let held: Vec<i32> = notes(&out).chunks(BLOCK).map(|c| c[BLOCK - 1]).collect();
         assert_eq!(held, [4, 7, -1, 12]);
-        // Out is exact V/Oct, the same as MIDI Note's
-        assert_eq!(out[BLOCK - 1], crate::modules::MidiNote::midi_to_voct(64.0));
+        // Out is exact V/Oct, the same as Note In's
+        assert_eq!(out[BLOCK - 1], crate::modules::NoteIn::midi_to_voct(64.0));
     }
 
     #[test]

@@ -10,7 +10,7 @@ The scenes live on the module, so you can see them in the patch, and they're sav
 
 A Scenes module at the top of the patch holds every knob and switch in the patch. Put one **inside a group**, and it holds only that group's knobs (and those of the groups inside it), so a voice can have scenes of its own without touching the drums.
 
-A scene leaves out the Audio Output, other Scenes modules, the keys a Keyboard or MIDI Note plays, and switches that start, stop or record rather than shape the sound (a Clock's **Run**, a Sampler's **Rec**, an Audio Input's **Channel**).
+A scene leaves out the Audio Output, other Scenes modules, and switches that start, stop or record rather than shape the sound (a Clock's **Run**, a Sampler's **Rec**, an Audio Input's **Channel**).
 
 ## Inputs
 

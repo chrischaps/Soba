@@ -45,7 +45,6 @@ use crate::modules::trigger_sequencer::{chain_from, CHAIN_NAMES};
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
 use super::chord_ear::take_letter_keys;
-use super::chord_grid::MIDI_MODULES;
 use super::step_ear::{StepEar, Strike};
 use super::trigger_display::{pattern_tabs, shown_pattern, PatternBar, Playing};
 use super::{SynthGraph, SynthGraphState, SynthNodeData, SynthResponse};
@@ -203,7 +202,7 @@ pub(super) fn step_sequencer_display(
         ties: std::array::from_fn(|step| values.field(editing, step, StepField::Tie).is_some_and(|v| v > 0.5)),
         slides: std::array::from_fn(|step| values.field(editing, step, StepField::Slide).is_some_and(|v| v > 0.5)),
     };
-    let plays_midi = graph.nodes.iter().any(|(_, node)| MIDI_MODULES.contains(&node.user_data.module_id));
+    let plays_midi = super::note_in_face::plays_midi(graph);
     step_grid(ui, zoom, &pattern, plays_midi, node_id, user_state, responses);
 
     ui.add_space(6.0 * zoom);

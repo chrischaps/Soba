@@ -18,7 +18,7 @@
 //! realtime factor, and the nodes that took longest, in nanoseconds per
 //! sample. `tools/nightly.py` reads its `bench:` line.
 //!
-//! Patches that need live input (Keyboard, MIDI Note, Poly MIDI) render
+//! Patches that need live input (Note In) render
 //! silence unless something in the patch triggers them, such as a Clock or
 //! Sequencer, or `--audition` is given to play a short phrase into them.
 //! Audio Input modules are silent too, unless `--input` gives them a WAV file
@@ -235,7 +235,7 @@ fn render(
         let commands = parse_cues(text, patch, &compiled, args.sample_rate as f32)?;
         renderer.render_with_commands(args.seconds, commands)
     } else if args.audition {
-        renderer.render_audition(patch, &compiled, args.seconds)
+        renderer.render_audition(patch, args.seconds)
     } else {
         renderer.render_seconds(args.seconds)
     };

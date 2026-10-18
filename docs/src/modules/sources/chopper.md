@@ -52,7 +52,7 @@ The file should be the loop itself, start to end: a break cut on its downbeats, 
 
 ## Recording a break
 
-The Chopper can record its own break. Patch something into **In L** (and **In R**, for stereo) and press the red **Rec** button beside **Open…**. It's the [Sampler's recorder](./sampler.md#recording-into-it): the same button, the same take drawn in red as it comes in, and the same file beside the patch when it's done. Play a phrase into the patch, from a [Keyboard](../midi/keyboard.md), an [Audio Input](./audio-input.md) or the patch's own drums, and chop it up straight away.
+The Chopper can record its own break. Patch something into **In L** (and **In R**, for stereo) and press the red **Rec** button beside **Open…**. It's the [Sampler's recorder](./sampler.md#recording-into-it): the same button, the same take drawn in red as it comes in, and the same file beside the patch when it's done. Play a phrase into the patch, from a [Note In](../midi/note-in.md), an [Audio Input](./audio-input.md) or the patch's own drums, and chop it up straight away.
 
 **Take** starts at **1 bar**. With a [Clock](../modulation/clock.md) running, Rec then waits for the next bar line, which the panel says, and records exactly that many bars, so the take is already a loop. As it comes in, the panel ticks its beats, each bar more strongly, and counts bar and beat of the bars, `REC 2.3 / 4`, so you can see how much of the phrase is left to play. When it ends, it's the break: it plays at once, from its top on the bar it ended, and **Beats** is set to its length, 8 for two bars of 4/4, so it loops in time. Undo brings back the break you had, with its **Beats**.
 

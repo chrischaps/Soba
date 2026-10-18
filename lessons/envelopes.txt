@@ -3,7 +3,7 @@ title Envelopes
 about Turn a tone that never stops into notes that start and end
 patch envelopes.json
 
-say A Keyboard plays an Oscillator through a VCA. Press **▶ Play**, then play the `Z` to `M` keys on your computer keyboard.
+say A Note In plays an Oscillator through a VCA. Press **▶ Play**, then play the `Z` to `M` keys on your computer keyboard.
 wait play
 
 say The pitch follows the keys, but the tone never stops: nothing tells the VCA when a note ends. Right-click below the VCA and add **Modulation › ADSR Envelope**.
@@ -11,11 +11,11 @@ point canvas
 show rclick canvas
 wait add mod.adsr
 
-say The Keyboard's **Gate** is on while a key is held. Patch it into the envelope's **Gate**. Green cables carry gates.
-point input.keyboard out:Gate
+say The Note In's **Gate** is on while a key is held. Patch it into the envelope's **Gate**. Green cables carry gates.
+point input.poly_midi out:Gate
 point mod.adsr in:Gate
-show drag input.keyboard out:Gate to mod.adsr in:Gate
-wait connect input.keyboard Gate -> mod.adsr Gate
+show drag input.poly_midi out:Gate to mod.adsr in:Gate
+wait connect input.poly_midi Gate -> mod.adsr Gate
 
 say Now patch the envelope's **Out** into the VCA's **CV**, so the envelope sets how loud the sound is.
 point mod.adsr out:Out
