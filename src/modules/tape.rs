@@ -26,6 +26,7 @@
 //! With every knob at zero each stage passes its input through bit for bit.
 
 use crate::dsp::{
+    db_to_gain,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     context::ProcessContext,
     denormal::flush,
@@ -490,7 +491,7 @@ impl Tape {
 
     /// The drive into the record head for a Saturation setting.
     fn drive_for(saturation: f32) -> f32 {
-        10f32.powf(MAX_DRIVE_DB * saturation.clamp(0.0, 1.0) / 20.0)
+        db_to_gain(MAX_DRIVE_DB * saturation.clamp(0.0, 1.0))
     }
 
     /// The gain after the head that keeps a 0 VU sine at its level (RMS,

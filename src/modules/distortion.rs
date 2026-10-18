@@ -8,6 +8,7 @@
 //! engine's, so it runs oversampled too.
 
 use crate::dsp::{
+    db_to_gain,
     context::ProcessContext,
     dynamics::DcBlocker,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
@@ -286,12 +287,6 @@ impl Distortion {
     const PARAM_SYMMETRY: usize = 5;
     const PARAM_RATE: usize = 6;
 
-    /// Convert dB to linear amplitude.
-    #[inline]
-    fn db_to_linear(db: f32) -> f32 {
-        10.0_f32.powf(db / 20.0)
-    }
-
     /// Gain into the curve for a drive of 0..1.
     #[inline]
     fn input_gain(distortion_type: DistortionType, drive: f32) -> f32 {
@@ -323,7 +318,7 @@ impl Distortion {
                 (x * levels).round() / levels
             }
         };
-        (x + (wet - x) * mix.clamp(0.0, 1.0)) * Self::db_to_linear(output_db)
+        (x + (wet - x) * mix.clamp(0.0, 1.0)) * db_to_gain(output_db)
     }
 
     /// How many bits the Bit type keeps at `drive`.
@@ -418,7 +413,7 @@ impl DspModule for Distortion {
         self.drive_smooth.set_target(params[Self::PARAM_DRIVE]);
         self.tone_coeff_smooth.set_target(self.tone_to_coefficient(params[Self::PARAM_TONE]));
         self.mix_smooth.set_target(params[Self::PARAM_MIX]);
-        self.output_gain_smooth.set_target(Self::db_to_linear(params[Self::PARAM_OUTPUT]));
+        self.output_gain_smooth.set_target(db_to_gain(params[Self::PARAM_OUTPUT]));
         self.symmetry_smooth.set_target(params[Self::PARAM_SYMMETRY].clamp(-1.0, 1.0));
 
         // Discrete, no smoothing needed
@@ -860,13 +855,6 @@ mod tests {
     fn test_distortion_default() {
         let dist = Distortion::default();
         assert_eq!(dist.info().id, "fx.distortion");
-    }
-
-    #[test]
-    fn test_db_to_linear() {
-        assert!((Distortion::db_to_linear(0.0) - 1.0).abs() < 0.001);
-        assert!((Distortion::db_to_linear(6.0) - 2.0).abs() < 0.1);
-        assert!((Distortion::db_to_linear(-6.0) - 0.5).abs() < 0.1);
     }
 
     #[test]

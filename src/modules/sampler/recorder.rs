@@ -39,6 +39,7 @@
 use std::sync::Arc;
 
 use crate::dsp::{
+    db_to_gain,
     context::ProcessContext,
     gate::{Edge, Transition},
     primitives::{decay_for_seconds, rate_for_seconds},
@@ -331,7 +332,7 @@ impl Recorder {
         // A take in bars, with a Clock to count them
         let clocked = bar.filter(|_| bars > 0).map(|bar| (bars as f64 * bar).round().max(1.0) as usize);
         let on_sound = controls.threshold_db > NO_THRESHOLD_DB + 0.05;
-        let threshold = 10f32.powf(controls.threshold_db / 20.0);
+        let threshold = db_to_gain(controls.threshold_db);
         let latency = context.input_latency as u64;
         let late = (LATE_TAP_SECONDS * rate) as u64;
         let pre_roll = ((PRE_ROLL_SECONDS * rate) as usize).max(1);

@@ -483,6 +483,7 @@ impl DspModule for Compressor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsp::gain_to_db;
 
     #[test]
     fn test_compressor_info() {
@@ -849,7 +850,7 @@ mod tests {
     }
 
     fn db(x: f32) -> f32 {
-        20.0 * x.log10()
+        gain_to_db(x)
     }
 
     #[test]

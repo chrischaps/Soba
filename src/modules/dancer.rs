@@ -14,6 +14,7 @@
 //! danced double time.
 
 use crate::dsp::{
+    gain_to_db,
     beat_tracker::BeatTracker,
     context::ProcessContext,
     denormal::flush,
@@ -237,7 +238,7 @@ impl Dancer {
 
     /// The music's level as energy, 0 to 1, eased at both ends.
     fn energy_of(level: f32) -> f32 {
-        let db = 20.0 * level.max(1e-6).log10();
+        let db = gain_to_db(level);
         let t = ((db - Self::QUIET_DB) / (Self::LOUD_DB - Self::QUIET_DB)).clamp(0.0, 1.0);
         t * t * (3.0 - 2.0 * t)
     }

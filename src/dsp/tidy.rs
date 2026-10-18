@@ -23,7 +23,7 @@ use std::collections::VecDeque;
 use std::ops::Range;
 
 use super::primitives::rate_for_seconds;
-use super::SampleData;
+use super::{db_to_gain, gain_to_db, SampleData};
 
 /// Frames a second the level is measured in: 10 ms each.
 const FRAMES_PER_SECOND: f32 = 100.0;
@@ -150,7 +150,7 @@ impl Survey {
             Level::Peak => (self.peak, PEAK_CEILING_DB),
             Level::Rms => (self.rms, TARGET_RMS_DB),
         };
-        (now > 1e-6).then(|| target - to_db(now))
+        (now > 1e-6).then(|| target - gain_to_db(now))
     }
 
     /// The RMS of a recording over the frames this survey found to be its
@@ -231,14 +231,14 @@ pub fn normalize(sample: &SampleData, survey: &Survey, level: Level) -> Option<N
     }
 
     // Up to LIMIT_DB of peaks over the ceiling is limited away; beyond it, the whole is lowered
-    let over = to_db(survey.peak) + gain_db - PEAK_CEILING_DB;
+    let over = gain_to_db(survey.peak) + gain_db - PEAK_CEILING_DB;
     let held_back_db = (over - LIMIT_DB).max(0.0);
     let mut gain_db = gain_db - held_back_db;
     let mut out = limit(&scaled(sample, db_to_gain(gain_db)), ceiling);
     // The limiter takes a little off the RMS: give it back, a few times over
     if held_back_db == 0.0 {
         for _ in 0..4 {
-            let short = TARGET_RMS_DB - to_db(survey.rms_of(&out));
+            let short = TARGET_RMS_DB - gain_to_db(survey.rms_of(&out));
             if short.abs() < 0.01 {
                 break;
             }
@@ -246,7 +246,7 @@ pub fn normalize(sample: &SampleData, survey: &Survey, level: Level) -> Option<N
             out = limit(&scaled(sample, db_to_gain(gain_db)), ceiling);
         }
     }
-    let limited_db = (to_db(survey.peak) + gain_db - PEAK_CEILING_DB).clamp(0.0, LIMIT_DB);
+    let limited_db = (gain_to_db(survey.peak) + gain_db - PEAK_CEILING_DB).clamp(0.0, LIMIT_DB);
     Some(Normalized { sample: out, gain_db, limited_db, held_back_db })
 }
 
@@ -386,14 +386,6 @@ fn percentile(values: &[f32], p: f32) -> f32 {
     sorted[below] + (sorted[above] - sorted[below]) * (place - below as f32)
 }
 
-fn to_db(amplitude: f32) -> f32 {
-    20.0 * amplitude.max(1e-9).log10()
-}
-
-fn db_to_gain(db: f32) -> f32 {
-    10f32.powf(db / 20.0)
-}
-
 /// A second-order Butterworth high-pass, as scipy's `butter(2, …)` makes.
 struct HighPass {
     b: [f64; 3],
@@ -529,7 +521,7 @@ mod tests {
         let survey = Survey::of(&take);
         let out = normalize(&take, &survey, Level::Peak).unwrap();
         let peak = out.sample.left().iter().fold(0.0f32, |m, s| m.max(s.abs()));
-        assert!((to_db(peak) - PEAK_CEILING_DB).abs() < 0.01, "{}", to_db(peak));
+        assert!((gain_to_db(peak) - PEAK_CEILING_DB).abs() < 0.01, "{}", gain_to_db(peak));
         // The tone peaks 3 dB over its RMS
         assert!((out.gain_db - 14.0).abs() < 0.1, "{}", out.gain_db);
     }
@@ -546,12 +538,12 @@ mod tests {
         let take = SampleData::stereo(sound.clone(), sound.iter().map(|s| s * 0.5).collect(), RATE);
         let survey = Survey::of(&take);
         let out = normalize(&take, &survey, Level::Rms).unwrap();
-        let rms = to_db(survey.rms_of(&out.sample));
+        let rms = gain_to_db(survey.rms_of(&out.sample));
         assert!((rms - TARGET_RMS_DB).abs() < 0.1, "{rms}");
         assert_eq!(out.held_back_db, 0.0);
         assert!(out.limited_db > 0.0);
         let peak = out.sample.left().iter().chain(out.sample.right()).fold(0.0f32, |m, s| m.max(s.abs()));
-        assert!(to_db(peak) <= PEAK_CEILING_DB + 0.001, "{}", to_db(peak));
+        assert!(gain_to_db(peak) <= PEAK_CEILING_DB + 0.001, "{}", gain_to_db(peak));
         // Stereo stays stereo, the sides in the same proportion away from the clicks
         assert!(out.sample.is_stereo());
         let i = (1.2 * RATE) as usize;

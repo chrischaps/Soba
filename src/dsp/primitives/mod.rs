@@ -27,7 +27,7 @@ pub use noise::NoiseFloor;
 pub use one_pole::{decay_for_seconds, rate_for_seconds, Follower, OnePole};
 pub use adaa::{Adaa1, BiasedTanh, Curve, HardClip, RoundedFolder, Tanh};
 pub use oversample::{Downsampler2x, Downsampler4x, Upsampler2x, Upsampler4x};
-pub use saturation::{fast_tanh, SoftSaturator};
+pub use saturation::{fast_tanh, knee_clip, SoftSaturator};
 pub use seam::seam_weight;
 pub use sinc::SincKernel;
 pub use slices::{Markers, Slices, MAX_MARKERS, MAX_SLICES, ONSETS};

@@ -7,6 +7,7 @@
 //! envelopes.
 
 use crate::dsp::{
+    db_to_gain, gain_to_db,
     context::ProcessContext,
     module_trait::{DspModule, MeterLevels, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
@@ -118,7 +119,7 @@ impl AudioInput {
     /// Follow's reading of the envelope.
     #[inline]
     fn follow(&self) -> f32 {
-        follow_from_db(20.0 * self.envelope.max(1e-9).log10())
+        follow_from_db(gain_to_db(self.envelope))
     }
 }
 
@@ -167,7 +168,7 @@ impl DspModule for AudioInput {
             return;
         };
         let gain_db = params[Self::PARAM_GAIN].clamp(-24.0, 24.0);
-        self.gain.set_target(10f32.powf(gain_db / 20.0));
+        self.gain.set_target(db_to_gain(gain_db));
         let open_at = follow_from_db(params[Self::PARAM_THRESHOLD]);
         let close_at = open_at - GATE_HYSTERESIS_DB / -FOLLOW_FLOOR_DB;
         let attack = coefficient(params[Self::PARAM_ATTACK], self.sample_rate);
@@ -250,7 +251,7 @@ mod tests {
     fn run(left: &[f32], right: &[f32], params: [f32; 5]) -> Run {
         let mut module = AudioInput::new();
         module.prepare(SR, BLOCK);
-        module.gain.set_immediate(10f32.powf(params[0] / 20.0));
+        module.gain.set_immediate(db_to_gain(params[0]));
         let mut outputs: Vec<SignalBuffer> = (0..4).map(|_| SignalBuffer::audio(BLOCK)).collect();
         let mut out = Run { left: vec![], right: vec![], follow: vec![], gate: vec![] };
         for (l, r) in left.chunks(BLOCK).zip(right.chunks(BLOCK)) {
@@ -266,7 +267,7 @@ mod tests {
 
     /// A 1 kHz tone at `db` dBFS, `seconds` long.
     fn tone(db: f32, seconds: f32) -> Vec<f32> {
-        let amplitude = 10f32.powf(db / 20.0);
+        let amplitude = db_to_gain(db);
         (0..(seconds * SR) as usize)
             .map(|n| amplitude * (2.0 * std::f32::consts::PI * 1000.0 * n as f32 / SR).sin())
             .collect()

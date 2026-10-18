@@ -4,6 +4,7 @@
 //! collecting audio and routing it to the system speakers.
 
 use crate::dsp::{
+    primitives::knee_clip,
     context::ProcessContext,
     dynamics::{DcBlocker, PeakLimiter},
     module_trait::{DspModule, ModuleCategory, ModuleInfo, OutputLevels},
@@ -118,13 +119,7 @@ impl AudioOutput {
     /// knee) rounds peaks off smoothly and never exceeds ±1.
     #[inline]
     fn soft_clip(sample: f32) -> f32 {
-        let magnitude = sample.abs();
-        if magnitude <= Self::CLIP_KNEE {
-            return sample;
-        }
-        let headroom = 1.0 - Self::CLIP_KNEE;
-        let shaped = Self::CLIP_KNEE + headroom * ((magnitude - Self::CLIP_KNEE) / headroom).tanh();
-        shaped.copysign(sample)
+        knee_clip(sample, Self::CLIP_KNEE, 1.0)
     }
 
     /// Replaces NaN and infinity with silence.

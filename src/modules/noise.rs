@@ -8,6 +8,7 @@ use std::f32::consts::PI;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::dsp::{
+    primitives::knee_clip,
     connected_input,
     context::ProcessContext,
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
@@ -96,14 +97,7 @@ impl PinkFilter {
 /// Holds a signal inside ±1 without touching anything below the knee.
 #[inline]
 pub(crate) fn soft_ceiling(x: f32) -> f32 {
-    const KNEE: f32 = 0.8;
-    let magnitude = x.abs();
-    if magnitude <= KNEE {
-        x
-    } else {
-        let over = (magnitude - KNEE) / (1.0 - KNEE);
-        (KNEE + (1.0 - KNEE) * over.tanh()).copysign(x)
-    }
+    knee_clip(x, 0.8, 1.0)
 }
 
 /// The module's ID, as patches name it.

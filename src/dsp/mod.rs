@@ -7,6 +7,7 @@ pub mod analysis;
 pub mod beat_tracker;
 pub mod bypass;
 pub mod context;
+pub mod decibels;
 pub mod denormal;
 pub mod dynamics;
 pub mod finite;
@@ -26,6 +27,7 @@ pub mod onsets;
 pub mod tidy;
 
 // Re-export commonly used types
+pub use decibels::{db_to_gain, gain_to_db};
 pub use context::{HostTransport, InputAudio, ProcessContext, TransportState};
 pub use module_trait::{Audition, DspModule, FinishedTake, MeterLevels, ModuleCategory, ModuleError, ModuleInfo, OutputLevels, Readout, SpectrumPorts, MAX_METERS, MAX_READOUT};
 pub use parameter::{ParameterDefinition, ParameterDisplay};

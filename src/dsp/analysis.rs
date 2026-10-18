@@ -22,9 +22,7 @@ pub fn peak(samples: &[f32]) -> f32 {
 }
 
 /// Converts a linear amplitude to decibels (floored at -200 dB).
-pub fn amp_to_db(amplitude: f32) -> f32 {
-    20.0 * amplitude.max(1e-10).log10()
-}
+pub use super::decibels::gain_to_db as amp_to_db;
 
 /// RMS of consecutive, non-overlapping windows of `window` samples.
 /// A trailing partial window is dropped.

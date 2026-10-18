@@ -22,6 +22,8 @@
 use std::f32::consts::FRAC_PI_4;
 
 use crate::dsp::{
+    db_to_gain,
+    primitives::knee_clip,
     connected_input,
     context::ProcessContext,
     module_trait::{DspModule, MeterLevels, ModuleCategory, ModuleInfo},
@@ -565,7 +567,7 @@ fn master_gain(db: f32) -> f32 {
     if db <= MASTER_FLOOR_DB {
         0.0
     } else {
-        10f32.powf(db / 20.0)
+        db_to_gain(db)
     }
 }
 
@@ -575,20 +577,11 @@ const CLIP_KNEE: f32 = 1.0;
 /// envelopes summed for a wider filter sweep still open it further than one.
 const CLIP_CEILING: f32 = 1.5;
 
-/// Soft clipping to keep hot sums from clipping harshly.
-///
-/// Unity up to the knee, then a tanh curve that meets it with the same value
-/// and slope and eases toward the ceiling, so a signal crossing full scale
-/// bends instead of jumping.
+/// Soft clipping to keep hot sums from clipping harshly: unity up to the
+/// knee, easing toward the ceiling above it.
 #[inline]
 pub(crate) fn soft_clip(x: f32) -> f32 {
-    let over = x.abs() - CLIP_KNEE;
-    if over <= 0.0 {
-        x
-    } else {
-        let room = CLIP_CEILING - CLIP_KNEE;
-        x.signum() * (CLIP_KNEE + room * (over / room).tanh())
-    }
+    knee_clip(x, CLIP_KNEE, CLIP_CEILING)
 }
 
 #[cfg(test)]

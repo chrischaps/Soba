@@ -19,6 +19,23 @@ pub fn fast_tanh(x: f32) -> f32 {
     (num / den).clamp(-1.0, 1.0)
 }
 
+/// A soft clipper that leaves everything inside ±`knee` untouched.
+///
+/// Above the knee a tanh segment takes over, meeting the straight line with
+/// the same value and slope and easing toward ±`ceiling` without reaching it,
+/// so a signal crossing the knee bends instead of jumping. `ceiling` must be
+/// above `knee`.
+#[inline]
+pub fn knee_clip(x: f32, knee: f32, ceiling: f32) -> f32 {
+    let over = x.abs() - knee;
+    if over <= 0.0 {
+        x
+    } else {
+        let room = ceiling - knee;
+        (knee + room * (over / room).tanh()).copysign(x)
+    }
+}
+
 /// A gain-compensated `tanh` saturator: `level * tanh(x / level)`.
 ///
 /// Its slope at zero is exactly 1, so small signals pass unchanged and only
@@ -63,6 +80,24 @@ impl SoftSaturator {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_knee_clip_is_transparent_below_the_knee_and_bounded_above() {
+        for x in [-0.8, -0.3, 0.0, 0.5, 0.8] {
+            assert_eq!(knee_clip(x, 0.8, 1.0), x);
+        }
+        let mut prev = 0.8;
+        for i in 1..2000 {
+            let x = 0.8 + i as f32 * 0.01;
+            let y = knee_clip(x, 0.8, 1.0);
+            assert!(y >= prev && y <= 1.0, "{x} -> {y}");
+            assert_eq!(knee_clip(-x, 0.8, 1.0), -y);
+            prev = y;
+        }
+        // Same slope either side of the knee: no corner where it starts
+        let slope = (knee_clip(1.0 + 1e-3, 1.0, 1.5) - knee_clip(1.0, 1.0, 1.5)) / 1e-3;
+        assert!((slope - 1.0).abs() < 1e-2, "slope {slope}");
+    }
 
     #[test]
     fn test_fast_tanh_tracks_tanh() {

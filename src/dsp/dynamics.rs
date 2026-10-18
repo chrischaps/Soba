@@ -6,6 +6,7 @@
 
 use super::primitives::rate_for_seconds;
 use super::denormal::flush;
+pub use super::decibels::db_to_gain;
 
 /// One-pole DC-blocking highpass at about 5 Hz.
 ///
@@ -310,12 +311,6 @@ impl PeakLimiter {
         self.sustain = 0.0;
         self.min_gain = 1.0;
     }
-}
-
-/// Converts decibels to a linear gain.
-#[inline]
-pub fn db_to_gain(db: f32) -> f32 {
-    10.0_f32.powf(db / 20.0)
 }
 
 /// One-pole smoothing coefficient for a time constant in milliseconds.

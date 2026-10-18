@@ -6,6 +6,7 @@
 use std::f32::consts::PI;
 
 use crate::dsp::{
+    db_to_gain,
     module_trait::{DspModule, ModuleCategory, ModuleInfo},
     context::ProcessContext,
     denormal::flush,
@@ -264,12 +265,6 @@ impl ParametricEq {
     const PARAM_HIGH_FREQ: usize = 5;
     const PARAM_HIGH_GAIN: usize = 6;
     const PARAM_OUTPUT_GAIN: usize = 7;
-
-    /// Convert dB to linear amplitude.
-    #[inline]
-    fn db_to_linear(db: f32) -> f32 {
-        10.0_f32.powf(db / 20.0)
-    }
 
     /// Calculate low shelf biquad coefficients (RBJ Cookbook).
     fn low_shelf(sample_rate: f32, freq: f32, gain_db: f32) -> BiquadCoeffs {
@@ -535,7 +530,7 @@ impl DspModule for ParametricEq {
                 let output_gain_db = self.output_gain_smooth.next();
                 if output_gain_db != self.output_gain_db {
                     self.output_gain_db = output_gain_db;
-                    self.output_gain = Self::db_to_linear(output_gain_db);
+                    self.output_gain = db_to_gain(output_gain_db);
                 }
 
                 // Get input sample
@@ -999,21 +994,6 @@ mod tests {
         // knob; the stepped glide still stays some 45 dB under the signal
         let error_db = 10.0 * (error_energy / signal_energy).log10();
         assert!(error_db < -40.0, "control-rate EQ strays {:.1} dB from per-sample", error_db);
-    }
-
-    #[test]
-    fn test_db_to_linear() {
-        // 0 dB = 1.0
-        let lin_0 = ParametricEq::db_to_linear(0.0);
-        assert!((lin_0 - 1.0).abs() < 0.001);
-
-        // 6 dB ≈ 2.0
-        let lin_6 = ParametricEq::db_to_linear(6.0);
-        assert!((lin_6 - 2.0).abs() < 0.1);
-
-        // -6 dB ≈ 0.5
-        let lin_neg6 = ParametricEq::db_to_linear(-6.0);
-        assert!((lin_neg6 - 0.5).abs() < 0.1);
     }
 
     #[test]
