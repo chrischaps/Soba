@@ -107,43 +107,41 @@ pub fn decode(mut source: impl MediaSource + 'static, name: &str) -> Result<Deco
 /// channel keeps the first two. Anything past [`MAX_SAMPLE_SECONDS`] is
 /// left unread, and a damaged frame is skipped rather than failing the file.
 fn decode_compressed(source: Box<dyn MediaSource>, name: &str) -> Result<Decoded, String> {
-    use symphonia::core::audio::SampleBuffer;
-    use symphonia::core::codecs::DecoderOptions;
+    use symphonia::core::codecs::audio::AudioDecoderOptions;
     use symphonia::core::errors::Error;
-    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::formats::probe::Hint;
+    use symphonia::core::formats::{FormatOptions, TrackType};
     use symphonia::core::io::MediaSourceStream;
     use symphonia::core::meta::MetadataOptions;
-    use symphonia::core::probe::Hint;
 
     let mut hint = Hint::new();
     if let Some(extension) = Path::new(name).extension() {
         hint.with_extension(&extension.to_string_lossy());
     }
     let stream = MediaSourceStream::new(source, Default::default());
-    // Gapless: an MP3's encoder delay and padding are cut, so a loop loops
-    let options = FormatOptions { enable_gapless: true, ..Default::default() };
     let mut format = symphonia::default::get_probe()
-        .format(&hint, stream, &options, &MetadataOptions::default())
-        .map_err(|_| "not a WAV, MP3, FLAC or Ogg file".to_string())?
-        .format;
-    let track = format.default_track().ok_or("no audio in the file")?;
+        .probe(&hint, stream, FormatOptions::default(), MetadataOptions::default())
+        .map_err(|_| "not a WAV, MP3, FLAC or Ogg file".to_string())?;
+    let track = format.default_track(TrackType::Audio).ok_or("no audio in the file")?;
     let track_id = track.id;
     // Where it says how long it is: an Ogg's last packet decodes past its end
-    let length = track.codec_params.n_frames.map(|n| n as usize);
-    let mut decoder = codecs()
-        .make(&track.codec_params, &DecoderOptions::default())
-        .map_err(|_| "its audio isn't MP3, FLAC, Vorbis or Opus".to_string())?;
+    let length = track.num_frames.map(|n| n as usize);
+    let not_ours = || "its audio isn't MP3, FLAC, Vorbis or Opus".to_string();
+    let params = track.codec_params.as_ref().and_then(|params| params.audio()).ok_or_else(not_ours)?;
+    // Gapless (the default): an MP3's encoder delay and padding are cut, so a loop loops
+    let mut decoder = codecs().make_audio_decoder(params, &AudioDecoderOptions::default()).map_err(|_| not_ours())?;
 
     let (mut left, mut right) = (Vec::new(), Vec::new());
     let (mut rate, mut stereo, mut truncated) = (0, false, false);
-    let mut buffer: Option<SampleBuffer<f32>> = None;
+    let mut interleaved = Vec::new();
     loop {
         let packet = match format.next_packet() {
-            Ok(packet) => packet,
+            Ok(Some(packet)) => packet,
+            Ok(None) => break,
             Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(e) => return Err(e.to_string()),
         };
-        if packet.track_id() != track_id {
+        if packet.track_id != track_id {
             continue;
         }
         let audio = match decoder.decode(&packet) {
@@ -151,16 +149,11 @@ fn decode_compressed(source: Box<dyn MediaSource>, name: &str) -> Result<Decoded
             Err(Error::DecodeError(_)) => continue,
             Err(e) => return Err(e.to_string()),
         };
-        let spec = *audio.spec();
-        let channels = spec.channels.count().max(1);
-        rate = spec.rate;
+        let channels = audio.spec().channels().count().max(1);
+        rate = audio.spec().rate();
         stereo = channels > 1;
-        let buffer = match &mut buffer {
-            Some(buffer) if buffer.capacity() >= audio.capacity() * channels => buffer,
-            _ => buffer.insert(SampleBuffer::new(audio.capacity() as u64, spec)),
-        };
-        buffer.copy_interleaved_ref(audio);
-        for frame in buffer.samples().chunks_exact(channels) {
+        audio.copy_to_vec_interleaved(&mut interleaved);
+        for frame in interleaved.chunks_exact(channels) {
             left.push(frame[0]);
             if stereo {
                 right.push(frame[1]);
@@ -186,12 +179,12 @@ fn decode_compressed(source: Box<dyn MediaSource>, name: &str) -> Result<Decoded
 }
 
 /// symphonia's decoders, and ours for Opus.
-fn codecs() -> &'static symphonia::core::codecs::CodecRegistry {
-    static CODECS: std::sync::OnceLock<symphonia::core::codecs::CodecRegistry> = std::sync::OnceLock::new();
+fn codecs() -> &'static symphonia::core::codecs::registry::CodecRegistry {
+    static CODECS: std::sync::OnceLock<symphonia::core::codecs::registry::CodecRegistry> = std::sync::OnceLock::new();
     CODECS.get_or_init(|| {
-        let mut codecs = symphonia::core::codecs::CodecRegistry::new();
+        let mut codecs = symphonia::core::codecs::registry::CodecRegistry::new();
         symphonia::default::register_enabled_codecs(&mut codecs);
-        codecs.register_all::<super::opus::OpusDecoder>();
+        codecs.register_audio_decoder::<super::opus::OpusDecoder>();
         codecs
     })
 }
