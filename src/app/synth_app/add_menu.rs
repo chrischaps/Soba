@@ -86,7 +86,7 @@ impl SynthApp {
         let mut picks = Picks::default();
         let categories = AllNodeTemplates::by_category();
         let finger = self.add_menu.finger;
-        let screen = ctx.screen_rect();
+        let screen = ctx.content_rect();
         let was_open = self.user_state.context_menu_open_category;
 
         // Where each category's row starts, for its submenu to line up with
@@ -342,7 +342,7 @@ impl SynthApp {
         let mut held: Option<String> = None;
         if finger {
             // Room left over for the menu's margins, a Back row and the footer
-            let max_height = (ui.ctx().screen_rect().height() - 160.0).max(FINGER_ROW * 3.0);
+            let max_height = (ui.ctx().content_rect().height() - 160.0).max(FINGER_ROW * 3.0);
             egui::ScrollArea::vertical()
                 .id_salt(("add_menu_rows", index))
                 .max_height(max_height)

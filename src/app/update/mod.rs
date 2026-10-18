@@ -535,7 +535,7 @@ impl Updater {
         let can_install = matches!(self.state, State::Available | State::Failed(_));
         let mut open = true;
         let mut clicked = None;
-        let screen = ctx.screen_rect();
+        let screen = ctx.content_rect();
         egui::Window::new("What's new")
             .id(egui::Id::new("update_whats_new"))
             .open(&mut open)

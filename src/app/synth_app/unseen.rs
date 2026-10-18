@@ -47,7 +47,7 @@ pub(super) fn measure(
     // Past the bottom right of the screen, and clipped away, so nothing
     // there can be pointed at
     let ctx = ui.ctx().clone();
-    let away = ctx.screen_rect().max + vec2(1000.0, 1000.0);
+    let away = ctx.content_rect().max + vec2(1000.0, 1000.0);
     let mut offscreen =
         ui.new_child(UiBuilder::new().id_salt("unseen modules").max_rect(Rect::from_min_size(away, Vec2::splat(1.0))).invisible());
     let life_size = PanZoom { zoom: 1.0, ..PanZoom::default() };

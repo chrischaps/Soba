@@ -323,7 +323,7 @@ impl Piece<'_> {
         }
     }
 
-    fn galley(&self, fonts: &egui::text::Fonts) -> std::sync::Arc<egui::Galley> {
+    fn galley(&self, fonts: &mut egui::epaint::text::FontsView<'_>) -> std::sync::Arc<egui::Galley> {
         let size = match self {
             Piece::Cap(_) => 12.0,
             Piece::Joiner(_) => 11.0,
@@ -371,7 +371,7 @@ fn pieces(shortcut: &str, mac: bool) -> Vec<Piece<'_>> {
 /// How far in a column's actions start: past its widest shortcut.
 fn keys_width(ctx: &egui::Context, groups: &[Group]) -> f32 {
     let mac = is_mac(ctx);
-    let widest = ctx.fonts(|fonts| {
+    let widest = ctx.fonts_mut(|fonts| {
         groups
             .iter()
             .flat_map(|group| group.rows.iter())
@@ -389,7 +389,7 @@ fn draw_keys(ui: &egui::Ui, rect: Rect, shortcut: &str) {
     let painter = ui.painter();
     let mut x = rect.left();
     for piece in pieces(shortcut, is_mac(ui.ctx())) {
-        let galley = ui.fonts(|fonts| piece.galley(fonts));
+        let galley = ui.fonts_mut(|fonts| piece.galley(fonts));
         let text = galley.size();
         let cell = Rect::from_min_size(pos2(x, rect.top()), vec2(piece.width(text.x), KEYCAP_HEIGHT));
         if let Piece::Cap(_) = piece {
@@ -531,7 +531,7 @@ mod tests {
         let ctx = egui::Context::default();
         theme::install_fonts(&ctx);
         let _ = ctx.run(Default::default(), |_| {});
-        assert!(ctx.fonts(|fonts| fonts.has_glyphs(&FontId::proportional(12.0), "⌘⇧")));
+        assert!(ctx.fonts_mut(|fonts| fonts.has_glyphs(&FontId::proportional(12.0), "⌘⇧")));
     }
 
     /// One frame with Space pressed under `modifiers` (and the space it

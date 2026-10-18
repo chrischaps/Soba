@@ -1196,7 +1196,7 @@ impl SynthApp {
                 return false;
             }
             let font = egui::TextStyle::Body.resolve(ui.style());
-            let label_width = ui.fonts(|f| f.layout_no_wrap(label.to_string(), font, egui::Color32::WHITE).size().x);
+            let label_width = ui.fonts_mut(|f| f.layout_no_wrap(label.to_string(), font, egui::Color32::WHITE).size().x);
             let need = 2.0 * gap + label_width + 8.0 + width + 2.0 * ui.spacing().button_padding.x + ui.spacing().icon_width + 4.0 * ui.spacing().item_spacing.x;
             if ui.available_size_before_wrap().x < need {
                 ui.end_row();
@@ -3595,7 +3595,7 @@ fn wordmark(ui: &mut egui::Ui) -> egui::Response {
         extra_letter_spacing: 0.6,
         ..Default::default()
     });
-    let word = ui.fonts(|fonts| fonts.layout_job(job));
+    let word = ui.fonts_mut(|fonts| fonts.layout_job(job));
     let cable = egui::vec2(20.0, word.size().y);
     let gap = 7.0;
     let (rect, response) = ui.allocate_exact_size(egui::vec2(cable.x + gap + word.size().x, cable.y), egui::Sense::hover());

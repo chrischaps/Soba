@@ -17,7 +17,7 @@ const MEASURED_AT: f32 = 100.0;
 /// How tall a row of `font` is, scaled smoothly from its size.
 pub fn row_height(ui: &Ui, font: &FontId) -> f32 {
     let big = FontId::new(MEASURED_AT, font.family.clone());
-    ui.fonts(|f| f.row_height(&big)) * font.size / MEASURED_AT
+    ui.fonts_mut(|f| f.row_height(&big)) * font.size / MEASURED_AT
 }
 
 /// The size text is measured across at. Every glyph measured is drawn
@@ -28,7 +28,7 @@ const WIDTH_MEASURED_AT: f32 = 24.0;
 /// How wide `text` is in `font`, scaled smoothly from its size.
 pub fn text_width(ui: &Ui, text: &str, font: &FontId) -> f32 {
     let measured = FontId::new(WIDTH_MEASURED_AT, font.family.clone());
-    ui.fonts(|f| f.layout_no_wrap(text.to_string(), measured, Color32::WHITE).size().x) * font.size / WIDTH_MEASURED_AT
+    ui.fonts_mut(|f| f.layout_no_wrap(text.to_string(), measured, Color32::WHITE).size().x) * font.size / WIDTH_MEASURED_AT
 }
 
 /// Adds `widget` filling a slot `size` big. Its padding goes, so as long
@@ -119,7 +119,7 @@ pub fn dropdown_height(ui: &Ui) -> f32 {
 pub fn fit(ctx: &Context, text: &str, font: &FontId, width: f32) -> String {
     let measured = FontId::new(WIDTH_MEASURED_AT, font.family.clone());
     let room = width * WIDTH_MEASURED_AT / font.size;
-    let wide = |s: String| ctx.fonts(|f| f.layout_no_wrap(s, measured.clone(), Color32::WHITE).size().x);
+    let wide = |s: String| ctx.fonts_mut(|f| f.layout_no_wrap(s, measured.clone(), Color32::WHITE).size().x);
     if wide(text.to_string()) <= room {
         return text.to_string();
     }

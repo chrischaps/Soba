@@ -399,7 +399,7 @@ fn result_row(ui: &mut egui::Ui, found: &Found, highlighted: bool, show_category
         };
         job.append(&ch.to_string(), 0.0, format);
     }
-    let galley = ui.fonts(|f| f.layout_job(job));
+    let galley = ui.fonts_mut(|f| f.layout_job(job));
     painter.galley(Pos2::new(rect.left() + 26.0, rect.center().y - galley.size().y / 2.0), galley, text_color);
 
     if show_category {

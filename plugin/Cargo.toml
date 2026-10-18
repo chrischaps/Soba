@@ -24,13 +24,13 @@ soba = { path = ".." }
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "de421011f41a6d10fc8c7a6084e4f4dee0143683", default-features = false }
 # The egui glue, from our fork of BillyDM's (its `soba` branch, checked out
 # beside this repo at ../egui-baseview), since upstream stops at egui 0.33.
-# It's at upstream's egui_32 head (egui 0.32), with the baseview that branch
+# It's at upstream's egui_33 head (egui 0.33), with the baseview that branch
 # pins. Its log macros come from `tracing` (or nih-plug's `nih_log`): without
 # one of the two it doesn't build
-egui-baseview = { git = "https://github.com/chrischaps/egui-baseview.git", rev = "ea1cd1c8cd2fd91084d718ace9607b2f308dd9cb", default-features = false, features = ["opengl", "default_fonts", "tracing"] }
+egui-baseview = { git = "https://github.com/chrischaps/egui-baseview.git", rev = "5cf93206def5984b67847caefd30d01612b629b8", default-features = false, features = ["opengl", "default_fonts", "tracing"] }
 baseview = { git = "https://github.com/RustAudio/baseview.git", rev = "237d323c729f3aa99476ba3efa50129c5e86cad3" }
 raw-window-handle = "0.5"
-egui = "0.32"
+egui = "0.33"
 parking_lot = "0.12"
 rtrb = "0.3"
 serde_json = "1.0"

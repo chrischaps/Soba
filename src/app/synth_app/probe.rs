@@ -193,7 +193,7 @@ impl CableProbe {
             .with_trigger_indicator(false);
 
         // Kept on screen, flipping to the pointer's other side near an edge
-        let screen = ctx.screen_rect();
+        let screen = ctx.content_rect();
         let size = SCOPE_SIZE + Vec2::new(16.0, 36.0);
         let mut at = pointer + FROM_POINTER;
         if at.x + size.x > screen.right() {

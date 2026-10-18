@@ -151,10 +151,10 @@ pub fn midi_log_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     // pitch: rows can't crowd into each other, and the node keeps its
     // size as events arrive
     let font = egui::FontId::monospace(egui::TextStyle::Small.resolve(ui.style()).size);
-    let row_height = ui.fonts(|f| f.row_height(&font)) + 2.0 * zoom;
+    let row_height = ui.fonts_mut(|f| f.row_height(&font)) + 2.0 * zoom;
     let gap = 6.0 * zoom;
-    let (stamp_width, width) = ui.fonts(|f| {
-        let measure = |text: &str| f.layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE).size().x;
+    let (stamp_width, width) = ui.fonts_mut(|f| {
+        let mut measure = |text: &str| f.layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE).size().x;
         let stamp = measure("000.0s");
         (stamp, (stamp + gap + measure(MIDI_LOG_WIDEST)).max(180.0 * zoom))
     });
