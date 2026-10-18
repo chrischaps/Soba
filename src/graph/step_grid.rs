@@ -45,22 +45,15 @@ use crate::modules::trigger_sequencer::{chain_from, CHAIN_NAMES};
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
 use super::chord_ear::take_letter_keys;
+use super::sequencer_common::{pattern_menu, popover_base, step_along, MenuHints, GATE_OFF, GATE_ON, OCTAVE_WIDTH, TAB_INSET, TOP_BASE};
 use super::step_ear::{StepEar, Strike};
 use super::trigger_display::{pattern_tabs, shown_pattern, PatternBar, Playing};
 use super::{SynthGraph, SynthGraphState, SynthNodeData, SynthResponse};
 
-// A lit step fires a gate, so it wears the gate cable's colour
-const GATE_ON: Color32 = theme::signal::GATE;
-const GATE_OFF: Color32 = Color32::from_rgb(60, 60, 70);
 /// Points of upward drag per semitone, before zoom: an octave is 72.
 const DRAG_PER_SEMITONE: f32 = 6.0;
 /// Points of drag per octave with Shift held, before zoom.
 const DRAG_PER_OCTAVE: f32 = 18.0;
-/// The highest C the piano's lower octave can start on, so its two octaves
-/// stay inside MIDI's 0–127.
-const TOP_BASE: u8 = 96;
-/// One octave of the piano, in points.
-const OCTAVE_WIDTH: f32 = 140.0;
 const KEY_HEIGHT: f32 = 48.0;
 /// The gap between steps, before zoom.
 const STEP_SPACING: f32 = 3.0;
@@ -68,8 +61,6 @@ const HINT: &str = "Click: gate · Shift+click: tie · Ctrl+click: slide\nDrag u
 
 /// The grid's width, before zoom.
 const GRID_WIDTH: f32 = 220.0;
-/// Room left of the pattern tabs for their captions, before zoom.
-const TAB_INSET: f32 = 34.0;
 /// The Step output, which the playhead follows.
 const OUT_STEP: usize = 3;
 
@@ -214,43 +205,26 @@ pub(super) fn step_sequencer_display(
         playing: position.filter(|p| p.started).map(|p| Playing { pattern: p.pattern, chain_slot: p.chain_slot, next: p.next_pattern }),
         pattern_cv,
     };
-    let edits = pattern_tabs(ui, node_id, zoom, &bar, |ui, pattern, edits| pattern_menu(ui, node_id, &values, pattern, edits));
+    let edits = pattern_tabs(ui, node_id, zoom, &bar, |ui, pattern, edits| pattern_tab_menu(ui, node_id, &values, pattern, edits));
     responses.extend(edits.into_iter().map(NodeResponse::User));
 }
 
 /// A pattern tab's right-click menu: copy the pattern to another, or clear
 /// it to rests, ready to write a new line over with the piano.
-fn pattern_menu(ui: &mut egui::Ui, node_id: NodeId, values: &Values, pattern: usize, edits: &mut Vec<SynthResponse>) {
-    const FIELDS: [StepField; 5] = StepField::ALL;
-    let from = PATTERN_NAMES[pattern];
-    let edit = |label: String, changes: Vec<(String, f32)>| SynthResponse::EditParameters { node_id, label, changes };
-    ui.label(RichText::new(format!("Pattern {from}")).strong());
-    ui.separator();
-    for to in (0..PATTERNS).filter(|&p| p != pattern) {
-        let copy = ui.button(format!("Copy to {}", PATTERN_NAMES[to])).on_hover_text("Every step's note, gate, velocity, tie and slide, to start a variation from");
-        if copy.clicked() {
-            let mut changes = Vec::with_capacity(MAX_STEPS * FIELDS.len());
-            for step in 0..MAX_STEPS {
-                for field in FIELDS {
-                    if let Some(value) = values.field(pattern, step, field) {
-                        changes.push((Seq::step_param_name(to, step, field).to_string(), value));
-                    }
-                }
-            }
-            edits.push(edit(format!("Copy pattern {from} to {}", PATTERN_NAMES[to]), changes));
-            ui.close_menu();
-        }
-    }
-    ui.separator();
-    if ui.button(format!("Clear {from}")).on_hover_text("Every step a rest, keeping its note").clicked() {
-        let changes = (0..MAX_STEPS)
-            .flat_map(|step| {
-                [StepField::Gate, StepField::Tie, StepField::Slide].map(|field| (Seq::step_param_name(pattern, step, field).to_string(), 0.0))
-            })
-            .collect();
-        edits.push(edit(format!("Clear pattern {from}"), changes));
-        ui.close_menu();
-    }
+fn pattern_tab_menu(ui: &mut egui::Ui, node_id: NodeId, values: &Values, pattern: usize, edits: &mut Vec<SynthResponse>) {
+    let hints = MenuHints { copy: "Every step's note, gate, velocity, tie and slide, to start a variation from", clear: "Every step a rest, keeping its note" };
+    let copy_to = |to| {
+        (0..MAX_STEPS)
+            .flat_map(|step| StepField::ALL.map(|field| (step, field)))
+            .filter_map(|(step, field)| values.field(pattern, step, field).map(|value| (Seq::step_param_name(to, step, field).to_string(), value)))
+            .collect()
+    };
+    let clear = || {
+        (0..MAX_STEPS)
+            .flat_map(|step| [StepField::Gate, StepField::Tie, StepField::Slide].map(|field| (Seq::step_param_name(pattern, step, field).to_string(), 0.0)))
+            .collect()
+    };
+    pattern_menu(ui, node_id, pattern, &hints, copy_to, clear, edits);
 }
 
 
@@ -343,20 +317,9 @@ pub(super) fn dragged_pitch(from: u8, dy: f32, zoom: f32, octaves: bool) -> u8 {
     (from as i32 + semitones).clamp(0, 127) as u8
 }
 
-/// Where the piano opens for a step's note: the note in its upper octave,
-/// so there's an octave below it and most of one above.
-fn popover_base(pitch: u8) -> u8 {
-    shift_base(pitch / 12 * 12, -12)
-}
-
 /// The piano moved by `semitones` (a multiple of 12), kept on the keyboard.
 fn shift_base(base: u8, semitones: i32) -> u8 {
     (base as i32 + semitones).clamp(0, TOP_BASE as i32) as u8
-}
-
-/// The step `by` steps along from `step`, round the loop.
-fn step_along(step: usize, by: isize, steps: usize) -> usize {
-    (step as isize + by).rem_euclid(steps.max(1) as isize) as usize
 }
 
 /// What a note played in writes to the step the piano's on, as one undo
@@ -478,9 +441,9 @@ pub(super) fn step_grid(
             } else {
                 base_color
             };
-            painter.rect_filled(*step_rect, 3.0, color);
+            painter.rect_filled(*step_rect, 3.0 * zoom, color);
             if is_current {
-                painter.rect_stroke(*step_rect, 3.0, egui::Stroke::new(2.0_f32, Color32::WHITE));
+                painter.rect_stroke(*step_rect, 3.0 * zoom, egui::Stroke::new(2.0 * zoom, Color32::WHITE));
             }
 
             // Note name below
@@ -504,7 +467,7 @@ pub(super) fn step_grid(
                 }
             }
             if response.secondary_clicked() {
-                entry = Some(StepEntry { step, base: popover_base(pitch), anchor: step, written: None });
+                entry = Some(StepEntry { step, base: popover_base(pitch as i32), anchor: step, written: None });
                 ui.memory_mut(|m| m.open_popup(entry_id));
             }
 
@@ -776,27 +739,10 @@ mod tests {
     }
 
     #[test]
-    fn the_piano_opens_with_the_note_in_its_upper_octave() {
-        assert_eq!(popover_base(60), 48); // C4 shows C3–B4
-        assert_eq!(popover_base(71), 48);
-        assert_eq!(popover_base(5), 0);
-        assert_eq!(popover_base(127), TOP_BASE);
-    }
-
-    #[test]
     fn the_piano_stays_on_the_keyboard() {
         assert_eq!(shift_base(48, 12), 60);
         assert_eq!(shift_base(0, -12), 0);
         assert_eq!(shift_base(TOP_BASE, 12), TOP_BASE);
-        assert!(TOP_BASE as u32 + 23 <= 127);
-    }
-
-    #[test]
-    fn stepping_wraps_round_the_pattern() {
-        assert_eq!(step_along(3, 1, 8), 4);
-        assert_eq!(step_along(7, 1, 8), 0);
-        assert_eq!(step_along(0, -1, 5), 4);
-        assert_eq!(step_along(2, 0, 5), 2);
     }
 
     const A: usize = 0;

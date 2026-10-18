@@ -61,27 +61,20 @@ use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
 use super::chord_chime::{ring_for, Chimes, Chip};
 use super::chord_ear::{take_letter_keys, ChordEar, Hand};
+use super::sequencer_common::{pattern_menu, popover_base, step_along, MenuHints, GATE_OFF, GATE_ON, OCTAVE_WIDTH, TAB_INSET, TOP_BASE};
 use super::step_grid::{drag_badge, dragged_pitch};
 use super::trigger_display::{pattern_tabs, shown_pattern, PatternBar, Playing};
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
-// A lit step fires a gate, so it wears the gate cable's colour
-const GATE_ON: Color32 = theme::signal::GATE;
-const GATE_OFF: Color32 = Color32::from_rgb(60, 60, 70);
 const ON_TEXT: Color32 = Color32::from_rgb(18, 40, 20);
 const OFF_TEXT: Color32 = Color32::from_rgb(150, 150, 165);
 /// How many octaves the keyboard strip spans: two under the Range octave,
 /// where a bass sits, the Range octave and the one over it.
 const STRIP_OCTAVES: i32 = 4;
-/// The highest C the popover piano's lower octave can start on.
-const TOP_BASE: u8 = 96;
-const OCTAVE_WIDTH: f32 = 140.0;
 const KEY_HEIGHT: f32 = 44.0;
 /// The order the popover lists the chord types in: as the Type dropdown,
 /// but with each one beside its kin, where a later type joined the list.
 const TYPE_ORDER: [usize; 19] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 13, 14, 15, 16, 17];
-/// Room left of the pattern tabs for their captions, before zoom.
-const TAB_INSET: f32 = 34.0;
 const HINT: &str = "Click: chord on/off · Shift+click: tie\nDrag up or down: root (Shift: by octave)\nRight-click: edit the chord";
 
 /// A Chord Sequencer's pattern and settings, as its face shows them.
@@ -439,14 +432,6 @@ struct RootDrag {
     from: u8,
 }
 
-fn step_along(step: usize, by: isize, steps: usize) -> usize {
-    (step as isize + by).rem_euclid(steps.max(1) as isize) as usize
-}
-
-fn popover_base(root: i32) -> u8 {
-    ((root / 12 * 12 - 12).clamp(0, TOP_BASE as i32)) as u8
-}
-
 /// Draws the face and returns the parameter edits made on it.
 pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphState, zoom: f32) -> Vec<SynthResponse> {
     let z = zoom;
@@ -540,7 +525,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
             };
             painter.rect_filled(*rect, 4.0 * z, fill);
             if playing {
-                painter.rect_stroke(*rect, 4.0 * z, Stroke::new(2.0_f32, Color32::WHITE));
+                painter.rect_stroke(*rect, 4.0 * z, Stroke::new(2.0 * z, Color32::WHITE));
             }
             // Velocity, along the foot
             if on {
@@ -696,37 +681,25 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
         playing: position.filter(|p| p.started).map(|p| Playing { pattern: p.pattern, chain_slot: p.chain_slot, next: p.next_pattern }),
         pattern_cv,
     };
-    edits.extend(pattern_tabs(ui, node_id, z, &bar, |ui, from, edits| pattern_menu(ui, node_id, &params, from, edits)));
+    edits.extend(pattern_tabs(ui, node_id, z, &bar, |ui, from, edits| pattern_tab_menu(ui, node_id, &params, from, edits)));
     edits
 }
 
 /// A pattern tab's right-click menu: copy the pattern to another, to start
 /// a chorus from the verse, or clear it to rests.
-fn pattern_menu(ui: &mut egui::Ui, node_id: NodeId, params: &[f32], pattern: usize, edits: &mut Vec<SynthResponse>) {
-    let from = PATTERN_NAMES[pattern];
-    let edit = |label: String, changes: Vec<(String, f32)>| SynthResponse::EditParameters { node_id, label, changes };
-    ui.label(RichText::new(format!("Pattern {from}")).strong());
-    ui.separator();
-    for to in (0..PATTERNS).filter(|&p| p != pattern) {
-        let copy = ui.button(format!("Copy to {}", PATTERN_NAMES[to])).on_hover_text("Every step's chord, bass, top, velocity, tie and stroke, to start a variation from");
-        if copy.clicked() {
-            let changes = (0..MAX_STEPS)
-                .flat_map(|step| {
-                    ChordField::ALL.map(|field| (ChordSequencer::step_param_name(to, step, field).to_string(), params[ChordSequencer::step_param(pattern, step, field)]))
-                })
-                .collect();
-            edits.push(edit(format!("Copy pattern {from} to {}", PATTERN_NAMES[to]), changes));
-            ui.close_menu();
-        }
-    }
-    ui.separator();
-    if ui.button(format!("Clear {from}")).on_hover_text("Every step a rest, keeping its chord").clicked() {
-        let changes = (0..MAX_STEPS)
+fn pattern_tab_menu(ui: &mut egui::Ui, node_id: NodeId, params: &[f32], pattern: usize, edits: &mut Vec<SynthResponse>) {
+    let hints = MenuHints { copy: "Every step's chord, bass, top, velocity, tie and stroke, to start a variation from", clear: "Every step a rest, keeping its chord" };
+    let copy_to = |to| {
+        (0..MAX_STEPS)
+            .flat_map(|step| ChordField::ALL.map(|field| (ChordSequencer::step_param_name(to, step, field).to_string(), params[ChordSequencer::step_param(pattern, step, field)])))
+            .collect()
+    };
+    let clear = || {
+        (0..MAX_STEPS)
             .flat_map(|step| [ChordField::Gate, ChordField::Tie].map(|field| (ChordSequencer::step_param_name(pattern, step, field).to_string(), 0.0)))
-            .collect();
-        edits.push(edit(format!("Clear pattern {from}"), changes));
-        ui.close_menu();
-    }
+            .collect()
+    };
+    pattern_menu(ui, node_id, pattern, &hints, copy_to, clear, edits);
 }
 
 /// A step's chord name inside its cell: the chord on top, a slash bass
@@ -1340,7 +1313,5 @@ mod tests {
     #[test]
     fn the_popover_piano_opens_with_the_root_in_its_upper_octave() {
         assert_eq!(popover_base(36), 24);
-        assert_eq!(popover_base(5), 0);
-        assert_eq!(popover_base(127), TOP_BASE);
     }
 }

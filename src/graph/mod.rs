@@ -60,6 +60,7 @@ mod chord_ear;
 mod chorus_display;
 mod chord_grid;
 mod step_ear;
+mod sequencer_common;
 mod step_grid;
 mod mixer_strips;
 mod module_ui;

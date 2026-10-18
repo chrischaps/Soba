@@ -25,6 +25,7 @@ use crate::modules::trigger_sequencer::{
     PATTERN_NAMES, STEPS, VEL_NAMES,
 };
 
+use super::sequencer_common::{pattern_menu, MenuHints};
 use super::steady_text;
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
 
@@ -599,7 +600,7 @@ pub fn pattern_bar(
         playing: reported.filter(|p| p.started).map(|p| Playing { pattern: p.pattern, chain_slot: p.chain_slot, next: p.next_pattern }),
         pattern_cv: reported.is_some_and(|p| p.pattern_cv),
     };
-    edits.extend(pattern_tabs(ui, node_id, z, &bar, |ui, pattern, edits| pattern_menu(ui, node_id, &params, pattern, edits)));
+    edits.extend(pattern_tabs(ui, node_id, z, &bar, |ui, pattern, edits| pattern_tab_menu(ui, node_id, &params, pattern, edits)));
     edits
 }
 
@@ -825,25 +826,19 @@ fn follow_toggle(ui: &mut egui::Ui, node_id: NodeId, z: f32, rect: Rect, playing
 }
 
 /// A pattern tab's right-click menu: copy it to another pattern, or clear it.
-fn pattern_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, pattern: usize, edits: &mut Vec<SynthResponse>) {
-    let from = PATTERN_NAMES[pattern];
-    ui.label(egui::RichText::new(format!("Pattern {from}")).strong());
-    ui.separator();
-    for to in (0..PATTERNS).filter(|&p| p != pattern) {
-        if ui.button(format!("Copy to {}", PATTERN_NAMES[to])).on_hover_text("Steps and accents, to start a variation or a fill from").clicked() {
-            let mut changes = Vec::with_capacity(STEPS * (LANES + 1));
-            for step in 0..STEPS {
-                changes.push((params.name(Seq::accent_param(to, step)), params.value(Seq::accent_param(pattern, step))));
-                for lane in 0..LANES {
-                    changes.push(params.set_step(to, lane, step, params.step(pattern, lane, step)));
-                }
+fn pattern_tab_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, pattern: usize, edits: &mut Vec<SynthResponse>) {
+    let hints = MenuHints { copy: "Steps and accents, to start a variation or a fill from", clear: "Every step off and every accent gone, keeping their ratchets, chances and velocities" };
+    let copy_to = |to| {
+        let mut changes = Vec::with_capacity(STEPS * (LANES + 1));
+        for step in 0..STEPS {
+            changes.push((params.name(Seq::accent_param(to, step)), params.value(Seq::accent_param(pattern, step))));
+            for lane in 0..LANES {
+                changes.push(params.set_step(to, lane, step, params.step(pattern, lane, step)));
             }
-            edits.push(edit(node_id, format!("Copy pattern {from} to {}", PATTERN_NAMES[to]), changes));
-            ui.close_menu();
         }
-    }
-    ui.separator();
-    if ui.button(format!("Clear {from}")).clicked() {
+        changes
+    };
+    let clear = || {
         let mut changes = Vec::with_capacity(STEPS * (LANES + 1));
         for step in 0..STEPS {
             changes.push((params.name(Seq::accent_param(pattern, step)), 0.0));
@@ -851,9 +846,9 @@ fn pattern_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, pattern: us
                 changes.push(params.set_step(pattern, lane, step, Step { on: false, ..params.step(pattern, lane, step) }));
             }
         }
-        edits.push(edit(node_id, format!("Clear pattern {from}"), changes));
-        ui.close_menu();
-    }
+        changes
+    };
+    pattern_menu(ui, node_id, pattern, &hints, copy_to, clear, edits);
 }
 
 #[cfg(test)]
