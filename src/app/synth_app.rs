@@ -65,6 +65,7 @@ mod framing;
 mod grouping;
 mod hosted;
 mod idle;
+mod launch;
 mod lessons;
 #[cfg(feature = "ableton-link")]
 mod link_follow;
@@ -2857,15 +2858,6 @@ impl SynthApp {
             Err(e) => {
                 self.status_error(format!("Couldn't open example {}: {}", example.name, e));
             }
-        }
-    }
-
-    /// Opens the patch the app starts with: the file named on the command
-    /// line, or else the First Sound example, so the canvas is never empty.
-    pub fn open_on_launch(&mut self, path: Option<&Path>) {
-        match path {
-            Some(path) => self.open_file(path),
-            None => self.open_example(examples::first_sound()),
         }
     }
 

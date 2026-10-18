@@ -77,6 +77,11 @@ fn main() -> eframe::Result<()> {
         Box::new(move |cc| {
             soba::app::theme::install_fonts(&cc.egui_ctx);
             let mut app = SynthApp::new(test_tone);
+            // The session first: it brings back the recent files, which the
+            // launch patch then joins at the top (#351)
+            if capture.is_none() {
+                app.restore_session(cc.storage);
+            }
             if resume.is_none() {
                 app.open_on_launch(patch_path.as_deref());
             }
@@ -88,7 +93,6 @@ fn main() -> eframe::Result<()> {
                     }
                 }
                 None => {
-                    app.restore_session(cc.storage);
                     if let Some(resume) = resume {
                         app.resume(resume);
                     }
