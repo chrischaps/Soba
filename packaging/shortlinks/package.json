@@ -1,12 +1,15 @@
 {
   "name": "soba-links",
   "private": true,
-  "description": "Short patch links (#370): a spike. See docs/SHORT_LINKS.md",
+  "description": "Short patch links (#370) and the Patch Garden (#388). See docs/SHORT_LINKS.md",
   "type": "module",
   "scripts": {
     "schema": "wrangler d1 execute soba-links --local --file schema.sql",
     "dev": "wrangler dev --local --port 8787",
-    "test": "node spike_test.mjs ../../patches"
+    "test": "node spike_test.mjs ../../patches",
+    "garden:pending": "node garden.mjs pending",
+    "garden:show": "node garden.mjs show",
+    "garden:hide": "node garden.mjs hide"
   },
   "devDependencies": {
     "wrangler": "^4.151.1"

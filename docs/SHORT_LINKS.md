@@ -130,11 +130,49 @@ If the service ever shuts down, the short links die with it unless they're carri
 - The long link stays authoritative: `p=1.` is the format, and a short link is
   only a name for one.
 
-## Later: Patch Garden
+## Patch Garden
 
-The API is under `/v1/` and the table can grow. A gallery would add a
-`published` flag, a title and a preview render (R2) to rows the sharer
-*chooses* to publish, with `GET /v1/garden` listing only those. Sharing is
-never publishing. Link previews in chats, which the 404 page can't give,
-would need the Worker in front of `soba.chaps.dev/s/*`. That's when moving
-chaps.dev's DNS to Cloudflare earns its keep.
+*The seed bed, #388. The page and planting from the app come later
+(`docs/Patch Garden — Proposal.md`).*
+
+A plant is a short link with a title. **Planting publishes a patch; sharing
+still never does.** Only `POST /v1/plants` puts a patch in the garden.
+
+```sql
+plants(id      TEXT PRIMARY KEY REFERENCES patches(id),
+       title   TEXT NOT NULL,                  -- 1–40 characters
+       name    TEXT,                           -- 0–24, optional
+       parent  TEXT REFERENCES patches(id),    -- the short link it grew from
+       planted_at INTEGER NOT NULL,            -- ms, one plant to each
+       status  TEXT NOT NULL DEFAULT 'pending')  -- pending, shown, hidden
+```
+
+- **`POST /v1/plants`**: a JSON body, `{payload, title, name?, parent?}`, sent as
+  `text/plain` so there's no preflight. It goes through every check a short link
+  does (the 96 KB body, the 2 MB inflate, the shape, the same ID) and shares the
+  10-a-minute rate limit. Titles and names are trimmed, with control and
+  formatting characters taken out, and a small word list refuses the worst. A
+  `parent` must be a short link the service knows, planted or not. It answers
+  `{id, url}`, and planting the same patch again answers the same way and
+  changes nothing: the first title stays. A patch that was taken down can't
+  be planted (410).
+- **`GET /v1/garden?before=<planted_at>`**: the 48 newest shown plants planted
+  before `before` (or the newest of all), each
+  `{id, title, name, planted_at, bytes, parent, payload}`, and `before` for the
+  next page (null at the end). Pages are cached at the edge for 60 s. A patch
+  that was taken down is never listed. Each plant is planted at least a
+  millisecond after the last, so paging never skips one. Anything that seeds
+  the table by hand should keep `planted_at` distinct too.
+
+**Curated at launch.** A new plant is `pending` and isn't listed until Chris
+shows it, from `packaging/shortlinks/` against the deployed database:
+
+```
+npm run garden:pending       # the waiting plants, each with its short link to listen to
+npm run garden:show <id>     # into the garden
+npm run garden:hide <id>     # out of it again; its short link still works
+```
+
+(`node garden.mjs ... --local` does the same against `wrangler dev`'s
+database.) A whole takedown is still `patches.removed`, which also takes the
+plant out of the garden.
