@@ -562,7 +562,7 @@ fn title_editor(ui: &mut Ui, annotations: &mut Annotations, id: AnnotationId, ba
                 .font(title_font(FRAME_TITLE_SIZE * zoom))
                 .text_color(ink)
                 .hint_text("Name this frame")
-                .frame(false)
+                .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(4, 2)))
                 .desired_width(rect.width())
                 .show(ui)
         })
@@ -748,7 +748,7 @@ fn note_ui(
                     .font(FontId::proportional(NOTE_TEXT_SIZE * zoom))
                     .text_color(NOTE_INK)
                     .hint_text("Write a note. **Bold** for emphasis")
-                    .frame(false)
+                    .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(4, 2)))
                     .desired_width(wrap)
                     .desired_rows(1)
                     .show(ui)
@@ -819,8 +819,8 @@ mod tests {
         for _ in 0..2 {
             let input = egui::RawInput { viewport_id: egui::ViewportId::ROOT, ..Default::default() };
             ctx.set_pixels_per_point(1.25);
-            let _ = ctx.run(input, |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            let _ = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
                     seen.clear();
                     for step in 0..60 {
                         let zoom = 0.3 * (2.0f32 / 0.3).powf(step as f32 / 59.0);

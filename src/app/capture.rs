@@ -759,7 +759,7 @@ impl Capture {
                     });
                 }
                 Cue::Wheel { delta, modifiers } => {
-                    raw.events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, delta), modifiers });
+                    raw.events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, delta), modifiers, phase: egui::TouchPhase::Move });
                 }
                 Cue::View { pan, dur } => {
                     // `from` is filled in by the app, which knows the pan

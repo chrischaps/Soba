@@ -71,6 +71,7 @@ mod link_follow;
 mod loops;
 mod lossy_load;
 mod mutating;
+mod out_of_sight;
 mod page_audio;
 mod scenes;
 mod share;
@@ -1737,7 +1738,8 @@ impl SynthApp {
     }
 
     /// Draw the main content area with the node graph editor
-    fn draw_main_area(&mut self, ctx: &egui::Context) {
+    fn draw_main_area(&mut self, ui: &mut egui::Ui) {
+        let ctx = &ui.ctx().clone();
         // Collect connections to remove (validated after drawing)
         let mut invalid_connections: Vec<(egui_node_graph2::OutputId, egui_node_graph2::InputId)> = Vec::new();
         let mut before_drop = None;
@@ -1758,7 +1760,7 @@ impl SynthApp {
 
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
-            .show(ctx, |ui| {
+            .show_inside(ui, |ui| {
                 // Store editor rect for coordinate conversion
                 editor_rect = ui.available_rect_before_wrap();
                 self.editor_rect = editor_rect;
@@ -3639,10 +3641,13 @@ const SHARE_HINT: &str = "Copy a link that plays this patch in a browser, with n
 impl SynthApp {
     /// One frame of the app. Apart from `eframe::App` so a test can draw
     /// one without a window, and the plugin (`plugin/`) in its own.
-    pub fn draw_frame(&mut self, ctx: &egui::Context) {
+    pub fn draw_frame(&mut self, ui: &mut egui::Ui) {
+        let ctx = &ui.ctx().clone();
         // Apply theme on first frame
         if !self.theme_applied {
             theme::apply_theme(ctx);
+            // This frame's Ui was made before the theme, so it takes it now
+            ui.set_style(ctx.global_style());
             self.theme_applied = true;
             // MIDI arriving draws a frame, so the pianos, Monitor and Learn
             // follow it without the UI drawing all the time
@@ -3761,21 +3766,21 @@ impl SynthApp {
 
         if !self.embedded {
             // Top toolbar panel
-            let toolbar_actions = egui::TopBottomPanel::top("toolbar")
+            let toolbar_actions = egui::Panel::top("toolbar")
                 .frame(egui::Frame::NONE
                     .fill(theme::background::PANEL)
                     .inner_margin(egui::Margin::symmetric(8, 8)))
-                .show(ctx, |ui| {
+                .show_inside(ui, |ui| {
                     self.draw_toolbar(ui)
                 })
                 .inner;
 
             // Bottom status bar
-            egui::TopBottomPanel::bottom("status_bar")
+            egui::Panel::bottom("status_bar")
                 .frame(egui::Frame::NONE
                     .fill(theme::background::PANEL)
                     .inner_margin(egui::Margin::symmetric(0, 4)))
-                .show(ctx, |ui| {
+                .show_inside(ui, |ui| {
                     self.draw_status_bar(ui);
                 });
             actions.extend(toolbar_actions);
@@ -3787,7 +3792,7 @@ impl SynthApp {
         // WAV files dragged in from outside: where they'd land, hearing them, and taking them
         self.handle_file_drops(ctx);
         self.tend_hovered_file(ctx);
-        self.draw_main_area(ctx);
+        self.draw_main_area(ui);
 
         // An embed's one control, over the canvas
         if self.embedded && self.draw_embed_bar(ctx) {
@@ -3849,7 +3854,7 @@ impl SynthApp {
         // Help ▸ Keyboard Shortcuts, its piano lit by the keys held
         if self.shortcuts.open {
             let held: Vec<i32> = self.pressed_keys.iter().map(|(note, _)| *note).collect();
-            self.shortcuts.show(ctx, &held);
+            self.shortcuts.show(ctx, self.editor_rect, &held);
         }
         self.show_variations(ctx);
         // A lesson's caption, glows and ghost, over the editor
@@ -3921,8 +3926,14 @@ impl SynthApp {
 }
 
 impl eframe::App for SynthApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.draw_frame(ctx);
+    /// Every pass, drawn or not: a minimised window still hears the engine
+    /// and MIDI, and sends the audio thread its edits.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.tend_out_of_sight(ctx);
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.draw_frame(ui);
     }
 
     /// While capturing, the script replaces the mouse and keyboard, and the

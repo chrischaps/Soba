@@ -465,7 +465,7 @@ pub fn claim_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
             pointer = Some(*at);
             true
         }
-        egui::Event::MouseWheel { unit, delta, modifiers } => {
+        egui::Event::MouseWheel { unit, delta, modifiers, .. } => {
             let zoom = modifiers.ctrl || modifiers.command || modifiers.mac_cmd;
             let Some((claim, at)) = claim_at(pointer, zoom) else { return true };
             let delta = match unit {
@@ -2186,8 +2186,8 @@ mod tests {
     fn frame(ctx: &egui::Context, time: f64, user_state: &SynthGraphState, song: &Song, nodes: &[NodeId]) -> Vec<View> {
         let mut views = Vec::new();
         let input = egui::RawInput { time: Some(time), ..Default::default() };
-        let _ = ctx.run(input, |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
+        let _ = ctx.run_ui(input, |ui| {
+            egui::CentralPanel::default().show_inside(ui, |ui| {
                 views = nodes.iter().map(|&node| update_view(ui, node, view_owner(user_state, node), song, timeline(), 1.0, Now { position: None, selected: 0 })).collect();
             });
         });

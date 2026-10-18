@@ -45,7 +45,7 @@ pub fn value_items(ui: &mut egui::Ui, id: egui::Id, spec: &NumberSpec, value: f3
                 output.state.store(ui.ctx(), edit_id);
             }
             let hint = format!("Type a value and press Enter: {} to {}", format.format(spec.min), format.format(spec.max));
-            let response = output.response.on_hover_text(hint);
+            let response = output.response.response.on_hover_text(hint);
             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 if let Some(typed) = read(&text) {
                     chosen = Some(typed);

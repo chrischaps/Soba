@@ -33,10 +33,12 @@ needless_range_loop = "allow"
 type_complexity = "allow"
 
 [dependencies]
-eframe = { version = "0.33", features = ["persistence"] }
-egui = "0.33"
+# glow, not wgpu (eframe's default since 0.34): a smaller, quicker build, the
+# OpenGL the plugin draws with too, and WebGL in the browser
+eframe = { version = "0.34", default-features = false, features = ["accesskit", "default_fonts", "glow", "persistence", "wayland", "web_screen_reader", "x11"] }
+egui = "0.34"
 # Pinned: bump the rev on purpose, after a push to the fork
-egui_node_graph2 = { git = "https://github.com/chrischaps/egui_node_graph2", rev = "1e24efd2123be9bc197b3c6d8d594f0f103ea5dc" }
+egui_node_graph2 = { git = "https://github.com/chrischaps/egui_node_graph2", rev = "cbe5ef0e5fd3d3f783cc389ee456adbd3cc24ae9" }
 cpal = "0.18"
 midir = "0.11"
 rtrb = "0.3"

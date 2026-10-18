@@ -140,8 +140,8 @@ mod tests {
     /// Runs `check` in a frame, once fonts are loaded.
     fn in_a_frame(check: impl Fn(&Context)) {
         let ctx = Context::default();
-        let _ = ctx.run(Default::default(), |_| {});
-        let _ = ctx.run(Default::default(), |ctx| check(ctx));
+        let _ = ctx.run_ui(Default::default(), |_| {});
+        let _ = ctx.run_ui(Default::default(), |ui| check(ui.ctx()));
     }
 
     #[test]

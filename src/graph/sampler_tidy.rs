@@ -100,7 +100,9 @@ pub fn name_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, label: &NameL
     let shown = hovered.filter(|_| egui::Popup::is_id_open(ui.ctx(), id));
     if shown != was {
         ui.data_mut(|d| match shown {
-            Some(tidy) => d.insert_temp(preview_id(node_id), tidy),
+            Some(tidy) => {
+                d.insert_temp(preview_id(node_id), tidy);
+            }
             None => d.remove::<Tidy>(preview_id(node_id)),
         });
         ui.ctx().request_repaint();

@@ -17,7 +17,7 @@ mod tests {
                 focused: true,
                 ..Default::default()
             };
-            let output = ctx.run(input, |ctx| app.draw_frame(ctx));
+            let output = ctx.run_ui(input, |ui| app.draw_frame(ui));
             delay = output.viewport_output.get(&egui::ViewportId::ROOT).map_or(std::time::Duration::MAX, |v| v.repaint_delay);
         }
         // A notice fading out asks once, seconds ahead: that's not animation

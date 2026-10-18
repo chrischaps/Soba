@@ -255,7 +255,8 @@ mod tests {
             ..Default::default()
         };
         let mut got = Vec::new();
-        let _ = ctx.run(raw, |ctx| {
+        let _ = ctx.run_ui(raw, |ui| {
+            let ctx = ui.ctx();
             got = pressed(ctx, typing, on_canvas, false).iter().map(|a| format!("{a:?}")).collect();
         });
         got

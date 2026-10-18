@@ -167,7 +167,7 @@ pub fn claim_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
             pointer = Some(*at);
             true
         }
-        Event::MouseWheel { unit, delta, modifiers } if modifiers.alt => {
+        Event::MouseWheel { unit, delta, modifiers, .. } if modifiers.alt => {
             let over = pointer.is_some_and(|at| knob.rect.contains(at) && ctx.layer_id_at(at) == Some(knob.layer));
             if !over {
                 return true;

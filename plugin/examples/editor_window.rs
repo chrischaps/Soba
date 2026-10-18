@@ -27,9 +27,9 @@ fn main() {
         Default::default(),
         (app, 0u32),
         |ctx, _queue, _state| soba_plugin::prepare_context(ctx),
-        move |ctx, queue, (app, drawn)| {
-            ctx.request_repaint();
-            app.draw_frame(ctx);
+        move |ui, queue, (app, drawn)| {
+            ui.request_repaint();
+            app.draw_frame(ui);
             *drawn += 1;
             if *drawn == frames {
                 println!("drew {drawn} frames in {:.1} s", started.elapsed().as_secs_f32());

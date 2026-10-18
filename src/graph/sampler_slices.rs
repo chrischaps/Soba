@@ -169,8 +169,8 @@ mod tests {
     /// Runs `f` on a frame's panel, as a display draws on one.
     fn in_frame<R>(ctx: &egui::Context, f: impl FnOnce(&egui::Ui) -> R) -> R {
         let (mut f, mut out) = (Some(f), None);
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            egui::CentralPanel::default().show(ctx, |ui| {
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            egui::CentralPanel::default().show_inside(ui, |ui| {
                 if let Some(f) = f.take() {
                     out = Some(f(ui));
                 }

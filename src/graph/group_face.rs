@@ -230,7 +230,7 @@ pub fn name_field(ui: &mut egui::Ui, id: egui::Id, current: &str, hint: &str) ->
             output.state.cursor.set_char_range(Some(all));
             output.state.store(ui.ctx(), edit_id);
         }
-        let response = output.response.on_hover_text(hint);
+        let response = output.response.response.on_hover_text(hint);
         if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
             if text.trim() != current {
                 renamed = Some(text.clone());
@@ -595,8 +595,8 @@ mod tests {
         for _ in 0..2 {
             let input = egui::RawInput { viewport_id: egui::ViewportId::ROOT, ..Default::default() };
             ctx.set_pixels_per_point(1.25);
-            let _ = ctx.run(input, |ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
+            let _ = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
                     seen.clear();
                     let style = ui.style().clone();
                     for step in 0..60 {

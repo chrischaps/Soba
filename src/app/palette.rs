@@ -295,7 +295,7 @@ impl QuickAdd {
                 .hint_text("Add a module…")
                 .font(FontId::proportional(15.0))
                 .text_color(theme::text::PRIMARY)
-                .frame(false)
+                .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(4, 2)))
                 .desired_width(WIDTH - 70.0);
             let response = ui.add(edit);
             response.request_focus();

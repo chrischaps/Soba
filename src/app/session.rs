@@ -312,7 +312,7 @@ fn prompt<R>(ctx: &egui::Context, id: &str, content: impl FnOnce(&mut egui::Ui) 
     egui::Modal::new(egui::Id::new(id))
         .backdrop_color(egui::Color32::from_black_alpha(140))
         .frame(
-            egui::Frame::popup(&ctx.style())
+            egui::Frame::popup(&ctx.global_style())
                 .fill(theme::background::PANEL)
                 .corner_radius(theme::ROUNDING)
                 .inner_margin(egui::Margin::same(20)),

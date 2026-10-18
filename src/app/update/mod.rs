@@ -678,7 +678,8 @@ mod tests {
         updater.state = State::Available;
         // A few frames: fonts load, then the window settles on its size
         for _ in 0..4 {
-            let _ = ctx.run(input(), |ctx| {
+            let _ = ctx.run_ui(input(), |ui| {
+                let ctx = ui.ctx();
                 updater.show_whats_new(ctx, false);
             });
         }

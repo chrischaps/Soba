@@ -133,7 +133,7 @@ mod tests {
         let at = |time: f64, data: Option<&ScopeData>| {
             let input = egui::RawInput { time: Some(time), ..Default::default() };
             let mut live = None;
-            let _ = ctx.run(input, |ctx| live = Some(super::live(ctx, id, data)));
+            let _ = ctx.run_ui(input, |ui| live = Some(super::live(ui.ctx(), id, data)));
             live.unwrap()
         };
         let capture = |count| ScopeData { channel1: vec![0.5; TRACE_POINTS], channel2: Vec::new(), triggered: true, count };

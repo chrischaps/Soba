@@ -225,11 +225,10 @@ impl ShortcutsSheet {
         });
     }
 
-    /// Draws the sheet. `held` are the notes the letter keys (or a pointer
-    /// on a piano) are holding, relative to C4.
-    pub fn show(&mut self, ctx: &egui::Context, held: &[i32]) {
-        // Between the toolbar and the status bar
-        let screen = ctx.available_rect();
+    /// Draws the sheet within `screen`, between the toolbar and the status
+    /// bar. `held` are the notes the letter keys (or a pointer on a piano)
+    /// are holding, relative to C4.
+    pub fn show(&mut self, ctx: &egui::Context, screen: egui::Rect, held: &[i32]) {
         // Canvas, Editing and Knobs on the left; the rest, and the piano,
         // on the right. Each column's actions start past its widest keys
         let (left, right) = SHEET.split_at(3);
@@ -530,7 +529,7 @@ mod tests {
     fn mac_symbols_are_in_the_fonts() {
         let ctx = egui::Context::default();
         theme::install_fonts(&ctx);
-        let _ = ctx.run(Default::default(), |_| {});
+        let _ = ctx.run_ui(Default::default(), |_| {});
         assert!(ctx.fonts_mut(|fonts| fonts.has_glyphs(&FontId::proportional(12.0), "⌘⇧")));
     }
 
@@ -547,7 +546,8 @@ mod tests {
             ..Default::default()
         };
         let mut result = (false, false);
-        let _ = ctx.run(raw, |ctx| {
+        let _ = ctx.run_ui(raw, |ui| {
+            let ctx = ui.ctx();
             result = ctx.input_mut(|i| {
                 let play = consume_play(i);
                 (play, i.key_pressed(egui::Key::Space))

@@ -51,13 +51,15 @@ pub struct Shared {
     editor_open: AtomicBool,
 }
 
-/// Readies an egui context for the app: its fonts, and the theme's styles
-/// and colours. The app styles the first context it draws in by itself; the
-/// plugin draws in several (one per opening of the editor, and the runner's),
-/// so each is readied as it's made.
+/// Readies an egui context for the app: its fonts, the theme's styles and
+/// colours, and no quit key. The app styles the first context it draws in
+/// by itself; the plugin draws in several (one per opening of the editor,
+/// and the runner's), so each is readied as it's made.
 pub fn prepare_context(ctx: &egui::Context) {
     soba::app::theme::install_fonts(ctx);
     soba::app::theme::apply_theme(ctx);
+    // egui closes the window on Ctrl+Q (since 0.34): in a DAW that's the host's to quit
+    ctx.options_mut(|o| o.quit_shortcuts.clear());
 }
 
 impl Shared {

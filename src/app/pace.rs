@@ -63,7 +63,8 @@ mod tests {
         let mut input = egui::RawInput { time: Some(time), focused, ..Default::default() };
         before_frame(ctx, &mut input);
         let mut dt = 0.0;
-        let _ = ctx.run(input, |ctx| {
+        let _ = ctx.run_ui(input, |ui| {
+            let ctx = ui.ctx();
             dt = ctx.input(|i| i.stable_dt);
             animate(ctx);
         });
@@ -84,7 +85,7 @@ mod tests {
         let ctx = egui::Context::default();
         let mut input = egui::RawInput { time: Some(0.0), focused: true, ..Default::default() };
         before_frame(&ctx, &mut input);
-        let output = ctx.run(input, |ctx| animate(ctx));
+        let output = ctx.run_ui(input, |ui| animate(ui.ctx()));
         assert_eq!(output.viewport_output[&egui::ViewportId::ROOT].repaint_delay, Duration::ZERO);
         assert!((frame_at(&ctx, 0.007, true) - 0.007).abs() < 1e-4);
     }

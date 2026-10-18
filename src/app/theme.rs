@@ -211,7 +211,7 @@ pub fn apply_theme(ctx: &egui::Context) {
     // Always dark, whatever the system's preference: a browser in light
     // mode would otherwise start this from egui's light style
     ctx.set_theme(egui::Theme::Dark);
-    let mut style = (*ctx.style()).clone();
+    let mut style = (*ctx.global_style()).clone();
 
     // Labels are names, not text to select. Selectable labels also take
     // clicks, so right-clicking a port's name wouldn't reach its module
@@ -273,7 +273,7 @@ pub fn apply_theme(ctx: &egui::Context) {
         egui::FontId::new(14.0, egui::FontFamily::Name(TITLE_FAMILY.into())),
     );
 
-    ctx.set_style(style);
+    ctx.set_global_style(style);
 
     // egui 0.31 snaps rects and straight lines to whole pixels. The patch
     // zooms smoothly, and parts of a face snapping one by one would shift

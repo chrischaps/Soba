@@ -86,14 +86,14 @@ impl Editor for SobaEditor {
             Default::default(),
             (),
             |ctx, _queue, _state| crate::prepare_context(ctx),
-            move |ctx, _queue, _state| {
+            move |ui, _queue, _state| {
                 // The app asks for repaints as it needs them, but a host
                 // may show the window before it's mapped: draw regardless
-                ctx.request_repaint();
+                ui.request_repaint();
                 let macros = params.macros();
                 shared.with_app(|app| {
                     app.follow_macros(&macros);
-                    app.draw_frame(ctx);
+                    app.draw_frame(ui);
                 });
             },
         );
