@@ -466,7 +466,7 @@ fn switch_chip(
     let data = &module.user_data;
     let accent = data.category.color();
     // A dropdown with a jack is the cable's while one is plugged in
-    let patched = graph.iter_connections().any(|(to, _)| to == input_id);
+    let patched = super::patched::input(graph, input_id);
     let place = KnobPlace::Face { depth: control.depth, outer };
     let hint = || data.face_hint(hints::Hint::input(data.module_id, &control.param), &control.param, place);
 

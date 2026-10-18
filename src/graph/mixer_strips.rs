@@ -204,7 +204,7 @@ pub fn mixer_strips(
     };
     let feeding = |name: &str| {
         let input = input_of(name)?;
-        graph.iter_connections().find(|(i, _)| *i == input).map(|(_, output)| output)
+        graph.connections.get(input)?.first().copied()
     };
     let engine_node_id = user_state.get_engine_node_id(node_id);
 

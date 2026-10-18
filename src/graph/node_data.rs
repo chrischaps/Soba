@@ -639,9 +639,7 @@ impl SynthNodeData {
                 };
 
                 // Check if this param has an input port and if it's connected
-                // iter_connections returns (InputId, OutputId) - input port and the output it's connected to
-                let is_connected = knob_param.has_input_port() &&
-                    graph.iter_connections().any(|(input, _output)| input == *input_id);
+                let is_connected = knob_param.has_input_port() && super::patched::input(graph, *input_id);
 
                 // Something else in charge of it: a synced LFO's division,
                 // a MIDI clock's tempo. Or reading what something else
@@ -665,7 +663,7 @@ impl SynthNodeData {
                 // VCA's CV moving its Level. The knob stays the hand's to turn
                 let through_cv = super::knob_cv::jack(self.module_id, &knob_param.param_name)
                     .and_then(|jack| node.inputs.iter().find(|(name, _)| name == jack))
-                    .filter(|(_, jack)| graph.iter_connections().any(|(input, _)| input == *jack))
+                    .filter(|(_, jack)| super::patched::input(graph, *jack))
                     .and_then(|(_, jack)| super::port_mapping::input_port_index(graph, node_id, *jack))
                     .and_then(|port| user_state.get_input_value(engine_node_id?, port));
 
@@ -677,7 +675,7 @@ impl SynthNodeData {
                     super::knob_cv::jack(self.module_id, &knob_param.param_name)
                         .and_then(|jack| node.inputs.iter().find(|(name, _)| name == jack))
                         .map(|(_, jack)| *jack)
-                        .filter(|jack| graph.iter_connections().any(|(input, _)| input == *jack))
+                        .filter(|jack| super::patched::input(graph, *jack))
                 };
                 let spotlight = fed_by.map_or(0.0, |jack| user_state.cable_spotlight.knob(jack));
 

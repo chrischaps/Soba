@@ -46,7 +46,7 @@ pub fn oscillator_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &Sy
     let voices = (value("Voices", 1.0).round() as usize).clamp(1, crate::modules::oscillator::MAX_VOICES);
     let detune = value("Detune", 0.4);
     let hz = Oscillator::C4_HZ * Oscillator::tune_octaves(value("Octave", 0.0), value("Semitone", 0.0), value("Fine", 0.0)).exp2();
-    let sub = output_patched(graph, node_id, "Sub");
+    let sub = output_patched(graph, user_state, node_id, "Sub");
     let tracked = input_patched(graph, node_id, "V/Oct");
     let bent = tracked || input_patched(graph, node_id, "Exp FM");
 

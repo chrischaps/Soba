@@ -29,6 +29,8 @@
 //! zoom is the editor's, like the section picked: not saved, not an edit.
 //! A follower shares its leader's zoom, so their sections stay lined up.
 
+use std::sync::Arc;
+
 use eframe::egui::{self, Align2, Color32, CursorIcon, FontId, Id, LayerId, Pos2, Rect, Sense, Shape, Stroke, Vec2};
 use egui_node_graph2::{InputId, NodeId};
 
@@ -140,6 +142,21 @@ impl Song {
             bars += length * times;
         }
         Self { steps: Arr::steps(&values), values, sections, repeats, bars }
+    }
+
+    /// The node's song as this pass draws it, worked out once a pass
+    /// rather than once for each of its rows.
+    fn this_pass(ctx: &egui::Context, node_id: NodeId, params: &Params) -> Arc<Self> {
+        let pass = ctx.cumulative_pass_nr();
+        let id = Id::new((node_id, "arranger-song"));
+        if let Some((at, song)) = ctx.data(|data| data.get_temp::<(u64, Arc<Self>)>(id)) {
+            if at == pass {
+                return song;
+            }
+        }
+        let song = Arc::new(Self::of(params.values()));
+        ctx.data_mut(|data| data.insert_temp(id, (pass, song.clone())));
+        song
     }
 
     fn count(&self) -> usize {
@@ -625,14 +642,14 @@ fn section_name(graph: &SynthGraph, node_id: NodeId, section: usize) -> String {
 }
 
 /// A lane's name: the one it was given, or what its cable drives, or None.
-fn lane_name(graph: &SynthGraph, node_id: NodeId, lane: usize) -> (Option<String>, bool) {
+fn lane_name(graph: &SynthGraph, user_state: &SynthGraphState, node_id: NodeId, lane: usize) -> (Option<String>, bool) {
     let Some(node) = graph.nodes.get(node_id) else { return (None, false) };
     if let Some(name) = node.user_data.labels.get(&lane_key(lane)) {
         return (Some(name.clone()), true);
     }
     for port in [LANE_NAMES[lane], GATE_NAMES[lane]] {
         let Ok(output) = node.get_output(port) else { continue };
-        if let Some((input, _)) = graph.iter_connections().find(|(_, from)| *from == output) {
+        if let Some(input) = user_state.cables_from.first(output) {
             let input = graph.get_input(input);
             if let Some(target) = graph.nodes.get(input.node) {
                 let port = target.inputs.iter().find(|(_, id)| *id == input.id).map_or("", |(name, _)| name.as_str());
@@ -648,7 +665,7 @@ fn lane_name(graph: &SynthGraph, node_id: NodeId, lane: usize) -> (Option<String
 /// ("Desk  ▸  Groove 3/4").
 pub fn title_note(graph: &SynthGraph, user_state: &SynthGraphState, node_id: NodeId) -> Option<String> {
     let position = position(user_state, node_id).filter(|p| p.started);
-    let repeats = |section: usize| Params::of(graph, node_id).map_or(1, |params| Arr::repeats(&params.values(), section));
+    let repeats = |section: usize| Params::of(graph, node_id).map_or(1, |params| Arr::repeat_count(params.value(Arr::PARAM_REPEAT + section)));
     let playing = position.map(|p| match (p.ended, pass_count(&p, repeats(p.section))) {
         (true, _) => "End".to_string(),
         (false, None) => section_name(graph, node_id, p.section),
@@ -769,7 +786,7 @@ pub fn output_row(
         return Some(Vec::new());
     }
 
-    let song = Song::of(params.values());
+    let song = Song::this_pass(ui.ctx(), node_id, &params);
     let timeline = Rect::from_min_max(Pos2::new(block.left() + LABEL * z, block.top()), block.max);
     let position = position(user_state, node_id).filter(|p| p.started && p.section < song.count());
     let selected = selected(ui.ctx(), node_id).min(song.count() - 1);
@@ -1150,7 +1167,7 @@ fn lane_rows(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, lane: u
     let green = theme::signal::GATE;
 
     // The lane's name, given or taken from its cable
-    let (name, given) = lane_name(graph, node_id, lane);
+    let (name, given) = lane_name(graph, user_state, node_id, lane);
     let lane_label = name.clone().unwrap_or_else(|| format!("Lane {}", lane + 1));
     let name_rect = Rect::from_min_max(block.left_top(), Pos2::new(timeline.left() - 3.0 * z, block.bottom()));
     let renaming: Option<Renaming> = ui.ctx().data(|data| data.get_temp(renaming_id(node_id)));
@@ -1168,10 +1185,13 @@ fn lane_rows(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, lane: u
         let ink = if given { theme::text::PRIMARY } else if name.is_some() { theme::text::SECONDARY } else { theme::text::DISABLED };
         painter.text(Pos2::new(name_rect.left() + 1.0 * z, name_rect.center().y + 3.0 * z), Align2::LEFT_CENTER, text, font, ink);
     }
-    let glide = params.values()[Arr::PARAM_GLIDE + lane];
+    let glide = params.value(Arr::PARAM_GLIDE + lane);
     let name_response = ui
         .interact(name_rect, Id::new((node_id, "arranger-lane", lane)), Sense::click())
-        .on_hover_text(format!("{lane_label}{}\nDouble-click to rename · right-click for its glide", if glide > 0.0 { format!(", gliding {}", super::drum_display::duration(glide)) } else { String::new() }));
+        .on_hover_ui(|ui| {
+            let gliding = if glide > 0.0 { format!(", gliding {}", super::drum_display::duration(glide)) } else { String::new() };
+            ui.label(format!("{lane_label}{gliding}\nDouble-click to rename · right-click for its glide"));
+        });
     if name_response.double_clicked() {
         let existing = graph.nodes.get(node_id).and_then(|n| n.user_data.labels.get(&key).cloned()).unwrap_or_default();
         ui.ctx().data_mut(|data| data.insert_temp(renaming_id(node_id), Renaming::start(key.clone(), existing)));

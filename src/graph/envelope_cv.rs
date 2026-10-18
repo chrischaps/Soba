@@ -28,7 +28,7 @@ const STAGES: [(&str, usize); 4] = [
 pub fn patched(graph: &SynthGraph, node_id: NodeId, stage: &str) -> bool {
     let Some(node) = graph.nodes.get(node_id) else { return false };
     let Some(&(_, input)) = node.inputs.iter().find(|(name, _)| name == stage) else { return false };
-    graph.iter_connections().any(|(connected, _)| connected == input)
+    super::patched::input(graph, input)
 }
 
 /// Which stages are patched, A, D, S, R.

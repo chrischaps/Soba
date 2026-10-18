@@ -36,7 +36,7 @@ pub fn logic_display(
             _ => None,
         })
         .unwrap_or(0.5);
-    let b_patched = input_of("B").is_some_and(|id| graph.iter_connections().any(|(input, _)| input == id));
+    let b_patched = input_of("B").is_some_and(|id| super::patched::input(graph, id));
 
     let engine_node_id = user_state.get_engine_node_id(node_id);
     let readout = engine_node_id.and_then(|id| user_state.readouts.get(&id)).copied().unwrap_or_default();

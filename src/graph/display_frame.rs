@@ -110,16 +110,16 @@ pub fn input_patched(graph: &SynthGraph, node_id: NodeId, name: &str) -> bool {
     node.inputs
         .iter()
         .find(|(input, _)| input == name)
-        .is_some_and(|(_, id)| graph.iter_connections().any(|(input, _)| input == *id))
+        .is_some_and(|(_, id)| super::patched::input(graph, *id))
 }
 
 /// Whether a cable runs out of the node's output `name`.
-pub fn output_patched(graph: &SynthGraph, node_id: NodeId, name: &str) -> bool {
+pub fn output_patched(graph: &SynthGraph, user_state: &SynthGraphState, node_id: NodeId, name: &str) -> bool {
     let Some(node) = graph.nodes.get(node_id) else { return false };
     node.outputs
         .iter()
         .find(|(output, _)| output == name)
-        .is_some_and(|(_, id)| graph.iter_connections().any(|(_, output)| output == *id))
+        .is_some_and(|(_, id)| user_state.cables_from.patched(*id))
 }
 
 /// The recent past of whatever is patched into the node's input `name`

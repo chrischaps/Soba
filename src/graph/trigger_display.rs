@@ -174,9 +174,9 @@ fn short_drum(name: &str) -> String {
 }
 
 /// What a lane's Gate cable plays: a Drum's type, or the module's name.
-fn lane_name(graph: &SynthGraph, node_id: NodeId, lane: usize) -> Option<String> {
+fn lane_name(graph: &SynthGraph, user_state: &SynthGraphState, node_id: NodeId, lane: usize) -> Option<String> {
     let output = graph.nodes.get(node_id)?.get_output(GATE_NAMES[lane]).ok()?;
-    let (input, _) = graph.iter_connections().find(|(_, from)| *from == output)?;
+    let input = user_state.cables_from.first(output)?;
     let target = graph.nodes.get(graph.get_input(input).node)?;
     if target.user_data.module_id == "source.drum" {
         let type_input = target.get_input("Type").ok()?;
@@ -241,7 +241,7 @@ pub fn output_row(
     match row {
         Row::Accent => accent_row(ui, rect, node_id, &params, pattern, Live { position, lit: lit(user_state, node_id, Seq::OUT_ACCENT) }, &mut edits),
         Row::Gate(lane) => {
-            let name = lane_name(graph, node_id, lane);
+            let name = lane_name(graph, user_state, node_id, lane);
             let lit = lit(user_state, node_id, 1 + 2 * lane);
             lane_rows(ui, rect, node_id, &params, LaneAt { pattern, lane, name }, Live { position, lit }, &mut edits);
         }

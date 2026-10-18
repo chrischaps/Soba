@@ -29,7 +29,7 @@ pub fn scale_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
 
     // The key Out is in: the root moved by Transpose, CV included
     let transpose_patched = input_of("Transpose")
-        .is_some_and(|id| graph.iter_connections().any(|(input, _)| input == id));
+        .is_some_and(|id| super::patched::input(graph, id));
     let transpose_cv = if transpose_patched {
         engine_node_id.and_then(|eid| user_state.get_input_value(eid, 1)).unwrap_or(0.0)
     } else {

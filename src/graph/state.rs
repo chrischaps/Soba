@@ -284,6 +284,9 @@ pub struct SynthGraphState {
     /// Key: (graph node, output index). Set by the app before drawing.
     pub output_aliases: HashMap<(NodeId, usize), (EngineNodeId, usize)>,
 
+    /// Where each output's cables go. Set by the app before drawing.
+    pub cables_from: super::patched::CablesFrom,
+
     /// What each group on the shown level has on its face. Set by the app
     /// before drawing.
     pub group_faces: HashMap<GroupId, Face>,
@@ -368,6 +371,7 @@ impl Default for SynthGraphState {
             level: None,
             hidden: HashSet::new(),
             output_aliases: HashMap::new(),
+            cables_from: Default::default(),
             group_faces: HashMap::new(),
             miniatures: HashMap::new(),
             jack_actions: HashMap::new(),
@@ -505,6 +509,7 @@ impl SynthGraphState {
         self.level = None;
         self.hidden.clear();
         self.output_aliases.clear();
+        self.cables_from.clear();
         self.group_faces.clear();
         self.miniatures.clear();
         self.jack_actions.clear();

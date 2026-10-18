@@ -101,7 +101,7 @@ pub fn filter_display(ui: &mut egui::Ui, filter: Filter, node_id: NodeId, graph:
     let moved = swept || (resonance - knob_resonance).abs() > 0.01;
 
     let outputs = filter.outputs();
-    let patched: Vec<bool> = outputs.iter().map(|(port, _)| output_patched(graph, node_id, port)).collect();
+    let patched: Vec<bool> = outputs.iter().map(|(port, _)| output_patched(graph, user_state, node_id, port)).collect();
     let any_patched = patched.iter().any(|&p| p);
     let lit = |index: usize| if any_patched { patched[index] } else { index == 0 };
 

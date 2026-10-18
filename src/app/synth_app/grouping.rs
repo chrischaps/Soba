@@ -48,6 +48,8 @@ impl SynthApp {
         let hidden = &self.user_state.hidden;
         self.graph_state.selected_nodes.retain(|n| !hidden.contains(n));
 
+        self.user_state.cables_from.rebuild(graph);
+
         // A jack's cable shows what's plugged in behind it
         self.user_state.output_aliases.clear();
         for (node_id, node) in graph.nodes.iter().filter(|(_, n)| !n.user_data.is_module()) {

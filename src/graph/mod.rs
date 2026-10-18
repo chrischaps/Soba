@@ -81,6 +81,7 @@ mod sampler_slices;
 pub mod sampler_take;
 mod sampler_tidy;
 pub mod signal_history;
+mod patched;
 mod state;
 mod templates;
 mod validation;

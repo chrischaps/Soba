@@ -599,7 +599,12 @@ impl Arranger {
 
     /// How many times a section plays.
     pub fn repeats(params: &[f32], section: usize) -> usize {
-        params.get(Self::PARAM_REPEAT + section).map_or(1, |r| (r.round() as usize).clamp(1, MAX_REPEATS))
+        params.get(Self::PARAM_REPEAT + section).map_or(1, |&r| Self::repeat_count(r))
+    }
+
+    /// How many times a section plays, from its Repeat parameter's value.
+    pub fn repeat_count(value: f32) -> usize {
+        (value.round() as usize).clamp(1, MAX_REPEATS)
     }
 
     pub fn cue(params: &[f32], section: usize, lane: usize) -> Cue {

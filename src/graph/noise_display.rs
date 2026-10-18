@@ -14,7 +14,7 @@ pub fn noise_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
         // over a knob at 0), so draw the slopes at full scale
         let level_input = node.inputs.iter().find(|(name, _)| name == "Level").map(|(_, id)| *id);
         let level = match level_input {
-            Some(id) if graph.iter_connections().any(|(input, _)| input == id) => 1.0,
+            Some(id) if super::patched::input(graph, id) => 1.0,
             Some(id) => match graph.get_input(id).value {
                 SynthValueType::Number { value, .. } => value,
                 _ => 0.5,
@@ -25,7 +25,7 @@ pub fn noise_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
             node.outputs
                 .iter()
                 .find(|(name, _)| name == port)
-                .is_some_and(|(_, id)| graph.iter_connections().any(|(_, output)| output == *id))
+                .is_some_and(|(_, id)| user_state.cables_from.patched(*id))
         };
         (level, [is_patched("White"), is_patched("Pink"), is_patched("Brown")])
     } else {
