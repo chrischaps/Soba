@@ -116,6 +116,9 @@ async function measure(browserName, patch) {
         lateMoving: moving.late - still.late,
         renderStill: spread(renders, begin.renders, still.renders),
         renderMoving: spread(renders, still.renders, moving.renders),
+        // The status bar's meter (#374): the page's share of each buffer, smoothed
+        loadStill: still.load,
+        loadMoving: moving.load,
         peak: +moving.peak.toFixed(3),
         contexts: moving.contexts.join(","),
     };
@@ -130,8 +133,8 @@ for (const browserName of browsers) {
     }
 }
 server.close();
-console.log("\n| Browser | Patch | Late (still) | Late (dragging) | Render still (mean, p95) | Render dragging (mean, p95) | Buffers | Peak |");
-console.log("|---|---|---|---|---|---|---|---|");
+console.log("\n| Browser | Patch | Late (still) | Late (dragging) | Render still (mean, p95) | Render dragging (mean, p95) | Load (still, dragging) | Buffers | Peak |");
+console.log("|---|---|---|---|---|---|---|---|---|");
 for (const r of rows) {
-    console.log(`| ${r.browser} | ${r.patch} | ${r.lateStill} | ${r.lateMoving} | ${r.renderStill.join(", ")} ms | ${r.renderMoving.join(", ")} ms | ${r.buffers} | ${r.peak} |`);
+    console.log(`| ${r.browser} | ${r.patch} | ${r.lateStill} | ${r.lateMoving} | ${r.renderStill.join(", ")} ms | ${r.renderMoving.join(", ")} ms | ${r.loadStill}%, ${r.loadMoving}% | ${r.buffers} | ${r.peak} |`);
 }

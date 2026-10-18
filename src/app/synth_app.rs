@@ -71,6 +71,7 @@ mod link_follow;
 mod loops;
 mod lossy_load;
 mod mutating;
+mod page_audio;
 mod scenes;
 mod share;
 mod probe;
@@ -3380,7 +3381,12 @@ impl SynthApp {
                         }
                     }
                     if self.is_playing {
-                        cpu_meter(ui, self.cpu_load, self.cpu_peak.peak(), &CpuMeterConfig::compact());
+                        let dropouts = self.poll_page_audio();
+                        let config = CpuMeterConfig { page: dropouts.is_some(), ..CpuMeterConfig::compact() };
+                        cpu_meter(ui, self.cpu_load, self.cpu_peak.peak(), &config);
+                        if let Some(dropouts) = dropouts {
+                            page_audio::dropouts_label(ui, dropouts);
+                        }
                     }
                     ui.label(RichText::new("|")
                         .color(theme::text::DISABLED)

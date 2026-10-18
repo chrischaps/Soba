@@ -147,6 +147,15 @@ hiccup is one short dropout and then clean sound, a little later. The same
 wrapper counts what the measurements below report (`sobaAudioStats()` in
 the console).
 
+The status bar shows the same thing to a player (#374). On the web, the CPU
+meter reads the page's load rather than the DSP's: for each buffer, the time
+its `ended` event waited for the page (a frame still drawing) plus the time it
+took to render, over the buffer's length. At 100% a buffer comes out late.
+Render time alone never shows that: a heavy graph's frames can cause a dropout
+while the sound costs 20%. Beside the meter, the count of late buffers so far
+turns amber for a few seconds after each one. Both come from
+`sobaAudioLoad()` in `index.html`, read by `src/app/web.rs`.
+
 ## How steady is it
 
 Measured with Playwright driving each browser headless, playing each patch

@@ -60,6 +60,9 @@ pub struct AudioDevices {
     /// The input's dropouts so far (underruns, overflows and the device's
     /// own), and when that last grew.
     input_glitches: Watch,
+    /// The browser build's late buffers so far, and when that last grew.
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    output_dropouts: Watch,
     /// Whether this session has warned about the input hearing the speakers.
     feedback_warned: bool,
     /// The audio callback count, and when it last moved: a count that
@@ -86,6 +89,7 @@ impl AudioDevices {
             inputs,
             input: None,
             input_glitches: Watch::new(now),
+            output_dropouts: Watch::new(now),
             feedback_warned: false,
             heartbeat: Watch::new(now),
         }
@@ -154,6 +158,14 @@ impl AudioDevices {
         glitches > 0 && since < INPUT_GLITCH_HOLD
     }
 
+    /// Has the output dropped a buffer lately? `late` is its count so far
+    /// (the browser build's, which the page counts).
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    pub fn output_dropped(&mut self, late: u64, now: Instant) -> bool {
+        let since = self.output_dropouts.see(late, now);
+        late > 0 && since < INPUT_GLITCH_HOLD
+    }
+
     /// Has the output stopped asking for audio? `count` is its callbacks so far.
     pub fn stalled(&mut self, count: u64, now: Instant) -> bool {
         self.heartbeat.see(count, now) > AUDIO_STALL
@@ -194,6 +206,18 @@ mod tests {
         assert!(devices.input_glitched(3, start + INPUT_GLITCH_HOLD / 2));
         assert!(!devices.input_glitched(3, start + INPUT_GLITCH_HOLD * 2));
         assert!(devices.input_glitched(4, start + INPUT_GLITCH_HOLD * 2));
+    }
+
+    #[test]
+    fn a_late_buffer_stays_amber_as_long_as_an_input_dropout() {
+        let start = Instant::now();
+        let mut devices = AudioDevices::new(Err(AudioError::NoOutputDevice));
+        assert!(!devices.output_dropped(0, start));
+        assert!(devices.output_dropped(1, start));
+        assert!(!devices.output_dropped(1, start + INPUT_GLITCH_HOLD * 2));
+        assert!(devices.output_dropped(2, start + INPUT_GLITCH_HOLD * 2));
+        // The input's own dropouts are watched apart
+        assert!(!devices.input_glitched(0, start + INPUT_GLITCH_HOLD * 2));
     }
 
     #[test]

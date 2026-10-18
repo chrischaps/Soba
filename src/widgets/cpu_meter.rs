@@ -30,6 +30,9 @@ pub struct CpuMeterConfig {
     pub moderate_threshold: f32,
     /// Threshold for "high" load (red).
     pub high_threshold: f32,
+    /// Whether the load is the browser page's (render plus the wait for
+    /// the page to draw) rather than the audio callback's, for the tooltip.
+    pub page: bool,
 }
 
 impl Default for CpuMeterConfig {
@@ -41,6 +44,7 @@ impl Default for CpuMeterConfig {
             show_warning: true,
             moderate_threshold: 50.0,
             high_threshold: 80.0,
+            page: false,
         }
     }
 }
@@ -223,12 +227,23 @@ pub fn cpu_meter(ui: &mut Ui, cpu_load: f32, peak: f32, config: &CpuMeterConfig)
     }
 
     // Add hover tooltip with more details
+    let (heading, slowest, about) = if config.page {
+        (
+            "Page busy",
+            "Busiest buffer",
+            "\nIn the browser, the sound is made on the page's own thread, between the frames \
+             it draws. This counts the time each buffer waited for a frame as well as the time \
+             spent making it.",
+        )
+    } else {
+        ("Audio CPU", "Slowest callback", "")
+    };
     response.on_hover_text(format!(
-        "Audio CPU: {:.1}%\nSlowest callback: {:.0}%\n{}",
+        "{heading}: {:.1}%\n{slowest}: {:.0}%\n{}{about}",
         cpu_load,
         peak,
         if peak >= 100.0 {
-            "A callback ran past its buffer - that's a dropout"
+            "A buffer ran past its time - that's a dropout"
         } else if cpu_load >= config.high_threshold {
             "High load - risk of audio glitches!"
         } else if peak >= config.high_threshold {

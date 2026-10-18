@@ -51,19 +51,40 @@
             // moved on by however late it fell, leaving one gap (a dropout)
             // instead of garbled sound from then on. The dropouts are counted
             // in sobaAudioStats, for the browser tests.
-            const stats = { buffers: 0, late: 0, lagMs: 0, peak: 0, renderMs: 0, renderMaxMs: 0 };
-            window.sobaAudioStats = () => ({ ...stats, lagMs: Math.round(stats.lagMs), renderMs: +stats.renderMs.toFixed(1), renderMaxMs: +stats.renderMaxMs.toFixed(1), contexts: contexts.map((c) => c.state) });
+            const stats = { buffers: 0, late: 0, lagMs: 0, peak: 0, renderMs: 0, renderMaxMs: 0, load: 0 };
+            window.sobaAudioStats = () => ({ ...stats, lagMs: Math.round(stats.lagMs), renderMs: +stats.renderMs.toFixed(1), renderMaxMs: +stats.renderMaxMs.toFixed(1), load: Math.round(stats.load * 100), contexts: contexts.map((c) => c.state) });
+            // The status bar's meter (src/app/web.rs): how much of each
+            // buffer's time went to the page, as a percentage. A buffer's
+            // `ended` must render the next one before the buffer playing
+            // now runs out, so the time it waited for the page to finish a
+            // frame counts as well as the render: at 100% a buffer comes out
+            // late. `peak` is the busiest buffer since the last call.
+            let loadPeak = 0;
+            window.sobaAudioLoad = () => {
+                const load = { late: stats.late, average: stats.load * 100, peak: loadPeak * 100 };
+                loadPeak = 0;
+                return load;
+            };
+            // When each buffer was scheduled to finish
+            const ends = new WeakMap();
             // How long the app takes to render each buffer, which is the
             // time the page's thread is busy with sound rather than drawing
             const listen = AudioBufferSourceNode.prototype.addEventListener;
             AudioBufferSourceNode.prototype.addEventListener = function (type, fn, ...rest) {
                 if (type !== "ended") return listen.call(this, type, fn, ...rest);
                 return listen.call(this, type, function (...args) {
+                    const end = ends.get(this);
+                    const waitMs = end === undefined ? 0 : Math.max(0, this.context.currentTime - end) * 1000;
                     const t0 = performance.now();
                     const result = fn.apply(this, args);
                     const ms = performance.now() - t0;
                     stats.renderMs = stats.renderMs * 0.95 + ms * 0.05;
                     stats.renderMaxMs = Math.max(stats.renderMaxMs, ms);
+                    if (this.buffer) {
+                        const load = (waitMs + ms) / (this.buffer.duration * 1000);
+                        stats.load = stats.load * 0.95 + load * 0.05;
+                        loadPeak = Math.max(loadPeak, load);
+                    }
                     return result;
                 }, ...rest);
             };
@@ -82,6 +103,7 @@
                     }
                     when += shift;
                 }
+                if (this.buffer) ends.set(this, Math.max(when, ctx.currentTime) + this.buffer.duration);
                 stats.buffers += 1;
                 if (this.buffer && stats.buffers % 8 === 0) {
                     for (const x of this.buffer.getChannelData(0)) stats.peak = Math.max(stats.peak, Math.abs(x));

@@ -105,3 +105,34 @@ pub fn audio_blocked() -> bool {
         .and_then(|blocked| blocked.as_bool())
         .unwrap_or(false)
 }
+
+/// How busy the page's thread is with sound, as `index.html` measures it
+/// (`sobaAudioLoad`). On the web, cpal renders each buffer on the page's
+/// own thread, after whatever frame is being drawn, so this counts the
+/// wait for the page as well as the render (#374).
+pub struct PageAudioLoad {
+    /// Buffers that came out late so far: each one a dropout.
+    pub late: u64,
+    /// The share of each buffer's time that went to the page, smoothed,
+    /// in percent.
+    pub average: f32,
+    /// The busiest buffer since the last call, in percent.
+    pub peak: f32,
+}
+
+/// The page's audio load, or None before the page has a measure of it.
+pub fn audio_load() -> Option<PageAudioLoad> {
+    let window = web_sys::window()?;
+    let load = js_sys::Reflect::get(&window, &"sobaAudioLoad".into())
+        .ok()?
+        .dyn_into::<js_sys::Function>()
+        .ok()?
+        .call0(&window)
+        .ok()?;
+    let number = |key: &str| js_sys::Reflect::get(&load, &key.into()).ok()?.as_f64();
+    Some(PageAudioLoad {
+        late: number("late")? as u64,
+        average: number("average")? as f32,
+        peak: number("peak")? as f32,
+    })
+}
