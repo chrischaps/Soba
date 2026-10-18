@@ -169,6 +169,7 @@ const dateFormat = new Intl.DateTimeFormat(undefined, { year: "numeric", month: 
 
 function card(table, plant, patch) {
     const modules = moduleCount(patch);
+    const heavy = modules >= HEAVY_MODULES || plant.bytes >= HEAVY_BYTES;
     const article = document.createElement("article");
     article.className = "card";
 
@@ -196,7 +197,8 @@ function card(table, plant, patch) {
     const count = document.createElement("span");
     count.textContent = modules === 1 ? "1 module" : `${modules} modules`;
     meta.append(when, count);
-    if (modules >= HEAVY_MODULES || plant.bytes >= HEAVY_BYTES) {
+    if (heavy) {
+        article.classList.add("heavy");
         const badge = document.createElement("span");
         badge.className = "badge heavy";
         badge.textContent = "Heavy";
@@ -219,6 +221,9 @@ async function main() {
     const status = document.getElementById("status");
     const more = document.getElementById("more");
     const base = api();
+    // One listener plays every card (listen.js, #394)
+    const listening = new Listening();
+    listening.watch(garden);
 
     let table;
     try {
@@ -244,7 +249,9 @@ async function main() {
             plants.forEach((plant, i) => {
                 if (!patches[i]) return;
                 try {
-                    garden.appendChild(card(table, plant, patches[i]));
+                    const grown = card(table, plant, patches[i]);
+                    garden.appendChild(grown);
+                    listening.attach(grown, plant.payload, grown.classList.contains("heavy"));
                     shown += 1;
                 } catch {
                     // A patch the drawing can't make sense of is left out

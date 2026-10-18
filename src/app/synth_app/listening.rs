@@ -6,7 +6,7 @@ use eframe::egui;
 use wasm_bindgen::JsValue;
 
 use super::SynthApp;
-use crate::app::listen::{self, page, Audition, Message, FADE_SECONDS, LEVEL_HZ};
+use crate::app::listen::{self, page, Audition, Message, FADE_SECONDS, LEVEL_HZ, STOP_FADE_SECONDS};
 use crate::engine::{MidiEvent, UI_VELOCITY};
 use crate::persistence::patch_link;
 
@@ -25,6 +25,9 @@ pub(super) struct Listener {
     audition: Option<Audition>,
     /// A patch link waiting for the sound to fade out, and when it will have.
     swap: Option<(String, f64)>,
+    /// A stop waiting for the sound to fade out: when it will have, and the
+    /// patch link to open then, if a swap was under way.
+    stopping: Option<(f64, Option<String>)>,
     /// When the level was last sent.
     level_sent: f64,
     /// When to ask whether the browser held the sound back, after Play.
@@ -79,6 +82,15 @@ impl SynthApp {
             }
             None => {}
         }
+        let Some(listener) = self.listener.as_mut() else { return };
+        match listener.stopping.take() {
+            Some((at, link)) if now >= at => self.halt_listening(link, now),
+            Some((at, link)) => {
+                ctx.request_repaint_after(std::time::Duration::from_secs_f64(at - now));
+                listener.stopping = Some((at, link));
+            }
+            None => {}
+        }
 
         if !self.is_playing {
             return;
@@ -109,30 +121,54 @@ impl SynthApp {
         let Some(listener) = self.listener.as_mut() else { return };
         match message {
             // Playing, the sound fades out first, and the new patch comes in playing
+            // (fading out to stop, it swaps once that fade is done instead)
             Message::Load(link) if self.is_playing => {
-                if listener.swap.is_none() {
+                let fading = listener.swap.take().map(|(_, at)| at).or(listener.stopping.take().map(|(at, _)| at));
+                if fading.is_none() {
                     page::fade(0.0, FADE_SECONDS, 0.0);
                 }
-                let at = listener.swap.take().map_or(now + FADE_SECONDS, |(_, at)| at);
-                listener.swap = Some((link, at));
+                listener.swap = Some((link, fading.unwrap_or(now + FADE_SECONDS)));
             }
             Message::Load(link) => self.open_listened(&link, false, now),
             // A swap under way comes in playing anyway
             Message::Play if listener.swap.is_some() => {}
+            // Fading out to stop, the sound comes back
+            Message::Play if listener.stopping.is_some() => {
+                listener.stopping = None;
+                page::fade(1.0, FADE_SECONDS, 0.0);
+            }
             Message::Play => {
                 page::resume();
                 listener.audition = Audition::start(listener.channels.clone(), now);
                 listener.ask_blocked = Some(now + BLOCKED_AFTER_SECONDS);
                 self.set_playing(true);
             }
-            Message::Stop => {
-                if let Some((link, _)) = listener.swap.take() {
-                    self.open_listened(&link, false, now);
+            // Playing, the sound fades out first (a swap under way already is)
+            Message::Stop if self.is_playing => {
+                if listener.stopping.is_none() {
+                    listener.stopping = Some(match listener.swap.take() {
+                        Some((link, at)) => (at, Some(link)),
+                        None => {
+                            page::fade(0.0, STOP_FADE_SECONDS, 0.0);
+                            (now + STOP_FADE_SECONDS, None)
+                        }
+                    });
                 }
-                self.stop_listening_audition();
-                self.set_playing(false);
-                page::fade(1.0, 0.0, 0.0);
             }
+            Message::Stop => {
+                let link = listener.swap.take().map(|(link, _)| link);
+                self.halt_listening(link, now);
+            }
+        }
+    }
+
+    /// Stops playing, and opens `link` stopped if a swap was under way.
+    fn halt_listening(&mut self, link: Option<String>, now: f64) {
+        self.stop_listening_audition();
+        self.set_playing(false);
+        page::fade(1.0, 0.0, 0.0);
+        if let Some(link) = link {
+            self.open_listened(&link, false, now);
         }
     }
 

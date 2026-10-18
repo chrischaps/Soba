@@ -200,3 +200,76 @@ h1 {
     cursor: pointer;
 }
 #more { height: 1px; }
+
+/* Listening (#394). The sounding card's ring is the audio cable's blue, as
+   wide and as bright as its level (--level, 0 to 1, from listen.js) */
+.card { --level: 0; }
+/* A card no longer sounding lets its ring go as the sound fades (listen::STOP_FADE_SECONDS) */
+.card:not(.sounding) { transition: border-color 160ms ease, transform 160ms ease, box-shadow 400ms ease; }
+.card.sounding {
+    border-color: var(--signal-audio);
+    box-shadow:
+        0 0 0 calc(1px + var(--level) * 2.5px) color-mix(in srgb, var(--signal-audio) calc(35% + var(--level) * 55%), transparent),
+        0 0 calc(6px + var(--level) * 26px) color-mix(in srgb, var(--signal-audio) calc(var(--level) * 45%), transparent);
+}
+/* Until its sound arrives (the first card wakes the whole app) the drawing breathes */
+.card.sounding.waking .drawing { animation: waking 1.4s ease-in-out infinite; }
+@keyframes waking {
+    50% { box-shadow: inset 0 0 28px color-mix(in srgb, var(--signal-audio) 22%, transparent); }
+}
+.drawing { position: relative; cursor: default; }
+.drawing:focus-visible { outline: 2px solid var(--signal-audio); outline-offset: -2px; }
+.card.heavy .drawing { cursor: pointer; }
+.hint {
+    position: absolute;
+    right: 10px;
+    bottom: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #16162acc;
+    color: var(--heavy);
+    font-size: 0.75rem;
+    opacity: 0;
+    transition: opacity 160ms ease;
+    pointer-events: none;
+}
+.card.heavy:hover .hint, .card.heavy .drawing:focus-visible .hint { opacity: 1; }
+.card.sounding .hint { opacity: 0; }
+
+/* Asked once a visit, when the browser holds the sound until a tap */
+.allow {
+    position: fixed;
+    left: 50%;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    border: 1px solid var(--signal-audio);
+    border-radius: 999px;
+    background: #1a1a2ef2;
+    box-shadow: 0 6px 24px #0008, 0 0 18px color-mix(in srgb, var(--signal-audio) 30%, transparent);
+    color: var(--bright);
+    font: inherit;
+    font-size: 0.9375rem;
+    cursor: pointer;
+    animation: sprout 320ms ease-out both;
+    z-index: 2;
+}
+.allow:hover { background: color-mix(in srgb, var(--signal-audio) 25%, #1a1a2e); }
+.allow:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* The listener: kept in the viewport, as a browser may stop drawing a frame it can't see */
+.listener {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    width: 1px;
+    height: 1px;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .card.sounding.waking .drawing { animation: none; }
+    .allow { animation: none; }
+}

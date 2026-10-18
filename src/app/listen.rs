@@ -8,7 +8,8 @@
 //! - `{type: "load", payload: "1.<data>"}` opens a patch link's patch,
 //!   stopped. Sent while one plays, the sound fades out, the patch is
 //!   swapped and the new one plays, fading in.
-//! - `{type: "play"}` and `{type: "stop"}`.
+//! - `{type: "play"}`, and `{type: "stop"}`, which fades the sound out
+//!   first. A load or a play sent while it fades takes the patch up again.
 //!
 //! It answers the page that sent them:
 //!
@@ -28,6 +29,10 @@ pub const LEVEL_HZ: f64 = 20.0;
 
 /// How long the sound fades out over before a patch is swapped, and back in after.
 pub const FADE_SECONDS: f64 = 0.15;
+
+/// How long the sound fades out over on Stop, before it stops: the garden's
+/// pointer leaving the cards, so slower than a swap.
+pub const STOP_FADE_SECONDS: f64 = 0.4;
 
 /// What the page asked for.
 #[derive(Clone, Debug, PartialEq)]

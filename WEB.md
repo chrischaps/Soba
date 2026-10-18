@@ -68,7 +68,7 @@ from `https://soba.chaps.dev`, or from `http://localhost` and
 |---|---|
 | `{type: "load", payload: "1.<data>"}` | Opens the patch in a patch link (what follows `#p=`), stopped. Sent while one plays, the sound fades out (150 ms), the patch is swapped, and the new one plays, fading in once the old one's sound already on its way has passed |
 | `{type: "play"}` | Plays it. A patch with Note Ins hears `engine::AUDITION` (the phrase `render --audition` plays) over and over, played as the computer keys play |
-| `{type: "stop"}` | Stops it |
+| `{type: "stop"}` | Fades the sound out (400 ms) and stops it. A `load` or `play` sent while it fades takes it up again |
 
 | It answers | When |
 |---|---|

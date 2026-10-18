@@ -155,8 +155,8 @@ If the service ever shuts down, the short links die with it unless they're carri
 
 ## Patch Garden
 
-*The seed bed, #388, and the page, #393. Listening and planting from the app
-come later (`docs/Patch Garden — Proposal.md`).*
+*The seed bed, #388, the page, #393, and listening, #394. Planting from the
+app comes later (`docs/Patch Garden — Proposal.md`).*
 
 **The page** is `packaging/web/garden/`, published at `soba.chaps.dev/garden/`
 by `docs.yml`. It pages through `GET /v1/garden`, inflates each payload and
@@ -164,6 +164,14 @@ draws the patch as an SVG cable diagram from `modules.json` (#390), skipping any
 it can't read. To try it against `wrangler dev`, serve `packaging/web` at
 `127.0.0.1:8080` and open `/garden/?api=http://127.0.0.1:8787` (`?api=` works
 only on a local page).
+
+**Listening** (#394, `listen.js`): resting the pointer on a card for a moment
+plays it through one hidden listener, `/?listen` (#391, `WEB.md`); moving to
+another card fades across, and leaving the cards fades out. A tap plays and
+stops a card on a phone, and a click does for heavy cards everywhere. A ring
+round the sounding card follows its level, and if the browser holds the
+sound back, "Tap to let the garden play" asks once a visit. Locally, add
+`&app=http://127.0.0.1:8081` with a `trunk serve --port 8081` to listen with.
 
 A plant is a short link with a title. **Planting publishes a patch; sharing
 still never does.** Only `POST /v1/plants` puts a patch in the garden.
