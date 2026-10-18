@@ -34,8 +34,8 @@ from pathlib import Path
 
 import picture_check
 import zoom_jitter
+from common import ROOT, require_fresh_build
 
-ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 # The sweep's own code: a change to it sweeps every patch (a change to
 # picture_check.py does already)
@@ -72,6 +72,7 @@ def main():
             print(f"{p.stem:{width}}  would sweep: {plan.why[p]}")
         return 0
 
+    require_fresh_build(stale_ok=True)
     jobs = max(1, a.jobs)
     lock = threading.Lock()
     start = time.monotonic()

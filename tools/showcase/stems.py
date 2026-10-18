@@ -5,7 +5,7 @@
 A part is whatever feeds a mixer channel: a group or a module, and a port
 of it if it feeds more than one channel (a stereo pair's Out L and Out R are
 one part). Each stem is the patch with every other channel of every Mixer
-muted, rendered by `render` (target/capture/release/render.exe, built by
+muted, rendered by `render` (target/capture/release/render, built by
 `CARGO_TARGET_DIR=target/capture cargo build --release`). So a part's stem
 keeps its share of the sends (echo, reverb) and the master chain (tape,
 limiter), as it sounds in the mix.
@@ -29,8 +29,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-RENDER = ROOT / "target" / "capture" / "release" / "render.exe"
+from common import require_fresh_build
 
 
 def slug(text):
@@ -100,13 +99,14 @@ def main():
         return 0
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    exe = require_fresh_build("render")
     work = Path(tempfile.mkdtemp(prefix="stems-"))
 
     def render(item):
         name, channels = item
         stem_patch = work / f"{name}.json"
         stem_patch.write_text(json.dumps(solo(patch, set(channels))), encoding="utf-8")
-        subprocess.run([str(RENDER), str(stem_patch), str(out / f"{name}.wav"), "--seconds", str(a.seconds)],
+        subprocess.run([str(exe), str(stem_patch), str(out / f"{name}.wav"), "--seconds", str(a.seconds)],
                        check=True, capture_output=True)
         print(f"{name} done", flush=True)
 

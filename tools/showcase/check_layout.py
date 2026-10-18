@@ -32,9 +32,8 @@ import textwrap
 from pathlib import Path
 
 import picture_check
+from common import ROOT, exe, require_fresh_build
 
-ROOT = Path(__file__).resolve().parents[2]
-EXE = ROOT / "target" / "capture" / "release" / "soba.exe"
 
 
 def overlap(a, b):
@@ -95,7 +94,7 @@ def layouts(patch, out):
     cues.append(f"{t:.2f} end")
     script = out / "layout.txt"
     script.write_text("\n".join(cues) + "\n")
-    run = subprocess.run([str(EXE), str(patch), "--capture", str(script), "--out", str(out), "--fps", "10", "--size", "960x540"],
+    run = subprocess.run([str(exe()), str(patch), "--capture", str(script), "--out", str(out), "--fps", "10", "--size", "960x540"],
                          check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
     # A level it couldn't reach would be checked as the one it stayed on
     lost = [line for line in run.stderr.splitlines() if "can't enter" in line or "no group to leave" in line]
@@ -134,6 +133,7 @@ def problems(lay):
 if __name__ == "__main__":
     names = sys.argv[1:] or sorted(p.stem for p in (ROOT / "patches").glob("*.json"))
     failed = False
+    require_fresh_build()
     with tempfile.TemporaryDirectory() as tmp:
         for name in names:
             out = Path(tmp) / name

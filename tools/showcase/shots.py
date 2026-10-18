@@ -44,10 +44,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from common import ROOT, require_fresh_build
 from tour import EDITORS, Tour
 
-ROOT = Path(__file__).resolve().parents[2]
-EXE = ROOT / "target" / "capture" / "release" / "soba.exe"
 SCRIPTS = Path(__file__).resolve().parent / "scripts"
 OUT = ROOT / "target" / "showcase"
 # What a film keeps between takes: where its dives land (aims*.json) and what
@@ -947,7 +946,7 @@ def run(name, script_only=False, preview=False, framing=False, dry=False):
     for old in [*out.glob("*.ppm"), *out.glob("lvl[0-9]*.json"), *(out.glob("m[0-9]*.png") if dry else [])]:
         old.unlink()
     print(f"filming {name} ...", flush=True)
-    subprocess.run([str(EXE), str(ROOT / patch), "--capture", str(script), "--out", str(out), "--ppp", str(ppp),
+    subprocess.run([str(require_fresh_build()), str(ROOT / patch), "--capture", str(script), "--out", str(out), "--ppp", str(ppp),
                     "--fps", str(fps), "--crf", str(crf), "--preset", preset, "--size", size],
                    check=True, cwd=ROOT)
     from PIL import Image

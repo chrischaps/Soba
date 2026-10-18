@@ -33,6 +33,11 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: clippy
 
+      # The Python tools (tools/) run unattended at night: a syntax error
+      # in one should fail here, not at 03:00
+      - name: Compile the Python tools
+        run: python -m compileall -q tools
+
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |

@@ -6,7 +6,7 @@ There is no text over the picture: what you see is the app.
 
 ## The kit
 
-Everything is in `tools/showcase/`. The tools work on any patch:
+Everything is in `tools/showcase/`. They need numpy, Pillow and ffmpeg (`pip install -r tools/requirements.txt`), and film the capture build: `CARGO_TARGET_DIR=target/capture cargo build --release`, or wherever `$CARGO_TARGET_DIR` points (`common.py`). A tool that films says so if the build is missing or older than HEAD's source. The tools work on any patch:
 
 | Tool | What it does |
 |------|--------------|

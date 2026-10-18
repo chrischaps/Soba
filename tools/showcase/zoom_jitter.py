@@ -30,10 +30,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from common import ROOT, exe, require_fresh_build
 from tour import EDITORS
 
-ROOT = Path(__file__).resolve().parents[2]
-EXE = ROOT / "target" / "capture" / "release" / "soba.exe"
 SIZE = "1920x1080"
 
 
@@ -82,7 +81,7 @@ def sweep(path, ppp=1.25, steps=80, zoom=(0.3, 2.0)):
     lines.append(f"{t + 0.1:.3f} end")
     script = out / "sweep.txt"
     script.write_text("\n".join(lines) + "\n")
-    subprocess.run([str(EXE), str(path), "--capture", str(script), "--out", str(out), "--fps", "30", "--ppp", str(ppp),
+    subprocess.run([str(exe()), str(path), "--capture", str(script), "--out", str(out), "--fps", "30", "--ppp", str(ppp),
                     "--size", SIZE, "--crf", "30"], check=True, capture_output=True)
 
     names = names_of(patch)
@@ -133,6 +132,7 @@ def main():
     ap.add_argument("--zoom", type=float, nargs=2, default=(0.3, 2.0))
     ap.add_argument("--max", type=float)
     a = ap.parse_args()
+    require_fresh_build()
     patch = json.loads(Path(a.patch).read_text(encoding="utf-8"))
     print(f"sweeping {len(centres(patch))} region(s), {a.steps} zooms each ...", flush=True)
     rows = sweep(a.patch, a.ppp, a.steps, tuple(a.zoom))

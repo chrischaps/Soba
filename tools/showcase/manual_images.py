@@ -55,7 +55,8 @@ from pathlib import Path
 from PIL import Image
 
 import picture_check
-from recipe_images import EXE, IMAGES, ROOT, changed, crop_box
+from common import ROOT, exe
+from recipe_images import IMAGES, changed, crop_box
 
 PPP = 2.0
 SIZE = (3600, 2100)
@@ -200,7 +201,7 @@ def shoot(name, tmp):
     out.mkdir()
     (out / "manual.txt").write_text(script(pic["cues"]))
     lesson = ["--lesson", pic["lesson"]] if "lesson" in pic else []
-    subprocess.run([str(EXE), str(ROOT / pic["patch"]), *lesson, "--capture", str(out / "manual.txt"), "--out", str(out),
+    subprocess.run([str(exe()), str(ROOT / pic["patch"]), *lesson, "--capture", str(out / "manual.txt"), "--out", str(out),
                     "--fps", "10", "--size", f"{size[0]}x{size[1]}", "--ppp", str(PPP)],
                    check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
     image = Image.open(out / "shot.ppm").convert("RGB")

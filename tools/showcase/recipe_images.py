@@ -60,9 +60,8 @@ from pathlib import Path
 from PIL import Image, ImageChops
 
 import picture_check
+from common import ROOT, exe
 
-ROOT = Path(__file__).resolve().parents[2]
-EXE = ROOT / "target" / "capture" / "release" / "soba.exe"
 IMAGES = ROOT / "docs" / "src" / "images"
 
 WIDTH = 1594
@@ -126,7 +125,7 @@ def film(patch, out, size, ppp, script=None):
     text = script or SCRIPT
     script = out / "recipe.txt"
     script.write_text(text)
-    subprocess.run([str(EXE), str(patch), "--capture", str(script), "--out", str(out), "--fps", "10",
+    subprocess.run([str(exe()), str(patch), "--capture", str(script), "--out", str(out), "--fps", "10",
                     "--size", f"{size[0]}x{size[1]}", "--ppp", str(ppp)],
                    check=True, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, errors="replace")
     if "still" in text and not (out / "shot.ppm").exists():

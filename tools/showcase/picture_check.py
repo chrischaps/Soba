@@ -67,7 +67,7 @@ from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+from common import ROOT, build_is_old, exe, require_fresh_build
 
 JOBS = max(1, min((os.cpu_count() or 2) - 1, 6))
 # A picture is filmed at least this often, whatever the map says
@@ -401,13 +401,7 @@ class Plan:
 def exe_is_old():
     """Whether the capture build predates the last commit to what goes into
     it, so it can't have filmed HEAD."""
-    from recipe_images import EXE
-
-    if not EXE.exists():
-        return True
-    last = git("log", "-1", "--format=%ct", "--", "src", "assets", "library", "Cargo.toml", "Cargo.lock",
-               "build.rs").stdout.strip()
-    return bool(last) and EXE.stat().st_mtime < int(last)
+    return build_is_old(exe())
 
 
 # Lines of a failed capture's stderr worth showing: its last words
@@ -473,6 +467,8 @@ def run(args, tool, every, png, inputs, shoot, compare, width):
                             break_on_hyphens=False))
     if plan.skipped and plan.film:
         print()
+    if plan.film:
+        require_fresh_build(stale_ok=True)
     stale, failed, entries = [], [], {}
     with tempfile.TemporaryDirectory() as tmp, ThreadPoolExecutor(jobs) as pool:
         lock = threading.Lock()

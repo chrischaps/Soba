@@ -1,0 +1,14 @@
+# Python packages the tools import: pip install -r tools/requirements.txt
+#
+# They also need ffmpeg on the PATH: the capture (soba --capture) pipes its
+# frames through it, and showcase/encode.py and check_film.py call it.
+# Everything else is the standard library.
+
+# showcase/: the pictures (recipe, manual and module images), check_film.py
+# and the films' activity maps
+numpy>=1.26
+Pillow>=10
+
+# voice/: recording and chopping the sung and spoken takes
+scipy>=1.11
+soundfile>=0.12
