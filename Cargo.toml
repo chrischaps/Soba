@@ -60,7 +60,7 @@ base64 = "0.22"
 ureq = "3.4"
 semver = { version = "1", features = ["serde"] }
 sha2 = "0.10"
-zip = { version = "2.4", default-features = false, features = ["deflate"] }
+zip = { version = "9.0", default-features = false, features = ["deflate"] }
 # Ableton Link, through the SDK's C wrapper (the ableton-link feature)
 rusty_link = { version = "0.4.9", optional = true }
 
