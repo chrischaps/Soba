@@ -43,7 +43,7 @@ mod tests {
 
         // Relative to the working directory, as a command line gives it
         let relative = Path::new("patches/fm-synthesis.json");
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         app.restore_session(Some(&storage));
         app.open_on_launch(Some(relative));
 

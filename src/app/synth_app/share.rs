@@ -332,7 +332,7 @@ mod round {
     #[ignore = "opens the audio device; run with --ignored"]
     fn a_shared_patch_opens_the_same_and_stopped() {
         let ctx = egui::Context::default();
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         // Its samples ship with the examples, so go by key
         app.open_example(example("Sampled Keys"));
         let shared = app.create_patch("Sampled Keys");
@@ -340,7 +340,7 @@ mod round {
         assert!(matches!(app.share_note, Some(ShareNote { kind: NoteKind::Making { .. }, .. })));
 
         let fragment = patch_link::fragment(&shared).unwrap();
-        let mut friend = SynthApp::new(false);
+        let mut friend = SynthApp::new();
         friend.set_playing(true);
         friend.open_from_link(&fragment).unwrap();
         assert_eq!(renumbered(friend.create_patch("Sampled Keys")), renumbered(shared));
@@ -355,7 +355,7 @@ mod round {
     #[ignore = "opens the audio device; run with --ignored"]
     fn a_patch_with_its_own_files_says_why_it_cant_go_by_link() {
         let ctx = egui::Context::default();
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         app.open_example(example("Sampled Keys"));
         let sampler = app.graph_state.graph.nodes.iter().find(|(_, n)| n.user_data.file.is_some()).map(|(id, _)| id).unwrap();
         app.graph_state.graph.nodes[sampler].user_data.file = Some("C:/Music/my piano.wav".into());

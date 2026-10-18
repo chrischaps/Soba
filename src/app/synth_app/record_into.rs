@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_a_new_sampler_lands_beside_patched_and_listening_as_one_step() {
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         let folder = opened(&mut app, "wiring", &["util.mixer", "osc.sine"]);
         let mixer = node(&app, "util.mixer");
         pump(&mut app, 0.05);
@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn test_a_take_in_bars_waits_for_the_bar_and_loops() {
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         let folder = opened(&mut app, "bars", &["util.clock", "osc.sine"]);
         let sine = node(&app, "osc.sine");
         pump(&mut app, 0.05);
@@ -302,7 +302,7 @@ mod tests {
     #[test]
     #[ignore = "needs an audio device; run with --ignored"]
     fn resampling_records_the_next_sound() {
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         if app.audio.engine.is_err() {
             eprintln!("no audio device: skipped");
             return;
@@ -341,7 +341,7 @@ mod tests {
     #[test]
     #[ignore = "needs an audio device; run with --ignored"]
     fn a_take_in_bars_stops_itself() {
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         if app.audio.engine.is_err() {
             eprintln!("no audio device: skipped");
             return;

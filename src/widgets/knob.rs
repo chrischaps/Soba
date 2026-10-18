@@ -931,20 +931,6 @@ fn paint_readout(painter: &egui::Painter, knob_rect: Rect, s: f32, config: &Knob
     }
 }
 
-/// A compact mini-knob variant for tight layouts.
-///
-/// Same functionality as the full knob but smaller and without
-/// value display or label.
-pub fn mini_knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
-    let mini_config = KnobConfig {
-        size: 28.0,
-        show_value: false,
-        label: None,
-        ..config.clone()
-    };
-    knob(ui, value, &mini_config)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -32,7 +32,7 @@ mod tests {
     fn a_stopped_example_asks_for_no_frames() {
         let ctx = egui::Context::default();
         theme::install_fonts(&ctx);
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         let mut busy = Vec::new();
         for (i, example) in EXAMPLES.iter().enumerate() {
             app.open_example(example);

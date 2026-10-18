@@ -220,7 +220,7 @@ mod round {
     #[test]
     #[ignore = "opens the audio device; run with --ignored"]
     fn tidying_writes_new_files_and_undo_brings_back_the_old() {
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         let folder = std::env::temp_dir().join(format!("soba-tidy-{}", std::process::id()));
         std::fs::create_dir_all(folder.join("samples")).unwrap();
         let original = folder.join("samples").join("padded.wav");
@@ -279,7 +279,7 @@ mod round {
     #[test]
     #[ignore = "opens the audio device; run with --ignored"]
     fn a_take_is_tidied_into_one_file() {
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         let folder = std::env::temp_dir().join(format!("soba-tidy-take-{}", std::process::id()));
         std::fs::create_dir_all(folder.join("Song samples")).unwrap();
         std::fs::write(folder.join("Song samples").join("Take 1.wav"), sample_files::encode_wav(&padded(48000.0))).unwrap();

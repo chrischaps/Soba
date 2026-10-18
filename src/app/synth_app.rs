@@ -332,13 +332,15 @@ enum NodeMenuAction {
     RecordInto(egui_node_graph2::NodeId, crate::graph::resample::Source, u32),
 }
 
+impl Default for SynthApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SynthApp {
     /// Create a new SynthApp instance
-    ///
-    /// If `enable_test_tone` is true, audio will start with a test tone immediately.
-    pub fn new(enable_test_tone: bool) -> Self {
-        // Note: enable_test_tone is ignored - test tone was removed in favor of AudioProcessor
-        let _ = enable_test_tone;
+    pub fn new() -> Self {
         Self::with_devices(AudioEngine::new(), Some(MidiEngine::new()))
     }
 
@@ -983,13 +985,6 @@ impl SynthApp {
 
     // Note: start_audio/stop_audio removed - we now use AudioProcessor which
     // starts automatically. Use the Play/Stop transport button to control audio.
-
-    /// Toggle the test tone on/off (legacy - may conflict with AudioProcessor)
-    #[allow(dead_code)]
-    fn toggle_test_tone(&mut self) {
-        // Test tone is disabled when using AudioProcessor
-        // This function is kept for potential future debug use
-    }
 
     /// Whether a take is being recorded (not counting one being finished).
     fn is_recording(&self) -> bool {
@@ -3217,18 +3212,6 @@ impl SynthApp {
                 Some("Could not determine port types".to_string())
             }
         }
-    }
-
-    /// Check if a connection between two nodes would create a self-loop.
-    #[allow(dead_code)]
-    fn is_self_connection(
-        &self,
-        output: egui_node_graph2::OutputId,
-        input: egui_node_graph2::InputId,
-    ) -> bool {
-        let output_node = self.graph_state.graph.get_output(output).node;
-        let input_node = self.graph_state.graph.get_input(input).node;
-        output_node == input_node
     }
 
     /// Draw the bottom status bar

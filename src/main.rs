@@ -18,7 +18,6 @@ use soba::app::SynthApp;
 fn main() -> eframe::Result<()> {
     // Parse command line arguments
     let args: Vec<String> = std::env::args().collect();
-    let test_tone = args.iter().any(|arg| arg == "--test-tone");
     // Filming the app: `soba <patch> --capture <script> --out <dir>`
     let capture = match CaptureConfig::from_args(&args) {
         Ok(capture) => capture,
@@ -76,7 +75,7 @@ fn main() -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             soba::app::theme::install_fonts(&cc.egui_ctx);
-            let mut app = SynthApp::new(test_tone);
+            let mut app = SynthApp::new();
             // The session first: it brings back the recent files, which the
             // launch patch then joins at the top (#351)
             if capture.is_none() {
@@ -131,7 +130,7 @@ fn main() {
                 eframe::WebOptions::default(),
                 Box::new(|cc| {
                     soba::app::theme::install_fonts(&cc.egui_ctx);
-                    let mut app = SynthApp::new(false);
+                    let mut app = SynthApp::new();
                     let (patch, open) = (web::query_param("patch"), web::query_param("open"));
                     // A shared patch (`#p=1.…`, see persistence/patch_link.rs),
                     // taken out of the address so a reload picks up the

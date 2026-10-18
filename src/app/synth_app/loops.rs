@@ -416,7 +416,7 @@ mod tests {
     #[test]
     #[ignore = "needs an audio device; run with --ignored"]
     fn loops_are_kept_with_the_patch() {
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         if app.audio.engine.is_err() {
             eprintln!("no audio device: skipped");
             return;

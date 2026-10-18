@@ -356,7 +356,7 @@ mod tests {
         use crate::modules::sampler;
         use crate::persistence::{sample_files, save_to_file, NodeData, Patch};
 
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         let folder = folder("round");
         let original = folder.join("padded.wav");
         std::fs::write(&original, sample_files::encode_wav(&padded())).unwrap();
@@ -440,7 +440,7 @@ mod tests {
         sampler.file = Some(take.to_string_lossy().into_owned());
         patch.nodes.push(sampler);
 
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         app.recover(&Autosave::new(&patch, None, None).unwrap());
         app.take_over_left_takes();
         assert!(take.exists(), "the recovered patch plays it");

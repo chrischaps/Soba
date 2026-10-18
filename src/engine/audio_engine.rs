@@ -12,7 +12,7 @@
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{BufferSize, Device, FromSample, Host, SampleFormat, SizedSample, Stream, StreamConfig, SupportedBufferSize};
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use web_time::Instant;
@@ -196,11 +196,6 @@ pub struct DeviceInfo {
 /// Shared state between audio callback and main thread.
 /// All fields use atomics for lock-free access.
 struct AudioState {
-    /// Whether the test tone is enabled.
-    test_tone_enabled: AtomicBool,
-    /// Current phase of the sine wave oscillator (stored as fixed-point).
-    /// We store phase * 1_000_000 as u32 to avoid floating-point atomics.
-    phase_fixed: AtomicU32,
     /// Counts audio callbacks: while the device is taking audio this keeps
     /// climbing, so the UI can tell a live stream from a stalled one.
     callbacks: AtomicU64,
@@ -266,8 +261,6 @@ impl AudioState {
 
     fn new() -> Self {
         Self {
-            test_tone_enabled: AtomicBool::new(false),
-            phase_fixed: AtomicU32::new(0),
             callbacks: AtomicU64::new(0),
             stream_failed: AtomicBool::new(false),
             stopped: AtomicU8::new(STOPPED_NOT),
@@ -511,19 +504,16 @@ impl AudioEngine {
         Ok(self.current_device_name())
     }
 
-    /// Starts the stream again on the current device: the processor's, or
-    /// the test tone without one.
+    /// Starts the processor's stream again on the current device. Without a
+    /// processor there's no stream to start: one is only ever wanted after
+    /// [`start_with_processor`](Self::start_with_processor).
     fn restart_stream(&mut self) -> Result<(), AudioError> {
-        match self.processor.clone() {
-            Some(processor) => {
-                // The old stream is gone, so this lock is uncontended
-                if let Ok(mut proc) = processor.lock() {
-                    proc.set_sample_rate(self.config.sample_rate as f32);
-                }
-                self.build_processor_stream(processor)
-            }
-            None => self.start(),
+        let Some(processor) = self.processor.clone() else { return Ok(()) };
+        // The old stream is gone, so this lock is uncontended
+        if let Ok(mut proc) = processor.lock() {
+            proc.set_sample_rate(self.config.sample_rate as f32);
         }
+        self.build_processor_stream(processor)
     }
 
     /// The output devices to choose from, in menu order.
@@ -782,91 +772,6 @@ impl AudioEngine {
         self.config.channels
     }
 
-    /// Enable or disable the test tone (440Hz sine wave).
-    pub fn set_test_tone(&self, enabled: bool) {
-        self.state.test_tone_enabled.store(enabled, Ordering::Relaxed);
-    }
-
-    /// Check if the test tone is enabled.
-    pub fn test_tone_enabled(&self) -> bool {
-        self.state.test_tone_enabled.load(Ordering::Relaxed)
-    }
-
-    /// Start the audio stream.
-    pub fn start(&mut self) -> Result<(), AudioError> {
-        if self.stream.is_some() {
-            return Ok(());
-        }
-
-        let state = Arc::clone(&self.state);
-        let error_state = Arc::clone(&self.state);
-        self.state.reset(self.follows_default);
-        let sample_rate = self.config.sample_rate as f32;
-        let channels = self.config.channels as usize;
-
-        // Phase increment per sample for 440Hz
-        // phase goes from 0.0 to 1.0
-        let phase_increment = 440.0 / sample_rate;
-
-        // Fixed-point scaling factor
-        const FIXED_SCALE: f32 = 1_000_000.0;
-
-        let stream = self
-            .device
-            .build_output_stream(
-                self.config,
-                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    // REAL-TIME SAFE: No allocations, no locks, no blocking
-                    state.callbacks.fetch_add(1, Ordering::Relaxed);
-
-                    let test_tone = state.test_tone_enabled.load(Ordering::Relaxed);
-
-                    if test_tone {
-                        // Get current phase from atomic (convert from fixed-point)
-                        let mut phase =
-                            state.phase_fixed.load(Ordering::Relaxed) as f32 / FIXED_SCALE;
-
-                        for frame in data.chunks_mut(channels) {
-                            // Generate sine wave sample
-                            let sample = (phase * 2.0 * std::f32::consts::PI).sin() * 0.3;
-
-                            // Write to all channels
-                            for sample_out in frame.iter_mut() {
-                                *sample_out = sample;
-                            }
-
-                            // Advance phase
-                            phase += phase_increment;
-                            if phase >= 1.0 {
-                                phase -= 1.0;
-                            }
-                        }
-
-                        // Store phase back (convert to fixed-point)
-                        state
-                            .phase_fixed
-                            .store((phase * FIXED_SCALE) as u32, Ordering::Relaxed);
-                    } else {
-                        // Output silence
-                        for sample in data.iter_mut() {
-                            *sample = 0.0;
-                        }
-                    }
-                },
-                move |err| error_state.take_error(&err),
-                None,
-            )
-            .map_err(|e| AudioError::StreamCreationFailed(e.to_string()))?;
-
-        stream
-            .play()
-            .map_err(|e| AudioError::StreamPlaybackFailed(e.to_string()))?;
-
-        self.stream = Some(stream);
-        self.wanted = true;
-        Ok(())
-    }
-
     /// Stop the audio stream. It always stops, even on a device that has
     /// gone (whose stream refuses to pause), so this never fails.
     pub fn stop(&mut self) -> Result<(), AudioError> {
@@ -883,8 +788,6 @@ impl AudioEngine {
             // has already exited), but dropping it closes it all the same
             let _ = stream.pause();
         }
-        // Reset phase when stopping
-        self.state.phase_fixed.store(0, Ordering::Relaxed);
     }
 
     /// Check if an audio stream has been started (it may since have failed:
@@ -927,9 +830,6 @@ impl AudioEngine {
     /// The AudioProcessor is moved into the audio callback where it processes
     /// the audio graph and produces output. The processor is wrapped in a Mutex
     /// to allow safe access from the audio callback.
-    ///
-    /// Note: This method is preferred over `start()` for actual synthesis.
-    /// The test tone (`start()`) is only for basic audio testing.
     pub fn start_with_processor(&mut self, processor: AudioProcessor) -> Result<(), AudioError> {
         if self.stream.is_some() {
             return Ok(());
@@ -1191,24 +1091,6 @@ mod tests {
         assert_eq!(info.index, 0);
     }
 
-    // Note: Hardware-dependent tests are difficult to run in CI
-    // The following tests require actual audio hardware:
-    //
-    // #[test]
-    // fn test_engine_creation() {
-    //     let engine = AudioEngine::new();
-    //     assert!(engine.is_ok());
-    // }
-    //
-    // #[test]
-    // fn test_start_stop() {
-    //     let mut engine = AudioEngine::new().unwrap();
-    //     assert!(engine.start().is_ok());
-    //     assert!(engine.is_running());
-    //     assert!(engine.stop().is_ok());
-    //     assert!(!engine.is_running());
-    // }
-
     /// Only a stream that follows the default output takes an invalidated
     /// stream for the default moving: one on a chosen device (or an ASIO
     /// driver) was reset by its driver (#337).
@@ -1221,6 +1103,13 @@ mod tests {
         assert_eq!(stop_reason(ErrorKind::DeviceNotAvailable, false), STOPPED_LOST);
     }
 
+    /// Starts `engine` on an empty patch: a stream that plays silence.
+    fn start_silent(engine: &mut AudioEngine) {
+        let (_ui, handle) = crate::engine::EngineChannels::with_defaults().split();
+        let processor = AudioProcessor::new(engine.sample_rate() as f32, crate::engine::BLOCK_SIZE, handle);
+        engine.start_with_processor(processor).unwrap();
+    }
+
     /// Choosing the device again restarts the stream after a rebuild failed,
     /// and only `stop` forgets it was wanted (#312). Needs an output device:
     /// `cargo test --lib reselecting -- --ignored`
@@ -1229,7 +1118,7 @@ mod tests {
     fn reselecting_the_device_restarts_a_lost_stream() {
         let mut engine = AudioEngine::new().expect("an output device");
         let index = engine.current_device_index().expect("the device is listed");
-        engine.start().unwrap();
+        start_silent(&mut engine);
         // As a rebuild that failed leaves it: no stream, but one wanted
         engine.drop_stream();
         assert!(engine.stream_lost());
@@ -1248,7 +1137,7 @@ mod tests {
     fn following_the_default_rebuilds_the_stream_there() {
         let mut engine = AudioEngine::new().expect("an output device");
         assert!(engine.follows_default);
-        engine.start().unwrap();
+        start_silent(&mut engine);
         // As the default going away with none to take its place leaves it
         engine.drop_stream();
         assert!(engine.awaiting_default() && engine.default_returned());

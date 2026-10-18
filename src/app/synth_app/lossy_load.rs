@@ -58,7 +58,7 @@ mod tests {
         from_a_newer_soba(&path);
         let before = std::fs::read_to_string(&path).unwrap();
 
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         app.open_file(&path);
         assert_eq!(app.document.path.as_deref(), Some(path.as_path()), "it still knows its file");
         assert_eq!(app.document.dropped_on_load.len(), 2, "the module and its cable: {:?}", app.document.dropped_on_load);
@@ -88,7 +88,7 @@ mod tests {
         patch.nodes.push(NodeData::new(1, "osc.sine", (0.0, 0.0)));
         save_to_file(&patch, &path).unwrap();
 
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         app.open_file(&path);
         assert!(app.document.dropped_on_load.is_empty(), "{:?}", app.document.dropped_on_load);
         assert_eq!(app.quick_save_path(), Some(path.clone()));
@@ -103,7 +103,7 @@ mod tests {
         let path = folder.join("Newer.json");
         from_a_newer_soba(&path);
 
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         app.open_file(&path);
         let patch = app.create_patch("Newer");
         let autosave = Autosave::new(&patch, Some(path.clone()), None).unwrap();
@@ -111,7 +111,7 @@ mod tests {
         // Through JSON, as it's kept between sessions
         let autosave: Autosave = serde_json::from_str(&serde_json::to_string(&autosave).unwrap()).unwrap();
 
-        let mut next = SynthApp::new(false);
+        let mut next = SynthApp::new();
         next.recover(&autosave);
         assert_eq!(next.document.path.as_deref(), Some(path.as_path()));
         assert_eq!(next.document.dropped_on_load, app.document.dropped_on_load);

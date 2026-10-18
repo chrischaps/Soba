@@ -533,7 +533,7 @@ mod tests {
         sampler.file = Some(kick.to_string_lossy().into_owned());
         patch.nodes.push(sampler);
         save_to_file(&patch, &path).unwrap();
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         app.open_file(&path);
         assert_eq!(app.quick_save_path(), Some(path.clone()));
 

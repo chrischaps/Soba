@@ -83,7 +83,7 @@ mod tests {
 
     #[test]
     fn opening_an_example_doesnt_hold_the_status_bar() {
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         app.status_message = Some("Opened example: First Sound".to_string());
         app.tick_status_bar(0.0);
         assert_eq!(app.status_bar_shows(), Shown::News);
@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn a_notice_shows_once_the_status_message_has_gone() {
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         app.status_error("Save failed: the disk is full");
         app.raise_notice("The input may be hearing the speakers".to_string());
         app.tick_status_bar(0.0);
@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn a_warning_comes_before_news_and_an_error_before_both() {
-        let mut app = SynthApp::new(false);
+        let mut app = SynthApp::new();
         app.raise_notice("The driver's settings changed: audio restarted".to_string());
         app.status_message = Some("Saved: patch.json".to_string());
         app.tick_status_bar(0.0);
