@@ -399,8 +399,8 @@ class Plan:
 
 
 def exe_is_old():
-    """Whether the capture build predates the last commit to what goes into
-    it, so it can't have filmed HEAD."""
+    """Whether the capture build is older than what goes into it, so it
+    can't have filmed HEAD."""
     return build_is_old(exe())
 
 

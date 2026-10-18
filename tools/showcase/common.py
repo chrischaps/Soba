@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# What goes into the build: a commit to any of these makes an older exe stale
+# What goes into the build: a change to any of these makes an older exe stale
 BUILD_INPUTS = ("src", "assets", "library", "Cargo.toml", "Cargo.lock", "build.rs")
 
 
@@ -33,13 +33,16 @@ def exe(name="soba"):
 
 
 def build_is_old(path):
-    """Whether `path` is missing or predates the last commit to what goes
-    into it, so it can't have been built from HEAD."""
+    """Whether `path` is missing or older than a file that goes into it, so
+    it can't have been built from the tree as it is. The files' own times,
+    as cargo judges them, not their last commit's: an amend or a rebase that
+    changes no file leaves the build as fresh as it was."""
     if not path.exists():
         return True
-    last = subprocess.run(["git", "log", "-1", "--format=%ct", "--", *BUILD_INPUTS], cwd=ROOT,
-                          capture_output=True, text=True).stdout.strip()
-    return bool(last) and path.stat().st_mtime < int(last)
+    files = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *BUILD_INPUTS],
+                           cwd=ROOT, capture_output=True, text=True).stdout.split("\0")
+    built = path.stat().st_mtime
+    return any(f and (ROOT / f).exists() and (ROOT / f).stat().st_mtime > built for f in files)
 
 
 def require_fresh_build(name="soba", stale_ok=False):
