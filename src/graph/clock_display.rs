@@ -24,7 +24,8 @@ use egui_node_graph2::NodeId;
 use crate::app::theme;
 use crate::dsp::Readout;
 use crate::modules::attenuverter::Attenuverter;
-use crate::modules::clock::{self, Clock, ClockDivision};
+use crate::dsp::tempo::Division;
+use crate::modules::clock::{self, Clock};
 use crate::modules::lfo::{Lfo, SYNC_DIVISIONS};
 
 use super::{SynthGraph, SynthGraphState, SynthValueType};
@@ -114,7 +115,7 @@ pub fn knob_takeover(
     let readout = readout(user_state, node_id);
     match (module_id, param) {
         ("mod.lfo", "Rate") => {
-            let &(label, beats) = SYNC_DIVISIONS.get(selected(graph, node_id, "Tempo Sync")?)?;
+            let &Division { label, beats } = SYNC_DIVISIONS.get(selected(graph, node_id, "Tempo Sync")?)?;
             beats?;
             Some(KnobTakeover {
                 value: readout.map(|r| r.values[Lfo::READOUT_RATE]).filter(|&hz| hz > 0.0),
@@ -283,7 +284,7 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     }
 
     // --- Where the pulses fall: on the grid in grey, swung late in orange ---
-    let division = ClockDivision::from_param(selected(graph, node_id, "Division").unwrap_or(2) as f32).beat_multiplier();
+    let division = Clock::division_beats(selected(graph, node_id, "Division").unwrap_or(2) as f32) as f32;
     let swing = number(graph, node_id, "Swing").unwrap_or(50.0) / 100.0;
     for (at, swung) in pulses_in_bar(division, swing) {
         let x = lamps.left() + lamps.width() * at / BEATS_PER_BAR as f32;

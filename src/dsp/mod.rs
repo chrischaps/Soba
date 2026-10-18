@@ -21,6 +21,7 @@ pub mod registry;
 pub mod sample;
 pub mod signal;
 pub mod smoothed_value;
+pub mod tempo;
 pub mod onsets;
 pub mod tidy;
 

@@ -17,49 +17,17 @@ use crate::dsp::{
     parameter::ParameterDefinition,
     port::PortDefinition,
     signal::{connected_input, MidiMessage, SignalBuffer},
+    tempo::{self, Division},
     ParameterDisplay, SignalType,
 };
 
-/// Clock division values.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ClockDivision {
-    /// Whole note (4 beats)
-    Whole = 0,
-    /// Half note (2 beats)
-    Half = 1,
-    /// Quarter note (1 beat)
-    Quarter = 2,
-    /// Eighth note (0.5 beats)
-    Eighth = 3,
-    /// Sixteenth note (0.25 beats)
-    Sixteenth = 4,
-}
+/// The Division choices: what each pulse is worth. Patches save the
+/// index, so new divisions go on the end. Chopper's Pulse uses the same
+/// table, so it can be set to match.
+pub const DIVISIONS: [Division; 5] = [tempo::WHOLE, tempo::HALF, tempo::QUARTER, tempo::EIGHTH, tempo::SIXTEENTH];
 
-impl ClockDivision {
-    /// Convert from parameter value (0-4) to division.
-    pub fn from_param(value: f32) -> Self {
-        match value as usize {
-            0 => ClockDivision::Whole,
-            1 => ClockDivision::Half,
-            2 => ClockDivision::Quarter,
-            3 => ClockDivision::Eighth,
-            4 => ClockDivision::Sixteenth,
-            _ => ClockDivision::Quarter,
-        }
-    }
-
-    /// Get the beat multiplier for this division.
-    /// Quarter note = 1.0 beat, whole = 4.0, sixteenth = 0.25
-    pub fn beat_multiplier(&self) -> f32 {
-        match self {
-            ClockDivision::Whole => 4.0,
-            ClockDivision::Half => 2.0,
-            ClockDivision::Quarter => 1.0,
-            ClockDivision::Eighth => 0.5,
-            ClockDivision::Sixteenth => 0.25,
-        }
-    }
-}
+/// The Division dropdown's labels.
+pub const DIVISION_LABELS: [&str; DIVISIONS.len()] = tempo::labels(&DIVISIONS);
 
 /// Where the Clock gets its time.
 ///
@@ -416,7 +384,7 @@ impl Clock {
                 ParameterDefinition::choice(
                     "division",
                     "Division",
-                    &["1", "1/2", "1/4", "1/8", "1/16"],
+                    &DIVISION_LABELS,
                     2, // Default to quarter note
                 ).describe("Pulse rate relative to the beat; 1/4 is one per beat"),
                 // Run toggle
@@ -501,6 +469,12 @@ impl Clock {
     #[inline]
     fn bent_tempo(knob: f64, scale: f64) -> f64 {
         (knob * scale).clamp(Self::MIN_TEMPO, Self::MAX_TEMPO)
+    }
+
+    /// Beats in each pulse for a Division value, a quarter when it's out
+    /// of range.
+    pub fn division_beats(value: f32) -> f64 {
+        tempo::beats(&DIVISIONS, value as usize).unwrap_or(1.0)
     }
 
     fn source(params: &[f32]) -> ClockSource {
@@ -612,7 +586,7 @@ impl DspModule for Clock {
     ) {
         let tempo = params[Self::PARAM_TEMPO] as f64;
         let gate_length = params[Self::PARAM_GATE_LENGTH] as f64 / 100.0;
-        let division = ClockDivision::from_param(params[Self::PARAM_DIVISION]).beat_multiplier() as f64;
+        let division = Self::division_beats(params[Self::PARAM_DIVISION]);
         let run = params[Self::PARAM_RUN] > 0.5;
         let mut source = Self::source(params);
         let swing = params.get(Self::PARAM_SWING).map_or(0.5, |&swing| (swing as f64 / 100.0).clamp(0.5, 0.75));
@@ -848,22 +822,13 @@ mod tests {
     }
 
     #[test]
-    fn test_clock_division_conversion() {
-        assert_eq!(ClockDivision::from_param(0.0), ClockDivision::Whole);
-        assert_eq!(ClockDivision::from_param(1.0), ClockDivision::Half);
-        assert_eq!(ClockDivision::from_param(2.0), ClockDivision::Quarter);
-        assert_eq!(ClockDivision::from_param(3.0), ClockDivision::Eighth);
-        assert_eq!(ClockDivision::from_param(4.0), ClockDivision::Sixteenth);
-        assert_eq!(ClockDivision::from_param(99.0), ClockDivision::Quarter); // Out of range
-    }
-
-    #[test]
-    fn test_clock_division_multipliers() {
-        assert_eq!(ClockDivision::Whole.beat_multiplier(), 4.0);
-        assert_eq!(ClockDivision::Half.beat_multiplier(), 2.0);
-        assert_eq!(ClockDivision::Quarter.beat_multiplier(), 1.0);
-        assert_eq!(ClockDivision::Eighth.beat_multiplier(), 0.5);
-        assert_eq!(ClockDivision::Sixteenth.beat_multiplier(), 0.25);
+    fn test_clock_division_beats() {
+        assert_eq!(Clock::division_beats(0.0), 4.0);
+        assert_eq!(Clock::division_beats(1.0), 2.0);
+        assert_eq!(Clock::division_beats(2.0), 1.0);
+        assert_eq!(Clock::division_beats(3.0), 0.5);
+        assert_eq!(Clock::division_beats(4.0), 0.25);
+        assert_eq!(Clock::division_beats(99.0), 1.0); // Out of range: a quarter
     }
 
     #[test]

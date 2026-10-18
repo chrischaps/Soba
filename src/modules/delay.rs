@@ -14,6 +14,7 @@ use crate::dsp::{
     primitives::{FracDelay, RecordHead, TapeTransport},
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
+    tempo::{self, Division},
     connected_input, ParameterDisplay, SignalType,
 };
 
@@ -207,8 +208,21 @@ impl StereoDelay {
         }
     }
 
+    /// The Sync choices, Off first.
+    pub const SYNC_DIVISIONS: [Division; 9] = [
+        tempo::OFF,
+        tempo::QUARTER,
+        tempo::EIGHTH,
+        tempo::EIGHTH_TRIPLET,
+        tempo::SIXTEENTH,
+        tempo::SIXTEENTH_TRIPLET,
+        tempo::THIRTY_SECOND,
+        tempo::QUARTER_DOTTED,
+        tempo::EIGHTH_DOTTED,
+    ];
+
     /// The Sync choices, as the dropdown names them.
-    pub const SYNC_LABELS: [&'static str; 9] = ["Off", "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32", "1/4D", "1/8D"];
+    pub const SYNC_LABELS: [&'static str; 9] = tempo::labels(&Self::SYNC_DIVISIONS);
 
     /// Readout slots: the delay time after Sync and CV (ms), the gain a
     /// repeat keeps each time round the loop, how far into Tape mode it is
@@ -275,18 +289,7 @@ impl StereoDelay {
 
     /// Get sync division multiplier in beats (quarter notes).
     fn sync_to_beats(sync_index: usize) -> Option<f32> {
-        match sync_index {
-            0 => None,           // Off
-            1 => Some(1.0),      // 1/4 = 1 beat
-            2 => Some(0.5),      // 1/8 = 0.5 beats
-            3 => Some(1.0 / 3.0), // 1/8T = triplet
-            4 => Some(0.25),     // 1/16 = 0.25 beats
-            5 => Some(1.0 / 6.0), // 1/16T = triplet
-            6 => Some(0.125),    // 1/32 = 0.125 beats
-            7 => Some(1.5),      // 1/4D = dotted quarter
-            8 => Some(0.75),     // 1/8D = dotted eighth
-            _ => None,
-        }
+        tempo::beats(&Self::SYNC_DIVISIONS, sync_index).map(|beats| beats as f32)
     }
 }
 

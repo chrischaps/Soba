@@ -34,7 +34,7 @@ pub fn lfo_display(ui: &mut eframe::egui::Ui, node_id: NodeId, graph: &SynthGrap
     let wave = LfoWaveform::from_param(wave_index);
     let bipolar = value("Bipolar", 1.0) > 0.5;
     let start = (value("Phase", 0.0) / 360.0).rem_euclid(1.0);
-    let division = SYNC_DIVISIONS.get(value("Tempo Sync", 0.0).max(0.0) as usize).filter(|(_, beats)| beats.is_some()).map(|(label, _)| *label);
+    let division = SYNC_DIVISIONS.get(value("Tempo Sync", 0.0).max(0.0) as usize).filter(|d| d.beats.is_some()).map(|d| d.label);
 
     // The rate it's running at, once the engine has said; the knob before
     let rate = readout(user_state, node_id)

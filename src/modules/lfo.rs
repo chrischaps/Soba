@@ -12,6 +12,7 @@ use crate::dsp::{
     port::PortDefinition,
     signal::SignalBuffer,
     smoothed_value::SmoothedValue,
+    tempo::{self, Division},
     ParameterDisplay, SignalType,
 };
 
@@ -37,43 +38,34 @@ impl LfoWaveform {
     }
 }
 
-/// The Tempo Sync choices: a label for the dropdown and the cycle length in
-/// beats, or `None` for Off. Bars are four beats. Patches save the index, so
-/// new divisions go on the end.
-pub const SYNC_DIVISIONS: [(&str, Option<f64>); 17] = [
-    ("Off", None),
-    ("4 bars", Some(16.0)),
-    ("2 bars", Some(8.0)),
-    ("1 bar", Some(4.0)),
-    ("1/2", Some(2.0)),
-    ("1/2D", Some(3.0)),
-    ("1/2T", Some(4.0 / 3.0)),
-    ("1/4", Some(1.0)),
-    ("1/4D", Some(1.5)),
-    ("1/4T", Some(2.0 / 3.0)),
-    ("1/8", Some(0.5)),
-    ("1/8D", Some(0.75)),
-    ("1/8T", Some(1.0 / 3.0)),
-    ("1/16", Some(0.25)),
-    ("1/16D", Some(0.375)),
-    ("1/16T", Some(1.0 / 6.0)),
-    ("1/32", Some(0.125)),
+/// The Tempo Sync choices, Off first. Patches save the index, so new
+/// divisions go on the end.
+pub const SYNC_DIVISIONS: [Division; 17] = [
+    tempo::OFF,
+    tempo::FOUR_BARS,
+    tempo::TWO_BARS,
+    tempo::BAR,
+    tempo::HALF,
+    tempo::HALF_DOTTED,
+    tempo::HALF_TRIPLET,
+    tempo::QUARTER,
+    tempo::QUARTER_DOTTED,
+    tempo::QUARTER_TRIPLET,
+    tempo::EIGHTH,
+    tempo::EIGHTH_DOTTED,
+    tempo::EIGHTH_TRIPLET,
+    tempo::SIXTEENTH,
+    tempo::SIXTEENTH_DOTTED,
+    tempo::SIXTEENTH_TRIPLET,
+    tempo::THIRTY_SECOND,
 ];
 
 /// The Tempo Sync dropdown's labels.
-const SYNC_LABELS: [&str; SYNC_DIVISIONS.len()] = {
-    let mut labels = [""; SYNC_DIVISIONS.len()];
-    let mut i = 0;
-    while i < labels.len() {
-        labels[i] = SYNC_DIVISIONS[i].0;
-        i += 1;
-    }
-    labels
-};
+const SYNC_LABELS: [&str; SYNC_DIVISIONS.len()] = tempo::labels(&SYNC_DIVISIONS);
 
 /// The cycle length in beats for a Tempo Sync value, or `None` when off.
 pub fn sync_beats(value: f32) -> Option<f64> {
-    SYNC_DIVISIONS.get(value.max(0.0) as usize).and_then(|&(_, beats)| beats)
+    tempo::beats(&SYNC_DIVISIONS, value.max(0.0) as usize)
 }
 
 /// The module's ID, as patches name it.
@@ -788,7 +780,7 @@ mod tests {
 
     /// The Tempo Sync value of the division labelled `label`.
     fn division(label: &str) -> f32 {
-        SYNC_DIVISIONS.iter().position(|&(l, _)| l == label).unwrap() as f32
+        SYNC_DIVISIONS.iter().position(|d| d.label == label).unwrap() as f32
     }
 
     #[test]
@@ -800,7 +792,7 @@ mod tests {
         assert_eq!(sync.max as usize, SYNC_DIVISIONS.len() - 1);
         assert_eq!(sync_beats(0.0), None);
         for i in 1..SYNC_DIVISIONS.len() {
-            assert!(sync_beats(i as f32).is_some_and(|beats| beats > 0.0), "{}", SYNC_DIVISIONS[i].0);
+            assert!(sync_beats(i as f32).is_some_and(|beats| beats > 0.0), "{}", SYNC_DIVISIONS[i].label);
         }
         assert_eq!(sync_beats(division("1 bar")), Some(4.0));
         assert_eq!(sync_beats(division("1/8D")), Some(0.75));

@@ -60,7 +60,9 @@ use crate::dsp::{
     FinishedTake, ParameterDisplay, SampleData, SignalType,
 };
 use crate::dsp::onsets::DEFAULT_SENSITIVITY;
+use crate::dsp::tempo;
 
+use super::clock;
 use super::sampler::{Controls, Recorder, Sampler, NO_THRESHOLD_DB, TAKE_LENGTHS};
 use super::sequencer::StepTimer;
 
@@ -83,13 +85,6 @@ pub const MAX_REPEAT: u8 = 4;
 
 /// The furthest a step's pitch moves, in semitones, either way.
 pub const MAX_PITCH: i8 = 12;
-
-/// The Pulse menu: what each pulse at Clock is worth, as the Clock's
-/// Division names it.
-pub const PULSES: &[&str] = &["1", "1/2", "1/4", "1/8", "1/16"];
-
-/// Beats in each Pulse, in menu order.
-const PULSE_BEATS: [f64; 5] = [4.0, 2.0, 1.0, 0.5, 0.25];
 
 /// The crossfade between one slice and the next, and the fade in and out
 /// of every slice.
@@ -411,7 +406,8 @@ impl Chopper {
     pub fn new() -> Self {
         let sample_rate = 44100.0;
         let mut parameters = vec![
-            ParameterDefinition::choice("pulse", "Pulse", PULSES, 4)
+            // What each pulse at Clock is worth, as the Clock's Division names it
+            ParameterDefinition::choice("pulse", "Pulse", &clock::DIVISION_LABELS, 4)
                 .describe("What each pulse at Clock is worth: set it to the Clock's Division, 1/16 for sixteenths"),
             ParameterDefinition::new("beats", "Beats", 1.0, 64.0, 4.0, ParameterDisplay::stepped("beats"))
                 .describe("How long the loop is: 4 for a bar of 4/4, 16 for four. The break then follows the patch's tempo, whatever it was played at"),
@@ -509,7 +505,8 @@ impl Chopper {
 
     /// Beats in each pulse.
     pub fn pulse_beats(value: f32) -> f64 {
-        PULSE_BEATS[(value.round().max(0.0) as usize).min(PULSE_BEATS.len() - 1)]
+        let last = clock::DIVISIONS.len() - 1;
+        tempo::beats(&clock::DIVISIONS, (value.round().max(0.0) as usize).min(last)).unwrap_or(1.0)
     }
 
     /// The loop's length, in beats.
