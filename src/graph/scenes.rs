@@ -13,7 +13,10 @@
 //! dropdowns hold until halfway, then flip. A knob a cable drives is left to
 //! the cable, and a knob only one of the two scenes knows stays put.
 //!
-//! The app's side (reading Morph, undo, the face's pads) is in
+//! The engine turns the knobs as Morph moves, from the table
+//! [`engine_knobs`] makes, so a morph is heard with no editor drawing it.
+//! The editor turns the same knobs on screen by the same blend. The app's
+//! side (reading Morph, undo, the face's pads) is in
 //! `app/synth_app/scenes.rs`.
 
 use std::collections::{BTreeMap, HashMap};
@@ -21,7 +24,7 @@ use std::collections::{BTreeMap, HashMap};
 use egui_node_graph2::{InputId, InputParamKind, NodeId};
 
 use crate::engine::NodeId as EngineNodeId;
-use crate::modules::scenes::{self, SLOT_LABELS};
+use crate::modules::scenes::{self, Glide, SceneKnob, SLOT_LABELS};
 use crate::widgets::knob::KnobConfig;
 
 use super::groups::{self, GroupIndex, NodeKind};
@@ -124,21 +127,21 @@ pub fn travel(value: &SynthValueType, actual: f32) -> f32 {
     }
 }
 
-/// The value `morph` of the way from `from` to `to`, for a control like
-/// `value`: round the knob's travel, or a flip at halfway for anything
-/// that steps.
-pub fn blend(value: &SynthValueType, from: f32, to: f32, morph: f32) -> f32 {
-    let morph = morph.clamp(0.0, 1.0);
+/// How a control like `value` glides: round the knob's travel, or a flip
+/// at halfway for anything that steps.
+pub fn glide(value: &SynthValueType) -> Glide {
     match value {
         SynthValueType::Number { spec, .. } if !spec.stepped => {
-            let config = KnobConfig { range: spec.min..=spec.max, logarithmic: spec.logarithmic, ..Default::default() };
-            let (a, b) = (config.travel(from.clamp(spec.min, spec.max)), config.travel(to.clamp(spec.min, spec.max)));
-            config.value_at_travel(a + (b - a) * morph).clamp(spec.min, spec.max)
+            Glide::Turn { min: spec.min, max: spec.max, logarithmic: spec.logarithmic }
         }
-        _ => {
-            if morph < 0.5 { from } else { to }
-        }
+        _ => Glide::Flip,
     }
+}
+
+/// The value `morph` of the way from `from` to `to`, for a control like
+/// `value`, as the engine turns it.
+pub fn blend(value: &SynthValueType, from: f32, to: f32, morph: f32) -> f32 {
+    scenes::blend(glide(value), from, to, morph)
 }
 
 /// The scene's controls that are still in scope, with where they stand
@@ -209,6 +212,46 @@ pub fn morph(graph: &SynthGraph, user_state: &SynthGraphState, scenes: NodeId, f
         }
     }
     settings
+}
+
+/// The knobs a Scenes module's scenes hold, for the engine to turn as its
+/// Morph moves: each one still in scope that no cable drives, with where
+/// each scene has it. `module` finds the module a scene names (by engine
+/// ID in the editor, by ID in the file as a patch is compiled) and
+/// `engine_id` gives it the engine's ID.
+pub fn engine_knobs(
+    graph: &SynthGraph,
+    scenes: NodeId,
+    module: impl Fn(EngineNodeId) -> Option<NodeId>,
+    engine_id: impl Fn(NodeId) -> Option<EngineNodeId>,
+) -> Vec<SceneKnob> {
+    let Some(node) = graph.nodes.get(scenes) else { return Vec::new() };
+    let in_scope = scope(graph, scenes);
+    let mut params: HashMap<NodeId, Vec<InputId>> = HashMap::new();
+    let mut knobs: BTreeMap<(EngineNodeId, usize), SceneKnob> = BTreeMap::new();
+    for (letter, scene) in &node.user_data.scenes {
+        let Some(slot) = SLOT_LABELS.iter().position(|label| label == letter) else { continue };
+        for (&id, values) in scene {
+            let Some(target) = module(id).filter(|target| in_scope.binary_search(target).is_ok()) else { continue };
+            let Some(engine) = engine_id(target) else { continue };
+            let inputs = params.entry(target).or_insert_with(|| port_mapping::parameter_inputs(graph, target));
+            for (name, &value) in values {
+                let Ok(input) = graph[target].get_input(name) else { continue };
+                if graph.connection(input).is_some() {
+                    continue;
+                }
+                let Some(param) = inputs.iter().position(|&i| i == input) else { continue };
+                let knob = knobs.entry((engine, param)).or_insert_with(|| SceneKnob {
+                    node: engine,
+                    param,
+                    glide: glide(&graph.get_input(input).value),
+                    values: [f32::NAN; SLOTS],
+                });
+                knob.values[slot] = value;
+            }
+        }
+    }
+    knobs.into_values().collect()
 }
 
 /// Sets what a recall or morph says to. Returns the inputs it moved.

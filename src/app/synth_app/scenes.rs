@@ -1,6 +1,12 @@
 //! Scenes, from the app's side: the pads' clicks, Morph's glide, and
 //! Ctrl+Shift+M, which keeps the knobs Mutate left as the next free scene.
 //!
+//! The engine turns the knobs as Morph moves, from the table of them this
+//! hands it each frame (see `modules/scenes.rs`), so a morph plays on
+//! whether or not anything is drawn. The editor turns the same knobs on
+//! screen by the same blend, and while the patch plays leaves the sound to
+//! the engine, sending them only once it stops.
+//!
 //! Storing, recalling and clearing a scene are undo steps of their own. A
 //! glide isn't: the knobs it moves follow from Morph, From and To, so undo
 //! takes back a turn of Morph (or of From or To) and the knobs glide back
@@ -13,13 +19,11 @@ use std::collections::HashMap;
 use eframe::egui;
 use egui_node_graph2::NodeId;
 
-use crate::engine::NodeId as EngineNodeId;
+use crate::engine::{EngineCommand, NodeId as EngineNodeId};
 use crate::graph::scenes::{self, Settings};
+use crate::modules::scenes::MORPH_EPSILON;
 use crate::graph::{port_mapping, SceneAction};
 use super::SynthApp;
-
-/// How far Morph has to move before the knobs follow.
-const MORPH_EPSILON: f32 = 1e-4;
 
 /// Where each Scenes module's Morph, From and To were when its knobs last
 /// followed them.
@@ -79,9 +83,11 @@ impl SynthApp {
         self.scene_pad(scenes_node, slot, SceneAction::Store);
     }
 
-    /// Lets the knobs follow each Scenes module's Morph. Call it once a
-    /// frame, before the knobs go to the engine.
+    /// Lets the knobs follow each Scenes module's Morph, and hands the
+    /// engine the knobs each one turns. Call it once a frame, before the
+    /// knobs go to the engine.
     pub(super) fn glide_scenes(&mut self, ctx: &egui::Context) {
+        self.send_scenes();
         let graph = &self.graph_state.graph;
         let mut glides: Vec<(EngineNodeId, Settings)> = Vec::new();
         let mut patched = false;
@@ -117,13 +123,38 @@ impl SynthApp {
                 let node_id = graph.get_input(input).node;
                 let Some(engine_id) = self.user_state.get_engine_node_id(node_id) else { continue };
                 let Some(index) = port_mapping::parameter_inputs(graph, node_id).iter().position(|&i| i == input) else { continue };
-                self.history.absorb_param(engine_id, index, graph.get_input(input).value.actual_value());
+                let value = graph.get_input(input).value.actual_value();
+                self.history.absorb_param(engine_id, index, value);
+                // Playing, the engine has turned it already, by its own
+                // Morph rather than the CV this frame read a moment ago
+                if self.is_playing {
+                    self.cached_params.insert((engine_id, index), value);
+                }
             }
         }
         // CV moves Morph without anything else asking for a frame, while
         // the patch plays
         if patched && self.is_playing {
             super::pace::animate(ctx);
+        }
+    }
+
+    /// Hands the engine each Scenes module's knobs as they stand. The
+    /// engine compiles nothing for a table it has already.
+    fn send_scenes(&mut self) {
+        let graph = &self.graph_state.graph;
+        let modules: HashMap<EngineNodeId, NodeId> = self.user_state.node_id_map.iter().map(|(&node, &engine)| (engine, node)).collect();
+        let mut tables = Vec::new();
+        for (node_id, node) in graph.nodes.iter() {
+            if node.user_data.module_id != crate::modules::scenes::ID {
+                continue;
+            }
+            let Some(engine_id) = self.user_state.get_engine_node_id(node_id) else { continue };
+            let knobs = scenes::engine_knobs(graph, node_id, |id| modules.get(&id).copied(), |n| self.user_state.get_engine_node_id(n));
+            tables.push(EngineCommand::SetScenes { node_id: engine_id, knobs });
+        }
+        for table in tables {
+            self.send_command(table);
         }
     }
 

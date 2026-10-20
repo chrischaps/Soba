@@ -14,7 +14,7 @@ use crate::dsp::onsets::{HandMarkers, Onsets, DEFAULT_SENSITIVITY};
 use crate::dsp::primitives::{Markers, Slices};
 use crate::dsp::SampleData;
 use crate::engine::{EngineCommand, NodeId as EngineNodeId};
-use crate::graph::{groups, port_mapping, SynthGraph};
+use crate::graph::{groups, port_mapping, scenes, SynthGraph};
 use crate::modules::plays_a_sample;
 
 use super::graph_io::patch_order;
@@ -132,6 +132,19 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
             to_node: engine_ids[&to],
             to_port,
         });
+    }
+
+    // Scenes modules turn their knobs in the engine as Morph moves. Their
+    // scenes name modules by ID in the file
+    let graph_ids: HashMap<u64, NodeId> = patch_ids.iter().map(|(&graph_id, &patch_id)| (patch_id, graph_id)).collect();
+    for node in &staged.nodes {
+        if graph[node.graph_id].user_data.module_id != crate::modules::scenes::ID {
+            continue;
+        }
+        let knobs = scenes::engine_knobs(graph, node.graph_id, |id| graph_ids.get(&id).copied(), |n| engine_ids.get(&n).copied());
+        if !knobs.is_empty() {
+            compiled.commands.push(EngineCommand::SetScenes { node_id: engine_ids[&node.graph_id], knobs });
+        }
     }
 
     Ok(compiled)

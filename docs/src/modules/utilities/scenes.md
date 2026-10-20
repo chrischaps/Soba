@@ -72,4 +72,4 @@ The [Breakdown](../../recipes/breakdown.md) recipe glides an acid line between a
 - **Keep a home scene.** Store A before you start exploring, so you can always click your way back.
 - **Morph between near neighbours.** Two scenes far apart sweep everything at once; two close ones make a subtle, living change.
 - **Several Scenes modules** can share a patch: one inside each group, each with its own Morph, and one at the top for the whole song.
-- **In the render tool,** the knobs sit where they were saved: the glide is the editor's, and an offline render doesn't move Morph's knobs.
+- **Morph plays anywhere the patch does.** The engine turns the knobs, so the render tool, the plugin with its window closed and a patch embedded in a web page all hear the glide. A patch opens and starts with its knobs where they were saved, and they follow once Morph moves.

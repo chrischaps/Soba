@@ -38,6 +38,7 @@ use crate::dsp::primitives::Markers;
 use crate::engine::commands::{ChannelPeaks, NodeId, PlanMessage, PortIndex};
 use crate::engine::monitor_board::MonitorWriter;
 use crate::engine::spectrum_tap::SpectrumTap;
+use crate::modules::scenes::SceneKnob;
 
 pub use crate::dsp::module_trait::MAX_INPUTS;
 
@@ -194,6 +195,20 @@ pub(crate) struct OutputTap {
     pub(crate) peaks: Option<ChannelPeaks>,
 }
 
+/// A Scenes module's knobs, which the plan turns as its Morph moves.
+pub(crate) struct PlanScenes {
+    /// The Scenes module (index into `GraphPlan::nodes`).
+    pub(crate) node: usize,
+    pub(crate) knobs: Vec<PlanKnob>,
+}
+
+/// A knob a scene holds, found in the plan.
+pub(crate) struct PlanKnob {
+    /// Its module (index into `GraphPlan::nodes`).
+    pub(crate) node: usize,
+    pub(crate) knob: SceneKnob,
+}
+
 /// A compiled audio graph, ready to run on the audio thread.
 pub struct GraphPlan {
     /// Modules in processing (topological) order.
@@ -211,6 +226,8 @@ pub struct GraphPlan {
     pub(crate) late: Vec<LateLine>,
     pub(crate) input_taps: Vec<InputTap>,
     pub(crate) output_taps: Vec<OutputTap>,
+    /// Scenes modules' knobs, turned as each one's Morph moves.
+    pub(crate) scenes: Vec<PlanScenes>,
     /// Where the UI reads the taps, meters and readouts, once the UI side
     /// has given the plan a board (see [`super::monitor_board`]).
     pub(crate) monitor: Option<MonitorWriter>,
@@ -232,6 +249,7 @@ impl GraphPlan {
             late: Vec::new(),
             input_taps: Vec::new(),
             output_taps: Vec::new(),
+            scenes: Vec::new(),
             monitor: None,
             block_len: max_block_size,
             max_block_size,
@@ -269,6 +287,16 @@ impl GraphPlan {
                 node.module = old.module.take();
                 // A crossfade in progress carries on where it was
                 node.wet = old.wet;
+            }
+        }
+        // Knobs a scene turned stand where it left them, not where the
+        // editor last set them
+        for scenes in &self.scenes {
+            for PlanKnob { node, knob } in &scenes.knobs {
+                let Some(old) = previous.nodes.iter().find(|old| old.node_id == knob.node) else { continue };
+                if let (Some(&value), Some(param)) = (old.params.get(knob.param), self.nodes[*node].params.get_mut(knob.param)) {
+                    *param = value;
+                }
             }
         }
     }
@@ -579,10 +607,26 @@ impl GraphPlan {
             }
         }
 
+        self.turn_scene_knobs();
+
         // Each monitored output's loudest since it was last read
         for tap in self.output_taps.iter_mut() {
             let now = ChannelPeaks::of(&self.outputs[tap.buffer]);
             tap.peaks = Some(tap.peaks.map_or(now, |earlier| earlier.louder(&now)));
+        }
+    }
+
+    /// Turns the knobs of each Scenes module whose Morph moved in the
+    /// block, for the next. A knob a scene doesn't hold at both ends stays.
+    fn turn_scene_knobs(&mut self) {
+        for scenes in &self.scenes {
+            let Some(module) = self.nodes[scenes.node].module.as_mut() else { continue };
+            let Some((morph, from, to)) = module.take_morph() else { continue };
+            for PlanKnob { node, knob } in &scenes.knobs {
+                if let (Some(value), Some(param)) = (knob.at(morph, from, to), self.nodes[*node].params.get_mut(knob.param)) {
+                    *param = value;
+                }
+            }
         }
     }
 
@@ -619,6 +663,11 @@ impl GraphPlan {
                 module.stems(&mut |name, left, right| f(node.node_id, name, left, right));
             }
         }
+    }
+
+    /// A running module's parameters, or `None` if it isn't in this plan.
+    pub fn parameters(&self, node_id: NodeId) -> Option<&[f32]> {
+        self.nodes.iter().find(|node| node.node_id == node_id).map(|node| node.params.as_slice())
     }
 
     /// Whether a node is bypassed, or `None` if it isn't in this plan.

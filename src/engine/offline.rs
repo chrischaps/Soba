@@ -845,6 +845,66 @@ mod tests {
         assert_eq!(peak(&out.right), 0.0, "a faded Mix input leaked on load");
     }
 
+    /// A filter at 1 kHz and a Scenes module keeping it at 200 Hz as scene
+    /// A and 3200 Hz as B, with Morph at 0.
+    fn scened_filter() -> Patch {
+        use std::collections::BTreeMap;
+        let mut patch = Patch::new("scened");
+        let cutoff = |hz: f32| BTreeMap::from([(1, BTreeMap::from([("Cutoff".to_string(), hz)]))]);
+        let mut scenes = NodeData::new(2, "util.scenes", (0.0, 0.0));
+        scenes.scenes.insert("A".into(), cutoff(200.0));
+        scenes.scenes.insert("B".into(), cutoff(3200.0));
+        patch.nodes.extend([NodeData::new(1, "filter.svf", (0.0, 0.0)), scenes, NodeData::new(3, "output.audio", (0.0, 0.0))]);
+        patch
+    }
+
+    #[test]
+    fn test_morph_turns_the_knobs_in_the_engine() {
+        let (mut r, compiled) = OfflineRenderer::from_patch(&scened_filter(), 48000.0, 256).unwrap();
+        assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+        let (filter, scenes) = (compiled.node_ids[&1], compiled.node_ids[&2]);
+        let cutoff = |r: &OfflineRenderer| r.plan.parameters(filter).unwrap()[0];
+
+        // A patch opens with its knobs where it saved them, Morph or no
+        r.render(1024);
+        assert_eq!(cutoff(&r), 1000.0);
+
+        // Halfway between 200 Hz and 3200 Hz, four octaves apart, is two up
+        r.apply(EngineCommand::SetParameter { node_id: scenes, param_index: 0, value: 0.5 });
+        r.render(512);
+        assert!((cutoff(&r) - 800.0).abs() < 1.0, "{}", cutoff(&r));
+
+        // A knob turned by hand keeps its place until Morph moves again...
+        r.apply(EngineCommand::SetParameter { node_id: filter, param_index: 0, value: 5000.0 });
+        r.render(512);
+        assert_eq!(cutoff(&r), 5000.0);
+        // ...and one a scene turned keeps its place as the patch is edited
+        r.apply(EngineCommand::SetParameter { node_id: scenes, param_index: 0, value: 1.0 });
+        r.render(512);
+        assert!((cutoff(&r) - 3200.0).abs() < 1.0, "{}", cutoff(&r));
+        r.apply(EngineCommand::AddModule { node_id: 99, module_id: "osc.sine" });
+        r.render(512);
+        assert!((cutoff(&r) - 3200.0).abs() < 1.0, "a new plan put the knob back at {}", cutoff(&r));
+    }
+
+    #[test]
+    fn test_a_morph_patched_from_an_lfo_is_heard_offline() {
+        let mut patch = scened_filter();
+        patch.nodes.push(NodeData::new(4, "mod.lfo", (0.0, 0.0)));
+        patch.connections.push(ConnectionData::new(4, "Phase", 2, "Morph"));
+        let (mut r, compiled) = OfflineRenderer::from_patch(&patch, 48000.0, 256).unwrap();
+        assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+        let filter = compiled.node_ids[&1];
+        let mut heard = Vec::new();
+        for _ in 0..20 {
+            r.render(2400);
+            heard.push(r.plan.parameters(filter).unwrap()[0]);
+        }
+        // The ramp sweeps the filter between the scenes, never past them
+        assert!(heard.iter().all(|hz| (199.0..=3201.0).contains(hz)), "{heard:?}");
+        assert!(heard.windows(2).filter(|pair| pair[0] != pair[1]).count() > 10, "{heard:?}");
+    }
+
     #[test]
     fn test_a_modules_noise_follows_its_id_in_the_patch() {
         // A Noise and a snare (hit by a Clock) in a patch, with `extra`

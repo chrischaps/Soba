@@ -19,9 +19,11 @@ use crate::dsp::{DspModule, ModuleRegistry, PortDefinition, SampleData, SignalBu
 use crate::dsp::primitives::Markers;
 use crate::engine::commands::{EngineCommand, NodeId, PlanMessage, PortIndex};
 use crate::engine::graph_plan::{
-    GraphPlan, InputSource, InputTap, LateLine, MonitorSource, OutputTap, PlanNode, SpectrumWatch, MAX_INPUTS,
+    GraphPlan, InputSource, InputTap, LateLine, MonitorSource, OutputTap, PlanKnob, PlanNode, PlanScenes, SpectrumWatch,
+    MAX_INPUTS,
 };
 use crate::engine::spectrum_tap::SpectrumTap;
+use crate::modules::scenes::SceneKnob;
 
 /// A connection between two ports in the audio graph.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -165,6 +167,8 @@ pub struct AudioGraph {
     /// Room to record takes into, and takes made to measure, for modules
     /// already on the audio thread, waiting to be sent likewise.
     take_handoffs: Vec<PlanMessage>,
+    /// Each Scenes module's knobs, which the plan turns as its Morph moves.
+    scenes: HashMap<NodeId, Vec<SceneKnob>>,
 }
 
 impl AudioGraph {
@@ -183,6 +187,7 @@ impl AudioGraph {
             monitored_outputs: HashSet::new(),
             sample_loads: Vec::new(),
             take_handoffs: Vec::new(),
+            scenes: HashMap::new(),
         }
     }
 
@@ -326,6 +331,7 @@ impl AudioGraph {
         }
         self.sample_loads.retain(|(id, _)| *id != node_id);
         self.take_handoffs.retain(|handoff| handoff.node_id() != node_id);
+        self.scenes.remove(&node_id);
 
         // Remove all connections involving this node
         self.connections.retain(|conn| {
@@ -477,6 +483,26 @@ impl AudioGraph {
         self.monitored_outputs.clear();
         self.sample_loads.clear();
         self.take_handoffs.clear();
+        self.scenes.clear();
+    }
+
+    /// Gives a Scenes module the knobs it turns as its Morph moves, from
+    /// the next plan. Returns false if there is no such module.
+    pub fn set_scenes(&mut self, node_id: NodeId, knobs: Vec<SceneKnob>) -> bool {
+        if !self.nodes.contains_key(&node_id) {
+            return false;
+        }
+        // The same again, sent each frame, compiles nothing
+        let had = self.scenes.get(&node_id).map_or(&[][..], Vec::as_slice);
+        if had != knobs.as_slice() {
+            if knobs.is_empty() {
+                self.scenes.remove(&node_id);
+            } else {
+                self.scenes.insert(node_id, knobs);
+            }
+            self.dirty = true;
+        }
+        true
     }
 
     /// Gives a module a recording to play, or takes its away with `None`.
@@ -758,6 +784,7 @@ impl AudioGraph {
             EngineCommand::SettleTake { node_id, take, sample } => self.settle_take(node_id, take, sample),
             EngineCommand::SetMarkers { node_id, markers } => self.set_markers(node_id, markers),
             EngineCommand::SeedModule { node_id, seed } => self.seed_module(node_id, seed),
+            EngineCommand::SetScenes { node_id, knobs } => self.set_scenes(node_id, knobs),
             // Played on the running module, not kept in the graph
             EngineCommand::Audition { node_id, .. } => self.nodes.contains_key(&node_id),
         }
@@ -956,6 +983,22 @@ impl AudioGraph {
                 .filter(|&(_, buffer)| heard[buffer])
                 // Past the 64th, every output counts as heard anyway
                 .fold(0, |mask, (index, _)| mask | 1u64.checked_shl(index as u32).unwrap_or(0));
+        }
+
+        // Each Scenes module's knobs, by their places in the plan. A knob
+        // whose module has gone is let go
+        let index: HashMap<NodeId, usize> = plan.nodes.iter().enumerate().map(|(i, node)| (node.node_id, i)).collect();
+        let mut scenes: Vec<_> = self.scenes.iter().collect();
+        scenes.sort_unstable_by_key(|(&node_id, _)| node_id);
+        for (node_id, knobs) in scenes {
+            let Some(&node) = index.get(node_id) else { continue };
+            let knobs: Vec<PlanKnob> = knobs
+                .iter()
+                .filter_map(|knob| Some(PlanKnob { node: *index.get(&knob.node)?, knob: knob.clone() }))
+                .collect();
+            if !knobs.is_empty() {
+                plan.scenes.push(PlanScenes { node, knobs });
+            }
         }
 
         // Hand over modules that haven't run yet

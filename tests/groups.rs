@@ -63,10 +63,14 @@ impl Editor {
     }
 
     /// The modules on a level, by patch ID.
+    /// The modules on a level, but for Scenes modules: one moved into a
+    /// group keeps the group's knobs and lets go of the rest, so it would
+    /// sound different by design.
     fn modules_on(&self, level: Option<GroupId>) -> Vec<NodeId> {
         groups::level_nodes(&self.editor.graph, level)
             .into_iter()
             .filter(|n| self.editor.graph[*n].user_data.kind == NodeKind::Module)
+            .filter(|n| self.editor.graph[*n].user_data.module_id != soba::modules::scenes::ID)
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect()

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use crate::dsp::primitives::Markers;
 use crate::dsp::{Audition, MeterLevels, OutputLevels, Readout, SampleData, SignalBuffer, Snapshot, MAX_CHANNELS};
 use crate::modules::oscilloscope::SCOPE_BUFFER_SIZE;
+use crate::modules::scenes::SceneKnob;
 
 use super::audio_input::InputFeed;
 use super::cue::Cue;
@@ -169,6 +170,14 @@ pub enum EngineCommand {
         node_id: NodeId,
         take: u32,
         sample: Arc<SampleData>,
+    },
+
+    /// Give a Scenes module the knobs its scenes hold, to turn as its
+    /// Morph moves, replacing those it had. Ignored by other modules.
+    SetScenes {
+        /// The Scenes module.
+        node_id: NodeId,
+        knobs: Vec<SceneKnob>,
     },
 
     /// Play a chord on a module's outputs from its face, or stop with

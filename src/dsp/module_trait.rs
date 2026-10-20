@@ -524,6 +524,16 @@ pub trait DspModule: Send + 'static {
     fn settle_take(&mut self, _take: u32, sample: Arc<SampleData>) -> Option<Arc<SampleData>> {
         Some(sample)
     }
+
+    /// Where a Scenes module's Morph moved to in the last block, once,
+    /// when the knobs it keeps should follow: how far, and from which
+    /// scene to which (slots 0 to 7). The plan turns the knobs.
+    ///
+    /// Returns `None` for modules that don't keep scenes, and while Morph
+    /// stands still.
+    fn take_morph(&mut self) -> Option<(f32, usize, usize)> {
+        None
+    }
 }
 
 /// The most input ports a module may have. Inputs are passed to modules as a

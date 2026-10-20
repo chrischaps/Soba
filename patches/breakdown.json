@@ -528,7 +528,7 @@
         {
           "name": "Volume",
           "type": "Number",
-          "value": 0.55
+          "value": 0.62
         },
         {
           "name": "Limiter",
