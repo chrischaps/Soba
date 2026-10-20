@@ -38,6 +38,8 @@ use crate::app::theme;
 use crate::modules::arranger::{Arranger as Arr, Cue, Curve, Move, Position, FROM_WHERE_IT_IS, GATE_NAMES, LANES, LANE_NAMES, MAX_BARS, MAX_GLIDE, MAX_REPEATS, SECTIONS};
 
 use super::arranger_follow::{self, NAME_KEY};
+
+mod next;
 use super::steady_text;
 use super::{SynthGraph, SynthGraphState, SynthResponse};
 
@@ -1041,8 +1043,9 @@ fn sections(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, now: Now
             None => "Click to pick · double-click to rename · right-click for more".to_string(),
         };
         let plays = if repeats > 1 { format!(" ×{repeats}, {} bars in all", song.span(section)) } else { String::new() };
+        let then = next::describe(graph, node_id, song, section).map_or(String::new(), |then| format!("\nThen {then}"));
         let response = response.on_hover_text(format!(
-            "{name}: {length} bar{}{plays}, from bar {}\n{how}",
+            "{name}: {length} bar{}{plays}, from bar {}{then}\n{how}",
             if length == 1 { "" } else { "s" },
             song.sections[section].0 + 1
         ));
@@ -1059,6 +1062,8 @@ fn sections(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, now: Now
             }
         }
     }
+
+    next::arcs(&tl, cx, layout, blocks, z);
 
     // The hovered name, whole, on a tag just over its block
     if let Some((shown, name)) = hovered_name {
@@ -1473,7 +1478,11 @@ fn section_menu(ui: &mut egui::Ui, cx: Ctx, section: usize, edits: &mut Vec<Synt
             ui.label(follows_text(graph, leader));
             ui.label(egui::RichText::new(follows_hint(graph, leader)).small().color(theme::text::SECONDARY));
         }
-        None => section_controls(ui, cx, section, edits, true),
+        None => {
+            section_controls(ui, cx, section, edits, true);
+            ui.separator();
+            next::menu(ui, cx, section, edits);
+        }
     }
 }
 
@@ -1723,20 +1732,21 @@ fn down_the_chain(node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphSt
         .collect()
 }
 
-/// What one section holds: its length, repeats, cues and name.
+/// What one section holds: its length, repeats, cues, Next and name.
 #[derive(Clone, Debug, PartialEq)]
 struct SectionData {
     length: f32,
     repeats: f32,
     cues: [f32; LANES],
     froms: [f32; LANES],
+    next: f32,
     name: String,
 }
 
 impl SectionData {
     /// A new section: four bars that hold every lane.
     fn blank() -> Self {
-        Self { length: 4.0, repeats: 1.0, cues: [Cue::HOLD.encode(); LANES], froms: [FROM_WHERE_IT_IS; LANES], name: String::new() }
+        Self { length: 4.0, repeats: 1.0, cues: [Cue::HOLD.encode(); LANES], froms: [FROM_WHERE_IT_IS; LANES], next: 0.0, name: String::new() }
     }
 
     /// Plays the same as `other`: the same bars and cues, whatever its name
@@ -1762,6 +1772,7 @@ fn section_data(labels: &Labels, song: &Song, section: usize) -> SectionData {
         repeats: song.repeats[section] as f32,
         cues: std::array::from_fn(|lane| song.values[Arr::cue_param(section, lane)]),
         froms: std::array::from_fn(|lane| song.values[Arr::from_param(section, lane)]),
+        next: song.values[Arr::PARAM_NEXT + section],
         name: labels.get(&section_key(section)).cloned().unwrap_or_default(),
     }
 }
@@ -1773,15 +1784,32 @@ struct Rewrite {
     sections: Vec<SectionData>,
     count: usize,
     loop_to: f32,
+    /// Where each old section is now, so every Next names the section it
+    /// named: None for one that's gone.
+    moves: Vec<Option<usize>>,
+    /// The Next of each section before `from`, which stay put.
+    before: Vec<f32>,
 }
 
 impl Rewrite {
+    fn new(song: &Song, from: usize, sections: Vec<SectionData>, count: usize, loop_to: f32, moves: impl Fn(usize) -> Option<usize>) -> Self {
+        let before = (0..from).map(|section| song.values[Arr::PARAM_NEXT + section]).collect();
+        Self { from, sections, count, loop_to, moves: (0..SECTIONS).map(moves).collect(), before }
+    }
+
     /// The parameters it sets, by index.
     fn changes(&self) -> Vec<(usize, f32)> {
         let mut changes = vec![(Arr::PARAM_SECTIONS, self.count as f32), (Arr::PARAM_LOOP, self.loop_to)];
+        for (section, &value) in self.before.iter().enumerate() {
+            let moved = next::renumbered(value, &self.moves);
+            if moved != value {
+                changes.push((Arr::PARAM_NEXT + section, moved));
+            }
+        }
         for (section, data) in self.placed() {
             changes.push((Arr::PARAM_LENGTH + section, data.length));
             changes.push((Arr::PARAM_REPEAT + section, data.repeats));
+            changes.push((Arr::PARAM_NEXT + section, next::renumbered(data.next, &self.moves)));
             for lane in 0..LANES {
                 changes.push((Arr::cue_param(section, lane), data.cues[lane]));
                 changes.push((Arr::from_param(section, lane), data.froms[lane]));
@@ -1826,7 +1854,7 @@ fn insert(node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, at:
     // Loop follows the section it named
     let loop_to = song.values[Arr::PARAM_LOOP];
     let loop_to = if loop_to >= 1.0 && loop_to as usize > at { loop_to + 1.0 } else { loop_to };
-    Rewrite { from: at, sections: moved, count: count + 1, loop_to }.edits(node_id, params, label)
+    Rewrite::new(song, at, moved, count + 1, loop_to, |s| Some(if s < at { s } else { s + 1 })).edits(node_id, params, label)
 }
 
 /// Takes section `at` out.
@@ -1839,7 +1867,7 @@ fn remove(node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, at:
     moved.push(SectionData::blank());
     let loop_to = song.values[Arr::PARAM_LOOP];
     let loop_to = if loop_to >= 1.0 && loop_to as usize - 1 > at { loop_to - 1.0 } else { loop_to.min((count - 1) as f32) };
-    Rewrite { from: at, sections: moved, count: count - 1, loop_to }.edits(node_id, params, label)
+    Rewrite::new(song, at, moved, count - 1, loop_to, |s| (s != at).then_some(if s < at { s } else { s - 1 })).edits(node_id, params, label)
 }
 
 /// Swaps section `at` with the one after it.
@@ -1847,7 +1875,8 @@ fn swap(node_id: NodeId, graph: &SynthGraph, params: &Params, song: &Song, at: u
     let labels = labels_of(graph, node_id);
     let label = format!("Move section {}", section_name(graph, node_id, at));
     let moved = vec![section_data(&labels, song, at + 1), section_data(&labels, song, at)];
-    Rewrite { from: at, sections: moved, count: song.count(), loop_to: song.values[Arr::PARAM_LOOP] }.edits(node_id, params, label)
+    let moves = |s| Some(if s == at { at + 1 } else if s == at + 1 { at } else { s });
+    Rewrite::new(song, at, moved, song.count(), song.values[Arr::PARAM_LOOP], moves).edits(node_id, params, label)
 }
 
 /// Section `at` ×N as N copies of it, each ×1, if there's room for them.
@@ -1859,9 +1888,11 @@ fn split_plan(labels: &Labels, song: &Song, at: usize) -> Option<Rewrite> {
         return None;
     }
     let data = section_data(labels, song, at);
+    // Only the last copy goes where the section went when it ended
     let mut moved: Vec<SectionData> = (0..repeats)
         .map(|pass| SectionData {
             repeats: 1.0,
+            next: if pass + 1 == repeats { data.next } else { 0.0 },
             name: if pass == 0 || data.name.is_empty() { data.name.clone() } else { format!("{} {}", data.name, pass + 1) },
             ..data.clone()
         })
@@ -1870,18 +1901,20 @@ fn split_plan(labels: &Labels, song: &Song, at: usize) -> Option<Rewrite> {
     // Loop to this section goes to its first copy, and to a later one follows it
     let loop_to = song.values[Arr::PARAM_LOOP];
     let loop_to = if loop_to >= 1.0 && loop_to as usize - 1 > at { loop_to + (repeats - 1) as f32 } else { loop_to };
-    Some(Rewrite { from: at, sections: moved, count: count + repeats - 1, loop_to })
+    Some(Rewrite::new(song, at, moved, count + repeats - 1, loop_to, |s| Some(if s <= at { s } else { s + repeats - 1 })))
 }
 
 /// How many of the sections straight after `at` play the same as it and
-/// can fold into it: up to ×16 in all, and not past one Loop goes back to.
+/// can fold into it: up to ×16 in all, not past one Loop goes back to, nor
+/// past one that may wander off when it ends.
 fn mergeable(labels: &Labels, song: &Song, at: usize) -> usize {
     let first = section_data(labels, song, at);
     let loop_to = Arr::loop_to(&song.values);
     let mut total = song.repeats[at];
     let mut folds = 0;
     for next in at + 1..song.count() {
-        if !first.same_music(&section_data(labels, song, next)) || total + song.repeats[next] > MAX_REPEATS || loop_to == Some(next) {
+        let wanders = Arr::next(&song.values, next - 1).wanders();
+        if !first.same_music(&section_data(labels, song, next)) || total + song.repeats[next] > MAX_REPEATS || loop_to == Some(next) || wanders {
             break;
         }
         total += song.repeats[next];
@@ -1901,13 +1934,15 @@ fn merge_plan(labels: &Labels, song: &Song, at: usize, most: usize) -> Option<Re
     let count = song.count();
     let mut first = section_data(labels, song, at);
     first.repeats = (at..=at + folds).map(|section| song.repeats[section]).sum::<usize>() as f32;
+    first.next = song.values[Arr::PARAM_NEXT + at + folds];
     let mut moved = vec![first];
     moved.extend((at + folds + 1..count).map(|section| section_data(labels, song, section)));
     // The emptied slots at the end go back to blank sections
     moved.extend((0..folds).map(|_| SectionData::blank()));
     let loop_to = song.values[Arr::PARAM_LOOP];
     let loop_to = if loop_to >= 1.0 && loop_to as usize - 1 > at + folds { loop_to - folds as f32 } else { loop_to };
-    Some(Rewrite { from: at, sections: moved, count: count - folds, loop_to })
+    let moves = |s| Some(if s <= at { s } else if s <= at + folds { at } else { s - folds });
+    Some(Rewrite::new(song, at, moved, count - folds, loop_to, moves))
 }
 
 #[cfg(test)]
@@ -2357,5 +2392,32 @@ mod tests {
         let (mut split, split_labels) = rewritten(&song, &labels, &split_plan(&labels, &song, 1).unwrap());
         split.values[Arr::PARAM_LOOP] = 3.0;
         assert_eq!(mergeable(&split_labels, &Song::of(split.values), 1), 0);
+    }
+
+    #[test]
+    fn where_a_section_may_go_follows_it_through_a_split_and_a_merge() {
+        use crate::modules::arranger::{Next, To, Way};
+        let (mut song, labels) = groove_song();
+        let to = |section: usize, weight: u8| Way { to: To::Section(section), weight };
+        // The Intro may skip to the Outro, the Groove may go anywhere, and
+        // the Outro may go back to the Groove
+        let intro = Next { on: 1, ways: [to(2, 1), Way::NONE] };
+        let groove = Next { on: 2, ways: [Way { to: To::Anywhere, weight: 1 }, Way::NONE] };
+        let outro = Next { on: 1, ways: [to(1, 2), Way::NONE] };
+        for (section, next) in [intro, groove, outro].into_iter().enumerate() {
+            song.values[Arr::PARAM_NEXT + section] = next.encode();
+        }
+        let song = Song::of(song.values);
+        let (split, split_labels) = rewritten(&song, &labels, &split_plan(&labels, &song, 1).unwrap());
+        let nexts = |song: &Song| (0..song.count()).map(|section| Arr::next(&song.values, section)).collect::<Vec<_>>();
+        // The Outro is section 5 now; a way to the Groove goes to its first
+        // copy; only the last copy goes where the Groove went when it ended
+        assert_eq!(nexts(&split), [Next { ways: [to(4, 1), Way::NONE], ..intro }, Next::WRITTEN, Next::WRITTEN, groove, outro]);
+        let (merged, _) = rewritten(&split, &split_labels, &merge_plan(&split_labels, &split, 1, MAX_REPEATS).unwrap());
+        assert_eq!(nexts(&merged), [intro, groove, outro]);
+        // A copy that may wander off ends the copies that can fold in
+        let mut wandering = split.values.clone();
+        wandering[Arr::PARAM_NEXT + 2] = groove.encode();
+        assert_eq!(mergeable(&split_labels, &Song::of(wandering), 1), 1);
     }
 }

@@ -17,7 +17,7 @@ It counts bars from a [Clock](../modulation/clock.md), like the sequencers, so t
 | **Reset** | Gate (Green) | A rising edge starts over: the next clock starts section 1 |
 | **Jump** | Gate (Green) | A rising edge goes to the section **Jump To** picks, at the next bar line |
 | **Jump To** | Control (Orange) | The section a Jump goes to, as its number ÷ 32 (section 1 is 0, section 5 is 4/32). It reads the same as the **Section** output |
-| **Follow** | Control (Orange) | Patch another Arranger's **Section** here to [follow](#more-than-eight-lanes-follow) it: its sections become this one's |
+| **Follow** | Control (Orange) | Patch another Arranger's **Section** here to [follow](#more-than-eight-lanes-follow) it: its sections become this one's, and it goes wherever the leader goes |
 
 ## Outputs
 
@@ -97,7 +97,7 @@ Each is one step of undo, and neither changes what you hear. The one thing that 
 
 ## More than eight lanes: Follow
 
-A song can need more than eight lanes. Patch one Arranger's **Section** output into another's **Follow** input, and the second one *follows* the first. It has the first one's sections, the same number of them, as long, played as many times, with the same names, and the same **Steps** and **Loop to**. Its lanes are its own, and you edit them on its own face as before.
+A song can need more than eight lanes. Patch one Arranger's **Section** output into another's **Follow** input, and the second one *follows* the first. It has the first one's sections, the same number of them, as long, played as many times, with the same names and the same [places to wander to](#wandering-where-a-section-goes-next), and the same **Steps** and **Loop to**. Its lanes are its own, and you edit them on its own face as before.
 
 - **Edit the sections on the leader.** On the follower they can be picked but not changed, and its bar says **Follows Desk** (or whatever the leader is called). Its **Steps** knob and **Loop to** are the leader's too.
 - **The follower's cues move with their sections.** Add, copy, move, delete, split or merge a section on the leader, and the follower does the same with its own cues. A merge folds only copies that play the same on every Arranger down the chain. Lengthening or renaming a section does too. The leader's edit and the follower's are one step of undo, so undo takes both back.
@@ -105,7 +105,7 @@ A song can need more than eight lanes. Patch one Arranger's **Section** output i
 - **Unpatch Follow** and the follower keeps the sections it had, and you can edit them on it again. It keeps the view it had too, and zooms on its own from then on.
 - **Chains.** A follower can lead another, so three Arrangers give 24 lanes. A chain can't come back round: an Arranger that would end up following itself refuses the cable and says why. **Follow** takes only an Arranger's **Section**.
 
-Following happens in the editor, not in the sound. Two Arrangers that count the same Clock already change section on the same sample, so the cable only keeps their sections the same while you write. A patch plays the same with it or without it.
+Two Arrangers that count the same Clock already change section on the same sample. But a leader can [wander](#wandering-where-a-section-goes-next), or jump on a **Jump** of its own, so on every bar line a follower goes to the section its leader is in. It throws no dice of its own. A Jump patched into the leader alone moves the whole chain.
 
 ## Cues
 
@@ -161,6 +161,22 @@ After the last section, the song goes back to **Loop to**, and **End** fires. Wi
 
 **Jump** waits for the next bar line, so a live change of section always lands on the beat. Patch a button, a [Note In](../midi/note-in.md) gate or a [Logic](./logic.md) decision into **Jump**, and a constant or a [Sample & Hold](./sample-hold.md) into **Jump To**. While a Jump waits, the section it's going to is outlined green.
 
+## Wandering: where a section goes next
+
+A song doesn't have to play in the order it's written. Right-click a section, and **When it ends** says where it may go:
+
+- **On as written** – the section after it, or **Loop to** after the last one, or stopping there with **Loop to** off.
+- **Or…** – up to two other places: any section (itself included, to maybe play it again), or **Anywhere**, which is any section but this one.
+
+Each place has a weight from 0 to 9, and its chance is its weight against the others'. **Window** with *on to Rain 1*, *Home 1*, *Late 1* goes each way a third of the time. *On 0* never goes on as written. **Always on as written** puts the section back in order.
+
+The dice are thrown on the downbeat of the section's last bar, on its last pass if it repeats. They don't wait for the bar line. Over the timeline, a faint arc leads from the end of each section that may wander to each place it may go, fainter the less likely it is, and a small **?** marks **Anywhere**. Once the dice are thrown, the arc to where they went lights green, a bar before the song gets there. A **Jump** that lands in that bar still wins.
+
+- **Repeatable.** The dice are seeded, so an offline render plays the same wandering every time, and so does the app each time the patch is opened. Stopping and starting again carries on with new throws.
+- **End** fires only when the last section goes on as written. A last section that wanders back into the song hasn't ended it.
+- **Followers wander with their leader.** A [follower](#more-than-eight-lanes-follow) has its leader's places to go, and goes where its leader went. Its timeline lights the same arc.
+- **Moving sections.** Add, copy, move, delete, split or merge sections and each place keeps pointing at the section it named, wherever that has moved. One that names a deleted section is dropped. Splitting a section ×3 gives only the last copy its wandering, and a merge stops at a copy that may wander off.
+
 ## How patches store it
 
 Every section's cue for every lane is one parameter, named for both: `Section 03 Lane 2` is section 3's cue for lane 2. Its value reads as digits, **move**, **ramp bars** and **level** in tenths of a percent. The move is 0 Hold, 1 Jump, 2 Ramp and 3 Hit, and a ramp on another curve takes 4 Linear, 5 Exp or 6 Log:
@@ -178,6 +194,8 @@ Every section's cue for every lane is one parameter, named for both: `Section 03
 
 A ramp's start is a second parameter, `Section 03 Lane 2 From`: the level in tenths of a percent (`280` starts at 28%), or `-1` to start from where the lane is. Patches saved before ramps had curves and starts have no From parameters and only 2 for ramps, so they play as they always did.
 
+Where a section may go is `Next 01` to `Next 32`, read as digits too: the weight of going on as written, then each other place's section (`01` to `32`, or `00` for anywhere) and weight. `1062051` goes on with weight 1, to section 6 with weight 2 and to section 5 with weight 1. `0` (the default, and every patch from before) always goes on as written.
+
 The sections' lengths are `Length 01` to `Length 32`, their repeats `Repeat 01` to `Repeat 32` (a patch from before repeats plays every section ×1), the lanes' glides `Glide 1` to `Glide 8`, and **Sections** is how many sections the song has. The names you give sections and lanes, and the Arranger's own name, are saved with the module as labels. A follower saves its own copy of its leader's sections, so it plays them even where Follow isn't known.
 
 ## Tips
@@ -188,7 +206,8 @@ The sections' lengths are `Length 01` to `Length 32`, their repeats `Repeat 01` 
 4. **Pedals.** Hit a Looper's **Rec** at the start of a section to record it, and its **Clear** at the top of the song so each pass starts fresh.
 5. **A brightness lane.** Ramp a lane over a build and patch it through an [Attenuverter](./attenuverter.md) into filter cutoffs or drive amounts: the whole build opens up together.
 6. **A shorter song.** Set **Loop to** a later section, and the intro plays only once.
-7. **Ride the room.** Patch a lane into a [Mixer](./mixer.md)'s **Return** with its knob at 0, and the lane is the reverb's fader: dry and close for the opening, the hall for the second verse. A lane into one channel's **Send** steps just that part into the room. [Canopy](../../songs/canopy.md#the-room) does the first.
+7. **An endless song.** Give each section a chance of going somewhere else, and set **Loop to** back near the start: the song never quite repeats. Weight its way home a little higher, so it keeps coming back to its centre.
+8. **Ride the room.** Patch a lane into a [Mixer](./mixer.md)'s **Return** with its knob at 0, and the lane is the reverb's fader: dry and close for the opening, the hall for the second verse. A lane into one channel's **Send** steps just that part into the room. [Canopy](../../songs/canopy.md#the-room) does the first.
 
 ## Related
 

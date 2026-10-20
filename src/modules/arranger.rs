@@ -39,6 +39,24 @@
 //! pass gives its cues again, fires Section Trig, Bar and Last Bar, and a
 //! ramp over "the section" takes one pass. Only the Section output (and so
 //! Jump To and Loop) counts it as one section. A Jump goes to its first pass.
+//!
+//! # What comes next
+//!
+//! A section can wander. Its **Next** weighs going on as written against up
+//! to two other places: a section, or anywhere (any other section, at
+//! random). "Window: on 1, Rain 2, Home 1" goes to Rain half the time. The
+//! dice are thrown on the downbeat of the section's last bar, so the editor
+//! can show where it's going a bar ahead, and they're seeded, so a render
+//! plays the same song every time. All weights at 0 is plain "as written".
+//!
+//! It's one parameter, read as digits like a cue: `O SSW SSW`, the weight of
+//! going on (0 to 9), then each other place's section (01 to 32, or 00 for
+//! anywhere) and weight. `1062051` is on 1, section 6 ×2, section 5 ×1. See
+//! [`Next`].
+//!
+//! An Arranger with another's Section in **Follow** throws no dice: on each
+//! bar line it goes where its leader is, so the two stay in step however the
+//! leader wanders or jumps.
 
 use std::f32::consts::PI;
 use std::sync::LazyLock;
@@ -53,6 +71,7 @@ use crate::dsp::{
     ParameterDisplay, Readout, SignalType,
 };
 
+use super::noise::Pcg32;
 use super::sequencer::StepTimer;
 
 /// The most sections a song has.
@@ -247,6 +266,104 @@ impl Cue {
     }
 }
 
+/// Where a section may go instead of on as written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum To {
+    /// Any other section, at random.
+    Anywhere,
+    /// This section (0-based).
+    Section(usize),
+}
+
+/// One place a section may go, and how likely it is: its weight against
+/// the others', 0 to 9.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Way {
+    pub to: To,
+    pub weight: u8,
+}
+
+impl Way {
+    pub const NONE: Way = Way { to: To::Anywhere, weight: 0 };
+
+    fn code(self) -> u32 {
+        let section = match self.to {
+            To::Anywhere => 0,
+            To::Section(section) => section.min(SECTIONS - 1) as u32 + 1,
+        };
+        section * 10 + self.weight.min(9) as u32
+    }
+
+    fn from_code(code: u32) -> Self {
+        let to = match (code / 10).min(SECTIONS as u32) {
+            0 => To::Anywhere,
+            section => To::Section(section as usize - 1),
+        };
+        Way { to, weight: (code % 10) as u8 }
+    }
+}
+
+/// What a section does when it finishes: go on as written, or somewhere
+/// else, by weight. See the module docs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Next {
+    /// The weight of going on as written, 0 to 9.
+    pub on: u8,
+    pub ways: [Way; 2],
+}
+
+impl Next {
+    /// Always on as written.
+    pub const WRITTEN: Next = Next { on: 0, ways: [Way::NONE; 2] };
+
+    pub fn decode(value: f32) -> Self {
+        let digits = value.max(0.0).round() as u32;
+        Next {
+            on: ((digits / 1_000_000) % 10) as u8,
+            ways: [Way::from_code((digits / 1000) % 1000), Way::from_code(digits % 1000)],
+        }
+    }
+
+    pub fn encode(self) -> f32 {
+        (self.on.min(9) as u32 * 1_000_000 + self.ways[0].code() * 1000 + self.ways[1].code()) as f32
+    }
+
+    /// Whether it ever leaves the written order.
+    pub fn wanders(self) -> bool {
+        self.ways.iter().any(|way| way.weight > 0)
+    }
+
+    /// The chance, 0 to 1, of each place: on as written, then each way.
+    pub fn chances(self) -> [f32; 3] {
+        if !self.wanders() {
+            return [1.0, 0.0, 0.0];
+        }
+        let total = (self.on + self.ways[0].weight + self.ways[1].weight) as f32;
+        [self.on as f32 / total, self.ways[0].weight as f32 / total, self.ways[1].weight as f32 / total]
+    }
+
+    /// Where a throw lands, `roll` 0 to just under 1: None for on as
+    /// written, else the way taken.
+    pub fn pick(self, roll: f32) -> Option<To> {
+        let [on, first, _] = self.chances();
+        if roll < on {
+            None
+        } else if roll < on + first {
+            Some(self.ways[0].to)
+        } else {
+            Some(self.ways[1].to)
+        }
+    }
+
+    /// Whether it may go back to its own section, `section`.
+    pub fn may_go_to(self, section: usize) -> bool {
+        self.ways.iter().any(|way| way.weight > 0 && way.to == To::Section(section))
+    }
+}
+
+/// The largest value a Next parameter takes.
+const NEXT_VALUE_LIMIT: f32 = 9_329_329.0;
+
 /// The largest value a cue's parameter takes.
 const CUE_VALUE_LIMIT: f32 = 6_641_000.0;
 /// A From parameter's value for a ramp that starts where the lane is.
@@ -273,6 +390,8 @@ struct Names {
     from_names: Vec<&'static str>,
     repeat_ids: Vec<&'static str>,
     repeat_names: Vec<&'static str>,
+    next_ids: Vec<&'static str>,
+    next_names: Vec<&'static str>,
 }
 
 fn keep(text: String) -> &'static str {
@@ -289,12 +408,16 @@ static NAMES: LazyLock<Names> = LazyLock::new(|| {
         from_names: Vec::new(),
         repeat_ids: Vec::new(),
         repeat_names: Vec::new(),
+        next_ids: Vec::new(),
+        next_names: Vec::new(),
     };
     for section in 1..=SECTIONS {
         names.length_ids.push(keep(format!("length_{section}")));
         names.length_names.push(keep(format!("Length {section:02}")));
         names.repeat_ids.push(keep(format!("repeat_{section}")));
         names.repeat_names.push(keep(format!("Repeat {section:02}")));
+        names.next_ids.push(keep(format!("next_{section}")));
+        names.next_names.push(keep(format!("Next {section:02}")));
         for lane in 1..=LANES {
             names.cue_ids.push(keep(format!("cue_{section}_{lane}")));
             names.cue_names.push(keep(format!("Section {section:02} Lane {lane}")));
@@ -384,8 +507,10 @@ pub const ID: &str = "seq.arranger";
 /// section Jump To picks, at the next bar line) and Jump To (the section, as
 /// its number ÷ 32, the same as the Section output). Follow takes another
 /// Arranger's Section, and the editor keeps this one's sections the same as
-/// that one's; the engine doesn't use it, as two Arrangers counting one Clock
-/// already keep step (see `graph::arranger_follow`).
+/// that one's (see `graph::arranger_follow`). Two Arrangers counting one
+/// Clock already keep step, but a leader's Next throws dice and its Jump
+/// can be patched alone, so on each bar line a follower goes to the section
+/// its leader is in.
 ///
 /// **Outputs:** Section (the section playing, its index ÷ 32), Section Trig
 /// (on each section's downbeat, every pass), Bar (on every downbeat), Last
@@ -418,6 +543,12 @@ pub struct Arranger {
     step: usize,
     /// A section asked for by Jump, for the next bar line.
     queued: Option<usize>,
+    /// Where the section's Next sent it, thrown on its last bar: None to go
+    /// on as written.
+    next: Option<usize>,
+    /// The dice Next throws. Kept through a reset, so the song wanders on
+    /// somewhere new, and seeded, so a render is the same every time.
+    rng: Pcg32,
     lanes: [Lane; LANES],
     section_trig: Pulse,
     bar_trig: Pulse,
@@ -457,10 +588,12 @@ impl Arranger {
     /// How wide the timeline is drawn. The editor's alone: the module
     /// doesn't read it.
     pub const PARAM_WIDTH: usize = Self::PARAM_FROMS + SECTIONS * LANES;
-    /// Each section's Repeat. Last, so older patches keep their order and
-    /// load as ×1.
+    /// Each section's Repeat. After the rest, so older patches keep their
+    /// order and load as ×1.
     pub const PARAM_REPEAT: usize = Self::PARAM_WIDTH + 1;
-    pub const PARAM_COUNT: usize = Self::PARAM_REPEAT + SECTIONS;
+    /// Each section's Next: where it goes when it finishes.
+    pub const PARAM_NEXT: usize = Self::PARAM_REPEAT + SECTIONS;
+    pub const PARAM_COUNT: usize = Self::PARAM_NEXT + SECTIONS;
 
     /// The parameter of a cue (both 0-based).
     pub const fn cue_param(section: usize, lane: usize) -> usize {
@@ -484,6 +617,8 @@ impl Arranger {
     pub const READOUT_QUEUED: usize = 4;
     /// Which time through the section, from 0.
     pub const READOUT_PASS: usize = 5;
+    /// Where the section's Next has sent it, + 1, or 0 for on as written.
+    pub const READOUT_NEXT: usize = 6;
 
     pub fn new() -> Self {
         let mut ports = vec![
@@ -496,7 +631,7 @@ impl Arranger {
             PortDefinition::input_with_default("jump_to", "Jump To", SignalType::Control, 0.0)
                 .describe("The section a Jump goes to, as its number ÷ 32: the same as the Section output"),
             PortDefinition::input_with_default("follow", "Follow", SignalType::Control, 0.0)
-                .describe("Patch another Arranger's Section here to follow it: its sections, their lengths and names, Steps and Loop become this one's. The lanes stay this one's own"),
+                .describe("Patch another Arranger's Section here to follow it: its sections, their lengths and names, Steps, Loop and Next become this one's, and on each bar line this one goes where it is. The lanes stay this one's own"),
             PortDefinition::output("section", "Section", SignalType::Control)
                 .describe("The section playing, as its index ÷ 32 (section 1 is 0)"),
             PortDefinition::output("section_trig", "Section Trig", SignalType::Gate)
@@ -562,6 +697,12 @@ impl Arranger {
                     .describe("How many times this section plays before the next: ×N is the same as N copies of it"),
             );
         }
+        for section in 0..SECTIONS {
+            parameters.push(
+                ParameterDefinition::new(names.next_ids[section], names.next_names[section], 0.0, NEXT_VALUE_LIMIT, 0.0, ParameterDisplay::stepped(""))
+                    .describe("Where this section may go when it finishes, by weight: on as written, or to another section or anywhere, as digits"),
+            );
+        }
         debug_assert_eq!(parameters.len(), Self::PARAM_COUNT);
         debug_assert_eq!(ports.len(), 5 + Self::OUT_COUNT);
 
@@ -607,6 +748,11 @@ impl Arranger {
         (value.round() as usize).clamp(1, MAX_REPEATS)
     }
 
+    /// Where a section may go when it finishes.
+    pub fn next(params: &[f32], section: usize) -> Next {
+        params.get(Self::PARAM_NEXT + section).map_or(Next::WRITTEN, |&value| Next::decode(value))
+    }
+
     pub fn cue(params: &[f32], section: usize, lane: usize) -> Cue {
         Cue::decode(params[Self::cue_param(section, lane)], params[Self::from_param(section, lane)])
     }
@@ -635,14 +781,16 @@ impl Arranger {
     }
 
     /// A rising clock edge: the next step, and maybe the next bar or section.
-    fn clock(&mut self, params: &[f32], pulse: usize) {
+    /// `leader` is the section the Arranger this one follows is in, if it
+    /// follows one.
+    fn clock(&mut self, params: &[f32], pulse: usize, leader: Option<usize>) {
         let sections = Self::sections(params);
         if self.pending {
             self.pending = false;
             self.ended = false;
             self.count = 0;
-            let first = self.queued.take().unwrap_or(0).min(sections - 1);
-            self.start_section(params, first, pulse);
+            let first = self.queued.take().or(leader).unwrap_or(0).min(sections - 1);
+            self.start_section(params, first, pulse, leader);
             return;
         }
         self.count = self.count.wrapping_add(1);
@@ -650,7 +798,7 @@ impl Arranger {
             // A Jump wakes a finished song on the next clock
             if let Some(section) = self.queued.take() {
                 self.ended = false;
-                self.start_section(params, section.min(sections - 1), pulse);
+                self.start_section(params, section.min(sections - 1), pulse, leader);
             }
             return;
         }
@@ -660,50 +808,99 @@ impl Arranger {
         }
         self.step = 0;
         self.bar += 1;
+        let finished = self.bar >= Self::length(params, self.section) && self.pass + 1 >= Self::repeats(params, self.section);
         if let Some(section) = self.queued.take() {
-            self.start_section(params, section.min(sections - 1), pulse);
+            self.start_section(params, section.min(sections - 1), pulse, leader);
+        } else if let Some(section) = leader.filter(|&section| section != self.section && !finished) {
+            // The leader jumped
+            self.start_section(params, section, pulse, leader);
         } else if self.bar < Self::length(params, self.section) {
-            self.downbeat(params, pulse);
+            self.downbeat(params, pulse, leader);
         } else if self.pass + 1 < Self::repeats(params, self.section) {
             self.pass += 1;
-            self.start_pass(params, pulse);
-        } else if self.section + 1 < sections {
-            self.start_section(params, self.section + 1, pulse);
+            self.start_pass(params, pulse, leader);
         } else {
+            self.finish_section(params, pulse, leader);
+        }
+    }
+
+    /// The end of a section's last pass: on as written, or where its Next
+    /// sent it, or where the leader went.
+    fn finish_section(&mut self, params: &[f32], pulse: usize, leader: Option<usize>) {
+        let sections = Self::sections(params);
+        let last = self.section + 1 >= sections;
+        let written = if last { Self::loop_to(params) } else { Some(self.section + 1) };
+        let next = self.next.take();
+        let go = match leader {
+            // A leader still in this section went back to it by its Next,
+            // or is on as written to it (a song of one section), or stopped.
+            // The Section can't tell the last two apart for a last section
+            // with Loop off that may go back to itself: the follower plays on
+            Some(section) if section == self.section && written != Some(section) && !Self::next(params, section).may_go_to(section) => written,
+            Some(section) => Some(section),
+            None => next.or(written),
+        };
+        // The song as written ends here, wherever it goes next
+        if last && go == written {
             self.end_trig.fire(pulse);
-            match Self::loop_to(params) {
-                Some(section) => self.start_section(params, section, pulse),
-                None => {
-                    self.ended = true;
-                    self.last_bar = false;
-                }
+        }
+        match go {
+            Some(section) => self.start_section(params, section.min(sections - 1), pulse, leader),
+            None => {
+                self.ended = true;
+                self.last_bar = false;
             }
         }
     }
 
     /// A bar's first step: the Bar trigger, and Last Bar if it's the last.
-    fn downbeat(&mut self, params: &[f32], pulse: usize) {
+    /// On the last pass's last bar, an Arranger that follows none throws its
+    /// section's Next.
+    fn downbeat(&mut self, params: &[f32], pulse: usize, leader: Option<usize>) {
         self.bar_trig.fire(pulse);
         let last = self.bar + 1 >= Self::length(params, self.section);
         self.last_bar_dip = last && self.last_bar;
         self.last_bar = last;
+        if last && self.pass + 1 >= Self::repeats(params, self.section) && leader.is_none() {
+            self.next = self.throw(params);
+        }
+    }
+
+    /// Where this section's Next sends it: None for on as written.
+    fn throw(&mut self, params: &[f32]) -> Option<usize> {
+        let next = Self::next(params, self.section);
+        if !next.wanders() {
+            return None;
+        }
+        let sections = Self::sections(params);
+        let roll = |rng: &mut Pcg32| (rng.bipolar() * 0.5 + 0.5).clamp(0.0, 0.999_999);
+        match next.pick(roll(&mut self.rng))? {
+            To::Section(section) => (section < sections).then_some(section),
+            // Any section but this one
+            To::Anywhere if sections > 1 => {
+                let other = (roll(&mut self.rng) * (sections - 1) as f32) as usize;
+                Some(if other >= self.section { other + 1 } else { other }.min(sections - 1))
+            }
+            To::Anywhere => None,
+        }
     }
 
     /// A section's first downbeat.
-    fn start_section(&mut self, params: &[f32], section: usize, pulse: usize) {
+    fn start_section(&mut self, params: &[f32], section: usize, pulse: usize, leader: Option<usize>) {
         self.section = section;
         self.pass = 0;
-        self.start_pass(params, pulse);
+        self.next = None;
+        self.start_pass(params, pulse, leader);
     }
 
     /// The downbeat of a pass through the section: its trigger, and every
     /// lane's cue, just as if it were a copy of the section.
-    fn start_pass(&mut self, params: &[f32], pulse: usize) {
+    fn start_pass(&mut self, params: &[f32], pulse: usize, leader: Option<usize>) {
         let section = self.section;
         self.bar = 0;
         self.step = 0;
         self.section_trig.fire(pulse);
-        self.downbeat(params, pulse);
+        self.downbeat(params, pulse, leader);
         let steps = Self::steps(params) as u64;
         let section_bars = Self::length(params, section) as u64;
         for (index, lane) in self.lanes.iter_mut().enumerate() {
@@ -782,6 +979,7 @@ impl DspModule for Arranger {
     ) {
         let sample = |port: usize, i: usize| inputs.get(port).map_or(0.0, |buf| buf.at(i));
         let jump_to = connected_input(inputs, Self::PORT_JUMP_TO);
+        let follow = connected_input(inputs, Self::PORT_FOLLOW);
         let mut glide_rates = [f32::INFINITY; LANES];
         for (lane, rate) in glide_rates.iter_mut().enumerate() {
             let glide = params[Self::PARAM_GLIDE + lane].clamp(0.0, MAX_GLIDE);
@@ -816,7 +1014,8 @@ impl DspModule for Arranger {
                 self.timer.clock();
                 let step_samples = self.step_samples(context);
                 let pulse = (step_samples / 2).max(1);
-                self.clock(params, pulse);
+                let leader = follow.map(|buf| Self::section_for_cv(buf.at(i), Self::sections(params)));
+                self.clock(params, pulse, leader);
             }
 
             let fraction = self.step_fraction(step_samples);
@@ -864,8 +1063,12 @@ impl DspModule for Arranger {
     }
 
     fn reset(&mut self) {
-        let (sample_rate, ports, parameters) = (self.sample_rate, std::mem::take(&mut self.ports), std::mem::take(&mut self.parameters));
-        *self = Self { sample_rate, ports, parameters, ..Self::new_state() };
+        let (sample_rate, rng, ports, parameters) = (self.sample_rate, self.rng, std::mem::take(&mut self.ports), std::mem::take(&mut self.parameters));
+        *self = Self { sample_rate, rng, ports, parameters, ..Self::new_state() };
+    }
+
+    fn seed(&mut self, seed: u64) {
+        self.rng = Pcg32::new(seed);
     }
 
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
@@ -879,6 +1082,7 @@ impl DspModule for Arranger {
         readout.values[Self::READOUT_FLAGS] = (started + ended) as f32;
         readout.values[Self::READOUT_QUEUED] = self.queued.map_or(0.0, |s| (s + 1) as f32);
         readout.values[Self::READOUT_PASS] = self.pass as f32;
+        readout.values[Self::READOUT_NEXT] = self.next.map_or(0.0, |s| (s + 1) as f32);
         Some(readout)
     }
 }
@@ -899,6 +1103,8 @@ impl Arranger {
             bar: 0,
             step: 0,
             queued: None,
+            next: None,
+            rng: Pcg32::new(0),
             lanes: [Lane::default(); LANES],
             section_trig: Pulse::default(),
             bar_trig: Pulse::default(),
@@ -928,6 +1134,8 @@ pub struct Position {
     pub ended: bool,
     /// The section a Jump will go to at the next bar line.
     pub queued: Option<usize>,
+    /// Where the section's Next has sent it, once thrown on its last bar.
+    pub next: Option<usize>,
 }
 
 impl Position {
@@ -942,6 +1150,7 @@ impl Position {
             started: flags & 1 != 0,
             ended: flags & 2 != 0,
             queued: queued.checked_sub(1),
+            next: (readout.values[Arranger::READOUT_NEXT] as usize).checked_sub(1),
         }
     }
 }
@@ -1494,6 +1703,200 @@ mod tests {
         params.truncate(Arranger::PARAM_REPEAT);
         assert_eq!(Arranger::repeats(&params, 0), 1);
         assert_eq!(Arranger::new().parameters()[Arranger::PARAM_REPEAT + 31].name, "Repeat 32");
+    }
+
+    /// Runs a seeded Arranger clocked every `period` ms, following `follow`
+    /// if given, and returns every output.
+    fn run_seeded(params: &[f32], ms: usize, period: usize, seed: u64, follow: Option<&[f32]>) -> Vec<Vec<f32>> {
+        let mut arranger = Arranger::new();
+        arranger.seed(seed);
+        arranger.prepare(RATE, ms);
+        let mut clock = SignalBuffer::gate(ms);
+        for t in (0..ms).step_by(period) {
+            clock.samples[t] = 1.0;
+        }
+        let (reset, jump, jump_to) = (SignalBuffer::gate(ms), SignalBuffer::gate(ms), SignalBuffer::control(ms));
+        let mut leader = SignalBuffer::control(ms);
+        if let Some(follow) = follow {
+            leader.samples.copy_from_slice(follow);
+        }
+        let mut inputs = vec![&clock, &reset, &jump, &jump_to];
+        if follow.is_some() {
+            inputs.push(&leader);
+        }
+        let transport = TransportState::playing_at(RATE * 60.0 / (4 * period) as f32);
+        let mut outputs: Vec<SignalBuffer> = (0..Arranger::OUT_COUNT).map(|_| SignalBuffer::control(ms)).collect();
+        arranger.process(&inputs, &mut outputs, params, &ProcessContext::with_transport(RATE, ms, transport));
+        outputs.into_iter().map(|b| b.samples).collect()
+    }
+
+    /// The section each Section Trig starts, in order.
+    fn sections_played(out: &[Vec<f32>]) -> Vec<usize> {
+        rises(&out[Arranger::OUT_SECTION_TRIG]).into_iter().map(|t| (out[Arranger::OUT_SECTION][t] * SECTIONS as f32).round() as usize).collect()
+    }
+
+    fn way(section: usize, weight: u8) -> Way {
+        Way { to: To::Section(section), weight }
+    }
+
+    #[test]
+    fn next_round_trips_through_its_parameter() {
+        assert_eq!(Next::decode(0.0), Next::WRITTEN);
+        assert!(!Next::WRITTEN.wanders());
+        // On 1, section 6 ×2, section 5 ×1
+        let window = Next { on: 1, ways: [way(5, 2), way(4, 1)] };
+        assert_eq!(window.encode(), 1_062_051.0);
+        assert_eq!(Next::decode(1_062_051.0), window);
+        for on in [0, 1, 9] {
+            for to in [To::Anywhere, To::Section(0), To::Section(SECTIONS - 1)] {
+                for weight in [0, 1, 9] {
+                    let next = Next { on, ways: [Way { to, weight }, way(3, 9 - weight)] };
+                    assert_eq!(Next::decode(next.encode()), next);
+                    assert!(next.encode() <= NEXT_VALUE_LIMIT);
+                }
+            }
+        }
+        let most = Next { on: 9, ways: [way(SECTIONS - 1, 9); 2] };
+        assert_eq!(most.encode(), NEXT_VALUE_LIMIT);
+        const { assert!(NEXT_VALUE_LIMIT < 16_777_216.0) };
+        // The chances add up, and a throw lands where they say
+        assert_eq!(window.chances(), [0.25, 0.5, 0.25]);
+        assert_eq!([window.pick(0.1), window.pick(0.3), window.pick(0.9)], [None, Some(To::Section(5)), Some(To::Section(4))]);
+        assert_eq!(Next::WRITTEN.chances(), [1.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn a_section_that_always_wanders_goes_where_it_says() {
+        // Section 1 always goes to section 3, skipping 2; Loop goes to 1
+        let mut params = song(4, &[1, 1, 1]);
+        params[Arranger::PARAM_NEXT] = Next { on: 0, ways: [way(2, 1), Way::NONE] }.encode();
+        let out = run_seeded(&params, 400, 10, 7, None);
+        assert_eq!(sections_played(&out), [0, 2, 0, 2, 0, 2, 0, 2, 0, 2]);
+        assert_eq!(rises(&out[Arranger::OUT_BAR]).len(), 10);
+        // Section 3 is the last, and goes on as written: the song ends there
+        assert_eq!(rises(&out[Arranger::OUT_END]), [80, 160, 240, 320]);
+    }
+
+    #[test]
+    fn the_last_section_wandering_is_not_the_end() {
+        let mut params = song(4, &[1, 1]);
+        params[Arranger::PARAM_LOOP] = 0.0;
+        params[Arranger::PARAM_NEXT + 1] = Next { on: 0, ways: [way(0, 1), Way::NONE] }.encode();
+        let out = run_seeded(&params, 200, 10, 1, None);
+        assert_eq!(sections_played(&out), [0, 1, 0, 1, 0]);
+        assert!(rises(&out[Arranger::OUT_END]).is_empty());
+    }
+
+    #[test]
+    fn sections_wander_by_their_weights_and_anywhere_is_somewhere_else() {
+        // Section 1: on 1 (to 2), section 4 ×3. Then 2, 3 and 4 go back to 1
+        let mut params = song(1, &[1, 1, 1, 1]);
+        params[Arranger::PARAM_NEXT] = Next { on: 1, ways: [way(3, 3), Way::NONE] }.encode();
+        for section in 1..4 {
+            params[Arranger::PARAM_NEXT + section] = Next { on: 0, ways: [way(0, 1), Way::NONE] }.encode();
+        }
+        let played = sections_played(&run_seeded(&params, 8000, 2, 3, None));
+        let after_first: Vec<usize> = played.windows(2).filter(|w| w[0] == 0).map(|w| w[1]).collect();
+        let to_four = after_first.iter().filter(|&&s| s == 3).count() as f32 / after_first.len() as f32;
+        assert!(after_first.len() > 1000 && after_first.iter().all(|&s| s == 1 || s == 3));
+        assert!((to_four - 0.75).abs() < 0.05, "went to 4 {to_four} of the time");
+
+        // Anywhere: never itself, and everywhere else
+        let mut params = song(1, &[1, 1, 1, 1]);
+        for section in 0..4 {
+            params[Arranger::PARAM_NEXT + section] = Next { on: 0, ways: [Way { to: To::Anywhere, weight: 1 }, Way::NONE] }.encode();
+        }
+        let played = sections_played(&run_seeded(&params, 4000, 2, 3, None));
+        assert!(played.windows(2).all(|w| w[0] != w[1]));
+        for section in 0..4 {
+            assert!(played.iter().filter(|&&s| s == section).count() > 150, "section {} plays", section + 1);
+        }
+    }
+
+    #[test]
+    fn a_seed_plays_the_same_song_every_time() {
+        let mut params = song(1, &[1, 1, 1, 1, 1]);
+        for section in 0..5 {
+            params[Arranger::PARAM_NEXT + section] = Next { on: 1, ways: [Way { to: To::Anywhere, weight: 2 }, Way::NONE] }.encode();
+        }
+        let a = sections_played(&run_seeded(&params, 1000, 2, 11, None));
+        assert_eq!(a, sections_played(&run_seeded(&params, 1000, 2, 11, None)));
+        assert_ne!(a, sections_played(&run_seeded(&params, 1000, 2, 12, None)));
+    }
+
+    #[test]
+    fn the_throw_shows_on_the_last_bar() {
+        // Two clocks a bar, two bars in section 1: the throw is on bar 2
+        let mut params = song(2, &[2, 1, 1]);
+        params[Arranger::PARAM_NEXT] = Next { on: 0, ways: [way(2, 1), Way::NONE] }.encode();
+        let mut arranger = Arranger::new();
+        arranger.prepare(RATE, 1);
+        let mut outputs: Vec<SignalBuffer> = (0..Arranger::OUT_COUNT).map(|_| SignalBuffer::control(1)).collect();
+        let ctx = ProcessContext::new(RATE, 1);
+        let mut nexts = Vec::new();
+        for _ in 0..5 {
+            for high in [1.0, 0.0] {
+                let mut clock = SignalBuffer::gate(1);
+                clock.samples[0] = high;
+                arranger.process(&[&clock], &mut outputs, &params, &ctx);
+            }
+            let at = Position::from_readout(&arranger.readout(&params).unwrap());
+            nexts.push((at.section, at.next));
+        }
+        // Clocks 1-2 are bar 1, 3-4 bar 2 (thrown), 5 is section 3
+        assert_eq!(nexts, [(0, None), (0, None), (0, Some(2)), (0, Some(2)), (2, None)]);
+    }
+
+    #[test]
+    fn a_follower_goes_where_its_leader_wanders_and_jumps() {
+        let mut params = song(2, &[1, 2, 1, 1]);
+        for section in 0..4 {
+            params[Arranger::PARAM_NEXT + section] = Next { on: 1, ways: [Way { to: To::Anywhere, weight: 3 }, Way::NONE] }.encode();
+        }
+        let leader = run_seeded(&params, 2000, 5, 21, None);
+        let follower = run_seeded(&params, 2000, 5, 99, Some(&leader[Arranger::OUT_SECTION]));
+        assert!(sections_played(&leader).len() > 50);
+        for output in [Arranger::OUT_SECTION, Arranger::OUT_SECTION_TRIG, Arranger::OUT_BAR, Arranger::OUT_LAST_BAR, Arranger::OUT_END] {
+            assert_eq!(leader[output], follower[output], "output {output} differs");
+        }
+
+        // A leader that jumps mid-section on a Jump of its own: the follower
+        // goes with it on the bar line
+        let params = song(2, &[4, 4, 4]);
+        let clocks: Vec<usize> = (0..300).step_by(5).collect();
+        let leader = run_with(&params, 300, &clocks, &[], &[(12, 2)]);
+        let follower = run_seeded(&params, 300, 5, 0, Some(&leader[Arranger::OUT_SECTION]));
+        assert_eq!(sections_played(&leader)[..2], [0, 2]);
+        assert_eq!(leader[Arranger::OUT_SECTION], follower[Arranger::OUT_SECTION]);
+        assert_eq!(leader[Arranger::OUT_SECTION_TRIG], follower[Arranger::OUT_SECTION_TRIG]);
+    }
+
+    #[test]
+    fn a_follower_of_a_section_that_goes_back_to_itself_goes_back_too() {
+        // Sections 2 and 3 (the last) go back to themselves half the time:
+        // the follower sees its leader still in the section, and asks the
+        // Next they share whether that was a choice
+        let mut params = song(2, &[1, 1, 1]);
+        for section in 1..3 {
+            params[Arranger::PARAM_NEXT + section] = Next { on: 1, ways: [way(section, 1), Way::NONE] }.encode();
+        }
+        let leader = run_seeded(&params, 1000, 5, 4, None);
+        let follower = run_seeded(&params, 1000, 5, 5, Some(&leader[Arranger::OUT_SECTION]));
+        let played = sections_played(&leader);
+        assert!(played.windows(2).any(|w| w == [1, 1]) && played.windows(2).any(|w| w == [2, 2]), "{played:?}");
+        assert!(played.windows(2).any(|w| w == [1, 2]) && played.windows(2).any(|w| w == [2, 0]), "{played:?}");
+        for output in [Arranger::OUT_SECTION_TRIG, Arranger::OUT_LAST_BAR, Arranger::OUT_END] {
+            assert_eq!(leader[output], follower[output], "output {output} differs");
+        }
+    }
+
+    #[test]
+    fn an_old_patch_without_next_plays_as_written() {
+        let mut params = song(4, &[1, 1, 1]);
+        params.truncate(Arranger::PARAM_NEXT);
+        assert_eq!(Arranger::next(&params, 0), Next::WRITTEN);
+        let out = run(&params, 120, 10);
+        assert_eq!(rises(&out[Arranger::OUT_SECTION_TRIG]), [0, 40, 80]);
     }
 
     #[test]

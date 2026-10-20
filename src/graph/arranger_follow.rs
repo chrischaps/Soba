@@ -3,16 +3,17 @@
 //! An Arranger has eight lanes, and a song can need more. Patch one
 //! Arranger's **Section** output into another's **Follow** input and the
 //! second *follows* the first. Its sections (how many, how long, how many
-//! times each plays, what they're called), its Steps and its Loop are kept
-//! the same as its leader's, and can't be edited on it. Its lanes and their
-//! cues stay its own.
+//! times each plays, where each may go next, what they're called), its Steps
+//! and its Loop are kept the same as its leader's, and can't be edited on
+//! it. Its lanes and their cues stay its own.
 //!
 //! It all happens in the editor. Each frame, before the engine hears about
 //! the frame's edits, [`sync`] copies every leader's song into its
 //! followers, so an edit to a leader and the copies of it are one undo step.
-//! The engine plays two Arrangers counting one Clock, which already keep
-//! step to the sample, so a saved patch plays the same in a build without
-//! Follow. Adding, copying, moving or deleting a leader's section moves its
+//! Two Arrangers counting one Clock already keep step to the sample, but a
+//! leader that wanders by its Next, or jumps alone, would leave its
+//! followers behind, so in the engine a follower goes where its leader is
+//! on each bar line (see `modules::arranger`). Adding, copying, moving or deleting a leader's section moves its
 //! followers' cues along with it (see `arranger_display`), so a cue stays
 //! with its section.
 //!
@@ -42,12 +43,13 @@ const SECTION: &str = "Section";
 pub const NAME_KEY: &str = "Name";
 
 /// The parameters a follower takes from its leader, by index: Steps,
-/// Sections, Loop and every section's length and repeats.
+/// Sections, Loop and every section's length, repeats and Next.
 static MIRRORED: LazyLock<Vec<usize>> = LazyLock::new(|| {
     [Arranger::PARAM_STEPS, Arranger::PARAM_SECTIONS, Arranger::PARAM_LOOP]
         .into_iter()
         .chain(Arranger::PARAM_LENGTH..Arranger::PARAM_LENGTH + SECTIONS)
         .chain(Arranger::PARAM_REPEAT..Arranger::PARAM_REPEAT + SECTIONS)
+        .chain(Arranger::PARAM_NEXT..Arranger::PARAM_NEXT + SECTIONS)
         .collect()
 });
 
@@ -313,6 +315,7 @@ mod tests {
         rig.set(desk, Arranger::PARAM_LENGTH + 1, 8.0);
         rig.set(desk, Arranger::PARAM_LOOP, 2.0);
         rig.set(desk, Arranger::PARAM_STEPS, 12.0);
+        rig.set(desk, Arranger::PARAM_NEXT + 1, 1_011_000.0);
         rig.name(desk, "Section 2", "Groove");
         rig.name(desk, "Lane 1", "Sine");
         rig.name(desk, NAME_KEY, "Desk");
@@ -322,7 +325,7 @@ mod tests {
 
         assert_eq!(rig.follow(cues, desk), None);
         assert!(rig.sync());
-        for index in [Arranger::PARAM_SECTIONS, Arranger::PARAM_LENGTH + 1, Arranger::PARAM_LOOP, Arranger::PARAM_STEPS] {
+        for index in [Arranger::PARAM_SECTIONS, Arranger::PARAM_LENGTH + 1, Arranger::PARAM_LOOP, Arranger::PARAM_STEPS, Arranger::PARAM_NEXT + 1] {
             assert_eq!(rig.get(cues, index), rig.get(desk, index));
         }
         assert_eq!(rig.label(cues, "Section 2"), Some("Groove"));
