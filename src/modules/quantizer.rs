@@ -79,7 +79,7 @@ pub fn rotate_to_key(relative: u16, root: i32) -> u16 {
 
 /// Whether `note` (in semitones from C4) belongs to an absolute mask.
 #[inline]
-fn in_key(key: u16, note: i32) -> bool {
+pub(crate) fn in_key(key: u16, note: i32) -> bool {
     key & (1 << note.rem_euclid(12)) != 0
 }
 

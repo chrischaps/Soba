@@ -1225,7 +1225,7 @@ mod tests {
             clock.prepare(48000.0, 512);
             seq.prepare(48000.0, 512);
             let mut seq_params: Vec<f32> = seq.parameters().iter().map(|p| p.default).collect();
-            seq_params[0] = 16.0; // Steps
+            seq_params[StepSequencer::PARAM_STEPS] = 16.0;
             let mut clock_outs = outputs(512);
             let mut seq_outs = vec![SignalBuffer::control(512); 5];
             let ctx = ProcessContext::new(48000.0, 512);
@@ -1329,7 +1329,7 @@ mod tests {
         seq.prepare(sr, BLOCK);
         let clock_params = [120.0, 50.0, 4.0, 1.0, 0.0];
         let mut seq_params: Vec<f32> = seq.parameters().iter().map(|p| p.default).collect();
-        seq_params[0] = 16.0; // Steps
+        seq_params[StepSequencer::PARAM_STEPS] = 16.0;
         let mut clock_outs = outputs(BLOCK);
         let mut seq_outs = vec![SignalBuffer::control(BLOCK); 5];
         let ctx = ProcessContext::new(sr, BLOCK);

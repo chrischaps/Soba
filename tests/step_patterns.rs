@@ -49,7 +49,7 @@ fn an_arranger_lane_switches_the_pattern_on_the_sample_a_section_starts() {
     // A bar of sixteenths a pass, and each pattern its own note: A is C4,
     // B D4, C E4, D F#4
     let mut seq_params: Vec<f32> = seq.parameters().iter().map(|p| p.default).collect();
-    seq_params[0] = 16.0;
+    seq_params[StepSequencer::PARAM_STEPS] = 16.0;
     for pattern in 0..PATTERNS {
         for step in 0..16 {
             seq_params[StepSequencer::step_param(pattern, step, StepField::Pitch)] = (60 + 2 * pattern) as f32;

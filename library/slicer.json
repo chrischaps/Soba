@@ -115,6 +115,11 @@
           ],
           "parameters": [
             {
+              "name": "Wander",
+              "type": "Number",
+              "value": 0.0
+            },
+            {
               "name": "Steps",
               "type": "Number",
               "value": 16.0
@@ -1778,6 +1783,341 @@
               "name": "Step D16 Slide",
               "type": "Toggle",
               "value": false
+            },
+            {
+              "name": "Scale",
+              "type": "Select",
+              "value": 6
+            },
+            {
+              "name": "Root",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Keep",
+              "type": "Select",
+              "value": 1
+            },
+            {
+              "name": "Step 1 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 2 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 3 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 4 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 5 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 6 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 7 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 8 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 9 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 10 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 11 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 12 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 13 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 14 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 15 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step 16 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B1 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B2 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B3 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B4 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B5 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B6 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B7 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B8 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B9 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B10 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B11 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B12 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B13 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B14 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B15 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step B16 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C1 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C2 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C3 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C4 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C5 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C6 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C7 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C8 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C9 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C10 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C11 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C12 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C13 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C14 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C15 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step C16 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D1 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D2 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D3 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D4 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D5 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D6 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D7 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D8 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D9 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D10 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D11 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D12 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D13 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D14 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D15 Chance",
+              "type": "Number",
+              "value": 100.0
+            },
+            {
+              "name": "Step D16 Chance",
+              "type": "Number",
+              "value": 100.0
             }
           ],
           "pinned": {

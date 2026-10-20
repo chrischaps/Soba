@@ -645,6 +645,7 @@ in   Clock              Gate     ConnectionOnly       inline=true  port
 in   Reset              Gate     ConnectionOnly       inline=true  port
 in   Run                Gate     ConnectionOnly       inline=true  port
 in   Pattern            Control  ConnectionOnly       inline=true  port
+in   Wander             Control  ConnectionOrConstant inline=true  num 0 [0..4]
 in   Steps              Control  ConstantOnly         inline=false num 8 [1..16]
 in   Direction          Control  ConstantOnly         inline=true  select 0 ["Fwd", "Bwd", "P-P", "Rnd"] "Dir"
 in   Gate Length        Control  ConstantOnly         inline=false num 50 [1..100] %
@@ -978,6 +979,73 @@ in   Step D13 Slide     Control  ConstantOnly         inline=false toggle false 
 in   Step D14 Slide     Control  ConstantOnly         inline=false toggle false ""
 in   Step D15 Slide     Control  ConstantOnly         inline=false toggle false ""
 in   Step D16 Slide     Control  ConstantOnly         inline=false toggle false ""
+in   Scale              Control  ConstantOnly         inline=true  select 6 ["Chromatic", "Major", "Natural Minor", "Dorian", "Mixolydian", "Harmonic Minor", "Pentatonic Major", "Pentatonic Minor", "Blues", "Whole Tone"] "Scale"
+in   Root               Control  ConstantOnly         inline=true  select 0 ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] "Root"
+in   Keep               Control  ConstantOnly         inline=true  select 1 ["Off", "Step 1", "Accents"] "Keep"
+in   Step 1 Chance      Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 2 Chance      Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 3 Chance      Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 4 Chance      Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 5 Chance      Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 6 Chance      Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 7 Chance      Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 8 Chance      Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 9 Chance      Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 10 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 11 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 12 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 13 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 14 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 15 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step 16 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B1 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B2 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B3 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B4 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B5 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B6 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B7 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B8 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B9 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B10 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B11 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B12 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B13 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B14 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B15 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step B16 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C1 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C2 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C3 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C4 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C5 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C6 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C7 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C8 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C9 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C10 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C11 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C12 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C13 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C14 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C15 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step C16 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D1 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D2 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D3 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D4 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D5 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D6 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D7 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D8 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D9 Chance     Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D10 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D11 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D12 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D13 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D14 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D15 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
+in   Step D16 Chance    Control  ConstantOnly         inline=false num 100 [0..100] %
 out  Pitch              Control
 out  Gate               Gate
 out  Velocity           Control
@@ -986,6 +1054,7 @@ out  EOC                Gate
 knob Steps              "Steps" KnobOnly
 knob Gate Length        "Gate" KnobOnly
 knob Glide              "Glide" KnobOnly
+knob Wander             "Wander" Modulatable
 monitor [1, 3, 4]
 display StepGrid
 

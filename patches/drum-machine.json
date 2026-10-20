@@ -7,7 +7,7 @@
       "module_id": "util.clock",
       "position": [
         40.0,
-        100.0
+        220.0
       ],
       "parameters": [
         {
@@ -437,7 +437,7 @@
       "module_id": "seq.step",
       "position": [
         300.0,
-        590.0
+        710.0
       ],
       "parameters": [
         {
@@ -787,7 +787,7 @@
       "module_id": "source.drum",
       "position": [
         720.0,
-        590.0
+        710.0
       ],
       "parameters": [
         {
@@ -827,7 +827,7 @@
       "module_id": "seq.step",
       "position": [
         300.0,
-        1140.0
+        1380.0
       ],
       "parameters": [
         {
@@ -1177,7 +1177,7 @@
       "module_id": "source.drum",
       "position": [
         720.0,
-        1140.0
+        1380.0
       ],
       "parameters": [
         {
@@ -1217,7 +1217,7 @@
       "module_id": "seq.step",
       "position": [
         300.0,
-        1690.0
+        2050.0
       ],
       "parameters": [
         {
@@ -1567,7 +1567,7 @@
       "module_id": "source.drum",
       "position": [
         720.0,
-        1690.0
+        2050.0
       ],
       "parameters": [
         {
@@ -1607,7 +1607,7 @@
       "module_id": "seq.step",
       "position": [
         300.0,
-        2240.0
+        2720.0
       ],
       "parameters": [
         {
@@ -1957,7 +1957,7 @@
       "module_id": "source.drum",
       "position": [
         720.0,
-        2240.0
+        2720.0
       ],
       "parameters": [
         {
@@ -1997,7 +1997,7 @@
       "module_id": "util.mixer",
       "position": [
         1110.0,
-        590.0
+        710.0
       ],
       "parameters": [
         {
@@ -2137,7 +2137,7 @@
       "module_id": "fx.reverb",
       "position": [
         1528.0,
-        590.0
+        710.0
       ],
       "parameters": [
         {
@@ -2182,7 +2182,7 @@
       "module_id": "output.audio",
       "position": [
         1818.0,
-        590.0
+        710.0
       ],
       "parameters": [
         {
@@ -2397,7 +2397,7 @@
       "title": "Time",
       "position": [
         16.0,
-        76.0
+        196.0
       ],
       "size": [
         226.0,
@@ -2413,7 +2413,7 @@
       ],
       "size": [
         358.0,
-        2765.0
+        3365.0
       ],
       "color": "slate"
     },
@@ -2425,7 +2425,7 @@
       ],
       "size": [
         330,
-        2590.0
+        3190.0
       ],
       "color": "blue"
     },
@@ -2433,11 +2433,11 @@
       "title": "Mix and room",
       "position": [
         1086.0,
-        566.0
+        686.0
       ],
       "size": [
         963.0,
-        505.0
+        625.0
       ],
       "color": "cyan"
     }
@@ -2447,7 +2447,7 @@
       "text": "Each **Drum** is one voice. Pick its Type, and Tune, Decay, Tone and Snap mean what they would on that drum.",
       "position": [
         16.0,
-        470.0
+        590.0
       ],
       "width": 226.0
     },
@@ -2455,7 +2455,7 @@
       "text": "The closed hat's lane also feeds the open hat's **Choke**: a closed hat cuts an open one short, the way a drummer's foot does.",
       "position": [
         16.0,
-        1690.0
+        2050.0
       ],
       "width": 226.0
     },
@@ -2463,7 +2463,7 @@
       "text": "The tom lane's **Pitch** drives the Tom's **Tune**, so its steps play tuned toms.",
       "position": [
         16.0,
-        2240.0
+        2720.0
       ],
       "width": 226.0
     }

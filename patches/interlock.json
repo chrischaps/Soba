@@ -67,7 +67,7 @@
       "module_id": "util.divider",
       "position": [
         240.0,
-        420.0
+        540.0
       ],
       "parameters": [
         {
@@ -107,7 +107,7 @@
       "module_id": "util.logic",
       "position": [
         480.0,
-        562.0
+        682.0
       ],
       "parameters": [
         {
@@ -582,7 +582,7 @@
       "module_id": "util.vca",
       "position": [
         1539.0,
-        114.0
+        234.0
       ],
       "parameters": [
         {
@@ -602,7 +602,7 @@
       "module_id": "seq.step",
       "position": [
         724.0,
-        718.0
+        838.0
       ],
       "parameters": [
         {
@@ -952,7 +952,7 @@
       "module_id": "osc.sine",
       "position": [
         1064.0,
-        718.0
+        838.0
       ],
       "parameters": [
         {
@@ -1012,7 +1012,7 @@
       "module_id": "util.logic",
       "position": [
         1279.0,
-        718.0
+        838.0
       ],
       "parameters": [
         {
@@ -1027,7 +1027,7 @@
       "module_id": "mod.adsr",
       "position": [
         1475.0,
-        718.0
+        838.0
       ],
       "parameters": [
         {
@@ -1077,7 +1077,7 @@
       "module_id": "util.vca",
       "position": [
         1735.0,
-        758.0
+        998.0
       ],
       "parameters": [
         {
@@ -1097,7 +1097,7 @@
       "module_id": "osc.sine",
       "position": [
         40.0,
-        1088.0
+        1328.0
       ],
       "parameters": [
         {
@@ -1157,7 +1157,7 @@
       "module_id": "mod.adsr",
       "position": [
         255.0,
-        1088.0
+        1328.0
       ],
       "parameters": [
         {
@@ -1207,7 +1207,7 @@
       "module_id": "util.vca",
       "position": [
         515.0,
-        1128.0
+        1368.0
       ],
       "parameters": [
         {
@@ -1227,7 +1227,7 @@
       "module_id": "mod.lfo",
       "position": [
         724.0,
-        1362.0
+        1602.0
       ],
       "parameters": [
         {
@@ -1262,7 +1262,7 @@
       "module_id": "osc.sine",
       "position": [
         939.0,
-        1362.0
+        1602.0
       ],
       "parameters": [
         {
@@ -1322,7 +1322,7 @@
       "module_id": "filter.svf",
       "position": [
         1154.0,
-        1362.0
+        1602.0
       ],
       "parameters": [
         {
@@ -1347,7 +1347,7 @@
       "module_id": "mod.adsr",
       "position": [
         1414.0,
-        1362.0
+        1602.0
       ],
       "parameters": [
         {
@@ -1397,7 +1397,7 @@
       "module_id": "util.vca",
       "position": [
         1674.0,
-        1402.0
+        1642.0
       ],
       "parameters": [
         {
@@ -1602,7 +1602,7 @@
       "module_id": "output.audio",
       "position": [
         2342.0,
-        464.0
+        584.0
       ],
       "parameters": [
         {
@@ -1845,7 +1845,7 @@
       ],
       "size": [
         438.0,
-        760.0
+        1000.0
       ],
       "color": "green"
     },
@@ -1857,7 +1857,7 @@
       ],
       "size": [
         214.0,
-        482.0
+        602.0
       ],
       "color": "amber"
     },
@@ -1865,11 +1865,11 @@
       "title": "The gaps",
       "position": [
         456.0,
-        514.0
+        634.0
       ],
       "size": [
         214.0,
-        470.0
+        590.0
       ],
       "color": "amber"
     },
@@ -1881,7 +1881,7 @@
       ],
       "size": [
         990.0,
-        631.0
+        751.0
       ],
       "color": "blue"
     },
@@ -1889,11 +1889,11 @@
       "title": "Sangsih",
       "position": [
         700.0,
-        660.0
+        780.0
       ],
       "size": [
         1180.0,
-        631.0
+        751.0
       ],
       "color": "violet"
     },
@@ -1901,7 +1901,7 @@
       "title": "Meeting tone",
       "position": [
         16.0,
-        1030.0
+        1270.0
       ],
       "size": [
         654.0,
@@ -1913,7 +1913,7 @@
       "title": "Tide",
       "position": [
         700.0,
-        1304.0
+        1544.0
       ],
       "size": [
         1125.0,
@@ -1929,7 +1929,7 @@
       ],
       "size": [
         706.0,
-        750.0
+        990.0
       ],
       "color": "cyan"
     }
@@ -1939,7 +1939,7 @@
       "text": "One clock, divided by 3 and by 4. **Where they meet**, AND fires where both do, every 12th pulse: the meeting tone. XOR, where exactly one does, is the polos part. **The gaps**: XOR of OR and the clock keeps only the pulses OR missed, the sangsih part.",
       "position": [
         16.0,
-        790.0
+        1030.0
       ],
       "width": 420.0
     },
@@ -1947,7 +1947,7 @@
       "text": "Polos and sangsih each play only some of the notes, in each other's gaps. Every sixteenth belongs to exactly one of them, so together they sound one fast melody, left and right. Each voice is two oscillators a few cents apart, beating like gamelan instruments tuned in pairs.",
       "position": [
         1900.0,
-        760.0
+        1000.0
       ],
       "width": 300.0
     },
@@ -1955,7 +1955,7 @@
       "text": "Nothing is patched into Tide's **B**, so B is its **Above**: the sangsih part plays only while the LFO is over 0. Above also swells the pad. The tide comes in every 40 seconds.",
       "position": [
         1900.0,
-        1330.0
+        1570.0
       ],
       "width": 300.0
     }

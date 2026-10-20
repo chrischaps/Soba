@@ -829,7 +829,7 @@
     "seq.step": {
       "category": "Utility",
       "color": "#9e9e9e",
-      "height": 380.0,
+      "height": 452.0,
       "inputs": [
         {
           "name": "Clock",
@@ -845,6 +845,10 @@
         },
         {
           "name": "Pattern",
+          "type": "Control"
+        },
+        {
+          "name": "Wander",
           "type": "Control"
         }
       ],

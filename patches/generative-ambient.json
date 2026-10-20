@@ -362,7 +362,7 @@
       "module_id": "osc.sine",
       "position": [
         965.0,
-        938.0
+        1058.0
       ],
       "parameters": [
         {
@@ -422,7 +422,7 @@
       "module_id": "util.mix",
       "position": [
         892.0,
-        114.0
+        234.0
       ],
       "parameters": [
         {
@@ -467,7 +467,7 @@
       "module_id": "util.vca",
       "position": [
         1482.0,
-        114.0
+        234.0
       ],
       "parameters": [
         {
@@ -582,7 +582,7 @@
       "module_id": "output.audio",
       "position": [
         2810.0,
-        114.0
+        234.0
       ],
       "parameters": [
         {
@@ -607,7 +607,7 @@
       "module_id": "mod.lfo",
       "position": [
         40.0,
-        938.0
+        1058.0
       ],
       "parameters": [
         {
@@ -637,7 +637,7 @@
       "module_id": "util.sample_hold",
       "position": [
         262.0,
-        958.0
+        1078.0
       ],
       "parameters": [
         {
@@ -652,7 +652,7 @@
       "module_id": "mod.adsr",
       "position": [
         1482.0,
-        354.0
+        474.0
       ],
       "parameters": [
         {
@@ -702,7 +702,7 @@
       "module_id": "mod.lfo",
       "position": [
         1246.0,
-        938.0
+        1058.0
       ],
       "parameters": [
         {
@@ -732,7 +732,7 @@
       "module_id": "source.noise",
       "position": [
         503.0,
-        938.0
+        1058.0
       ],
       "parameters": [
         {
@@ -752,7 +752,7 @@
       "module_id": "util.quantizer",
       "position": [
         725.0,
-        948.0
+        1068.0
       ],
       "parameters": [
         {
@@ -782,7 +782,7 @@
       "module_id": "util.divider",
       "position": [
         40.0,
-        442.0
+        562.0
       ],
       "parameters": [
         {
@@ -1093,7 +1093,7 @@
       ],
       "size": [
         781.0,
-        754.0
+        874.0
       ],
       "color": "blue"
     },
@@ -1105,7 +1105,7 @@
       ],
       "size": [
         868.0,
-        799.0
+        919.0
       ],
       "color": "teal"
     },
@@ -1117,7 +1117,7 @@
       ],
       "size": [
         598.0,
-        465.0
+        585.0
       ],
       "color": "cyan"
     },
@@ -1125,7 +1125,7 @@
       "title": "Brightness",
       "position": [
         16.0,
-        880.0
+        1000.0
       ],
       "size": [
         439.0,
@@ -1137,7 +1137,7 @@
       "title": "Second voice",
       "position": [
         479.0,
-        880.0
+        1000.0
       ],
       "size": [
         695.0,
@@ -1149,7 +1149,7 @@
       "title": "Drift",
       "position": [
         1222.0,
-        880.0
+        1000.0
       ],
       "size": [
         233.0,
@@ -1163,7 +1163,7 @@
       "text": "The Clock steps the sequencer once a beat through C D E G A G E D. The pentatonic scale has no half steps, so no two notes clash.",
       "position": [
         223.0,
-        565.0
+        685.0
       ],
       "width": 330.0
     },
@@ -1171,7 +1171,7 @@
       "text": "The S&H catches the LFO every third beat, on the Clock Divider, so the brightness moves in threes against the eight-note melody. The cycles don't line up, so no two passes sound alike.",
       "position": [
         16.0,
-        1327.0
+        1447.0
       ],
       "width": 300.0
     },
@@ -1179,7 +1179,7 @@
       "text": "Noise picks a pitch every few seconds and the Quantizer snaps it to the melody's scale: chance, without a wrong note.",
       "position": [
         479.0,
-        1522.0
+        1642.0
       ],
       "width": 360.0
     }

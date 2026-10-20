@@ -30,6 +30,12 @@
 //! where they're on different rows it breaks at its peak, the way a printed
 //! slur breaks at the end of a line.
 //!
+//! A step that plays only some of the time is filled only as far up as its
+//! Chance, like a glass part full. The step playing shows what the dice
+//! did: one that lost them keeps a grey outline instead of a white one, and
+//! a note that wandered names the note it went to, in the pitch cable's
+//! orange, with a small arrow on the side it went.
+//!
 //! Under the steps are the Trigger Sequencer's tabs: one for each pattern,
 //! A to D, which the grid shows and edits, and the Chain that plays them.
 
@@ -40,7 +46,8 @@ use egui_node_graph2::{NodeId, NodeResponse};
 
 use crate::app::theme;
 use crate::dsp::Audition;
-use crate::modules::sequencer::{note_to_name, PatternPosition, StepField, StepSequencer as Seq, MAX_STEPS, PATTERNS, PATTERN_NAMES};
+use crate::modules::quantizer::{rotate_to_key, scale_mask};
+use crate::modules::sequencer::{note_to_name, wander_note, PatternPosition, StepField, StepSequencer as Seq, MAX_STEPS, PATTERNS, PATTERN_NAMES};
 use crate::modules::trigger_sequencer::{chain_from, CHAIN_NAMES};
 use crate::widgets::{piano_keys, PianoConfig, PianoData};
 
@@ -77,8 +84,21 @@ pub(super) struct StepPattern {
     pub ties: [bool; 16],
     /// Steps slurred into from the step before.
     pub slides: [bool; 16],
+    /// How often each step plays, 0 to 1.
+    pub chances: [f32; 16],
+    /// What the dice did to the step playing, if it's in this pattern.
+    pub fate: Option<Fate>,
     /// Where a tie on the last step goes, and whether one arrives on step 1.
     pub seam: Seam,
+}
+
+/// What Chance and Wander did to the step playing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct Fate {
+    /// It lost its dice, and rests.
+    pub dropped: bool,
+    /// The note it's playing, when that isn't the one written.
+    pub wandered: Option<u8>,
 }
 
 /// How a pattern joins the patterns either side of it in the Chain, as far
@@ -182,16 +202,25 @@ pub(super) fn step_sequencer_display(
         let field = |field| values.field(pattern, steps - 1, field);
         field(StepField::Tie).is_some_and(|v| v > 0.5) && field(StepField::Gate).is_none_or(|v| v > 0.5)
     };
+    let pitches: [u8; 16] = std::array::from_fn(|step| values.field(editing, step, StepField::Pitch).map_or(60, |v| v as u8));
+    let fate = current.zip(engine_id.and_then(|id| user_state.readouts.get(&id))).map(|(step, readout)| {
+        let degrees = readout.values[Seq::READOUT_WANDER] as i32;
+        let key = rotate_to_key(scale_mask(values.get("Scale").map_or(6, |v| v.round().max(0.0) as usize), 0), values.get("Root").map_or(0, |v| v.round() as i32));
+        let note = wander_note(pitches[step], degrees, key);
+        Fate { dropped: readout.values[Seq::READOUT_DROPPED] > 0.5, wandered: (note != pitches[step]).then_some(note) }
+    });
     let pattern = StepPattern {
         seam: Seam::of(editing, &chain[..len], pattern_cv, tied_out),
         pattern: editing,
         steps,
         current,
-        pitches: std::array::from_fn(|step| values.field(editing, step, StepField::Pitch).map_or(60, |v| v as u8)),
+        pitches,
         gates: std::array::from_fn(|step| values.field(editing, step, StepField::Gate).is_none_or(|v| v > 0.5)),
         velocities: std::array::from_fn(|step| values.field(editing, step, StepField::Velocity).map_or(100, |v| v as u8)),
         ties: std::array::from_fn(|step| values.field(editing, step, StepField::Tie).is_some_and(|v| v > 0.5)),
         slides: std::array::from_fn(|step| values.field(editing, step, StepField::Slide).is_some_and(|v| v > 0.5)),
+        chances: std::array::from_fn(|step| values.field(editing, step, StepField::Chance).map_or(1.0, |v| (v / 100.0).clamp(0.0, 1.0))),
+        fate,
     };
     let plays_midi = super::note_in_face::plays_midi(graph);
     step_grid(ui, zoom, &pattern, plays_midi, node_id, user_state, responses);
@@ -429,8 +458,9 @@ pub(super) fn step_grid(
 
         for (step, (step_rect, response)) in cells.iter().enumerate() {
             let is_current = pattern.current == Some(step);
+            let fate = pattern.fate.filter(|_| is_current).unwrap_or_default();
             let base_color = if pattern.gates[step] { GATE_ON } else { GATE_OFF };
-            let color = if is_current {
+            let color = if is_current && !fate.dropped {
                 // Brighten current step
                 Color32::from_rgb(
                     (base_color.r() as u16 + 100).min(255) as u8,
@@ -440,20 +470,38 @@ pub(super) fn step_grid(
             } else {
                 base_color
             };
-            painter.rect_filled(*step_rect, 3.0 * zoom, color);
+            let chance = pattern.chances[step];
+            if pattern.gates[step] && chance < 1.0 {
+                // Full only as far up as its Chance
+                painter.rect_filled(*step_rect, 3.0 * zoom, GATE_OFF.lerp_to_gamma(color, 0.3));
+                let mut level = *step_rect;
+                level.set_top(step_rect.bottom() - step_rect.height() * chance);
+                let rounding = egui::CornerRadius { sw: (3.0 * zoom) as u8, se: (3.0 * zoom) as u8, ..Default::default() };
+                painter.rect_filled(level, rounding, color);
+            } else {
+                painter.rect_filled(*step_rect, 3.0 * zoom, color);
+            }
             if is_current {
-                painter.rect_stroke(*step_rect, 3.0 * zoom, egui::Stroke::new(2.0 * zoom, Color32::WHITE), egui::StrokeKind::Middle);
+                let outline = if fate.dropped { Color32::from_gray(130) } else { Color32::WHITE };
+                painter.rect_stroke(*step_rect, 3.0 * zoom, egui::Stroke::new(2.0 * zoom, outline), egui::StrokeKind::Middle);
             }
 
-            // Note name below
+            // Note name below: the one written, or where it wandered to
             let pitch = pattern.pitches[step];
+            let (name, ink) = match fate.wandered {
+                Some(note) => (note_to_name(note), theme::signal::CONTROL),
+                None => (note_to_name(pitch), Color32::from_gray(180)),
+            };
             painter.text(
                 egui::pos2(step_rect.center().x, step_rect.bottom() + 2.0 * zoom),
                 egui::Align2::CENTER_TOP,
-                note_to_name(pitch),
+                name,
                 egui::FontId::proportional(8.0 * zoom),
-                Color32::from_gray(180),
+                ink,
             );
+            if let Some(note) = fate.wandered {
+                wander_arrow(painter, *step_rect, note > pitch, zoom);
+            }
 
             if response.clicked() {
                 let modifiers = ui.input(|i| i.modifiers);
@@ -582,6 +630,16 @@ pub(super) fn step_grid(
     responses.extend(played.into_iter().map(NodeResponse::User));
 }
 
+/// A small arrow on the top edge of a step whose note wandered up, or on its
+/// bottom edge for down, in the pitch cable's orange.
+fn wander_arrow(painter: &egui::Painter, step: egui::Rect, up: bool, zoom: f32) {
+    let (half, height) = (3.5 * zoom, 3.5 * zoom);
+    let (edge, tip) = if up { (step.top() + 1.5 * zoom + height, -height) } else { (step.bottom() - 1.5 * zoom - height, height) };
+    let x = step.center().x;
+    let points = vec![egui::pos2(x - half, edge), egui::pos2(x + half, edge), egui::pos2(x, edge + tip)];
+    painter.add(egui::Shape::convex_polygon(points, theme::signal::CONTROL, egui::Stroke::NONE));
+}
+
 /// The slur from the step `from` into the slide step `to`: an arch from the
 /// top of one to the top of the other. Where the slide comes from the row
 /// above, or round from the pattern's end, the arch is broken at its peak:
@@ -697,6 +755,11 @@ fn step_piano(ui: &mut egui::Ui, open: &mut StepEntry, pattern: &StepPattern, se
     if ui.checkbox(&mut slide, "Slide into this step").on_hover_text(hint).changed() {
         set(pattern.param(step, StepField::Slide), if slide { 1.0 } else { 0.0 });
     }
+    let mut chance = pattern.chances[step] * 100.0;
+    let slider = egui::Slider::new(&mut chance, 0.0..=100.0).suffix("%").integer().text("Chance");
+    if ui.add(slider).on_hover_text("How often this step plays; when it doesn't, it's a rest").changed() {
+        set(pattern.param(step, StepField::Chance), chance.round());
+    }
     ui.label(RichText::new("Each key writes this step, then moves to the next").small().weak()).on_hover_text(
         "So does a note on a MIDI keyboard, with its touch, or on the letter keys (Z is the lowest C). One held into the next ties into it. \
          Each sounds on the sequencer's outputs as it's written",
@@ -799,6 +862,8 @@ mod tests {
             velocities: [100; 16],
             ties: [false; 16],
             slides: [false; 16],
+            chances: [1.0; 16],
+            fate: None,
             seam: Seam::default(),
         }
     }

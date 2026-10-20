@@ -7,7 +7,7 @@
       "module_id": "util.clock",
       "position": [
         40.0,
-        94.0
+        214.0
       ],
       "parameters": [
         {
@@ -407,7 +407,7 @@
       "module_id": "util.vca",
       "position": [
         1135.0,
-        114.0
+        234.0
       ],
       "parameters": [
         {
@@ -522,7 +522,7 @@
       "module_id": "output.audio",
       "position": [
         2050.0,
-        474.0
+        594.0
       ],
       "parameters": [
         {
@@ -547,7 +547,7 @@
       "module_id": "mod.adsr",
       "position": [
         870.0,
-        434.0
+        554.0
       ],
       "parameters": [
         {
@@ -597,7 +597,7 @@
       "module_id": "mod.adsr",
       "position": [
         1185.0,
-        434.0
+        554.0
       ],
       "parameters": [
         {
@@ -647,7 +647,7 @@
       "module_id": "mod.adsr",
       "position": [
         60.0,
-        1038.0
+        1158.0
       ],
       "parameters": [
         {
@@ -697,7 +697,7 @@
       "module_id": "source.noise",
       "position": [
         325.0,
-        1038.0
+        1158.0
       ],
       "parameters": [
         {
@@ -717,7 +717,7 @@
       "module_id": "filter.svf",
       "position": [
         545.0,
-        1038.0
+        1158.0
       ],
       "parameters": [
         {
@@ -747,7 +747,7 @@
       "module_id": "mod.lfo",
       "position": [
         1483.0,
-        620.0
+        740.0
       ],
       "parameters": [
         {
@@ -782,7 +782,7 @@
       "module_id": "util.scenes",
       "position": [
         1743.0,
-        620.0
+        740.0
       ],
       "parameters": [
         {
@@ -977,7 +977,7 @@
       ],
       "size": [
         541.0,
-        617.0
+        737.0
       ],
       "color": "green"
     },
@@ -989,7 +989,7 @@
       ],
       "size": [
         833.0,
-        879.0
+        999.0
       ],
       "color": "teal"
     },
@@ -1001,7 +1001,7 @@
       ],
       "size": [
         543.0,
-        465.0
+        585.0
       ],
       "color": "cyan"
     },
@@ -1009,7 +1009,7 @@
       "title": "Hi-hats",
       "position": [
         36.0,
-        980.0
+        1100.0
       ],
       "size": [
         763.0,
@@ -1021,7 +1021,7 @@
       "title": "Verse and breakdown",
       "position": [
         1463.0,
-        560.0
+        680.0
       ],
       "size": [
         543.0,
@@ -1035,7 +1035,7 @@
       "text": "Sixteen steps make one bar at 120 BPM. The rests do as much as the notes: they're what make it groove.",
       "position": [
         16.0,
-        649.0
+        769.0
       ],
       "width": 300.0
     },
@@ -1043,7 +1043,7 @@
       "text": "An envelope into the Noise module's **Level** turns hiss into a hi-hat: 1 ms in, 45 ms out.",
       "position": [
         823.0,
-        980.0
+        1100.0
       ],
       "width": 280.0
     },
@@ -1051,7 +1051,7 @@
       "text": "Scene **A** is the verse and **B** the breakdown. A slow LFO glides **Morph** from one to the other and back every 32 seconds: the filter rings, the echoes bloom, the hats wash out. Unplug it and turn **Morph** yourself, or click a pad to jump.",
       "position": [
         1463.0,
-        1116.0
+        1236.0
       ],
       "width": 320.0
     }

@@ -11944,7 +11944,7 @@
           "module_id": "util.attenuverter",
           "position": [
             0.0,
-            543.0
+            663.0
           ],
           "parameters": [
             {
@@ -13639,7 +13639,7 @@
           "module_id": "osc.sine",
           "position": [
             338.0,
-            543.0
+            663.0
           ],
           "parameters": [
             {
@@ -13734,7 +13734,7 @@
           "module_id": "mod.adsr",
           "position": [
             676.0,
-            271.0
+            391.0
           ],
           "parameters": [
             {
@@ -13853,7 +13853,7 @@
           "module_id": "mod.adsr",
           "position": [
             934.0,
-            271.0
+            391.0
           ],
           "parameters": [
             {
@@ -13903,7 +13903,7 @@
           "module_id": "util.vca",
           "position": [
             1192.0,
-            317.0
+            437.0
           ],
           "parameters": [
             {

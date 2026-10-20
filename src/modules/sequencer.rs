@@ -18,6 +18,12 @@
 //! sequencer's own outputs (see [`DspModule::audition`]): struck at once,
 //! clock or no clock, for at least the Gate Length and for as long as the
 //! key's held.
+//!
+//! A step can play only some of the time, by its Chance, and Wander lets
+//! the line drift from what's written: each note struck may step up or
+//! down a few degrees of a scale, while Keep holds step 1 (or the accents)
+//! where they are. These came last of all, Wander first among the
+//! parameters only so its jack sits with the others.
 
 use std::sync::LazyLock;
 
@@ -32,6 +38,8 @@ use crate::dsp::{
     ParameterDisplay, Readout, SignalType,
 };
 
+use super::noise::Pcg32;
+use super::quantizer::{in_key, rotate_to_key, scale_mask, CUSTOM_SCALE, NOTE_NAMES, SCALE_NAMES};
 use super::trigger_sequencer::{chain_from, TriggerSequencer, CHAIN_CHOICES, CHAIN_IDS, CHAIN_NAMES, CHAIN_SLOTS};
 pub use super::trigger_sequencer::{PATTERNS, PATTERN_NAMES};
 
@@ -109,6 +117,20 @@ static STEP_SLIDE_NAMES: [&str; MAX_STEPS] = [
     "Step 13 Slide", "Step 14 Slide", "Step 15 Slide", "Step 16 Slide",
 ];
 
+static STEP_CHANCE_IDS: [&str; MAX_STEPS] = [
+    "step_1_chance", "step_2_chance", "step_3_chance", "step_4_chance",
+    "step_5_chance", "step_6_chance", "step_7_chance", "step_8_chance",
+    "step_9_chance", "step_10_chance", "step_11_chance", "step_12_chance",
+    "step_13_chance", "step_14_chance", "step_15_chance", "step_16_chance",
+];
+
+static STEP_CHANCE_NAMES: [&str; MAX_STEPS] = [
+    "Step 1 Chance", "Step 2 Chance", "Step 3 Chance", "Step 4 Chance",
+    "Step 5 Chance", "Step 6 Chance", "Step 7 Chance", "Step 8 Chance",
+    "Step 9 Chance", "Step 10 Chance", "Step 11 Chance", "Step 12 Chance",
+    "Step 13 Chance", "Step 14 Chance", "Step 15 Chance", "Step 16 Chance",
+];
+
 /// The things each step holds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepField {
@@ -118,11 +140,13 @@ pub enum StepField {
     Tie = 3,
     /// Came after patterns, so its parameters are in a block of their own.
     Slide = 4,
+    /// How often the step plays, in percent. Last of all, in a block of its own.
+    Chance = 5,
 }
 
 impl StepField {
     /// Every field, as copying a pattern copies them.
-    pub const ALL: [StepField; 5] = [StepField::Pitch, StepField::Gate, StepField::Velocity, StepField::Tie, StepField::Slide];
+    pub const ALL: [StepField; 6] = [StepField::Pitch, StepField::Gate, StepField::Velocity, StepField::Tie, StepField::Slide, StepField::Chance];
 }
 
 /// The four fields patterns B to D keep side by side, a step at a time.
@@ -132,17 +156,26 @@ const FIELD_NAMES: [&str; 4] = ["Pitch", "Gate", "Velocity", "Tie"];
 /// Patterns B to D's parameter ids and names, made once and kept: they must
 /// be `'static`, and there are 240 of them. In the order the parameters
 /// are: pattern, then step, then field; and then the slides, pattern by
-/// pattern.
+/// pattern; and then the chances, the same way.
 struct PatternNames {
     ids: Vec<&'static str>,
     names: Vec<&'static str>,
     slide_ids: Vec<&'static str>,
     slide_names: Vec<&'static str>,
+    chance_ids: Vec<&'static str>,
+    chance_names: Vec<&'static str>,
 }
 
 static PATTERN_PARAM_NAMES: LazyLock<PatternNames> = LazyLock::new(|| {
     let keep = |text: String| -> &'static str { Box::leak(text.into_boxed_str()) };
-    let mut names = PatternNames { ids: Vec::new(), names: Vec::new(), slide_ids: Vec::new(), slide_names: Vec::new() };
+    let mut names = PatternNames {
+        ids: Vec::new(),
+        names: Vec::new(),
+        slide_ids: Vec::new(),
+        slide_names: Vec::new(),
+        chance_ids: Vec::new(),
+        chance_names: Vec::new(),
+    };
     for letter in &PATTERN_NAMES[1..] {
         for step in 1..=MAX_STEPS {
             for field in FIELD_NAMES {
@@ -155,6 +188,8 @@ static PATTERN_PARAM_NAMES: LazyLock<PatternNames> = LazyLock::new(|| {
         for step in 1..=MAX_STEPS {
             names.slide_ids.push(keep(format!("step_{}{step}_slide", letter.to_lowercase())));
             names.slide_names.push(keep(format!("Step {letter}{step} Slide")));
+            names.chance_ids.push(keep(format!("step_{}{step}_chance", letter.to_lowercase())));
+            names.chance_names.push(keep(format!("Step {letter}{step} Chance")));
         }
     }
     names
@@ -175,6 +210,45 @@ impl GateMode {
     pub fn from_param(value: f32) -> Self {
         if value >= 0.5 { GateMode::Fixed } else { GateMode::Step }
     }
+}
+
+/// Which notes Wander leaves as written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Keep {
+    /// Every note may wander.
+    Off = 0,
+    /// Step 1 always plays as written, so the line keeps its downbeat.
+    First = 1,
+    /// Accents (a Velocity of [`Keep::ACCENT`] or more) play as written.
+    Accents = 2,
+}
+
+impl Keep {
+    /// The Velocity from which a step is an accent: above the 100 steps start at.
+    pub const ACCENT: f32 = 110.0;
+
+    pub fn from_param(value: f32) -> Self {
+        match value.round() as i32 {
+            1 => Keep::First,
+            2 => Keep::Accents,
+            _ => Keep::Off,
+        }
+    }
+}
+
+/// `note` moved `degrees` notes of `key` up (or down, when negative). A note
+/// off the scale counts its first step as the nearest scale note that way.
+/// `key` must not be empty.
+pub(crate) fn wander_note(note: u8, degrees: i32, key: u16) -> u8 {
+    let step = degrees.signum();
+    let mut at = note as i32;
+    for _ in 0..degrees.abs() {
+        at += step;
+        while !in_key(key, at - 60) {
+            at += step;
+        }
+    }
+    at.clamp(0, 127) as u8
 }
 
 /// Direction modes for sequence playback.
@@ -308,6 +382,7 @@ pub const ID: &str = "seq.step";
 /// - **Run** (Gate): Enables/disables sequencer advancement.
 /// - **Pattern** (Control): Picks the pattern for each pass in place of the
 ///   Chain, in four equal zones of 0 to 1 (as on the Trigger Sequencer).
+/// - **Wander** (Control): Added to the Wander knob, 1 for its whole range.
 ///
 /// **Outputs:**
 /// - **Pitch** (Control): V/Oct pitch CV from current step.
@@ -318,6 +393,9 @@ pub const ID: &str = "seq.step";
 ///
 /// # Parameters
 ///
+/// - **Wander** (0-4): How many degrees of the scale a note may stray from
+///   what's written (see Chance and Wander, below). At 0 every note plays as
+///   written.
 /// - **Steps** (1-16): Number of active steps in the sequence.
 /// - **Direction** (0-3): Playback direction (Forward, Backward, PingPong, Random).
 /// - **Gate Length** (1-100%): Gate duration as a share of the step (or of
@@ -335,6 +413,10 @@ pub const ID: &str = "seq.step";
 /// - **Step 1-16 Slide**, **Step B1-D16 Slide** (0/1): The step is slurred
 ///   into from the note before: Pitch glides there over the Glide time, and
 ///   the gate stays high across the join, as on a 303.
+/// - **Scale**, **Root**: The scale Wander steps along.
+/// - **Keep** (Off / Step 1 / Accents): Notes Wander leaves as written.
+/// - **Step 1-16 Chance**, **Step B1-D16 Chance** (0-100%): How often the
+///   step plays. One that doesn't is a rest.
 ///
 /// # Patterns
 ///
@@ -356,6 +438,17 @@ pub const ID: &str = "seq.step";
 /// gate until the slide begins, whatever the Gate Length, so the two join;
 /// it looks ahead to the step the next clock will play, in the pattern that
 /// step will be in. A tie carries a slide's glide on into the next step.
+///
+/// # Chance and Wander
+///
+/// Each step's dice are thrown as the clock reaches it: one that loses is a
+/// rest, ending a note tied into it. Then each note struck may wander: with
+/// Wander at `w`, it moves `x` degrees of the scale, `x` drawn evenly from
+/// `-w` to `w` and rounded up or down at random in proportion, so a Wander
+/// of 0.2 moves a note now and then by one degree and one of 2 up to two
+/// either way. A tie continues its note where it wandered to. Nothing is
+/// drawn while Wander is 0 and every Chance 100%, so a patch that uses
+/// neither plays the same notes it always did.
 ///
 /// # Auditions
 ///
@@ -422,6 +515,12 @@ pub struct StepSequencer {
     next_pattern: usize,
     /// Pattern was patched in the last block.
     pattern_cv: bool,
+    /// Throws each step's dice and each note's wander.
+    rng: Pcg32,
+    /// The degrees the note playing has wandered, which a tie carries on.
+    wander: i32,
+    /// The last step the clock reached lost its dice and rests.
+    dropped: bool,
     /// Sample rate from prepare().
     sample_rate: f32,
     /// Port definitions.
@@ -439,6 +538,7 @@ impl StepSequencer {
             PortDefinition::input_with_default("reset", "Reset", SignalType::Gate, 0.0).describe("A rising edge jumps back to step 1"),
             PortDefinition::input_with_default("run", "Run", SignalType::Gate, 1.0).describe("Steps only advance while high; runs when unpatched"),
             PortDefinition::input_with_default("pattern", "Pattern", SignalType::Control, 0.0).describe("Picks the pattern for each pass in place of the Chain: 0 to 0.25 is A, then B, C and D"),
+            PortDefinition::input_with_default("wander_cv", "Wander", SignalType::Control, 0.0).describe("CV added to the Wander knob: 1 more is its whole range"),
             // Output ports
             PortDefinition::output("pitch", "Pitch", SignalType::Control).describe("Pitch of the current step as V/Oct; patch into an oscillator"),
             PortDefinition::output("gate", "Gate", SignalType::Gate).describe("Pulses on each clock when the step's gate is on; patch into an envelope"),
@@ -448,6 +548,10 @@ impl StepSequencer {
         ];
 
         let mut parameters = vec![
+            // Wander came last, but its jack has to come before the knob-only
+            // parameters, and patches load parameters by name
+            ParameterDefinition::new("wander", "Wander", 0.0, Self::WANDER_MAX, 0.0, ParameterDisplay::linear(""))
+                .describe("How far notes stray from what's written, in degrees of the scale; 0 plays them as written"),
             // Global sequencer parameters
             ParameterDefinition::new(
                 "steps",
@@ -538,7 +642,7 @@ impl StepSequencer {
                     .describe("Velocity for this step, 0 to 127"),
                 StepField::Tie => ParameterDefinition::toggle(id, name, false)
                     .describe("Holds this step's note into the next step, which continues it without a new attack"),
-                StepField::Slide => unreachable!("slides have their own block"),
+                StepField::Slide | StepField::Chance => unreachable!("slides and chances have their own blocks"),
             });
         }
 
@@ -552,6 +656,24 @@ impl StepSequencer {
             parameters.push(ParameterDefinition::toggle(id, name, false).describe(
                 "Slurs into this step: Pitch glides from the note before and the gate stays high, so the envelope isn't struck again",
             ));
+        }
+
+        // Wander's scale, and then every pattern's chances, last of all
+        parameters.push(
+            ParameterDefinition::choice("scale", "Scale", &SCALE_NAMES[..CUSTOM_SCALE], 6)
+                .describe("The scale Wander moves notes along"),
+        );
+        parameters.push(ParameterDefinition::choice("root", "Root", &NOTE_NAMES, 0).describe("The scale's first note"));
+        parameters.push(
+            ParameterDefinition::choice("keep", "Keep", &["Off", "Step 1", "Accents"], Keep::First as usize)
+                .describe("Notes Wander leaves as written: step 1, or steps with a Velocity of 110 or more"),
+        );
+        let chances = STEP_CHANCE_IDS.iter().zip(STEP_CHANCE_NAMES).chain(names.chance_ids.iter().zip(names.chance_names.iter().copied()));
+        for (id, name) in chances {
+            parameters.push(
+                ParameterDefinition::new(id, name, 0.0, 100.0, 100.0, ParameterDisplay::linear("%"))
+                    .describe("How often this step plays; when it doesn't, it's a rest"),
+            );
         }
         debug_assert_eq!(parameters.len(), Self::PARAM_COUNT);
 
@@ -580,6 +702,10 @@ impl StepSequencer {
             pass_clocks: 0,
             next_pattern: 0,
             pattern_cv: false,
+            // The graph seeds it, so a patch wanders the same way everywhere
+            rng: Pcg32::new(0),
+            wander: 0,
+            dropped: false,
             sample_rate: 44100.0,
             ports,
             parameters,
@@ -591,34 +717,41 @@ impl StepSequencer {
     const PORT_RESET: usize = 1;
     const PORT_RUN: usize = 2;
     const PORT_PATTERN: usize = 3;
+    const PORT_WANDER: usize = 4;
     const PORT_PITCH: usize = 0;
     const PORT_GATE: usize = 1;
     const PORT_VELOCITY: usize = 2;
     const PORT_STEP: usize = 3;
     const PORT_EOC: usize = 4;
 
-    /// Parameter index constants for global params.
-    const PARAM_STEPS: usize = 0;
-    const PARAM_DIRECTION: usize = 1;
-    const PARAM_GATE_LENGTH: usize = 2;
+    /// Parameter index constants for global params. Wander is first, for
+    /// its jack's sake.
+    const PARAM_WANDER: usize = 0;
+    pub const PARAM_STEPS: usize = 1;
+    const PARAM_DIRECTION: usize = 2;
+    const PARAM_GATE_LENGTH: usize = 3;
+    /// The per-step pitch, gate and velocity start here.
+    const PARAM_STEPS_A: usize = 4;
+    /// The most degrees a note can wander.
+    const WANDER_MAX: f32 = 4.0;
 
     /// Get parameter index for step pitch (0-indexed step).
     const fn step_pitch_param(step: usize) -> usize {
-        3 + step * 3
+        Self::PARAM_STEPS_A + step * 3
     }
 
     /// Get parameter index for step gate (0-indexed step).
     const fn step_gate_param(step: usize) -> usize {
-        3 + step * 3 + 1
+        Self::PARAM_STEPS_A + step * 3 + 1
     }
 
     /// Get parameter index for step velocity (0-indexed step).
     const fn step_velocity_param(step: usize) -> usize {
-        3 + step * 3 + 2
+        Self::PARAM_STEPS_A + step * 3 + 2
     }
 
     /// Gate Mode comes after the per-step pitch, gate and velocity.
-    const PARAM_GATE_MODE: usize = 3 + MAX_STEPS * 3;
+    const PARAM_GATE_MODE: usize = Self::PARAM_STEPS_A + MAX_STEPS * 3;
 
     /// Get parameter index for step tie (0-indexed step).
     const fn step_tie_param(step: usize) -> usize {
@@ -633,19 +766,27 @@ impl StepSequencer {
     const PARAM_GLIDE: usize = Self::PARAM_PATTERNS + (PATTERNS - 1) * MAX_STEPS * 4;
     /// Every pattern's slides, A's first, after Glide.
     const PARAM_SLIDES: usize = Self::PARAM_GLIDE + 1;
-    pub const PARAM_COUNT: usize = Self::PARAM_SLIDES + PATTERNS * MAX_STEPS;
+    /// Wander's Scale, Root and Keep, after the slides.
+    const PARAM_SCALE: usize = Self::PARAM_SLIDES + PATTERNS * MAX_STEPS;
+    const PARAM_ROOT: usize = Self::PARAM_SCALE + 1;
+    const PARAM_KEEP: usize = Self::PARAM_ROOT + 1;
+    /// Every pattern's chances, A's first, last of all.
+    const PARAM_CHANCES: usize = Self::PARAM_KEEP + 1;
+    pub const PARAM_COUNT: usize = Self::PARAM_CHANCES + PATTERNS * MAX_STEPS;
 
     /// The parameter holding one of a step's fields (all 0-based).
     pub const fn step_param(pattern: usize, step: usize, field: StepField) -> usize {
         if let StepField::Slide = field {
             Self::PARAM_SLIDES + pattern * MAX_STEPS + step
+        } else if let StepField::Chance = field {
+            Self::PARAM_CHANCES + pattern * MAX_STEPS + step
         } else if pattern == 0 {
             match field {
                 StepField::Pitch => Self::step_pitch_param(step),
                 StepField::Gate => Self::step_gate_param(step),
                 StepField::Velocity => Self::step_velocity_param(step),
                 StepField::Tie => Self::step_tie_param(step),
-                StepField::Slide => unreachable!(),
+                StepField::Slide | StepField::Chance => unreachable!(),
             }
         } else {
             Self::PARAM_PATTERNS + ((pattern - 1) * MAX_STEPS + step) * 4 + field as usize
@@ -662,9 +803,12 @@ impl StepSequencer {
                 StepField::Velocity => STEP_VELOCITY_NAMES[step],
                 StepField::Tie => STEP_TIE_NAMES[step],
                 StepField::Slide => STEP_SLIDE_NAMES[step],
+                StepField::Chance => STEP_CHANCE_NAMES[step],
             }
         } else if field == StepField::Slide {
             PATTERN_PARAM_NAMES.slide_names[(pattern - 1) * MAX_STEPS + step]
+        } else if field == StepField::Chance {
+            PATTERN_PARAM_NAMES.chance_names[(pattern - 1) * MAX_STEPS + step]
         } else {
             PATTERN_PARAM_NAMES.names[((pattern - 1) * MAX_STEPS + step) * 4 + field as usize]
         }
@@ -703,6 +847,28 @@ impl StepSequencer {
     pub const READOUT_PATTERN: usize = 0;
     /// The next pass's pattern, + 64 while Pattern is patched.
     pub const READOUT_NEXT: usize = 1;
+    /// How many degrees the note playing has wandered from what's written.
+    pub const READOUT_WANDER: usize = 2;
+    /// 1 when the step the clock last reached lost its dice and rests.
+    pub const READOUT_DROPPED: usize = 3;
+
+    /// Whether a step with this Chance (in percent) plays this time. Only
+    /// throws the dice when it might not.
+    fn plays(&mut self, chance: f32) -> bool {
+        chance >= 100.0 || (chance > 0.0 && self.rng.chance(f64::from(chance) / 100.0))
+    }
+
+    /// How many degrees a note struck now wanders, at Wander `amount`: `x`
+    /// evenly from `-amount` to `amount`, then rounded down or up at random,
+    /// in proportion, so a small amount moves a note one degree now and then.
+    fn wander_degrees(&mut self, amount: f32) -> i32 {
+        if amount <= 0.0 {
+            return 0;
+        }
+        let x = self.rng.bipolar() * amount;
+        let up = 0.5 + 0.5 * self.rng.bipolar();
+        (x + up).floor() as i32
+    }
 
     /// How long a new note's gate stays high, in samples.
     ///
@@ -867,12 +1033,16 @@ impl DspModule for StepSequencer {
         let gate_length_percent = params[Self::PARAM_GATE_LENGTH] / 100.0;
         let gate_mode = GateMode::from_param(params[Self::PARAM_GATE_MODE]);
         let glide = Glide::coefficient(params[Self::PARAM_GLIDE], self.sample_rate);
+        let scale = (params[Self::PARAM_SCALE].round().max(0.0) as usize).min(CUSTOM_SCALE - 1);
+        let key = rotate_to_key(scale_mask(scale, 0), params[Self::PARAM_ROOT].round() as i32);
+        let keep = Keep::from_param(params[Self::PARAM_KEEP]);
 
         // Get input buffers
         let clock_in = inputs.get(Self::PORT_CLOCK);
         let reset_in = inputs.get(Self::PORT_RESET);
         let run_in = inputs.get(Self::PORT_RUN);
         let pattern_in = connected_input(inputs, Self::PORT_PATTERN);
+        let wander_in = connected_input(inputs, Self::PORT_WANDER);
         self.pattern_cv = pattern_in.is_some();
         let mut audition_dip = std::mem::take(&mut self.audition_struck);
         if audition_dip {
@@ -943,9 +1113,11 @@ impl DspModule for StepSequencer {
                 let pattern = self.pattern;
 
                 // A step that plays starts a note, or continues the last one
-                // if that was tied, or slides on from it. A rest ends the note
+                // if that was tied, or slides on from it. A rest ends the
+                // note, and so does a step whose dice say it rests this time
                 let step_gate = params[Self::step_param(pattern, self.current_step, StepField::Gate)] > 0.5;
-                if step_gate {
+                self.dropped = step_gate && !self.plays(params[Self::step_param(pattern, self.current_step, StepField::Chance)]);
+                if step_gate && !self.dropped {
                     let tie = params[Self::step_param(pattern, self.current_step, StepField::Tie)] > 0.5;
                     let slide = params[Self::step_param(pattern, self.current_step, StepField::Slide)] > 0.5;
                     // Fixed gates never dipped, so old patches whose notes
@@ -954,7 +1126,19 @@ impl DspModule for StepSequencer {
                     // A slide glides from the note before. A note held on by
                     // a tie keeps gliding if it was
                     self.sliding = (slide && self.playing_note) || (self.tied && self.sliding);
-                    let note = params[Self::step_param(pattern, self.current_step, StepField::Pitch)] as u8;
+                    // A tie carries on where its note wandered to
+                    if !self.tied {
+                        let velocity = params[Self::step_param(pattern, self.current_step, StepField::Velocity)];
+                        let kept = match keep {
+                            Keep::Off => false,
+                            Keep::First => self.current_step == 0,
+                            Keep::Accents => velocity >= Keep::ACCENT,
+                        };
+                        let amount = params[Self::PARAM_WANDER] + wander_in.map_or(0.0, |buf| buf.at(i) * Self::WANDER_MAX);
+                        self.wander = if kept { 0 } else { self.wander_degrees(amount.clamp(0.0, Self::WANDER_MAX)) };
+                    }
+                    let written = params[Self::step_param(pattern, self.current_step, StepField::Pitch)] as u8;
+                    let note = wander_note(written, self.wander, key);
                     self.glide.start(note as f32, self.sliding);
                     // A note held into a slide joins it with no gap, like a tie
                     let held = tie || self.slide_follows(params, num_steps, direction, cv);
@@ -971,6 +1155,7 @@ impl DspModule for StepSequencer {
                     self.tied = false;
                     self.playing_note = false;
                     self.sliding = false;
+                    self.wander = 0;
                 }
 
                 // Fire EOC pulse once the chain has played through (never in
@@ -986,7 +1171,8 @@ impl DspModule for StepSequencer {
             }
 
             // Get current step's data
-            let step_pitch = params[Self::step_param(self.pattern, self.current_step, StepField::Pitch)] as u8;
+            let written = params[Self::step_param(self.pattern, self.current_step, StepField::Pitch)] as u8;
+            let step_pitch = if self.wander == 0 { written } else { wander_note(written, self.wander, key) };
             let step_gate_enabled = params[Self::step_param(self.pattern, self.current_step, StepField::Gate)] > 0.5;
             let step_velocity = params[Self::step_param(self.pattern, self.current_step, StepField::Velocity)] / 127.0;
 
@@ -1053,6 +1239,12 @@ impl DspModule for StepSequencer {
         self.pattern = 0;
         self.chain_slot = 0;
         self.pass_clocks = 0;
+        self.wander = 0;
+        self.dropped = false;
+    }
+
+    fn seed(&mut self, seed: u64) {
+        self.rng = Pcg32::new(seed);
     }
 
     /// A note played in on the face's piano sounds at once, with the clock
@@ -1088,6 +1280,8 @@ impl DspModule for StepSequencer {
             pattern_cv: self.pattern_cv,
         };
         position.write(&mut readout, Self::READOUT_PATTERN);
+        readout.values[Self::READOUT_WANDER] = self.wander as f32;
+        readout.values[Self::READOUT_DROPPED] = if self.dropped { 1.0 } else { 0.0 };
         Some(readout)
     }
 }
@@ -1162,8 +1356,8 @@ mod tests {
         let seq = StepSequencer::new();
         let ports = seq.ports();
 
-        // 4 inputs + 5 outputs = 9 ports
-        assert_eq!(ports.len(), 9);
+        // 5 inputs + 5 outputs = 10 ports
+        assert_eq!(ports.len(), 10);
 
         // Inputs
         assert!(ports[0].is_input());
@@ -1174,18 +1368,20 @@ mod tests {
         assert_eq!(ports[2].id, "run");
         assert!(ports[3].is_input());
         assert_eq!(ports[3].id, "pattern");
+        assert!(ports[4].is_input());
+        assert_eq!(ports[4].id, "wander_cv");
 
         // Outputs
-        assert!(ports[4].is_output());
-        assert_eq!(ports[4].id, "pitch");
         assert!(ports[5].is_output());
-        assert_eq!(ports[5].id, "gate");
+        assert_eq!(ports[5].id, "pitch");
         assert!(ports[6].is_output());
-        assert_eq!(ports[6].id, "velocity");
+        assert_eq!(ports[6].id, "gate");
         assert!(ports[7].is_output());
-        assert_eq!(ports[7].id, "step_out");
+        assert_eq!(ports[7].id, "velocity");
         assert!(ports[8].is_output());
-        assert_eq!(ports[8].id, "eoc");
+        assert_eq!(ports[8].id, "step_out");
+        assert!(ports[9].is_output());
+        assert_eq!(ports[9].id, "eoc");
     }
 
     #[test]
@@ -1193,10 +1389,11 @@ mod tests {
         let seq = StepSequencer::new();
         let params = seq.parameters();
 
-        // 3 global + 16 steps * 3 params each, then Gate Mode and 16 ties,
-        // then the Chain and patterns B to D, then Glide and every slide
+        // Wander, 3 global + 16 steps * 3 params each, then Gate Mode and 16
+        // ties, then the Chain and patterns B to D, then Glide and every
+        // slide, then Scale, Root, Keep and every chance
         assert_eq!(params.len(), StepSequencer::PARAM_COUNT);
-        assert_eq!(params.len(), 3 + MAX_STEPS * 3 + 1 + MAX_STEPS + CHAIN_SLOTS + 3 * MAX_STEPS * 4 + 1 + 4 * MAX_STEPS);
+        assert_eq!(params.len(), 4 + MAX_STEPS * 3 + 1 + MAX_STEPS + CHAIN_SLOTS + 3 * MAX_STEPS * 4 + 1 + 4 * MAX_STEPS + 3 + 4 * MAX_STEPS);
         assert_eq!(params[StepSequencer::PARAM_GATE_MODE].id, "gate_mode");
         assert_eq!(params[StepSequencer::step_tie_param(0)].id, "step_1_tie");
         assert_eq!(params[StepSequencer::step_tie_param(15)].id, "step_16_tie");
@@ -1205,14 +1402,17 @@ mod tests {
         assert_eq!(params[StepSequencer::PARAM_CHAIN + 7].default, 0.0);
 
         // Global params
-        assert_eq!(params[0].id, "steps");
-        assert_eq!(params[1].id, "direction");
-        assert_eq!(params[2].id, "gate_length");
+        assert_eq!(params[0].id, "wander");
+        assert_eq!(params[1].id, "steps");
+        assert_eq!(params[2].id, "direction");
+        assert_eq!(params[3].id, "gate_length");
 
         // First step params
-        assert_eq!(params[3].id, "step_1_pitch");
-        assert_eq!(params[4].id, "step_1_gate");
-        assert_eq!(params[5].id, "step_1_velocity");
+        assert_eq!(params[4].id, "step_1_pitch");
+        assert_eq!(params[5].id, "step_1_gate");
+        assert_eq!(params[6].id, "step_1_velocity");
+        assert_eq!(params[StepSequencer::PARAM_SCALE].id, "scale");
+        assert_eq!(params[StepSequencer::PARAM_KEEP].id, "keep");
     }
 
     #[test]
@@ -1553,7 +1753,8 @@ mod tests {
         assert_eq!(params[StepSequencer::step_param(2, 9, StepField::Velocity)].id, "step_c10_velocity");
         assert_eq!(params[StepSequencer::step_param(0, 0, StepField::Slide)].id, "step_1_slide");
         assert_eq!(params[StepSequencer::step_param(3, 15, StepField::Slide)].id, "step_d16_slide");
-        assert_eq!(params[StepSequencer::PARAM_COUNT - 1].name, "Step D16 Slide");
+        assert_eq!(params[StepSequencer::step_param(3, 15, StepField::Chance)].id, "step_d16_chance");
+        assert_eq!(params[StepSequencer::PARAM_COUNT - 1].name, "Step D16 Chance");
         // Unique, or saving by name would mix them up
         let mut names: Vec<&str> = params.iter().map(|p| p.name).collect();
         names.sort();
@@ -1983,6 +2184,178 @@ mod tests {
         let (pitch, gate) = play_over(&params, 4000, &[0, 1000, 2000, 3000], &[]);
         assert_eq!(rises(&gate), [0, 1000, 2000, 3000]);
         assert_eq!(pitch[2000], 12.0);
+    }
+
+    /// C major pentatonic, absolute.
+    fn pentatonic() -> u16 {
+        rotate_to_key(scale_mask(6, 0), 0)
+    }
+
+    /// Runs `params` at 1 kHz, a clock every 100 ms for `clocks` clocks,
+    /// with `wander_cv` in the Wander jack if it's given. The note struck at
+    /// each clock, and the gate.
+    fn wandering(params: &[f32], clocks: usize, wander_cv: Option<f32>) -> (Vec<i32>, Vec<f32>) {
+        let ms = clocks * 100;
+        let mut seq = StepSequencer::new();
+        seq.prepare(1000.0, ms);
+        let mut clock = SignalBuffer::control(ms);
+        for t in (0..ms).step_by(100) {
+            clock.samples[t] = 1.0;
+        }
+        let unpatched = SignalBuffer::unconnected(ms, SignalType::Control);
+        let wander = wander_cv.map_or_else(
+            || unpatched.clone(),
+            |cv| {
+                let mut buf = SignalBuffer::control(ms);
+                buf.samples.fill(cv);
+                buf
+            },
+        );
+        let reset = SignalBuffer::control(ms);
+        let mut run = SignalBuffer::control(ms);
+        run.samples.fill(1.0);
+        let mut outputs: Vec<SignalBuffer> = (0..5).map(|_| SignalBuffer::control(ms)).collect();
+        seq.process(&[&clock, &reset, &run, &unpatched, &wander], &mut outputs, params, &ProcessContext::new(1000.0, ms));
+        (notes_at(&outputs[0].samples, 100, clocks), outputs[1].samples.clone())
+    }
+
+    /// Eight steps of C4 in C major pentatonic, wandering `amount`, keeping `keep`.
+    fn wander_params(amount: f32, keep: Keep) -> Vec<f32> {
+        let mut params = params_with(8.0, 0.0, 50.0);
+        params[StepSequencer::PARAM_WANDER] = amount;
+        params[StepSequencer::PARAM_KEEP] = keep as usize as f32;
+        params
+    }
+
+    #[test]
+    fn wander_steps_along_the_scale() {
+        let key = pentatonic();
+        assert_eq!(wander_note(60, 0, key), 60);
+        assert_eq!(wander_note(60, 1, key), 62);
+        assert_eq!(wander_note(60, 3, key), 67);
+        assert_eq!(wander_note(60, -1, key), 57);
+        assert_eq!(wander_note(60, -2, key), 55);
+        // Off the scale, the first step is to the scale note that way
+        assert_eq!(wander_note(61, 1, key), 62);
+        assert_eq!(wander_note(61, -1, key), 60);
+        assert_eq!(wander_note(61, 0, key), 61, "no wander leaves a note as written");
+        assert_eq!(wander_note(127, 4, key), 127);
+        assert_eq!(wander_note(0, -4, key), 0);
+    }
+
+    #[test]
+    fn wander_comes_last_but_its_knob_is_first() {
+        let seq = StepSequencer::new();
+        let params = seq.parameters();
+        assert_eq!(params[StepSequencer::PARAM_WANDER].default, 0.0, "a new sequencer plays as written");
+        assert_eq!(params[StepSequencer::step_param(2, 5, StepField::Chance)].default, 100.0);
+        assert_eq!(params[StepSequencer::PARAM_KEEP].default, Keep::First as usize as f32);
+        assert_eq!(params[StepSequencer::PARAM_SCALE].name, "Scale");
+        assert_eq!(seq.ports()[StepSequencer::PORT_WANDER].name, params[StepSequencer::PARAM_WANDER].name, "the jack pairs with the knob");
+    }
+
+    #[test]
+    fn wandering_notes_stay_on_the_scale_and_within_reach() {
+        let (notes, _) = wandering(&wander_params(2.0, Keep::Off), 96, None);
+        for note in &notes {
+            assert!([55, 57, 60, 62, 64].contains(note), "two degrees either way of C4: {notes:?}");
+        }
+        let mut heard = notes.clone();
+        heard.sort();
+        heard.dedup();
+        assert_eq!(heard, [55, 57, 60, 62, 64], "and it goes everywhere it can");
+    }
+
+    #[test]
+    fn a_little_wander_moves_a_note_now_and_then() {
+        let (notes, _) = wandering(&wander_params(0.2, Keep::Off), 400, None);
+        let moved = notes.iter().filter(|&&n| n != 60).count();
+        // Half of 0.2 on average: a tenth of the notes, by one degree
+        assert!((15..=70).contains(&moved), "{moved} of 400 moved");
+        assert!(notes.iter().all(|n| [57, 60, 62].contains(n)));
+    }
+
+    #[test]
+    fn no_wander_plays_as_written() {
+        let mut params = wander_params(0.0, Keep::Off);
+        params[StepSequencer::step_pitch_param(3)] = 61.0;
+        let (notes, _) = wandering(&params, 16, None);
+        assert_eq!(notes[..8], [60, 60, 60, 61, 60, 60, 60, 60], "C#4 isn't in the scale, but nothing moves it");
+    }
+
+    #[test]
+    fn keep_holds_step_1_or_the_accents() {
+        let (notes, _) = wandering(&wander_params(4.0, Keep::First), 160, None);
+        assert!(notes.iter().step_by(8).all(|&n| n == 60), "step 1 as written: {notes:?}");
+        assert!(notes.iter().skip(1).step_by(8).any(|&n| n != 60), "the others wander");
+
+        let mut params = wander_params(4.0, Keep::Accents);
+        params[StepSequencer::step_velocity_param(4)] = 120.0;
+        let (notes, _) = wandering(&params, 160, None);
+        assert!(notes.iter().skip(4).step_by(8).all(|&n| n == 60), "the accent as written: {notes:?}");
+        assert!(notes.iter().step_by(8).any(|&n| n != 60), "step 1 wanders");
+    }
+
+    #[test]
+    fn a_tie_carries_on_where_its_note_wandered() {
+        let mut params = wander_params(4.0, Keep::Off);
+        for step in [0, 2, 4, 6] {
+            params[StepSequencer::step_tie_param(step)] = 1.0;
+        }
+        let (notes, _) = wandering(&params, 160, None);
+        for pair in notes.chunks(2) {
+            assert_eq!(pair[0], pair[1], "{notes:?}");
+        }
+        assert!(notes.iter().any(|&n| n != 60));
+    }
+
+    #[test]
+    fn the_wander_jack_adds_to_the_knob() {
+        let (notes, _) = wandering(&wander_params(0.0, Keep::Off), 80, Some(0.5));
+        assert!(notes.iter().any(|&n| n != 60), "half the range: up to two degrees");
+        assert!(notes.iter().all(|n| [55, 57, 60, 62, 64].contains(n)), "{notes:?}");
+        let (notes, _) = wandering(&wander_params(0.0, Keep::Off), 80, Some(0.0));
+        assert!(notes.iter().all(|&n| n == 60));
+    }
+
+    #[test]
+    fn chance_plays_a_step_some_of_the_time() {
+        let with_chance = |chance: f32| {
+            let mut params = wander_params(0.0, Keep::Off);
+            for step in 0..MAX_STEPS {
+                params[StepSequencer::step_param(0, step, StepField::Chance)] = chance;
+            }
+            rises(&wandering(&params, 400, None).1).len()
+        };
+        assert_eq!(with_chance(100.0), 400);
+        assert_eq!(with_chance(0.0), 0);
+        let half = with_chance(50.0);
+        assert!((150..=250).contains(&half), "{half} of 400");
+    }
+
+    #[test]
+    fn a_step_that_loses_its_dice_ends_a_tie_into_it() {
+        let mut params = params_with(2.0, 0.0, 50.0);
+        params[StepSequencer::step_tie_param(0)] = 1.0;
+        params[StepSequencer::step_param(0, 1, StepField::Chance)] = 0.0;
+        let (_, gate) = wandering(&params, 4, None);
+        assert_eq!(gate[50], 1.0, "step 1's note holds toward step 2");
+        assert_eq!(gate[101], 0.0, "but step 2 rests");
+        assert_eq!(gate[201], 1.0, "and step 1 plays again");
+    }
+
+    #[test]
+    fn readout_reports_the_wander_and_a_lost_step() {
+        let mut seq = StepSequencer::new();
+        seq.prepare(1000.0, 1);
+        let mut params = params_with(1.0, 0.0, 50.0);
+        params[StepSequencer::step_param(0, 0, StepField::Chance)] = 0.0;
+        tick(&mut seq, &params, true, false);
+        let readout = seq.readout(&params).unwrap();
+        assert_eq!(readout.values[StepSequencer::READOUT_DROPPED], 1.0);
+        assert_eq!(readout.values[StepSequencer::READOUT_WANDER], 0.0);
+        seq.wander = -2;
+        assert_eq!(seq.readout(&params).unwrap().values[StepSequencer::READOUT_WANDER], -2.0);
     }
 
     #[test]

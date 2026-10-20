@@ -7,7 +7,7 @@
       "module_id": "util.clock",
       "position": [
         40.0,
-        100.0
+        220.0
       ],
       "parameters": [
         {
@@ -312,7 +312,7 @@
       "module_id": "seq.step",
       "position": [
         300.0,
-        590.0
+        710.0
       ],
       "parameters": [
         {
@@ -577,7 +577,7 @@
       "module_id": "seq.step",
       "position": [
         300.0,
-        1140.0
+        1380.0
       ],
       "parameters": [
         {
@@ -842,7 +842,7 @@
       "module_id": "seq.step",
       "position": [
         300.0,
-        1690.0
+        2050.0
       ],
       "parameters": [
         {
@@ -1107,7 +1107,7 @@
       "module_id": "seq.chord",
       "position": [
         300.0,
-        2240.0
+        2720.0
       ],
       "parameters": [
         {
@@ -1317,7 +1317,7 @@
       "module_id": "source.drum",
       "position": [
         720.0,
-        590.0
+        710.0
       ],
       "parameters": [
         {
@@ -1357,7 +1357,7 @@
       "module_id": "source.drum",
       "position": [
         720.0,
-        1140.0
+        1380.0
       ],
       "parameters": [
         {
@@ -1452,7 +1452,7 @@
       "module_id": "source.resonator",
       "position": [
         1110.0,
-        820.0
+        1060.0
       ],
       "parameters": [
         {
@@ -1507,7 +1507,7 @@
       "module_id": "source.resonator",
       "position": [
         1110.0,
-        1600.0
+        1960.0
       ],
       "parameters": [
         {
@@ -1562,7 +1562,7 @@
       "module_id": "util.mixer",
       "position": [
         1530.0,
-        1140.0
+        1380.0
       ],
       "parameters": [
         {
@@ -1702,7 +1702,7 @@
       "module_id": "fx.reverb",
       "position": [
         1950.0,
-        1140.0
+        1380.0
       ],
       "parameters": [
         {
@@ -1747,7 +1747,7 @@
       "module_id": "output.audio",
       "position": [
         2240.0,
-        1140.0
+        1380.0
       ],
       "parameters": [
         {
@@ -1968,7 +1968,7 @@
       "title": "Time",
       "position": [
         16.0,
-        76.0
+        196.0
       ],
       "size": [
         226.0,
@@ -1984,7 +1984,7 @@
       ],
       "size": [
         374.0,
-        2885.0
+        3365.0
       ],
       "color": "slate"
     },
@@ -1996,7 +1996,7 @@
       ],
       "size": [
         330.0,
-        1640.0
+        2000.0
       ],
       "color": "blue"
     },
@@ -2008,7 +2008,7 @@
       ],
       "size": [
         380.0,
-        2330.0
+        2810.0
       ],
       "color": "amber"
     },
@@ -2016,11 +2016,11 @@
       "title": "Mix and room",
       "position": [
         1506.0,
-        1116.0
+        1356.0
       ],
       "size": [
         963.0,
-        505.0
+        625.0
       ],
       "color": "cyan"
     }
@@ -2030,7 +2030,7 @@
       "text": "No oscillators: every note here is a **Resonator**, a string or a glass, rung by a drum or plucked by a lane's gate.",
       "position": [
         16.0,
-        470.0
+        590.0
       ],
       "width": 226.0
     },
@@ -2038,7 +2038,7 @@
       "text": "The **Shaker** never stops, so the strings never stop: each bead rings all four strings of the chord at once, the way a drum makes a piano's open strings hum.",
       "position": [
         16.0,
-        1140.0
+        1380.0
       ],
       "width": 226.0
     },
@@ -2046,7 +2046,7 @@
       "text": "The **Rim** strikes a glass tuned to E5. Turn its **Material** to Bell or Wood, or the glass's **Inharm**, and the same rim plays a different instrument.",
       "position": [
         16.0,
-        590.0
+        710.0
       ],
       "width": 226.0
     }

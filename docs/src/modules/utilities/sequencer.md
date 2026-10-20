@@ -9,6 +9,8 @@ The Step Sequencer plays a repeating pattern of up to 16 notes. Each clock pulse
 
 The pattern lives on the node itself: a grid of step buttons with each step's note name underneath. Ties join a step to the next one for held notes and legato lines, and slides glide the pitch into chosen notes, the way a 303 or a Minimoog lead slurs a phrase. It holds four patterns, A to D, and plays them in the order its **Chain** gives, so a melody can run to 64 steps without repeating, and a verse and a chorus can share one sequencer.
 
+It can also loosen its grip on what's written. A step can play only some of the time, and **Wander** lets each note stray a degree or two along a scale, so a line drifts away from itself and comes back. See [Chance and Wander](#chance-and-wander).
+
 ## Inputs
 
 | Port | Signal Type | Description |
@@ -17,6 +19,7 @@ The pattern lives on the node itself: a grid of step buttons with each step's no
 | **Reset** | Gate (Green) | A rising edge jumps back to step 1 |
 | **Run** | Gate (Green) | Steps advance only while this is high. With nothing patched, the sequencer runs |
 | **Pattern** | Control (Orange) | Picks the pattern for each pass in place of the Chain: 0 to 0.25 is A, 0.25 to 0.5 is B, then C, and D from 0.75 up |
+| **Wander** | Control (Orange) | Added to the **Wander** knob. A CV of 1 is the knob's whole range, 4 degrees |
 
 ## Outputs
 
@@ -37,8 +40,12 @@ The pattern lives on the node itself: a grid of step buttons with each step's no
 | **Glide** | 0 – 1 s | 60 ms | How long a [slide](#slides) takes to reach its note |
 | **Dir** (Direction) | Fwd / Bwd / P-P / Rnd | Fwd | Playback order |
 | **Gate of** (Gate Mode) | Step / 100 ms | Step | What **Gate** is a share of: the time between clock pulses, or a fixed 100 ms |
+| **Wander** | 0 – 4 | 0 | How many degrees of the scale a note may stray from what's written. At 0 every note plays as written |
+| **Scale** | Chromatic … Whole Tone | Pentatonic Major | The scale **Wander** steps along, as the [Quantizer](./quantizer.md) names them |
+| **Root** | C – B | C | The scale's first note |
+| **Keep** | Off / Step 1 / Accents | Step 1 | Notes **Wander** leaves as written: step 1, or accents (a velocity of 110 or more) |
 
-Each of the 16 steps of each pattern also stores a note (default C4), a gate on/off (default on), a tie (default off), a slide (default off) and a velocity (default 100 of 127). The Chain has up to eight slots. Patches save all of them. **Steps**, **Dir**, the gate settings and **Glide** are shared by all four patterns.
+Each of the 16 steps of each pattern also stores a note (default C4), a gate on/off (default on), a tie (default off), a slide (default off), a velocity (default 100 of 127) and a chance (default 100%). The Chain has up to eight slots. Patches save all of them. **Steps**, **Dir**, the gate settings, **Glide** and the Wander settings are shared by all four patterns.
 
 ## Programming a pattern
 
@@ -50,7 +57,7 @@ The grid shows one button per active step, in rows of eight. Steps beyond **Step
 - **Drag** a step up or down to change its note, a semitone for every few pixels. The note it will land on shows above the step as you drag, and you hear it: the step's note sounds at its Velocity as the drag begins and follows it up or down, each semitone gliding in under the held note the way a key held under the hand does. Let go and it stops; with the clock running, the sequence takes over again at its next note. Hold **Shift** while dragging to move by whole octaves. A drag is one undo step, however far it goes.
 - **Right-click** a step to open its piano (below).
 
-While the patch plays, the current step is drawn brighter, with a white outline.
+While the patch plays, the current step is drawn brighter, with a white outline. A step with a chance under 100% is filled only part way up, like a glass: half full plays half the time.
 
 ### Writing a melody on the piano
 
@@ -63,6 +70,7 @@ Right-click a step and a two-octave piano opens under it, with the step's note l
 - **‹ ›** move the piano down or up an octave. It stays on that octave as you move from step to step.
 - **Tie into next step** ties the step being written, the same as Shift + click.
 - **Slide into this step** slides into the step being written, the same as Ctrl + click.
+- **Chance** sets how often the step being written plays, from 0 to 100%.
 - **Esc**, or a click anywhere outside the piano, closes it.
 
 Each note you write is its own undo step, so **Ctrl+Z** takes back the last key you played.
@@ -108,6 +116,31 @@ A pass ends where the pattern comes round: after the last step going **Fwd**, af
 With a cable in **Pattern**, the CV picks the patterns instead, and the Chain dims. The CV is read once a pass, on the clock that starts it, in the same four zones as the Trigger Sequencer's, so one CV means the same pattern on both. An [Arranger](./arranger.md) lane is made for this: a verse section that holds the lane at A and a chorus that holds it at B make one sequencer play the song's two melodies. The Arranger moves its lanes on the same clock edge the sequencer steps on, so a section's first note comes from its own pattern, with no lag. Leave that lane's **Glide** at 0.
 
 Because the CV is only read as a pass starts, a lane that ramps can play a chain inside one long section. A **Linear** ramp from 12.5% to 87.5% over three passes stands in the middle of A, B, C and D at the start of each one. [From One Sine](../../songs/from-one-sine.md#the-motif-and-the-line) grows its motif into a sixteen-bar line that way, and holds the lane at A wherever the motif plays alone.
+
+## Chance and Wander
+
+A sequencer plays exactly what's written, which is what makes a riff a riff. Sometimes a line wants to breathe instead: to leave a note out now and then, or to remember the tune slightly differently each time round. Two things on the Step Sequencer do that, and both leave the written pattern alone.
+
+### Chance
+
+Each step has a **Chance**, set on its piano. When the clock reaches a step, its dice are thrown: at 100% it always plays, at 50% about every other time, at 0% never. A step that loses is a rest for that pass, and ends a note tied into it. On the grid, a step with a chance under 100% is filled only as far up as its chance.
+
+The Trigger Sequencer's steps have the same kind of probability. On a melody it works best on the passing notes, the ones between the notes that carry the tune.
+
+### Wander
+
+**Wander** moves each note struck a few degrees along **Scale** and **Root**, up or down, then lets it go back to what's written on the next pass. At **Wander** 0.2 a note moves now and then, by one degree. At 1 about half the notes move, and at 2 or more the line can stray two degrees either way and starts to sound like an improvisation on itself. A degree is the next note of the scale: in C major pentatonic, one degree up from C is D and two up is E.
+
+- **Keep** holds some notes where they are. **Step 1**, the default, keeps each pattern's first step as written, so the line keeps its downbeat however far the rest wanders. **Accents** keeps the steps with a velocity of 110 or more, so the notes you've leaned on stay put.
+- A tied note carries on where it wandered to, so a held note doesn't jump halfway through.
+- A written note that's off the scale plays as written. When it wanders, its first degree is the nearest scale note in that direction.
+- At **Wander** 0 with every chance at 100%, nothing is left to chance, and the sequencer plays exactly as it did before it had either.
+
+The playing step shows where it went. A note that wandered names the note it's playing, in orange, under its step, with a small arrow on the side it moved toward. A step that lost its dice keeps a grey outline instead of a white one.
+
+**Wander** has a jack. Patch a slow [LFO](../modulation/lfo.md) into it and the melody drifts away and returns over a minute or two, or give it an [Arranger](./arranger.md) lane, so a verse plays the tune as written and the outro remembers it loosely.
+
+The dice are seeded for each module in the patch, so a patch wanders the same way every time it plays, in the editor, in a render or in a DAW.
 
 ## Timing
 
@@ -201,6 +234,17 @@ Set the Clock's **Div** to 1/8 or 1/16, switch a few steps off to make rests, an
 ```
 
 The [Library](../../concepts/groups.md#the-library)'s **Acid Bass** snaps its filter open on every new gate. Write a 16-step line in the octave around C2, then Ctrl + click two or three of its notes to slide into them: an octave leap, or a step back down to the root. Those notes glide in under a filter that's still closing, and the rest stay plucked. Keep **Glide** short, 40 to 80 ms, for the 303's quick slur, or raise it to 200 ms or more for a lazier Minimoog lead.
+
+### A melody that drifts
+
+```text
+[Clock Gate] ──> [Step Sequencer Clock]        (Div 1/8)
+[LFO Out] ──> [Step Sequencer Wander]          (Rate 0.01 Hz, Bipolar off)
+[Step Sequencer Pitch] ──> [Oscillator V/Oct]
+[Step Sequencer Gate] ──> [ADSR Gate]
+```
+
+Write a line in C major pentatonic and leave **Scale** on **Pentatonic Major**. The LFO takes the melody away over about fifty seconds and brings it home again over the next fifty, with step 1 kept as written so you can always hear where the bar starts. Set the passing notes' chances to 60 to 80% and some of them fall out too, more so as the line wanders.
 
 ### Modulation sequences
 
