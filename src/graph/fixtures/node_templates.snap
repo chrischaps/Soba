@@ -36,6 +36,7 @@ out  White              Audio
 out  Pink               Audio
 out  Brown              Audio
 out  Random             Control
+out  Dust               Gate
 knob Level              "Level" Modulatable
 knob Rate               "Rate" Modulatable
 display NoiseSpectrum
@@ -576,14 +577,17 @@ display DividerRing
 in   A                  Gate     ConnectionOnly       inline=true  port
 in   B                  Gate     ConnectionOnly       inline=true  port
 in   CV                 Control  ConnectionOnly       inline=true  port
+in   Chance             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
 in   Threshold          Control  ConstantOnly         inline=false num 0.5 [-1..1]
 out  AND                Gate
 out  OR                 Gate
 out  XOR                Gate
 out  NOT A              Gate
 out  Above              Gate
+out  Maybe              Gate
 knob Threshold          "Thresh" KnobOnly
-monitor [0, 1, 2, 3, 4]
+knob Chance             "Chance" Modulatable
+monitor [0, 1, 2, 3, 4, 5]
 display LogicLamps
 
 == util.looper "Looper" finder="Looper" Utility

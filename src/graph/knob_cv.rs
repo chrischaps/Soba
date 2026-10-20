@@ -54,6 +54,7 @@ pub fn law(module_id: &str, param: &str) -> Option<CvLaw> {
         ("source.noise", "Level") => Add { scale: 1.0 }, // noise.rs: knob + cv
         ("source.noise", "Rate") => Octaves,             // noise.rs: knob * 2^cv
         ("source.drum", "Tune") => Add { scale: 12.0 },  // drum.rs: semitones + 12 cv
+        ("util.logic", "Chance") => Add { scale: 1.0 },  // logic.rs: knob + cv
         ("source.drum", "Decay") => Add { scale: 1.0 },
         ("source.resonator", "Decay" | "Damping" | "Brightness") => Add { scale: 1.0 },  // resonator.rs: knob + cv
         ("source.sampler", "Start" | "Speed") => Add { scale: 1.0 },

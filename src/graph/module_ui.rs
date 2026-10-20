@@ -339,9 +339,9 @@ static MODULE_UI: &[ModuleUi] = &[
     },
     ModuleUi {
         module_id: "util.logic",
-        knobs: &[knob_as("Threshold", "Thresh")],
+        knobs: &[knob_as("Threshold", "Thresh"), modulatable("Chance", "Chance")],
         // The lamps read the outputs, which light up too
-        monitor: &["AND", "OR", "XOR", "NOT A", "Above"],
+        monitor: &["AND", "OR", "XOR", "NOT A", "Above", "Maybe"],
         display: NodeDisplay::LogicLamps,
         ..ModuleUi::DEFAULT
     },

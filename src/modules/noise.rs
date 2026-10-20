@@ -2,7 +2,9 @@
 //!
 //! White, pink and brown noise for snares, hats, wind, breath and surf, and
 //! a slowly wandering random voltage for modulation. Noise into a clocked
-//! Sample & Hold is the classic random melody.
+//! Sample & Hold is the classic random melody. Dust scatters single triggers
+//! at random, for crackle, rain on a window and anything that should happen
+//! now and then.
 
 use std::f32::consts::PI;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -61,6 +63,14 @@ impl Pcg32 {
         shifted.rotate_right((old >> 59) as u32)
     }
 
+    /// True with probability `p`: a coin weighted to come up `p` of the
+    /// time. In f64 against all 32 bits, so a one-in-a-million chance a
+    /// sample still comes up about as often as it should.
+    #[inline]
+    pub(crate) fn chance(&mut self, p: f64) -> bool {
+        f64::from(self.next_u32()) < p * 4_294_967_296.0
+    }
+
     /// Uniform in [-1, 1).
     #[inline]
     pub(crate) fn bipolar(&mut self) -> f32 {
@@ -117,13 +127,19 @@ pub const ID: &str = "source.noise";
 /// - **Brown** (Audio): Falls 6 dB per octave, like a random walk.
 /// - **Random** (Control): Glides with a cosine curve to a new random
 ///   value between -1 and 1 at the Rate, regardless of Level.
+/// - **Dust** (Gate): Single-sample triggers at random moments, Rate of
+///   them a second on average (a Poisson process), regardless of Level.
 ///
 /// # Parameters
 ///
 /// - **Level** (0-1): Level of the three noise outputs.
-/// - **Rate** (0.01-20 Hz): How often Random picks a new value.
+/// - **Rate** (0.01-20 Hz): How often Random picks a new value, and how
+///   many triggers Dust scatters a second.
 pub struct Noise {
     rng: Pcg32,
+    /// Dust's dice, a stream of their own so White plays the same noise
+    /// whether or not Dust is drawing.
+    dust: Pcg32,
     pink: PinkFilter,
     /// Brown noise: a leaky integrator of white noise.
     brown: f32,
@@ -147,8 +163,10 @@ impl Noise {
     /// Creates a Noise module with its own random stream.
     pub fn new() -> Self {
         let sample_rate = 44100.0;
+        let stream = NEXT_STREAM.fetch_add(1, Ordering::Relaxed);
         let mut noise = Self {
-            rng: Pcg32::next_stream(),
+            rng: Pcg32::new(stream),
+            dust: Pcg32::new(Self::dust_stream(stream)),
             pink: PinkFilter::default(),
             brown: 0.0,
             brown_leak: 0.0,
@@ -160,17 +178,18 @@ impl Noise {
             sample_rate,
             ports: vec![
                 PortDefinition::input_with_default("level_cv", "Level", SignalType::Control, 0.0).describe("CV added to the Level knob"),
-                PortDefinition::input_with_default("rate_cv", "Rate", SignalType::Control, 0.0).describe("CV that speeds up or slows down Random; 1 doubles the rate"),
+                PortDefinition::input_with_default("rate_cv", "Rate", SignalType::Control, 0.0).describe("CV that speeds up or slows down Random and Dust; 1 doubles the rate"),
                 PortDefinition::output("white", "White", SignalType::Audio).describe("Equal energy at every frequency: bright hiss, and the classic source for Sample & Hold"),
                 PortDefinition::output("pink", "Pink", SignalType::Audio).describe("Falls 3 dB per octave, equal energy in every octave: rain, surf, a balanced hiss"),
                 PortDefinition::output("brown", "Brown", SignalType::Audio).describe("Falls 6 dB per octave: a deep rumble, like wind or distant thunder"),
                 PortDefinition::output("random", "Random", SignalType::Control).describe("Glides smoothly to a new random value between -1 and 1, Rate times a second"),
+                PortDefinition::output("dust", "Dust", SignalType::Gate).describe("Single triggers at random moments, Rate of them a second on average: crackle, raindrops, a ghost hit now and then"),
             ],
             parameters: vec![
                 ParameterDefinition::new("level", "Level", 0.0, 1.0, 0.5, ParameterDisplay::linear(""))
                     .describe("Level of the White, Pink and Brown outputs"),
                 ParameterDefinition::new("rate", "Rate", 0.01, 20.0, 1.0, ParameterDisplay::logarithmic("Hz"))
-                    .describe("How many new values Random glides to each second"),
+                    .describe("How many new values Random glides to each second, and how many triggers Dust scatters"),
             ],
         };
         noise.prepare(sample_rate, 0);
@@ -199,6 +218,12 @@ impl Noise {
 
     /// The fastest Random goes, however hard its Rate CV pushes.
     const MAX_RATE_HZ: f32 = 1000.0;
+
+    /// Dust's stream, beside the noise's own `stream`: far from the small
+    /// numbers that modules and voices take, so it never meets another's.
+    const fn dust_stream(stream: u64) -> u64 {
+        !stream
+    }
 
     /// The next value of Random, `step` cycles further on.
     #[inline]
@@ -257,9 +282,10 @@ impl DspModule for Noise {
         params: &[f32],
         context: &ProcessContext,
     ) {
-        let [white_out, pink_out, brown_out, random_out, ..] = outputs else {
+        let [white_out, pink_out, brown_out, random_out, rest @ ..] = outputs else {
             return;
         };
+        let mut dust_out = rest.first_mut();
         let level_knob = params[Self::PARAM_LEVEL];
         let rate_knob = params[Self::PARAM_RATE];
         let level_cv = connected_input(inputs, Self::PORT_LEVEL_CV);
@@ -293,6 +319,12 @@ impl DspModule for Noise {
                 steady_step
             };
             random_out.samples[i] = self.next_random(step);
+
+            // A step is Rate over the sample rate: the chance of a trigger now
+            if let Some(dust_out) = dust_out.as_deref_mut() {
+                let fired = self.dust.chance(f64::from(step));
+                dust_out.samples[i] = if fired { 1.0 } else { 0.0 };
+            }
         }
     }
 
@@ -309,6 +341,7 @@ impl DspModule for Noise {
     /// Starts again from the seeded stream, Random's first target included.
     fn seed(&mut self, seed: u64) {
         self.rng = Pcg32::new(seed);
+        self.dust = Pcg32::new(Self::dust_stream(seed));
         self.reset();
     }
 }
@@ -405,10 +438,11 @@ mod tests {
 
         let ports = noise.ports();
         let ids: Vec<_> = ports.iter().map(|p| p.id).collect();
-        assert_eq!(ids, ["level_cv", "rate_cv", "white", "pink", "brown", "random"]);
+        assert_eq!(ids, ["level_cv", "rate_cv", "white", "pink", "brown", "random", "dust"]);
         assert!(ports[..2].iter().all(|p| p.is_input() && p.signal_type == SignalType::Control));
         assert!(ports[2..5].iter().all(|p| p.is_output() && p.signal_type == SignalType::Audio));
         assert_eq!(ports[5].signal_type, SignalType::Control);
+        assert_eq!(ports[6].signal_type, SignalType::Gate);
 
         let params = noise.parameters();
         assert_eq!(params[0].id, "level");
@@ -635,6 +669,70 @@ mod tests {
             assert!(r.abs() < margin, "{name} voices correlate at {r}");
             assert!(rms(first) > 0.05 && rms(second) > 0.05, "{name} voices are silent");
         }
+    }
+
+    /// Runs a seeded Noise with its Dust patched for `seconds` at `rate`
+    /// (Level 1), returning (white, dust).
+    fn render_dust(seed: u64, rate: f32, seconds: f32) -> (Vec<f32>, Vec<f32>) {
+        let mut noise = Noise::new();
+        noise.seed(seed);
+        noise.prepare(SAMPLE_RATE, BLOCK);
+        let unpatched = SignalBuffer::unconnected(BLOCK, SignalType::Control);
+        let mut outputs: Vec<SignalBuffer> = (0..5).map(|_| SignalBuffer::audio(BLOCK)).collect();
+        let ctx = ProcessContext::new(SAMPLE_RATE, BLOCK);
+        let (mut white, mut dust) = (Vec::new(), Vec::new());
+        for _ in 0..(seconds * SAMPLE_RATE) as usize / BLOCK {
+            noise.process(&[&unpatched, &unpatched], &mut outputs, &[1.0, rate], &ctx);
+            white.extend_from_slice(&outputs[0].samples);
+            dust.extend_from_slice(&outputs[4].samples);
+        }
+        (white, dust)
+    }
+
+    #[test]
+    fn test_dust_scatters_rate_triggers_a_second() {
+        // 20 s at 8 a second: 160 expected, give or take sqrt(160) ≈ 13
+        let (_, dust) = render_dust(3, 8.0, 20.0);
+        assert!(dust.iter().all(|&s| s == 0.0 || s == 1.0));
+        let triggers: Vec<usize> = (0..dust.len()).filter(|&i| dust[i] == 1.0).collect();
+        assert!((120..=200).contains(&triggers.len()), "{} triggers in 20 s at 8 Hz", triggers.len());
+
+        // Poisson: the gaps are exponential, so their spread is about their
+        // mean, where a steady clock's would be about none
+        let gaps: Vec<f64> = triggers.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
+        let mean = gaps.iter().sum::<f64>() / gaps.len() as f64;
+        let sd = (gaps.iter().map(|g| (g - mean).powi(2)).sum::<f64>() / gaps.len() as f64).sqrt();
+        assert!((0.7..1.3).contains(&(sd / mean)), "gap spread {:.2} of the mean", sd / mean);
+    }
+
+    #[test]
+    fn test_slow_dust_is_rare() {
+        // The highest Logic Threshold passes 240 samples a second (#413);
+        // Dust at 0.5 Hz is the crackle that couldn't make
+        let (_, dust) = render_dust(5, 0.5, 20.0);
+        let triggers = dust.iter().filter(|&&s| s == 1.0).count();
+        assert!((2..=25).contains(&triggers), "{triggers} triggers in 20 s at 0.5 Hz");
+    }
+
+    #[test]
+    fn test_dust_leaves_white_as_it_was() {
+        // Dust draws from its own stream, so a patch's noise didn't change
+        // when Dust arrived
+        let (with_dust, _) = render_dust(9, 20.0, 0.5);
+        let mut noise = Noise::new();
+        noise.seed(9);
+        let [without_dust, ..] = render(&mut noise, &[1.0, 20.0], 0.5);
+        let n = with_dust.len().min(without_dust.len());
+        assert_eq!(with_dust[..n], without_dust[..n]);
+    }
+
+    #[test]
+    fn test_chance_comes_up_as_often_as_it_should() {
+        let mut rng = Pcg32::new(1);
+        let hits = (0..100_000).filter(|_| rng.chance(0.2)).count();
+        assert!((19_000..21_000).contains(&hits), "{hits} of 100000 at 0.2");
+        assert!((0..1000).all(|_| rng.chance(1.0)));
+        assert!((0..1000).all(|_| !rng.chance(0.0)));
     }
 
     #[test]

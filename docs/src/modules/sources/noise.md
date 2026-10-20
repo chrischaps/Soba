@@ -7,12 +7,13 @@
 
 Noise is a sound with no pitch: every frequency at once, at random. Through a filter and an envelope it becomes a snare, a hi-hat, a breath, wind or surf. Sampled by a clock, it becomes a melody that never repeats.
 
-The module makes three colours of noise, and a fourth output that wanders smoothly at modulation speed:
+The module makes three colours of noise, an output that wanders smoothly at modulation speed, and one that scatters triggers at random:
 
 - **White**: equal energy at every frequency. Bright, hissing, like steam or an untuned radio.
 - **Pink**: falls 3 dB per octave, so every octave holds the same energy. To the ear it is the most balanced noise: rain, surf, a waterfall.
 - **Brown**: falls 6 dB per octave. A deep, soft rumble, like wind or thunder far away. The name is for Robert Brown, whose random walk of pollen grains it imitates, not the colour.
 - **Random**: a smooth random voltage that glides to a new value **Rate** times a second.
+- **Dust**: single triggers at random moments, **Rate** of them a second on average. Crackle, raindrops, a ghost note now and then.
 
 Noise is polyphonic. Patch a polyphonic cable into **Level** or **Rate** and each voice plays noise of its own, so a four-note chord of filtered noise is four different hisses, not one copied four times.
 
@@ -21,7 +22,7 @@ Noise is polyphonic. Patch a polyphonic cable into **Level** or **Rate** and eac
 | Port | Signal Type | Description |
 |------|-------------|-------------|
 | **Level** | Control (Orange) | Added to the **Level** knob, and followed instantly. An envelope here, with the knob at 0, shapes the noise into a hit |
-| **Rate** | Control (Orange) | Speeds up or slows down **Random**. Each +1 doubles the rate; -1 halves it |
+| **Rate** | Control (Orange) | Speeds up or slows down **Random** and **Dust**. Each +1 doubles the rate; -1 halves it |
 
 ## Outputs
 
@@ -31,13 +32,14 @@ Noise is polyphonic. Patch a polyphonic cable into **Level** or **Rate** and eac
 | **Pink** | Audio (Blue) | Pink noise, about -12 dBFS RMS at full Level |
 | **Brown** | Audio (Blue) | Brown noise, about -12 dBFS RMS at full Level |
 | **Random** | Control (Orange) | A smooth random voltage between -1 and 1. **Level** doesn't affect it |
+| **Dust** | Gate (Green) | One-sample triggers at random moments, **Rate** a second on average. **Level** doesn't affect it |
 
 ## Parameters
 
 | Knob | Range | Default | Description |
 |------|-------|---------|-------------|
 | **Level** | 0 – 100% | 50% | Level of White, Pink and Brown |
-| **Rate** | 0.01 – 20 Hz | 1 Hz | How many new values **Random** glides to each second |
+| **Rate** | 0.01 – 20 Hz | 1 Hz | How many new values **Random** glides to each second, and how many triggers **Dust** scatters |
 
 ## The display
 
@@ -56,6 +58,14 @@ Brown is a *leaky* random walk: it rises 6 dB per octave as frequency falls, dow
 **Random** picks a new value between -1 and 1 **Rate** times a second, and glides to it along a cosine curve. It arrives at each value at rest and leaves it smoothly, so it has no corners. It sounds less like a stepped sample-and-hold and more like something drifting: a filter that breathes, or a pitch that wavers like an old tape.
 
 At 0.05 Hz it takes twenty seconds to move, which is slow enough to change the character of a whole pad over time. At 10–20 Hz it becomes a fast flutter.
+
+## Dust
+
+**Dust** fires a trigger one sample long at moments nobody can predict. Every sample has the same small chance of one, **Rate** over the sample rate, so the triggers fall the way raindrops do: on average **Rate** a second, sometimes two close together, sometimes a long gap. (It's a Poisson process, and the name comes from the Dust generators of SuperCollider.)
+
+At 0.5 Hz it's an occasional tick, a record's dust. At 20 Hz it's a steady drizzle, and **Rate** CV takes it up to a thousand a second, a hiss of grains. Random and Dust share **Rate**, so a Noise used for both moves them together; use a second Noise to set them apart.
+
+A trigger, not a level: patch Dust into anything that listens for a rising edge, like a [Drum](./drum.md)'s **Trig**, an [ADSR](../modulation/adsr.md)'s **Gate** (with a short decay) or a [Sample & Hold](../utilities/sample-hold.md)'s **Trig**. To let only some of a regular rhythm through instead, use [Logic](../utilities/logic.md)'s **Maybe**.
 
 ## Patches
 
@@ -97,6 +107,15 @@ Random sweeps a resonant band slowly through the noise, so it rises and falls li
 
 The [Shoreline](../../recipes/shoreline.md) example builds a whole beach this way, using every output of one Noise module: Pink and Brown for the surf, Random to vary the waves, and White, through a Sample & Hold, to play a wind chime.
 
+### Vinyl crackle
+
+```text
+[Noise Dust] ──> [Drum Trig]                    (Noise Rate 6 Hz; Drum: Rim, Tune +24, Decay short)
+[Drum Out] ──> [SVF Filter In]                  (Cutoff 3 kHz, take HighPass)
+```
+
+Each trigger plays a tiny pitched-up click, at random, about six a second. Turn the Drum down until it sits under the music rather than on it. Patch Dust into a Sample & Hold's **Trig** with White in its **In**, and the S&H's **Out** into the Drum's **Tune**, and no two clicks are the same pitch.
+
 ## Related modules
 
 - [Sample & Hold](../utilities/sample-hold.md): turns noise into stepped random values
@@ -105,3 +124,4 @@ The [Shoreline](../../recipes/shoreline.md) example builds a whole beach this wa
 - [Drum](./drum.md): a finished drum voice, with its noise and filters built in
 - [ADSR Envelope](../modulation/adsr.md): gives noise a shape in time
 - [LFO](../modulation/lfo.md): regular movement, where Random is irregular
+- [Logic](../utilities/logic.md): **Maybe** passes a regular rhythm only sometimes, where Dust has none

@@ -95,6 +95,11 @@
           ],
           "parameters": [
             {
+              "name": "Chance",
+              "type": "Number",
+              "value": 0.5
+            },
+            {
               "name": "Threshold",
               "type": "Number",
               "value": 0.5

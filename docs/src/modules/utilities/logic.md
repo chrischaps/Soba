@@ -5,7 +5,7 @@
 ![Logic Module](../../images/module-logic.png)
 *A clock in A, an LFO in CV, nothing in B. The LFO is above the Threshold line, so B, standing in for Above, is lit. A clock pulse is high in A, so AND and OR are high too.*
 
-Logic answers questions about gates. Are both of these high? Is either? Is exactly one? Its other half answers a question about a control voltage: is it above this line? The answer is a gate, so Logic is how a control signal reaches a gate input, which a cable alone can't do.
+Logic answers questions about gates. Are both of these high? Is either? Is exactly one? Its other half answers a question about a control voltage: is it above this line? The answer is a gate, so Logic is how a control signal reaches a gate input, which a cable alone can't do. And one answer is a throw of the dice: **Maybe** lets each gate at A through only sometimes.
 
 The node shows its working. Two small lamps at the left light while **A** and **B** are high. The four big lamps light while **AND**, **OR**, **XOR** and **NOT A** are, so the truth table plays out as the gates come and go. The **column** at the right is the CV, rising past the **Threshold** line and turning green when it's above. Drag the line to move the Threshold.
 
@@ -16,6 +16,7 @@ The node shows its working. Two small lamps at the left light while **A** and **
 | **A** | Gate (Green) | The first gate for AND, OR, XOR and NOT A |
 | **B** | Gate (Green) | The second gate for AND, OR and XOR. With nothing patched, B is **Above** (see below) |
 | **CV** | Control (Orange) | A voltage to compare with **Threshold**. Audio patches in too |
+| **Chance** | Control (Orange) | Added to the **Chance** knob |
 
 ## Outputs
 
@@ -26,12 +27,14 @@ The node shows its working. Two small lamps at the left light while **A** and **
 | **XOR** | Gate (Green) | High while exactly one of A and B is high |
 | **NOT A** | Gate (Green) | High while A is low. With nothing in A it's always high |
 | **Above** | Gate (Green) | High while CV is above **Threshold** |
+| **Maybe** | Gate (Green) | A, sometimes: each gate at A passes whole, or not at all, by **Chance** |
 
 ## Parameters
 
 | Knob | Range | Default | Description |
 |------|-------|---------|-------------|
 | **Thresh** | -1 – 1 | 0.5 | Where **Above** switches |
+| **Chance** | 0 – 100% | 50% | How likely each gate at A is to reach **Maybe** |
 
 ## How it works
 
@@ -58,7 +61,23 @@ With nothing patched into **B**, B reads **Above**, the way a jack on a hardware
 
 With nothing in CV either, Above is low at the default Threshold, so an empty B behaves like an empty jack.
 
+### Sometimes
+
+Each time A rises, Logic throws the dice: at a **Chance** of 25%, one gate in four on average gets through to **Maybe**, and which ones nobody knows. A gate that wins passes whole, for as long as A stays high, and one that loses stays shut even if **Chance** rises while it's held. At 100% every gate passes; at 0, none.
+
+Each Logic throws its own dice, and an offline render throws the same ones every time, so a render you liked can be made again.
+
 ## Patches
+
+### Ghost notes
+
+```text
+[Clock Gate] ──> [Logic A]                     (Clock at sixteenths)
+[Logic Maybe] ──> [Drum Trig]                  (Chance 20%; a quiet, short Drum)
+```
+
+A hat that plays one sixteenth in five, never the same ones twice, under a steady beat. Patch a slow [LFO](../modulation/lfo.md) into **Chance** and the fills thicken and thin as it moves. For triggers with no grid at all, use [Noise](../sources/noise.md)'s **Dust**.
+
 
 ### A clock that waits for the wind
 
@@ -108,5 +127,6 @@ Two [Clock Dividers](./divider.md) on one sixteenth clock play three against fou
 - [Clock Divider](./divider.md): rhythms to combine
 - [Interlock](../../recipes/interlock.md): a gamelan-style example built around AND, OR, XOR and an empty B
 - [Clock](../modulation/clock.md): the pulse to gate
+- [Noise](../sources/noise.md): **Dust** gives random triggers off any grid; **Random** is a CV to compare
 - [Audio Input](../sources/audio-input.md): gates from a microphone or instrument
 - [Attenuverter](./attenuverter.md): scale a control signal before **CV**, or turn a gate into a control voltage
