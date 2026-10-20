@@ -50,7 +50,17 @@ pub struct OfflineRenderer {
     faults: Vec<NodeId>,
     /// How long processing has taken, once [`time`](Self::time) is on.
     bench: Option<Bench>,
+    /// Whether modules that mix several parts keep them apart (see
+    /// [`keep_stems`](Self::keep_stems)).
+    stems: bool,
+    /// Shown every block once processed (see [`watch`](Self::watch)).
+    watcher: Option<Watcher>,
 }
+
+/// Looks at the plan after each block, given how many of its frames are
+/// the render's: all of them but in the last block of a render that isn't
+/// a whole number of blocks.
+pub type Watcher = Box<dyn FnMut(&GraphPlan, usize) + Send>;
 
 /// How long a render spent processing the graph: the whole of it and each
 /// node's share. Loading, analysis and copying the output out aren't in it.
@@ -135,7 +145,24 @@ impl OfflineRenderer {
             limiter: LimiterReport::default(),
             faults: Vec::new(),
             bench: None,
+            stems: false,
+            watcher: None,
         }
+    }
+
+    /// Shows `watcher` the plan after every block from now on, to read
+    /// outputs (see [`GraphPlan::output`]) and stems from as they play.
+    pub fn watch(&mut self, watcher: Watcher) {
+        self.watcher = Some(watcher);
+    }
+
+    /// Has modules that mix several parts, such as a Mixer's channels, keep
+    /// them apart from now on, for a watcher to read (see
+    /// [`GraphPlan::stems`]). The sound is the same either way.
+    pub fn keep_stems(&mut self) {
+        self.stems = true;
+        self.sync_plan();
+        self.plan.keep_stems();
     }
 
     /// Starts timing processing, from nothing: see [`bench`](Self::bench).
@@ -228,6 +255,9 @@ impl OfflineRenderer {
             }
             plan.take_over(&mut self.plan);
             self.plan = plan;
+            if self.stems {
+                self.plan.keep_stems();
+            }
         }
         // Recordings for modules already running, after the plan that has them
         for (node_id, sample) in self.graph.take_sample_loads() {
@@ -351,6 +381,9 @@ impl OfflineRenderer {
             });
 
             let wanted = (frames - out.left.len()).min(self.context.block_size);
+            if let Some(watcher) = &mut self.watcher {
+                watcher(&self.plan, wanted);
+            }
             match self.plan.audio_output() {
                 Some((left, right)) => {
                     out.left.extend_from_slice(&left[..wanted]);
@@ -737,6 +770,42 @@ mod tests {
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("gone/nowhere.wav"), "{warnings:?}");
         assert_eq!(peak(&r.render_seconds(0.2).left), 0.0);
+    }
+
+    #[test]
+    fn a_watcher_sees_every_frame_and_the_stems_once() {
+        use std::sync::Mutex;
+        // The sine through a Mixer's first channel
+        let mut patch = osc_patch(0);
+        patch.connections.clear();
+        patch.nodes.push(NodeData::new(3, "util.mixer", (100.0, 0.0)));
+        patch.connections.push(ConnectionData::new(1, "Out", 3, "Ch 1"));
+        patch.connections.push(ConnectionData::new(3, "Out L", 2, "Left"));
+        let (mut plain, _) = OfflineRenderer::from_patch(&patch, 48_000.0, 256).unwrap();
+        let (mut watched, compiled) = OfflineRenderer::from_patch(&patch, 48_000.0, 256).unwrap();
+        let mixer = compiled.node_ids[&3];
+
+        // Frames seen, and how far Out L and the Ch 1 stem ever differ
+        let seen = Arc::new(Mutex::new((0, 0.0f32)));
+        let into = Arc::clone(&seen);
+        watched.keep_stems();
+        watched.watch(Box::new(move |plan, len| {
+            let mut seen = into.lock().unwrap();
+            seen.0 += len;
+            let out = &plan.output(mixer, 0).unwrap().samples[..len];
+            plan.stems(|node, name, left, _| {
+                if (node, name) == (mixer, "Ch 1") {
+                    let apart = out.iter().zip(left).fold(0.0f32, |a, (o, s)| a.max((o - s).abs()));
+                    seen.1 = seen.1.max(apart);
+                }
+            });
+        }));
+        // Not a whole number of blocks
+        let heard = watched.render(1000);
+        assert_eq!(heard.left, plain.render(1000).left, "watching changes nothing heard");
+        let (frames, apart) = *seen.lock().unwrap();
+        assert_eq!(frames, 1000);
+        assert!(apart < 1e-6, "the only channel's stem is the mix: {apart}");
     }
 
     #[test]

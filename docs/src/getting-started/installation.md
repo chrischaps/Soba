@@ -224,6 +224,9 @@ cargo run --release --bin render -- patches/fm-synthesis.json out.wav --seconds 
 | `--compare FILE.wav` | none | An earlier render to measure against: prints how far peak, true peak, RMS, loudness and range have moved since |
 | `--bench` | off | Times the render: how long processing took, how many times faster than real time that is, and the five modules that took longest |
 | `--runs N` | 3 with `--bench` | Renders this many times and reports the fastest |
+| `--trace OUTPUTS FILE.csv` | none | Follows module outputs as the patch plays and writes them to a CSV (see [Following a song](#following-a-song)) |
+| `--trace-every S` | one block | How often `--trace` writes a row, in seconds |
+| `--stems FOLDER` | none | Writes each [Mixer](../modules/utilities/mixer.md) channel with something patched into it, and each Mixer's return, to a WAV of its own |
 
 A patch that waits for a player renders silence unless something inside it plays notes (a Clock or Step Sequencer, say) or you add `--audition`. Audio Input modules render silence unless you give them a file with `--input`. [Samplers](../modules/sources/sampler.md) find their files relative to the patch, as the app does.
 
@@ -261,6 +264,36 @@ bench: 1.3546 s for 20.00 s of audio, 14.8x realtime (best of 3)
 ```
 
 That is Lush Pad, auditioned. **Realtime** is how much faster than playback it rendered: below 1x it couldn't keep up live. Below it are the modules that took longest, by their module and their id in the patch file, in nanoseconds per sample and as a share of the whole. Lush Pad's oscillator plays every held voice, so it takes the most. Timing each module costs a little in itself, so the whole runs a few percent slower than it would without `--bench`.
+
+### Following a song
+
+A level for the whole mix says little about a song that changes as it goes. Two options take it apart, from the same render, without changing what it sounds like.
+
+`--trace` follows outputs of the patch's modules, named as `--cue` names them, a colon, then the output (quote the list: output names have spaces). It writes a CSV with a row every `--trace-every` seconds: the time at the end of the row, then a column for each output. An audio output gives its RMS over the row, its voices summed. A gate gives its highest, so a trigger anywhere in the row reads 1. A CV gives where it ended. Here are Canopy's sections as they go by, and how loud its second Mixer plays:
+
+```text
+cargo run --release --bin render -- patches/canopy.json out.wav --seconds 120 \
+    --trace "seq.arranger:Section,seq.arranger:Bar,util.mixer#2:Out L" trace.csv --trace-every 10
+```
+
+```text
+seconds,"seq.arranger:Section","seq.arranger:Bar","util.mixer#2:Out L"
+10.0000,0.000000,1.000000,0.025193
+20.0000,0.031250,1.000000,0.070801
+...
+70.0000,0.125000,1.000000,0.124964
+```
+
+The [Arranger](../modules/utilities/arranger.md)'s Section is the index of the section playing ÷ 32, so 0.125 is the fifth.
+
+`--stems FOLDER` writes each Mixer channel that has something patched into it to a stereo WAV of its own, and each Mixer's return, named by the Mixer's id in the patch file and the channel (`util.mixer@126-ch2.wav`). A stem is the channel after its Level, Pan, Mute and Solo and the Mixer's Master, before the soft clip that keeps a hot mix from clipping hard, so a Mixer's stems add up to its mix. A chained Mixer's mix arrives on its own stems, not on the Mixer it joins. Each stem is listed with what feeds it and its levels:
+
+```text
+stems -> stems:
+  util.mixer@126 Ch 1      <- util.vca@70 Out              peak  -16.0 dBFS   rms  -24.0 dBFS   util.mixer@126-ch1.wav
+  util.mixer@126 Ch 2      <- util.vca@46 Out              peak   -9.4 dBFS   rms  -25.3 dBFS   util.mixer@126-ch2.wav
+  util.mixer@127 Return    <- fx.reverb@128 Out L          peak   -5.6 dBFS   rms  -26.0 dBFS   util.mixer@127-return.wav
+```
 
 ## Microphone access
 

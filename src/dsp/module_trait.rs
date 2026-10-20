@@ -369,6 +369,16 @@ pub trait DspModule: Send + 'static {
         None
     }
 
+    /// Starts keeping each part of the module's mix apart, for modules that
+    /// mix several parts (a Mixer's channels), so an offline render can
+    /// write each to a file of its own (`render --stems`). Allocates: never
+    /// called on the audio thread. The default keeps nothing.
+    fn keep_stems(&mut self, _max_block_size: usize) {}
+
+    /// Calls `f` with each part kept since [`keep_stems`](Self::keep_stems),
+    /// for the last block: its name, then its left and right.
+    fn stems(&self, _f: &mut dyn FnMut(&'static str, &[f32], &[f32])) {}
+
     /// Returns captured scope buffer data for oscilloscope modules.
     ///
     /// Returns `Some((channel1, channel2, triggered))` when the oscilloscope has

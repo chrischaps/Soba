@@ -65,6 +65,7 @@ The `render` binary plays a patch to a WAV file without an audio device, and pri
 ```bash
 cargo run --release --bin render -- patches/fm-synthesis.json out.wav --seconds 5
 cargo run --release --bin render -- patches/lush-pad.json out.wav --audition  # plays a phrase into Note In modules
+cargo run --release --bin render -- patches/canopy.json out.wav --seconds 120 --trace "seq.arranger:Section" trace.csv --stems stems/  # what played when, and each Mixer channel apart
 ```
 
 ### Shortcuts

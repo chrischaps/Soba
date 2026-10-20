@@ -220,6 +220,9 @@ cargo run --release --bin render -- patches/lush-pad.json out.wav --audition
 cargo run --release --bin render -- patch.json out.wav --input voice.wav
 # ...pressing knobs and footswitches from a cue script (`<seconds> param <module> <param> <value>`)
 cargo run --release --bin render -- patches/live-looper.json out.wav --seconds 30 --input take.wav --cue cues.txt
+# ...following a song without listening: outputs to a CSV (audio RMS, a gate's highest, a CV's last)
+# every --trace-every seconds, and each Mixer channel and return to its own WAV, from the same run
+cargo run --release --bin render -- patches/canopy.json out.wav --seconds 120 --trace "seq.arranger:Section,util.mixer#2:Out L" trace.csv --trace-every 1 --stems stems/
 # Every example near -16 LUFS with peaks under -1 dBFS into the limiter: renders
 # them all at length (a couple of minutes); the nightly run does this, or run it after an example's levels change
 cargo test --release --test example_loudness -- --ignored --nocapture

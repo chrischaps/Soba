@@ -1,7 +1,7 @@
 //! Render a patch to a WAV file without opening the app.
 //!
 //! ```text
-//! cargo run --release --bin render -- <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--audition] [--input in.wav] [--cue cues.txt] [--compare before.wav] [--bench [--runs N]]
+//! cargo run --release --bin render -- <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--block-size N] [--audition] [--input in.wav] [--cue cues.txt] [--compare before.wav] [--bench [--runs N]] [--trace module:Port[,...] trace.csv [--trace-every S]] [--stems dir]
 //! ```
 //!
 //! Prints the peak, true peak (ITU-R BS.1770-4) and RMS level of each
@@ -33,18 +33,37 @@
 //! 1.05  param util.looper Pedal Rec 0     # and let go
 //! 2.0   param filter.svf#2 Cutoff 800     # the second SVF Filter
 //! ```
+//!
+//! `--trace` follows outputs as the render plays, named as the cue script
+//! names modules, and writes them to a CSV: a row each `--trace-every`
+//! seconds (each block unless given), the time at its end, then each
+//! output's RMS (audio), highest (a gate, so no trigger is missed) or where
+//! it ended (a CV). Which section of a song played when, say:
+//!
+//! ```text
+//! --trace "seq.arranger:Section,seq.arranger:Bar,util.mixer#2:Out L" trace.csv --trace-every 0.5
+//! ```
+//!
+//! `--stems` writes each Mixer channel that has something patched into it,
+//! and each Mixer's return, to a WAV of its own in a folder, from the same
+//! run: after the fader and the Master, before the Mixer's soft clip. A
+//! Mixer's stems add up to its mix (a chained Mixer's to what it brings in).
 
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::{Arc, Mutex};
 
 use soba::dsp::analysis::{amp_to_db, peak, rms};
 use soba::dsp::loudness::{loudness, true_peak, Loudness};
-use soba::engine::{create_module_registry, Bench, NodeId, StereoBuffer, read_wav, read_wav_at, EngineCommand, LimiterReport, OfflineRenderer, BLOCK_SIZE};
+use soba::dsp::SignalType;
+use soba::engine::{create_module_registry, Bench, GraphPlan, NodeId, StereoBuffer, read_wav, read_wav_at, EngineCommand, LimiterReport, OfflineRenderer, BLOCK_SIZE};
 use soba::persistence::sample_files::SampleBase;
-use soba::persistence::{load_from_file, CompiledPatch, Patch};
+use soba::persistence::{load_from_file, CompiledPatch, NodeData, Patch};
 
 const USAGE: &str =
-    "usage: render <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--block-size N] [--audition] [--input in.wav] [--cue cues.txt] [--compare before.wav] [--bench [--runs N]]";
+    "usage: render <patch.json> <out.wav> [--seconds N] [--sample-rate HZ] [--block-size N] [--audition] [--input in.wav] [--cue cues.txt] [--compare before.wav] [--bench [--runs N]] [--trace module:Port[,...] trace.csv [--trace-every S]] [--stems dir]";
 
 struct Args {
     patch: PathBuf,
@@ -62,6 +81,12 @@ struct Args {
     /// Time the render, best of `runs`.
     bench: bool,
     runs: usize,
+    /// Outputs to follow (`module:Port,...`) and the CSV to write them to.
+    trace: Option<(String, PathBuf)>,
+    /// How often a trace row is written, in seconds (each block if not given).
+    trace_every: Option<f32>,
+    /// A folder to write each Mixer channel's stem into.
+    stems: Option<PathBuf>,
 }
 
 /// How many of the heaviest nodes `--bench` lists.
@@ -78,6 +103,9 @@ fn parse_args() -> Result<Args, String> {
     let mut compare = None;
     let mut bench = false;
     let mut runs = None;
+    let mut trace = None;
+    let mut trace_every = None;
+    let mut stems = None;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -96,6 +124,11 @@ fn parse_args() -> Result<Args, String> {
             "--compare" => compare = Some(PathBuf::from(value("--compare")?)),
             "--bench" => bench = true,
             "--runs" => runs = Some(value("--runs")?.parse().map_err(|e| format!("--runs: {}", e))?),
+            "--trace" => trace = Some((value("--trace")?, PathBuf::from(value("--trace")?))),
+            "--trace-every" => {
+                trace_every = Some(value("--trace-every")?.parse().map_err(|e| format!("--trace-every: {}", e))?)
+            }
+            "--stems" => stems = Some(PathBuf::from(value("--stems")?)),
             "-h" | "--help" => return Err(USAGE.to_string()),
             flag if flag.starts_with("--") => return Err(format!("unknown option {}\n{}", flag, USAGE)),
             _ => positional.push(PathBuf::from(arg)),
@@ -103,7 +136,7 @@ fn parse_args() -> Result<Args, String> {
     }
 
     match <[PathBuf; 2]>::try_from(positional) {
-        Ok([patch, out]) if seconds > 0.0 && block_size > 0 && runs != Some(0) => Ok(Args {
+        Ok([patch, out]) if seconds > 0.0 && block_size > 0 && runs != Some(0) && trace_every.is_none_or(|s| s > 0.0) => Ok(Args {
             patch,
             out,
             seconds,
@@ -115,6 +148,9 @@ fn parse_args() -> Result<Args, String> {
             compare,
             bench,
             runs: runs.unwrap_or(if bench { 3 } else { 1 }),
+            trace,
+            trace_every,
+            stems,
         }),
         _ => Err(USAGE.to_string()),
     }
@@ -130,11 +166,15 @@ fn run(args: Args) -> Result<(), String> {
         return Err("--cue and --audition can't be used together".to_string());
     }
 
+    // What --trace and --stems write, as the first run plays
+    let taps = Arc::new(Mutex::new(Taps::default()));
+
     // Every run renders the same: the fastest is the one least slowed down
     let mut fastest: Option<Bench> = None;
     let mut last = None;
     for run in 0..args.runs {
-        let (renderer, compiled, audio) = render(&args, &patch, cues.as_deref(), run == 0)?;
+        let taps = (run == 0).then_some(&taps);
+        let (renderer, compiled, audio) = render(&args, &patch, cues.as_deref(), taps)?;
         let bench = renderer.bench();
         if fastest.as_ref().zip(bench.as_ref()).is_none_or(|(best, now)| now.process < best.process) {
             fastest = bench;
@@ -185,6 +225,10 @@ fn run(args: Args) -> Result<(), String> {
     if let Some(bench) = &fastest {
         print_bench(bench, args.sample_rate, args.runs, describe);
     }
+    taps.lock().map_err(|e| e.to_string())?.finish()?;
+    if let Some((_, path)) = &args.trace {
+        println!("trace -> {}", path.display());
+    }
     if let Some(path) = &args.compare {
         let (before, rate) = read_wav(path).map_err(|e| format!("{}: {}", path.display(), e))?;
         println!("against {}:", path.display());
@@ -197,13 +241,15 @@ fn run(args: Args) -> Result<(), String> {
 }
 
 /// Builds the patch and renders it once. Warnings are printed on the
-/// first run only, since every run gives the same ones.
+/// first run only, since every run gives the same ones, and only the first
+/// is given `taps` to write as it plays.
 fn render(
     args: &Args,
     patch: &Patch,
     cues: Option<&str>,
-    first: bool,
+    taps: Option<&Arc<Mutex<Taps>>>,
 ) -> Result<(OfflineRenderer, CompiledPatch, StereoBuffer), String> {
+    let first = taps.is_some();
     let warn = |message: String| {
         if first {
             eprintln!("{}", message);
@@ -228,6 +274,25 @@ fn render(
         renderer.set_audio_input(input);
     }
 
+    if let Some(taps) = taps {
+        let mut opened = taps.lock().map_err(|e| e.to_string())?;
+        if let Some((specs, path)) = &args.trace {
+            let every = args.trace_every.map_or(args.block_size, |s| (s * args.sample_rate as f32).round() as usize);
+            opened.trace = Some(Trace::new(specs, path, every, args.sample_rate, patch, &compiled)?);
+        }
+        if let Some(dir) = &args.stems {
+            opened.stems = Some(Stems::new(dir, args.sample_rate, patch, &compiled)?);
+            renderer.keep_stems();
+        }
+        if args.trace.is_some() || args.stems.is_some() {
+            let taps = Arc::clone(taps);
+            renderer.watch(Box::new(move |plan, len| {
+                if let Ok(mut taps) = taps.lock() {
+                    taps.block(plan, len);
+                }
+            }));
+        }
+    }
     if args.bench {
         renderer.time();
     }
@@ -364,30 +429,309 @@ fn parse_cues(text: &str, patch: &Patch, compiled: &CompiledPatch, sample_rate: 
         if words.get(1) != Some(&"param") || words.len() < 5 {
             return Err(err("expected <seconds> param <module>[#n|@id] <parameter> <value>"));
         }
-        // `kind#n` is the nth of its kind, `kind@id` the one with that id in the file
-        let (module, which) = match (words[2].split_once('@'), words[2].split_once('#')) {
-            (Some((m, id)), _) => (m, Err(id.parse::<u64>().map_err(|_| err("bad @id"))?)),
-            (None, Some((m, n))) => (m, Ok(n.parse::<usize>().map_err(|_| err("bad #n"))?.max(1) - 1)),
-            (None, None) => (words[2], Ok(0)),
-        };
+        let (found, node) = find_node(patch, compiled, words[2]).map_err(err)?;
         let value: f32 = words[words.len() - 1].parse().map_err(|_| err("not a value"))?;
         let name = words[3..words.len() - 1].join(" ");
-        let mut kind = patch.all_nodes().into_iter().filter(|n| n.module_id == module);
-        let found = match which {
-            Ok(nth) => kind.nth(nth),
-            Err(id) => kind.find(|n| n.id == id),
-        };
-        let node = found
-            .and_then(|n| compiled.node_ids.get(&n.id).copied())
-            .ok_or_else(|| err("no such module in the patch"))?;
         let param_index = registry
-            .create(module)
+            .create(&found.module_id)
             .and_then(|m| m.parameters().iter().position(|p| p.name == name))
             .ok_or_else(|| err("no such parameter"))?;
         let frame = (seconds * sample_rate as f64).round().max(0.0) as u64;
         commands.push((frame, EngineCommand::SetParameter { node_id: node, param_index, value }));
     }
     Ok(commands)
+}
+
+/// A module as cue scripts and `--trace` name it: `kind` (the first of its
+/// kind), `kind#n` (the nth) or `kind@id` (the one with that id in the file).
+fn find_node<'p>(patch: &'p Patch, compiled: &CompiledPatch, word: &str) -> Result<(&'p NodeData, NodeId), &'static str> {
+    let (module, which) = match (word.split_once('@'), word.split_once('#')) {
+        (Some((m, id)), _) => (m, Err(id.parse::<u64>().map_err(|_| "bad @id")?)),
+        (None, Some((m, n))) => (m, Ok(n.parse::<usize>().map_err(|_| "bad #n")?.max(1) - 1)),
+        (None, None) => (word, Ok(0)),
+    };
+    let mut kind = patch.all_nodes().into_iter().filter(|n| n.module_id == module);
+    let found = match which {
+        Ok(nth) => kind.nth(nth),
+        Err(id) => kind.find(|n| n.id == id),
+    };
+    found
+        .and_then(|n| compiled.node_ids.get(&n.id).map(|&engine| (n, engine)))
+        .ok_or("no such module in the patch")
+}
+
+/// One output `--trace` follows.
+struct Traced {
+    node: NodeId,
+    /// Counted among the module's outputs.
+    output: usize,
+    signal: SignalType,
+    /// Over the row so far: the sum of squares for audio, the highest for a
+    /// gate, the latest for a CV.
+    value: f64,
+}
+
+/// Writes the traced outputs to a CSV as the render plays, a row each
+/// `every` frames (to the block): the time at its end, then for each output
+/// its RMS (audio, its voices summed), its highest (a gate, in any voice) or
+/// where it ended (a CV, its first voice).
+struct Trace {
+    out: std::io::BufWriter<std::fs::File>,
+    every: usize,
+    traced: Vec<Traced>,
+    /// Frames in the row so far, and in the whole render.
+    frames: usize,
+    total: u64,
+    sample_rate: f64,
+}
+
+impl Trace {
+    /// Reads `specs` (`module[#n|@id]:Port[,...]`) against the patch and
+    /// starts the CSV with their names.
+    fn new(specs: &str, path: &Path, every: usize, sample_rate: u32, patch: &Patch, compiled: &CompiledPatch) -> Result<Self, String> {
+        let registry = create_module_registry();
+        let mut traced = Vec::new();
+        for spec in specs.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+            let err = |msg: &str| format!("--trace {}: {}", spec, msg);
+            let (word, port) = spec.split_once(':').ok_or_else(|| err("expected module[#n|@id]:Port"))?;
+            let (node, engine) = find_node(patch, compiled, word).map_err(err)?;
+            let module = registry.create(&node.module_id).ok_or_else(|| err("unknown module"))?;
+            let outputs = module.ports().iter().filter(|p| p.is_output());
+            let (output, definition) = outputs.enumerate().find(|(_, p)| p.name == port).ok_or_else(|| err("no such output"))?;
+            if !matches!(definition.signal_type, SignalType::Audio | SignalType::Control | SignalType::Gate) {
+                return Err(err("only audio, CV and gate outputs can be traced"));
+            }
+            traced.push((spec.to_string(), Traced { node: engine, output, signal: definition.signal_type, value: 0.0 }));
+        }
+        if traced.is_empty() {
+            return Err("--trace needs at least one module:Port".to_string());
+        }
+        let file = std::fs::File::create(path).map_err(|e| format!("{}: {}", path.display(), e))?;
+        let mut out = std::io::BufWriter::new(file);
+        // A name with a comma or quote in it is quoted, as CSV has it
+        let names: Vec<String> = traced.iter().map(|(name, _)| format!("\"{}\"", name.replace('"', "\"\""))).collect();
+        writeln!(out, "seconds,{}", names.join(",")).map_err(|e| e.to_string())?;
+        let traced = traced.into_iter().map(|(_, t)| t).collect();
+        Ok(Self { out, every: every.max(1), traced, frames: 0, total: 0, sample_rate: sample_rate as f64 })
+    }
+
+    /// Takes in the first `len` frames of the block just played.
+    fn block(&mut self, plan: &GraphPlan, len: usize) -> std::io::Result<()> {
+        for traced in &mut self.traced {
+            let Some(buffer) = plan.output(traced.node, traced.output) else { continue };
+            let len = len.min(buffer.samples.len());
+            if len == 0 {
+                continue;
+            }
+            let voices = 0..buffer.channels();
+            match traced.signal {
+                SignalType::Audio => {
+                    for i in 0..len {
+                        let sum: f32 = voices.clone().map(|c| buffer.voice(c).samples[i]).sum();
+                        traced.value += sum as f64 * sum as f64;
+                    }
+                }
+                SignalType::Gate => {
+                    let high = voices.flat_map(|c| &buffer.voice(c).samples[..len]).fold(f32::MIN, |a, &b| a.max(b));
+                    traced.value = traced.value.max(high as f64);
+                }
+                _ => traced.value = buffer.samples[len - 1] as f64,
+            }
+        }
+        self.frames += len;
+        self.total += len as u64;
+        if self.frames >= self.every {
+            self.row()?;
+        }
+        Ok(())
+    }
+
+    /// Writes the row so far, and starts the next.
+    fn row(&mut self) -> std::io::Result<()> {
+        if self.frames == 0 {
+            return Ok(());
+        }
+        write!(self.out, "{:.4}", self.total as f64 / self.sample_rate)?;
+        for traced in &mut self.traced {
+            let value = match traced.signal {
+                SignalType::Audio => (traced.value / self.frames as f64).sqrt(),
+                _ => traced.value,
+            };
+            write!(self.out, ",{:.6}", value)?;
+            if traced.signal != SignalType::Control {
+                traced.value = 0.0;
+            }
+        }
+        writeln!(self.out)?;
+        self.frames = 0;
+        Ok(())
+    }
+
+    /// Writes the last row, short or not, and closes the file.
+    fn finish(&mut self) -> std::io::Result<()> {
+        self.row()?;
+        self.out.flush()
+    }
+}
+
+/// A stem `--stems` writes: one part of a module's mix.
+struct Stem {
+    node: NodeId,
+    name: &'static str,
+    /// What it's written as, and where it comes from (`None` for a part
+    /// nothing is patched into, which isn't written).
+    written: Option<(PathBuf, String, hound::WavWriter<std::io::BufWriter<std::fs::File>>)>,
+    peak: f32,
+    squares: f64,
+    frames: u64,
+}
+
+/// Writes each part a Mixer (or any module that keeps stems) mixes to a WAV
+/// of its own as the render plays, after its fader and the Master.
+struct Stems {
+    dir: PathBuf,
+    sample_rate: u32,
+    stems: Vec<Stem>,
+    /// For naming each stem: the module of every engine node, and the
+    /// cables between them as the engine has them.
+    modules: HashMap<NodeId, (String, u64)>,
+    cables: Vec<(NodeId, usize, NodeId, usize)>,
+}
+
+impl Stems {
+    fn new(dir: &Path, sample_rate: u32, patch: &Patch, compiled: &CompiledPatch) -> Result<Self, String> {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {}", dir.display(), e))?;
+        let nodes = patch.all_nodes();
+        let modules = compiled
+            .node_ids
+            .iter()
+            .filter_map(|(&id, &engine)| nodes.iter().find(|n| n.id == id).map(|n| (engine, (n.module_id.clone(), id))))
+            .collect();
+        let cables = compiled
+            .commands
+            .iter()
+            .filter_map(|c| match *c {
+                EngineCommand::Connect { from_node, from_port, to_node, to_port } => Some((from_node, from_port, to_node, to_port)),
+                _ => None,
+            })
+            .collect();
+        Ok(Self { dir: dir.to_path_buf(), sample_rate, stems: Vec::new(), modules, cables })
+    }
+
+    /// What feeds the part `name` of `node`: a cable into its audio input
+    /// `name`, or `name L` or `name R`, as `module@id Port`.
+    fn source(modules: &HashMap<NodeId, (String, u64)>, cables: &[(NodeId, usize, NodeId, usize)], node: NodeId, name: &str) -> Option<String> {
+        let registry = create_module_registry();
+        let ports = |engine: NodeId| modules.get(&engine).and_then(|(module, _)| registry.create(module));
+        let module = ports(node)?;
+        let feeds = |port: usize| {
+            module.ports().get(port).is_some_and(|p| {
+                p.is_input() && p.signal_type == SignalType::Audio && [name.to_string(), format!("{name} L"), format!("{name} R")].contains(&p.name.to_string())
+            })
+        };
+        let &(from, from_port, _, _) = cables.iter().find(|&&(_, _, to, port)| to == node && feeds(port))?;
+        let (module, id) = modules.get(&from)?;
+        let port = ports(from).and_then(|m| m.ports().get(from_port).map(|p| p.name)).unwrap_or("?");
+        Some(format!("{module}@{id} {port}"))
+    }
+
+    fn block(&mut self, plan: &GraphPlan, len: usize) -> Result<(), String> {
+        let Self { dir, sample_rate, stems, modules, cables } = self;
+        let mut result = Ok(());
+        plan.stems(|node, name, left, right| {
+            if result.is_err() {
+                return;
+            }
+            let index = match stems.iter().position(|s| (s.node, s.name) == (node, name)) {
+                Some(index) => index,
+                // Seen for the first time: open its file if something plays into it
+                None => {
+                    let written = Self::source(modules, cables, node, name).map(|source| {
+                        let (module, id) = &modules[&node];
+                        let file = format!("{module}@{id}-{}.wav", name.to_lowercase().replace(' ', ""));
+                        let path = dir.join(file);
+                        let spec = hound::WavSpec { channels: 2, sample_rate: *sample_rate, bits_per_sample: 32, sample_format: hound::SampleFormat::Float };
+                        hound::WavWriter::create(&path, spec).map(|writer| (path, source, writer))
+                    });
+                    let written = match written.transpose() {
+                        Ok(written) => written,
+                        Err(e) => {
+                            result = Err(e.to_string());
+                            return;
+                        }
+                    };
+                    stems.push(Stem { node, name, written, peak: 0.0, squares: 0.0, frames: 0 });
+                    stems.len() - 1
+                }
+            };
+            let stem = &mut stems[index];
+            let Some((_, _, writer)) = &mut stem.written else { return };
+            for (&l, &r) in left[..len].iter().zip(&right[..len]) {
+                if let Err(e) = writer.write_sample(l).and_then(|()| writer.write_sample(r)) {
+                    result = Err(e.to_string());
+                    return;
+                }
+                stem.peak = stem.peak.max(l.abs()).max(r.abs());
+                stem.squares += (l as f64 * l as f64 + r as f64 * r as f64) / 2.0;
+            }
+            stem.frames += len as u64;
+        });
+        result
+    }
+
+    /// Closes every file, printing what each stem holds.
+    fn finish(&mut self) -> Result<(), String> {
+        println!("stems -> {}:", self.dir.display());
+        for stem in self.stems.drain(..) {
+            let Some((path, source, writer)) = stem.written else { continue };
+            writer.finalize().map_err(|e| format!("{}: {}", path.display(), e))?;
+            let (module, id) = &self.modules[&stem.node];
+            let rms = (stem.squares / stem.frames.max(1) as f64).sqrt() as f32;
+            let level = |amp: f32| if amp > 0.0 { format!("{:6.1} dBFS", amp_to_db(amp)) } else { format!("{:>11}", "silent") };
+            println!(
+                "  {:<24} <- {:<28} peak {}   rms {}   {}",
+                format!("{module}@{id} {}", stem.name),
+                source,
+                level(stem.peak),
+                level(rms),
+                path.file_name().map_or(String::new(), |f| f.to_string_lossy().into_owned())
+            );
+        }
+        Ok(())
+    }
+}
+
+/// What `--trace` and `--stems` write as the render plays, shown each block.
+#[derive(Default)]
+struct Taps {
+    trace: Option<Trace>,
+    stems: Option<Stems>,
+    /// The first thing that went wrong writing either.
+    error: Option<String>,
+}
+
+impl Taps {
+    fn block(&mut self, plan: &GraphPlan, len: usize) {
+        if self.error.is_some() {
+            return;
+        }
+        let trace = self.trace.as_mut().map_or(Ok(()), |t| t.block(plan, len).map_err(|e| format!("--trace: {e}")));
+        let stems = self.stems.as_mut().map_or(Ok(()), |s| s.block(plan, len).map_err(|e| format!("--stems: {e}")));
+        self.error = trace.and(stems).err();
+    }
+
+    fn finish(&mut self) -> Result<(), String> {
+        if let Some(error) = self.error.take() {
+            return Err(error);
+        }
+        if let Some(trace) = &mut self.trace {
+            trace.finish().map_err(|e| format!("--trace: {e}"))?;
+        }
+        if let Some(stems) = &mut self.stems {
+            stems.finish()?;
+        }
+        Ok(())
+    }
 }
 
 fn main() -> ExitCode {

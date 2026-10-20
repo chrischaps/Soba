@@ -594,6 +594,33 @@ impl GraphPlan {
         Some(self.outputs[buffer].channels())
     }
 
+    /// What a node's output (counted among its outputs) carried in the last
+    /// block, or `None` if there is no such output.
+    pub fn output(&self, node_id: NodeId, output_index: usize) -> Option<&SignalBuffer> {
+        let node = self.nodes.iter().find(|node| node.node_id == node_id)?;
+        let buffer = node.outputs.clone().nth(output_index)?;
+        Some(&self.outputs[buffer])
+    }
+
+    /// Has every module that mixes several parts keep them apart from now
+    /// on (see [`DspModule::keep_stems`]). Allocates: for offline renders.
+    pub fn keep_stems(&mut self) {
+        let max_block_size = self.max_block_size;
+        for module in self.nodes.iter_mut().filter_map(|node| node.module.as_deref_mut()) {
+            module.keep_stems(max_block_size);
+        }
+    }
+
+    /// Calls `f` with each part a module kept apart in the last block: the
+    /// node, the part's name, then its left and right.
+    pub fn stems(&self, mut f: impl FnMut(NodeId, &'static str, &[f32], &[f32])) {
+        for node in &self.nodes {
+            if let Some(module) = node.module.as_deref() {
+                module.stems(&mut |name, left, right| f(node.node_id, name, left, right));
+            }
+        }
+    }
+
     /// Whether a node is bypassed, or `None` if it isn't in this plan.
     pub fn is_bypassed(&self, node_id: NodeId) -> Option<bool> {
         self.nodes.iter().find(|node| node.node_id == node_id).map(|node| node.bypassed)

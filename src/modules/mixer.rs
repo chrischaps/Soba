@@ -191,7 +191,15 @@ pub struct Mixer {
     /// The loudest sample the return and the chain brought in.
     return_peak: f32,
     chain_peak: f32,
+    /// Each strip's part of the mix and the return's, as (left, right),
+    /// after the faders and the Master, before the clip: what
+    /// [`STEM_NAMES`] names. Empty unless kept (see `keep_stems`).
+    stems: Vec<[Vec<f32>; 2]>,
 }
+
+/// The parts a Mixer keeps apart for `render --stems`: its strips, then the
+/// return. Chain In isn't among them, as the Mixer it comes from has its own.
+pub const STEM_NAMES: [&str; STRIPS + 1] = ["Ch 1", "Ch 2", "Ch 3", "Ch 4", "Return"];
 
 impl Mixer {
     /// Creates a new Mixer.
@@ -278,6 +286,7 @@ impl Mixer {
             master_peaks: [0.0; 2],
             return_peak: 0.0,
             chain_peak: 0.0,
+            stems: Vec::new(),
         }
     }
 
@@ -371,6 +380,9 @@ impl DspModule for Mixer {
         for bus in [&mut *out_l, &mut *out_r, &mut *send_l, &mut *send_r] {
             bus.fill(0.0);
         }
+        for side in self.stems.iter_mut().flatten() {
+            side[..n].fill(0.0);
+        }
 
         let on = |index: usize| params[index] >= 0.5;
         let any_solo = (0..STRIPS).any(|s| on(Self::PARAM_SOLO + s));
@@ -379,6 +391,7 @@ impl DspModule for Mixer {
         self.master.set_target(master_gain(params[Self::PARAM_MASTER]));
 
         for (s, strip) in self.strips.iter_mut().enumerate() {
+            let mut stem = self.stems.get_mut(s);
             strip.level.set_target(params[Self::PARAM_LEVEL + s]);
             strip.pan.set_target(params[Self::PARAM_PAN + s]);
             strip.width.set_target(params[Self::PARAM_WIDTH + s]);
@@ -439,6 +452,10 @@ impl DspModule for Mixer {
                     let (left, right) = (left * gain, right * gain);
                     out_l[i] += left;
                     out_r[i] += right;
+                    if let Some([stem_l, stem_r]) = stem.as_deref_mut() {
+                        stem_l[i] = left;
+                        stem_r[i] = right;
+                    }
                     let send = (strip.send.next() + send_cv.map_or(0.0, |cv| cv[i])).clamp(0.0, 1.0);
                     send_l[i] += left * send;
                     send_r[i] += right * send;
@@ -479,6 +496,10 @@ impl DspModule for Mixer {
                 let (l, r) = (summed(l, i) * level, summed(r, i) * level);
                 out_l[i] += l;
                 out_r[i] += r;
+                if let Some([stem_l, stem_r]) = self.stems.get_mut(STRIPS) {
+                    stem_l[i] = l;
+                    stem_r[i] = r;
+                }
                 self.return_peak = self.return_peak.max(l.abs()).max(r.abs());
             }
         } else {
@@ -496,6 +517,9 @@ impl DspModule for Mixer {
             out_r[i] = soft_clip(out_r[i] * master);
             self.master_peaks[0] = self.master_peaks[0].max(out_l[i].abs());
             self.master_peaks[1] = self.master_peaks[1].max(out_r[i].abs());
+            for side in self.stems.iter_mut().flatten() {
+                side[i] *= master;
+            }
         }
 
         // The chain carries the same four signals on one cable
@@ -530,6 +554,16 @@ impl DspModule for Mixer {
         levels.peaks[Self::METER_RETURN] = std::mem::take(&mut self.return_peak);
         levels.peaks[Self::METER_CHAIN] = std::mem::take(&mut self.chain_peak);
         Some(levels)
+    }
+
+    fn keep_stems(&mut self, max_block_size: usize) {
+        self.stems = vec![[vec![0.0; max_block_size], vec![0.0; max_block_size]]; STEM_NAMES.len()];
+    }
+
+    fn stems(&self, f: &mut dyn FnMut(&'static str, &[f32], &[f32])) {
+        for (name, [left, right]) in STEM_NAMES.iter().zip(&self.stems) {
+            f(name, left, right);
+        }
     }
 
     /// Runs as one module, but hears each voice of a polyphonic cable on its
@@ -676,6 +710,43 @@ mod tests {
 
     /// Centred, each side is at -3 dB.
     const CENTRE: f32 = FRAC_1_SQRT_2;
+
+    #[test]
+    fn test_kept_stems_add_up_to_the_mix() {
+        let mut p = params();
+        p[Mixer::PARAM_PAN] = -0.5;
+        p[Mixer::PARAM_WIDTH + 2] = 1.0;
+        p[Mixer::PARAM_MUTE + 1] = 1.0;
+        p[Mixer::PARAM_MASTER] = -6.0;
+        let (one, two, three, back) = (constant(0.2), constant(0.3), poly(&[0.1, -0.05, 0.15]), constant(0.1));
+        let patched = [(Mixer::PORT_CH, &one), (Mixer::PORT_CH + 1, &two), (Mixer::PORT_CH + 2, &three), (Mixer::PORT_RETURN, &back)];
+
+        let mut kept = prepared();
+        kept.keep_stems(BLOCK);
+        let out = run(&mut kept, &patched, &p, 40);
+        // Keeping them changes nothing heard
+        let plain = run(&mut prepared(), &patched, &p, 40);
+        assert_eq!(out[Mixer::OUT_L].samples, plain[Mixer::OUT_L].samples);
+
+        let mut names = Vec::new();
+        let mut sum = [0.0; 2];
+        kept.stems(&mut |name, left, right| {
+            names.push(name);
+            sum[0] += left[BLOCK - 1];
+            sum[1] += right[BLOCK - 1];
+            if name == "Ch 2" {
+                assert_eq!((left[BLOCK - 1], right[BLOCK - 1]), (0.0, 0.0), "a muted channel's stem is silent");
+            }
+        });
+        assert_eq!(names, STEM_NAMES);
+        let mix = lr(&out);
+        assert!((sum[0] - mix[0]).abs() < 1e-6 && (sum[1] - mix[1]).abs() < 1e-6, "{sum:?} against {mix:?}");
+
+        // Unless asked, a Mixer keeps none
+        let mut none = 0;
+        prepared().stems(&mut |_, _, _| none += 1);
+        assert_eq!(none, 0);
+    }
 
     #[test]
     fn test_mixer_info() {
