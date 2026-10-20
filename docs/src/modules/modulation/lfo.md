@@ -27,7 +27,7 @@ The display on the node draws one cycle of the selected waveform, with a dot tha
 
 | Control | Range | Default | Description |
 |---------|-------|---------|-------------|
-| **Rate** | 0.01 – 100 Hz | 1 Hz | Speed of the cycle. The knob is logarithmic |
+| **Rate** | 0.001 – 100 Hz | 1 Hz | Speed of the cycle. The knob is logarithmic, and its slowest turn is a cycle of nearly 17 minutes: a tide under a whole song |
 | **Phase** | 0 – 360° | 0° | Shifts where in the cycle the waveform starts |
 | **Wave** | Sine / Triangle / Square / Saw | Sine | Dropdown on the node |
 | **Bipolar** | On / Off | On | Checkbox on the node. On swings -1 to 1; off stays between 0 and 1 |

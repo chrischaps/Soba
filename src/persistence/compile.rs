@@ -214,6 +214,21 @@ mod tests {
     }
 
     #[test]
+    fn test_a_tide_minutes_long_loads_at_its_own_rate() {
+        // 213 s round: slower than the LFO's Rate knob once reached
+        let mut patch = Patch::new("tide");
+        let mut lfo = NodeData::new(1, "mod.lfo", (0.0, 0.0));
+        lfo.parameters = vec![NamedParameter::new("Rate", ParameterValue::Number(0.0047))];
+        patch.nodes.push(lfo);
+        let compiled = compile_patch(&patch).unwrap();
+        let rate = compiled.commands.iter().find_map(|command| match *command {
+            EngineCommand::SetParameter { param_index: 0, value, .. } => Some(value),
+            _ => None,
+        });
+        assert_eq!(rate, Some(0.0047));
+    }
+
+    #[test]
     fn test_missing_parameters_fall_back_to_defaults() {
         // Patches saved before the Character toggle don't name it; Limiter
         // keeps its saved value and Character falls back to its default (off)

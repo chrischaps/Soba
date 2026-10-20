@@ -400,7 +400,7 @@ knob Release Curve      "R Crv" KnobOnly
 display Envelope
 
 == mod.lfo "LFO" finder="LFO" Modulation
-in   Rate               Control  ConnectionOrConstant inline=true  num 1 [0.01..100] Hz log
+in   Rate               Control  ConnectionOrConstant inline=true  num 1 [0.001..100] Hz log
 in   Sync               Gate     ConnectionOnly       inline=true  port
 in   Waveform           Control  ConstantOnly         inline=true  select 0 ["Sine", "Triangle", "Square", "Saw"] "Wave"
 in   Phase              Control  ConstantOnly         inline=false num 0 [0..360] °

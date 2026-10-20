@@ -67,8 +67,13 @@ impl ParamFormat {
                     format!("{:.0} Hz", value)
                 } else if value >= 10.0 {
                     format!("{:.1} Hz", value)
-                } else {
+                } else if value >= 0.1 {
                     format!("{:.2} Hz", value)
+                } else if value >= 0.01 {
+                    // A slow LFO: a tide of a minute or two
+                    format!("{:.3} Hz", value)
+                } else {
+                    format!("{:.4} Hz", value)
                 }
             }
             ParamFormat::Time => {
@@ -958,6 +963,8 @@ mod tests {
         assert_eq!(ParamFormat::Frequency.format(20000.0), "20.00 kHz");
         assert_eq!(ParamFormat::Frequency.format(50.0), "50.0 Hz");
         assert_eq!(ParamFormat::Frequency.format(5.0), "5.00 Hz");
+        assert_eq!(ParamFormat::Frequency.format(0.0113), "0.011 Hz");
+        assert_eq!(ParamFormat::Frequency.format(0.0047), "0.0047 Hz");
     }
 
     #[test]

@@ -88,7 +88,7 @@ pub const ID: &str = "mod.lfo";
 ///
 /// # Parameters
 ///
-/// - **Rate** (0.01-100 Hz): Speed of the LFO oscillation. Logarithmic display.
+/// - **Rate** (0.001-100 Hz): Speed of the LFO oscillation. Logarithmic display.
 /// - **Waveform** (0-3): Shape of the output (Sine, Triangle, Square, Saw).
 /// - **Phase** (0-360°): Phase offset for waveform start point.
 /// - **Bipolar** (toggle): When on, output is -1 to +1. When off, output is 0 to +1.
@@ -175,7 +175,7 @@ impl Lfo {
                 ParameterDefinition::new(
                     "rate",
                     "Rate",
-                    0.01,
+                    0.001,
                     100.0,
                     1.0, // Default 1 Hz
                     ParameterDisplay::logarithmic("Hz"),
@@ -552,7 +552,7 @@ mod tests {
 
         // Rate parameter
         assert_eq!(params[0].id, "rate");
-        assert!((params[0].min - 0.01).abs() < f32::EPSILON);
+        assert!((params[0].min - 0.001).abs() < f32::EPSILON);
         assert!((params[0].max - 100.0).abs() < f32::EPSILON);
         assert!((params[0].default - 1.0).abs() < f32::EPSILON);
 
