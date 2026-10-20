@@ -40,6 +40,10 @@ session's working tree or locks an exe someone is running. Every process it
 starts runs at below-normal priority, cargo on all but two cores. One run at
 a time: a second exits at once.
 
+Cargo builds on the Rust CI pins (RUST_TOOLCHAIN in the commit's ci.yml),
+installed first if this machine lacks it, never on whatever its stable is:
+a stable too old for egui failed every step for two nights (#417).
+
 A failing step opens an issue labelled nightly-failure ("Nightly: <step>
 fails on master"), or comments on the one already open; a step that passes
 again closes it. The report and each step's log go to target/nightly/<stamp>/
@@ -84,6 +88,7 @@ PERF_RUNS = 3
 # of canopy varies by about a fifth; the best of three by much less
 PERF_TOLERANCE = 0.15
 BENCH_LINE = re.compile(r"^bench: ([0-9.]+) s ")
+CI_TOOLCHAIN = re.compile(r"^\s*RUST_TOOLCHAIN:\s*['\"]?([\w.-]+)", re.MULTILINE)
 
 
 def run(*args, check=True, cwd=None):
@@ -140,9 +145,20 @@ def take_lock(path):
     return False
 
 
-def quiet_env(target=None):
+def pinned_toolchain(worktree):
+    """The Rust CI builds with, from the checked-out ci.yml, or None if it pins none."""
+    try:
+        match = CI_TOOLCHAIN.search((worktree / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    return match.group(1) if match else None
+
+
+def quiet_env(target=None, toolchain=None):
     """Cargo and the tests on all but two cores, so the machine stays usable."""
     env = dict(os.environ)
+    if toolchain:
+        env["RUSTUP_TOOLCHAIN"] = toolchain
     jobs = str(max(1, (os.cpu_count() or 4) - 2))
     env["CARGO_BUILD_JOBS"] = jobs
     env["RUST_TEST_THREADS"] = jobs
@@ -304,7 +320,12 @@ def judge_perf(timings, baseline_path, log):
 def run_steps(steps, worktree, logs, push, perf_baseline=None, rebaseline=False):
     """Each step's result: (passed, minutes, note)."""
     results = {}
-    env = quiet_env()
+    toolchain = pinned_toolchain(worktree)
+    if toolchain:
+        # A no-op when it's there already; when it can't be had, the steps fail saying why
+        step_run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal"],
+                 logs / "toolchain.log", worktree, dict(os.environ))
+    env = quiet_env(toolchain=toolchain)
     python = sys.executable
     showcase = worktree / "tools" / "showcase"
     capture_ok = None
@@ -318,7 +339,7 @@ def run_steps(steps, worktree, logs, push, perf_baseline=None, rebaseline=False)
         note = ""
         if step in CAPTURE_STEPS and capture_ok is None:
             capture_ok = step_run(["cargo", "build", "--release"], logs / "capture-build.log", worktree,
-                                  quiet_env(worktree / "target" / "capture")) == 0
+                                  quiet_env(worktree / "target" / "capture", toolchain)) == 0
         if step in CAPTURE_STEPS and not capture_ok:
             log.write_text("the capture build failed: see capture-build.log\n" + tail(logs / "capture-build.log"),
                            encoding="utf-8")
