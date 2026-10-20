@@ -107,7 +107,7 @@
       "module_id": "util.logic",
       "position": [
         480.0,
-        500.0
+        562.0
       ],
       "parameters": [
         {
@@ -1857,7 +1857,7 @@
       ],
       "size": [
         214.0,
-        430.0
+        482.0
       ],
       "color": "amber"
     },
@@ -1865,11 +1865,11 @@
       "title": "The gaps",
       "position": [
         456.0,
-        452.0
+        514.0
       ],
       "size": [
         214.0,
-        418.0
+        470.0
       ],
       "color": "amber"
     },

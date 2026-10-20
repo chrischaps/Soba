@@ -642,7 +642,7 @@
       "module_id": "util.logic",
       "position": [
         24.0,
-        1872.0
+        1914.0
       ],
       "parameters": [
         {
@@ -672,7 +672,7 @@
       "module_id": "util.logic",
       "position": [
         218.0,
-        1872.0
+        1914.0
       ],
       "parameters": [
         {
@@ -687,7 +687,7 @@
       "module_id": "util.logic",
       "position": [
         412.0,
-        1872.0
+        1914.0
       ],
       "parameters": [
         {
@@ -702,7 +702,7 @@
       "module_id": "util.logic",
       "position": [
         412.0,
-        2248.0
+        2332.0
       ],
       "parameters": [
         {
@@ -717,7 +717,7 @@
       "module_id": "util.logic",
       "position": [
         24.0,
-        2248.0
+        2332.0
       ],
       "parameters": [
         {
@@ -732,7 +732,7 @@
       "module_id": "util.logic",
       "position": [
         218.0,
-        2248.0
+        2332.0
       ],
       "parameters": [
         {
@@ -777,7 +777,7 @@
       "module_id": "util.logic",
       "position": [
         606.0,
-        1872.0
+        1914.0
       ],
       "parameters": [
         {
@@ -807,7 +807,7 @@
       "module_id": "util.logic",
       "position": [
         606.0,
-        2248.0
+        2332.0
       ],
       "parameters": [
         {
@@ -822,7 +822,7 @@
       "module_id": "util.logic",
       "position": [
         800.0,
-        1872.0
+        1914.0
       ],
       "parameters": [
         {
@@ -2497,7 +2497,7 @@
       "module_id": "util.logic",
       "position": [
         3033.0,
-        440.0
+        486.0
       ],
       "parameters": [
         {
@@ -3396,7 +3396,7 @@
       ],
       "size": [
         1544.0,
-        1084.0
+        1134.0
       ],
       "color": "slate"
     },
@@ -3408,7 +3408,7 @@
       ],
       "size": [
         1325.0,
-        1386.0
+        1436.0
       ],
       "color": "amber"
     },
@@ -3420,7 +3420,7 @@
       ],
       "size": [
         1030.0,
-        1311.0
+        1395.0
       ],
       "color": "teal"
     },
@@ -3456,7 +3456,7 @@
       ],
       "size": [
         430.0,
-        860.0
+        910.0
       ],
       "color": "rose"
     }
@@ -18548,7 +18548,7 @@
           "module_id": "util.attenuverter",
           "position": [
             0.0,
-            330.0
+            357.0
           ],
           "parameters": [
             {
@@ -18660,7 +18660,7 @@
       "name": "Faders",
       "position": [
         800.0,
-        2248.0
+        2332.0
       ],
       "inputs": [
         {

@@ -247,7 +247,7 @@
       "module_id": "output.audio",
       "position": [
         2072.0,
-        954.0
+        1010.0
       ],
       "parameters": [
         {
@@ -272,7 +272,7 @@
       "module_id": "mod.lfo",
       "position": [
         849.0,
-        1134.0
+        1190.0
       ],
       "parameters": [
         {
@@ -302,7 +302,7 @@
       "module_id": "util.mix",
       "position": [
         264.0,
-        914.0
+        970.0
       ],
       "parameters": [
         {
@@ -322,7 +322,7 @@
       "module_id": "filter.svf",
       "position": [
         584.0,
-        914.0
+        970.0
       ],
       "parameters": [
         {
@@ -347,7 +347,7 @@
       "module_id": "util.vca",
       "position": [
         849.0,
-        914.0
+        970.0
       ],
       "parameters": [
         {
@@ -382,7 +382,7 @@
       "module_id": "util.mixer",
       "position": [
         1354.0,
-        914.0
+        970.0
       ],
       "parameters": [
         {
@@ -522,7 +522,7 @@
       "module_id": "fx.tape",
       "position": [
         1780.0,
-        914.0
+        970.0
       ],
       "parameters": [
         {
@@ -730,7 +730,7 @@
       ],
       "size": [
         1300.0,
-        818.0
+        874.0
       ],
       "color": "cyan"
     },
@@ -738,7 +738,7 @@
       "title": "Surf",
       "position": [
         240.0,
-        856.0
+        912.0
       ],
       "size": [
         818.0,
@@ -750,7 +750,7 @@
       "title": "On tape",
       "position": [
         1330.0,
-        856.0
+        912.0
       ],
       "size": [
         704.0,
@@ -764,7 +764,7 @@
       "text": "One Noise module does it all. Pink and brown are the water, white picks the chime's notes, and **Random** is the wind.",
       "position": [
         16.0,
-        844.0
+        900.0
       ],
       "width": 210.0
     },
@@ -772,7 +772,7 @@
       "text": "Each rise of the LFO is a wave arriving: louder, and brighter as the filter opens.",
       "position": [
         1082.0,
-        1334.0
+        1390.0
       ],
       "width": 240.0
     },
