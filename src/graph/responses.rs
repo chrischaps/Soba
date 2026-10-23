@@ -72,18 +72,23 @@ pub enum SynthResponse {
     CopyNode(egui_node_graph2::NodeId),
     /// Request to bypass a node, or bring it back.
     ToggleBypass(egui_node_graph2::NodeId),
-    /// Request to start MIDI Learn mode for a parameter.
+    /// Request to start MIDI Learn mode for a parameter, or a Scenes pad.
     MidiLearnStart {
         engine_node_id: u64,
         param_index: usize,
         param_name: String,
         min_value: f32,
         max_value: f32,
+        /// What kind of control it is: what a CC or a note does to it.
+        control: crate::persistence::MidiControl,
+        /// The Scenes pad (0-7) to recall, in place of a parameter.
+        scene: Option<u8>,
     },
-    /// Request to clear MIDI mapping for a parameter.
+    /// Request to clear the MIDI mapping of a parameter, or a Scenes pad.
     MidiLearnClear {
         engine_node_id: u64,
         param_index: usize,
+        scene: Option<u8>,
     },
     /// Request to leave MIDI Learn mode without mapping anything.
     MidiLearnCancel,
@@ -211,13 +216,14 @@ impl SynthResponse {
         Self::ResetNode(node_id)
     }
 
-    /// Create a MIDI learn start response.
+    /// Create a MIDI learn start response for a parameter.
     pub fn midi_learn_start(
         engine_node_id: u64,
         param_index: usize,
         param_name: impl Into<String>,
         min_value: f32,
         max_value: f32,
+        control: crate::persistence::MidiControl,
     ) -> Self {
         Self::MidiLearnStart {
             engine_node_id,
@@ -225,14 +231,17 @@ impl SynthResponse {
             param_name: param_name.into(),
             min_value,
             max_value,
+            control,
+            scene: None,
         }
     }
 
-    /// Create a MIDI learn clear response.
+    /// Create a MIDI learn clear response for a parameter.
     pub fn midi_learn_clear(engine_node_id: u64, param_index: usize) -> Self {
         Self::MidiLearnClear {
             engine_node_id,
             param_index,
+            scene: None,
         }
     }
 }

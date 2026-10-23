@@ -38,7 +38,7 @@ Each input acts on its rising edge.
 
 The four buttons under the ring do what the gate inputs do. Each one is labelled with what it does next: **Rec** reads *Play* while recording, *Dub* while playing, and *Play* while overdubbing, and **Undo** reads *Redo* once a layer has been taken back. Pressing a footswitch plays the Looper rather than editing the patch, so it isn't an undo step.
 
-Right-click a footswitch and choose **Learn MIDI CC** to press it from a MIDI controller. A footswitch pedal on a MIDI interface works this way: any CC value from 64 up presses it. A learned footswitch wears a small purple dot.
+Right-click a footswitch and choose **Learn MIDI** to press it from a MIDI controller. A footswitch pedal on a MIDI interface works this way: any CC value from 64 up presses it. So does a pad, which presses it for as long as it's held: four pads of a pad controller make a looper's pedalboard. A learned footswitch wears a small purple dot.
 
 ## Parameters
 

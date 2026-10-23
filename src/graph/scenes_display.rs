@@ -7,6 +7,9 @@
 //! carried the knobs to each, so the light crossfades from one to the other
 //! as it glides. The pad the knobs stand at, however they got there, is
 //! ringed. Along the bottom, Morph rides a line from From to To.
+//!
+//! A pad can learn a MIDI pad or CC to recall its scene (#423), and wears
+//! a purple badge once it has.
 
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Sense, Stroke};
 use egui_node_graph2::NodeId;
@@ -15,7 +18,8 @@ use crate::app::theme;
 
 use super::display_frame;
 use super::scenes::{self, SLOTS};
-use super::{SceneAction, SynthGraph, SynthGraphState};
+use super::{SceneAction, SynthGraph, SynthGraphState, SynthResponse};
+use crate::persistence::MidiControl;
 
 /// Pads in a row.
 const COLUMNS: usize = 4;
@@ -26,14 +30,14 @@ const STRIP: f32 = 14.0;
 /// Most ticks a pad draws: more knobs than this share them.
 const MOST_TICKS: usize = 16;
 
-/// Draws the pads, and returns what a click on one asked for.
+/// Draws the pads, and returns what a click on one, or its menu, asked for.
 pub fn scenes_display(
     ui: &mut egui::Ui,
     node_id: NodeId,
     graph: &SynthGraph,
-    user_state: &SynthGraphState,
+    user_state: &mut SynthGraphState,
     zoom: f32,
-) -> Option<(usize, SceneAction)> {
+) -> Option<SynthResponse> {
     let z = zoom;
     let node = graph.nodes.get(node_id)?;
     let bank = &node.user_data.scenes;
@@ -90,6 +94,8 @@ pub fn scenes_display(
     let current = (0..SLOTS)
         .find(|&slot| bank.get(scenes::letter(slot)).is_some_and(|scene| scenes::matches(graph, user_state, node_id, scene)));
 
+    let engine_id = user_state.get_engine_node_id(node_id);
+    let now = ui.input(|i| i.time);
     let mut clicked = None;
     for slot in 0..SLOTS {
         let pad = pad_rect(slot);
@@ -127,22 +133,62 @@ pub fn scenes_display(
             }
         }
 
-        let tip = match scene {
+        // A MIDI pad or CC recalls it: a purple badge in its corner
+        let mapping = engine_id.and_then(|eid| user_state.scene_midi_mappings.get(&(eid, slot)).cloned());
+        let learning = engine_id.is_some_and(|eid| user_state.midi_learn_scene == Some((eid, slot)));
+        if mapping.is_some() || learning {
+            let alpha = if learning { 0.4 + 0.6 * (now * 4.0).sin().abs() as f32 } else { 1.0 };
+            painter.circle_filled(pad.right_top() + vec2(-3.0 * z, 3.0 * z), 2.2 * z, theme::signal::MIDI.gamma_multiply(alpha));
+            if learning {
+                crate::app::pace::animate(ui.ctx());
+            }
+        }
+
+        let mut tip = match scene {
             Some(scene) => format!(
                 "Scene {letter} · {} knobs\nClick to recall it\nShift+click to keep the knobs here instead\nAlt+click to clear it",
                 scene.values().map(|params| params.len()).sum::<usize>(),
             ),
             None => format!("Scene {letter} is empty: click to keep the knobs here"),
         };
+        match &mapping {
+            Some(mapping) => tip.push_str(&format!("\nMIDI {} recalls it. Right-click to change", mapping.text())),
+            None => tip.push_str("\nRight-click to recall it from a MIDI pad"),
+        }
         let response = response.on_hover_text(tip);
         if response.clicked() {
             let modifiers = ui.input(|i| i.modifiers);
             clicked = Some(match (scene.is_some(), modifiers.alt, modifiers.shift) {
-                (true, true, _) => (slot, SceneAction::Clear),
-                (true, false, false) => (slot, SceneAction::Recall),
-                (_, false, _) => (slot, SceneAction::Store),
+                (true, true, _) => SynthResponse::Scene { node_id, slot, action: SceneAction::Clear },
+                (true, false, false) => SynthResponse::Scene { node_id, slot, action: SceneAction::Recall },
+                (_, false, _) => SynthResponse::Scene { node_id, slot, action: SceneAction::Store },
                 (false, true, _) => continue,
             });
+        }
+        let menu = crate::widgets::menu::context_menu(&response, |ui| {
+            let Some(eid) = engine_id else { return };
+            if learning {
+                if ui.button("Cancel MIDI Learn").clicked() {
+                    clicked = Some(SynthResponse::MidiLearnCancel);
+                    ui.close();
+                }
+                return;
+            }
+            let learn = SynthResponse::MidiLearnStart {
+                engine_node_id: eid,
+                param_index: 0,
+                param_name: format!("Scene {letter}"),
+                min_value: 0.0,
+                max_value: 1.0,
+                control: MidiControl::Button,
+                scene: Some(slot as u8),
+            };
+            if let Some(chosen) = super::node_data::midi_items(ui, mapping.as_ref(), learn) {
+                clicked = Some(chosen);
+            }
+        });
+        if menu.is_some() {
+            user_state.widget_context_menu_open = true;
         }
     }
 

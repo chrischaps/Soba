@@ -1,4 +1,4 @@
-//! The patch's MIDI CC and host-macro mappings, kept in one place
+//! The patch's MIDI CC, note and host-macro mappings, kept in one place
 //!
 //! The knobs' badges are worked out from these mappings
 //! ([`MidiMappings::badges`]) rather than kept as a second copy beside them,
@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use crate::engine::NodeId as EngineNodeId;
 use crate::graph::MidiMappingInfo;
-use crate::persistence::MidiMapping;
+use crate::persistence::{MidiMapping, MidiSource};
 
 /// Which CC or macro turns which parameter.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -33,12 +33,15 @@ impl MidiMappings {
         self.0.iter()
     }
 
-    /// A CC learned for a parameter: it takes the place of whatever turned
-    /// that parameter, and the CC leaves any other parameter it turned.
+    /// A CC or note learned for a parameter or a Scenes pad: it takes the
+    /// place of whatever turned that, and leaves anything else it turned.
     pub fn learn(&mut self, mapping: MidiMapping) {
-        self.unmap(mapping.node_id, mapping.param_index);
+        self.unmap(mapping.node_id, mapping.param_index, mapping.scene);
         self.0.retain(|m| {
-            m.macro_slot.is_some() || !(m.cc_number == mapping.cc_number && (m.channel == 0 || m.channel == mapping.channel))
+            m.macro_slot.is_some()
+                || !(m.source == mapping.source
+                    && m.cc_number == mapping.cc_number
+                    && (m.channel == 0 || mapping.channel == 0 || m.channel == mapping.channel))
         });
         self.0.push(mapping);
     }
@@ -46,27 +49,38 @@ impl MidiMappings {
     /// A host macro mapped to a parameter, in place of whatever CC or
     /// macro turned it. Other parameters may follow the same macro.
     pub fn map_macro(&mut self, mapping: MidiMapping) {
-        self.unmap(mapping.node_id, mapping.param_index);
+        self.unmap(mapping.node_id, mapping.param_index, None);
         self.0.push(mapping);
     }
 
-    /// Lets a parameter go of whatever turned it.
-    pub fn unmap(&mut self, node_id: EngineNodeId, param_index: usize) {
-        self.0.retain(|m| !(m.node_id == node_id && m.param_index == param_index));
+    /// Lets a parameter, or with `scene` a Scenes pad, go of whatever
+    /// turned it.
+    pub fn unmap(&mut self, node_id: EngineNodeId, param_index: usize, scene: Option<u8>) {
+        self.0.retain(|m| {
+            let same = match scene {
+                Some(_) => m.scene == scene,
+                None => m.scene.is_none() && m.param_index == param_index,
+            };
+            !(m.node_id == node_id && same)
+        });
     }
 
-    /// The badge each mapped knob shows.
+    /// The badge each mapped knob, toggle, dropdown or footswitch shows.
     pub fn badges(&self) -> HashMap<(EngineNodeId, usize), MidiMappingInfo> {
-        self.0
-            .iter()
-            .map(|m| {
-                let info = match m.macro_slot {
-                    Some(slot) => MidiMappingInfo { cc_number: 0, channel: 0, macro_slot: Some(slot) },
-                    None => MidiMappingInfo { cc_number: m.cc_number, channel: m.channel, macro_slot: None },
-                };
-                ((m.node_id, m.param_index), info)
-            })
-            .collect()
+        self.0.iter().filter(|m| m.scene.is_none()).map(|m| ((m.node_id, m.param_index), info(m))).collect()
+    }
+
+    /// The badge each mapped Scenes pad shows, keyed by its slot.
+    pub fn scene_badges(&self) -> HashMap<(EngineNodeId, usize), MidiMappingInfo> {
+        self.0.iter().filter_map(|m| Some(((m.node_id, m.scene? as usize), info(m)))).collect()
+    }
+}
+
+/// What a mapping's badge says.
+fn info(m: &MidiMapping) -> MidiMappingInfo {
+    match m.macro_slot {
+        Some(slot) => MidiMappingInfo { cc_number: 0, channel: 0, macro_slot: Some(slot), source: MidiSource::Cc },
+        None => MidiMappingInfo { cc_number: m.cc_number, channel: m.channel, macro_slot: None, source: m.source },
     }
 }
 
@@ -128,11 +142,42 @@ mod tests {
     }
 
     #[test]
+    fn a_pad_takes_its_note_from_the_control_that_had_it_on_its_channel_only() {
+        let mut mappings = MidiMappings::default();
+        let pad = |channel, node_id| MidiMapping::new(36, channel, node_id, 0, "Pedal Rec", 0.0, 1.0).note();
+        mappings.learn(pad(10, 1));
+        mappings.learn(pad(1, 2));
+        // The same number as a CC is another control
+        mappings.learn(cc(36, 3, 0));
+        assert_eq!(mappings.as_slice().len(), 3);
+        // On channel 10 again: it moves
+        mappings.learn(pad(10, 4));
+        let badges = mappings.badges();
+        assert!(!badges.contains_key(&(1, 0)));
+        assert_eq!(badges.get(&(4, 0)).map(|b| (b.source, b.text())), Some((MidiSource::Note, "C2 · ch 10".to_string())));
+    }
+
+    #[test]
+    fn a_scene_pad_is_mapped_apart_from_the_knobs_of_its_module() {
+        let mut mappings = MidiMappings::default();
+        mappings.learn(cc(1, 10, 0));
+        mappings.learn(MidiMapping::new(40, 10, 10, 0, "Scene", 0.0, 1.0).note().recalling(2));
+        mappings.learn(MidiMapping::new(41, 10, 10, 0, "Scene", 0.0, 1.0).note().recalling(3));
+        assert_eq!(mappings.badges().len(), 1, "the knob keeps its CC");
+        let scenes = mappings.scene_badges();
+        assert_eq!(scenes.get(&(10, 2)).map(|b| b.cc_number), Some(40));
+        assert_eq!(scenes.get(&(10, 3)).map(|b| b.cc_number), Some(41));
+        mappings.unmap(10, 0, Some(2));
+        assert_eq!(mappings.scene_badges().len(), 1);
+        assert_eq!(mappings.badges().len(), 1);
+    }
+
+    #[test]
     fn unmapping_and_clearing_take_the_badges_off() {
         let mut mappings = MidiMappings::default();
         mappings.learn(cc(1, 10, 0));
         mappings.learn(cc(2, 20, 0));
-        mappings.unmap(10, 0);
+        mappings.unmap(10, 0, None);
         assert!(!mappings.badges().contains_key(&(10, 0)));
         mappings.clear();
         assert!(mappings.badges().is_empty());

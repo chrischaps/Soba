@@ -9,7 +9,8 @@ use super::*;
 /// What the left of the status bar shows, most pressing first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Shown {
-    /// The prompt to move a CC, for as long as MIDI Learn waits for one.
+    /// The prompt to move a control or hit a pad, for as long as MIDI Learn
+    /// waits for one.
     Learn,
     /// An action that failed, or a warning raised as the status.
     Failure,
@@ -133,7 +134,7 @@ impl SynthApp {
         match self.status_bar_shows() {
             Shown::Learn => {
                 let param = self.midi.learning().map_or("", |target| target.param_name.as_str());
-                ui.label(RichText::new(format!("Move a MIDI CC to map {}... (Esc to cancel)", param))
+                ui.label(RichText::new(format!("Move a knob or fader, or hit a pad, to map {}... (Esc to cancel)", param))
                     .color(theme::accent::PRIMARY)
                     .small());
             }

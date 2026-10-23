@@ -273,9 +273,22 @@ impl WidgetValueTrait for SynthValueType {
         };
         // For a capture script to aim at, as a knob is
         super::marks::mark(ui.ctx(), node_id, format_args!("knob:{param_name}"), control.rect);
+        // Mapped to MIDI, or waiting to be: a purple badge on its corner, as
+        // a knob has
+        if let Some(midi) = node_data.midi_learn(node_id, param_name, self, user_state).filter(|midi| midi.badged()) {
+            let alpha = if midi.learning {
+                crate::app::pace::animate(ui.ctx());
+                0.4 + 0.6 * (ui.input(|i| i.time) * 4.0).sin().abs() as f32
+            } else {
+                1.0
+            };
+            let corner = control.rect.right_top() + egui::vec2(-1.0, 1.0) * user_state.zoom;
+            ui.painter().circle_filled(corner, 2.2 * user_state.zoom, crate::app::theme::signal::MIDI.gamma_multiply(alpha));
+        }
+        let value = &*self;
         [name, control]
             .iter()
-            .filter_map(|response| node_data.switch_menu(response, node_id, param_name, param_name, KnobPlace::Module, user_state))
+            .filter_map(|response| node_data.switch_menu(response, node_id, param_name, param_name, value, KnobPlace::Module, user_state))
             .collect()
     }
 

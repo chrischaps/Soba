@@ -78,7 +78,7 @@ The click goes straight to the Mixer, never through the Looper, so it isn't reco
 
 ## Things to try
 
-- **Learn a footswitch.** Right-click **Rec** on the Looper, choose **Learn MIDI CC**, and press a MIDI pedal. Now your hands stay on the instrument.
+- **Learn a footswitch.** Right-click **Rec** on the Looper, choose **Learn MIDI**, and press a MIDI pedal or hit a pad. Now your hands stay on the instrument.
 - **Octave down.** Set **Speed** to ½× after recording a guitar part: it becomes a bass line, twice as long.
 - **Free time.** Set **Bars** to Free and unpatch the Looper's **Clock**: the loop is exactly as long as you held it, for playing out of time.
 - **Effects on the loop only.** Patch **Loop L/R** through a filter or the Distortion while **Out** carries you dry.

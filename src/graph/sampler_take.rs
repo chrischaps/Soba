@@ -28,6 +28,7 @@ use crate::modules::sampler::{RecState, Sampler, NO_THRESHOLD_DB};
 
 use super::state::ScopeData;
 use super::{SynthGraph, SynthGraphState, SynthResponse};
+use crate::persistence::MidiControl;
 
 /// How long a press from the face holds Rec down, at least: long enough
 /// for the audio thread to see it.
@@ -381,7 +382,7 @@ pub fn rec_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, user_state: &S
         crop_marks(ui.painter(), rect.shrink(1.5 * z), 2.5 * z, Stroke::new(1.0 * z, Color32::WHITE.gamma_multiply(0.75)));
     }
 
-    // A learned MIDI footswitch shows as a purple badge
+    // A learned MIDI footswitch or pad shows as a purple badge
     let mapping = engine_node_id.and_then(|eid| user_state.get_midi_mapping(eid, param_index));
     let learning = engine_node_id.is_some_and(|eid| user_state.is_midi_learn_target(eid, param_index));
     if mapping.is_some() || learning {
@@ -403,12 +404,12 @@ pub fn rec_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, user_state: &S
                 tip.push_str("\nTidy takes is on: each is trimmed to its sound and set to −16 dBFS RMS as it's kept");
             }
             if let Some(m) = mapping {
-                tip.push_str(&format!("\nMIDI CC {} presses it", m.cc_number));
+                tip.push_str(&format!("\nMIDI {} presses it", m.text()));
             }
             tip
         }
     };
-    let menu = if tidy_menu { "Right-click to tidy takes as they're kept, or learn a MIDI footswitch" } else { "Right-click to learn a MIDI footswitch" };
+    let menu = if tidy_menu { "Right-click to tidy takes as they're kept, or learn a MIDI footswitch or pad" } else { "Right-click to learn a MIDI footswitch or pad" };
     let button = button.on_hover_text(format!("{tip}\n{menu}"));
     crate::widgets::menu::context_menu(&button, |ui| {
         if tidy_menu {
@@ -430,13 +431,13 @@ pub fn rec_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, user_state: &S
             }
             return;
         }
-        let learn = if mapping.is_some() { "Re-learn MIDI CC" } else { "Learn MIDI CC" };
-        if ui.button(learn).clicked() {
-            responses.push(SynthResponse::MidiLearnStart { engine_node_id: eid, param_index, param_name: REC_BUTTON.to_string(), min_value: 0.0, max_value: 1.0 });
+        let learn = if mapping.is_some() { "Re-learn MIDI" } else { "Learn MIDI" };
+        if ui.button(learn).on_hover_text("Press a footswitch or hit a pad to press Rec with").clicked() {
+            responses.push(SynthResponse::midi_learn_start(eid, param_index, REC_BUTTON, 0.0, 1.0, MidiControl::Button));
             ui.close();
         }
         if mapping.is_some() && ui.button("Clear MIDI mapping").clicked() {
-            responses.push(SynthResponse::MidiLearnClear { engine_node_id: eid, param_index });
+            responses.push(SynthResponse::midi_learn_clear(eid, param_index));
             ui.close();
         }
     });

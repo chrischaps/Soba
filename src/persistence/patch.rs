@@ -27,12 +27,70 @@ pub const PATCH_VERSION: u32 = 6;
 /// The version a patch without groups is written as.
 const VERSION_WITHOUT_GROUPS: u32 = 5;
 
-/// A MIDI CC to parameter mapping.
+/// What a mapping hears: a CC, or a note from a pad or a key (#423).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MidiSource {
+    #[default]
+    Cc,
+    Note,
+}
+
+impl MidiSource {
+    fn is_cc(&self) -> bool {
+        *self == Self::Cc
+    }
+}
+
+/// The kind of control a mapping turns, which says what a CC or a note
+/// does to it (#423).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MidiControl {
+    /// A CC turns it across its range; a note holds it at the top.
+    #[default]
+    Knob,
+    /// A CC sets it on at 64 or more; a note flips it.
+    Toggle,
+    /// A CC sweeps across the choices; a note steps to the next.
+    Select,
+    /// A footswitch: pressed while a note is held, or a CC is 64 or more.
+    Button,
+}
+
+impl MidiControl {
+    fn is_knob(&self) -> bool {
+        *self == Self::Knob
+    }
+}
+
+/// What a mapped CC or note asks of its control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MidiInput {
+    /// A CC's value (0-127).
+    Cc(u8),
+    NoteOn,
+    NoteOff,
+}
+
+impl MidiInput {
+    /// Is it a press: a note struck, or a CC at 64 or more?
+    pub fn presses(self) -> bool {
+        match self {
+            Self::Cc(value) => value >= 64,
+            Self::NoteOn => true,
+            Self::NoteOff => false,
+        }
+    }
+}
+
+/// A MIDI CC or note to parameter mapping.
 ///
-/// Maps a hardware MIDI CC controller to a synthesizer parameter.
+/// Maps a hardware knob, fader, pad or key to a synthesizer parameter, or
+/// to a Scenes pad.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MidiMapping {
-    /// CC number (0-127).
+    /// CC number (0-127), or the note's when `source` is a note.
     pub cc_number: u8,
     /// MIDI channel (0 = omni/any channel, 1-16 = specific channel).
     pub channel: u8,
@@ -51,6 +109,16 @@ pub struct MidiMapping {
     /// CC: the DAW automates it. `cc_number` and `channel` are unused then.
     #[serde(default, rename = "macro", skip_serializing_if = "Option::is_none")]
     pub macro_slot: Option<u8>,
+    /// A CC (all there was before #423), or a note.
+    #[serde(default, skip_serializing_if = "MidiSource::is_cc")]
+    pub source: MidiSource,
+    /// What kind of control it turns.
+    #[serde(default, skip_serializing_if = "MidiControl::is_knob")]
+    pub control: MidiControl,
+    /// The Scenes pad (0-7) it recalls, in place of a parameter:
+    /// `param_index` is unused then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scene: Option<u8>,
 }
 
 impl MidiMapping {
@@ -73,7 +141,25 @@ impl MidiMapping {
             min_value,
             max_value,
             macro_slot: None,
+            source: MidiSource::Cc,
+            control: MidiControl::Knob,
+            scene: None,
         }
+    }
+
+    /// The mapping, heard from a note (a pad or a key) instead of a CC.
+    pub fn note(self) -> Self {
+        Self { source: MidiSource::Note, ..self }
+    }
+
+    /// The mapping, turning a control of kind `control`.
+    pub fn of(self, control: MidiControl) -> Self {
+        Self { control, ..self }
+    }
+
+    /// The mapping, recalling Scenes pad `slot` instead of a parameter.
+    pub fn recalling(self, slot: u8) -> Self {
+        Self { scene: Some(slot), ..self }
     }
 
     /// A mapping from the plugin's host macro `slot` (0-7) instead of a CC.
@@ -81,9 +167,28 @@ impl MidiMapping {
         Self { macro_slot: Some(slot), ..Self::new(0, 0, node_id, param_index, param_name, min_value, max_value) }
     }
 
-    /// Check if this mapping matches a given CC event.
-    pub fn matches(&self, cc_number: u8, channel: u8) -> bool {
-        self.macro_slot.is_none() && self.cc_number == cc_number && (self.channel == 0 || self.channel == channel + 1)
+    /// Does it hear `number` from `source` on `channel` (0-15)?
+    pub fn hears(&self, source: MidiSource, number: u8, channel: u8) -> bool {
+        self.macro_slot.is_none() && self.source == source && self.cc_number == number && (self.channel == 0 || self.channel == channel + 1)
+    }
+
+    /// What `input` sets its control to, from `current`, or `None` when it
+    /// leaves it be (a toggle's note let go).
+    pub fn respond(&self, input: MidiInput, current: f32) -> Option<f32> {
+        let (min, max) = (self.min_value, self.max_value);
+        let pressed = if input.presses() { max } else { min };
+        match (self.control, input) {
+            (MidiControl::Knob, MidiInput::Cc(value)) => Some(self.cc_to_value(value)),
+            (MidiControl::Select, MidiInput::Cc(value)) => Some(self.cc_to_value(value).round()),
+            (MidiControl::Toggle, MidiInput::NoteOn) => Some(if current > (min + max) / 2.0 { min } else { max }),
+            (MidiControl::Select, MidiInput::NoteOn) => {
+                let next = current.round() + 1.0;
+                Some(if next > max { min } else { next })
+            }
+            (MidiControl::Toggle | MidiControl::Select, MidiInput::NoteOff) => None,
+            // A knob's note, a toggle's CC, and a footswitch from either
+            _ => Some(pressed),
+        }
     }
 
     /// The macro's value (0-1) in the mapped parameter range.
@@ -990,6 +1095,42 @@ mod tests {
         let newer = r#"{"name": "New", "version": 5, "nodes": [], "connections": [],
             "frames": [], "sketches": [{"title": "Later"}]}"#;
         assert!(patch_from_json(newer).is_ok());
+    }
+
+    #[test]
+    fn test_pad_and_scene_mappings_round_trip_and_cc_ones_are_written_as_before() {
+        let mut patch = Patch::new("Pads");
+        let cc = MidiMapping::new(74, 0, 1, 0, "Cutoff", 0.0, 1.0);
+        let pad = MidiMapping::new(36, 10, 2, 8, "Pedal Rec", 0.0, 1.0).note().of(MidiControl::Button);
+        let scene = MidiMapping::new(40, 10, 3, 0, "Scene C", 0.0, 1.0).note().of(MidiControl::Button).recalling(2);
+        patch.midi_mappings = vec![cc.clone(), pad, scene];
+        let json = patch_to_json(&patch).unwrap();
+        assert_eq!(patch_from_json(&json).unwrap().midi_mappings, patch.midi_mappings);
+
+        // A CC on a knob, all there was before #423, gains no fields
+        let old = serde_json::to_value(&cc).unwrap();
+        assert_eq!(old.as_object().unwrap().len(), 7, "{old}");
+        let read: MidiMapping = serde_json::from_value(old).unwrap();
+        assert_eq!((read.source, read.control, read.scene), (MidiSource::Cc, MidiControl::Knob, None));
+    }
+
+    #[test]
+    fn test_a_mapping_responds_as_its_control_does() {
+        let knob = MidiMapping::new(1, 0, 1, 0, "Cutoff", 100.0, 200.0);
+        assert_eq!(knob.respond(MidiInput::Cc(127), 150.0), Some(200.0));
+        assert_eq!(knob.respond(MidiInput::NoteOn, 150.0), Some(200.0));
+        assert_eq!(knob.respond(MidiInput::NoteOff, 150.0), Some(100.0));
+
+        let toggle = MidiMapping::new(1, 0, 1, 0, "Sync", 0.0, 1.0).of(MidiControl::Toggle);
+        assert_eq!(toggle.respond(MidiInput::Cc(64), 0.0), Some(1.0));
+        assert_eq!(toggle.respond(MidiInput::Cc(63), 1.0), Some(0.0));
+        assert_eq!(toggle.respond(MidiInput::NoteOn, 1.0), Some(0.0));
+        assert_eq!(toggle.respond(MidiInput::NoteOff, 1.0), None);
+
+        let select = MidiMapping::new(1, 0, 1, 0, "Wave", 0.0, 4.0).of(MidiControl::Select);
+        assert_eq!(select.respond(MidiInput::Cc(64), 0.0), Some(2.0));
+        assert_eq!(select.respond(MidiInput::NoteOn, 4.0), Some(0.0));
+        assert_eq!(select.respond(MidiInput::NoteOff, 4.0), None);
     }
 
     #[test]

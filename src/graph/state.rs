@@ -82,15 +82,34 @@ pub struct ScopeData {
 /// one follow it, as they would a MIDI CC.
 pub const MACRO_COUNT: u8 = 8;
 
-/// Info about a MIDI CC mapping for display in the UI.
+/// Info about a MIDI CC or note mapping for display in the UI.
 #[derive(Clone, Debug)]
 pub struct MidiMappingInfo {
-    /// CC number that is mapped.
+    /// CC number that is mapped, or the note's.
     pub cc_number: u8,
     /// MIDI channel (0 = omni).
     pub channel: u8,
     /// In the plugin, the host macro (0-7) mapped instead of a CC.
     pub macro_slot: Option<u8>,
+    /// A CC, or a note (a pad or a key).
+    pub source: crate::persistence::MidiSource,
+}
+
+impl MidiMappingInfo {
+    /// What turns it, for its menu: "CC 74 · ch 1", "C2 · ch 10", "Macro 3".
+    pub fn text(&self) -> String {
+        let what = match (self.macro_slot, self.source) {
+            (Some(slot), _) => return format!("Macro {}", slot + 1),
+            (None, crate::persistence::MidiSource::Cc) => format!("CC {}", self.cc_number),
+            (None, crate::persistence::MidiSource::Note) => super::midi_log_display::note_to_name(self.cc_number),
+        };
+        match self.channel {
+            0 => what,
+            // The computer keys' notes come on the channel past MIDI's sixteen
+            channel if channel > 16 => format!("{what} · keys"),
+            channel => format!("{what} · ch {channel}"),
+        }
+    }
 }
 
 /// User state for the graph editor.
@@ -182,12 +201,19 @@ pub struct SynthGraphState {
     /// its mappings whenever those change (`MidiMappings::badges`).
     pub midi_mappings: HashMap<(EngineNodeId, usize), MidiMappingInfo>,
 
+    /// The badges of the Scenes pads a CC or note recalls, keyed by
+    /// (engine_node_id, slot).
+    pub scene_midi_mappings: HashMap<(EngineNodeId, usize), MidiMappingInfo>,
+
     /// Whether MIDI Learn mode is active.
     pub midi_learn_active: bool,
 
     /// Target parameter for MIDI Learn (if active).
     /// Tuple of (engine_node_id, param_index).
     pub midi_learn_target: Option<(EngineNodeId, usize)>,
+
+    /// The Scenes pad MIDI Learn waits for, as (engine_node_id, slot).
+    pub midi_learn_scene: Option<(EngineNodeId, usize)>,
 
     /// Flag set when a widget context menu is shown this frame.
     /// Used to prevent the add-node menu from also appearing.
@@ -344,8 +370,10 @@ impl Default for SynthGraphState {
             midi_notes: VecDeque::new(),
             midi_note_count: 0,
             midi_mappings: HashMap::new(),
+            scene_midi_mappings: HashMap::new(),
             midi_learn_active: false,
             midi_learn_target: None,
+            midi_learn_scene: None,
             widget_context_menu_open: false,
             scope_data: HashMap::new(),
             zoom: 1.0,
@@ -470,6 +498,11 @@ impl SynthGraphState {
         self.node_id_map.get(&graph_node_id).copied()
     }
 
+    /// The graph node an engine node is.
+    pub fn graph_node_id(&self, engine_node_id: EngineNodeId) -> Option<NodeId> {
+        self.node_id_map.iter().find(|(_, &id)| id == engine_node_id).map(|(&node, _)| node)
+    }
+
     /// Remove a graph node from the mapping.
     pub fn remove_node(&mut self, graph_node_id: NodeId) -> Option<EngineNodeId> {
         self.node_id_map.remove(&graph_node_id)
@@ -493,6 +526,8 @@ impl SynthGraphState {
         self.midi_mappings.clear();
         self.midi_learn_active = false;
         self.midi_learn_target = None;
+        self.midi_learn_scene = None;
+        self.scene_midi_mappings.clear();
         self.widget_context_menu_open = false;
         self.scope_data.clear();
         self.midi_active_notes.clear();

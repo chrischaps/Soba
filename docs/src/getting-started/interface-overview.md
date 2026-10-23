@@ -85,7 +85,7 @@ Hover any jack's name or knob for a tooltip: what it does, its signal type in th
 | Nudge it | Hold `Alt` and scroll over it, or click it and press the arrow keys |
 | Set an exact value | Right-click, type into **Value** and press `Enter`: `440`, `1.2 kHz`, `250 ms`, `-6 dB`, `C#3` |
 | Return to the default | Double-click, press `Home` once you've clicked it, or right-click and **Reset** |
-| Map to a MIDI controller | Right-click, then **Learn MIDI CC** |
+| Map to a MIDI controller | Right-click, then **Learn MIDI** |
 | Let the DAW automate it (in the [plugin](installation.md#the-plugin-clap-and-vst3)) | Right-click, then **Map to Macro** |
 
 A knob's ring lights up in its module's header color. Knobs with a range either side of zero, like **Semi** and **Fine**, light outward from the top, so you can see at a glance which way they're set. A small mark stands where zero is, so a knob at zero shows a dark ring with its pointer on the mark.
@@ -248,14 +248,26 @@ Two modules listen to the controller: [Note In](../modules/midi/note-in.md), for
 
 ### MIDI Learn
 
-Any knob can follow a MIDI controller's knob or fader:
+Any knob, toggle or dropdown can follow a control on your MIDI controller: a knob, a fader, a pad or a key. So can the [Looper](../modules/utilities/looper.md)'s footswitches, the [Sampler](../modules/sources/sampler.md)'s **Rec** and the pads of [Scenes](../modules/utilities/scenes.md).
 
-1. Right-click the knob and choose **Learn MIDI CC**. A purple **M** badge blinks above it.
-2. Move the control on your MIDI controller.
+1. Right-click it and choose **Learn MIDI**. A purple badge blinks on it, and the status bar asks you to move something.
+2. Turn a knob, move a fader, or hit a pad on your controller.
 
-The badge stops blinking and stays, and the knob now follows that control across its full range. Right-click it again to **Re-learn MIDI CC** or **Clear MIDI**. Mappings are saved with the patch.
+The badge stops blinking and stays. Right-click again to see what it's mapped to (`CC 74 · ch 1`, or `C2 · ch 10` for a pad), to **Re-learn MIDI**, or to **Clear MIDI**. Mappings are saved with the patch, and playing them isn't added to the undo history.
 
-To back out before moving a control, press `Escape`, or right-click the blinking knob and choose **Cancel MIDI Learn**. Choosing **Learn MIDI CC** on a different knob moves learn mode to that knob instead.
+What a control does depends on what it's mapped to:
+
+| Mapped to | A knob or fader (a CC) | A pad or key (a note) |
+|---|---|---|
+| A knob | turns it across its range | holds it at the top while held |
+| A toggle | switches it on from halfway up | flips it on each hit |
+| A dropdown | sweeps through the choices | steps to the next choice, and round |
+| A footswitch or **Rec** | presses it from halfway up | presses it while held |
+| A Scenes pad | recalls the scene from halfway up | recalls the scene |
+
+A mapping listens on the MIDI channel it was learned on, so the keys and the pads of one controller can send the same note numbers without mixing up. (Mappings made before Soba learned channels still listen on all of them.)
+
+To back out before moving anything, press `Escape`, or right-click the blinking control and choose **Cancel MIDI Learn**. Choosing **Learn MIDI** on a different control moves learn mode there instead.
 
 ## Recording
 

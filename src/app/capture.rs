@@ -48,7 +48,10 @@
 //! 0.5  type osc 0.1                 # type text, a letter every 0.1 s
 //! 0.5  type "two words" 0.05        # quoted, for text with spaces
 //! 1.0  note 60 100 2.0              # MIDI note, velocity, length
+//! 1.0  note 36 110 0.1 10           # ...and its channel, 1-16 (1 if left out):
+//!                                   # a pad on channel 10
 //! 1.0  chord 60,64,67 90 3.0
+//! 1.0  cc 1 74 127                  # a MIDI CC: channel, number, value
 //! 1.0  midi start                   # MIDI Start, Stop or Continue
 //! 1.0  midiclock 120 8.0            # MIDI clock ticks at 120 BPM for 8 s
 //! 2.0  param osc.sine Detune 12 1.5 # module (#n for the nth, @id for its id
@@ -199,6 +202,11 @@ impl CaptureConfig {
     }
 }
 
+/// A script's MIDI channel, 1-16, as the 0-15 a message carries.
+fn midi_channel(n: f64) -> Option<u8> {
+    (1.0..=16.0).contains(&n).then(|| n as u8 - 1)
+}
+
 /// A cue from the script.
 #[derive(Debug, Clone)]
 enum Cue {
@@ -206,7 +214,8 @@ enum Cue {
     KeyDown(egui::Key, egui::Modifiers),
     KeyUp(egui::Key, egui::Modifiers),
     Text(String),
-    Note { note: u8, velocity: u8, on: bool },
+    /// A note on `channel` (0-15).
+    Note { channel: u8, note: u8, velocity: u8, on: bool },
     /// Any other MIDI message, such as a clock tick.
     Midi(MidiEvent),
     Param { module: String, which: Which, input: String, value: f32, dur: f64 },
@@ -457,8 +466,8 @@ impl Capture {
         let midi = midi
             .into_iter()
             .map(|(at, cue)| match cue {
-                Cue::Note { note, velocity, on: true } => (at, MidiEvent::NoteOn { channel: 0, note, velocity }),
-                Cue::Note { note, on: false, .. } => (at, MidiEvent::NoteOff { channel: 0, note, velocity: 0 }),
+                Cue::Note { channel, note, velocity, on: true } => (at, MidiEvent::NoteOn { channel, note, velocity }),
+                Cue::Note { channel, note, on: false, .. } => (at, MidiEvent::NoteOff { channel, note, velocity: 0 }),
                 Cue::Midi(event) => (at, event),
                 _ => unreachable!(),
             })
@@ -1256,10 +1265,19 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
                     .collect::<Result<_, _>>()?;
                 let velocity = num(3)? as u8;
                 let len = num(4)?;
+                let channel = if words.len() > 5 { midi_channel(num(5)?).ok_or_else(|| err("channel is 1-16"))? } else { 0 };
                 for note in notes {
-                    cues.push((t, Cue::Note { note, velocity, on: true }));
-                    cues.push((t + len, Cue::Note { note, velocity, on: false }));
+                    cues.push((t, Cue::Note { channel, note, velocity, on: true }));
+                    cues.push((t + len, Cue::Note { channel, note, velocity, on: false }));
                 }
+            }
+            "cc" => {
+                let channel = midi_channel(num(2)?).ok_or_else(|| err("channel is 1-16"))?;
+                let byte = |i| match num(i)? {
+                    n if (0.0..=127.0).contains(&n) => Ok(n as u8),
+                    _ => Err(err("a CC's number and value are 0-127")),
+                };
+                cues.push((t, Cue::Midi(MidiEvent::ControlChange { channel, controller: byte(3)?, value: byte(4)? })));
             }
             "midi" => {
                 let event = match words.get(2).copied() {
@@ -1414,6 +1432,17 @@ mod tests {
         assert!((ticks[1] - ticks[0] - 1.0 / 48.0).abs() < 1e-12);
         assert!(matches!(cues[0].1, Cue::Midi(MidiEvent::Start)));
         assert!(parse_script("0 midi pause\n1 end").is_err());
+    }
+
+    #[test]
+    fn script_hits_a_pad_on_its_channel_and_moves_a_cc() {
+        let cues = parse_script("0.5 note 36 110 0.1 10\n1 cc 1 74 127\n2 end").unwrap();
+        assert!(matches!(cues[0].1, Cue::Note { channel: 9, note: 36, velocity: 110, on: true }));
+        assert!(matches!(cues[1].1, Cue::Note { channel: 9, on: false, .. }));
+        assert!(matches!(cues[2].1, Cue::Midi(MidiEvent::ControlChange { channel: 0, controller: 74, value: 127 })));
+        assert!(parse_script("0 note 60 100 1\n1 end").is_ok_and(|cues| matches!(cues[0].1, Cue::Note { channel: 0, .. })));
+        assert!(parse_script("0 cc 17 1 1\n1 end").is_err());
+        assert!(parse_script("0 cc 1 1 128\n1 end").is_err());
     }
 
     #[test]

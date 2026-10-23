@@ -24,6 +24,7 @@ use crate::app::theme;
 use crate::modules::looper::{LoopState, Looper, OVERVIEW_SEGMENTS};
 
 use super::{SynthGraph, SynthGraphState, SynthResponse, SynthValueType};
+use crate::persistence::MidiControl;
 
 /// The shortest a press of a footswitch on the node is held, in seconds, so
 /// the audio thread sees it down however quick the click.
@@ -309,7 +310,7 @@ pub fn looper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
             if lit { ink } else { theme::text::SECONDARY },
         );
 
-        // A learned MIDI footswitch shows its CC
+        // A learned MIDI footswitch or pad shows a badge
         let mapping = engine_node_id.and_then(|eid| user_state.get_midi_mapping(eid, param_index));
         let learning = engine_node_id.is_some_and(|eid| user_state.is_midi_learn_target(eid, param_index));
         if mapping.is_some() || learning {
@@ -323,8 +324,8 @@ pub fn looper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
         }
 
         let tip = match (n, mapping) {
-            (_, Some(m)) => format!("{}: MIDI CC {} presses it. Right-click to change", pedal_tip(n), m.cc_number),
-            _ => format!("{}. Right-click to learn a MIDI footswitch", pedal_tip(n)),
+            (_, Some(m)) => format!("{}: MIDI {} presses it. Right-click to change", pedal_tip(n), m.text()),
+            _ => format!("{}. Right-click to learn a MIDI footswitch or pad", pedal_tip(n)),
         };
         let pedal = pedal.on_hover_text(tip);
         crate::widgets::menu::context_menu(&pedal, |ui| {
@@ -336,19 +337,13 @@ pub fn looper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
                 }
                 return;
             }
-            let learn = if mapping.is_some() { "Re-learn MIDI CC" } else { "Learn MIDI CC" };
-            if ui.button(learn).clicked() {
-                responses.push(SynthResponse::MidiLearnStart {
-                    engine_node_id: eid,
-                    param_index,
-                    param_name: param.clone(),
-                    min_value: 0.0,
-                    max_value: 1.0,
-                });
+            let learn = if mapping.is_some() { "Re-learn MIDI" } else { "Learn MIDI" };
+            if ui.button(learn).on_hover_text("Press a footswitch or hit a pad to press it with").clicked() {
+                responses.push(SynthResponse::midi_learn_start(eid, param_index, param.clone(), 0.0, 1.0, MidiControl::Button));
                 ui.close();
             }
             if mapping.is_some() && ui.button("Clear MIDI mapping").clicked() {
-                responses.push(SynthResponse::MidiLearnClear { engine_node_id: eid, param_index });
+                responses.push(SynthResponse::midi_learn_clear(eid, param_index));
                 ui.close();
             }
         });

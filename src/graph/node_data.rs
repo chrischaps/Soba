@@ -354,15 +354,28 @@ impl<'a> KnobCellCtx<'a> {
     }
 }
 
+/// A toggle's or dropdown's MIDI Learn: how to start it, what turns the
+/// control now, and whether Learn is waiting for it.
+pub(super) struct SwitchMidi {
+    pub learn: SynthResponse,
+    pub mapping: Option<super::MidiMappingInfo>,
+    pub learning: bool,
+}
+
+impl SwitchMidi {
+    /// Whether it shows the purple badge.
+    pub fn badged(&self) -> bool {
+        self.mapping.is_some() || self.learning
+    }
+}
+
 /// A knob's MIDI mapping: what its badge shows and its menu offers.
 #[derive(Default)]
 struct KnobMidiConfig {
-    /// Whether this knob has a MIDI CC mapping.
+    /// Whether this knob has a MIDI CC, note or macro mapping.
     has_midi_mapping: bool,
-    /// The CC number if mapped.
-    cc_number: Option<u8>,
-    /// The plugin's host macro (0-7), if one is mapped instead of a CC.
-    macro_slot: Option<u8>,
+    /// What turns it, if anything does.
+    mapping: Option<super::MidiMappingInfo>,
     /// Whether this knob is the current MIDI Learn target.
     is_learn_target: bool,
     /// Parameter min value (for MIDI Learn).
@@ -693,8 +706,7 @@ impl SynthNodeData {
                 // Build MIDI config for the knob
                 let midi_config = KnobMidiConfig {
                     has_midi_mapping: midi_mapping.is_some(),
-                    cc_number: midi_mapping.map(|m| m.cc_number),
-                    macro_slot: midi_mapping.and_then(|m| m.macro_slot),
+                    mapping: midi_mapping.cloned(),
                     is_learn_target,
                     min_value,
                     max_value,
@@ -890,47 +902,22 @@ impl SynthNodeData {
                                 responses.push(NodeResponse::User(SynthResponse::MidiLearnCancel));
                                 ui.close();
                             }
-                        } else if midi_config.has_midi_mapping {
-                            let cc_text = match (midi_config.macro_slot, midi_config.cc_number) {
-                                (Some(slot), _) => format!("Macro {}", slot + 1),
-                                (None, Some(cc)) => format!("CC #{}", cc),
-                                (None, None) => "MIDI".to_string(),
-                            };
-                            ui.label(RichText::new(cc_text).small().weak());
-                            ui.separator();
-
-                            if ui.button("Clear MIDI").clicked() {
-                                responses.push(NodeResponse::User(SynthResponse::MidiLearnClear {
-                                    engine_node_id: engine_id,
-                                    param_index: current_param_index,
-                                }));
-                                ui.close();
-                            }
-                            if ui.button("Re-learn MIDI CC").clicked() {
-                                responses.push(NodeResponse::User(SynthResponse::MidiLearnStart {
-                                    engine_node_id: engine_id,
-                                    param_index: current_param_index,
-                                    param_name: knob_param.param_name.clone(),
-                                    min_value: midi_config.min_value,
-                                    max_value: midi_config.max_value,
-                                }));
-                                ui.close();
-                            }
-                        } else if ui.button("Learn MIDI CC").clicked() {
-                            responses.push(NodeResponse::User(SynthResponse::MidiLearnStart {
-                                engine_node_id: engine_id,
-                                param_index: current_param_index,
-                                param_name: knob_param.param_name.clone(),
-                                min_value: midi_config.min_value,
-                                max_value: midi_config.max_value,
-                            }));
-                            ui.close();
+                        } else {
+                            let learn = SynthResponse::midi_learn_start(
+                                engine_id,
+                                current_param_index,
+                                knob_param.param_name.clone(),
+                                midi_config.min_value,
+                                midi_config.max_value,
+                                crate::persistence::MidiControl::Knob,
+                            );
+                            responses.extend(midi_items(ui, midi_config.mapping.as_ref(), learn).map(NodeResponse::User));
                         }
                         // In a DAW, one of the plugin's eight macros can turn it
                         if user_state.hosted && !is_learn_target {
                             crate::widgets::menu::menu_button(ui, "Map to Macro", |ui| {
                                 for slot in 0..crate::graph::MACRO_COUNT {
-                                    let current = midi_config.macro_slot == Some(slot);
+                                    let current = midi_config.mapping.as_ref().and_then(|m| m.macro_slot) == Some(slot);
                                     if ui.selectable_label(current, format!("Macro {}", slot + 1)).clicked() {
                                         responses.push(NodeResponse::User(SynthResponse::MapToMacro {
                                             engine_node_id: engine_id,
@@ -1020,18 +1007,21 @@ impl SynthNodeData {
 
     /// A dropdown's or toggle's right-click menu, among the module's inputs
     /// or on a group's face: its jack on the group, if it has a jack,
-    /// pinning, and why there's no MIDI Learn.
+    /// pinning, and MIDI Learn (#423).
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn switch_menu(
         &self,
         response: &egui::Response,
         node_id: egui_node_graph2::NodeId,
         param_name: &str,
         named: &str,
+        value: &SynthValueType,
         place: KnobPlace,
         user_state: &mut super::SynthGraphState,
     ) -> Option<SynthResponse> {
-        // Outside a group there's nothing to offer
-        if self.parent.is_none() && !place.is_face() {
+        // MIDI Learn needs the module running in the engine
+        let midi = self.midi_learn(node_id, param_name, value, user_state);
+        if self.parent.is_none() && !place.is_face() && midi.is_none() {
             return None;
         }
         if place.is_face() && response.secondary_clicked() {
@@ -1051,15 +1041,52 @@ impl SynthNodeData {
                 chosen = super::group_face::jack_items(ui, &jack_actions, node_id, Side::Input, param_name);
                 ui.separator();
             }
-            let pinned = self.pin_items(ui, node_id, param_name, place);
-            chosen = chosen.take().or(pinned);
-            ui.separator();
-            ui.label(RichText::new("Only knobs can learn MIDI CCs").small().weak());
+            if self.parent.is_some() || place.is_face() {
+                let pinned = self.pin_items(ui, node_id, param_name, place);
+                chosen = chosen.take().or(pinned);
+                ui.separator();
+            }
+            match &midi {
+                Some(SwitchMidi { learning: true, .. }) => {
+                    if ui.button("Cancel MIDI Learn").clicked() {
+                        chosen = Some(SynthResponse::MidiLearnCancel);
+                        ui.close();
+                    }
+                }
+                Some(SwitchMidi { learn, mapping, .. }) => {
+                    let learned = midi_items(ui, mapping.as_ref(), learn.clone());
+                    chosen = chosen.take().or(learned);
+                }
+                None => {}
+            }
         });
         if menu.is_some() {
             user_state.widget_context_menu_open = true;
         }
         chosen
+    }
+
+    /// What MIDI Learn offers a toggle or dropdown, when its module runs in
+    /// the engine: a CC sets or sweeps it, a pad flips or steps it.
+    pub(super) fn midi_learn(
+        &self,
+        node_id: egui_node_graph2::NodeId,
+        param_name: &str,
+        value: &SynthValueType,
+        user_state: &super::SynthGraphState,
+    ) -> Option<SwitchMidi> {
+        let engine_id = user_state.get_engine_node_id(node_id)?;
+        let index = super::SynthNodeTemplate::from_module_id(self.module_id)?.parameter_names().iter().position(|name| name == param_name)?;
+        let control = match value {
+            SynthValueType::Select { .. } => crate::persistence::MidiControl::Select,
+            _ => crate::persistence::MidiControl::Toggle,
+        };
+        let (min, max) = value.range();
+        Some(SwitchMidi {
+            learn: SynthResponse::midi_learn_start(engine_id, index, param_name, min, max, control),
+            mapping: user_state.get_midi_mapping(engine_id, index).cloned(),
+            learning: user_state.is_midi_learn_target(engine_id, index),
+        })
     }
 
     /// A module's right-click menu. Each action applies to the whole
@@ -1432,8 +1459,8 @@ impl NodeDataTrait for SynthNodeData {
                 responses.extend(changes.into_iter().map(NodeResponse::User));
             }
             NodeDisplay::ScenePads => {
-                if let Some((slot, action)) = super::scenes_display::scenes_display(ui, node_id, graph, user_state, zoom) {
-                    responses.push(NodeResponse::User(SynthResponse::Scene { node_id, slot, action }));
+                if let Some(response) = super::scenes_display::scenes_display(ui, node_id, graph, user_state, zoom) {
+                    responses.push(NodeResponse::User(response));
                 }
             }
             NodeDisplay::ResonatorRings => super::resonator_display::resonator_display(ui, node_id, graph, user_state, zoom),
@@ -1663,6 +1690,34 @@ impl NodeDataTrait for SynthNodeData {
     ) -> bool {
         !self.kind.is_proxy()
     }
+}
+
+/// A mapped control's MIDI items, after any value of its own: what turns it,
+/// Clear and Re-learn, or Learn when nothing does yet. `learn` is the
+/// response that starts MIDI Learn on it.
+pub(super) fn midi_items(ui: &mut egui::Ui, mapping: Option<&super::MidiMappingInfo>, learn: SynthResponse) -> Option<SynthResponse> {
+    let tip = "Move a knob or fader, or hit a pad or key, on your MIDI controller";
+    let Some(mapping) = mapping else {
+        let clicked = ui.button("Learn MIDI").on_hover_text(tip).clicked();
+        if clicked {
+            ui.close();
+        }
+        return clicked.then_some(learn);
+    };
+    ui.label(RichText::new(mapping.text()).small().weak());
+    ui.separator();
+    let mut chosen = None;
+    if ui.button("Clear MIDI").clicked() {
+        if let SynthResponse::MidiLearnStart { engine_node_id, param_index, scene, .. } = &learn {
+            chosen = Some(SynthResponse::MidiLearnClear { engine_node_id: *engine_node_id, param_index: *param_index, scene: *scene });
+        }
+        ui.close();
+    }
+    if ui.button("Re-learn MIDI").on_hover_text(tip).clicked() {
+        chosen = Some(learn);
+        ui.close();
+    }
+    chosen
 }
 
 #[cfg(test)]

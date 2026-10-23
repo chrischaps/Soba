@@ -537,7 +537,7 @@ fn switch_chip(
         }
 
         for response in [name, response] {
-            if let Some(pin) = data.switch_menu(&response, control.node, &control.param, label, place, user_state) {
+            if let Some(pin) = data.switch_menu(&response, control.node, &control.param, label, &input.value, place, user_state) {
                 responses.push(NodeResponse::User(pin));
             }
         }

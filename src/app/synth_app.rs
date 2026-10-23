@@ -181,6 +181,8 @@ pub struct SynthApp {
 
     /// MIDI in: the inputs, the notes held, the CC mappings and MIDI Learn.
     midi: MidiSession,
+    /// Footswitches pressed from MIDI, held down long enough to be seen.
+    midi_presses: crate::app::midi_presses::Presses,
 
     /// Undo and redo for edits to the patch.
     history: History,
@@ -393,6 +395,7 @@ impl SynthApp {
             cpu_peak: Default::default(),
             toolbar_full_width: None,
             midi,
+            midi_presses: Default::default(),
             history: History::default(),
             quick_add: None,
             editor_rect: egui::Rect::NOTHING,
@@ -687,36 +690,53 @@ impl SynthApp {
     }
 
     /// Hears the UI's copy of the MIDI that came in: the MIDI Monitors log
-    /// it, the pianos light, MIDI Learn takes a CC and mapped knobs turn.
+    /// it, the pianos light, MIDI Learn takes a CC or a note, mapped
+    /// controls turn and mapped Scenes pads recall.
     ///
     /// Notes reach Note In modules on the audio thread, sample-accurately;
     /// nothing here affects what they play.
     fn process_midi_events(&mut self, now: f64) {
         let user_state = &mut self.user_state;
-        let heard = self.midi.drain(|event| user_state.push_midi_event(event, now));
+        let cached = &self.cached_params;
+        let heard = self.midi.drain(|event| user_state.push_midi_event(event, now), |node, param| cached.get(&(node, param)).copied());
 
         if heard.learned {
             self.show_midi_badges();
             self.show_midi_learn();
-            self.status_message = Some("MIDI CC mapped successfully".to_string());
+            self.status_message = Some("MIDI mapped".to_string());
+        }
+
+        for (node_id, param_index, value, pressed) in heard.footswitches {
+            if let Some(value) = self.midi_presses.set(now, node_id, param_index, value, pressed) {
+                self.turn_from_midi(node_id, param_index, value);
+            }
+        }
+        for (node_id, param_index, value) in self.midi_presses.due(now) {
+            self.turn_from_midi(node_id, param_index, value);
+        }
+
+        for (engine_node_id, slot) in heard.recalls {
+            if let Some(node_id) = self.user_state.graph_node_id(engine_node_id) {
+                self.scene_pad(node_id, slot as usize, crate::graph::SceneAction::Recall);
+            }
         }
 
         for (node_id, param_index, value) in heard.turns {
-            self.send_command(EngineCommand::SetParameter {
-                node_id,
-                param_index,
-                value,
-            });
-            // Update cached param so sync_parameters doesn't overwrite
-            self.cached_params.insert((node_id, param_index), value);
-
-            // Also update the graph UI to reflect the change
-            self.update_graph_param_from_cc(node_id, param_index, value);
+            self.turn_from_midi(node_id, param_index, value);
         }
 
         if heard.notes_changed {
             self.user_state.set_midi_active_notes(self.midi.held());
         }
+    }
+
+    /// Turns a parameter from a mapped CC or note: sent at once, and shown
+    /// on the node, but not an undo step.
+    fn turn_from_midi(&mut self, node_id: u64, param_index: usize, value: f32) {
+        self.send_command(EngineCommand::SetParameter { node_id, param_index, value });
+        // So sync_parameters doesn't send it again
+        self.cached_params.insert((node_id, param_index), value);
+        self.update_graph_param_from_cc(node_id, param_index, value);
     }
 
     /// Plays a parameter from the node, as a MIDI controller would: sent at
@@ -797,24 +817,27 @@ impl SynthApp {
         self.midi.learning().is_some()
     }
 
-    /// Remove MIDI mapping for a specific parameter.
-    pub fn clear_mapping_for_param(&mut self, node_id: u64, param_index: usize) {
-        self.midi.mappings.unmap(node_id, param_index);
+    /// Remove the MIDI mapping of a parameter, or with `scene` of a Scenes pad.
+    pub fn clear_mapping_for_param(&mut self, node_id: u64, param_index: usize, scene: Option<u8>) {
+        self.midi.mappings.unmap(node_id, param_index, scene);
         self.show_midi_badges();
         self.status_message = Some("MIDI mapping cleared".to_string());
     }
 
-    /// Lights the knob MIDI Learn waits for, and has the status bar ask
-    /// for a CC for as long as it waits.
+    /// Lights the control MIDI Learn waits for, and has the status bar ask
+    /// for a CC or a note for as long as it waits.
     fn show_midi_learn(&mut self) {
-        let target = self.midi.learning().map(|t| (t.node_id, t.param_index));
-        self.user_state.midi_learn_active = target.is_some();
-        self.user_state.midi_learn_target = target;
+        let learning = self.midi.learning();
+        self.user_state.midi_learn_active = learning.is_some();
+        self.user_state.midi_learn_target = learning.filter(|t| t.scene.is_none()).map(|t| (t.node_id, t.param_index));
+        self.user_state.midi_learn_scene = learning.and_then(|t| Some((t.node_id, t.scene? as usize)));
     }
 
-    /// Puts on the knobs the badges of the mappings as they now stand.
+    /// Puts on the controls and Scenes pads the badges of the mappings as
+    /// they now stand.
     fn show_midi_badges(&mut self) {
         self.user_state.midi_mappings = self.midi.mappings.badges();
+        self.user_state.scene_midi_mappings = self.midi.mappings.scene_badges();
     }
 
     /// Whether the patch has a Note In, which the keys play.
@@ -2595,6 +2618,10 @@ impl SynthApp {
 
         // Process pending MIDI events
         self.process_midi_events(ctx.input(|i| i.time));
+        // A footswitch tapped from MIDI is let go once it's been seen down
+        if self.midi_presses.waiting() {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(crate::app::midi_presses::MIN_PRESS_SECONDS));
+        }
 
         self.show_notes(ctx);
 

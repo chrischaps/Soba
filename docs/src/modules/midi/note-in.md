@@ -153,14 +153,14 @@ To hear it, open First Sound and turn **Glide** to about 200 ms. Hold **Z** (C) 
 
 ## MIDI Learn
 
-Any knob in the patch can follow a MIDI controller (a mod wheel, a fader, a knob on your keyboard). This works with or without a Note In in the patch.
+Any knob in the patch can follow a MIDI controller (a mod wheel, a fader, a knob on your keyboard), and so can toggles, dropdowns and footswitches, from pads as well as knobs. This works with or without a Note In in the patch.
 
-1. Right-click the knob and choose **Learn MIDI CC**. A purple **M** badge blinks above it, and the status bar asks you to move a control.
+1. Right-click the knob and choose **Learn MIDI**. A purple **M** badge blinks above it, and the status bar asks you to move a control.
 2. Move the knob or fader on your controller. The badge stops blinking: the knob is mapped.
 
 Changed your mind, or no controller to hand? Press `Escape`, or right-click the blinking knob and choose **Cancel MIDI Learn**, and nothing is mapped. Starting learn on another knob moves it there instead.
 
-The controller sweeps the knob's whole range, on any MIDI channel. Right-click a mapped knob to see its CC number, to **Re-learn MIDI CC**, or to **Clear MIDI**. Mappings are saved with the patch. Moves made by a controller aren't added to the undo history.
+The controller sweeps the knob's whole range, on the channel it was learned on. Right-click a mapped knob to see its CC number and channel, to **Re-learn MIDI**, or to **Clear MIDI**. Mappings are saved with the patch. Moves made by a controller aren't added to the undo history. [MIDI Learn](../../getting-started/interface-overview.md#midi-learn) in the interface overview says what pads do to each kind of control.
 
 ## Patch examples
 

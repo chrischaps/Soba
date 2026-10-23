@@ -34,6 +34,7 @@ Each pad is a scene. A pad with a scene in it draws the scene's knobs as a row o
 - **Click a full pad** to recall it: every knob it holds jumps there.
 - **Shift+click a full pad** to keep the knobs there instead.
 - **Alt+click a full pad** to clear it.
+- **Right-click a pad and choose Learn MIDI**, then hit a pad on your controller, to recall the scene from it. A mapped pad wears a small purple dot.
 
 The From and To pads glow, each in proportion to how near Morph has carried the knobs to it, so the light crossfades from one to the other as Morph turns. Along the bottom, a dot rides a line from From to To. The header says what the module reaches (**PATCH**, or its group's name) and where Morph is.
 
@@ -54,7 +55,7 @@ Morph only moves the knobs when it moves. Turn a knob by hand after a glide and 
 
 ### Driving Morph
 
-- **By hand:** turn Morph, or map it to a MIDI controller (right-click it, **MIDI Learn**) and ride it.
+- **By hand:** turn Morph, or map it to a MIDI controller (right-click it, **Learn MIDI**) and ride it.
 - **An LFO:** a very slow sine with **Bipolar** off breathes between two scenes. At 0.03 Hz it takes 32 seconds to go there and back.
 - **The Arranger:** patch a lane into Morph, and give each section a level. **Jump** switches scenes on the downbeat; **Ramp** glides over the section, for a build.
 - **An envelope:** a long ADSR swells into a scene and back as a key is held.

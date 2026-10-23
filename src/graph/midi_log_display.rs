@@ -25,7 +25,7 @@ mod midi_colors {
 }
 
 /// Convert a MIDI note number to a note name (e.g., 60 -> "C4").
-fn note_to_name(note: u8) -> String {
+pub(super) fn note_to_name(note: u8) -> String {
     const NOTES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
     let octave = (note / 12) as i32 - 1; // MIDI note 60 = C4
     let name = NOTES[(note % 12) as usize];

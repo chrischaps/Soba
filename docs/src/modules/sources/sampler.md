@@ -47,7 +47,7 @@ Patch something into **In L** (and **In R**, for stereo) and press the red **Rec
 - **Stopping.** Rec again, the **Rec** gate falling, the bars running out, or the room: a take lasts at most a minute. Stopping the transport ends a take there.
 - **The Rec jack** takes over from the button, as **Freeze** does on the Vocoder: the Sampler records while the gate is high. A sequencer's gate resamples a phrase on cue.
 - **Tidied as they're kept.** Right-click **Rec** and tick **Tidy takes**, and each take is trimmed to its sound and set to −16 dBFS RMS as it's kept (see [Tidy takes](#tidy-takes)).
-- **On a footswitch.** Right-click **Rec** to learn a MIDI CC for it.
+- **On a footswitch or a pad.** Right-click **Rec** and choose **Learn MIDI**, then press a MIDI footswitch or hit a pad.
 
 Live input reaches the patch a round trip after it was played, so the take is written that much earlier, as the [Looper](../utilities/looper.md)'s overdubs are. A take in bars begins with what you played on the bar line, within a few milliseconds at the latency your device reports. The patch's own sound has no round trip, and is taken as it comes.
 

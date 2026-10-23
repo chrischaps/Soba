@@ -26,7 +26,8 @@ pub use graph_io::{
 };
 
 pub use patch::{
-    ConnectionData, FrameData, GroupData, JackData, MidiMapping, NamedParameter, NodeData, NoteData, ParameterValue,
+    ConnectionData, FrameData, GroupData, JackData, MidiControl, MidiInput, MidiMapping, MidiSource,
+    NamedParameter, NodeData, NoteData, ParameterValue,
     Patch, PatchError,
     load_from_file, migrate_v2_to_v3, patch_from_json, patch_to_json, save_to_file, PATCH_VERSION,
 };

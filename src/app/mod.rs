@@ -16,6 +16,7 @@ pub mod library;
 pub mod listen;
 mod long_press;
 pub mod midi_mappings;
+mod midi_presses;
 mod midi_session;
 mod mutate;
 mod notice;

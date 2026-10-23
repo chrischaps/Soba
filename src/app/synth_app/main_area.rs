@@ -326,14 +326,18 @@ impl SynthApp {
                 param_name,
                 min_value,
                 max_value,
+                control,
+                scene,
             } => {
-                // Start MIDI Learn mode for this parameter
+                // Start MIDI Learn mode for this control
                 self.start_midi_learn(MidiLearnTarget {
                     node_id: engine_node_id,
                     param_index,
                     param_name,
                     min_value,
                     max_value,
+                    control,
+                    scene,
                 });
             }
             crate::graph::SynthResponse::MidiLearnCancel => {
@@ -352,8 +356,9 @@ impl SynthApp {
             crate::graph::SynthResponse::MidiLearnClear {
                 engine_node_id,
                 param_index,
+                scene,
             } => {
-                self.clear_mapping_for_param(engine_node_id, param_index);
+                self.clear_mapping_for_param(engine_node_id, param_index, scene);
             }
             _ => {
                 // Other responses not yet handled

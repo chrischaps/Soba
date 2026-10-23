@@ -1,5 +1,6 @@
 //! The UI's side of MIDI in (#343): the inputs to choose from and the one
-//! chosen, the notes held on it, which CC turns which knob, and MIDI Learn.
+//! chosen, the notes held on it, which CC or pad turns which control, and
+//! MIDI Learn.
 //! Kept apart from the frame loop, with no egui in it, so what a note or a
 //! CC does can be tested.
 //!
@@ -14,10 +15,10 @@
 use rtrb::Consumer;
 
 use crate::engine::{MidiDeviceInfo, MidiEngine, MidiEvent, TimestampedMidiEvent, UiNotes};
-use crate::persistence::MidiMapping;
+use crate::persistence::{MidiControl, MidiInput, MidiMapping, MidiSource};
 use super::midi_mappings::MidiMappings;
 
-/// The knob MIDI Learn is waiting for a CC for.
+/// The control MIDI Learn is waiting for a CC or a note for.
 #[derive(Debug, Clone)]
 pub struct MidiLearnTarget {
     /// Engine node ID of the target parameter.
@@ -30,6 +31,10 @@ pub struct MidiLearnTarget {
     pub min_value: f32,
     /// Maximum value of the parameter range.
     pub max_value: f32,
+    /// What kind of control it is: what a CC or a note will do to it.
+    pub control: MidiControl,
+    /// The Scenes pad (0-7) to recall, in place of a parameter.
+    pub scene: Option<u8>,
 }
 
 /// What the events heard in one go asked of the UI.
@@ -37,10 +42,17 @@ pub struct MidiLearnTarget {
 pub struct Heard {
     /// A note started or stopped: the pianos show [`MidiSession::held`].
     pub notes_changed: bool,
-    /// MIDI Learn took a CC, and has stopped listening.
+    /// MIDI Learn took a CC or a note, and has stopped listening.
     pub learned: bool,
-    /// Knobs turned by mapped CCs: engine node, parameter index and value.
+    /// Controls turned by mapped CCs and notes: engine node, parameter
+    /// index and value.
     pub turns: Vec<(u64, usize, f32)>,
+    /// Footswitches pressed or let go by mapped CCs and notes: engine
+    /// node, parameter index, value, and whether it's a press. A quick tap
+    /// brings both at once, so the app holds the release back a moment.
+    pub footswitches: Vec<(u64, usize, f32, bool)>,
+    /// Scenes pads recalled by mapped CCs and notes: engine node and slot.
+    pub recalls: Vec<(u64, u8)>,
 }
 
 /// MIDI in, as the UI holds it.
@@ -59,7 +71,7 @@ pub struct MidiSession {
     pub error: Option<String>,
     /// The notes held, in order of press, each with its velocity.
     held: Vec<(u8, u8)>,
-    /// Which CC or macro turns which knob.
+    /// Which CC, note or macro turns which control.
     pub mappings: MidiMappings,
     /// The mappings as last opened or saved. Undo history doesn't hold
     /// them, so they say for themselves whether the patch has changed.
@@ -156,76 +168,107 @@ impl MidiSession {
     }
 
     /// Takes every event waiting, and the notes the UI played, handing
-    /// each to `each` (the MIDI Monitor's log) as it's heard.
-    pub fn drain(&mut self, mut each: impl FnMut(MidiEvent)) -> Heard {
+    /// each to `each` (the MIDI Monitor's log) as it's heard. `current`
+    /// gives a parameter's value, which a toggle flips and a dropdown steps
+    /// on from.
+    pub fn drain(&mut self, mut each: impl FnMut(MidiEvent), current: impl Fn(u64, usize) -> Option<f32>) -> Heard {
         let mut heard = Heard::default();
         if let Some(mut events) = self.events.take() {
             while let Ok(timestamped) = events.pop() {
                 each(timestamped.event);
-                self.hear(timestamped.event, &mut heard);
+                self.hear(timestamped.event, &mut heard, &current);
             }
             self.events = Some(events);
         }
         for event in std::mem::take(&mut self.played) {
             each(event);
-            self.hear(event, &mut heard);
+            self.hear(event, &mut heard, &current);
         }
         heard
     }
 
-    /// What one event does: a note is held or let go, and a CC is learned,
-    /// or turns the knobs mapped to it.
-    pub fn hear(&mut self, event: MidiEvent, heard: &mut Heard) {
-        match event {
-            MidiEvent::NoteOn { note, velocity, .. } => {
+    /// What one event does: a note is held or let go, and a CC or a note is
+    /// learned, or turns the controls mapped to it.
+    pub fn hear(&mut self, event: MidiEvent, heard: &mut Heard, current: &impl Fn(u64, usize) -> Option<f32>) {
+        let (source, number, channel, input) = match event {
+            MidiEvent::NoteOn { channel, note, velocity } => {
                 if !self.held.iter().any(|&(n, _)| n == note) {
                     self.held.push((note, velocity));
                     heard.notes_changed = true;
                 }
+                (MidiSource::Note, note, channel, MidiInput::NoteOn)
             }
-            MidiEvent::NoteOff { note, .. } => {
+            MidiEvent::NoteOff { channel, note, .. } => {
                 if let Some(at) = self.held.iter().position(|&(n, _)| n == note) {
                     self.held.remove(at);
                     heard.notes_changed = true;
                 }
+                (MidiSource::Note, note, channel, MidiInput::NoteOff)
             }
-            MidiEvent::ControlChange { channel, controller, value } => {
-                if let Some(target) = self.learning.take() {
-                    // Omni: a learned CC turns the knob from any channel.
-                    // The CC leaves whatever knob it turned before
-                    self.mappings.learn(MidiMapping::new(
-                        controller,
-                        0,
-                        target.node_id,
-                        target.param_index,
-                        target.param_name,
-                        target.min_value,
-                        target.max_value,
-                    ));
-                    heard.learned = true;
-                } else {
-                    for mapping in &self.mappings {
-                        if mapping.matches(controller, channel) {
-                            heard.turns.push((mapping.node_id, mapping.param_index, mapping.cc_to_value(value)));
-                        }
+            MidiEvent::ControlChange { channel, controller, value } => (MidiSource::Cc, controller, channel, MidiInput::Cc(value)),
+            _ => return,
+        };
+        // A note let go isn't one to learn: its press came first
+        if input != MidiInput::NoteOff {
+            if let Some(target) = self.learning.take() {
+                // On the channel it came on, so the keys and the pads can
+                // share note numbers. It leaves whatever it turned before
+                let mut mapping = MidiMapping::new(
+                    number,
+                    channel + 1,
+                    target.node_id,
+                    target.param_index,
+                    target.param_name,
+                    target.min_value,
+                    target.max_value,
+                )
+                .of(target.control);
+                if source == MidiSource::Note {
+                    mapping = mapping.note();
+                }
+                if let Some(slot) = target.scene {
+                    mapping = mapping.recalling(slot);
+                }
+                self.mappings.learn(mapping);
+                heard.learned = true;
+                return;
+            }
+        }
+        for mapping in &self.mappings {
+            if !mapping.hears(source, number, channel) {
+                continue;
+            }
+            match mapping.scene {
+                Some(slot) => {
+                    if input.presses() {
+                        heard.recalls.push((mapping.node_id, slot));
+                    }
+                }
+                None => {
+                    let now = current(mapping.node_id, mapping.param_index).unwrap_or(mapping.min_value);
+                    let Some(value) = mapping.respond(input, now) else { continue };
+                    if mapping.control == MidiControl::Button {
+                        heard.footswitches.push((mapping.node_id, mapping.param_index, value, input.presses()));
+                    } else {
+                        heard.turns.push((mapping.node_id, mapping.param_index, value));
                     }
                 }
             }
-            _ => {}
         }
     }
 
-    /// Waits for a CC for `target`, in place of any knob it waited for.
+    /// Waits for a CC or a note for `target`, in place of any control it
+    /// waited for.
     pub fn start_learn(&mut self, target: MidiLearnTarget) {
         self.learning = Some(target);
     }
 
-    /// Stops waiting for a CC.
+    /// Stops waiting for a CC or a note.
     pub fn cancel_learn(&mut self) {
         self.learning = None;
     }
 
-    /// The knob MIDI Learn waits for a CC for.
+    /// The control MIDI Learn waits for a CC or a note for.
     pub fn learning(&self) -> Option<&MidiLearnTarget> {
         self.learning.as_ref()
     }
@@ -258,7 +301,23 @@ mod tests {
     use super::*;
 
     fn target(node_id: u64) -> MidiLearnTarget {
-        MidiLearnTarget { node_id, param_index: 0, param_name: "Cutoff".into(), min_value: 0.0, max_value: 100.0 }
+        MidiLearnTarget {
+            node_id,
+            param_index: 0,
+            param_name: "Cutoff".into(),
+            min_value: 0.0,
+            max_value: 100.0,
+            control: MidiControl::Knob,
+            scene: None,
+        }
+    }
+
+    fn on(channel: u8, note: u8) -> MidiEvent {
+        MidiEvent::NoteOn { channel, note, velocity: 100 }
+    }
+
+    fn off(channel: u8, note: u8) -> MidiEvent {
+        MidiEvent::NoteOff { channel, note, velocity: 0 }
     }
 
     fn cc(channel: u8, controller: u8, value: u8) -> MidiEvent {
@@ -275,11 +334,11 @@ mod tests {
         session.play_note(60, false);
 
         let mut logged = Vec::new();
-        let heard = session.drain(|event| logged.push(event));
+        let heard = session.drain(|event| logged.push(event), |_, _| None);
         assert!(heard.notes_changed);
         assert_eq!(logged.len(), 3, "the MIDI Monitor logs them");
         assert_eq!(session.held(), [(64, crate::engine::UI_VELOCITY)]);
-        assert_eq!(session.drain(|_| {}), Heard::default(), "heard once");
+        assert_eq!(session.drain(|_| {}, |_, _| None), Heard::default(), "heard once");
 
         let sent: Vec<_> = std::iter::from_fn(|| audio.pop().ok()).map(|e| e.event).collect();
         assert!(matches!(sent[..], [
@@ -290,9 +349,14 @@ mod tests {
     }
 
     fn hear(session: &mut MidiSession, events: &[MidiEvent]) -> Heard {
+        hear_at(session, events, None)
+    }
+
+    /// What `events` do with every parameter standing at `current`.
+    fn hear_at(session: &mut MidiSession, events: &[MidiEvent], current: Option<f32>) -> Heard {
         let mut heard = Heard::default();
         for &event in events {
-            session.hear(event, &mut heard);
+            session.hear(event, &mut heard, &|_, _| current);
         }
         heard
     }
@@ -321,12 +385,91 @@ mod tests {
         assert!(session.learning().is_none());
         assert!(session.unsaved());
 
-        // Learned omni: any channel turns it, across the parameter's range
-        let heard = hear(&mut session, &[cc(9, 74, 127), cc(0, 75, 64)]);
+        // Learned on its channel, it turns across the parameter's range
+        let heard = hear(&mut session, &[cc(3, 74, 127), cc(9, 74, 0), cc(3, 75, 64)]);
         assert_eq!(heard.turns, [(7, 0, 100.0)]);
 
         session.mark_saved();
         assert!(!session.unsaved());
+    }
+
+    #[test]
+    fn a_mapping_from_before_channels_were_learned_hears_every_channel() {
+        let mut session = MidiSession::default();
+        session.open(vec![MidiMapping::new(74, 0, 7, 0, "Cutoff", 0.0, 100.0)]);
+        let heard = hear(&mut session, &[cc(0, 74, 127), cc(9, 74, 0)]);
+        assert_eq!(heard.turns, [(7, 0, 100.0), (7, 0, 0.0)]);
+    }
+
+    #[test]
+    fn a_pad_learned_onto_a_footswitch_presses_it_while_held() {
+        let mut session = MidiSession::default();
+        let pedal = MidiLearnTarget { max_value: 1.0, control: MidiControl::Button, ..target(3) };
+        session.start_learn(pedal);
+        // Learn waits for a press; a stray release isn't one
+        assert!(!hear(&mut session, &[off(9, 36)]).learned);
+        assert!(hear(&mut session, &[on(9, 36)]).learned);
+
+        assert_eq!(hear(&mut session, &[on(9, 36)]).footswitches, [(3, 0, 1.0, true)]);
+        assert_eq!(hear(&mut session, &[off(9, 36)]).footswitches, [(3, 0, 0.0, false)]);
+        // The same note from the keys, on channel 1, is the keys'
+        assert!(hear(&mut session, &[on(0, 36)]).footswitches.is_empty());
+    }
+
+    #[test]
+    fn a_cc_presses_a_footswitch_at_64_or_more() {
+        let mut session = MidiSession::default();
+        session.start_learn(MidiLearnTarget { max_value: 1.0, control: MidiControl::Button, ..target(3) });
+        hear(&mut session, &[cc(0, 20, 127)]);
+        let heard = hear(&mut session, &[cc(0, 20, 127), cc(0, 20, 0), cc(0, 20, 64), cc(0, 20, 63)]);
+        let values: Vec<_> = heard.footswitches.iter().map(|&(_, _, value, pressed)| (value, pressed)).collect();
+        assert_eq!(values, [(1.0, true), (0.0, false), (1.0, true), (0.0, false)]);
+    }
+
+    #[test]
+    fn a_pad_flips_a_toggle_and_a_cc_sets_it() {
+        let mut session = MidiSession::default();
+        session.start_learn(MidiLearnTarget { max_value: 1.0, control: MidiControl::Toggle, ..target(4) });
+        hear(&mut session, &[on(9, 40)]);
+        assert_eq!(hear_at(&mut session, &[on(9, 40), off(9, 40)], Some(0.0)).turns, [(4, 0, 1.0)]);
+        assert_eq!(hear_at(&mut session, &[on(9, 40), off(9, 40)], Some(1.0)).turns, [(4, 0, 0.0)]);
+
+        session.start_learn(MidiLearnTarget { max_value: 1.0, control: MidiControl::Toggle, ..target(4) });
+        hear(&mut session, &[cc(0, 21, 127)]);
+        assert_eq!(hear_at(&mut session, &[cc(0, 21, 127), cc(0, 21, 10)], Some(1.0)).turns, [(4, 0, 1.0), (4, 0, 0.0)]);
+    }
+
+    #[test]
+    fn a_pad_steps_a_dropdown_round_and_a_cc_sweeps_it() {
+        let mut session = MidiSession::default();
+        let select = MidiLearnTarget { max_value: 3.0, control: MidiControl::Select, ..target(5) };
+        session.start_learn(select.clone());
+        hear(&mut session, &[on(9, 41)]);
+        assert_eq!(hear_at(&mut session, &[on(9, 41), off(9, 41)], Some(1.0)).turns, [(5, 0, 2.0)]);
+        assert_eq!(hear_at(&mut session, &[on(9, 41)], Some(3.0)).turns, [(5, 0, 0.0)], "past the last it goes round");
+
+        session.start_learn(select);
+        hear(&mut session, &[cc(0, 22, 0)]);
+        let heard = hear(&mut session, &[cc(0, 22, 0), cc(0, 22, 50), cc(0, 22, 127)]);
+        assert_eq!(heard.turns, [(5, 0, 0.0), (5, 0, 1.0), (5, 0, 3.0)]);
+    }
+
+    #[test]
+    fn a_pad_on_a_knob_holds_it_at_the_top() {
+        let mut session = MidiSession::default();
+        session.start_learn(target(6));
+        hear(&mut session, &[on(9, 42)]);
+        assert_eq!(hear(&mut session, &[on(9, 42), off(9, 42)]).turns, [(6, 0, 100.0), (6, 0, 0.0)]);
+    }
+
+    #[test]
+    fn a_pad_recalls_a_scene() {
+        let mut session = MidiSession::default();
+        session.start_learn(MidiLearnTarget { scene: Some(2), ..target(8) });
+        hear(&mut session, &[on(9, 43)]);
+        let heard = hear(&mut session, &[on(9, 43), off(9, 43)]);
+        assert_eq!(heard.recalls, [(8, 2)]);
+        assert!(heard.turns.is_empty());
     }
 
     #[test]
@@ -352,7 +495,7 @@ mod tests {
             producer.push(TimestampedMidiEvent { event, received: web_time::Instant::now() }).unwrap();
         }
         let mut logged = Vec::new();
-        let heard = session.drain(|event| logged.push(event));
+        let heard = session.drain(|event| logged.push(event), |_, _| None);
         assert_eq!(logged.len(), 2);
         assert!(heard.notes_changed);
         assert!(session.events.is_some());
