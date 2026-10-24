@@ -20,6 +20,7 @@ use super::graph_plan::GraphPlan;
 use super::midi_engine::TimestampedMidiEvent;
 use super::midi_scheduler::{take_chunk, MidiScheduler, MAX_MIDI_EVENTS_PER_CALLBACK};
 use super::recorder::RecordTap;
+use crate::link::midi_clock::MidiClock;
 
 /// Creates a module registry with all built-in modules.
 ///
@@ -121,6 +122,8 @@ pub struct AudioProcessor {
     probe: Box<ProbePlayer>,
     /// The DAW's transport at the start of the next buffer, in the plugin.
     host: Option<HostTransport>,
+    /// The patch's Clock, as MIDI clock for the ports that send it (#437).
+    clock: MidiClock,
 }
 
 /// Frames of background copying (loops loaded or snapshotted) per frame a
@@ -161,6 +164,7 @@ impl AudioProcessor {
             cue: CuePlayer::default(),
             probe: Box::default(),
             host: None,
+            clock: MidiClock::new(),
         }
     }
 
@@ -267,7 +271,7 @@ impl AudioProcessor {
             feed.begin(num_frames);
         }
         let latency = if self.input.feed.is_some() { self.engine_handle.input_latency() } else { 0 };
-        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Live(&mut self.input), latency, Some(start_time), None);
+        Self::render(&mut self.plan, &mut self.probe, &mut self.clock, self.sample_rate, output, channels, midi, RenderInput::Live(&mut self.input), latency, Some(start_time), None);
         self.record(output, channels);
         self.probe.mix(output, channels);
         self.play_cue(output, channels);
@@ -335,7 +339,7 @@ impl AudioProcessor {
         };
 
         // Input given with the picture is already in time with it
-        Self::render(&mut self.plan, &mut self.probe, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0, None, self.host);
+        Self::render(&mut self.plan, &mut self.probe, &mut self.clock, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0, None, self.host);
         self.record(output, channels);
         self.probe.mix(output, channels);
         self.play_cue(output, channels);
@@ -351,11 +355,13 @@ impl AudioProcessor {
     /// late), and writes the output module's audio into it. The probe
     /// listens to each block as it's made. Played live, the buffer leaves
     /// for the device at `sent_at`, and each block its frames after. In a
-    /// DAW, `host` is its transport at the buffer's start.
+    /// DAW, `host` is its transport at the buffer's start. The patch's
+    /// transport goes out as MIDI clock beside each block.
     #[allow(clippy::too_many_arguments)]
     fn render(
         plan: &mut GraphPlan,
         probe: &mut ProbePlayer,
+        clock: &mut MidiClock,
         sample_rate: f32,
         output: &mut [f32],
         channels: usize,
@@ -380,9 +386,11 @@ impl AudioProcessor {
                 .with_input(chunk_input)
                 .with_input_latency(latency)
                 .with_host(host.map(|host| HostTransport { beat: host.beat_after(start, sample_rate), ..host }));
-            if let Some(at) = sent_at {
-                context = context.sent_at(at + std::time::Duration::from_secs_f64(start as f64 / sample_rate as f64));
+            let block_at = sent_at.map(|at| at + std::time::Duration::from_secs_f64(start as f64 / sample_rate as f64));
+            if let Some(at) = block_at {
+                context = context.sent_at(at);
             }
+            clock.run(|| plan.transport(), frames, sample_rate, block_at);
             plan.process(&context);
             probe.listen(plan, frames, sample_rate);
             Self::write_output(plan, chunk, channels, frames);
@@ -453,6 +461,7 @@ impl AudioProcessor {
                     if self.is_playing && !playing {
                         // Clear tails so pressing Play again starts from silence
                         self.plan.reset_modules();
+                        self.clock.stop();
                     }
                     self.is_playing = playing;
                     let event = if playing {

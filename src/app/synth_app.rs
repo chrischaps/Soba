@@ -115,6 +115,8 @@ const CABLE_THROUGH_KEY: &str = "cable_through";
 const KNOB_STYLE_KEY: &str = "knob_style";
 /// The device each MIDI Out port plays, a line per port.
 const MIDI_OUT_PORTS_KEY: &str = "midi_out_ports";
+/// What each MIDI Out port sends of the clock, and its offset, a line per port (#437).
+const MIDI_OUT_CLOCK_KEY: &str = "midi_out_clock";
 /// The name of the MIDI In device to open again (#425).
 const MIDI_IN_DEVICE_KEY: &str = "midi_in_device";
 /// Where the audio system chosen under Output is remembered.
@@ -1774,6 +1776,7 @@ impl SynthApp {
         // Everything the build skipped is missing from the graph, so from
         // anything saved from it. A sample that isn't there is still named
         self.document.dropped_on_load = staged.warnings.clone();
+        staged.warnings.extend(rig_panel::clock_old_midi_outs(patch));
 
         // Samplers' files, found from where the patch is
         let sample_warnings = self.resolve_samples(&staged.nodes, base);
@@ -2323,6 +2326,9 @@ impl SynthApp {
             .map(PathBuf::from);
         if let Some(ports) = storage.and_then(|s| s.get_string(MIDI_OUT_PORTS_KEY)) {
             crate::link::midi::MIDI.restore(&ports);
+        }
+        if let Some(clock) = storage.and_then(|s| s.get_string(MIDI_OUT_CLOCK_KEY)) {
+            crate::link::midi::MIDI.restore_clock(&clock);
         }
         // A DAW supplies the plugin's MIDI
         if self.hosted.is_none() {
@@ -2914,6 +2920,7 @@ impl eframe::App for SynthApp {
         self.hands_overlay.store(storage);
         storage.set_string(KNOB_STYLE_KEY, self.user_state.knob_style.name().to_string());
         storage.set_string(MIDI_OUT_PORTS_KEY, crate::link::midi::MIDI.setting());
+        storage.set_string(MIDI_OUT_CLOCK_KEY, crate::link::midi::MIDI.clock_setting());
         storage.set_string(MIDI_IN_DEVICE_KEY, self.midi.remembered_setting());
         if let Ok(engine) = &self.audio.engine {
             storage.set_string(AUDIO_SYSTEM_KEY, engine.audio_system().key().to_string());

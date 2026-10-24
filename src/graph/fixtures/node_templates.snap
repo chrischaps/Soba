@@ -3224,7 +3224,6 @@ in   CC 1 #             Control  ConstantOnly         inline=false num 1 [0..127
 in   CC 2 #             Control  ConstantOnly         inline=false num 74 [0..127]  stepped
 in   CC 3 #             Control  ConstantOnly         inline=false num 71 [0..127]  stepped
 in   CC 4 #             Control  ConstantOnly         inline=false num 10 [0..127]  stepped
-in   Send Clock         Control  ConstantOnly         inline=true  toggle false "Clock"
 knob CC 1 #             "CC 1" KnobOnly
 knob CC 2 #             "CC 2" KnobOnly
 knob CC 3 #             "CC 3" KnobOnly

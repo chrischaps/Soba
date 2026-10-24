@@ -6,21 +6,22 @@
 //!   or close it, its slot, the last message heard, and the modules set to
 //!   hear it alone.
 //! - **MIDI Out**, a row for each port, A to H: a lamp that flashes as it
-//!   sends, its device to choose, how it's doing, the last message sent
-//!   (and a dot on each beat while clock goes out), and the MIDI Outs that
-//!   play it.
+//!   sends, its device to choose, what it sends of the Clock (#437), its
+//!   offset, how it's doing, the last message sent (and a dot on each beat
+//!   while clock goes out), and the MIDI Outs that play it.
 //!
 //! Both are this computer's settings, not the patch's. A device the system
 //! renumbers after a reboot ("2- Digitakt", now "3- Digitakt") is found
 //! again under its new name, and the row says so (see
-//! [`device_names`](crate::engine::device_names)). The columns leave room
-//! for what each port learns next: its clock, offset and thru routes.
+//! [`device_names`](crate::engine::device_names)). An input's device
+//! spans the ports' clock and offset, so the columns after line up.
 
 use super::*;
 use crate::engine::device_names;
 use crate::engine::MidiEvent;
 use crate::graph::midi_log_display::format_midi_event;
-use crate::link::midi::{PortStatus, Traffic, MIDI, PORTS, PORT_LABELS};
+use crate::link::midi::{ClockMode, PortStatus, Traffic, MIDI, OFFSET_RANGE, PORTS, PORT_LABELS};
+use crate::persistence::graph_io::clocked_ports;
 
 /// The panel: open or not.
 #[derive(Debug, Default)]
@@ -33,8 +34,11 @@ const FLASH: f64 = 0.25;
 /// How long the last message stays bright before it settles, in seconds.
 const FRESH: f64 = 4.0;
 /// The columns' widths, in order: the lamp, the tick or port, the device,
-/// how it's doing, the last message, and the modules.
-const COLUMNS: [f32; 6] = [14.0, 22.0, 220.0, 84.0, 176.0, 96.0];
+/// the port's clock and offset, how it's doing, the last message, and the
+/// modules. An input's row has no clock or offset: see [`in_columns`].
+const COLUMNS: [f32; 8] = [14.0, 22.0, 184.0, 116.0, 64.0, 84.0, 160.0, 96.0];
+/// The space between columns.
+const GAP: f32 = 6.0;
 const ROW_HEIGHT: f32 = 22.0;
 /// The clock ticks to a beat.
 const PPQN: u32 = 24;
@@ -59,6 +63,10 @@ struct OutRow {
     found: Option<String>,
     status: PortStatus,
     traffic: Traffic,
+    /// What it sends of the Clock.
+    clock: ClockMode,
+    /// How much later than the sound it sends, in milliseconds.
+    offset: f32,
     /// The MIDI Outs on this port.
     played_by: Vec<String>,
 }
@@ -68,6 +76,8 @@ enum Edit {
     Toggle(usize),
     Forget(String),
     Choose(usize, Option<String>),
+    Clock(usize, ClockMode),
+    Offset(usize, f32),
     Refresh,
 }
 
@@ -93,7 +103,8 @@ impl SynthApp {
         let mut open = true;
         let mut edits = Vec::new();
         let editor = self.editor_rect;
-        let width: f32 = COLUMNS.iter().sum::<f32>() + 6.0 * (COLUMNS.len() - 1) as f32;
+        let width: f32 = COLUMNS.iter().sum::<f32>() + GAP * (COLUMNS.len() - 1) as f32;
+        let earliest = MIDI.earliest();
         let now = ctx.input(|i| i.time);
         egui::Window::new("The Rig")
             .id(egui::Id::unique("rig_panel"))
@@ -118,7 +129,7 @@ impl SynthApp {
 
                 ui.add_space(10.0);
                 section(ui, "MIDI In", "what plays Soba");
-                header(ui, ["", "", "Device", "", "Last heard", "Heard by"]);
+                header(ui, &["", "", "Device", "", "Last heard", "Heard by"], &in_columns());
                 if !has_inputs {
                     quiet_line(ui, error.as_deref().unwrap_or("MIDI in isn't available here: a DAW hands the plugin its MIDI"));
                 } else if ins.is_empty() {
@@ -136,9 +147,9 @@ impl SynthApp {
 
                 ui.add_space(12.0);
                 section(ui, "MIDI Out", "what Soba plays");
-                header(ui, ["", "Port", "Device", "", "Last sent", "Played by"]);
+                header(ui, &["", "Port", "Device", "Clock", "Offset", "", "Last sent", "Played by"], &COLUMNS);
                 for row in &outs {
-                    out_row(ui, row, &devices, now, &mut edits);
+                    out_row(ui, row, &devices, earliest, now, &mut edits);
                 }
 
                 ui.add_space(8.0);
@@ -152,6 +163,8 @@ impl SynthApp {
                 Edit::Toggle(index) => self.toggle_midi_device(index),
                 Edit::Forget(name) => self.midi.remembered.retain(|n| *n != name),
                 Edit::Choose(port, device) => MIDI.choose(port, device.as_deref()),
+                Edit::Clock(port, mode) => MIDI.set_clock(port, mode),
+                Edit::Offset(port, ms) => MIDI.set_offset(port, ms),
                 Edit::Refresh => {
                     self.refresh_midi_devices();
                     MIDI.rescan();
@@ -200,7 +213,16 @@ impl SynthApp {
                     })
                     .map(|(_, node)| node.user_data.display_name.clone())
                     .collect();
-                OutRow { port, chosen: MIDI.chosen(port), found: found[port].clone(), status: MIDI.status(port), traffic: MIDI.traffic(port), played_by }
+                OutRow {
+                    port,
+                    chosen: MIDI.chosen(port),
+                    found: found[port].clone(),
+                    status: MIDI.status(port),
+                    traffic: MIDI.traffic(port),
+                    clock: MIDI.clock(port),
+                    offset: MIDI.offset(port),
+                    played_by,
+                }
             })
             .collect()
     }
@@ -209,6 +231,30 @@ impl SynthApp {
     fn module_names(&self, matches: impl Fn(&SynthNodeData) -> bool) -> Vec<String> {
         self.graph_state.graph.nodes.iter().filter(|(_, node)| matches(&node.user_data)).map(|(_, node)| node.user_data.display_name.clone()).collect()
     }
+}
+
+/// Turns on the clock of each port an old patch's MIDI Outs sent it on, with
+/// Send Clock, before clock was the port's (#437), unless it's on already.
+/// Says which, for the patch's notes on opening.
+pub(super) fn clock_old_midi_outs(patch: &crate::persistence::Patch) -> Vec<String> {
+    clocked_ports(patch)
+        .into_iter()
+        .filter(|&port| MIDI.clock(port) == ClockMode::Off)
+        .map(|port| {
+            MIDI.set_clock(port, ClockMode::Transport);
+            format!(
+                "A MIDI Out's Send Clock is now port {}'s, in the Rig (Ctrl+Shift+H): turned on there, for this computer",
+                PORT_LABELS[port]
+            )
+        })
+        .collect()
+}
+
+/// An input's columns: [`COLUMNS`] with the device spanning the ports'
+/// clock and offset.
+fn in_columns() -> [f32; 6] {
+    let [lamp, tick, device, clock, offset, state, last, who] = COLUMNS;
+    [lamp, tick, device + clock + offset + 2.0 * GAP, state, last, who]
 }
 
 /// The panel's name, after a short purple bar, what's open, and the way
@@ -239,11 +285,11 @@ fn section(ui: &mut egui::Ui, name: &str, says: &str) {
     });
 }
 
-/// The columns' names, and a line under them.
-fn header(ui: &mut egui::Ui, names: [&str; 6]) {
+/// The columns' names, `widths` wide, and a line under them.
+fn header(ui: &mut egui::Ui, names: &[&str], widths: &[f32]) {
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        for (name, width) in names.iter().zip(COLUMNS) {
+        ui.spacing_mut().item_spacing.x = GAP;
+        for (name, &width) in names.iter().zip(widths) {
             cell(ui, width, |ui| {
                 ui.label(RichText::new(*name).small().color(theme::text::QUIET));
             });
@@ -278,8 +324,8 @@ fn in_row(ui: &mut egui::Ui, row: &InRow, now: f64, edits: &mut Vec<Edit>) {
         (Some(_), None) => (theme::background::GRID_MAJOR, "closed".to_string(), theme::text::DISABLED),
     };
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        let [lamp_w, tick_w, device_w, state_w, last_w, who_w] = COLUMNS;
+        ui.spacing_mut().item_spacing.x = GAP;
+        let [lamp_w, tick_w, device_w, state_w, last_w, who_w] = in_columns();
         cell(ui, lamp_w, |ui| lamp(ui, lamp_color, row.slot.map(|_| since)));
         cell(ui, tick_w, |ui| match row.index {
             Some(index) => {
@@ -308,10 +354,11 @@ fn in_row(ui: &mut egui::Ui, row: &InRow, now: f64, edits: &mut Vec<Edit>) {
 }
 
 /// A port's row, its edits joining `edits`.
-fn out_row(ui: &mut egui::Ui, row: &OutRow, devices: &[String], now: f64, edits: &mut Vec<Edit>) {
+fn out_row(ui: &mut egui::Ui, row: &OutRow, devices: &[String], earliest: f32, now: f64, edits: &mut Vec<Edit>) {
     let id = egui::Id::unique(("rig_out", row.port));
     let since = since(ui, id, row.traffic.messages, now);
-    let used = !row.played_by.is_empty();
+    // A port sending clock is in use, whether a MIDI Out plays it or not
+    let used = !row.played_by.is_empty() || row.clock != ClockMode::Off;
     let (state, color) = match row.status {
         PortStatus::Sending => ("Sending", theme::signal::GATE),
         PortStatus::Failed => ("In use", theme::accent::ERROR),
@@ -323,11 +370,13 @@ fn out_row(ui: &mut egui::Ui, row: &OutRow, devices: &[String], now: f64, edits:
     };
     let flashing = (row.status == PortStatus::Sending).then_some(since);
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        let [lamp_w, port_w, device_w, state_w, last_w, who_w] = COLUMNS;
+        ui.spacing_mut().item_spacing.x = GAP;
+        let [lamp_w, port_w, device_w, clock_w, offset_w, state_w, last_w, who_w] = COLUMNS;
         cell(ui, lamp_w, |ui| lamp(ui, color, flashing));
         cell(ui, port_w, |ui| badge(ui, PORT_LABELS[row.port], row.chosen.is_some() || used));
         cell(ui, device_w, |ui| device_menu(ui, row, devices, edits));
+        cell(ui, clock_w, |ui| clock_menu(ui, row, edits));
+        cell(ui, offset_w, |ui| offset_drag(ui, row, earliest, edits));
         cell(ui, state_w, |ui| {
             let text = if state.is_empty() && used { "No device" } else { state };
             let ink = if state.is_empty() && used { theme::accent::WARNING } else if state == "Ready" || state.is_empty() { theme::text::QUIET } else { color };
@@ -385,6 +434,74 @@ fn device_menu(ui: &mut egui::Ui, row: &OutRow, devices: &[String], edits: &mut 
         _ => {
             response.on_hover_text(format!("Which device port {} plays, on this computer", PORT_LABELS[row.port]));
         }
+    }
+}
+
+/// What a port sends of the Clock, to choose.
+fn clock_menu(ui: &mut egui::Ui, row: &OutRow, edits: &mut Vec<Edit>) {
+    ui.spacing_mut().button_padding.y = 1.0;
+    ui.spacing_mut().interact_size.y = ROW_HEIGHT - 4.0;
+    let ink = if row.clock == ClockMode::Off { theme::text::DISABLED } else { theme::text::PRIMARY };
+    let response = egui::ComboBox::from_id_salt(("rig_out_clock", row.port))
+        .width(COLUMNS[3] - 4.0)
+        .truncate()
+        .selected_text(RichText::new(row.clock.label()).small().color(ink))
+        .show_ui(ui, |ui| {
+            ui.set_min_width(150.0);
+            for mode in ClockMode::ALL {
+                let hint = match mode {
+                    ClockMode::Off => "No clock: the device keeps its own tempo",
+                    ClockMode::Transport => "The Clock's tempo, and Start, Stop and where the song is: the device plays when Soba plays",
+                    ClockMode::ClockOnly => "The Clock's tempo alone: the device follows it, and starts and stops on its own",
+                };
+                if ui.selectable_label(row.clock == mode, mode.label()).on_hover_text(hint).clicked() {
+                    edits.push(Edit::Clock(row.port, mode));
+                }
+            }
+        })
+        .response;
+    response.on_hover_text(format!(
+        "What port {} sends of the patch's Clock, once for the port however many MIDI Outs play it",
+        PORT_LABELS[row.port]
+    ));
+}
+
+/// A port's offset, in milliseconds, to drag: amber when it asks for
+/// earlier than the output's delay allows (`earliest`).
+fn offset_drag(ui: &mut egui::Ui, row: &OutRow, earliest: f32, edits: &mut Vec<Edit>) {
+    let mut ms = row.offset;
+    let clipped = ms < earliest - 0.05;
+    let ink = if clipped {
+        theme::accent::WARNING
+    } else if ms == 0.0 {
+        theme::text::DISABLED
+    } else {
+        theme::text::PRIMARY
+    };
+    // Slim and small, as the clock and device beside it
+    ui.visuals_mut().override_text_color = Some(ink);
+    ui.style_mut().override_text_style = Some(egui::TextStyle::Small);
+    ui.spacing_mut().button_padding.y = 1.0;
+    ui.spacing_mut().interact_size.y = ROW_HEIGHT - 4.0;
+    let drag = egui::DragValue::new(&mut ms)
+        .range(-OFFSET_RANGE..=OFFSET_RANGE)
+        .speed(0.2)
+        .custom_formatter(|ms, _| if ms.abs() < 0.05 { "0".to_string() } else { format!("{ms:+.1}") })
+        .suffix(" ms");
+    let response = ui.add_sized([COLUMNS[4] - 4.0, ROW_HEIGHT - 4.0], drag);
+    if response.changed() {
+        edits.push(Edit::Offset(row.port, ms));
+    }
+    if clipped {
+        response.on_hover_text(format!(
+            "Port {} can go no earlier than {earliest:.1} ms: a message can't leave before its sound is made, and the output's delay is all the head start there is. A larger buffer gives more",
+            PORT_LABELS[row.port]
+        ));
+    } else {
+        response.on_hover_text(format!(
+            "How much later than the sound port {}'s notes, CCs and clock go out: nudge it until a slow device lands with Soba. Negative goes earlier, as far as {earliest:.1} ms",
+            PORT_LABELS[row.port]
+        ));
     }
 }
 

@@ -14,6 +14,14 @@
 //! on port A wherever it opens. A port finds its device again when the
 //! system renumbers it (see [`device_names`](crate::engine::device_names)).
 //!
+//! **Clock** is the port's, not a module's (#437): the engine sends one
+//! clock stream, from the Clock that sets the patch's tempo
+//! ([`midi_clock`](super::midi_clock)), and the sender passes it to every
+//! port whose [`ClockMode`] wants it, so two MIDI Outs on a port can't
+//! double it and a port nothing plays can still keep a drum machine in
+//! time. Each port also has an **offset**, to line a slow device up with
+//! the rest (see [`MidiBus::set_offset`]).
+//!
 //! Unlike the Seoul link's newest-value atomics, MIDI needs every message,
 //! in order and on time: a lost Note Off is a stuck note. So the ring
 //! carries events, and the sender keeps track of which notes each module
@@ -54,6 +62,62 @@ pub mod status {
 
 /// CC 123, All Notes Off.
 pub const ALL_NOTES_OFF: u8 = 123;
+
+/// How far a port's offset reaches either way, in milliseconds.
+pub const OFFSET_RANGE: f32 = 50.0;
+
+/// What a port sends of the patch's clock.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ClockMode {
+    /// None of it.
+    #[default]
+    Off = 0,
+    /// Clock ticks, and Start, Stop, Continue and Song Position: the device
+    /// follows the tempo and starts and stops with Soba.
+    Transport = 1,
+    /// Clock ticks alone: the device follows the tempo, and starts and
+    /// stops on its own (an RC-505's loops, say).
+    ClockOnly = 2,
+}
+
+impl ClockMode {
+    pub const ALL: [Self; 3] = [Self::Off, Self::Transport, Self::ClockOnly];
+
+    /// As the Rig names it.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::Transport => "Clock + Transport",
+            Self::ClockOnly => "Clock only",
+        }
+    }
+
+    /// As the settings keep it.
+    fn key(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Transport => "transport",
+            Self::ClockOnly => "clock",
+        }
+    }
+
+    fn from_code(code: u8) -> Self {
+        match code {
+            1 => Self::Transport,
+            2 => Self::ClockOnly,
+            _ => Self::Off,
+        }
+    }
+
+    /// Whether a port set this way sends `message` of the patch's clock.
+    pub fn passes(self, message: &Message) -> bool {
+        match self {
+            Self::Off => false,
+            Self::Transport => true,
+            Self::ClockOnly => message.bytes()[0] == status::CLOCK,
+        }
+    }
+}
 
 /// What a MIDI Out puts in its ring.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -193,6 +257,12 @@ pub struct MidiBus {
     /// What each port has sent: messages, clock ticks, and the last
     /// message packed (see [`Message::packed`]).
     sent: [[AtomicU32; 3]; PORTS],
+    /// What each port sends of the patch's clock (a [`ClockMode`]).
+    clock: [AtomicU8; PORTS],
+    /// Each port's offset in milliseconds, an f32's bits.
+    offsets: [AtomicU32; PORTS],
+    /// The patch's clock ring, made since the sender last looked.
+    new_clock: Mutex<Option<Consumer<Outgoing>>>,
     /// The output device's delay, so MIDI goes out as the audio beside it
     /// is heard: in microseconds.
     latency_micros: AtomicU64,
@@ -209,6 +279,9 @@ impl MidiBus {
             chosen: Mutex::new([const { String::new() }; PORTS]),
             status: [const { AtomicU8::new(PortStatus::Idle as u8) }; PORTS],
             sent: [const { [const { AtomicU32::new(0) }; 3] }; PORTS],
+            clock: [const { AtomicU8::new(ClockMode::Off as u8) }; PORTS],
+            offsets: [const { AtomicU32::new(0) }; PORTS],
+            new_clock: Mutex::new(None),
             latency_micros: AtomicU64::new(0),
             rescan: AtomicBool::new(true),
         }
@@ -224,6 +297,17 @@ impl MidiBus {
         }
         let (producer, consumer) = RingBuffer::new(RING);
         self.new_streams.lock().ok()?.push(consumer);
+        Some(producer)
+    }
+
+    /// The ring the engine sends the patch's clock on, or `None` while no
+    /// sender drains the bus. One made later takes the place of the last.
+    pub fn open_clock_stream(&self) -> Option<Producer<Outgoing>> {
+        if !self.draining.load(Relaxed) {
+            return None;
+        }
+        let (producer, consumer) = RingBuffer::new(RING);
+        *self.new_clock.lock().ok()? = Some(consumer);
         Some(producer)
     }
 
@@ -276,6 +360,73 @@ impl MidiBus {
         }
     }
 
+    /// What port `port` sends of the patch's clock.
+    pub fn clock(&self, port: usize) -> ClockMode {
+        ClockMode::from_code(self.clock.get(port).map_or(0, |c| c.load(Relaxed)))
+    }
+
+    /// Every port's clock setting.
+    pub fn clock_modes(&self) -> [ClockMode; PORTS] {
+        std::array::from_fn(|port| self.clock(port))
+    }
+
+    /// Whether any port sends the patch's clock. REAL-TIME SAFE.
+    pub fn wants_clock(&self) -> bool {
+        self.clock.iter().any(|c| c.load(Relaxed) != ClockMode::Off as u8)
+    }
+
+    pub fn set_clock(&self, port: usize, mode: ClockMode) {
+        if let Some(slot) = self.clock.get(port) {
+            slot.store(mode as u8, Relaxed);
+        }
+    }
+
+    /// How much later than the audio port `port`'s messages go out, in
+    /// milliseconds: negative for earlier.
+    pub fn offset(&self, port: usize) -> f32 {
+        self.offsets.get(port).map_or(0.0, |o| f32::from_bits(o.load(Relaxed)))
+    }
+
+    /// Every port's offset, in milliseconds.
+    pub fn offsets(&self) -> [f32; PORTS] {
+        std::array::from_fn(|port| self.offset(port))
+    }
+
+    /// Moves port `port`'s notes, CCs and clock `ms` later (or earlier,
+    /// negative), within [`OFFSET_RANGE`]. Later goes as far as it says;
+    /// earlier goes no further than the output's delay, which the sender
+    /// already waits out (see [`earliest`](Self::earliest)).
+    pub fn set_offset(&self, port: usize, ms: f32) {
+        if let Some(slot) = self.offsets.get(port) {
+            let ms = if ms.is_finite() { ms.clamp(-OFFSET_RANGE, OFFSET_RANGE) } else { 0.0 };
+            slot.store(ms.to_bits(), Relaxed);
+        }
+    }
+
+    /// The earliest offset that takes effect, in milliseconds: minus the
+    /// output's delay, since a message can't go before its block is made.
+    pub fn earliest(&self) -> f32 {
+        -(self.latency().as_secs_f32() * 1000.0)
+    }
+
+    /// Every port's clock and offset as the settings keep them: a line
+    /// each, as `transport +12.5`.
+    pub fn clock_setting(&self) -> String {
+        (0..PORTS).map(|port| format!("{} {:+}", self.clock(port).key(), self.offset(port))).collect::<Vec<_>>().join("\n")
+    }
+
+    /// Takes up what [`clock_setting`](Self::clock_setting) kept. A line
+    /// it can't read leaves its port off, on time.
+    pub fn restore_clock(&self, setting: &str) {
+        for (port, line) in setting.lines().take(PORTS).enumerate() {
+            let mut words = line.split_whitespace();
+            let mode = words.next().and_then(|key| ClockMode::ALL.into_iter().find(|m| m.key() == key));
+            let offset = mode.and(words.next()).and_then(|ms| ms.parse().ok());
+            self.set_clock(port, mode.unwrap_or_default());
+            self.set_offset(port, offset.unwrap_or(0.0));
+        }
+    }
+
     /// Asks the sender to look for devices again, soon.
     pub fn rescan(&self) {
         self.rescan.store(true, Relaxed);
@@ -306,6 +457,11 @@ impl MidiBus {
 
     pub fn take_new_streams(&self) -> Vec<Consumer<Outgoing>> {
         self.new_streams.try_lock().map(|mut s| std::mem::take(&mut *s)).unwrap_or_default()
+    }
+
+    /// The patch's clock ring, if the engine has made one since the last look.
+    pub fn take_clock_stream(&self) -> Option<Consumer<Outgoing>> {
+        self.new_clock.try_lock().ok()?.take()
     }
 
     pub fn set_devices(&self, devices: Vec<String>) {
@@ -413,6 +569,35 @@ mod tests {
         assert_eq!(found[1].as_deref(), Some("MicroFreak"));
         assert_eq!(found[2], None, "unplugged");
         assert_eq!(found[3], None, "none chosen");
+    }
+
+    #[test]
+    fn clock_settings_are_kept_a_line_a_port() {
+        let bus = MidiBus::new();
+        assert!(!bus.wants_clock());
+        bus.set_clock(0, ClockMode::Transport);
+        bus.set_clock(3, ClockMode::ClockOnly);
+        bus.set_offset(3, -7.5);
+        bus.set_offset(5, 400.0);
+        assert!(bus.wants_clock());
+        assert_eq!(bus.offset(5), OFFSET_RANGE, "within reach");
+        let other = MidiBus::new();
+        other.restore_clock(&bus.clock_setting());
+        assert_eq!(other.clock_modes(), bus.clock_modes());
+        assert_eq!(other.offsets(), bus.offsets());
+        other.restore_clock("sideways 3\ntransport nonsense");
+        assert_eq!((other.clock(0), other.offset(0)), (ClockMode::Off, 0.0), "unreadable: off, on time");
+        assert_eq!((other.clock(1), other.offset(1)), (ClockMode::Transport, 0.0));
+    }
+
+    #[test]
+    fn clock_modes_pass_what_they_say() {
+        let tick = Message::real_time(status::CLOCK);
+        let start = Message::real_time(status::START);
+        let place = Message::song_position(8);
+        assert!(ClockMode::Transport.passes(&tick) && ClockMode::Transport.passes(&start) && ClockMode::Transport.passes(&place));
+        assert!(ClockMode::ClockOnly.passes(&tick) && !ClockMode::ClockOnly.passes(&start) && !ClockMode::ClockOnly.passes(&place));
+        assert!(!ClockMode::Off.passes(&tick));
     }
 
     #[test]

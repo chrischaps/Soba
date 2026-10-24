@@ -9,7 +9,8 @@
 //!
 //! It plays an arpeggio, then a chord it stops mid-way, on the first
 //! output found (on Windows, the Microsoft GS Wavetable Synth, which you
-//! hear) or the one `SOBA_MIDI_OUT` names, with MIDI clock at 120 BPM.
+//! hear) or the one `SOBA_MIDI_OUT` names, with MIDI clock at 120 BPM from
+//! the port (#437), as the engine sends it.
 //!
 //! **Clock steadiness.** Name a loopback port in `SOBA_MIDI_LOOPBACK` (a
 //! loopMIDI port, say, as both output and input) and the test listens to
@@ -25,7 +26,8 @@ use soba::dsp::context::{ProcessContext, TransportState};
 use soba::dsp::module_trait::DspModule;
 use soba::dsp::signal::SignalBuffer;
 use soba::dsp::SignalType;
-use soba::link::midi::{PortStatus, MIDI};
+use soba::link::midi::{ClockMode, PortStatus, MIDI};
+use soba::link::midi_clock::MidiClock;
 use soba::modules::MidiOut;
 
 const RATE: f32 = 48_000.0;
@@ -56,6 +58,7 @@ fn a_midi_out_plays_a_real_device() {
         .expect("no MIDI output on this machine");
     assert!(devices.contains(&device), "{device} isn't among them");
     MIDI.choose(0, Some(&device));
+    MIDI.set_clock(0, ClockMode::Transport);
     println!("Playing {device}");
 
     // What comes back through the loopback, stamped as it arrives
@@ -72,8 +75,8 @@ fn a_midi_out_plays_a_real_device() {
     });
 
     let mut module = MidiOut::new();
-    let mut params: Vec<f32> = module.parameters().iter().map(|p| p.default).collect();
-    params[MidiOut::PARAM_SEND_CLOCK] = 1.0;
+    let mut clock = MidiClock::new();
+    let params: Vec<f32> = module.parameters().iter().map(|p| p.default).collect();
     let mut gate = SignalBuffer::new(BLOCK, SignalType::Gate);
     let mut pitch = SignalBuffer::polyphonic(BLOCK, SignalType::Control);
     let empty = SignalBuffer::unconnected(BLOCK, SignalType::Control);
@@ -108,6 +111,7 @@ fn a_midi_out_plays_a_real_device() {
         let mut inputs: Vec<&SignalBuffer> = vec![&empty; module.ports().len()];
         inputs[MidiOut::PORT_PITCH] = &pitch;
         inputs[MidiOut::PORT_GATE] = &gate;
+        clock.run(|| Some(transport), BLOCK, RATE, Some(due));
         module.process(&inputs, &mut [], &params, &context);
         statuses.push(MIDI.status(0));
     }
@@ -197,6 +201,7 @@ fn clock_keeps_time() {
     let sent: Arc<Mutex<Vec<(Instant, Vec<u8>)>>> = Arc::default();
     let mut sender = MidiSender::new(bus, Box::new(Stopwatch(sent.clone())));
     bus.choose(0, Some("Stopwatch"));
+    bus.set_clock(0, ClockMode::Transport);
     let latency = Duration::from_millis(20);
     bus.set_latency(Some(latency));
     // The link thread's loop, noting how late it wakes at worst
@@ -212,10 +217,8 @@ fn clock_keeps_time() {
         }
     });
 
-    let mut module = MidiOut::on_bus(bus);
-    let mut params: Vec<f32> = module.parameters().iter().map(|p| p.default).collect();
-    params[MidiOut::PARAM_SEND_CLOCK] = 1.0;
-    let empty = SignalBuffer::unconnected(BLOCK, SignalType::Control);
+    // The engine's clock, as the audio callback runs it
+    let mut clock = MidiClock::on_bus(bus);
     let blocks = (seconds * RATE as f64 / BLOCK as f64) as usize;
     let beats_per_block = BLOCK as f64 * BPM as f64 / 60.0 / RATE as f64;
     let started = Instant::now() + Duration::from_millis(50);
@@ -225,11 +228,8 @@ fn clock_keeps_time() {
         // A callback runs when it runs: up to a couple of ms late
         std::thread::sleep(due.saturating_duration_since(Instant::now()));
         callback_late = callback_late.max(Instant::now().saturating_duration_since(due));
-        let mut context = ProcessContext::new(RATE, BLOCK);
-        context.transport = TransportState { beat_position: Some(block as f64 * beats_per_block), ..TransportState::playing_at(BPM) };
-        let context = context.sent_at(Instant::now());
-        let inputs: Vec<&SignalBuffer> = vec![&empty; module.ports().len()];
-        module.process(&inputs, &mut [], &params, &context);
+        let transport = TransportState { beat_position: Some(block as f64 * beats_per_block), ..TransportState::playing_at(BPM) };
+        clock.run(|| Some(transport), BLOCK, RATE, Some(Instant::now()));
     }
     std::thread::sleep(Duration::from_millis(100));
 

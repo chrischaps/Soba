@@ -460,6 +460,36 @@ fn signal_named(name: &str) -> Option<SignalType> {
         .find(|signal| signal.name().eq_ignore_ascii_case(name))
 }
 
+/// Parameters a module once had and has no more, by module ID and name.
+/// A patch that has one opens without a warning: what it did is done
+/// elsewhere now, so nothing is lost.
+///
+/// - MIDI Out's Send Clock: clock is the port's, in the Rig (#437). A patch
+///   with it on turns its port's clock on as it opens ([`clocked_ports`]).
+pub const RETIRED_PARAMETERS: &[(&str, &str)] = &[(crate::modules::midi_out::ID, "Send Clock")];
+
+/// The ports of the MIDI Outs `patch` saved with Send Clock on, before
+/// clock was the port's (#437), in any group, each once.
+pub fn clocked_ports(patch: &Patch) -> Vec<usize> {
+    fn walk(nodes: &[NodeData], groups: &[GroupData], ports: &mut Vec<usize>) {
+        let value = |node: &NodeData, name: &str| node.parameters.iter().find(|p| p.name == name).map(|p| p.value.as_f32());
+        for node in nodes.iter().filter(|node| node.module_id == crate::modules::midi_out::ID) {
+            if value(node, "Send Clock").is_some_and(|on| on > 0.5) {
+                let port = (value(node, "Port").unwrap_or(0.0).round().max(0.0) as usize).min(crate::link::midi::PORTS - 1);
+                if !ports.contains(&port) {
+                    ports.push(port);
+                }
+            }
+        }
+        for group in groups {
+            walk(&group.nodes, &group.groups, ports);
+        }
+    }
+    let mut ports = Vec::new();
+    walk(&patch.nodes, &patch.groups, &mut ports);
+    ports
+}
+
 /// Sets a freshly built node's parameters from the patch, by name.
 fn restore_parameters(graph: &mut SynthGraph, node_id: NodeId, node_data: &NodeData, warnings: &mut Vec<String>) {
     for saved in &node_data.parameters {
@@ -469,10 +499,12 @@ fn restore_parameters(graph: &mut SynthGraph, node_id: NodeId, node_data: &NodeD
             .find(|(name, id)| *name == saved.name && port_mapping::is_parameter(graph.get_input(*id).kind))
             .map(|(_, id)| *id);
         let Some(input_id) = input_id else {
-            warnings.push(format!(
-                "{}: ignored unknown parameter '{}'",
-                node_data.module_id, saved.name
-            ));
+            if !RETIRED_PARAMETERS.contains(&(node_data.module_id.as_str(), saved.name.as_str())) {
+                warnings.push(format!(
+                    "{}: ignored unknown parameter '{}'",
+                    node_data.module_id, saved.name
+                ));
+            }
             continue;
         };
 
@@ -1103,6 +1135,24 @@ mod tests {
         assert_eq!(param(&saved, "filter.svf", "Resonance"), 0.5);
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("Retired Knob"));
+    }
+
+    #[test]
+    fn test_send_clock_retires_quietly_and_names_its_port() {
+        let mut patch = Patch::new("old midi out");
+        for (id, port, clock) in [(1, 2.0, true), (2, 0.0, false), (3, 2.0, true)] {
+            let mut out = NodeData::new(id, crate::modules::midi_out::ID, (0.0, 0.0));
+            out.parameters = vec![
+                NamedParameter::new("Port", ParameterValue::Select(port as usize)),
+                NamedParameter::new("Send Clock", ParameterValue::Toggle(clock)),
+            ];
+            patch.nodes.push(out);
+        }
+        let (saved, warnings) = reload(&patch, 0);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(saved.nodes.iter().all(|n| n.parameters.iter().all(|p| p.name != "Send Clock")), "gone once saved again");
+        assert_eq!(clocked_ports(&patch), [2], "port C, once");
+        assert!(clocked_ports(&saved).is_empty());
     }
 
     #[test]

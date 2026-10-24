@@ -1,9 +1,10 @@
 //! MIDI Out module: plays hardware and other apps from the patch.
 //!
 //! A gate and a pitch cable become notes (a poly cable, chords), and four
-//! control cables become CCs. With **Send Clock** on, the patch's Clock
-//! goes out as MIDI clock, 24 ticks a beat with Start, Stop and Continue,
-//! so a drum machine or a DAW follows Soba's tempo.
+//! control cables become CCs. MIDI clock is the port's, set in the Rig,
+//! not the module's (see [`midi_clock`](crate::link::midi_clock)): a patch
+//! saved when MIDI Out had **Send Clock** turns its port's clock on as it
+//! opens.
 //!
 //! The module only turns cables into messages, each stamped with the sample
 //! it belongs on, and writes them to a ring. The link's sender thread
@@ -23,7 +24,7 @@ use crate::dsp::{
     signal::{connected_input, SignalBuffer, MAX_CHANNELS},
     SignalType,
 };
-use crate::link::midi::{status, Message, MidiBus, Outgoing, MIDI, PORTS, PORT_LABELS};
+use crate::link::midi::{Message, MidiBus, Outgoing, MIDI, PORTS, PORT_LABELS};
 
 /// CC lanes on the module.
 pub const CC_LANES: usize = 4;
@@ -31,9 +32,6 @@ pub const CC_LANES: usize = 4;
 /// The CC each lane sends unless set otherwise: mod wheel, cutoff,
 /// resonance and pan, which most synths answer to.
 const CC_DEFAULTS: [f32; CC_LANES] = [1.0, 74.0, 71.0, 10.0];
-
-/// MIDI clock ticks in a beat.
-const PPQN: f64 = 24.0;
 
 const CHANNEL_LABELS: &[&str] = &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"];
 
@@ -57,7 +55,6 @@ pub const ID: &str = "output.midi";
 /// - **Port**: A to H; this computer's settings (the Rig panel) say which device each plays.
 /// - **Channel**: the MIDI channel notes and CCs go out on.
 /// - **CC 1 #** … **CC 4 #**: the controller number each lane sends.
-/// - **Send Clock**: sends the patch's Clock as MIDI clock.
 pub struct MidiOut {
     ring: Option<Producer<Outgoing>>,
     /// Samples run so far: the clock the ring's messages are stamped on.
@@ -74,10 +71,6 @@ pub struct MidiOut {
     cc_sent: [Option<(u8, u8)>; CC_LANES],
     /// Whether the patch's Clock was playing last block.
     was_playing: bool,
-    /// Whether clock is going out (Start or Continue sent, Stop not yet).
-    clock_running: bool,
-    /// The next clock tick to send, counting 24 a beat from beat 0.
-    next_tick: i64,
     /// For the face.
     beat: f32,
     notes_sent: u32,
@@ -118,10 +111,6 @@ impl MidiOut {
         parameters.extend(NUMBER_IDS.iter().zip(NUMBER_NAMES).zip(CC_DEFAULTS).map(|((&id, name), default)| {
             ParameterDefinition::new(id, name, 0.0, 127.0, default, ParameterDisplay::stepped("")).describe("The controller number this lane sends")
         }));
-        parameters.push(
-            ParameterDefinition::toggle("send_clock", "Send Clock", false)
-                .describe("Sends the patch's Clock as MIDI clock (24 a beat) with Start, Stop and Continue, for other gear to follow"),
-        );
         Self {
             ring: bus.open_stream(),
             sample: 0,
@@ -131,8 +120,6 @@ impl MidiOut {
             held: [0; 128],
             cc_sent: [None; CC_LANES],
             was_playing: false,
-            clock_running: false,
-            next_tick: 0,
             beat: 0.0,
             notes_sent: 0,
             dropped: 0,
@@ -151,7 +138,6 @@ impl MidiOut {
     pub const PARAM_CHANNEL: usize = 1;
     /// The first CC lane's number.
     pub const PARAM_CC_NUMBER: usize = 2;
-    pub const PARAM_SEND_CLOCK: usize = 2 + CC_LANES;
 
     // Readout slots
 
@@ -159,8 +145,8 @@ impl MidiOut {
     pub const READOUT_NOTES: usize = 0;
     /// Each lane's CC value as sent (0 to 127), or -1 while unpatched.
     pub const READOUT_CC: usize = 6;
-    /// 0 with Send Clock off, 1 while on and waiting, 2 while clock runs.
-    pub const READOUT_CLOCK: usize = 10;
+    /// 1 while the patch's Clock plays.
+    pub const READOUT_PLAYING: usize = 10;
     /// The beat in the bar, from 0.
     pub const READOUT_BEAT: usize = 11;
     /// Notes sent so far, wrapping at [`WRAP`](Self::WRAP).
@@ -217,60 +203,6 @@ impl MidiOut {
         }
         self.voice_note = [None; MAX_CHANNELS];
     }
-
-    fn stop_clock(&mut self, offset: usize) {
-        if std::mem::take(&mut self.clock_running) {
-            self.emit(offset, Message::real_time(status::STOP));
-        }
-    }
-
-    /// Sends this block's MIDI clock.
-    fn run_clock(&mut self, send: bool, context: &ProcessContext) {
-        let transport = &context.transport;
-        let frames = context.block_size;
-        let Some(start) = transport.beat_position.filter(|_| send && transport.playing) else {
-            self.stop_clock(0);
-            return;
-        };
-        let beats_per_sample = transport.tempo_bpm.unwrap_or(120.0) as f64 / 60.0 / context.sample_rate as f64;
-        let end = start + frames as f64 * beats_per_sample;
-        // The first sample at or past `beat` (a hair's leeway for rounding)
-        let at = |beat: f64| (((beat - start) / beats_per_sample - 1e-6).ceil().max(0.0) as usize).min(frames.saturating_sub(1));
-        let tick = 1.0 / PPQN;
-
-        // Moved more than a tick from where it was going (a jump in the
-        // song): stop, and start again from the new place
-        if self.clock_running && (start < (self.next_tick - 1) as f64 * tick - tick || start > self.next_tick as f64 * tick + tick) {
-            self.stop_clock(0);
-        }
-        if !self.clock_running {
-            if end <= 0.0 {
-                return; // a count-in
-            }
-            if start <= 1e-9 {
-                // From the top: Start, and the first tick is beat 0
-                self.emit(at(0.0), Message::real_time(status::START));
-                self.next_tick = 0;
-            } else {
-                // Partway in: where to carry on from, then Continue. The
-                // follower waits for the next sixteenth's tick
-                let sixteenth = (start * 4.0).ceil();
-                self.emit(0, Message::song_position(sixteenth.min(16383.0) as u16));
-                self.emit(0, Message::real_time(status::CONTINUE));
-                self.next_tick = sixteenth as i64 * 6;
-            }
-            self.clock_running = true;
-        }
-        loop {
-            // A tick a rounding error short of the block's end is the next block's first
-            let offset = ((self.next_tick as f64 * tick - start) / beats_per_sample - 1e-6).ceil().max(0.0) as usize;
-            if offset >= frames {
-                break;
-            }
-            self.emit(offset, Message::real_time(status::CLOCK));
-            self.next_tick += 1;
-        }
-    }
 }
 
 impl Default for MidiOut {
@@ -285,7 +217,7 @@ impl DspModule for MidiOut {
             id: ID,
             name: "MIDI Out",
             category: ModuleCategory::Output,
-            description: "Play hardware and other apps: gates and pitch as notes, four CCs, and the Clock as MIDI clock",
+            description: "Play hardware and other apps: gates and pitch as notes, and four CCs. Clock goes out from the port, in the Rig",
         };
         &INFO
     }
@@ -324,8 +256,6 @@ impl DspModule for MidiOut {
             self.channel = channel;
         }
 
-        // The clock first, so a Start lands before the notes on its beat
-        self.run_clock(param(Self::PARAM_SEND_CLOCK) > 0.5, context);
         let transport = &context.transport;
         let playing = transport.beat_position.is_some() && transport.playing;
         if self.was_playing && !playing {
@@ -388,12 +318,11 @@ impl DspModule for MidiOut {
 
     fn reset(&mut self) {
         self.release_all(0);
-        self.stop_clock(0);
         self.gates = [Edge::LOW; MAX_CHANNELS];
         self.cc_sent = [None; CC_LANES];
     }
 
-    fn readout(&self, params: &[f32]) -> Option<Readout> {
+    fn readout(&self, _params: &[f32]) -> Option<Readout> {
         let mut readout = Readout::default();
         let values = &mut readout.values;
         for (note, &count) in self.held.iter().enumerate() {
@@ -405,12 +334,7 @@ impl DspModule for MidiOut {
         for lane in 0..CC_LANES {
             values[Self::READOUT_CC + lane] = self.cc_sent[lane].map_or(-1.0, |(_, value)| value as f32);
         }
-        let send = params.get(Self::PARAM_SEND_CLOCK).is_some_and(|&p| p > 0.5);
-        values[Self::READOUT_CLOCK] = match (send, self.clock_running) {
-            (false, _) => 0.0,
-            (true, false) => 1.0,
-            (true, true) => 2.0,
-        };
+        values[Self::READOUT_PLAYING] = if self.was_playing { 1.0 } else { 0.0 };
         values[Self::READOUT_BEAT] = self.beat;
         values[Self::READOUT_NOTES_SENT] = self.notes_sent as f32;
         values[Self::READOUT_DROPPED] = self.dropped as f32;
@@ -481,7 +405,6 @@ mod tests {
         assert_eq!(module.info().id, "output.midi");
         assert!(module.ports().iter().all(|p| p.is_input()));
         assert_eq!(module.ports()[MidiOut::PORT_CC + 3].id, "cc4");
-        assert_eq!(module.parameters()[MidiOut::PARAM_SEND_CLOCK].id, "send_clock");
         assert!(module.polyphonic());
         assert!(MidiOut::on_bus(Box::leak(Box::new(MidiBus::new()))).ring.is_none(), "no sender, no ring");
     }
@@ -569,84 +492,20 @@ mod tests {
         assert_eq!(module.readout(&params).unwrap().values[MidiOut::READOUT_CC], -1.0);
     }
 
-    /// Runs `blocks` blocks of the Clock from `beat` at `bpm`, as the
-    /// engine would, the beat advancing with each. Returns what was sent.
-    #[allow(clippy::too_many_arguments)]
-    fn clock(
-        module: &mut MidiOut,
-        ring: &mut Consumer<Outgoing>,
-        params: &[f32],
-        beat: &mut f64,
-        bpm: f32,
-        blocks: usize,
-        playing: bool,
-    ) -> Vec<(u64, Vec<u8>)> {
-        let inputs = inputs(module);
-        let mut sent = Vec::new();
-        for _ in 0..blocks {
-            let transport = TransportState { playing, beat_position: Some(*beat), ..TransportState::playing_at(bpm) };
-            run(module, &inputs, params, transport);
-            sent.extend(messages(ring));
-            if playing {
-                *beat += BLOCK as f64 * bpm as f64 / 60.0 / RATE as f64;
-            }
-        }
-        sent
-    }
-
     #[test]
-    fn the_clock_ticks_24_a_beat_from_start() {
-        let (mut module, mut ring) = module();
-        let mut params = defaults(&module);
-        params[MidiOut::PARAM_SEND_CLOCK] = 1.0;
-        let mut beat = 0.0;
-        // Just short of four beats at 120 BPM (2 s is 1500 blocks)
-        let sent = clock(&mut module, &mut ring, &params, &mut beat, 120.0, 1499, true);
-        assert_eq!(sent[0], (0, vec![status::START]));
-        let ticks: Vec<u64> = sent.iter().filter(|(_, m)| m == &[status::CLOCK]).map(|(s, _)| *s).collect();
-        assert_eq!(ticks.len(), 96);
-        // Every 1000 samples: 24 a beat at 2 beats a second, at 48 kHz
-        assert!(ticks.iter().enumerate().all(|(k, &s)| s == k as u64 * 1000), "{:?}", &ticks[..4]);
-        // Stopped, then played on from beat 4: Stop, then the position and Continue
-        let stopped = clock(&mut module, &mut ring, &params, &mut beat, 120.0, 2, false);
-        assert_eq!(stopped.iter().map(|(_, m)| m[0]).collect::<Vec<_>>(), [status::STOP]);
-        beat = 4.1;
-        let resumed = clock(&mut module, &mut ring, &params, &mut beat, 120.0, 1, true);
-        assert_eq!(resumed[0].1, Message::song_position(17).bytes(), "carries on from the next sixteenth");
-        assert_eq!(resumed[1].1, vec![status::CONTINUE]);
-    }
-
-    #[test]
-    fn a_count_in_starts_the_clock_on_the_downbeat() {
-        let (mut module, mut ring) = module();
-        let mut params = defaults(&module);
-        params[MidiOut::PARAM_SEND_CLOCK] = 1.0;
-        // Half a beat before the top
-        let mut beat = -0.5;
-        let sent = clock(&mut module, &mut ring, &params, &mut beat, 120.0, 200, true);
-        let start = sent.iter().position(|(_, m)| m == &[status::START]).unwrap();
-        assert_eq!(sent[start].0, 12_000, "half a beat at 120 BPM");
-        assert_eq!(sent[start + 1], (12_000, vec![status::CLOCK]));
-    }
-
-    #[test]
-    fn a_jump_in_the_song_restarts_the_clock() {
-        let (mut module, mut ring) = module();
-        let mut params = defaults(&module);
-        params[MidiOut::PARAM_SEND_CLOCK] = 1.0;
-        let mut beat = 0.0;
-        clock(&mut module, &mut ring, &params, &mut beat, 120.0, 100, true);
-        beat = 0.0;
-        let sent: Vec<u8> = clock(&mut module, &mut ring, &params, &mut beat, 120.0, 1, true).iter().map(|(_, m)| m[0]).collect();
-        assert_eq!(&sent[..3], [status::STOP, status::START, status::CLOCK]);
-    }
-
-    #[test]
-    fn clock_off_sends_none() {
+    fn a_playing_clock_sends_no_clock_from_the_module() {
+        // The port sends it, once, however many MIDI Outs play it (#437)
         let (mut module, mut ring) = module();
         let params = defaults(&module);
+        let inputs = inputs(&module);
         let mut beat = 0.0;
-        assert!(clock(&mut module, &mut ring, &params, &mut beat, 120.0, 100, true).is_empty());
+        for _ in 0..200 {
+            let transport = TransportState { beat_position: Some(beat), ..TransportState::playing_at(120.0) };
+            run(&mut module, &inputs, &params, transport);
+            beat += BLOCK as f64 * 2.0 / RATE as f64;
+        }
+        assert!(messages(&mut ring).is_empty());
+        assert_eq!(module.readout(&params).unwrap().values[MidiOut::READOUT_PLAYING], 1.0);
     }
 
     #[test]

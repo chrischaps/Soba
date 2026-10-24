@@ -348,12 +348,14 @@ With a room of hardware plugged in, choose **The Rig…** at the foot of the **M
   - how many modules have their **Device** set to it alone. Hover to see their names.
 - **MIDI Out** has a row for each of the eight ports, **A** to **H**, that a [MIDI Out](../modules/output/midi-out.md) plays. Each row has:
   - the port's device, which you choose here or on a MIDI Out's face;
-  - how the port is doing: **Sending**, **Ready** (it has a device but no MIDI Out plays it), **Unplugged**, **No device**, or **In use** (another app has the device);
+  - its **Clock**: what it sends of the patch's Clock. **Clock + Transport** sends the tempo with Start and Stop, **Clock only** the tempo alone, and **Off** nothing. The port sends it whether or not a MIDI Out plays it;
+  - its **Offset**: how many milliseconds later than the sound its notes, CCs and clock go out, to line a slow device up with the rest. Drag it, or click to type. It's amber when it asks for earlier than your audio device's delay allows;
+  - how the port is doing: **Sending**, **Ready** (it has a device but nothing plays it), **Unplugged**, **No device**, or **In use** (another app has the device);
   - a dot that lights on each beat while clock goes out;
   - the last message sent;
   - how many MIDI Outs play the port.
 
-Ports and inputs are settings of this computer, not of the patch. **🔄 Refresh** looks for devices again at once. Otherwise Soba looks every couple of seconds.
+Ports, with their clocks and offsets, and inputs are settings of this computer, not of the patch. **🔄 Refresh** looks for devices again at once. Otherwise Soba looks every couple of seconds.
 
 **After a reboot.** Windows numbers devices that share a name in the order they were plugged in (`2- Digitakt`), and numbers a device's extra ports (`MIDIIN3 (FANTOM-06)`). Linux adds the device's client and port numbers to its name. Those numbers can change when you reboot or plug things in a different order. Soba finds a device by its exact name first, then by its name without those numbers, so every port and input finds its device again. A module whose **Device** is set to it, or a mapping learned from it, still hears it. If two devices are left that both fit, Soba uses neither, rather than guess. Hover a port's device to see whether it was found under a new number.
 

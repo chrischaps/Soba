@@ -7,13 +7,14 @@
 //! - **A keyboard** of five octaves (C2 to C7), each held note lit, so a
 //!   chord shows as its shape. A note beyond either end lights an arrow.
 //! - **Four bars** for the CC lanes, each with its controller number, and
-//!   at the right the Clock's beat while clock goes out.
+//!   at the right the Clock's beat while the port sends clock (the Rig
+//!   sets that, for the port: #437).
 
 use eframe::egui::{self, Color32, Id, Pos2, Rect, Sense, Stroke, Vec2};
 use egui_node_graph2::NodeId;
 
 use crate::app::theme;
-use crate::link::midi::{PortStatus, MIDI, PORTS, PORT_LABELS};
+use crate::link::midi::{ClockMode, PortStatus, MIDI, PORTS, PORT_LABELS};
 use crate::modules::midi_out::CC_LANES;
 use crate::modules::MidiOut;
 
@@ -167,13 +168,14 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         );
     }
 
-    // --- The clock: four beat lamps, lit in turn while it goes out ---
-    let clock = values[MidiOut::READOUT_CLOCK];
+    // --- The clock: four beat lamps, lit in turn while the port sends it ---
+    let clock = MIDI.clock(port);
+    let ticking = live && clock != ClockMode::Off && values[MidiOut::READOUT_PLAYING] > 0.5;
     let beat = values[MidiOut::READOUT_BEAT].max(0.0) as usize;
     let clock_y = row.top() + 2.5 * z;
     for i in 0..4 {
         let at = Pos2::new(rect.right() - 30.0 * z + i as f32 * 7.0 * z, clock_y);
-        let on = clock > 1.5 && beat % 4 == i;
+        let on = ticking && beat % 4 == i;
         let color = if on {
             if i == 0 { accent } else { theme::text::SECONDARY }
         } else {
@@ -186,7 +188,7 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         egui::Align2::CENTER_TOP,
         "clock",
         tiny,
-        if clock > 0.5 { theme::text::SECONDARY } else { theme::text::DISABLED },
+        if clock != ClockMode::Off { theme::text::SECONDARY } else { theme::text::DISABLED },
     );
 
     let dropped = values[MidiOut::READOUT_DROPPED] > 0.0;
@@ -202,7 +204,11 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         _ => format!(
             "Playing port {} on channel {channel}: gates and pitch as notes, the CC lanes as controllers{}",
             PORT_LABELS[port],
-            if clock > 0.5 { ", and the Clock as MIDI clock" } else { "" }
+            match clock {
+                ClockMode::Off => ". The port sends no clock: the Rig (Ctrl+Shift+H) turns it on",
+                ClockMode::Transport => ". The port sends the Clock as MIDI clock, with Start and Stop",
+                ClockMode::ClockOnly => ". The port sends the Clock's ticks, without Start and Stop",
+            }
         ),
     });
 }

@@ -27,6 +27,7 @@
 //! the browser, which has no OSC, a timer sends MIDI Out ([`web_sender`]).
 
 pub mod midi;
+pub mod midi_clock;
 pub mod midi_sender;
 pub mod osc;
 #[cfg(not(target_arch = "wasm32"))]

@@ -46,13 +46,15 @@ Where MIDI clock carries the master's time down a cable, Link has every app keep
 
 ## Leading other gear
 
-It works the other way round too. Turn on **Clock** in a [MIDI Out](../modules/output/midi-out.md) and the patch's Clock becomes the master: a DAW, a drum machine or an arpeggiator set to follow MIDI clock plays in Soba's time. MIDI Out:
+It works the other way round too. Turn on a port's **Clock** in [the Rig](../getting-started/interface-overview.md#the-rig) and the patch's Clock becomes the master: a DAW, a drum machine or an arpeggiator on that port, set to follow MIDI clock, plays in Soba's time. The port, with **Clock + Transport**:
 
 - **sends Start** when the Clock starts from the top, or on the first downbeat after a count-in;
 - **sends 24 ticks per beat**, each placed on the beat to the sample, and sent as the audio beside it reaches your speakers, so the other gear and Soba's own sounds line up;
 - **sends Stop** when the Clock stops, and **Continue**, after a Song Position saying where, when it plays on from there.
 
-A follower measures the tempo from the ticks' spacing, so change the Clock's BPM and it follows. Don't send clock back to the gear the Clock follows: two clocks can't lead one another. A Clock playing in a Link session can lead MIDI gear, though. The same MIDI Out can also play the device's notes.
+With **Clock only** it sends the ticks alone, for gear that should follow the tempo but start and stop by itself. Each port also has an **Offset**, to line up gear that's slow to sound (see [MIDI Out](../modules/output/midi-out.md#how-it-works)).
+
+A follower measures the tempo from the ticks' spacing, so change the Clock's BPM and it follows. Don't send clock back to the gear the Clock follows: two clocks can't lead one another. A Clock playing in a Link session can lead MIDI gear, though. A [MIDI Out](../modules/output/midi-out.md) on the same port can also play the device's notes.
 
 ## Precision
 

@@ -589,7 +589,7 @@ static MODULE_UI: &[ModuleUi] = &[
         module_id: "output.midi",
         // Each CC lane's controller number, under the bar it fills
         knobs: &[knob_as("CC 1 #", "CC 1"), knob_as("CC 2 #", "CC 2"), knob_as("CC 3 #", "CC 3"), knob_as("CC 4 #", "CC 4")],
-        labels: &[("Channel", "Ch"), ("Send Clock", "Clock")],
+        labels: &[("Channel", "Ch")],
         display: NodeDisplay::MidiOutKeys,
         ..ModuleUi::DEFAULT
     },

@@ -706,7 +706,7 @@
     "output.midi": {
       "category": "Output",
       "color": "#7e57c2",
-      "height": 452.0,
+      "height": 434.0,
       "inputs": [
         {
           "name": "Pitch",

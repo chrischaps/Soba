@@ -21,6 +21,17 @@
 //! name without the number (see [`device_names`]), so the rig comes back
 //! after a reboot plugs it in a different order.
 //!
+//! **The patch's clock** (#437) comes from the engine on a ring of its own
+//! ([`midi_clock`](super::midi_clock)), and each port takes what its
+//! [`ClockMode`] wants of it, however many MIDI Outs play the port, or
+//! none. A port that starts sending the transport while the song plays is
+//! brought in on the next sixteenth, with the place and Continue; one that
+//! stops is sent Stop.
+//!
+//! **Offsets.** Each port's notes, CCs and clock go out its offset later
+//! than the audio beside them, or earlier, but only by as much as the
+//! output's delay: a message can't go before its block is made.
+//!
 //! **Ahead of time.** The desktop's thread wakes every millisecond and
 //! sends each message as it falls due. The browser has no thread, only a
 //! timer that a busy frame can hold up, so there the sender looks
@@ -35,7 +46,7 @@ use std::time::Duration;
 use rtrb::Consumer;
 use web_time::Instant;
 
-use super::midi::{Message, MidiBus, Outgoing, PortStatus, Traffic, ALL_NOTES_OFF, PORTS};
+use super::midi::{status, ClockMode, Message, MidiBus, Outgoing, PortStatus, Traffic, ALL_NOTES_OFF, PORTS};
 use crate::engine::device_names;
 
 /// How often messages are looked at while a MIDI Out runs. MIDI clock ticks
@@ -111,6 +122,8 @@ pub struct MidiSender {
     bus: &'static MidiBus,
     outputs: Box<dyn Outputs>,
     streams: Vec<Stream>,
+    /// The patch's clock, once the engine has made its ring.
+    clock: Option<ClockStream>,
     ports: [Port; PORTS],
     devices: Vec<String>,
     scanned_at: Option<Instant>,
@@ -133,6 +146,10 @@ struct Port {
     /// The latest moment a message was sent for. What lets go of notes
     /// goes after it.
     latest: Option<Instant>,
+    /// What it sends of the patch's clock, as last applied from the bus.
+    mode: ClockMode,
+    /// Whether its device has been sent Start or Continue, and not Stop since.
+    transport_on: bool,
 }
 
 /// One MIDI Out's ring, and what sending it remembers.
@@ -183,11 +200,82 @@ impl Stream {
     }
 }
 
+/// The patch's clock, and each port's share of it still to send.
+struct ClockStream {
+    /// Its ring and timing. Its `pending` and `held` go unused.
+    stream: Stream,
+    /// What each port has waiting, in the order it's due.
+    queues: [VecDeque<(u64, Message)>; PORTS],
+    /// The next tick's place, in ticks from the top, while the clock runs.
+    tick: Option<i64>,
+}
+
+impl ClockStream {
+    fn new(events: Consumer<Outgoing>) -> Self {
+        Self { stream: Stream::new(events), queues: Default::default(), tick: None }
+    }
+
+    /// Queues `message` for each port that wants it. A port that sends the
+    /// transport but missed the Start is brought in on the next sixteenth,
+    /// with where the song is and Continue, as a MIDI Out used to when it
+    /// started partway in. The ticks before then keep its tempo steady.
+    fn fan(&mut self, sample: u64, message: Message, ports: &mut [Port; PORTS]) {
+        let bytes = message.bytes();
+        match bytes[0] {
+            status::START => self.tick = Some(0),
+            status::SONG_POSITION => self.tick = Some((bytes[1] as i64 | (bytes[2] as i64) << 7) * 6),
+            status::STOP => self.tick = None,
+            _ => {}
+        }
+        for (port, queue) in ports.iter_mut().zip(&mut self.queues) {
+            if !port.mode.passes(&message) {
+                continue;
+            }
+            if port.mode == ClockMode::Transport {
+                match bytes[0] {
+                    status::CLOCK if !port.transport_on => {
+                        if let Some(tick) = self.tick.filter(|tick| tick % 6 == 0) {
+                            if tick == 0 {
+                                queue.push_back((sample, Message::real_time(status::START)));
+                            } else {
+                                queue.push_back((sample, Message::song_position((tick / 6).min(16383) as u16)));
+                                queue.push_back((sample, Message::real_time(status::CONTINUE)));
+                            }
+                            port.transport_on = true;
+                        }
+                    }
+                    status::START | status::CONTINUE => port.transport_on = true,
+                    status::STOP => port.transport_on = false,
+                    _ => {}
+                }
+            }
+            queue.push_back((sample, message));
+        }
+        if bytes[0] == status::CLOCK {
+            if let Some(tick) = &mut self.tick {
+                *tick += 1;
+            }
+        }
+    }
+}
+
+/// When a message due at `due` goes out on a port offset by `ms`: later by
+/// all of it, earlier by no more than `latency`, the output's delay, since
+/// a message can't go out before the block it belongs to is made.
+fn shifted(due: Instant, ms: f32, latency: Duration) -> Instant {
+    let by = Duration::from_secs_f32(ms.abs() / 1000.0);
+    if ms >= 0.0 {
+        due + by
+    } else {
+        due.checked_sub(by.min(latency)).unwrap_or(due)
+    }
+}
+
 impl MidiSender {
     /// A sender for `bus`, playing to `outputs`. The bus hands out rings from now on.
     pub fn new(bus: &'static MidiBus, outputs: Box<dyn Outputs>) -> Self {
         bus.start_draining();
-        Self { bus, outputs, streams: Vec::new(), ports: Default::default(), devices: Vec::new(), scanned_at: None, ahead: Duration::ZERO }
+        Self { bus, outputs, streams: Vec::new(), clock: None, ports: Default::default(), devices: Vec::new(), scanned_at: None, ahead: Duration::ZERO }
     }
 
     /// Sends each message up to `ahead` before it's due, stamped with when
@@ -200,6 +288,10 @@ impl MidiSender {
     /// Sends whatever is due, and says when to look again.
     pub fn tick(&mut self, now: Instant) -> Instant {
         self.streams.extend(self.bus.take_new_streams().into_iter().map(Stream::new));
+        if let Some(events) = self.bus.take_clock_stream() {
+            // The engine made a new one: the audio device changed
+            self.clock = Some(ClockStream::new(events));
+        }
         if self.bus.take_rescan() || self.scanned_at.is_none_or(|at| now.duration_since(at) >= SCAN_EVERY) {
             self.scanned_at = Some(now);
             self.devices = self.outputs.scan();
@@ -207,9 +299,12 @@ impl MidiSender {
         }
         self.follow_choices();
         self.find_devices();
+        self.follow_clock_modes(now);
 
         let latency = self.bus.latency();
-        let mut busy = false;
+        let offsets = self.bus.offsets();
+        // The clock first, so a Start goes before the notes on its beat
+        let mut busy = self.send_clock(now, latency, &offsets);
         let mut index = 0;
         while index < self.streams.len() {
             let gone = self.drain(index, now);
@@ -219,7 +314,7 @@ impl MidiSender {
             // sends what it left at once, then lets go of its notes
             let flush = gone || stale;
             while let Some(&(sample, message)) = stream.pending.front() {
-                let due = stream.due(sample, latency);
+                let due = stream.due(sample, latency).map(|due| shifted(due, offsets[stream.port], latency));
                 if !flush && due.is_none_or(|due| due > now + self.ahead) {
                     break;
                 }
@@ -243,7 +338,7 @@ impl MidiSender {
         self.report();
         now + if busy {
             TICK
-        } else if !self.streams.is_empty() {
+        } else if !self.streams.is_empty() || (self.clock.is_some() && self.ports.iter().any(|p| p.mode != ClockMode::Off)) {
             WAITING_TICK
         } else {
             IDLE_TICK
@@ -285,8 +380,76 @@ impl MidiSender {
             for stream in self.streams.iter_mut().filter(|s| s.port == index) {
                 Self::release(&mut self.ports[index], &mut self.outputs, &self.devices, &mut stream.held, now);
             }
-            self.ports[index] = Port { device, traffic: self.ports[index].traffic, ..Port::default() };
+            let port = &mut self.ports[index];
+            if std::mem::take(&mut port.transport_on) {
+                // The device it leaves stops; the new one comes in on a sixteenth
+                let at = port.after(now);
+                Self::send(port, &mut self.outputs, &self.devices, &mut [0; 16], Message::real_time(status::STOP), now, at);
+            }
+            self.ports[index] = Port { device, traffic: port.traffic, mode: port.mode, ..Port::default() };
         }
+    }
+
+    /// Takes up each port's clock setting. A port that stops sending the
+    /// transport while the clock runs is sent Stop, and what it had waiting
+    /// that it no longer wants goes.
+    fn follow_clock_modes(&mut self, now: Instant) {
+        let modes = self.bus.clock_modes();
+        let Self { ports, clock, outputs, devices, .. } = self;
+        for (index, (port, mode)) in ports.iter_mut().zip(modes).enumerate() {
+            if port.mode == mode {
+                continue;
+            }
+            if let Some(clock) = clock {
+                clock.queues[index].retain(|(_, message)| mode.passes(message));
+            }
+            if mode != ClockMode::Transport && std::mem::take(&mut port.transport_on) {
+                let at = port.after(now);
+                Self::send(port, outputs, devices, &mut [0; 16], Message::real_time(status::STOP), now, at);
+            }
+            port.mode = mode;
+        }
+    }
+
+    /// Takes in the patch's clock, shared out among the ports that want
+    /// it, and sends what's due on each. Returns whether it's running.
+    fn send_clock(&mut self, now: Instant, latency: Duration, offsets: &[f32; PORTS]) -> bool {
+        let Self { clock: slot, ports, outputs, devices, ahead, .. } = self;
+        let Some(clock) = slot.as_mut() else { return false };
+        while let Ok(event) = clock.stream.events.pop() {
+            match event {
+                Outgoing::Block { sample, at, rate, .. } => {
+                    clock.stream.learn(sample, at, rate);
+                    clock.stream.last_block = Some(now);
+                }
+                Outgoing::Message { sample, message } => clock.fan(sample, message, ports),
+            }
+        }
+        let gone = clock.stream.events.is_abandoned() && clock.stream.events.is_empty();
+        let stale = clock.stream.last_block.is_none_or(|at| now.duration_since(at) >= STALE);
+        let flush = gone || stale;
+        let mut none = [0u128; 16];
+        for (index, port) in ports.iter_mut().enumerate() {
+            let queue = &mut clock.queues[index];
+            while let Some(&(sample, message)) = queue.front() {
+                let due = clock.stream.due(sample, latency).map(|due| shifted(due, offsets[index], latency));
+                if !flush && due.is_none_or(|due| due > now + *ahead) {
+                    break;
+                }
+                queue.pop_front();
+                let at = if flush { port.after(now) } else { due.unwrap_or(now).max(now) };
+                Self::send(port, outputs, devices, &mut none, message, now, at);
+            }
+            if flush && std::mem::take(&mut port.transport_on) {
+                // The audio stopped, or the engine went: the device stops too
+                let at = port.after(now);
+                Self::send(port, outputs, devices, &mut none, Message::real_time(status::STOP), now, at);
+            }
+        }
+        if gone {
+            *slot = None;
+        }
+        !flush
     }
 
     /// Finds each port's device among those plugged in, by name or by the
@@ -316,7 +479,7 @@ impl MidiSender {
         port.latest = Some(port.latest.map_or(at, |latest| latest.max(at)));
         if let Some(connection) = Self::connection(port, outputs, devices, now) {
             match connection.send_at(message.bytes(), at) {
-                Ok(()) if message.is_real_time() && message.bytes()[0] == super::midi::status::CLOCK => {
+                Ok(()) if message.is_real_time() && message.bytes()[0] == status::CLOCK => {
                     port.traffic.clocks = port.traffic.clocks.wrapping_add(1);
                 }
                 Ok(()) if message.is_real_time() => {}
@@ -371,8 +534,10 @@ impl MidiSender {
 
     /// Tells each MIDI Out's face, and the Rig panel, how its port is doing.
     fn report(&mut self) {
+        let clocked = self.clock.as_ref().is_some_and(|clock| clock.stream.last_block.is_some());
         for (index, port) in self.ports.iter_mut().enumerate() {
-            let used = self.streams.iter().any(|s| s.port == index && s.last_block.is_some());
+            // A port with no MIDI Out still sends the clock
+            let used = self.streams.iter().any(|s| s.port == index && s.last_block.is_some()) || (clocked && port.mode != ClockMode::Off);
             self.bus.set_traffic(index, port.traffic);
             let status = if !used {
                 PortStatus::Idle
@@ -436,7 +601,6 @@ impl Connection for midir::MidiOutputConnection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::link::midi::status;
     use std::sync::{Arc, Mutex};
 
     /// What a test's outputs were sent: (device, bytes, when).
@@ -702,6 +866,135 @@ mod tests {
         let traffic = bus.traffic(0);
         assert_eq!((traffic.messages, traffic.clocks), (1, 2));
         assert_eq!(traffic.last, Some(Message::note_on(1, 62, 80)), "clock doesn't hide the note");
+    }
+
+    /// A sender playing "Synth" on port A and "DAW" on port B, each port's
+    /// clock as `modes` says, and the engine's clock ring.
+    fn clocked(modes: [ClockMode; 2]) -> (&'static MidiBus, MidiSender, Log, rtrb::Producer<Outgoing>) {
+        let (bus, sender, log) = setup(false);
+        bus.choose(1, Some("DAW"));
+        bus.set_clock(0, modes[0]);
+        bus.set_clock(1, modes[1]);
+        let clock = bus.open_clock_stream().unwrap();
+        (bus, sender, log, clock)
+    }
+
+    /// What `device` was sent: its bytes.
+    fn sent_to(log: &Log, device: &str) -> Vec<Vec<u8>> {
+        log.lock().unwrap().iter().filter(|(d, _, _)| d == device).map(|(_, bytes, _)| bytes.clone()).collect()
+    }
+
+    fn real_time(byte: u8) -> Outgoing {
+        Outgoing::Message { sample: 0, message: Message::real_time(byte) }
+    }
+
+    #[test]
+    fn the_clock_goes_once_to_each_port_that_wants_it() {
+        let (bus, mut sender, log, mut clock) = clocked([ClockMode::Transport, ClockMode::ClockOnly]);
+        bus.choose(2, Some("Synth"));
+        let start = Instant::now();
+        clock.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        for byte in [status::START, status::CLOCK, status::CLOCK, status::STOP] {
+            clock.push(real_time(byte)).unwrap();
+        }
+        // Two MIDI Outs on port A: their notes, and no clock of their own
+        let mut rings: Vec<_> = (0..2).map(|_| bus.open_stream().unwrap()).collect();
+        for (k, ring) in rings.iter_mut().enumerate() {
+            ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+            ring.push(Outgoing::Message { sample: 0, message: Message::note_on(0, 60 + k as u8, 90) }).unwrap();
+        }
+        sender.tick(start);
+        let synth = sent_to(&log, "Synth");
+        assert_eq!(synth.iter().filter(|m| m[..] == [status::CLOCK]).count(), 2, "once, however many MIDI Outs");
+        assert_eq!(synth[0], [status::START], "the Start before the notes on its beat");
+        assert!(synth.contains(&vec![status::STOP]));
+        assert_eq!(sent_to(&log, "DAW"), [[status::CLOCK], [status::CLOCK]], "no MIDI Out, still clock; and only clock");
+        assert_eq!(bus.status(1), PortStatus::Sending);
+        assert_eq!(bus.status(2), PortStatus::Idle, "port C's clock is off");
+    }
+
+    #[test]
+    fn an_offset_moves_a_ports_notes_and_clock_and_no_others() {
+        let (bus, sender, log, mut clock) = clocked([ClockMode::Transport, ClockMode::Transport]);
+        let mut sender = sender.ahead(Duration::from_millis(200));
+        bus.set_offset(0, 10.0);
+        let start = Instant::now();
+        clock.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        clock.push(Outgoing::Message { sample: 0, message: Message::real_time(status::START) }).unwrap();
+        // 50 ms in
+        clock.push(Outgoing::Message { sample: 2_400, message: Message::real_time(status::CLOCK) }).unwrap();
+        let mut rings = Vec::new();
+        for port in 0..2u8 {
+            let mut ring = bus.open_stream().unwrap();
+            ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port }).unwrap();
+            ring.push(Outgoing::Message { sample: 2_400, message: Message::note_on(0, 60, 90) }).unwrap();
+            rings.push(ring);
+        }
+        sender.tick(start);
+        let log = log.lock().unwrap();
+        let when = |device: &str, byte: u8| log.iter().find(|(d, b, _)| d == device && b[0] == byte).map(|(_, _, at)| *at - start).unwrap();
+        let ms = Duration::from_millis;
+        assert_eq!((when("Synth", 0x90), when("Synth", status::CLOCK)), (ms(60), ms(60)), "10 ms later, together");
+        assert_eq!((when("DAW", 0x90), when("DAW", status::CLOCK)), (ms(50), ms(50)), "port B as it was");
+    }
+
+    #[test]
+    fn an_early_offset_goes_no_earlier_than_the_output_delay() {
+        let (bus, sender, log, _clock) = clocked([ClockMode::Off, ClockMode::Off]);
+        let mut sender = sender.ahead(Duration::from_millis(200));
+        bus.set_latency(Some(Duration::from_millis(5)));
+        bus.set_offset(0, -20.0);
+        assert_eq!(bus.earliest(), -5.0);
+        let mut ring = bus.open_stream().unwrap();
+        let start = Instant::now();
+        ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        ring.push(Outgoing::Message { sample: 2_400, message: Message::note_on(0, 60, 90) }).unwrap();
+        sender.tick(start);
+        assert_eq!(log.lock().unwrap()[0].2 - start, Duration::from_millis(50), "heard at 55, sent 5 early");
+    }
+
+    #[test]
+    fn a_port_joining_the_song_comes_in_on_a_sixteenth() {
+        let (bus, mut sender, log, mut clock) = clocked([ClockMode::Off, ClockMode::Off]);
+        let start = Instant::now();
+        clock.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        clock.push(real_time(status::START)).unwrap();
+        for _ in 0..3 {
+            clock.push(real_time(status::CLOCK)).unwrap();
+        }
+        sender.tick(start);
+        bus.set_clock(0, ClockMode::Transport);
+        clock.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        // Ticks 3 to 7: the sixth, a sixteenth, is tick 6
+        for _ in 3..8 {
+            clock.push(real_time(status::CLOCK)).unwrap();
+        }
+        sender.tick(start + TICK);
+        let place = Message::song_position(1).bytes().to_vec();
+        let tick = vec![status::CLOCK];
+        assert_eq!(sent_to(&log, "Synth"), [tick.clone(), tick.clone(), tick.clone(), place, vec![status::CONTINUE], tick.clone(), tick]);
+    }
+
+    #[test]
+    fn leaving_the_transport_stops_the_device() {
+        let (bus, mut sender, log, mut clock) = clocked([ClockMode::Transport, ClockMode::Off]);
+        let start = Instant::now();
+        clock.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        clock.push(real_time(status::START)).unwrap();
+        clock.push(real_time(status::CLOCK)).unwrap();
+        sender.tick(start);
+        bus.set_clock(0, ClockMode::ClockOnly);
+        clock.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        clock.push(real_time(status::CLOCK)).unwrap();
+        sender.tick(start + TICK);
+        assert_eq!(sent_to(&log, "Synth"), [[status::START], [status::CLOCK], [status::STOP], [status::CLOCK]]);
+        // And a clock that goes quiet (the audio stopped) stops a device that runs
+        bus.set_clock(0, ClockMode::Transport);
+        clock.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        clock.push(real_time(status::START)).unwrap();
+        sender.tick(start + TICK * 2);
+        sender.tick(start + TICK * 2 + STALE);
+        assert_eq!(sent_to(&log, "Synth").last().unwrap(), &[status::STOP]);
     }
 
     #[test]
