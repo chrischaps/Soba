@@ -306,7 +306,7 @@ The [Hands On](../recipes/hands-on.md) example puts all of this to work on an Ar
 
 Mapping is for a patch you've finished. While you're building one, you want the encoders under your hand to be the knobs of whatever you're working on: click an oscillator and they turn its knobs, click a filter and they turn the filter's. That's **Hands Follow Selection**.
 
-**Teach Soba your controller first.** You do this once per controller. Choose **Teach Your Controller…** in the **MIDI In** menu, and the status bar walks you through it. With several devices open, it teaches the first one ticked, and once one is taught, the hands follow that one:
+**Teach Soba your controller first.** You do this once per controller. Choose **Teach Your Controller…** in the **MIDI In** menu, and the status bar walks you through it. With several devices open, it teaches the one whose encoder you turn first, and keeps what it learns under that device's name. The hands then stay on the controller you taught last, for as long as it's open:
 
 1. "Turn encoder 1 a few clicks". Turn the first encoder a few clicks in one direction, at any speed. The status bar says what it heard (`Encoder 1 is CC 74 · ch 1, endless`) and asks for the next one, through encoder 8.
 2. "Move fader 1". Move each fader in turn, through fader 4.

@@ -16,10 +16,9 @@ impl SynthApp {
     /// puts the badges on them. With a group selected, the knobs pinned to
     /// its face; with several things selected, the first.
     pub(super) fn follow_hands(&mut self, now: f64) {
-        // With several devices open, the first taught (#435)
+        // With several devices open, the one being taught, or taught (#435, #454)
         let open = self.midi.open_names();
-        let device = self.midi.hands.choose_device(&open).map(str::to_string);
-        self.midi.hands.set_device(device.as_deref());
+        self.midi.hands.follow_devices(&open);
         self.midi.hands.held_back = self.map_mode_on() || self.is_midi_learning();
         let targets = if self.midi.hands.active() { self.hand_targets() } else { Vec::new() };
         if self.midi.hands.follow(&targets) {
@@ -110,7 +109,9 @@ impl SynthApp {
     /// move next, and the keys.
     pub(super) fn teach_status(&self) -> Option<String> {
         let teaching = self.midi.hands.teaching()?;
-        let device = Some(self.midi.hands.device()).filter(|d| !d.is_empty()).unwrap_or("your controller");
+        // With several open, the one turned first is taught (#454)
+        let any = if teaching.device().is_none() && self.midi.open_names().len() > 1 { "the controller you turn first" } else { "your controller" };
+        let device = Some(self.midi.hands.device()).filter(|d| !d.is_empty()).unwrap_or(any);
         Some(format!("Teaching {device} · {} · Tab skips, Enter finishes, Esc cancels", teaching.prompt()))
     }
 }

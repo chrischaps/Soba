@@ -391,10 +391,11 @@ impl MidiSession {
 
     /// Takes every event waiting, and the notes the UI played, handing
     /// each to `each` (the MIDI Monitor's log) as it's heard, with the
-    /// name of the device it came from (`None` for Soba's own). `current`
+    /// input it came in on and the name of its device (`SOBA_PORT` and
+    /// `None` for Soba's own). `current`
     /// gives where a parameter stands, which a toggle flips, a dropdown
     /// steps on from, an encoder turns from and a fader picks up.
-    pub fn drain(&mut self, mut each: impl FnMut(MidiEvent, Option<&str>), current: impl Fn(u64, usize) -> Option<Standing>) -> Heard {
+    pub fn drain(&mut self, mut each: impl FnMut(MidiEvent, u8, Option<&str>), current: impl Fn(u64, usize) -> Option<Standing>) -> Heard {
         let mut heard = Heard::default();
         // Named once: the inputs don't open or close while this drains
         let names: [Option<String>; MIDI_INPUTS] =
@@ -406,13 +407,13 @@ impl MidiSession {
                     traffic.count = traffic.count.wrapping_add(1);
                     traffic.last = Some(timestamped.event);
                 }
-                each(timestamped.event, device);
+                each(timestamped.event, timestamped.port, device);
                 self.hear_from(timestamped.port, device, timestamped.event, &mut heard, &current);
             }
             self.events = Some(events);
         }
         for event in std::mem::take(&mut self.played) {
-            each(event, None);
+            each(event, SOBA_PORT, None);
             self.hear(event, &mut heard, &current);
         }
         heard
@@ -429,7 +430,7 @@ impl MidiSession {
     pub fn hear_from(&mut self, port: u8, device: Option<&str>, event: MidiEvent, heard: &mut Heard, current: &impl Fn(u64, usize) -> Option<Standing>) {
         let (source, number, channel, input) = match event {
             MidiEvent::NoteOn { channel, note, velocity } => {
-                if !self.held.iter().any(|&(n, _)| n == note) && !self.claims.claims(channel, note) {
+                if !self.held.iter().any(|&(n, _)| n == note) && !self.claims.claims(port, channel, note) {
                     self.held.push((note, velocity));
                     self.held_on.push(port);
                     heard.notes_changed = true;
@@ -458,11 +459,12 @@ impl MidiSession {
                 listening.hear(channel, number, value);
             }
         }
-        // The hands are one controller's: another device's CCs pass them by
-        let for_hands = device.is_none_or(|device| device_names::same(device, self.hands.device()));
+        // The hands are one controller's: another device's CCs pass them by,
+        // unless Soba is taught whichever moves first (#454)
+        let for_hands = self.hands.hears_device(device);
         // While Soba is taught the controller, its CCs are for that alone (#429)
         if let (MidiInput::Cc(value), Some(_), true) = (input, self.hands.teaching(), for_hands) {
-            self.hands.hear(number, channel, value, current, &mut heard.turns);
+            self.hands.hear_from(device, number, channel, value, current, &mut heard.turns);
             return;
         }
         if self.learn_into(&event, heard) {
@@ -511,7 +513,7 @@ impl MidiSession {
         // A taught control turns the selection's knob while the hands follow,
         // and the patch's mappings on it pause
         if let (MidiInput::Cc(value), true) = (input, for_hands) {
-            if self.hands.hear(number, channel, value, current, &mut heard.turns) {
+            if self.hands.hear_from(device, number, channel, value, current, &mut heard.turns) {
                 return;
             }
         }
@@ -680,11 +682,11 @@ mod tests {
         session.play_note(60, false);
 
         let mut logged = Vec::new();
-        let heard = session.drain(|event, _| logged.push(event), |_, _| None);
+        let heard = session.drain(|event, _, _| logged.push(event), |_, _| None);
         assert!(heard.notes_changed);
         assert_eq!(logged.len(), 3, "the MIDI Monitor logs them");
         assert_eq!(session.held(), [(64, crate::engine::UI_VELOCITY)]);
-        assert_eq!(session.drain(|_, _| {}, |_, _| None), Heard::default(), "heard once");
+        assert_eq!(session.drain(|_, _, _| {}, |_, _| None), Heard::default(), "heard once");
 
         let sent: Vec<_> = std::iter::from_fn(|| audio.pop().ok()).map(|e| e.event).collect();
         assert!(matches!(sent[..], [
@@ -724,12 +726,23 @@ mod tests {
     #[test]
     fn a_pads_notes_arent_held_for_the_pianos_but_still_learn() {
         let mut session = MidiSession::default();
-        session.claims.claim(Some(9), 36);
+        session.claims.claim(crate::dsp::ListenTo::Any, Some(9), 36);
         hear(&mut session, &[MidiEvent::NoteOn { channel: 9, note: 36, velocity: 100 }, MidiEvent::NoteOn { channel: 0, note: 36, velocity: 90 }]);
         assert_eq!(session.held(), [(36, 90)], "the same note on another channel is a key");
         // A learn still hears the pad
         session.start_learn(target(3));
         assert!(hear(&mut session, &[MidiEvent::NoteOn { channel: 9, note: 36, velocity: 100 }]).learned);
+    }
+
+    #[test]
+    fn a_pads_on_one_device_leaves_another_devices_notes_for_the_pianos() {
+        let mut session = MidiSession::default();
+        session.claims.claim(crate::dsp::ListenTo::Port(0), Some(9), 36);
+        let (mut heard, none) = (Heard::default(), |_: u64, _: usize| None);
+        session.hear_from(0, Some("MiniLab3 MIDI"), MidiEvent::NoteOn { channel: 9, note: 36, velocity: 100 }, &mut heard, &none);
+        assert!(session.held().is_empty(), "the MiniLab's pad is the Pads'");
+        session.hear_from(1, Some("Fantom-06"), MidiEvent::NoteOn { channel: 9, note: 36, velocity: 80 }, &mut heard, &none);
+        assert_eq!(session.held(), [(36, 80)], "the Fantom's same note is a key");
     }
 
     #[test]
@@ -929,6 +942,26 @@ mod tests {
         assert_eq!(heard.turns, [(7, 0, 100.0), (8, 0, 1.0)]);
     }
 
+    /// Teaching with two devices open hears both, until one's encoder is
+    /// taken; then the other's CCs are the patch's again (#454).
+    #[test]
+    fn teaching_takes_the_device_whose_encoder_is_turned_first() {
+        let mut session = MidiSession::default();
+        session.open(vec![MidiMapping::new(74, 0, 8, 0, "Res", 0.0, 1.0)]);
+        session.hands.start_teaching();
+        let none = |_: u64, _: usize| None;
+        let mut heard = Heard::default();
+        for _ in 0..4 {
+            session.hear_from(1, Some("Fantom-06"), cc(0, 16, 1), &mut heard, &none);
+        }
+        assert!(heard.turns.is_empty(), "the Fantom's encoder is taught");
+        assert_eq!(session.hands.teaching().and_then(|t| t.device()), Some("Fantom-06"));
+        assert_eq!(session.hands.device(), "Fantom-06");
+        // The MiniLab's CC 74 turns the patch's mapping again
+        session.hear_from(0, Some("MiniLab3 MIDI"), cc(0, 74, 127), &mut heard, &none);
+        assert_eq!(heard.turns, [(8, 0, 1.0)]);
+    }
+
     #[test]
     fn a_device_listened_to_for_its_profile_is_heard_and_its_cc_still_turns() {
         let mut session = MidiSession::default();
@@ -966,7 +999,7 @@ mod tests {
             producer.push(TimestampedMidiEvent::heard(0, event)).unwrap();
         }
         let mut logged = Vec::new();
-        let heard = session.drain(|event, _| logged.push(event), |_, _| None);
+        let heard = session.drain(|event, _, _| logged.push(event), |_, _| None);
         assert_eq!(logged.len(), 2);
         assert!(heard.notes_changed);
         assert!(session.events.is_some());

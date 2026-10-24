@@ -731,13 +731,13 @@ impl SynthApp {
         self.follow_midi_listening();
         self.follow_hands(now);
         // The pads' notes, which the pianos and their ears leave be (#428)
-        let claims = crate::graph::pads_claims(&self.graph_state.graph);
+        let claims = crate::graph::pads_claims(&self.graph_state.graph, |name| self.midi.slot_of(name));
         self.midi.claims = claims;
         self.user_state.note_claims = claims;
         let standings = self.midi_standings();
         let was_learning = self.is_midi_learning();
         let (user_state, overlay) = (&mut self.user_state, &mut self.hands_overlay);
-        let heard = self.midi.drain(|event, device| { user_state.push_midi_event(event, device, now); overlay.hear(event, now) }, |node, param| standings.get(&(node, param)).copied());
+        let heard = self.midi.drain(|event, port, device| { user_state.push_midi_event(event, port, device, now); overlay.hear(event, now) }, |node, param| standings.get(&(node, param)).copied());
         self.show_midi_pickups(now);
 
         if heard.learned {

@@ -710,14 +710,14 @@ impl SynthGraphState {
     /// `now` is the UI's clock (egui's input time), which a capture steps
     /// frame by frame, so a filmed log reads the same every time.
     /// Only the most recent MAX_MIDI_EVENTS are kept.
-    pub fn push_midi_event(&mut self, event: MidiEvent, device: Option<&str>, now: f64) {
+    pub fn push_midi_event(&mut self, event: MidiEvent, port: u8, device: Option<&str>, now: f64) {
         let first = *self.midi_first_event_time.get_or_insert(now);
         let timestamp = (now - first) as f32;
 
         self.midi_events.push_back(DisplayMidiEvent { event, timestamp, device: device.map(str::to_string) });
         // A pad's notes aren't for the ears
         match event {
-            MidiEvent::NoteOn { channel, note, .. } | MidiEvent::NoteOff { channel, note, .. } if self.note_claims.claims(channel, note) => {}
+            MidiEvent::NoteOn { channel, note, .. } | MidiEvent::NoteOff { channel, note, .. } if self.note_claims.claims(port, channel, note) => {}
             MidiEvent::NoteOn { note, velocity, .. } => self.push_midi_note(note, velocity),
             MidiEvent::NoteOff { note, .. } => self.push_midi_note(note, 0),
             _ => {}
@@ -922,29 +922,34 @@ mod tests {
 
     #[test]
     fn midi_notes_are_kept_in_order_past_the_monitors_few() {
+        use crate::dsp::SOBA_PORT;
         let mut state = SynthGraphState::default();
         let seen = state.midi_note_count();
         // A note tapped and let go between frames, among more events than a
         // MIDI Monitor keeps
         for controller in 0..20 {
-            state.push_midi_event(MidiEvent::ControlChange { channel: 0, controller, value: 64 }, None, 0.0);
+            state.push_midi_event(MidiEvent::ControlChange { channel: 0, controller, value: 64 }, SOBA_PORT, None, 0.0);
         }
-        state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 60, velocity: 40 }, None, 0.0);
-        state.push_midi_event(MidiEvent::NoteOff { channel: 0, note: 60, velocity: 64 }, None, 0.0);
+        state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 60, velocity: 40 }, SOBA_PORT, None, 0.0);
+        state.push_midi_event(MidiEvent::NoteOff { channel: 0, note: 60, velocity: 64 }, SOBA_PORT, None, 0.0);
         assert_eq!(state.midi_notes_since(seen), vec![(60, 40), (60, 0)]);
         assert_eq!(state.midi_notes_since(state.midi_note_count()), vec![]);
         // Only as many as are kept
         for _ in 0..MAX_MIDI_NOTES {
-            state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 61, velocity: 90 }, None, 0.0);
+            state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 61, velocity: 90 }, SOBA_PORT, None, 0.0);
         }
         assert_eq!(state.midi_notes_since(seen).len(), MAX_MIDI_NOTES);
 
         // A pad's notes aren't for the ears (#428)
-        state.note_claims.claim(Some(9), 36);
+        state.note_claims.claim(crate::dsp::ListenTo::Port(0), Some(9), 36);
         let seen = state.midi_note_count();
-        state.push_midi_event(MidiEvent::NoteOn { channel: 9, note: 36, velocity: 90 }, None, 0.0);
-        state.push_midi_event(MidiEvent::NoteOff { channel: 9, note: 36, velocity: 0 }, None, 0.0);
+        state.push_midi_event(MidiEvent::NoteOn { channel: 9, note: 36, velocity: 90 }, 0, Some("MiniLab3"), 0.0);
+        state.push_midi_event(MidiEvent::NoteOff { channel: 9, note: 36, velocity: 0 }, 0, Some("MiniLab3"), 0.0);
         assert_eq!(state.midi_notes_since(seen), vec![]);
+        // Another device's same note is (#454)
+        state.push_midi_event(MidiEvent::NoteOn { channel: 9, note: 36, velocity: 80 }, 1, Some("Fantom-06"), 0.0);
+        assert_eq!(state.midi_notes_since(seen), vec![(36, 80)]);
+        state.push_midi_event(MidiEvent::NoteOff { channel: 9, note: 36, velocity: 0 }, 1, Some("Fantom-06"), 0.0);
         assert!(matches!(state.midi_events().back().map(|e| e.event), Some(MidiEvent::NoteOff { channel: 9, .. })), "though the MIDI Monitor logs them");
     }
 

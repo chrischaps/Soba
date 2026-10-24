@@ -53,12 +53,14 @@ pub fn params_of(graph: &SynthGraph, node_id: NodeId) -> Vec<f32> {
 }
 
 /// The notes every Pads module in `graph` claims (#428), for the UI to
-/// leave off the pianos and their ears as the engine leaves them off Note In.
-pub fn note_claims(graph: &SynthGraph) -> NoteClaims {
+/// leave off the pianos and their ears as the engine leaves them off Note
+/// In: each from its Device (#454), given the slot of each input open.
+pub fn note_claims(graph: &SynthGraph, slot_of: impl Fn(&str) -> Option<u8>) -> NoteClaims {
     let mut claims = NoteClaims::EMPTY;
     for (node_id, node) in graph.nodes.iter() {
         if node.user_data.module_id == pads::ID {
-            pads::claim_notes(&params_of(graph, node_id), &mut claims);
+            let device = super::midi_device::listen_to(super::midi_device::device(&node.user_data), &slot_of);
+            pads::claim_notes(&params_of(graph, node_id), device, &mut claims);
         }
     }
     claims

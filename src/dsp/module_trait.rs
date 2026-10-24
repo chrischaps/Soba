@@ -442,12 +442,13 @@ pub trait DspModule: Send + 'static {
     }
 
     /// How a module that claims notes (Pads, #428) works out which, from
-    /// its parameters, so a Note In on Omni skips them (see
-    /// [`NoteClaims`](super::NoteClaims)). The plan calls it every block,
-    /// on the audio thread, so a learned note is claimed from the next.
+    /// its parameters and the device it listens to (#454), so a Note In on
+    /// Omni skips them (see [`NoteClaims`](super::NoteClaims)). The plan
+    /// calls it every block, on the audio thread, so a learned note is
+    /// claimed from the next.
     ///
     /// Returns `None` for modules that claim none.
-    fn note_claims(&self) -> Option<fn(&[f32], &mut super::NoteClaims)> {
+    fn note_claims(&self) -> Option<super::ClaimNotes> {
         None
     }
 

@@ -29,7 +29,7 @@ use crate::dsp::{
     port::PortDefinition,
     primitives::rate_for_seconds,
     signal::SignalBuffer,
-    MidiEvent, MidiMessage, NoteClaims, ParameterDisplay, SignalType, KEYS_CHANNEL, MAX_CHANNELS,
+    ListenTo, MidiEvent, MidiMessage, NoteClaims, ParameterDisplay, SignalType, KEYS_CHANNEL, MAX_CHANNELS,
 };
 
 /// The module's ID, as patches name it.
@@ -149,14 +149,15 @@ pub fn listens(params: &[f32]) -> [Listen; PADS] {
     })
 }
 
-/// Claims the notes a Pads module with `params` listens to, so an Omni
-/// Note In skips them. It's how the engine and the UI both work them out.
+/// Claims the notes a Pads module with `params`, set to hear `device`,
+/// listens to, so an Omni Note In skips them: from that device alone
+/// (#454). It's how the engine and the UI both work them out.
 ///
 /// REAL-TIME SAFE.
-pub fn claim_notes(params: &[f32], claims: &mut NoteClaims) {
+pub fn claim_notes(params: &[f32], device: ListenTo, claims: &mut NoteClaims) {
     for listen in listens(params) {
         if let Some(note) = listen.note {
-            claims.claim(listen.channel.checked_sub(1), note);
+            claims.claim(device, listen.channel.checked_sub(1), note);
         }
     }
 }
@@ -465,7 +466,7 @@ impl DspModule for Pads {
         true
     }
 
-    fn note_claims(&self) -> Option<fn(&[f32], &mut NoteClaims)> {
+    fn note_claims(&self) -> Option<crate::dsp::ClaimNotes> {
         Some(claim_notes)
     }
 
@@ -830,9 +831,14 @@ mod tests {
         params[Pads::note_param(7)] = 70.0;
         params[Pads::channel_param(7)] = 0.0;
         let mut claims = NoteClaims::EMPTY;
-        claim_notes(&params, &mut claims);
-        assert!((36..43).all(|note| claims.claims(TEN, note)));
-        assert!(!claims.claims(TEN, 43) && !claims.claims(0, 36));
-        assert!((0..16).all(|channel| claims.claims(channel, 70)), "pad 8 on Omni claims its note everywhere");
+        claim_notes(&params, ListenTo::Any, &mut claims);
+        assert!((36..43).all(|note| claims.claims(0, TEN, note)));
+        assert!(!claims.claims(0, TEN, 43) && !claims.claims(0, 0, 36));
+        assert!((0..16).all(|channel| claims.claims(0, channel, 70)), "pad 8 on Omni claims its note everywhere");
+
+        // Set to one device, the claims are that device's (#454)
+        let mut claims = NoteClaims::EMPTY;
+        claim_notes(&params, ListenTo::Port(1), &mut claims);
+        assert!(claims.claims(1, TEN, 36) && !claims.claims(0, TEN, 36));
     }
 }

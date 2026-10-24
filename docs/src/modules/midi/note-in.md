@@ -94,6 +94,8 @@ The Device is saved with the patch, by the device's name, so the patch finds it 
 
 A [Pads](./pads.md) module claims the notes its pads listen to, on their channel: by default notes 36 to 43 on channel 10, which most pad controllers send. A Note In on Omni skips those notes, so hitting a pad plays its drum and not the synth as well. The piano doesn't light for them either.
 
+A Pads set to one **Device** claims that device's notes alone. With the Pads on the pad controller, a keyboard's note 36 on channel 10 still plays the synth.
+
 A Note In set to a channel hears all of that channel's notes, claimed or not. Set **Ch** to the pads' channel to play notes from the pads too. The computer keys and the piano are never claimed.
 
 ## How notes become CV
@@ -103,7 +105,7 @@ A Note In set to a channel hears all of that channel's notes, claimed or not. Se
 - **Pitch bend** moves **Pitch** by up to ±**Bend** semitones. It glides over about 5 ms between the wheel's steps, so bends never zipper.
 - **Channel pressure** appears on **Aftertouch**.
 - **The sustain pedal** (CC 64) holds notes after their keys come up. Lifting it releases them all.
-- **All Notes Off** (CC 123) and **All Sound Off** (CC 120) release everything, pedal or not.
+- **All Notes Off** (CC 123) and **All Sound Off** (CC 120) release every note the device that sent them is playing, pedal or not, and lift its pedal. Soba sends one when a device is closed or unplugged, so a Note In on **Any** lets go of that device's notes and plays on with the others'. From a DAW, they release everything.
 
 Each semitone is 1/12 on **Pitch**, so MIDI note 72 (C5) is +1.0 and note 48 (C3) is −1.0. With every tune knob at 0, the [Oscillator](../sources/oscillator.md) plays C4 at 0.0, so Note In plays it in tune with nothing to set.
 
@@ -225,7 +227,7 @@ Note In takes the place of three modules: Keyboard (the computer keys, one voice
 
 **Wrong pitch.** Check **Oct**, and that the pitch bend wheel is centered.
 
-**Stuck note.** Send All Notes Off from your controller, or select the device again in **MIDI In**. Either releases every held note.
+**Stuck note.** Send All Notes Off from your controller, or select the device again in **MIDI In**. Either releases every note held from that device.
 
 ## Related modules
 

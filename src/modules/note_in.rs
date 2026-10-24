@@ -15,6 +15,10 @@
 //! never also plays the synth. Set to a channel, it hears all of that
 //! channel's notes, claimed or not.
 //!
+//! Each voice remembers the input its note came in on, so an All Notes Off
+//! from one device (sent as it's unplugged) ends only that device's notes
+//! (#454). One from Soba itself (a DAW's, say) ends them all.
+//!
 //! It was Poly MIDI, and keeps its ID, so Poly MIDI patches open as they
 //! were. Keyboard and MIDI Note patches open as Note In with one voice (see
 //! `persistence::patch`).
@@ -26,7 +30,7 @@ use crate::dsp::{
     port::PortDefinition,
     primitives::{glide_parameters, rate_for_seconds, Glide, GlideMode},
     signal::SignalBuffer,
-    MidiEvent, MidiMessage, ParameterDisplay, SignalType, KEYS_CHANNEL, MAX_CHANNELS,
+    MidiEvent, MidiMessage, ParameterDisplay, SignalType, KEYS_CHANNEL, MAX_CHANNELS, SOBA_PORT,
 };
 
 /// CC 64, the sustain pedal.
@@ -134,6 +138,8 @@ struct Voice {
     glide: Glide,
     /// The note's velocity (0.0-1.0).
     velocity: f32,
+    /// The input the note came in on (see [`MidiEvent::port`]).
+    port: u8,
     /// The key is down.
     held: bool,
     /// The key is up but the sustain pedal holds the note.
@@ -155,6 +161,7 @@ impl Voice {
         note: 60,
         glide: Glide::NEW,
         velocity: 0.0,
+        port: SOBA_PORT,
         held: false,
         sustained: false,
         started: 0,
@@ -187,6 +194,8 @@ impl Voice {
 struct Key {
     note: u8,
     velocity: f32,
+    /// The input it came in on.
+    port: u8,
     /// Let go, but held by the sustain pedal.
     sustained: bool,
 }
@@ -299,6 +308,8 @@ pub struct NoteIn {
     clock: u64,
     /// Whether the sustain pedal is down.
     pedal: bool,
+    /// The input the pedal was last pressed on.
+    pedal_port: u8,
     /// Channel pressure (0.0-1.0).
     aftertouch: f32,
     /// Pitch bend as last received (-1.0 to 1.0).
@@ -348,6 +359,7 @@ impl NoteIn {
             next: 0,
             clock: 0,
             pedal: false,
+            pedal_port: SOBA_PORT,
             aftertouch: 0.0,
             bend_target: 0.0,
             bend: 0.0,
@@ -406,9 +418,9 @@ impl NoteIn {
             MidiMessage::NoteOn { note, velocity } if velocity > 0 => {
                 let velocity = if event.channel == KEYS_CHANNEL { key_velocity } else { velocity as f32 / 127.0 };
                 if play.count == 1 {
-                    self.mono_note_on(note, velocity, play);
+                    self.mono_note_on(note, velocity, event.port, play);
                 } else {
-                    self.note_on(note, velocity, play);
+                    self.note_on(note, velocity, event.port, play);
                 }
             }
             // Note On at velocity 0 is a Note Off
@@ -427,19 +439,13 @@ impl NoteIn {
             }
             MidiMessage::ControlChange { controller: SUSTAIN_PEDAL, value } => {
                 self.pedal = value >= 64;
-                if !self.pedal {
-                    let now = self.tick();
-                    for voice in self.voices.iter_mut().filter(|voice| voice.sustained) {
-                        voice.sustained = false;
-                        voice.freed = now;
-                    }
-                    self.mono.keys.retain(|key| !key.sustained);
-                    if play.count == 1 {
-                        self.choose_mono_note(play);
-                    }
+                if self.pedal {
+                    self.pedal_port = event.port;
+                } else {
+                    self.lift_pedal(play);
                 }
             }
-            MidiMessage::ControlChange { controller: ALL_NOTES_OFF | ALL_SOUND_OFF, .. } => {
+            MidiMessage::ControlChange { controller: ALL_NOTES_OFF | ALL_SOUND_OFF, .. } if event.port == SOBA_PORT => {
                 self.pedal = false;
                 for voice in &mut self.voices {
                     voice.held = false;
@@ -447,11 +453,43 @@ impl NoteIn {
                 }
                 self.mono.release_all();
             }
+            // From one device, as it's unplugged: its notes end, and its
+            // pedal lifts, but another device's notes play on (#454)
+            MidiMessage::ControlChange { controller: ALL_NOTES_OFF | ALL_SOUND_OFF, .. } => {
+                let port = event.port;
+                if self.pedal && self.pedal_port == port {
+                    self.pedal = false;
+                    self.lift_pedal(play);
+                }
+                let now = self.tick();
+                for voice in self.voices.iter_mut().filter(|voice| voice.port == port && voice.busy()) {
+                    voice.held = false;
+                    voice.sustained = false;
+                    voice.freed = now;
+                }
+                self.mono.keys.retain(|key| key.port != port);
+                if play.count == 1 {
+                    self.choose_mono_note(play);
+                }
+            }
             _ => {}
         }
     }
 
-    fn note_on(&mut self, note: u8, velocity: f32, play: Play) {
+    /// The pedal's up: the notes it held end.
+    fn lift_pedal(&mut self, play: Play) {
+        let now = self.tick();
+        for voice in self.voices.iter_mut().filter(|voice| voice.sustained) {
+            voice.sustained = false;
+            voice.freed = now;
+        }
+        self.mono.keys.retain(|key| !key.sustained);
+        if play.count == 1 {
+            self.choose_mono_note(play);
+        }
+    }
+
+    fn note_on(&mut self, note: u8, velocity: f32, port: u8, play: Play) {
         let count = play.count;
         // A key held from before this chord: Legato mode glides
         let key_held = self.voices[..count].iter().any(|voice| voice.held);
@@ -472,6 +510,7 @@ impl NoteIn {
         voice.glide.start(note as f32, play.glide_mode.glides(legato));
         voice.note = note;
         voice.velocity = velocity;
+        voice.port = port;
         voice.held = true;
         voice.sustained = false;
         voice.started = started;
@@ -520,10 +559,10 @@ impl NoteIn {
         }
     }
 
-    fn mono_note_on(&mut self, note: u8, velocity: f32, play: Play) {
+    fn mono_note_on(&mut self, note: u8, velocity: f32, port: u8, play: Play) {
         self.mono.keys.retain(|key| key.note != note);
         if self.mono.keys.len() < self.mono.keys.capacity() {
-            self.mono.keys.push(Key { note, velocity, sustained: false });
+            self.mono.keys.push(Key { note, velocity, port, sustained: false });
         }
         self.choose_mono_note(play);
     }
@@ -638,7 +677,7 @@ impl DspModule for NoteIn {
         // release still lets go, so a note held when a pad claimed it ends
         let omni = channel.round() == 0.0;
         let claimed = |event: &MidiEvent| match event.message {
-            MidiMessage::NoteOn { note, velocity } if velocity > 0 => omni && context.claimed_notes.claims(event.channel, note),
+            MidiMessage::NoteOn { note, velocity } if velocity > 0 => omni && context.claimed_notes.claims(event.port, event.channel, note),
             _ => false,
         };
         let mut events = context
@@ -689,6 +728,7 @@ impl DspModule for NoteIn {
         self.next = 0;
         self.clock = 0;
         self.pedal = false;
+        self.pedal_port = SOBA_PORT;
         self.aftertouch = 0.0;
         self.bend_target = 0.0;
         self.bend = 0.0;
@@ -941,6 +981,36 @@ mod tests {
         assert!(sounding(&out, 10).iter().all(Option::is_none));
     }
 
+    /// An All Notes Off from one device ends its notes and no other's
+    /// (#454): a Note In on Any keeps device A's when device B is unplugged.
+    #[test]
+    fn test_one_devices_all_notes_off_leaves_anothers_notes_be() {
+        let (a, b) = (0, 1);
+        // Polyphonic: A holds 60, B holds 64 and 67 and its pedal
+        let p = params(4, Allocation::Rotate);
+        let mut m = module();
+        let pedal = |port, value| MidiEvent::new(0, 0, MidiMessage::ControlChange { controller: SUSTAIN_PEDAL, value }).from_port(port);
+        run(&mut m, &p, &[on(0, 60).from_port(a), on(0, 64).from_port(b), pedal(b, 127), on(0, 67).from_port(b), off(1, 67).from_port(b)]);
+        let out = run(&mut m, &p, &[cc(10, ALL_NOTES_OFF, 0).from_port(b)]);
+        assert_eq!(sounding(&out, 5).into_iter().flatten().collect::<Vec<_>>(), [60, 64, 67]);
+        assert_eq!(sounding(&out, 20).into_iter().flatten().collect::<Vec<_>>(), [60], "A's note plays on");
+        // Then A's pedal holds A's note, and B's All Notes Off leaves it held
+        run(&mut m, &p, &[pedal(a, 127), off(0, 60).from_port(a)]);
+        let out = run(&mut m, &p, &[cc(0, ALL_NOTES_OFF, 0).from_port(b)]);
+        assert_eq!(sounding(&out, 5).into_iter().flatten().collect::<Vec<_>>(), [60], "A's pedal still holds it");
+        // Soba's own All Notes Off ends everything
+        let out = run(&mut m, &p, &[cc(0, ALL_NOTES_OFF, 0)]);
+        assert!(sounding(&out, 5).iter().all(Option::is_none));
+
+        // One voice: A's key comes back when B's goes
+        let mut m = module();
+        let out = run_mono(&mut m, &one_voice(), &[on(0, 60).from_port(a), on(0, 72).from_port(b)]);
+        assert_eq!(pitch(&out)[BLOCK - 1], 1.0, "B's 72 sounds");
+        let out = run_mono(&mut m, &one_voice(), &[cc(10, ALL_NOTES_OFF, 0).from_port(b)]);
+        assert_eq!(pitch(&out)[BLOCK - 1], 0.0, "A's 60 is back");
+        assert_eq!(gate(&out)[BLOCK - 1], 1.0);
+    }
+
     fn glide_params(voices: usize, seconds: f32, mode: GlideMode) -> [f32; 11] {
         let mut p = params(voices, Allocation::Rotate);
         p[NoteIn::PARAM_GLIDE] = seconds;
@@ -1079,7 +1149,7 @@ mod tests {
     #[test]
     fn test_omni_skips_the_notes_pads_claim_and_a_channel_hears_them() {
         let mut claims = crate::dsp::NoteClaims::EMPTY;
-        claims.claim(Some(9), 36);
+        claims.claim(crate::dsp::ListenTo::Any, Some(9), 36);
         let play = |channel: f32, midi: &[MidiEvent]| {
             let mut p = DEFAULTS;
             p[NoteIn::PARAM_CHANNEL] = channel;
@@ -1114,6 +1184,32 @@ mod tests {
         let off = [MidiEvent::new(0, 9, MidiMessage::NoteOff { note: 36, velocity: 0 })];
         m.process(&[], &mut out, &p, &ProcessContext::new(SR, BLOCK).with_midi(&off).with_claims(&claims));
         assert!(sounding(&out, BLOCK - 1).into_iter().flatten().next().is_none());
+    }
+
+    /// A Pads set to one device claims that device's notes alone (#454):
+    /// the same note from another device still plays an Omni Note In.
+    #[test]
+    fn test_omni_skips_only_the_claiming_devices_notes() {
+        let mut claims = crate::dsp::NoteClaims::EMPTY;
+        // A Pads set to the device in slot 0 (the MiniLab, say)
+        claims.claim(crate::dsp::ListenTo::Port(0), Some(9), 36);
+        let mut p = DEFAULTS;
+        p[NoteIn::PARAM_CHANNEL] = 0.0;
+        let play = |midi: &[MidiEvent]| {
+            let mut m = module();
+            let mut out = vec![
+                SignalBuffer::polyphonic(BLOCK, SignalType::Control),
+                SignalBuffer::polyphonic(BLOCK, SignalType::Gate),
+                SignalBuffer::polyphonic(BLOCK, SignalType::Control),
+                SignalBuffer::polyphonic(BLOCK, SignalType::Control),
+            ];
+            m.process(&[], &mut out, &p, &ProcessContext::new(SR, BLOCK).with_midi(midi).with_claims(&claims));
+            sounding(&out, BLOCK - 1).into_iter().flatten().collect::<Vec<_>>()
+        };
+        let pad = MidiEvent::note_on(0, 9, 36, 100);
+        assert!(play(&[pad.from_port(0)]).is_empty(), "the MiniLab's pad is the Pads'");
+        assert_eq!(play(&[pad.from_port(1)]), [36], "the Fantom's 36 on channel 10 plays");
+        assert!(play(&[pad]).is_empty(), "Soba's own reach the Pads too, so they're claimed");
     }
 
     #[test]

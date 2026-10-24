@@ -7,7 +7,9 @@
 //! Soba is taught a controller once, from the MIDI In menu: turn encoder
 //! 1, then 2, through 8, then move fader 1 through 4. What it heard is kept
 //! in the app's storage under the device's name, not in the patch, since
-//! it's the hardware's and goes with it from patch to patch.
+//! it's the hardware's and goes with it from patch to patch. With several
+//! devices open, the one whose control is turned first is the one taught
+//! (#454), and the hands stay with it.
 //!
 //! While the hands follow, the patch's own mappings on the taught CCs
 //! pause, and come back when they stop. The turning itself is
@@ -20,6 +22,7 @@ use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
+use crate::engine::device_names::same;
 use crate::engine::NodeId as EngineNodeId;
 use crate::persistence::{MidiEncoding, MidiInput, MidiMapping, MidiSource};
 use super::midi_mappings::{MidiMappings, Standing};
@@ -170,6 +173,8 @@ impl Step {
 /// A control heard while it's taught, not yet taken.
 #[derive(Debug, Clone)]
 struct Listening {
+    /// The device it's on.
+    device: String,
     cc: u8,
     channel: u8,
     values: Vec<u8>,
@@ -178,8 +183,9 @@ struct Listening {
 /// Soba being taught a controller, a control at a time.
 #[derive(Debug, Clone)]
 pub struct Teaching {
-    /// The device's name, to keep it under.
-    device: String,
+    /// The device's name, to keep it under: `None` until a control is
+    /// taken, when it's that control's device (#454).
+    device: Option<String>,
     /// The slot being taught.
     slot: usize,
     taught: Controller,
@@ -189,8 +195,19 @@ pub struct Teaching {
 }
 
 impl Teaching {
+    /// Teaching the device called `device`.
     pub fn new(device: impl Into<String>) -> Self {
-        Self { device: device.into(), slot: 0, taught: Controller::default(), listening: None, last: None }
+        Self { device: Some(device.into()), ..Self::any() }
+    }
+
+    /// Teaching whichever device's control is turned first (#454).
+    pub fn any() -> Self {
+        Self { device: None, slot: 0, taught: Controller::default(), listening: None, last: None }
+    }
+
+    /// The device taught, once a control of it has been taken.
+    pub fn device(&self) -> Option<&str> {
+        self.device.as_deref()
     }
 
     /// The control to move next, or `None` once they've all been taught.
@@ -198,22 +215,37 @@ impl Teaching {
         Step::of(self.slot)
     }
 
-    /// Hears a CC (channel 0-15). A control already taught is still being
-    /// turned or let go of, and isn't heard again. Another control than
-    /// the one being heard takes its place: the player moved the one they
-    /// meant. Returns whether the step was taken.
+    /// Hears a CC (channel 0-15) from the device being taught.
     pub fn hear(&mut self, cc: u8, channel: u8, value: u8) -> bool {
+        let device = self.device.clone().unwrap_or_default();
+        self.hear_from(&device, cc, channel, value)
+    }
+
+    /// Hears a CC (channel 0-15) from the device called `device`. A
+    /// control already taught is still being turned or let go of, and
+    /// isn't heard again. Another control than the one being heard takes
+    /// its place: the player moved the one they meant. Until one is taken,
+    /// every device's controls are heard, and the first taken names the
+    /// device taught; from then on, other devices' aren't (#454). Returns
+    /// whether the step was taken.
+    pub fn hear_from(&mut self, device: &str, cc: u8, channel: u8, value: u8) -> bool {
         let Some(step) = self.step() else { return false };
+        if self.device.as_deref().is_some_and(|taught| !same(taught, device)) {
+            return false;
+        }
         if self.taught.hears(cc, channel).is_some() {
             return false;
         }
         let listening = match self.listening.as_mut() {
-            Some(l) if l.cc == cc && l.channel == channel => l,
-            _ => self.listening.insert(Listening { cc, channel, values: Vec::new() }),
+            Some(l) if l.cc == cc && l.channel == channel && l.device == device => l,
+            _ => self.listening.insert(Listening { device: device.to_string(), cc, channel, values: Vec::new() }),
         };
         listening.values.push(value);
         if listening.values.len() < CLICKS {
             return false;
+        }
+        if self.device.is_none() {
+            self.device = Some(listening.device.clone());
         }
         // A fader has ends, whatever it sends
         let encoding = match step {
@@ -258,7 +290,12 @@ impl Teaching {
             None => String::new(),
         };
         let Some(step) = self.step() else { return format!("{last}done") };
-        let hearing = self.hearing().map(|(cc, channel)| format!(" (hearing CC {cc} · ch {channel})")).unwrap_or_default();
+        // Before a device is chosen, which one is moving
+        let on = match (&self.device, &self.listening) {
+            (None, Some(l)) if !l.device.is_empty() => format!(" on {}", l.device),
+            _ => String::new(),
+        };
+        let hearing = self.hearing().map(|(cc, channel)| format!(" (hearing CC {cc} · ch {channel}{on})")).unwrap_or_default();
         let mut ask = step.ask();
         if last.is_empty() {
             ask = format!("{}{}", ask[..1].to_uppercase(), &ask[1..]);
@@ -314,11 +351,30 @@ impl Hands {
         &self.device
     }
 
-    /// Of the devices `open`, the one whose controller the hands are
-    /// (#435): the first that has been taught, or else the first, to teach.
-    pub fn choose_device<'a>(&self, open: &'a [String]) -> Option<&'a str> {
-        let taught = open.iter().find(|name| self.taught_as(name).is_some());
-        taught.or(open.first()).map(String::as_str)
+    /// Puts the hands on one of the devices `open` (#435): the one being
+    /// taught; else the one they're on, if it's open and taught (#454);
+    /// else the first that has been taught, or else the first, to teach.
+    /// While Soba is taught whichever device moves first, with several
+    /// open, it's none of them yet.
+    pub fn follow_devices(&mut self, open: &[String]) {
+        let chosen = match self.teaching.as_ref().map(Teaching::device) {
+            Some(Some(taught)) => Some(taught.to_string()),
+            Some(None) if open.len() > 1 => None,
+            _ => {
+                let current = open.iter().find(|name| same(name, &self.device) && self.taught_as(name).is_some());
+                let taught = || open.iter().find(|name| self.taught_as(name).is_some());
+                current.or_else(taught).or(open.first()).cloned()
+            }
+        };
+        self.set_device(chosen.as_deref());
+    }
+
+    /// Are the CCs of the device called `device` (`None` for Soba's own)
+    /// for the hands? Those of the device they're on, and while Soba is
+    /// taught whichever device moves first, every device's (#454).
+    pub fn hears_device(&self, device: Option<&str>) -> bool {
+        let any = self.teaching.as_ref().is_some_and(|t| t.device.is_none());
+        device.is_none_or(|device| any || same(device, &self.device))
     }
 
     /// The controller of the device open, if it has been taught.
@@ -387,8 +443,28 @@ impl Hands {
         current: &impl Fn(u64, usize) -> Option<Standing>,
         turns: &mut Vec<(u64, usize, f32)>,
     ) -> bool {
+        self.hear_from(None, cc, channel, value, current, turns)
+    }
+
+    /// [`hear`](Self::hear)s a CC from the device called `device`, or
+    /// Soba's own (`None`, heard as the device they're on). The first
+    /// control taught from a device makes that device the one taught, and
+    /// the one the hands are on (#454).
+    pub fn hear_from(
+        &mut self,
+        device: Option<&str>,
+        cc: u8,
+        channel: u8,
+        value: u8,
+        current: &impl Fn(u64, usize) -> Option<Standing>,
+        turns: &mut Vec<(u64, usize, f32)>,
+    ) -> bool {
         if let Some(teaching) = self.teaching.as_mut() {
-            if teaching.hear(cc, channel, value) && teaching.step().is_none() {
+            let taken = teaching.hear_from(device.unwrap_or(&self.device), cc, channel, value);
+            if let Some(taught) = teaching.device().filter(|&taught| taught != self.device) {
+                self.device = taught.to_string();
+            }
+            if taken && teaching.step().is_none() {
                 self.finish_teaching();
             }
             return true;
@@ -431,9 +507,10 @@ impl Hands {
             .collect()
     }
 
-    /// Starts teaching the open device's controller, from its first encoder.
+    /// Starts teaching a controller, from its first encoder: whichever
+    /// device's encoder is turned first (#454).
     pub fn start_teaching(&mut self) {
-        self.teaching = Some(Teaching::new(self.device.clone()));
+        self.teaching = Some(Teaching::any());
         self.finished = None;
         self.let_go();
     }
@@ -462,7 +539,7 @@ impl Hands {
             "Nothing taught: the controller is as it was".to_string()
         } else {
             let summary = teaching.taught.summary();
-            self.controllers.insert(teaching.device, teaching.taught);
+            self.controllers.insert(teaching.device.unwrap_or_else(|| self.device.clone()), teaching.taught);
             self.on = true;
             format!("Taught {summary}. The encoders follow the selection")
         });
@@ -573,7 +650,9 @@ mod tests {
         hands.start_teaching();
         // Four encoders, then the rest skipped, then one fader
         for n in 0..4 {
-            teach_encoder(hands.teaching.as_mut().unwrap(), n, [64, 65, 66, 67]);
+            for value in [64, 65, 66, 67] {
+                hands.hear(70 + n, 0, value, &|_, _| None, &mut Vec::new());
+            }
         }
         for _ in 4..ENCODERS {
             hands.skip();
@@ -699,6 +778,76 @@ mod tests {
         assert!(hands.badges().is_empty(), "it lets go");
         hands.set_device(Some("MiniLab3"));
         assert!(hands.follow(&knobs(7, 2)), "and takes hold again when it's back");
+    }
+
+    /// With a taught MiniLab and a Fantom open, teaching takes whichever
+    /// device's encoder is turned first, and keeps the controller under
+    /// its name (#454).
+    #[test]
+    fn teaching_with_two_devices_open_takes_the_one_turned_first() {
+        let open = ["MiniLab3".to_string(), "Fantom-06".to_string()];
+        fn turn(hands: &mut Hands, device: &str, cc: u8, value: u8) {
+            hands.hear_from(Some(device), cc, 0, value, &|_, _| None, &mut Vec::new());
+        }
+        let mut hands = minilab();
+        hands.follow_devices(&open);
+        assert_eq!(hands.device(), "MiniLab3", "the taught one");
+        let minilab = hands.controller().cloned();
+
+        hands.start_teaching();
+        hands.follow_devices(&open);
+        assert_eq!(hands.device(), "", "none of them yet");
+        assert!(hands.hears_device(Some("MiniLab3")) && hands.hears_device(Some("Fantom-06")));
+        // A nudge of the MiniLab gives way to the Fantom's encoder, turned
+        turn(&mut hands, "MiniLab3", 70, 65);
+        turn(&mut hands, "MiniLab3", 70, 65);
+        assert!(hands.teaching().unwrap().prompt().contains("(hearing CC 70 · ch 1 on MiniLab3)"));
+        for value in [1, 1, 1, 1] {
+            turn(&mut hands, "Fantom-06", 16, value);
+        }
+        assert_eq!(hands.teaching().and_then(Teaching::device), Some("Fantom-06"));
+        assert_eq!(hands.device(), "Fantom-06", "the hands are on the device taught");
+        hands.follow_devices(&open);
+        assert_eq!(hands.device(), "Fantom-06", "and stay there while it's taught");
+        // The MiniLab's controls are its own again
+        assert!(!hands.hears_device(Some("MiniLab3")));
+        for value in [65; 4] {
+            turn(&mut hands, "MiniLab3", 71, value);
+        }
+        assert_eq!(hands.teaching().unwrap().step(), Some(Step::Encoder(1)), "the MiniLab teaches nothing now");
+        for value in [1; 4] {
+            turn(&mut hands, "Fantom-06", 17, value);
+        }
+        hands.finish_teaching();
+
+        let fantom = hands.controller().expect("taught");
+        assert_eq!(fantom.summary(), "2 encoders");
+        assert_eq!(fantom.slot(0).map(|t| t.cc), Some(16));
+        // The hands stay with the Fantom, and the MiniLab keeps what it was taught
+        hands.follow_devices(&open);
+        assert_eq!(hands.device(), "Fantom-06");
+        hands.set_device(Some("MiniLab3"));
+        assert_eq!(hands.controller().cloned(), minilab);
+        // Gone, the hands go back to the first taught
+        hands.follow_devices(&open[..1]);
+        assert_eq!(hands.device(), "MiniLab3");
+    }
+
+    #[test]
+    fn with_one_device_open_teaching_is_that_ones() {
+        let open = ["Little Keys".to_string()];
+        let mut hands = Hands::default();
+        hands.follow_devices(&open);
+        hands.start_teaching();
+        hands.follow_devices(&open);
+        assert_eq!(hands.device(), "Little Keys", "the device open, to name it");
+        for value in [64, 65, 66, 67] {
+            // Soba's own CCs (a capture's) are the device's the hands are on
+            hands.hear(70, 0, value, &|_, _| None, &mut Vec::new());
+        }
+        hands.finish_teaching();
+        assert_eq!(hands.controller().map(Controller::summary).as_deref(), Some("1 encoder"));
+        assert!(hands.controllers.contains_key("Little Keys"));
     }
 
     #[test]

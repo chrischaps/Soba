@@ -238,7 +238,7 @@ pub struct GraphPlan {
     pub(crate) scenes: Vec<PlanScenes>,
     /// Modules that claim notes (Pads, #428), by index into `nodes`, and
     /// how each works its claims out from its parameters.
-    pub(crate) claimers: Vec<(usize, fn(&[f32], &mut NoteClaims))>,
+    pub(crate) claimers: Vec<(usize, crate::dsp::ClaimNotes)>,
     /// The notes they claim, worked out again every block from their
     /// parameters as they stand, so a learn or an edit counts at once.
     pub(crate) claims: NoteClaims,
@@ -552,11 +552,12 @@ impl GraphPlan {
         if let Some(transport) = self.transport() {
             context.transport = transport;
         }
-        // The notes Pads claim, from their parameters as they stand
+        // The notes Pads claim, from their parameters and devices as they stand
         if !self.claimers.is_empty() {
             self.claims.clear();
             for &(node, claim) in &self.claimers {
-                claim(&self.nodes[node].params, &mut self.claims);
+                let node = &self.nodes[node];
+                claim(&node.params, node.listen, &mut self.claims);
             }
         }
 

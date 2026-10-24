@@ -52,6 +52,8 @@ A pad's menu also sets its **Note** and **Channel** by hand. Pad 1's are the row
 
 The notes a Pads module listens to are its own. A [Note In](./note-in.md) whose **Ch** is Omni skips them, so a pad never also plays the synth, and the pianos and the sequencers' ears don't light for them either. The [MIDI Monitor](./midi-monitor.md) still shows them.
 
+A Pads set to one **Device** claims only that device's notes. Set it to the pad controller, and another keyboard's note 36 on channel 10 still plays the synth.
+
 A Note In set to a channel hears that channel's notes, claimed or not. To play a melody on the pads as well as drums, set a Note In to the pads' channel.
 
 The computer keys and the on-screen pianos are never claimed: they always play Note In.

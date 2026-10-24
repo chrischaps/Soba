@@ -69,7 +69,7 @@ struct NodeSpec {
     /// Whether the module brings live input into the patch.
     live_input: bool,
     /// How it claims notes, for Pads (see [`DspModule::note_claims`]).
-    note_claims: Option<fn(&[f32], &mut crate::dsp::NoteClaims)>,
+    note_claims: Option<crate::dsp::ClaimNotes>,
     /// A module created and prepared here but not yet handed to a plan.
     /// Once compiled into a plan it lives on the audio thread, and later
     /// plans take it over from their predecessor.
@@ -2411,6 +2411,34 @@ mod tests {
         plan.process(&context);
         assert_eq!(gate(&plan, 1, NOTE_IN_GATE), 1.0);
         assert_eq!(gate(&plan, 2, 0), 0.0);
+    }
+
+    /// A Pads set to one device claims its notes from that device alone
+    /// (#454): device B's same note still plays an Omni Note In.
+    #[test]
+    fn test_pads_on_one_device_leave_another_devices_notes_be() {
+        use crate::dsp::{ListenTo, MidiEvent, MidiMessage};
+        const NOTE_IN_GATE: usize = 1;
+        let mut graph = AudioGraph::with_registry(48000.0, 256, crate::engine::create_module_registry());
+        for (node_id, module_id) in [(1, crate::modules::note_in::ID), (2, crate::modules::pads::ID)] {
+            assert!(graph.handle_command(EngineCommand::AddModule { node_id, module_id }));
+        }
+        let mut plan = graph.compile();
+        assert!(plan.set_listen(2, ListenTo::Port(0)));
+        let gate = |plan: &GraphPlan, node, output| plan.output(node, output).unwrap().samples[255];
+        let strike = |port| [MidiEvent::new(0, 9, MidiMessage::NoteOn { note: 36, velocity: 100 }).from_port(port)];
+        let lift = |port| [MidiEvent::new(0, 9, MidiMessage::NoteOff { note: 36, velocity: 0 }).from_port(port)];
+
+        // Device A's pad strikes the Pads, and the synth stays quiet
+        plan.process(&ProcessContext::new(48000.0, 256).with_midi(&strike(0)));
+        assert_eq!(gate(&plan, 2, 0), 1.0, "pad 1 is struck");
+        assert_eq!(gate(&plan, 1, NOTE_IN_GATE), 0.0, "and the synth isn't");
+        plan.process(&ProcessContext::new(48000.0, 256).with_midi(&lift(0)));
+
+        // Device B's note 36 on channel 10 is the synth's
+        plan.process(&ProcessContext::new(48000.0, 256).with_midi(&strike(1)));
+        assert_eq!(gate(&plan, 1, NOTE_IN_GATE), 1.0, "device B plays the synth");
+        assert_eq!(gate(&plan, 2, 0), 0.0, "and not the Pads, which hear device A");
     }
 
     /// A filter's spectrum tap hears what goes in and the output that's
