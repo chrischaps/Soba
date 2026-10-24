@@ -19,7 +19,7 @@ From left to right:
 | **❓ Help** | **📖 Manual** opens this manual, and **⌨ Keyboard Shortcuts** (`F1`) lists the [shortcuts](#keyboard-shortcuts), and **🎓 Lessons** opens the [lessons](lessons.md) you take inside the app. **Check for Updates…**, **Check for Updates Automatically**, and **Roll Back** after an update: see [Updates](installation.md#updates) |
 | **Output** | The audio device to play through |
 | **Input** | The microphone, guitar or line input that [Audio Input](../modules/sources/audio-input.md) modules hear. It starts at **None**: nothing is opened until you choose a device. A filled dot (●) means it's open. |
-| **MIDI In** | The MIDI controllers to listen to, as many at once as are ticked. A filled dot (●) means one is open. At the foot of the menu, **Map Mode** (`Ctrl + L`) and the **Controller Map**: see [MIDI Learn](#midi-learn). Below them, **Teach Your Controller…**, **Hands Follow Selection** (`Ctrl + Shift + L`) and **Show the Controller** (`Ctrl + H`): see [Playing with a controller](#playing-with-a-controller). |
+| **MIDI In** | The MIDI controllers to listen to, as many at once as are ticked. A filled dot (●) means one is open. At the foot of the menu, **Map Mode** (`Ctrl + L`) and the **Controller Map**: see [MIDI Learn](#midi-learn). Below them, **Teach Your Controller…**, **Hands Follow Selection** (`Ctrl + Shift + L`) and **Show the Controller** (`Ctrl + H`): see [Playing with a controller](#playing-with-a-controller). **The Rig…** (`Ctrl + Shift + H`) shows every MIDI input and MIDI Out port at once: see [The Rig](#the-rig). |
 
 At the right end, the toolbar shows a CPU meter while the patch plays, the device's sample rate and channel count, and whether the audio engine is running. While an input is open, **In** shows how much audio is held between the input and output devices, in milliseconds; it turns amber for a moment after a dropout. Hover it for details.
 
@@ -336,6 +336,27 @@ On stage it's hard to remember which fader does what in this patch. Choose **Sho
 
 The sketch keeps its size as you zoom, stays clear of the status bar, and only takes the clicks that land on it. Hover a control to see what it sends. Soba remembers whether it's shown.
 
+### The Rig
+
+With a room of hardware plugged in, choose **The Rig…** at the foot of the **MIDI In** menu, or press `Ctrl + Shift + H`. It shows every MIDI device Soba can hear or play on one panel.
+
+- **MIDI In** has a row for each input found, and for each one Soba remembers that isn't plugged in. Each row has:
+  - a lamp: green while the input is open, flashing as it's heard; amber while it's unplugged;
+  - a tick to open or close it, as in the menu. An unplugged one has a ✕ instead, to forget it;
+  - its slot (**In 1** to **In 8**);
+  - the last message heard, as the [MIDI Monitor](../modules/midi/midi-monitor.md) writes it. It's bright when it arrives and fades to grey over a few seconds;
+  - how many modules have their **Device** set to it alone. Hover to see their names.
+- **MIDI Out** has a row for each of the eight ports, **A** to **H**, that a [MIDI Out](../modules/output/midi-out.md) plays. Each row has:
+  - the port's device, which you choose here or on a MIDI Out's face;
+  - how the port is doing: **Sending**, **Ready** (it has a device but no MIDI Out plays it), **Unplugged**, **No device**, or **In use** (another app has the device);
+  - a dot that lights on each beat while clock goes out;
+  - the last message sent;
+  - how many MIDI Outs play the port.
+
+Ports and inputs are settings of this computer, not of the patch. **🔄 Refresh** looks for devices again at once. Otherwise Soba looks every couple of seconds.
+
+**After a reboot.** Windows numbers devices that share a name in the order they were plugged in (`2- Digitakt`), and numbers a device's extra ports (`MIDIIN3 (FANTOM-06)`). Linux adds the device's client and port numbers to its name. Those numbers can change when you reboot or plug things in a different order. Soba finds a device by its exact name first, then by its name without those numbers, so every port and input finds its device again. A module whose **Device** is set to it, or a mapping learned from it, still hears it. If two devices are left that both fit, Soba uses neither, rather than guess. Hover a port's device to see whether it was found under a new number.
+
 ## Recording
 
 When something good happens (a filter sweep you rode by hand, a lucky generative passage, an improvisation on a MIDI keyboard), press **● Rec** or `Ctrl + R` to keep it. If the patch is stopped, Rec starts it.
@@ -485,6 +506,7 @@ On a Mac, hold `⌘ Command` where these say `Ctrl`, and `Option` for `Alt`. The
 | `Ctrl + L` | Map Mode: click controls one after another to map them to MIDI |
 | `Ctrl + Shift + L` | The controller's encoders and faders follow the selection, or let go |
 | `Ctrl + H` | Show or hide the sketch of the controller, saying what each control does |
+| `Ctrl + Shift + H` | The Rig: every MIDI input and MIDI Out port, and the device each plays |
 | `Alt` over a cable | Hear what the cable carries |
 
 The letter keys play notes: see [The computer keyboard](#the-computer-keyboard).

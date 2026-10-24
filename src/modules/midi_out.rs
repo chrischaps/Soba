@@ -54,7 +54,7 @@ pub const ID: &str = "output.midi";
 ///
 /// # Parameters
 ///
-/// - **Port**: A to D; the settings say which device each plays.
+/// - **Port**: A to H; this computer's settings (the Rig panel) say which device each plays.
 /// - **Channel**: the MIDI channel notes and CCs go out on.
 /// - **CC 1 #** … **CC 4 #**: the controller number each lane sends.
 /// - **Send Clock**: sends the patch's Clock as MIDI clock.
@@ -112,7 +112,7 @@ impl MidiOut {
         }));
         let mut parameters = vec![
             ParameterDefinition::choice("port", "Port", PORT_LABELS, 0)
-                .describe("Which device plays: the face, or Settings > MIDI Out, gives each port one"),
+                .describe("Which device plays: click the device on the face, or open the Rig (Ctrl+Shift+H) to give each port one"),
             ParameterDefinition::choice("channel", "Channel", CHANNEL_LABELS, 0).describe("The MIDI channel notes and CCs go out on"),
         ];
         parameters.extend(NUMBER_IDS.iter().zip(NUMBER_NAMES).zip(CC_DEFAULTS).map(|((&id, name), default)| {

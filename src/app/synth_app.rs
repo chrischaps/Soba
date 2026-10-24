@@ -58,6 +58,7 @@ use super::web;
 mod actions;
 mod add_menu;
 mod controller_map;
+mod rig_panel;
 mod cue;
 mod dive;
 mod file_hover;
@@ -310,6 +311,8 @@ pub struct SynthApp {
     gliding: scenes::Gliding,
     /// The Controller Map: every MIDI mapping in the patch, to edit (#426).
     controller_map: controller_map::ControllerMap,
+    /// The Rig panel: every MIDI input and MIDI Out port (#436).
+    rig_panel: rig_panel::RigPanel,
     /// The sketch of the controller along the canvas's foot (#431).
     hands_overlay: hands_overlay::HandsOverlay,
     /// Patch files the visitor picked, which the browser hands over later.
@@ -455,6 +458,7 @@ impl SynthApp {
             mutating: Default::default(),
             gliding: Default::default(),
             controller_map: Default::default(),
+            rig_panel: Default::default(),
             hands_overlay: Default::default(),
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
@@ -2748,6 +2752,7 @@ impl SynthApp {
         }
         self.show_variations(ctx);
         self.show_controller_map(ctx);
+        self.show_rig_panel(ctx);
         self.show_hands_overlay(ctx);
         // A lesson's caption, glows and ghost, over the editor
         self.tend_lesson(ctx);

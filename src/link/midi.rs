@@ -8,9 +8,11 @@
 //! message when its sample reaches the speakers.
 //!
 //! A module doesn't name a device, which would tie a patch to one machine.
-//! It names a **port**, A to D, and this machine's settings say which
-//! device each port plays (see [`MidiBus::choose`]). A patch that plays a
-//! synth on port A plays whatever synth is on port A wherever it opens.
+//! It names a **port**, A to H, and this machine's settings say which
+//! device each port plays (see [`MidiBus::choose`]), as the Rig panel
+//! shows them. A patch that plays a synth on port A plays whatever synth is
+//! on port A wherever it opens. A port finds its device again when the
+//! system renumbers it (see [`device_names`](crate::engine::device_names)).
 //!
 //! Unlike the Seoul link's newest-value atomics, MIDI needs every message,
 //! in order and on time: a lost Note Off is a stuck note. So the ring
@@ -18,7 +20,7 @@
 //! is holding, to let them go if the module disappears (deleted, or a new
 //! patch loaded) or stops running.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering::Relaxed};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -26,10 +28,13 @@ use web_time::Instant;
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
-/// Ports a MIDI Out can play, each mapped to a device in the settings.
-pub const PORTS: usize = 4;
+use crate::engine::device_names;
+
+/// Ports a MIDI Out can play, each mapped to a device in the settings:
+/// enough for a room of USB gear and a DIN interface's ports (#436).
+pub const PORTS: usize = 8;
 /// The ports as the Port choice shows them.
-pub const PORT_LABELS: &[&str] = &["A", "B", "C", "D"];
+pub const PORT_LABELS: &[&str] = &["A", "B", "C", "D", "E", "F", "G", "H"];
 
 /// Events a module's ring holds: a busy block of chords, CCs and clock is
 /// a few dozen, and the sender drains it every millisecond.
@@ -100,6 +105,21 @@ impl Message {
         &self.bytes[..self.len as usize]
     }
 
+    /// Is this clock, start, stop or another real-time byte?
+    pub fn is_real_time(&self) -> bool {
+        self.bytes[0] >= status::CLOCK
+    }
+
+    /// The message in one word, for an atomic: its length, then its bytes.
+    fn packed(&self) -> u32 {
+        u32::from_be_bytes([self.len, self.bytes[0], self.bytes[1], self.bytes[2]])
+    }
+
+    fn unpacked(word: u32) -> Option<Self> {
+        let [len, a, b, c] = word.to_be_bytes();
+        (1..=3).contains(&len).then_some(Self { bytes: [a, b, c], len })
+    }
+
     /// The note this starts, as (channel, note): a Note On with a velocity.
     pub fn starts(&self) -> Option<(u8, u8)> {
         (self.len == 3 && self.bytes[0] & 0xF0 == status::NOTE_ON && self.bytes[2] > 0)
@@ -131,6 +151,18 @@ pub enum PortStatus {
     Failed = 4,
 }
 
+/// What a port has sent, for the Rig panel's lamps: counts that move as
+/// messages go, to flash by, and the last of them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Traffic {
+    /// Messages sent, but for real-time ones.
+    pub messages: u32,
+    /// Clock ticks sent.
+    pub clocks: u32,
+    /// The last message sent, but for real-time ones.
+    pub last: Option<Message>,
+}
+
 impl PortStatus {
     fn from_code(code: u8) -> Self {
         match code {
@@ -158,6 +190,9 @@ pub struct MidiBus {
     /// Each port's device by name; empty for none.
     chosen: Mutex<[String; PORTS]>,
     status: [AtomicU8; PORTS],
+    /// What each port has sent: messages, clock ticks, and the last
+    /// message packed (see [`Message::packed`]).
+    sent: [[AtomicU32; 3]; PORTS],
     /// The output device's delay, so MIDI goes out as the audio beside it
     /// is heard: in microseconds.
     latency_micros: AtomicU64,
@@ -173,6 +208,7 @@ impl MidiBus {
             devices: Mutex::new(Vec::new()),
             chosen: Mutex::new([const { String::new() }; PORTS]),
             status: [const { AtomicU8::new(PortStatus::Idle as u8) }; PORTS],
+            sent: [const { [const { AtomicU32::new(0) }; 3] }; PORTS],
             latency_micros: AtomicU64::new(0),
             rescan: AtomicBool::new(true),
         }
@@ -218,13 +254,22 @@ impl MidiBus {
         }
     }
 
-    /// Every port's device as the settings keep it: a line each.
-    pub fn setting(&self) -> String {
-        self.all_chosen().join("
-")
+    /// The device each port plays, of those plugged in: the one chosen, or
+    /// the one it became when the system renumbered it. `None` for a port
+    /// with none, or whose device isn't plugged in.
+    pub fn found(&self) -> [Option<String>; PORTS] {
+        let devices = self.devices();
+        let found = device_names::find_all(&self.all_chosen(), &devices);
+        std::array::from_fn(|port| found.get(port).copied().flatten().map(str::to_string))
     }
 
-    /// Takes up the devices [`setting`](Self::setting) kept.
+    /// Every port's device as the settings keep it: a line each.
+    pub fn setting(&self) -> String {
+        self.all_chosen().join("\n")
+    }
+
+    /// Takes up the devices [`setting`](Self::setting) kept. One kept
+    /// before there were eight ports fills the first four.
     pub fn restore(&self, setting: &str) {
         for (port, device) in setting.lines().take(PORTS).enumerate() {
             self.choose(port, Some(device).filter(|d| !d.is_empty()));
@@ -244,6 +289,12 @@ impl MidiBus {
     /// What the sender last knew about port `port`.
     pub fn status(&self, port: usize) -> PortStatus {
         PortStatus::from_code(self.status.get(port).map_or(0, |s| s.load(Relaxed)))
+    }
+
+    /// What port `port` has sent.
+    pub fn traffic(&self, port: usize) -> Traffic {
+        let Some([messages, clocks, last]) = self.sent.get(port) else { return Traffic::default() };
+        Traffic { messages: messages.load(Relaxed), clocks: clocks.load(Relaxed), last: Message::unpacked(last.load(Relaxed)) }
     }
 
     // --- For the sender ---
@@ -274,6 +325,14 @@ impl MidiBus {
     pub fn set_status(&self, port: usize, status: PortStatus) {
         if let Some(slot) = self.status.get(port) {
             slot.store(status as u8, Relaxed);
+        }
+    }
+
+    pub fn set_traffic(&self, port: usize, traffic: Traffic) {
+        if let Some([messages, clocks, last]) = self.sent.get(port) {
+            messages.store(traffic.messages, Relaxed);
+            clocks.store(traffic.clocks, Relaxed);
+            last.store(traffic.last.map_or(0, |m| m.packed()), Relaxed);
         }
     }
 }
@@ -328,7 +387,44 @@ mod tests {
         let kept = bus.setting();
         let other = MidiBus::new();
         other.restore(&kept);
-        assert_eq!(other.all_chosen(), ["", "", "DAW Bus 1", ""]);
+        assert_eq!(other.all_chosen()[..4], ["", "", "DAW Bus 1", ""]);
         assert_eq!(bus.status(9), PortStatus::Idle, "a stray port reads idle");
+    }
+
+    #[test]
+    fn eight_ports_and_the_old_four_line_setting() {
+        let bus = MidiBus::new();
+        bus.restore("Volca FM\n\nDigitakt\nMicroFreak");
+        assert_eq!(bus.all_chosen(), ["Volca FM", "", "Digitakt", "MicroFreak", "", "", "", ""]);
+        bus.choose(7, Some("Zoia"));
+        let other = MidiBus::new();
+        other.restore(&bus.setting());
+        assert_eq!(other.chosen(7).as_deref(), Some("Zoia"), "port H is kept");
+        assert_eq!(PORT_LABELS.len(), PORTS);
+    }
+
+    #[test]
+    fn ports_find_their_renumbered_devices() {
+        let bus = MidiBus::new();
+        bus.restore("2- Digitakt\nMicroFreak\nRC-505");
+        bus.set_devices(vec!["MicroFreak".into(), "3- Digitakt".into()]);
+        let found = bus.found();
+        assert_eq!(found[0].as_deref(), Some("3- Digitakt"));
+        assert_eq!(found[1].as_deref(), Some("MicroFreak"));
+        assert_eq!(found[2], None, "unplugged");
+        assert_eq!(found[3], None, "none chosen");
+    }
+
+    #[test]
+    fn traffic_survives_the_trip_through_atomics() {
+        let bus = MidiBus::new();
+        assert_eq!(bus.traffic(0), Traffic::default());
+        let traffic = Traffic { messages: 3, clocks: 96, last: Some(Message::control(2, 74, 64)) };
+        bus.set_traffic(5, traffic);
+        assert_eq!(bus.traffic(5), traffic);
+        bus.set_traffic(5, Traffic { last: Some(Message::real_time(status::START)), ..traffic });
+        assert_eq!(bus.traffic(5).last.unwrap().bytes(), &[status::START]);
+        assert!(Message::real_time(status::STOP).is_real_time());
+        assert!(!Message::song_position(4).is_real_time());
     }
 }

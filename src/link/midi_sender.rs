@@ -16,6 +16,11 @@
 //! channels. A port moved to another device lets go of its notes on the
 //! old one first.
 //!
+//! **Renamed devices.** A port looks for its device by name, and if the
+//! system has renumbered it ("2- Digitakt" is now "3- Digitakt"), by the
+//! name without the number (see [`device_names`]), so the rig comes back
+//! after a reboot plugs it in a different order.
+//!
 //! **Ahead of time.** The desktop's thread wakes every millisecond and
 //! sends each message as it falls due. The browser has no thread, only a
 //! timer that a busy frame can hold up, so there the sender looks
@@ -30,7 +35,8 @@ use std::time::Duration;
 use rtrb::Consumer;
 use web_time::Instant;
 
-use super::midi::{Message, MidiBus, Outgoing, PortStatus, ALL_NOTES_OFF, PORTS};
+use super::midi::{Message, MidiBus, Outgoing, PortStatus, Traffic, ALL_NOTES_OFF, PORTS};
+use crate::engine::device_names;
 
 /// How often messages are looked at while a MIDI Out runs. MIDI clock ticks
 /// every 20 ms at 125 BPM, so a millisecond keeps a following DAW steady.
@@ -117,7 +123,12 @@ pub struct MidiSender {
 struct Port {
     /// The device it plays, as last applied from the bus.
     device: String,
+    /// What that device is called now, if it's plugged in: `device`, or
+    /// what the system renumbered it to.
+    found: Option<String>,
     connection: Option<Box<dyn Connection>>,
+    /// What it has sent, for the Rig panel.
+    traffic: Traffic,
     failed_at: Option<Instant>,
     /// The latest moment a message was sent for. What lets go of notes
     /// goes after it.
@@ -195,6 +206,7 @@ impl MidiSender {
             self.bus.set_devices(self.devices.clone());
         }
         self.follow_choices();
+        self.find_devices();
 
         let latency = self.bus.latency();
         let mut busy = false;
@@ -273,7 +285,22 @@ impl MidiSender {
             for stream in self.streams.iter_mut().filter(|s| s.port == index) {
                 Self::release(&mut self.ports[index], &mut self.outputs, &self.devices, &mut stream.held, now);
             }
-            self.ports[index] = Port { device, ..Port::default() };
+            self.ports[index] = Port { device, traffic: self.ports[index].traffic, ..Port::default() };
+        }
+    }
+
+    /// Finds each port's device among those plugged in, by name or by the
+    /// name the system renumbered it to. One found under another name
+    /// opens afresh.
+    fn find_devices(&mut self) {
+        let wanted: Vec<String> = self.ports.iter().map(|port| port.device.clone()).collect();
+        let found = device_names::find_all(&wanted, &self.devices);
+        for (port, found) in self.ports.iter_mut().zip(found) {
+            if port.found.as_deref() != found {
+                port.found = found.map(str::to_string);
+                port.connection = None;
+                port.failed_at = None;
+            }
         }
     }
 
@@ -288,10 +315,20 @@ impl MidiSender {
         }
         port.latest = Some(port.latest.map_or(at, |latest| latest.max(at)));
         if let Some(connection) = Self::connection(port, outputs, devices, now) {
-            if let Err(error) = connection.send_at(message.bytes(), at) {
-                eprintln!("MIDI Out: sending to {} failed: {error}", port.device);
-                port.connection = None;
-                port.failed_at = Some(now);
+            match connection.send_at(message.bytes(), at) {
+                Ok(()) if message.is_real_time() && message.bytes()[0] == super::midi::status::CLOCK => {
+                    port.traffic.clocks = port.traffic.clocks.wrapping_add(1);
+                }
+                Ok(()) if message.is_real_time() => {}
+                Ok(()) => {
+                    port.traffic.messages = port.traffic.messages.wrapping_add(1);
+                    port.traffic.last = Some(message);
+                }
+                Err(error) => {
+                    eprintln!("MIDI Out: sending to {} failed: {error}", port.device);
+                    port.connection = None;
+                    port.failed_at = Some(now);
+                }
             }
         }
     }
@@ -316,31 +353,32 @@ impl MidiSender {
     /// `port`'s open device, opening it if it's plugged in and hasn't just
     /// refused.
     fn connection<'a>(port: &'a mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], now: Instant) -> Option<&'a mut Box<dyn Connection>> {
-        if port.connection.is_none() && !port.device.is_empty() && devices.contains(&port.device)
-            && port.failed_at.is_none_or(|at| now.duration_since(at) >= RETRY_AFTER) {
-                match outputs.open(&port.device) {
-                    Ok(connection) => {
-                        port.connection = Some(connection);
-                        port.failed_at = None;
-                    }
-                    Err(error) => {
-                        eprintln!("MIDI Out: couldn't open {}: {error}", port.device);
-                        port.failed_at = Some(now);
-                    }
+        let name = port.found.as_ref().filter(|name| devices.contains(name));
+        if let Some(name) = name.filter(|_| port.connection.is_none() && port.failed_at.is_none_or(|at| now.duration_since(at) >= RETRY_AFTER)) {
+            match outputs.open(name) {
+                Ok(connection) => {
+                    port.connection = Some(connection);
+                    port.failed_at = None;
+                }
+                Err(error) => {
+                    eprintln!("MIDI Out: couldn't open {name}: {error}");
+                    port.failed_at = Some(now);
                 }
             }
+        }
         port.connection.as_mut()
     }
 
-    /// Tells each MIDI Out's face how its port is doing.
+    /// Tells each MIDI Out's face, and the Rig panel, how its port is doing.
     fn report(&mut self) {
         for (index, port) in self.ports.iter_mut().enumerate() {
             let used = self.streams.iter().any(|s| s.port == index && s.last_block.is_some());
+            self.bus.set_traffic(index, port.traffic);
             let status = if !used {
                 PortStatus::Idle
             } else if port.device.is_empty() {
                 PortStatus::NoDevice
-            } else if !self.devices.contains(&port.device) {
+            } else if port.found.is_none() {
                 // Unplugged: open it afresh when it comes back
                 port.connection = None;
                 PortStatus::Missing
@@ -607,6 +645,63 @@ mod tests {
         sender.tick(start);
         assert_eq!(bus.status(1), PortStatus::Missing);
         assert_eq!(bus.devices(), ["Synth", "DAW"]);
+    }
+
+    #[test]
+    fn eight_ports_send_at_once() {
+        let bus: &'static MidiBus = Box::leak(Box::new(MidiBus::new()));
+        let log = Log::default();
+        let devices: Vec<String> = (0..PORTS).map(|port| format!("Synth {port}")).collect();
+        let mut sender = MidiSender::new(bus, Box::new(Recorder { devices: devices.clone(), log: log.clone(), refuse: false }));
+        let start = Instant::now();
+        let mut rings = Vec::new();
+        for (port, device) in devices.iter().enumerate() {
+            bus.choose(port, Some(device));
+            let mut ring = bus.open_stream().unwrap();
+            ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: port as u8 }).unwrap();
+            ring.push(Outgoing::Message { sample: 0, message: Message::note_on(0, 60 + port as u8, 100) }).unwrap();
+            rings.push(ring);
+        }
+        sender.tick(start);
+        let log = log.lock().unwrap();
+        for (port, device) in devices.iter().enumerate() {
+            assert!(log.iter().any(|(to, bytes, _)| to == device && bytes[1] == 60 + port as u8), "port {port}");
+            assert_eq!(bus.status(port), PortStatus::Sending);
+            assert_eq!(bus.traffic(port).messages, 1);
+        }
+    }
+
+    #[test]
+    fn a_renumbered_device_plays_its_port_again() {
+        let bus: &'static MidiBus = Box::leak(Box::new(MidiBus::new()));
+        let log = Log::default();
+        let mut sender = MidiSender::new(bus, Box::new(Recorder { devices: vec!["3- Digitakt".into()], log: log.clone(), refuse: false }));
+        bus.choose(2, Some("2- Digitakt"));
+        let mut ring = bus.open_stream().unwrap();
+        let start = Instant::now();
+        ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 2 }).unwrap();
+        ring.push(Outgoing::Message { sample: 0, message: Message::control(9, 74, 30) }).unwrap();
+        sender.tick(start);
+        assert_eq!(log.lock().unwrap()[0].0, "3- Digitakt");
+        assert_eq!(bus.status(2), PortStatus::Sending);
+        assert_eq!(bus.found()[2].as_deref(), Some("3- Digitakt"));
+        assert_eq!(bus.chosen(2).as_deref(), Some("2- Digitakt"), "the choice is kept as it was made");
+    }
+
+    #[test]
+    fn traffic_counts_clock_apart() {
+        let (bus, mut sender, _log) = setup(false);
+        let mut ring = bus.open_stream().unwrap();
+        let start = Instant::now();
+        ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        ring.push(Outgoing::Message { sample: 0, message: Message::real_time(status::START) }).unwrap();
+        ring.push(Outgoing::Message { sample: 0, message: Message::note_on(1, 62, 80) }).unwrap();
+        ring.push(Outgoing::Message { sample: 0, message: Message::real_time(status::CLOCK) }).unwrap();
+        ring.push(Outgoing::Message { sample: 0, message: Message::real_time(status::CLOCK) }).unwrap();
+        sender.tick(start);
+        let traffic = bus.traffic(0);
+        assert_eq!((traffic.messages, traffic.clocks), (1, 2));
+        assert_eq!(traffic.last, Some(Message::note_on(1, 62, 80)), "clock doesn't hide the note");
     }
 
     #[test]

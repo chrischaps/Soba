@@ -10,6 +10,7 @@
 use eframe::egui;
 
 use crate::dsp::ListenTo;
+use crate::engine::device_names::same;
 
 use super::{SynthNodeData, SynthResponse};
 
@@ -41,7 +42,7 @@ pub fn listen_to(device: Option<&str>, slot_of: impl Fn(&str) -> Option<u8>) -> 
 /// that hears any.
 pub fn title_note(data: &SynthNodeData, open: &[String]) -> Option<String> {
     let device = device(data)?;
-    let dot = if open.iter().any(|name| name == device) { '●' } else { '○' };
+    let dot = if open.iter().any(|name| same(name, device)) { '●' } else { '○' };
     Some(format!("{dot} {device}"))
 }
 
@@ -68,10 +69,10 @@ pub fn device_menu(ui: &mut egui::Ui, node_id: egui_node_graph2::NodeId, data: &
             ui.separator();
         }
         for name in open {
-            choose(ui, current == Some(name.as_str()), name, Some(name));
+            choose(ui, current.is_some_and(|current| same(current, name)), name, Some(name));
         }
         // Set on another machine, or unplugged: kept until another is chosen
-        if let Some(name) = current.filter(|name| !open.iter().any(|n| n == name)) {
+        if let Some(name) = current.filter(|name| !open.iter().any(|n| same(n, name))) {
             choose(ui, true, &format!("{name} (not open)"), Some(name));
         }
     })

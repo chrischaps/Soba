@@ -10,6 +10,7 @@ pub mod audio_processor;
 pub mod channels;
 pub mod commands;
 pub mod cue;
+pub mod device_names;
 pub mod graph_plan;
 pub mod latency;
 pub mod midi_engine;

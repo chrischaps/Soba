@@ -23,7 +23,7 @@ Every input is optional. The module has no outputs.
 
 | Control | Range | Default | Description |
 |---------|-------|---------|-------------|
-| **Port** | A – D | A | Which device plays. Each port's device is a setting of this computer, not of the patch (see below) |
+| **Port** | A – H | A | Which device plays. Each port's device is a setting of this computer, not of the patch (see below) |
 | **Ch** | 1 – 16 | 1 | The MIDI channel the notes and CCs go out on |
 | **Clock** | On / Off | Off | Sends the Clock as MIDI clock: 24 ticks a beat, with Start, Stop and Continue |
 | **CC 1** … **CC 4** | 0 – 127 | 1, 74, 71, 10 | The controller number each lane sends. The defaults are the mod wheel, cutoff, resonance and pan, which most synths answer to |
@@ -38,9 +38,11 @@ Every input is optional. The module has no outputs.
 
 ## Ports, not devices
 
-A patch doesn't name a device. It names a **port**, A to D, and this computer remembers which device each port plays. Choose port A's device once and every MIDI Out on port A plays it, in this patch and the next. Share the patch and it plays whatever synth is on port A on the other computer. So it travels without either of you editing it.
+A patch doesn't name a device. It names a **port**, A to H, and this computer remembers which device each port plays. Choose port A's device once and every MIDI Out on port A plays it, in this patch and the next. Share the patch and it plays whatever synth is on port A on the other computer. So it travels without either of you editing it.
 
-Click the device's name on the face to choose. The list shows every MIDI output this computer has, and it updates as you plug devices in. In the browser the menu offers **🎹 Connect MIDI** first, until you've allowed it. A port's device stays chosen while it's unplugged and plays again once it's back.
+Click the device's name on the face to choose. The list shows every MIDI output this computer has, and it updates as you plug devices in. In the browser the menu offers **🎹 Connect MIDI** first, until you've allowed it. A port's device stays chosen while it's unplugged and plays again once it's back, even if the system has renumbered it (`2- Digitakt` is now `3- Digitakt`).
+
+To see all eight ports at once, open [the Rig](../../getting-started/interface-overview.md#the-rig) (`Ctrl + Shift + H`, or **The Rig…** in the **MIDI In** menu). It shows each port's device, how the port is doing, and the last message it sent. It lists the MIDI inputs too.
 
 On Windows only one app can open a MIDI port at a time. If the lamp is red, close whatever else has the device (a DAW, or the maker's editor app), and MIDI Out tries again within a couple of seconds. To play a DAW on the same computer, use a virtual MIDI port such as [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html): MIDI Out plays the port, and the DAW listens to it.
 

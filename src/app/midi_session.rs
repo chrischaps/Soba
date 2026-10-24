@@ -12,6 +12,10 @@
 //! name of the device it came from, so a mapping learned from one device
 //! isn't turned by another, and the hands follow one controller.
 //!
+//! A device is kept by name, and found again when the system renumbers it
+//! (#436): "2- Digitakt" remembered opens "3- Digitakt", and a module or
+//! mapping set to the one hears the other (see [`device_names`]).
+//!
 //! Notes played on the UI itself (the computer keys, the piano) go to the
 //! audio thread on a ring of their own ([`UiNotes`]), with or without a
 //! MIDI device, and are heard here as MIDI in is.
@@ -19,6 +23,7 @@
 use rtrb::Consumer;
 
 use crate::dsp::{MIDI_INPUTS, SOBA_PORT};
+use crate::engine::device_names;
 use crate::engine::{MidiDeviceInfo, MidiEngine, MidiEvent, TimestampedMidiEvent, UiNotes};
 use crate::persistence::{MidiControl, MidiEncoding, MidiInput, MidiMapping, MidiSource};
 use super::midi_mappings::{MidiMappings, Standing};
@@ -40,6 +45,28 @@ pub fn devices_to_connect(remembered: &[String], devices: &[MidiDeviceInfo], ope
         .filter(|d| remembered.contains(&d.name) && !open.contains(&d.name))
         .map(|d| d.index)
         .collect()
+}
+
+/// Has each input remembered by a name the system has since renumbered
+/// ("2- Digitakt", now "3- Digitakt") take its new name, so it's opened,
+/// and kept, as it's called now.
+pub fn follow_renames(remembered: &mut [String], devices: &[MidiDeviceInfo]) {
+    let names: Vec<String> = devices.iter().map(|d| d.name.clone()).collect();
+    let found: Vec<Option<String>> = device_names::find_all(remembered, &names).into_iter().map(|f| f.map(str::to_string)).collect();
+    for (name, found) in remembered.iter_mut().zip(found) {
+        if let Some(found) = found {
+            *name = found;
+        }
+    }
+}
+
+/// What an input has been heard to send, for the Rig panel's lamps.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct InputTraffic {
+    /// Events heard, which moves as each comes: clock ticks aren't heard here.
+    pub count: u32,
+    /// The last of them.
+    pub last: Option<MidiEvent>,
 }
 
 /// The names of the inputs remembered, from the app's storage: one a line.
@@ -159,6 +186,8 @@ pub struct MidiSession {
     /// The controller's encoders and faders, which follow the selection
     /// (#429), and teaching Soba them.
     pub hands: Hands,
+    /// What each input open has sent, by slot (#436).
+    pub traffic: [InputTraffic; MIDI_INPUTS],
 }
 
 impl MidiSession {
@@ -245,6 +274,7 @@ impl MidiSession {
             return false;
         }
         self.listed = names;
+        follow_renames(&mut self.remembered, &self.devices);
         let mut changed = false;
         for name in self.open_names() {
             if !self.devices.iter().any(|d| d.name == name) {
@@ -271,9 +301,10 @@ impl MidiSession {
     }
 
     /// The slot of the input called `name`, if it's open: the port its
-    /// events come on.
+    /// events come on. A name the system has since renumbered finds it.
     pub fn slot_of(&self, name: &str) -> Option<u8> {
-        self.engine.as_ref()?.slot_of(name)
+        let engine = self.engine.as_ref()?;
+        engine.slot_of(name).or_else(|| engine.slot_of(device_names::find(name, &self.open_names())?))
     }
 
     /// Is any input open?
@@ -297,6 +328,7 @@ impl MidiSession {
         engine.disconnect(name);
         self.error = None;
         self.let_go(slot);
+        self.traffic[slot as usize] = InputTraffic::default();
     }
 
     /// Closes every input open, letting go of their notes.
@@ -362,6 +394,10 @@ impl MidiSession {
         if let Some(mut events) = self.events.take() {
             while let Ok(timestamped) = events.pop() {
                 let device = names.get(timestamped.port as usize).and_then(Option::as_deref);
+                if let Some(traffic) = self.traffic.get_mut(timestamped.port as usize) {
+                    traffic.count = traffic.count.wrapping_add(1);
+                    traffic.last = Some(timestamped.event);
+                }
                 each(timestamped.event, device);
                 self.hear_from(timestamped.port, device, timestamped.event, &mut heard, &current);
             }
@@ -407,7 +443,7 @@ impl MidiSession {
             }
         };
         // The hands are one controller's: another device's CCs pass them by
-        let for_hands = device.is_none_or(|device| device == self.hands.device());
+        let for_hands = device.is_none_or(|device| device_names::same(device, self.hands.device()));
         // While Soba is taught the controller, its CCs are for that alone (#429)
         if let (MidiInput::Cc(value), Some(_), true) = (input, self.hands.teaching(), for_hands) {
             self.hands.hear(number, channel, value, current, &mut heard.turns);
@@ -940,6 +976,19 @@ mod remember_tests {
         let devices = list(&["Loopback", "MiniLab3 MIDI", "Fantom-06"]);
         let remembered = names(&["MiniLab3 MIDI", "Fantom-06"]);
         assert_eq!(devices_to_connect(&remembered, &devices, &names(&["MiniLab3 MIDI"])), [2]);
+    }
+
+    #[test]
+    fn a_renumbered_input_is_opened_and_remembered_as_its_called_now() {
+        let mut remembered = names(&["2- Digitakt", "MIDIIN3 (Fantom-06)", "MicroFreak"]);
+        let devices = list(&["MicroFreak", "MIDIIN2 (FANTOM-06)", "3- Digitakt"]);
+        follow_renames(&mut remembered, &devices);
+        assert_eq!(remembered, ["3- Digitakt", "MIDIIN2 (FANTOM-06)", "MicroFreak"]);
+        assert_eq!(devices_to_connect(&remembered, &devices, &[]), [0, 1, 2]);
+        // Unplugged, it keeps the name it had
+        let mut remembered = names(&["2- Digitakt"]);
+        follow_renames(&mut remembered, &list(&["MicroFreak"]));
+        assert_eq!(remembered, ["2- Digitakt"]);
     }
 
     #[test]

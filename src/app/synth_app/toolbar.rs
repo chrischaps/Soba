@@ -395,7 +395,7 @@ impl SynthApp {
                 }
                 ui.label(RichText::new("MIDI In").color(theme::text::SECONDARY));
                 ui.add_space(8.0);
-                actions.extend(midi_in_menu(ui, &self.midi, self.map_mode_on(), self.controller_map.open, self.hands_overlay.on));
+                actions.extend(midi_in_menu(ui, &self.midi, self.map_mode_on(), self.controller_map.open, self.hands_overlay.on, self.rig_panel.open));
             }
             Err(e) => {
                 bar.group_break(ui);
@@ -615,7 +615,7 @@ pub(super) fn midi_in_summary(open: &[String]) -> String {
 
 /// The MIDI In selector: the devices that play Note In modules and MIDI
 /// Learn, as many open at once as are ticked (#435).
-fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession, map_mode: bool, controller_map: bool, overlay: bool) -> Vec<AppAction> {
+fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession, map_mode: bool, controller_map: bool, overlay: bool, rig: bool) -> Vec<AppAction> {
     let mut actions = Vec::new();
     let open = midi.open_names();
 
@@ -653,6 +653,12 @@ fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession, map_mode: bool, controlle
             ui.separator();
             if ui.button("🔄 Refresh").clicked() {
                 actions.push(AppAction::RefreshMidiDevices);
+            }
+            // Every input and MIDI Out port in one place (#436)
+            let keys = shortcuts::keys(ui.ctx(), "Ctrl+Shift+H");
+            let item = egui::Button::selectable(rig, "The Rig…").shortcut_text(keys);
+            if ui.add(item).on_hover_text("Every MIDI input and MIDI Out port: which device each is, and what it's sending").clicked() {
+                actions.push(AppAction::ToggleRig);
             }
 
             // Mapping a controller, a control at a time, and the map of it (#426)

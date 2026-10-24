@@ -66,6 +66,8 @@ pub(super) enum AppAction {
     TeachController,
     /// Show or hide the sketch of the controller along the canvas's foot (#431).
     ToggleHandsOverlay,
+    /// Open or close the Rig panel: every MIDI input and MIDI Out port (#436).
+    ToggleRig,
     // The browser has no updater
     #[cfg(not(target_arch = "wasm32"))]
     CheckUpdates,
@@ -145,6 +147,8 @@ const MAP_MODE_SHEET: &str = "Map Mode: click controls one after another to map 
 const HANDS_SHEET: &str = "The controller's encoders and faders follow the selection, or let go";
 /// What the Keyboard Shortcuts sheet says the Hands overlay's key does.
 const OVERLAY_SHEET: &str = "Show or hide the sketch of the controller, saying what each control does";
+/// What the Keyboard Shortcuts sheet says the Rig panel's key does.
+const RIG_SHEET: &str = "The Rig: every MIDI input and MIDI Out port, and the device each plays";
 
 /// The app's own shortcuts, taken in this order: where one chord holds
 /// another (Ctrl+Shift+S holds Ctrl+S), the longer comes first. Editing's
@@ -162,6 +166,7 @@ pub(super) const KEYS: &[Binding] = &[
     bind(Chord::Command(Modifiers::NONE, Key::R), Listens::OnCanvas, AppAction::ToggleRecording, "Record, or end the take"),
     bind(Chord::Command(Modifiers::SHIFT, Key::L), Listens::OnCanvas, AppAction::ToggleHands, HANDS_SHEET),
     bind(Chord::Command(Modifiers::NONE, Key::L), Listens::OnCanvas, AppAction::ToggleMapMode, MAP_MODE_SHEET),
+    bind(Chord::Command(Modifiers::SHIFT, Key::H), Listens::OnCanvas, AppAction::ToggleRig, RIG_SHEET),
     bind(Chord::Command(Modifiers::NONE, Key::H), Listens::OnCanvas, AppAction::ToggleHandsOverlay, OVERLAY_SHEET),
     // Before the palette's Space, which Shift+Space would match too
     bind(Chord::Play, Listens::OnCanvas, AppAction::TogglePlaying, "Play or stop the patch"),
@@ -247,6 +252,7 @@ impl SynthApp {
             AppAction::ToggleHands => self.toggle_hands(ctx),
             AppAction::TeachController => self.start_teaching(),
             AppAction::ToggleHandsOverlay => self.toggle_hands_overlay(),
+            AppAction::ToggleRig => self.toggle_rig_panel(),
             #[cfg(not(target_arch = "wasm32"))]
             AppAction::CheckUpdates => self.updater.check_now(ctx),
             #[cfg(not(target_arch = "wasm32"))]

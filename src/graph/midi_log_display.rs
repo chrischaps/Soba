@@ -55,7 +55,7 @@ fn note_channel(channel: u8) -> String {
 }
 
 /// Format a MIDI event for display.
-fn format_midi_event(event: &MidiEvent) -> (String, Color32) {
+pub(crate) fn format_midi_event(event: &MidiEvent) -> (String, Color32) {
     match event {
         MidiEvent::NoteOn { channel, note, velocity } => (
             format!("NoteOn {} {} vel={}", note_channel(*channel), note_to_name(*note), velocity),
@@ -147,7 +147,10 @@ pub fn midi_log_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     let visible: Vec<_> = midi_events
         .iter()
         .rev()
-        .filter(|event| device.is_none() || event.device.is_none() || event.device.as_deref() == device)
+        .filter(|event| match (device, event.device.as_deref()) {
+            (Some(device), Some(from)) => crate::engine::device_names::same(device, from),
+            _ => true,
+        })
         .filter(|event| {
             // Channel filter: 0 = all, 1-16 = that channel
             let channel_ok = channel_filter == 0

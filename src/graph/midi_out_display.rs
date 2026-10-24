@@ -38,6 +38,8 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     let live = values[MidiOut::READOUT_LIVE] > 0.5;
     let status = live.then(|| MIDI.status(port));
     let device = MIDI.chosen(port);
+    // As it's called now, if the system has renumbered it since (#436)
+    let found = device.as_ref().and(MIDI.found()[port].clone());
 
     let width = display_frame::knob_row_width(ui, CC_LANES, z);
     let accent = theme::module::OUTPUT;
@@ -69,7 +71,7 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         (None, _) => "choose a device".to_string(),
         (Some(name), Some(PortStatus::Missing)) => format!("{name} (unplugged)"),
         (Some(name), Some(PortStatus::Failed)) => format!("{name} (in use)"),
-        (Some(name), _) => name.clone(),
+        (Some(name), _) => found.clone().unwrap_or_else(|| name.clone()),
     };
     let label_rect = Rect::from_min_max(
         lamp_at + Vec2::new(5.0 * z, -5.0 * z),
@@ -93,7 +95,7 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         small.clone(),
         theme::text::SECONDARY,
     );
-    device_menu(ui, &picker, port, device.as_deref());
+    device_menu(ui, &picker, port, device.as_deref(), found.as_deref());
 
     // --- The keyboard: white keys across, black keys over them ---
     let board = Rect::from_min_max(rect.left_top() + Vec2::new(9.0 * z, 15.0 * z), rect.right_top() + Vec2::new(-9.0 * z, 44.0 * z));
@@ -206,7 +208,7 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
 }
 
 /// The menu a click on the device's name opens: every output found, or none.
-fn device_menu(ui: &mut egui::Ui, picker: &egui::Response, port: usize, current: Option<&str>) {
+fn device_menu(ui: &mut egui::Ui, picker: &egui::Response, port: usize, current: Option<&str>, found: Option<&str>) {
     let popup = picker.id.with("menu");
     if picker.clicked() {
         MIDI.rescan();
@@ -239,18 +241,20 @@ fn device_menu(ui: &mut egui::Ui, picker: &egui::Response, port: usize, current:
             ui.label(egui::RichText::new("No MIDI outputs found").weak());
         }
         for device in &devices {
-            if ui.selectable_label(current == Some(device.as_str()), device).clicked() {
+            if ui.selectable_label(found == Some(device.as_str()), device).clicked() {
                 MIDI.choose(port, Some(device));
             }
         }
         // Chosen before, on another day, and not plugged in now
-        if let Some(missing) = current.filter(|c| !devices.iter().any(|d| d == c)) {
+        if let Some(missing) = current.filter(|_| found.is_none()) {
             let _ = ui.selectable_label(true, format!("{missing} (unplugged)"));
         }
         ui.separator();
         if ui.selectable_label(current.is_none(), "None").clicked() {
             MIDI.choose(port, None);
         }
+        let keys = crate::app::shortcuts::keys(ui.ctx(), "Ctrl+Shift+H");
+        ui.label(egui::RichText::new(format!("Every port: the Rig ({keys})")).small().weak());
     });
 }
 

@@ -317,13 +317,21 @@ impl Hands {
     /// Of the devices `open`, the one whose controller the hands are
     /// (#435): the first that has been taught, or else the first, to teach.
     pub fn choose_device<'a>(&self, open: &'a [String]) -> Option<&'a str> {
-        let taught = open.iter().find(|name| self.controllers.get(*name).is_some_and(|c| !c.is_empty()));
+        let taught = open.iter().find(|name| self.taught_as(name).is_some());
         taught.or(open.first()).map(String::as_str)
     }
 
     /// The controller of the device open, if it has been taught.
     pub fn controller(&self) -> Option<&Controller> {
-        self.controllers.get(&self.device).filter(|c| !c.is_empty())
+        self.taught_as(&self.device)
+    }
+
+    /// The controller taught as the device called `name`, or as it was
+    /// called before the system renumbered it (#436).
+    fn taught_as(&self, name: &str) -> Option<&Controller> {
+        let exact = self.controllers.get(name);
+        let near = || self.controllers.iter().find(|(taught, _)| crate::engine::device_names::same(taught, name)).map(|(_, c)| c);
+        exact.or_else(near).filter(|c| !c.is_empty())
     }
 
     /// Teaches `controller` as the open device's, as if it had been

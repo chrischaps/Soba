@@ -267,7 +267,8 @@ impl MidiMapping {
     /// itself (`None`), every mapping hears.
     pub fn hears_device(&self, device: Option<&str>) -> bool {
         match (self.device.as_deref(), device) {
-            (Some(own), Some(device)) => own == device,
+            // The same device, though the system may have renumbered it (#436)
+            (Some(own), Some(device)) => crate::engine::device_names::same(own, device),
             _ => true,
         }
     }
