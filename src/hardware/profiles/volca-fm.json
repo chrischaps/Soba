@@ -1,0 +1,25 @@
+{
+  "name": "volca fm",
+  "maker": "Korg",
+  "about": "Korg's original 2016 three-voice, six-operator digital FM synthesizer in a volca, with a step sequencer and arpeggiator.",
+  "source": "KORG volca fm MIDI Implementation Rev. 1.01 (2016.4.07) and volca fm MIDI Implementation Chart Ver. 1.01 (2016.04.07, Model: volca fm), plus volca fm Owner's Manual (volca_fm_OM_EFGSCJ5), https://www.korg.com/us/support/download/product/0/558/",
+  "port": "volca fm",
+  "kind": "synth",
+  "channels": [1],
+  "voices": {"poly": 3},
+  "parameters": [
+    {"name": "Algorithm", "cc": 48, "group": "Oscillator"},
+    {"name": "Mod Attack", "cc": 42, "group": "Envelope", "default": 64},
+    {"name": "Mod Decay", "cc": 43, "group": "Envelope", "default": 64},
+    {"name": "Carrier Attack", "cc": 44, "group": "Envelope", "default": 64},
+    {"name": "Carrier Decay", "cc": 45, "group": "Envelope", "default": 64},
+    {"name": "LFO Rate", "cc": 46, "group": "LFO"},
+    {"name": "LFO Pitch Dep", "cc": 47, "group": "LFO"},
+    {"name": "Arp Type", "cc": 49, "group": "Arp", "values": [{"label": "Off", "value": 6}, {"label": "Rise 1", "value": 19}, {"label": "Rise 2", "value": 32}, {"label": "Rise 3", "value": 45}, {"label": "Fall 1", "value": 54}, {"label": "Fall 2", "value": 65}, {"label": "Fall 3", "value": 81}, {"label": "Random 1", "value": 96}, {"label": "Random 2", "value": 109}, {"label": "Random 3", "value": 121}]},
+    {"name": "Arp Div", "cc": 50, "group": "Arp", "values": [{"label": "1/12", "value": 5}, {"label": "1/8", "value": 17}, {"label": "1/4", "value": 29}, {"label": "1/3", "value": 41}, {"label": "1/2", "value": 52}, {"label": "2/3", "value": 64}, {"label": "1/1", "value": 75}, {"label": "3/2", "value": 87}, {"label": "2/1", "value": 99}, {"label": "3/1", "value": 110}, {"label": "4/1", "value": 122}]},
+    {"name": "Transpose", "cc": 40, "group": "Voice", "values": [{"label": "-3", "value": 9}, {"label": "-2", "value": 27}, {"label": "-1", "value": 45}, {"label": "0", "value": 64}, {"label": "+1", "value": 81}, {"label": "+2", "value": 99}, {"label": "+3", "value": 118}], "mutate": false},
+    {"name": "Velocity", "cc": 41, "group": "Amp", "range": [1, 127], "mutate": false}
+  ],
+  "clock": {"sends": false, "receives": true, "transport": true},
+  "notes": "The volca fm has a MIDI In only (no MIDI Out), and takes no Program Change. The manual does not state the factory MIDI channel (channel 1 is assumed): set it by holding MEMORY while powering on and pressing keyboard button 1-16. Hold FUNC while powering on and set global parameter 7 'MIDI RX ShortMessage' to On (the factory default), or notes, CCs and pitch bend are ignored; clock, Start and Stop are followed only while parameter 6 'MIDI Clock Src' is Auto (the default). Transpose steps shown apply when 'TRANSPOSE NOTE' is On; with it Off, CC 40 gives octave-range transposition of -36 to +36 semitones instead. Modulator/Carrier Attack and Decay run -63 to +63 around the voice's own setting (64 is no change). Korg's hex and decimal columns disagree in a few of the step tables, so Soba sends each step from the middle of its band, inside it whichever column is right."
+}

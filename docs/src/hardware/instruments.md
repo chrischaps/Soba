@@ -16,10 +16,8 @@ Each one was built from its maker's official MIDI implementation chart, and its 
 | [RC-505mkII](./rc-505mkii.md) | BOSS | The same for the mkII, which has sixteen assigns |
 | [MicroFreak](./microfreak.md) | Arturia | A paraphonic synth with 20 CCs |
 | [Polyend Tracker](./polyend-tracker.md) | Polyend | Played as a MIDI synth, with its mixer and perform effects |
-| [volca fm2](./volca-fm2.md) | Korg | A six-voice FM synth |
-| [volca sample2](./volca-sample2.md) | Korg | A kit: ten sample parts, a channel each |
+| [volca fm](./volca-fm.md) | Korg | A three-voice FM synth, the DX7 in miniature |
 | [volca drum](./volca-drum.md) | Korg | A kit: six parts, a channel each |
-| [volca kick](./volca-kick.md) | Korg | A kick synth, played by notes |
 | [FANTOM-06](./fantom-06.md) | Roland | A workstation with sixteen zones, and scenes chosen by program change |
 | [ZOIA](./zoia.md) | Empress | Sixteen CC lanes for the CC In modules in your patches |
 

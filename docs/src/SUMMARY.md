@@ -76,10 +76,8 @@
   - [RC-505mkII](./hardware/rc-505mkii.md)
   - [MicroFreak](./hardware/microfreak.md)
   - [Polyend Tracker](./hardware/polyend-tracker.md)
-  - [volca fm2](./hardware/volca-fm2.md)
-  - [volca sample2](./hardware/volca-sample2.md)
+  - [volca fm](./hardware/volca-fm.md)
   - [volca drum](./hardware/volca-drum.md)
-  - [volca kick](./hardware/volca-kick.md)
   - [FANTOM-06](./hardware/fantom-06.md)
   - [ZOIA](./hardware/zoia.md)
 

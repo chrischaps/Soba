@@ -32,17 +32,15 @@ macro_rules! bundled {
 }
 
 /// Every profile that ships, in menu order.
-const BUNDLED: [Bundled; 12] = bundled![
+const BUNDLED: [Bundled; 10] = bundled![
     "digitakt.json",
     "sp-404mkii.json",
     "rc-505.json",
     "rc-505mkii.json",
     "microfreak.json",
     "polyend-tracker.json",
-    "volca-fm2.json",
-    "volca-sample2.json",
+    "volca-fm.json",
     "volca-drum.json",
-    "volca-kick.json",
     "fantom-06.json",
     "zoia.json",
 ];
