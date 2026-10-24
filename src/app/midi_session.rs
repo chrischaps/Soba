@@ -18,6 +18,7 @@ use crate::engine::{MidiDeviceInfo, MidiEngine, MidiEvent, TimestampedMidiEvent,
 use crate::persistence::{MidiControl, MidiEncoding, MidiInput, MidiMapping, MidiSource};
 use super::midi_mappings::{MidiMappings, Standing};
 use super::module_learn::ModuleLearn;
+use super::hands::Hands;
 
 /// How many CCs a newly learned knob listens to before saying whether
 /// it's an endless encoder (#424).
@@ -149,6 +150,9 @@ pub struct MidiSession {
     /// Notes played on the UI since the last [`drain`](Self::drain), for
     /// it to hear with the MIDI that came in.
     played: Vec<MidiEvent>,
+    /// The controller's encoders and faders, which follow the selection
+    /// (#429), and teaching Soba them.
+    pub hands: Hands,
 }
 
 impl MidiSession {
@@ -346,6 +350,11 @@ impl MidiSession {
                 return;
             }
         };
+        // While Soba is taught the controller, its CCs are for that alone (#429)
+        if let (MidiInput::Cc(value), Some(_)) = (input, self.hands.teaching()) {
+            self.hands.hear(number, channel, value, current, &mut heard.turns);
+            return;
+        }
         if self.learn_into(&event, heard) {
             return;
         }
@@ -383,6 +392,13 @@ impl MidiSession {
             heard.learned = true;
             // The control holds still while it's told apart
             return;
+        }
+        // A taught control turns the selection's knob while the hands follow,
+        // and the patch's mappings on it pause
+        if let MidiInput::Cc(value) = input {
+            if self.hands.hear(number, channel, value, current, &mut heard.turns) {
+                return;
+            }
         }
         for index in 0..self.mappings.len() {
             let mapping = &self.mappings.as_slice()[index];
@@ -461,6 +477,8 @@ impl MidiSession {
     /// Waits for a CC or a note for `target`, in place of any control it
     /// waited for.
     pub fn start_learn(&mut self, target: MidiLearnTarget) {
+        // Learning a control wants the controller more than teaching it does
+        self.hands.cancel_teaching();
         self.guessing = None;
         self.learning = Some(target);
     }

@@ -58,6 +58,10 @@ pub(super) enum AppAction {
     ToggleMapMode,
     /// Open or close the Controller Map.
     ToggleControllerMap,
+    /// The taught encoders and faders follow the selection, or let go (#429).
+    ToggleHands,
+    /// Teach Soba the controller open, a control at a time.
+    TeachController,
     // The browser has no updater
     #[cfg(not(target_arch = "wasm32"))]
     CheckUpdates,
@@ -133,6 +137,8 @@ const fn bind(chord: Chord, listens: Listens, action: AppAction, sheet: &'static
 
 /// What the Keyboard Shortcuts sheet says Map Mode's key does.
 const MAP_MODE_SHEET: &str = "Map Mode: click controls one after another to map them to MIDI";
+/// What the Keyboard Shortcuts sheet says the hands' key does.
+const HANDS_SHEET: &str = "The controller's encoders and faders follow the selection, or let go";
 
 /// The app's own shortcuts, taken in this order: where one chord holds
 /// another (Ctrl+Shift+S holds Ctrl+S), the longer comes first. Editing's
@@ -148,6 +154,7 @@ pub(super) const KEYS: &[Binding] = &[
     bind(Chord::Command(Modifiers::NONE, Key::Z), Listens::UnlessTyping, AppAction::Undo, "Undo"),
     bind(Chord::Command(Modifiers::NONE, Key::B), Listens::OnCanvas, AppAction::Bypass, "Bypass or switch on the selected filters and effects"),
     bind(Chord::Command(Modifiers::NONE, Key::R), Listens::OnCanvas, AppAction::ToggleRecording, "Record, or end the take"),
+    bind(Chord::Command(Modifiers::SHIFT, Key::L), Listens::OnCanvas, AppAction::ToggleHands, HANDS_SHEET),
     bind(Chord::Command(Modifiers::NONE, Key::L), Listens::OnCanvas, AppAction::ToggleMapMode, MAP_MODE_SHEET),
     // Before the palette's Space, which Shift+Space would match too
     bind(Chord::Play, Listens::OnCanvas, AppAction::TogglePlaying, "Play or stop the patch"),
@@ -230,6 +237,8 @@ impl SynthApp {
             AppAction::DisconnectMidi => self.disconnect_midi_device(),
             AppAction::ToggleMapMode => self.toggle_map_mode(),
             AppAction::ToggleControllerMap => self.toggle_controller_map(),
+            AppAction::ToggleHands => self.toggle_hands(ctx),
+            AppAction::TeachController => self.start_teaching(),
             #[cfg(not(target_arch = "wasm32"))]
             AppAction::CheckUpdates => self.updater.check_now(ctx),
             #[cfg(not(target_arch = "wasm32"))]

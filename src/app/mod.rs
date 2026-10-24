@@ -9,6 +9,7 @@ pub mod capture;
 mod capture_aim;
 mod document;
 pub(crate) mod editing;
+pub mod hands;
 pub mod engine_sync;
 mod input_device;
 pub mod lesson;

@@ -249,6 +249,10 @@ pub struct SynthGraphState {
     /// Controller Map lights (#426).
     pub map_mode: super::map_mode::MapMode,
 
+    /// The knobs a controller's hands hold as they follow the selection,
+    /// and the mapped knobs paused meanwhile (#429).
+    pub hands: super::hand_badges::HandBadges,
+
     /// Flag set when a widget context menu is shown this frame.
     /// Used to prevent the add-node menu from also appearing.
     pub widget_context_menu_open: bool,
@@ -410,6 +414,7 @@ impl Default for SynthGraphState {
             midi_learn_scene: None,
             midi_pickups: HashMap::new(),
             map_mode: Default::default(),
+            hands: Default::default(),
             widget_context_menu_open: false,
             scope_data: HashMap::new(),
             zoom: 1.0,

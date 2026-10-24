@@ -93,6 +93,7 @@ pub const SHEET: &[Group] = &[
             ("`Shift + Space`", "Play or stop the patch"),
             ("`Ctrl + R`", "Record, or end the take"),
             ("`Ctrl + L`", "Map Mode: click controls one after another to map them to MIDI"),
+            ("`Ctrl + Shift + L`", "The controller's encoders and faders follow the selection, or let go"),
             ("`Alt` over a cable", "Hear what the cable carries"),
         ],
     },

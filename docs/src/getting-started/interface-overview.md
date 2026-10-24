@@ -19,7 +19,7 @@ From left to right:
 | **❓ Help** | **📖 Manual** opens this manual, and **⌨ Keyboard Shortcuts** (`F1`) lists the [shortcuts](#keyboard-shortcuts), and **🎓 Lessons** opens the [lessons](lessons.md) you take inside the app. **Check for Updates…**, **Check for Updates Automatically**, and **Roll Back** after an update: see [Updates](installation.md#updates) |
 | **Output** | The audio device to play through |
 | **Input** | The microphone, guitar or line input that [Audio Input](../modules/sources/audio-input.md) modules hear. It starts at **None**: nothing is opened until you choose a device. A filled dot (●) means it's open. |
-| **MIDI In** | The MIDI controller to listen to. A filled dot (●) means it's connected. At the foot of the menu, **Map Mode** (`Ctrl + L`) and the **Controller Map**: see [MIDI Learn](#midi-learn). |
+| **MIDI In** | The MIDI controller to listen to. A filled dot (●) means it's connected. At the foot of the menu, **Map Mode** (`Ctrl + L`) and the **Controller Map**: see [MIDI Learn](#midi-learn). Below them, **Teach Your Controller…** and **Hands Follow Selection** (`Ctrl + Shift + L`): see [Playing with a controller](#playing-with-a-controller). |
 
 At the right end, the toolbar shows a CPU meter while the patch plays, the device's sample rate and channel count, and whether the audio engine is running. While an input is open, **In** shows how much audio is held between the input and output devices, in milliseconds; it turns amber for a moment after a dropout. Hover it for details.
 
@@ -300,6 +300,28 @@ Choose **Controller Map…** at the foot of the **MIDI In** menu to see every ma
 
 The cross at the end of a row clears that mapping. Hover a row and its control lights up on the canvas, so you can find which knob it is. Changes here are changes to the patch: they're saved with it, and the patch shows it has unsaved changes until you save. A DAW macro's range and style are the DAW's, so its row only lists it. Map Mode has a button at the foot of the panel too, so you can keep mapping with the map open.
 
+### Playing with a controller
+
+Mapping is for a patch you've finished. While you're building one, you want the encoders under your hand to be the knobs of whatever you're working on: click an oscillator and they turn its knobs, click a filter and they turn the filter's. That's **Hands Follow Selection**.
+
+**Teach Soba your controller first.** You do this once per controller. Choose **Teach Your Controller…** in the **MIDI In** menu, and the status bar walks you through it:
+
+1. "Turn encoder 1 a few slow clicks". Turn the first encoder a few clicks, slowly, in one direction. The status bar says what it heard (`Encoder 1 is CC 74 · ch 1, endless`) and asks for the next one, through encoder 8.
+2. "Move fader 1". Move each fader in turn, through fader 4.
+
+If your controller has fewer encoders or faders, press `Tab` (or **Skip**) to pass one, and `Enter` (or **Done**) to finish early. `Escape` gives up and keeps what Soba knew before. Turning slowly lets Soba tell an endless encoder, which sends steps, from a knob with ends, which sends where it is. Soba keeps what it learned under the controller's name, not in the patch, so it's there for every patch, and each controller you teach is remembered separately.
+
+**Then turn on Hands Follow Selection** in the **MIDI In** menu, or press `Ctrl + Shift + L`. Teaching turns it on for you. While it's on:
+
+- The encoders turn the selected module's first eight knobs, in the order its face shows them, and the faders turn the next four.
+- Select a [group](#groups) and they turn the knobs pinned to its face instead. With several modules selected, they turn the first one's.
+- The knobs they turn wear small numbered purple badges, `1` to `8` for the encoders and `F1` to `F4` for the faders. The badges fade in each time you select something else.
+- Endless encoders step the knob from wherever it stands. Faders, and knobs with ends, pick the knob up as mapped ones do: a tick on the rim shows where the fader is until it reaches the knob.
+- The patch's own mappings on the taught encoders and faders pause, and their badges dim. Turn Hands Follow Selection off and they come back. Mappings on the controller's other controls, its pads and keys, carry on as before.
+- As with mappings, turning a knob this way isn't added to the undo history.
+
+Map Mode and MIDI Learn come first. While either is on, the encoders don't follow the selection, so you can map them in the usual way.
+
 ## Recording
 
 When something good happens (a filter sweep you rode by hand, a lucky generative passage, an improvisation on a MIDI keyboard), press **● Rec** or `Ctrl + R` to keep it. If the patch is stopped, Rec starts it.
@@ -447,6 +469,7 @@ On a Mac, hold `⌘ Command` where these say `Ctrl`, and `Option` for `Alt`. The
 | `Shift + Space` | Play or stop the patch |
 | `Ctrl + R` | Record, or end the take |
 | `Ctrl + L` | Map Mode: click controls one after another to map them to MIDI |
+| `Ctrl + Shift + L` | The controller's encoders and faders follow the selection, or let go |
 | `Alt` over a cable | Hear what the cable carries |
 
 The letter keys play notes: see [The computer keyboard](#the-computer-keyboard).

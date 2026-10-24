@@ -665,6 +665,24 @@ fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession, map_mode: bool, controlle
             if ui.add(item).on_hover_text("Every MIDI mapping in the patch: its range, hardware, pickup and invert").clicked() {
                 actions.push(AppAction::ToggleControllerMap);
             }
+
+            // The encoders and faders following the selection (#429)
+            ui.separator();
+            let taught = midi.hands.controller();
+            let teach = if taught.is_some() { "Teach Your Controller Again…" } else { "Teach Your Controller…" };
+            let tip = match taught {
+                Some(controller) => format!("Soba knows {} on this controller. Turn each encoder, then move each fader, to teach it again", controller.summary()),
+                None => "Turn each encoder, then move each fader, so Soba knows them. Once per controller".to_string(),
+            };
+            if ui.button(teach).on_hover_text(tip).clicked() {
+                actions.push(AppAction::TeachController);
+            }
+            let keys = shortcuts::keys(ui.ctx(), "Ctrl+Shift+L");
+            let item = egui::Button::selectable(midi.hands.on, "Hands Follow Selection").shortcut_text(keys);
+            let tip = "The encoders turn the selected module's first eight knobs, and the faders the next four. The patch's own mappings on them pause meanwhile";
+            if ui.add_enabled(taught.is_some(), item).on_hover_text(tip).on_disabled_hover_text("Teach Soba your controller first").clicked() {
+                actions.push(AppAction::ToggleHands);
+            }
         });
     actions
 }

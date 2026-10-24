@@ -9,6 +9,8 @@ use super::*;
 /// What the left of the status bar shows, most pressing first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Shown {
+    /// Soba is being taught the controller: the control to move next (#429).
+    Teach,
     /// Map Mode is on: what it waits for, and how to leave (#426).
     MapMode,
     /// The prompt to move a control or hit a pad, for as long as MIDI Learn
@@ -38,7 +40,9 @@ impl SynthApp {
 
     pub(super) fn status_bar_shows(&mut self) -> Shown {
         let failed = self.status.as_ref().is_some_and(|line| line.severity >= Severity::Warning);
-        if self.map_mode_on() {
+        if self.midi.hands.teaching().is_some() {
+            Shown::Teach
+        } else if self.map_mode_on() {
             Shown::MapMode
         } else if self.is_midi_learning() {
             Shown::Learn
@@ -136,6 +140,17 @@ impl SynthApp {
             ui.label(RichText::new(format!("⚠ {}", text)).color(color).small());
         };
         match self.status_bar_shows() {
+            Shown::Teach => {
+                let text = self.teach_status().unwrap_or_default();
+                ui.label(RichText::new(text).color(theme::signal::MIDI.lerp_to_gamma(theme::text::PRIMARY, 0.35)).small());
+                let button = |text: &str| egui::Button::new(RichText::new(text).small()).small();
+                if ui.add(button("Skip")).on_hover_text("This controller hasn't this one (Tab)").clicked() {
+                    self.midi.hands.skip();
+                }
+                if ui.add(button("Done")).on_hover_text("It has no more (Enter)").clicked() {
+                    self.midi.hands.finish_teaching();
+                }
+            }
             Shown::MapMode => {
                 let text = self.map_mode_status(ui.ctx());
                 ui.label(RichText::new(text).color(theme::signal::MIDI.lerp_to_gamma(theme::text::PRIMARY, 0.35)).small());

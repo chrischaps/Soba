@@ -754,6 +754,11 @@ impl SynthNodeData {
                         };
                         let show_connection_indicator = is_connected && !show_midi_indicator && modulated.is_none();
 
+                        // Its CC is the hands' while they follow the selection (#429)
+                        let paused = engine_node_id.is_some_and(|eid| user_state.hands.paused.contains(&(eid, current_param_index)));
+                        if let Some(eid) = engine_node_id {
+                            super::hand_badges::paint(ui, (eid, current_param_index), ui.cursor().min, zoom, &user_state.hands);
+                        }
                         if show_midi_indicator {
                             // MIDI CC badge - purple for mapped, blinking for learn mode
                             let badge_color = if midi_config.is_learn_target {
@@ -764,6 +769,8 @@ impl SynthNodeData {
                                     let m = crate::app::theme::signal::MIDI;
                                     Color32::from_rgba_unmultiplied(m.r(), m.g(), m.b(), 128 + blink * 127)
                                 }
+                            } else if paused {
+                                crate::app::theme::signal::MIDI.gamma_multiply(0.35)
                             } else {
                                 crate::app::theme::signal::MIDI
                             };
@@ -786,7 +793,7 @@ impl SynthNodeData {
                                 egui::Align2::LEFT_TOP,
                                 "M",
                                 egui::FontId::proportional(8.0 * zoom),
-                                Color32::WHITE,
+                                if paused { Color32::WHITE.gamma_multiply(0.45) } else { Color32::WHITE },
                             );
 
                             // Request repaint for blinking effect

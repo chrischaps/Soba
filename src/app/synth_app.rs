@@ -63,6 +63,7 @@ mod dive;
 mod file_hover;
 mod framing;
 mod grouping;
+mod hands;
 mod hosted;
 mod idle;
 mod launch;
@@ -714,6 +715,7 @@ impl SynthApp {
     /// Notes reach Note In modules on the audio thread, sample-accurately;
     /// nothing here affects what they play.
     fn process_midi_events(&mut self, now: f64) {
+        self.follow_hands(now);
         let standings = self.midi_standings();
         let was_learning = self.is_midi_learning();
         let user_state = &mut self.user_state;
@@ -759,7 +761,8 @@ impl SynthApp {
     /// number knob a number at a time.
     fn midi_standings(&self) -> HashMap<(u64, usize), Standing> {
         let mut standings = HashMap::new();
-        for mapping in &self.midi.mappings {
+        // The knobs the hands hold too (#429)
+        for mapping in self.midi.mappings.iter().chain(self.midi.hands.mappings()) {
             let key = (mapping.node_id, mapping.param_index);
             if mapping.scene.is_some() || standings.contains_key(&key) {
                 continue;
@@ -793,7 +796,8 @@ impl SynthApp {
     /// Shows a tick where each fader is that hasn't picked its knob up
     /// yet, and fades it once it has.
     fn show_midi_pickups(&mut self, now: f64) {
-        let waiting = self.midi.mappings.waiting();
+        let mut waiting = self.midi.mappings.waiting();
+        waiting.extend(self.midi.hands.waiting());
         let pickups = &mut self.user_state.midi_pickups;
         for (key, (_, caught)) in pickups.iter_mut() {
             if !waiting.contains_key(key) && caught.is_none() {
@@ -2290,6 +2294,7 @@ impl SynthApp {
         if let Some(storage) = storage {
             self.probe.load(storage);
             self.planting.load(storage);
+            self.midi.hands.load(storage);
         }
         if let Some(glyph) = storage.and_then(|s| s.get_string(FLOW_GLYPH_KEY)) {
             self.user_state.flow_glyph = FlowGlyph::ALL
@@ -2641,6 +2646,8 @@ impl SynthApp {
         // Editing shortcuts act on the graph, so they wait while a text field
         // or the palette has the keys
         if on_canvas {
+            // Teaching the controller has Tab, Enter and Escape first (#429)
+            self.teach_keys(ctx);
             self.handle_group_shortcuts(ctx);
             self.handle_editing_shortcuts(ctx);
             self.handle_framing_shortcut(ctx);
@@ -2886,6 +2893,7 @@ impl eframe::App for SynthApp {
         storage.set_string(CABLE_THROUGH_KEY, self.user_state.cable_through.to_string());
         self.probe.store(storage);
         self.planting.store(storage);
+        self.midi.hands.store(storage);
         storage.set_string(KNOB_STYLE_KEY, self.user_state.knob_style.name().to_string());
         storage.set_string(MIDI_OUT_PORTS_KEY, crate::link::midi::MIDI.setting());
         storage.set_string(MIDI_IN_DEVICE_KEY, self.midi.remembered.clone().unwrap_or_default());
