@@ -60,7 +60,7 @@ impl SynthApp {
                     });
                     match listening.off_channel() {
                         0 => {}
-                        n => quiet(ui, &format!("{n} heard on another channel than the rest: a profile keeps one, so they're left out")),
+                        n => quiet(ui, &format!("{n} heard on another channel than the rest: each keeps its own")),
                     }
                 }
                 ui.add_space(6.0);

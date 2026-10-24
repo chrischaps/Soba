@@ -8,7 +8,7 @@ Roland's 61-key workstation synthesizer, sixteen zones each playing its own tone
 
 ## Before you play
 
-Zone channels 1-16 are assumed (each zone's Receive Channel is a setting; the document gives no factory default). Scenes: Bank Select 85/LSB 0 = A001-A128, LSB 1 = B001-B128 (the document elides further banks); scenes are presumably selected on the Scene Control Channel (SYSTEM, 1-16 or OFF; the MIDI document does not say so outright, so check the Reference Manual), and Receive Program Change/Bank Select must be On in SYSTEM:MIDI. Tones per zone: Bank Select MSB 87 (User LSB 0, Preset B 64, C 68, D 69, E 78, CMN 85, A 92), MSB 89 SN-A (User 0, Preset 65), MSB 91 VTW (User 0, Preset 65), MSB 86 drum kits (User LSB 0, Preset A 64, CMN 65); program 1-128, sent on the zone's channel. Cutoff, Resonance, Attack, Decay, Release and Vibrato are relative offsets (64 = no change). Clock in needs Sync Mode EXTERNAL; Start/Stop/Continue also work in REMOTE; clock out needs Sync Output On. Polyphony and the Scene Control Channel's factory default are not stated in Roland's spec page, MIDI Implementation or Reference Manual.
+Zone channels 1-16 are assumed (each zone's Receive Channel is a setting; the document gives no factory default). Scenes: Bank Select 85/LSB 0 = A001-A128, LSB 1 = B001-B128 (the document elides further banks); scenes are presumably selected on the Scene Control Channel (SYSTEM, 1-16 or OFF; the MIDI document does not say so outright, so check the Reference Manual), and Receive Program Change/Bank Select must be On in SYSTEM:MIDI. Tones per zone: Bank Select MSB 87 (User LSB 0, Preset B 64, C 68, D 69, E 78, CMN 85, A 92), MSB 89 SN-A (User 0, Preset 65), MSB 91 VTW (User 0, Preset 65), MSB 86 drum kits (User LSB 0, Preset A 64, CMN 65); program 1-128, sent on the zone's channel. Clock in needs Sync Mode EXTERNAL; Start/Stop/Continue also work in REMOTE; clock out needs Sync Output On. Polyphony and the Scene Control Channel's factory default are not stated in Roland's spec page, MIDI Implementation or Reference Manual.
 
 ## Parameters
 
@@ -16,15 +16,15 @@ The first 12 are an Instrument's knobs when it's first made. Each part takes the
 
 | | Parameter | Message | Group | Values |
 |---|---|---|---|---|
-| ● | Cutoff | CC 74 | Filter | starts at 64 |
-| ● | Resonance | CC 71 | Filter | starts at 64 |
-| ● | Attack | CC 73 | Envelope | starts at 64 |
-| ● | Decay | CC 75 | Envelope | starts at 64 |
-| ● | Release | CC 72 | Envelope | starts at 64 |
+| ● | Cutoff | CC 74 | Filter | an offset: 64 is no change |
+| ● | Resonance | CC 71 | Filter | an offset: 64 is no change |
+| ● | Attack | CC 73 | Envelope | an offset: 64 is no change |
+| ● | Decay | CC 75 | Envelope | an offset: 64 is no change |
+| ● | Release | CC 72 | Envelope | an offset: 64 is no change |
 | ● | Modulation | CC 1 | Voice |  |
-| ● | Vibrato Rate | CC 76 | LFO | starts at 64 |
-| ● | Vibrato Depth | CC 77 | LFO | starts at 64 |
-| ● | Vibrato Delay | CC 78 | LFO | starts at 64 |
+| ● | Vibrato Rate | CC 76 | LFO | an offset: 64 is no change |
+| ● | Vibrato Depth | CC 77 | LFO | an offset: 64 is no change |
+| ● | Vibrato Delay | CC 78 | LFO | an offset: 64 is no change |
 | ● | Reverb Send | CC 91 | FX |  |
 | ● | Chorus Send | CC 93 | FX |  |
 | ● | Portamento | CC 5 | Voice |  |

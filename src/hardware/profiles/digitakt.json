@@ -59,7 +59,23 @@
     {"name": "Trig Velocity", "cc": 4, "group": "Voice", "mutate": false},
     {"name": "Trig Length", "cc": 5, "group": "Voice"},
     {"name": "Filter Trig", "cc": 13, "group": "Voice"},
-    {"name": "LFO Trig", "cc": 14, "group": "Voice"}
+    {"name": "LFO Trig", "cc": 14, "group": "Voice"},
+    {"name": "Delay Time", "cc": 85, "group": "FX", "channel": 9},
+    {"name": "Delay Pingpong", "cc": 86, "group": "FX", "channel": 9},
+    {"name": "Delay Width", "cc": 87, "group": "FX", "channel": 9},
+    {"name": "Delay Feedback", "cc": 88, "group": "FX", "channel": 9},
+    {"name": "Delay Highpass", "cc": 89, "group": "FX", "channel": 9},
+    {"name": "Delay Lowpass", "cc": 90, "group": "FX", "channel": 9},
+    {"name": "Delay to Reverb", "cc": 91, "group": "FX", "channel": 9},
+    {"name": "Delay Volume", "cc": 92, "group": "FX", "channel": 9, "mutate": false},
+    {"name": "Reverb Predelay", "cc": 24, "group": "FX", "channel": 9},
+    {"name": "Reverb Decay", "cc": 25, "group": "FX", "channel": 9},
+    {"name": "Reverb Shelf Hz", "cc": 26, "group": "FX", "channel": 9},
+    {"name": "Reverb Shelf dB", "cc": 27, "group": "FX", "channel": 9},
+    {"name": "Reverb Highpass", "cc": 28, "group": "FX", "channel": 9},
+    {"name": "Reverb Lowpass", "cc": 29, "group": "FX", "channel": 9},
+    {"name": "Reverb Pre/Post", "cc": 30, "group": "FX", "channel": 9, "mutate": false},
+    {"name": "Reverb Volume", "cc": 31, "group": "FX", "channel": 9, "mutate": false}
   ],
   "parts": [
     {"name": "Track 1", "note": 0, "channel": 1},
@@ -74,5 +90,5 @@
   "cc_per_part": true,
   "programs": {"what": "Pattern", "style": "lettered", "letters": "ABCDEFGH", "per_bank": 16, "first": 1},
   "clock": {"sends": true, "receives": true, "transport": true},
-  "notes": "In Settings > MIDI Config > Port Config turn Receive CC/NRPN and Receive Notes on. Tracks 1-8 are on their default channels 1-8 (notes 0-7 trigger tracks 1-8 only then). Program changes need Prg Ch Receive on in MIDI Sync; the channel is set by Prg Chg In Ch."
+  "notes": "In Settings > MIDI Config > Port Config turn Receive CC/NRPN and Receive Notes on. Tracks 1-8 are on their default channels 1-8 (notes 0-7 trigger tracks 1-8 only then). Program changes need Prg Ch Receive on in MIDI Sync; the channel is set by Prg Chg In Ch. The Delay and Reverb parameters go to the FX Control channel, not a track's: set FX Control Ch to 9 in Settings > MIDI Config > Channels (the manual gives no factory setting). The compressor and the external-in mixer (also in B.7) are left out, because the manual doesn't say which channel they listen on."
 }

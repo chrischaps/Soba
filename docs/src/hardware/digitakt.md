@@ -8,11 +8,11 @@ Eight-track sample-based drum machine and sequencer.
 
 ## Before you play
 
-In Settings > MIDI Config > Port Config turn Receive CC/NRPN and Receive Notes on. Tracks 1-8 are on their default channels 1-8 (notes 0-7 trigger tracks 1-8 only then). Program changes need Prg Ch Receive on in MIDI Sync; the channel is set by Prg Chg In Ch.
+In Settings > MIDI Config > Port Config turn Receive CC/NRPN and Receive Notes on. Tracks 1-8 are on their default channels 1-8 (notes 0-7 trigger tracks 1-8 only then). Program changes need Prg Ch Receive on in MIDI Sync; the channel is set by Prg Chg In Ch. The Delay and Reverb parameters go to the FX Control channel, not a track's: set FX Control Ch to 9 in Settings > MIDI Config > Channels (the manual gives no factory setting). The compressor and the external-in mixer (also in B.7) are left out, because the manual doesn't say which channel they listen on.
 
 ## Parameters
 
-The first 12 are an Instrument's knobs when it's first made. Each part takes them on its own channel.
+The first 12 are an Instrument's knobs when it's first made. Each part takes them on its own channel, except those with a channel of their own.
 
 | | Parameter | Message | Group | Values |
 |---|---|---|---|---|
@@ -68,6 +68,22 @@ The first 12 are an Instrument's knobs when it's first made. Each part takes the
 |  | Trig Length | CC 5 | Voice |  |
 |  | Filter Trig | CC 13 | Voice |  |
 |  | LFO Trig | CC 14 | Voice |  |
+|  | Delay Time | CC 85 (ch 9) | FX |  |
+|  | Delay Pingpong | CC 86 (ch 9) | FX |  |
+|  | Delay Width | CC 87 (ch 9) | FX |  |
+|  | Delay Feedback | CC 88 (ch 9) | FX |  |
+|  | Delay Highpass | CC 89 (ch 9) | FX |  |
+|  | Delay Lowpass | CC 90 (ch 9) | FX |  |
+|  | Delay to Reverb | CC 91 (ch 9) | FX |  |
+|  | Delay Volume | CC 92 (ch 9) | FX | Mutate leaves it |
+|  | Reverb Predelay | CC 24 (ch 9) | FX |  |
+|  | Reverb Decay | CC 25 (ch 9) | FX |  |
+|  | Reverb Shelf Hz | CC 26 (ch 9) | FX |  |
+|  | Reverb Shelf dB | CC 27 (ch 9) | FX |  |
+|  | Reverb Highpass | CC 28 (ch 9) | FX |  |
+|  | Reverb Lowpass | CC 29 (ch 9) | FX |  |
+|  | Reverb Pre/Post | CC 30 (ch 9) | FX | Mutate leaves it |
+|  | Reverb Volume | CC 31 (ch 9) | FX | Mutate leaves it |
 
 ## Parts
 

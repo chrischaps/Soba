@@ -39,7 +39,7 @@ A device that sends its knobs as CCs can teach Soba its own profile. The Digitak
 4. Turn each knob on the device, one at a time. Each knob shows up as a row the moment it moves, with its lamp glowing and a bar showing where it stands. Type its name into the row; the newest row takes your typing.
 5. Click **Save Profile**.
 
-Turn the knobs in the order you want them on the node, because the first twelve become an Instrument's knobs. A knob you don't name keeps its number ("CC 83"). A knob you moved by mistake can be dropped with its ✕. If one knob sends on a different channel from the rest, it's left out, because a profile's parameters share a single channel.
+Turn the knobs in the order you want them on the node, because the first twelve become an Instrument's knobs. A knob you don't name keeps its number ("CC 83"). A knob you moved by mistake can be dropped with its ✕. A knob that sends on a different channel from the rest keeps its own, as the Digitakt's delay and reverb do on its FX channel.
 
 ### The format
 
@@ -57,7 +57,9 @@ A profile is a small JSON file, like a patch:
     { "name": "Cutoff", "cc": 23, "group": "Filter" },
     { "name": "Mode", "cc": 80, "values": ["Mono", "Poly"] },
     { "name": "Fine", "cc": 1, "lsb": 33, "mutate": false },
-    { "name": "Deep", "nrpn": 1234, "range": [0, 100] }
+    { "name": "Deep", "nrpn": 1234, "range": [0, 100] },
+    { "name": "Delay", "cc": 85, "channel": 9 },
+    { "name": "Nudge", "cc": 74, "relative": true }
   ],
   "parts": [{ "name": "Kick", "note": 36, "channel": 10 }],
   "buttons": [{ "name": "Rec", "cc": 80, "mode": "momentary" }],
@@ -80,9 +82,11 @@ A profile is a small JSON file, like a patch:
   - **curve**: `"log"`, for times and frequencies.
   - **default**: where it starts.
   - **mutate**: `false` keeps Mutate away from a volume or a tuning.
+  - **channel**: its own channel, 1-16, when it isn't the device's or a part's. The Digitakt's delay and reverb are on its FX channel, and the SP-404MKII's effects choose their bus by channel.
+  - **relative**: `true` when the CC nudges the device's value instead of setting it, as the FANTOM-06's Cutoff does. The middle of the range (64) is no change, and the knob shows an offset: +12, −5.
 
   **group** (Oscillator, Sample, Voice, Filter, Envelope, LFO, Arp, FX, Amp, Mix, Global) colours the knob after the matching module category: oscillators blue, filters teal, envelopes and LFOs orange, effects cyan, and the rest grey.
 - **cc_per_part**: each part takes the same CCs on its own channel, a track a channel.
 - **buttons**: CCs a gate presses (`momentary`) or flips (`toggle`), with their `on` and `off` values (127 and 0 unless given).
-- **programs**: what program changes choose and how the device numbers them. The style is either `numbered` (from `first`, with `count`) or `lettered`, like the Digitakt's A01 to H16. It can also give a `channel`, and `banks` reached by Bank Select (`msb`, `lsb`).
+- **programs**: what program changes choose and how the device numbers them. The style is either `numbered` (from `first`, with `count`) or `lettered`, like the Digitakt's A01 to H16. It can also give a `channel`, and `banks` reached by Bank Select (`msb`, `lsb`). A lettered device whose banks are chosen by channel instead, as the SP-404MKII's are, says `"bank_by_channel": true`: bank A is on the programs' channel, B on the next, and so on.
 - **clock**: whether the device sends MIDI clock, follows it, and starts and stops with it.

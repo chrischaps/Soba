@@ -7,15 +7,15 @@
   "kind": "synth",
   "channels": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
   "parameters": [
-    {"name": "Cutoff", "cc": 74, "group": "Filter", "default": 64},
-    {"name": "Resonance", "cc": 71, "group": "Filter", "default": 64},
-    {"name": "Attack", "cc": 73, "group": "Envelope", "default": 64},
-    {"name": "Decay", "cc": 75, "group": "Envelope", "default": 64},
-    {"name": "Release", "cc": 72, "group": "Envelope", "default": 64},
+    {"name": "Cutoff", "cc": 74, "group": "Filter", "default": 64, "relative": true},
+    {"name": "Resonance", "cc": 71, "group": "Filter", "default": 64, "relative": true},
+    {"name": "Attack", "cc": 73, "group": "Envelope", "default": 64, "relative": true},
+    {"name": "Decay", "cc": 75, "group": "Envelope", "default": 64, "relative": true},
+    {"name": "Release", "cc": 72, "group": "Envelope", "default": 64, "relative": true},
     {"name": "Modulation", "cc": 1, "group": "Voice"},
-    {"name": "Vibrato Rate", "cc": 76, "group": "LFO", "default": 64},
-    {"name": "Vibrato Depth", "cc": 77, "group": "LFO", "default": 64},
-    {"name": "Vibrato Delay", "cc": 78, "group": "LFO", "default": 64},
+    {"name": "Vibrato Rate", "cc": 76, "group": "LFO", "default": 64, "relative": true},
+    {"name": "Vibrato Depth", "cc": 77, "group": "LFO", "default": 64, "relative": true},
+    {"name": "Vibrato Delay", "cc": 78, "group": "LFO", "default": 64, "relative": true},
     {"name": "Reverb Send", "cc": 91, "group": "FX"},
     {"name": "Chorus Send", "cc": 93, "group": "FX"},
     {"name": "Portamento", "cc": 5, "group": "Voice"},
@@ -61,5 +61,5 @@
   "cc_per_part": true,
   "programs": {"what": "Scene", "style": "numbered", "first": 1, "count": 128, "banks": [{"name": "Scene A", "msb": 85, "lsb": 0}, {"name": "Scene B", "msb": 85, "lsb": 1}]},
   "clock": {"sends": true, "receives": true, "transport": true},
-  "notes": "Zone channels 1-16 are assumed (each zone's Receive Channel is a setting; the document gives no factory default). Scenes: Bank Select 85/LSB 0 = A001-A128, LSB 1 = B001-B128 (the document elides further banks); scenes are presumably selected on the Scene Control Channel (SYSTEM, 1-16 or OFF; the MIDI document does not say so outright, so check the Reference Manual), and Receive Program Change/Bank Select must be On in SYSTEM:MIDI. Tones per zone: Bank Select MSB 87 (User LSB 0, Preset B 64, C 68, D 69, E 78, CMN 85, A 92), MSB 89 SN-A (User 0, Preset 65), MSB 91 VTW (User 0, Preset 65), MSB 86 drum kits (User LSB 0, Preset A 64, CMN 65); program 1-128, sent on the zone's channel. Cutoff, Resonance, Attack, Decay, Release and Vibrato are relative offsets (64 = no change). Clock in needs Sync Mode EXTERNAL; Start/Stop/Continue also work in REMOTE; clock out needs Sync Output On. Polyphony and the Scene Control Channel's factory default are not stated in Roland's spec page, MIDI Implementation or Reference Manual."
+  "notes": "Zone channels 1-16 are assumed (each zone's Receive Channel is a setting; the document gives no factory default). Scenes: Bank Select 85/LSB 0 = A001-A128, LSB 1 = B001-B128 (the document elides further banks); scenes are presumably selected on the Scene Control Channel (SYSTEM, 1-16 or OFF; the MIDI document does not say so outright, so check the Reference Manual), and Receive Program Change/Bank Select must be On in SYSTEM:MIDI. Tones per zone: Bank Select MSB 87 (User LSB 0, Preset B 64, C 68, D 69, E 78, CMN 85, A 92), MSB 89 SN-A (User 0, Preset 65), MSB 91 VTW (User 0, Preset 65), MSB 86 drum kits (User LSB 0, Preset A 64, CMN 65); program 1-128, sent on the zone's channel. Clock in needs Sync Mode EXTERNAL; Start/Stop/Continue also work in REMOTE; clock out needs Sync Output On. Polyphony and the Scene Control Channel's factory default are not stated in Roland's spec page, MIDI Implementation or Reference Manual."
 }

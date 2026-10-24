@@ -44,7 +44,9 @@ pub fn page(profile: &Profile) -> String {
 
     if !profile.parameters.is_empty() {
         let _ = writeln!(w, "## Parameters\n");
-        let _ = writeln!(w, "The first {FACE} are an Instrument's knobs when it's first made{}.\n", if profile.cc_per_part { ". Each part takes them on its own channel" } else { "" });
+        let own = if profile.parameters.iter().any(|p| p.channel.is_some()) { ", except those with a channel of their own" } else { "" };
+        let per_part = if profile.cc_per_part { format!(". Each part takes them on its own channel{own}") } else { String::new() };
+        let _ = writeln!(w, "The first {FACE} are an Instrument's knobs when it's first made{per_part}.\n");
         let _ = writeln!(w, "| | Parameter | Message | Group | Values |");
         let _ = writeln!(w, "|---|---|---|---|---|");
         for (i, p) in profile.parameters.iter().enumerate() {
@@ -56,16 +58,22 @@ pub fn page(profile: &Profile) -> String {
             } else {
                 String::new()
             };
-            if let Some(default) = p.default {
+            if p.relative {
+                values = [values, format!("an offset: {} is no change", p.centre())].into_iter().filter(|v| !v.is_empty()).collect::<Vec<_>>().join("; ");
+            }
+            if let Some(default) = p.default.filter(|&d| !(p.relative && d == p.centre())) {
                 values = [values, format!("starts at {default}")].into_iter().filter(|v| !v.is_empty()).collect::<Vec<_>>().join("; ");
             }
             if !p.mutate {
                 values = [values, "Mutate leaves it".to_string()].into_iter().filter(|v| !v.is_empty()).collect::<Vec<_>>().join("; ");
             }
-            let message = match p.address {
+            let mut message = match p.address {
                 Address::Cc14 { .. } => format!("{} (14-bit)", p.address.text()),
                 address => address.text(),
             };
+            if let Some(channel) = p.channel {
+                let _ = write!(message, " (ch {channel})");
+            }
             let _ = writeln!(w, "| {face} | {} | {message} | {} | {values} |", p.name, p.group);
         }
         let _ = writeln!(w);
@@ -101,7 +109,7 @@ pub fn page(profile: &Profile) -> String {
     if let Some(programs) = &profile.programs {
         let _ = writeln!(w, "## Programs\n");
         let first = programs.label(0);
-        let last = programs.label((programs.count() - 1) as u8);
+        let last = programs.label(programs.count() - 1);
         let what = programs.what.to_lowercase();
         let style = match programs.naming {
             Naming::Numbered { .. } => "",
@@ -109,6 +117,11 @@ pub fn page(profile: &Profile) -> String {
         };
         let channel = programs.channel.map(|c| format!(" on channel {c}")).unwrap_or_default();
         let _ = writeln!(w, "A program change{channel} chooses a {what}, shown {first} to {last}{style}.");
+        if programs.bank_by_channel {
+            let (from, _) = programs.message(0, profile.channel());
+            let (to, _) = programs.message(programs.count() - 1, profile.channel());
+            let _ = writeln!(w, "Each bank is on its own channel: {} on channel {from} to {} on channel {to}.", &first[..1], &last[..1]);
+        }
         if !programs.banks.is_empty() {
             let banks = programs.banks.iter().map(|b| format!("{} (MSB {}{})", b.name, b.msb, b.lsb.map(|l| format!(", LSB {l}")).unwrap_or_default()));
             let _ = writeln!(w, "Bank Select reaches {}.", banks.collect::<Vec<_>>().join(", "));

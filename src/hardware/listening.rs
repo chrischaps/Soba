@@ -1,7 +1,7 @@
 //! A profile made by listening (#441): for a device that sends its knobs
 //! as CCs (the Digitakt, the MicroFreak), turn each knob on it and type
 //! its name. Each CC heard becomes a parameter, in the order its knobs
-//! were first turned, on the channel they came on. What comes out is a
+//! were first turned, on the channel it came on. What comes out is a
 //! profile of your own, saved to the Instruments folder.
 
 use super::profile::{Kind, Parameter, Profile};
@@ -95,11 +95,21 @@ impl Listening {
     }
 
     /// The profile it has heard: a parameter a knob, on the channel most
-    /// came on (a knob heard on another is left out, since a profile's
-    /// parameters share one).
+    /// came on. A knob heard on another keeps it as its own, as the
+    /// Digitakt's delay keeps its FX channel.
     pub fn profile(&self) -> Profile {
         let channel = self.channel();
-        let parameters = self.knobs.iter().filter(|k| k.channel == channel).map(|k| Parameter::cc(k.shown_name(), k.cc)).collect();
+        let parameters = self
+            .knobs
+            .iter()
+            .map(|k| match k.channel == channel {
+                true => Parameter::cc(k.shown_name(), k.cc),
+                false => {
+                    let name = if k.name.trim().is_empty() { format!("CC {} ch {}", k.cc, k.channel) } else { k.shown_name() };
+                    Parameter { channel: Some(k.channel), ..Parameter::cc(name, k.cc) }
+                }
+            })
+            .collect();
         Profile {
             name: self.name.trim().to_string(),
             maker: String::new(),
@@ -119,8 +129,8 @@ impl Listening {
         }
     }
 
-    /// The knobs heard on another channel than the profile's, which it
-    /// leaves out.
+    /// The knobs heard on another channel than the profile's, which keep
+    /// their own.
     pub fn off_channel(&self) -> usize {
         let channel = self.channel();
         self.knobs.iter().filter(|k| k.channel != channel).count()
@@ -154,9 +164,27 @@ mod tests {
         let profile = listening.profile();
         assert_eq!(profile.channels, [3]);
         assert_eq!(profile.port, "2- MicroFreak");
-        assert_eq!(profile.parameters.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Cutoff", "CC 83"]);
+        assert_eq!(profile.parameters.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["Cutoff", "CC 83", "CC 40 ch 6"]);
+        assert_eq!(profile.parameters.iter().map(|p| p.channel).collect::<Vec<_>>(), [None, None, Some(6)], "the odd one out keeps its channel");
         assert_eq!(listening.off_channel(), 1);
         assert_eq!(listening.not_ready(), None);
+    }
+
+    #[test]
+    fn one_cc_on_two_channels_is_two_parameters() {
+        // A Digitakt's track filter and its FX channel's delay time both turn up as CCs from one port
+        let mut listening = Listening::new("Elektron Digitakt");
+        listening.name = "Heard Digitakt".into();
+        listening.hear(0, 74, 10);
+        listening.hear(0, 75, 10);
+        listening.hear(8, 85, 10);
+        listening.hear(8, 74, 10);
+        let profile = listening.profile();
+        assert_eq!(profile.channels, [1]);
+        assert_eq!(profile.parameters.len(), 4);
+        assert_eq!(profile.parameters[3].name, "CC 74 ch 9");
+        assert_eq!(profile.parameters[3].channel, Some(9));
+        assert_eq!(listening.not_ready(), None, "no two names alike");
     }
 
     #[test]

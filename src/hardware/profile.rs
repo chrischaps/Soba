@@ -15,7 +15,10 @@
 //! A parameter is a CC (`"cc": 74`), a 14-bit pair (`"cc": 1, "lsb": 33`)
 //! or an NRPN (`"nrpn": 1234`), across its whole range unless it names
 //! one. A stepped one lists its values: plain labels share the range
-//! evenly, and labels with a `value` say exactly what to send.
+//! evenly, and labels with a `value` say exactly what to send. One on its
+//! own channel says so (`"channel": 9`, the Digitakt's delay), and a CC
+//! that nudges rather than sets is `"relative": true`, its middle meaning
+//! no change (the FANTOM's Cutoff).
 
 use std::collections::HashSet;
 
@@ -185,6 +188,12 @@ pub struct Parameter {
     pub default: Option<u16>,
     /// Whether Mutate may move it: not a volume, a tuning or a MIDI setting.
     pub mutate: bool,
+    /// Its own channel, 1-16, whatever the device's or a part's: the
+    /// Digitakt's delay is on its FX channel, not a track's.
+    pub channel: Option<u8>,
+    /// It moves the device's value by an offset rather than setting it:
+    /// the middle of its range is no change.
+    pub relative: bool,
 }
 
 impl Parameter {
@@ -199,6 +208,8 @@ impl Parameter {
             values: Vec::new(),
             default: None,
             mutate: true,
+            channel: None,
+            relative: false,
         }
     }
 
@@ -227,6 +238,29 @@ impl Parameter {
     /// The label of the step `value` falls in: the nearest one sent.
     pub fn label_of(&self, value: u16) -> Option<&str> {
         self.steps().into_iter().min_by_key(|&(_, at)| at.abs_diff(value)).map(|(label, _)| label)
+    }
+
+    /// The middle of its range: no change, for a relative one. 64 for a
+    /// whole CC, as the makers write it.
+    pub fn centre(&self) -> u16 {
+        let (lo, hi) = self.range;
+        lo + (hi - lo).div_ceil(2)
+    }
+
+    /// `value` as a face shows it: a stepped one's label, a relative one's
+    /// offset ("+12", "−5", "0"), anything else its number.
+    pub fn text(&self, value: u16) -> String {
+        if let Some(label) = self.label_of(value) {
+            return label.to_string();
+        }
+        if !self.relative {
+            return value.to_string();
+        }
+        match value as i32 - self.centre() as i32 {
+            0 => "0".to_string(),
+            offset if offset > 0 => format!("+{offset}"),
+            offset => format!("−{}", -offset),
+        }
     }
 
     /// What's wrong with it, if anything: each problem a line.
@@ -259,6 +293,12 @@ impl Parameter {
         if let Some((label, value)) = steps.iter().find(|(_, v)| !(lo..=hi).contains(v)) {
             problems.push(format!("{name}: “{label}” at {value} is outside {lo}-{hi}"));
         }
+        if let Some(channel) = self.channel.filter(|c| !(1..=16).contains(c)) {
+            problems.push(format!("{name}: its channel {channel} isn't 1-16"));
+        }
+        if self.relative && self.stepped() {
+            problems.push(format!("{name}: a relative parameter can't have named values"));
+        }
         problems
     }
 }
@@ -285,6 +325,10 @@ struct RawParameter {
     default: Option<u16>,
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     mutate: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    channel: Option<u8>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    relative: bool,
 }
 
 fn is_linear(curve: &Curve) -> bool {
@@ -319,6 +363,8 @@ impl TryFrom<RawParameter> for Parameter {
             values: raw.values,
             default: raw.default,
             mutate: raw.mutate,
+            channel: raw.channel,
+            relative: raw.relative,
         })
     }
 }
@@ -331,7 +377,20 @@ impl From<Parameter> for RawParameter {
             Address::Nrpn(n) => (None, None, Some(n)),
         };
         let range = (p.range != (0, p.address.max())).then_some([p.range.0, p.range.1]);
-        RawParameter { name: p.name, cc, lsb, nrpn, group: p.group, range, curve: p.curve, values: p.values, default: p.default, mutate: p.mutate }
+        RawParameter {
+            name: p.name,
+            cc,
+            lsb,
+            nrpn,
+            group: p.group,
+            range,
+            curve: p.curve,
+            values: p.values,
+            default: p.default,
+            mutate: p.mutate,
+            channel: p.channel,
+            relative: p.relative,
+        }
     }
 }
 
@@ -388,6 +447,11 @@ pub struct Programs {
     /// The banks Bank Select reaches, when it uses them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub banks: Vec<Bank>,
+    /// Each lettered bank is on its own channel, counting up from the
+    /// programs' first: the SP-404MKII's bank D is program changes on
+    /// channel 4.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub bank_by_channel: bool,
 }
 
 fn program() -> String {
@@ -432,18 +496,36 @@ pub struct Bank {
 }
 
 impl Programs {
-    /// How many there are in a bank.
+    /// How many there are in a bank, or across every channel's bank for
+    /// one banked by channel.
     pub fn count(&self) -> u16 {
         match &self.naming {
             Naming::Numbered { count, .. } => (*count).min(128),
-            Naming::Lettered { letters, per_bank, .. } => (letters.chars().count() as u16 * per_bank).min(128),
+            Naming::Lettered { letters, per_bank, .. } => {
+                let all = letters.chars().count() as u16 * per_bank;
+                if self.bank_by_channel { all } else { all.min(128) }
+            }
         }
     }
 
-    /// Program change `program` (0-127) as the device shows it: "A05",
-    /// "12". Past the letters, a plain number.
-    pub fn label(&self, program: u8) -> String {
-        let n = program as u16;
+    /// Where the `index`th program goes, given the device's channel: the
+    /// channel (the programs' own, or else the device's) and the program
+    /// change. Banked by channel, each letter is the next channel along.
+    pub fn message(&self, index: u16, device_channel: u8) -> (u8, u8) {
+        let first = self.channel.unwrap_or(device_channel);
+        match &self.naming {
+            Naming::Lettered { per_bank, .. } if self.bank_by_channel => {
+                let per_bank = (*per_bank).max(1);
+                (first + (index / per_bank) as u8, (index % per_bank) as u8)
+            }
+            _ => (first, index.min(127) as u8),
+        }
+    }
+
+    /// The `index`th program as the device shows it: "A05", "12". Past
+    /// the letters, a plain number.
+    pub fn label(&self, index: u16) -> String {
+        let n = index;
         match &self.naming {
             Naming::Numbered { first, .. } => (n + first).to_string(),
             Naming::Lettered { letters, per_bank, first } => match letters.chars().nth((n / per_bank.max(&1)) as usize) {
@@ -454,10 +536,10 @@ impl Programs {
     }
 
     /// With its word and its bank: "Pattern A05", "Scene User 12".
-    pub fn name(&self, bank: Option<usize>, program: u8) -> String {
+    pub fn name(&self, bank: Option<usize>, index: u16) -> String {
         match bank.and_then(|b| self.banks.get(b)) {
-            Some(bank) => format!("{} {} {}", self.what, bank.name, self.label(program)),
-            None => format!("{} {}", self.what, self.label(program)),
+            Some(bank) => format!("{} {} {}", self.what, bank.name, self.label(index)),
+            None => format!("{} {}", self.what, self.label(index)),
         }
     }
 }
@@ -550,6 +632,21 @@ impl Profile {
             if programs.banks.iter().any(|b| b.msb > 127 || b.lsb.is_some_and(|l| l > 127)) {
                 problems.push("a bank's MSB or LSB is past 127".to_string());
             }
+            if programs.bank_by_channel {
+                match &programs.naming {
+                    Naming::Lettered { letters, per_bank, .. } => {
+                        let first = programs.channel.unwrap_or(self.channel()) as usize;
+                        let last = first + letters.chars().count().max(1) - 1;
+                        if last > 16 {
+                            problems.push(format!("its banks run from channel {first} past 16, to {last}"));
+                        }
+                        if *per_bank > 128 {
+                            problems.push("a bank on its own channel holds at most 128 programs".to_string());
+                        }
+                    }
+                    Naming::Numbered { .. } => problems.push("programs banked by channel need a letter a bank".to_string()),
+                }
+            }
         }
         problems
     }
@@ -596,13 +693,77 @@ mod tests {
     #[test]
     fn it_round_trips_as_it_was_written() {
         let json = r#"{ "name": "Test", "maker": "Soba", "kind": "kit", "channels": [10], "voices": { "poly": 8 },
-            "parameters": [{ "name": "Wave", "cc": 9, "group": "Oscillator", "values": ["Saw", { "label": "Square", "value": 100 }], "mutate": false }],
+            "parameters": [
+                { "name": "Wave", "cc": 9, "group": "Oscillator", "values": ["Saw", { "label": "Square", "value": 100 }], "mutate": false },
+                { "name": "Delay", "cc": 85, "group": "FX", "channel": 9 },
+                { "name": "Cutoff", "cc": 74, "group": "Filter", "relative": true }
+            ],
             "parts": [{ "name": "Kick", "note": 36 }],
-            "programs": { "what": "Pattern", "style": "lettered", "letters": "AB", "per_bank": 16, "channel": 10 },
+            "programs": { "what": "Pattern", "style": "lettered", "letters": "AB", "per_bank": 16, "channel": 10, "bank_by_channel": true },
             "clock": { "sends": true, "receives": true, "transport": true } }"#;
         let p = profile(json).unwrap();
         assert_eq!(profile(&p.to_json()).unwrap(), p);
         assert!(!p.to_json().contains("range"), "a whole range isn't written");
+        assert_eq!(p.parameters[1].channel, Some(9));
+        assert!(p.parameters[2].relative);
+        assert!(p.programs.as_ref().unwrap().bank_by_channel);
+        let plain = profile(r#"{ "name": "T", "parameters": [{ "name": "A", "cc": 1 }] }"#).unwrap().to_json();
+        assert!(!plain.contains("null") && !plain.contains("relative") && !plain.contains("bank_by_channel"), "fields left out stay out: {plain}");
+    }
+
+    #[test]
+    fn a_parameter_on_its_own_channel_names_a_real_one() {
+        let fx = profile(r#"{ "name": "T", "parameters": [{ "name": "Delay", "cc": 85, "channel": 16 }] }"#).unwrap();
+        assert_eq!(fx.parameters[0].channel, Some(16));
+        assert_eq!(fx.parameters[0].address, Address::Cc(85));
+        let err = profile(r#"{ "name": "T", "parameters": [{ "name": "Delay", "cc": 85, "channel": 0 }] }"#).unwrap_err();
+        assert!(err.contains("channel 0 isn't 1-16"), "{err}");
+        assert!(profile(r#"{ "name": "T", "parameters": [{ "name": "Delay", "cc": 85, "channel": 17 }] }"#).is_err());
+    }
+
+    #[test]
+    fn a_relative_parameter_centres_on_no_change_and_reads_as_an_offset() {
+        let p = profile(r#"{ "name": "T", "parameters": [{ "name": "Cutoff", "cc": 74, "relative": true }, { "name": "Level", "cc": 7 }] }"#).unwrap();
+        let cutoff = &p.parameters[0];
+        assert_eq!(cutoff.centre(), 64, "as Roland writes it: 00H - 40H - 7FH is -64 - 0 - +63");
+        assert_eq!(cutoff.text(64), "0");
+        assert_eq!(cutoff.text(76), "+12");
+        assert_eq!(cutoff.text(0), "−64");
+        assert_eq!(cutoff.text(127), "+63");
+        assert_eq!(p.parameters[1].text(64), "64", "an absolute one is its number");
+        let wide = profile(r#"{ "name": "T", "parameters": [{ "name": "Fine", "nrpn": 5, "relative": true }] }"#).unwrap();
+        assert_eq!(wide.parameters[0].centre(), 8192);
+        let stepped = r#"{ "name": "T", "parameters": [{ "name": "M", "cc": 1, "relative": true, "values": ["A", "B"] }] }"#;
+        assert!(profile(stepped).unwrap_err().contains("relative"));
+    }
+
+    #[test]
+    fn programs_banked_by_channel_go_to_their_banks_channel() {
+        // The SP-404MKII's chart: PC 15 on channel 4 is bank D, pattern 16.
+        let sp = profile(r#"{ "name": "T", "programs": { "what": "Pattern", "style": "lettered", "letters": "ABCDEFGHIJ", "per_bank": 16, "bank_by_channel": true } }"#).unwrap();
+        let programs = sp.programs.as_ref().unwrap();
+        assert_eq!(programs.count(), 160, "every bank, past 128");
+        let d16 = 3 * 16 + 15;
+        assert_eq!(programs.label(d16), "D16");
+        assert_eq!(programs.message(d16, sp.channel()), (4, 15));
+        assert_eq!(programs.message(0, sp.channel()), (1, 0));
+        assert_eq!(programs.label(159), "J16");
+        assert_eq!(programs.message(159, sp.channel()), (10, 15));
+
+        let flat = Programs {
+            what: "Pattern".into(),
+            naming: Naming::Lettered { letters: "ABCDEFGH".into(), per_bank: 16, first: 1 },
+            channel: Some(10),
+            banks: Vec::new(),
+            bank_by_channel: false,
+        };
+        assert_eq!(flat.message(20, 1), (10, 20), "one channel, its own over the device's");
+        assert_eq!(flat.count(), 128);
+
+        let numbered = r#"{ "name": "T", "programs": { "style": "numbered", "bank_by_channel": true } }"#;
+        assert!(profile(numbered).unwrap_err().contains("letter a bank"));
+        let past = r#"{ "name": "T", "channels": [10], "programs": { "style": "lettered", "letters": "ABCDEFGHIJ", "per_bank": 16, "bank_by_channel": true } }"#;
+        assert!(profile(past).unwrap_err().contains("past 16"), "banks from channel 10 run out at G");
     }
 
     #[test]
@@ -641,6 +802,7 @@ mod tests {
             naming: Naming::Lettered { letters: "ABCDEFGH".into(), per_bank: 16, first: 1 },
             channel: None,
             banks: Vec::new(),
+            bank_by_channel: false,
         };
         assert_eq!(lettered.label(0), "A01");
         assert_eq!(lettered.label(4), "A05");
@@ -654,6 +816,7 @@ mod tests {
             naming: Naming::Numbered { first: 1, count: 128 },
             channel: None,
             banks: vec![Bank { name: "User".into(), msb: 85, lsb: Some(0) }],
+            bank_by_channel: false,
         };
         assert_eq!(numbered.label(11), "12");
         assert_eq!(numbered.name(Some(0), 11), "Scene User 12");
