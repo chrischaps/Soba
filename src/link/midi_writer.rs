@@ -186,6 +186,13 @@ impl ControlLane {
         self.sent
     }
 
+    /// Takes `control` as sent without sending it: for a value the device
+    /// is taken to have already, which sending would change (a relative
+    /// CC's, which nudges).
+    pub fn assume(&mut self, control: Control) {
+        self.sent = Some(control);
+    }
+
     /// Forgets what it sent, so the next value goes whatever it is: for a
     /// cable unplugged, or a module moved to another port.
     pub fn reset(&mut self) {

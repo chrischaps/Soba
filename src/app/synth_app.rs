@@ -69,6 +69,7 @@ mod hands_overlay;
 mod hosted;
 mod idle;
 mod instrument_listening;
+mod instruments;
 mod launch;
 mod lessons;
 mod auto_follow;
@@ -2754,6 +2755,8 @@ impl SynthApp {
 
         // Sync parameter values to the audio engine
         self.sync_parameters();
+        // ...and what Instruments' knobs send, from their profiles
+        self.sync_instruments();
 
         // What the toolbar and the shortcuts asked for, now the graph is drawn
         self.dispatch(ctx, actions);

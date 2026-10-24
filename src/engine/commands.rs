@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use crate::dsp::primitives::Markers;
+use crate::hardware::SlotMap;
 use crate::dsp::{Audition, ListenTo, MeterLevels, OutputLevels, Readout, SampleData, SignalBuffer, Snapshot, MAX_CHANNELS};
 use crate::modules::oscilloscope::SCOPE_BUFFER_SIZE;
 use crate::modules::scenes::SceneKnob;
@@ -160,6 +161,15 @@ pub enum EngineCommand {
         markers: Markers,
     },
 
+    /// Give an Instrument's knob `slot` what it sends, and have it send its
+    /// value again (#442). Ignored by other modules.
+    MapSlot {
+        /// Target node.
+        node_id: NodeId,
+        slot: usize,
+        map: SlotMap,
+    },
+
     /// Give a module room to record a take into (a Sampler's Rec): an
     /// empty recording with room set aside, at the engine's sample rate,
     /// that nothing else holds. Ignored by modules that don't record.
@@ -256,6 +266,8 @@ pub enum PlanMessage {
     LoadSample { node_id: NodeId, sample: Option<Arc<SampleData>> },
     /// Give a running module the markers its recording is cut at.
     SetMarkers { node_id: NodeId, markers: Markers },
+    /// Give a running Instrument's knob what it sends.
+    MapSlot { node_id: NodeId, slot: usize, map: SlotMap },
     /// Give a running module room to record a take into. Room it's done
     /// with goes back to the UI to be dropped.
     GiveRoom { node_id: NodeId, room: Arc<SampleData> },
@@ -274,6 +286,7 @@ impl PlanMessage {
             | Self::Audition { node_id, .. }
             | Self::LoadSample { node_id, .. }
             | Self::SetMarkers { node_id, .. }
+            | Self::MapSlot { node_id, .. }
             | Self::GiveRoom { node_id, .. }
             | Self::SettleTake { node_id, .. } => node_id,
         }

@@ -365,7 +365,7 @@ fn lane_menu(ui: &mut egui::Ui, node_id: NodeId, lane: usize, view: &Lane, asked
 }
 
 /// The menu a click on the device's name opens: every output found, or none.
-fn device_menu(ui: &mut egui::Ui, picker: &egui::Response, port: usize, current: Option<&str>, found: Option<&str>) {
+pub(super) fn device_menu(ui: &mut egui::Ui, picker: &egui::Response, port: usize, current: Option<&str>, found: Option<&str>) {
     let popup = picker.id.with("menu");
     if picker.clicked() {
         MIDI.rescan();
@@ -421,7 +421,7 @@ fn is_black(note: u8) -> bool {
 
 /// How bright a flash is, 0 to 1: full when `count` has moved since the
 /// last frame, fading over `length` seconds.
-fn flash_of(ui: &egui::Ui, id: Id, count: u32, now: f64, length: f64) -> f32 {
+pub(super) fn flash_of(ui: &egui::Ui, id: Id, count: u32, now: f64, length: f64) -> f32 {
     (1.0 - since(ui, id, count, now) / length).clamp(0.0, 1.0) as f32
 }
 

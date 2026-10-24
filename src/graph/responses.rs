@@ -183,6 +183,9 @@ pub enum SynthResponse {
     /// Save a copy of a Sampler's file kept only in the browser's tab (a
     /// take recorded there), as a download.
     DownloadSample(egui_node_graph2::NodeId),
+    /// Send every knob of an Instrument to its hardware again (#442), so
+    /// the device comes back to what the patch says.
+    SendAll(egui_node_graph2::NodeId),
 }
 
 /// What a Sampler's face can do to its file.

@@ -492,6 +492,12 @@ impl GraphPlan {
                 self.set_markers(node_id, markers);
                 None
             }
+            PlanMessage::MapSlot { node_id, slot, map } => {
+                if let Some(module) = self.nodes.iter_mut().find(|node| node.node_id == node_id).and_then(|node| node.module.as_mut()) {
+                    module.map_slot(slot, map);
+                }
+                None
+            }
             PlanMessage::GiveRoom { node_id, room } => self.give_room(node_id, room),
             PlanMessage::SettleTake { node_id, take, sample } => self.settle_take(node_id, take, sample),
         };

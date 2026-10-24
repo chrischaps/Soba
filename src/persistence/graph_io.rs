@@ -789,6 +789,25 @@ mod tests {
     }
 
     #[test]
+    fn test_an_instrument_of_an_unknown_profile_loads_and_round_trips() {
+        // Played on another computer, with a profile of its own (#442)
+        let mut patch = Patch::new("someone's rig");
+        let mut instrument = NodeData::new(1, crate::modules::instrument::ID, (0.0, 0.0));
+        instrument.labels.insert("profile".into(), "Someone's Synth".into());
+        instrument.labels.insert("slot 1".into(), r#"{"name":"Fold","cc":31,"group":"Oscillator"}"#.into());
+        instrument.parameters = vec![crate::persistence::NamedParameter::new("Slot 1", crate::persistence::ParameterValue::Number(0.25))];
+        patch.nodes.push(instrument);
+
+        let (saved, warnings) = reload(&patch, 0);
+        assert!(warnings.is_empty(), "{:?}", warnings);
+        let node = node(&saved, crate::modules::instrument::ID);
+        assert_eq!(node.labels, patch.nodes[0].labels, "kept as written, for the computer that knows it");
+        assert_eq!(param(&saved, crate::modules::instrument::ID, "Slot 1"), 0.25);
+        let json = serde_json::to_string(&saved).unwrap();
+        assert_eq!(patch_from_json(&json).unwrap(), saved);
+    }
+
+    #[test]
     fn test_scenes_survive_a_round_trip_under_new_ids() {
         use std::collections::BTreeMap;
 

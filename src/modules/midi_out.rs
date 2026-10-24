@@ -22,14 +22,14 @@
 
 use crate::dsp::{
     context::ProcessContext,
-    gate::{Edge, Transition},
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::{ParameterDefinition, ParameterDisplay},
     port::PortDefinition,
-    signal::{connected_input, SignalBuffer, MAX_CHANNELS},
+    signal::{connected_input, SignalBuffer},
     SignalType,
 };
-use crate::link::midi::{CcMode, Control, Message, MidiBus, Program, BEND_CENTER, MAX_14, MIDI, PORTS, PORT_LABELS, RPN_BEND_RANGE};
+use crate::link::midi::{CcMode, Control, MidiBus, Program, MAX_14, MIDI, PORTS, PORT_LABELS, RPN_BEND_RANGE};
+use crate::link::midi_player::Player;
 use crate::link::midi_writer::{lane_gap, ControlLane, MidiWriter, ProgramSlot, WRAP};
 
 /// CC lanes on the module.
@@ -39,7 +39,7 @@ pub const CC_LANES: usize = 4;
 /// resonance and pan, which most synths answer to.
 const CC_DEFAULTS: [f32; CC_LANES] = [1.0, 74.0, 71.0, 10.0];
 
-const CHANNEL_LABELS: &[&str] = &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"];
+pub(crate) const CHANNEL_LABELS: &[&str] = &["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"];
 
 /// The widest bend range a device is told, in semitones: two octaves.
 pub const MAX_BEND_RANGE: f32 = 24.0;
@@ -74,30 +74,16 @@ pub const ID: &str = "output.midi";
 ///   from its menu on the face.
 pub struct MidiOut {
     out: MidiWriter,
-    /// The port and channel it played last block.
+    /// The port it played last block.
     port: usize,
-    channel: u8,
-    /// Each voice's gate at the end of the last block.
-    gates: [Edge; MAX_CHANNELS],
-    /// The note each voice is holding.
-    voice_note: [Option<u8>; MAX_CHANNELS],
-    /// Where each voice's note began in this block: 0 for one held from before.
-    voice_from: [usize; MAX_CHANNELS],
-    /// How many voices hold each note: it's let go when the last does.
-    held: [u8; 128],
+    /// The notes, bend and pressure, on the channel it plays.
+    player: Player,
     lanes: [ControlLane; CC_LANES],
-    bend: ControlLane,
-    pressure: ControlLane,
-    /// Each voice's Poly Pressure, from a poly Pressure cable.
-    poly_pressure: [ControlLane; MAX_CHANNELS],
     program: ProgramSlot,
     /// The bend range the device was told, and where: (port, channel, semitones).
     bend_range: Option<(usize, u8, u8)>,
-    /// Whether the patch's Clock was playing last block.
-    was_playing: bool,
     /// For the face.
     beat: f32,
-    notes_sent: u32,
     programs_sent: u32,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
@@ -168,20 +154,11 @@ impl MidiOut {
         Self {
             out: MidiWriter::on_bus(bus),
             port: 0,
-            channel: 0,
-            gates: [Edge::LOW; MAX_CHANNELS],
-            voice_note: [None; MAX_CHANNELS],
-            voice_from: [0; MAX_CHANNELS],
-            held: [0; 128],
+            player: Player::new(),
             lanes: [ControlLane::new(); CC_LANES],
-            bend: ControlLane::new(),
-            pressure: ControlLane::new(),
-            poly_pressure: [ControlLane::new(); MAX_CHANNELS],
             program: ProgramSlot::new(),
             bend_range: None,
-            was_playing: false,
             beat: 0.0,
-            notes_sent: 0,
             programs_sent: 0,
             ports,
             parameters,
@@ -244,49 +221,13 @@ impl MidiOut {
         bits & (1 << (note % 24)) != 0
     }
 
-    fn note_on(&mut self, voice: usize, note: u8, velocity: u8, offset: usize) {
-        self.note_off(voice, offset);
-        self.out.message(offset, Message::note_on(self.channel, note, velocity));
-        self.held[note as usize] = self.held[note as usize].saturating_add(1);
-        self.voice_note[voice] = Some(note);
-        self.voice_from[voice] = offset;
-        // Its pressure goes after it, afresh
-        self.poly_pressure[voice].reset();
-        self.notes_sent = (self.notes_sent + 1) % Self::WRAP;
-    }
-
-    fn note_off(&mut self, voice: usize, offset: usize) {
-        let Some(note) = self.voice_note[voice].take() else { return };
-        let count = &mut self.held[note as usize];
-        *count = count.saturating_sub(1);
-        if *count == 0 {
-            self.out.message(offset, Message::note_off(self.channel, note));
+    /// Lights the notes `player` holds in a readout's values, 24 to a slot
+    /// from `first`: [`note_in`](Self::note_in) reads them back.
+    pub fn light_notes(values: &mut [f32], first: usize, player: &Player) {
+        for note in (0..128u8).filter(|&note| player.holds(note)) {
+            let slot = &mut values[first + note as usize / 24];
+            *slot = (*slot as u32 | 1 << (note % 24)) as f32;
         }
-    }
-
-    /// Lets go of every note held. Gates still high stay quiet until they
-    /// rise again.
-    fn release_all(&mut self, offset: usize) {
-        for note in 0..128u8 {
-            if std::mem::take(&mut self.held[note as usize]) > 0 {
-                self.out.message(offset, Message::note_off(self.channel, note));
-            }
-        }
-        self.voice_note = [None; MAX_CHANNELS];
-    }
-
-    /// Lets the bend spring back and the pressure off, on the channel
-    /// they went out on, if they're away from rest.
-    fn relax(&mut self, offset: usize) {
-        if matches!(self.bend.sent(), Some(Control::Bend { value, .. }) if value != BEND_CENTER) {
-            self.out.control(offset, Control::Bend { channel: self.channel, value: BEND_CENTER });
-        }
-        if matches!(self.pressure.sent(), Some(Control::Pressure { value, .. }) if value > 0) {
-            self.out.control(offset, Control::Pressure { channel: self.channel, value: 0 });
-        }
-        self.bend.reset();
-        self.pressure.reset();
-        self.poly_pressure = [ControlLane::new(); MAX_CHANNELS];
     }
 
     /// The Program and bank the knobs choose, if one is.
@@ -351,26 +292,12 @@ impl DspModule for MidiOut {
             // The new device hears every controller afresh. The sender lets
             // go of the notes, and the bend, on the old one
             self.lanes = [ControlLane::new(); CC_LANES];
-            self.bend.reset();
-            self.pressure.reset();
-            self.poly_pressure = [ControlLane::new(); MAX_CHANNELS];
+            self.player.moved();
             self.port = port;
         }
-        if channel != self.channel {
-            // Notes end, and the bend springs back, on the channel they started on
-            self.release_all(0);
-            self.relax(0);
-            self.channel = channel;
-        }
-        self.voice_from = [0; MAX_CHANNELS];
-
         let transport = &context.transport;
         let playing = transport.beat_position.is_some() && transport.playing;
-        if self.was_playing && !playing {
-            // Stopped mid-note: nothing will let go of it
-            self.release_all(0);
-        }
-        self.was_playing = playing;
+        self.player.begin(&mut self.out, channel, playing);
         let beats_per_bar = transport.time_sig_numerator.max(1) as f64;
         self.beat = transport.beat_at(frames, context.sample_rate).map_or(0.0, |b| b.rem_euclid(beats_per_bar) as f32);
 
@@ -390,78 +317,11 @@ impl DspModule for MidiOut {
             self.bend_range = Some((port, channel, range));
         }
 
-        // Notes: a voice per channel of the gate (or pitch) cable
-        let gate = connected_input(inputs, Self::PORT_GATE);
-        let pitch = connected_input(inputs, Self::PORT_PITCH);
-        let velocity = connected_input(inputs, Self::PORT_VELOCITY);
-        let voices = gate.map_or(0, |g| g.channels().max(pitch.map_or(1, |p| p.channels())));
-        for voice in voices..MAX_CHANNELS {
-            // A voice the cable no longer carries
-            self.gates[voice].reset();
-            self.note_off(voice, 0);
-        }
-        if let Some(gate) = gate {
-            // Sample by sample across the voices, so messages go in time
-            // order and a note two voices share ends with the later
-            for offset in 0..frames {
-                for voice in 0..voices {
-                    match self.gates[voice].tick(gate.voice(voice).at(offset)) {
-                        None => continue,
-                        Some(Transition::Falling) => {
-                            self.note_off(voice, offset);
-                            continue;
-                        }
-                        Some(Transition::Rising) => {}
-                    }
-                    let read = |input: Option<&SignalBuffer>, default: f32| input.map_or(default, |i| i.voice(voice).at(offset));
-                    let note = (60.0 + read(pitch, 0.0) * 12.0).round().clamp(0.0, 127.0) as u8;
-                    let strike = (read(velocity, 0.8) * 127.0).round().clamp(1.0, 127.0) as u8;
-                    self.note_on(voice, note, strike, offset);
-                }
-            }
-        }
-
-        // The bend, where it moves; unplugged, it springs back
-        match connected_input(inputs, Self::PORT_BEND) {
-            Some(bend) => self.bend.run(&mut self.out, 0..frames, gap, |i| Control::bend(channel, bend.at(i))),
-            None => {
-                if matches!(self.bend.sent(), Some(Control::Bend { value, .. }) if value != BEND_CENTER) {
-                    self.out.control(0, Control::Bend { channel, value: BEND_CENTER });
-                }
-                self.bend.reset();
-            }
-        }
-
-        // The pressure: the channel's from one cable, each note's from a poly one
-        match connected_input(inputs, Self::PORT_PRESSURE) {
-            Some(pressure) if pressure.channels() > 1 => {
-                self.pressure.reset();
-                for voice in 0..MAX_CHANNELS {
-                    let Some(note) = self.voice_note[voice].filter(|_| voice < pressure.channels()) else {
-                        self.poly_pressure[voice].reset();
-                        continue;
-                    };
-                    let cable = pressure.voice(voice);
-                    let from = self.voice_from[voice];
-                    self.poly_pressure[voice].run(&mut self.out, from..frames, gap, |i| Control::PolyPressure {
-                        channel,
-                        note,
-                        value: Control::seven(cable.at(i)),
-                    });
-                }
-            }
-            Some(pressure) => {
-                self.poly_pressure = [ControlLane::new(); MAX_CHANNELS];
-                self.pressure.run(&mut self.out, 0..frames, gap, |i| Control::Pressure { channel, value: Control::seven(pressure.at(i)) });
-            }
-            None => {
-                if matches!(self.pressure.sent(), Some(Control::Pressure { value, .. }) if value > 0) {
-                    self.out.control(0, Control::Pressure { channel, value: 0 });
-                }
-                self.pressure.reset();
-                self.poly_pressure = [ControlLane::new(); MAX_CHANNELS];
-            }
-        }
+        // Notes, then the bend and pressure where they move
+        let input = |port: usize| connected_input(inputs, port);
+        self.player.notes(&mut self.out, input(Self::PORT_GATE), input(Self::PORT_PITCH), input(Self::PORT_VELOCITY), frames);
+        self.player.bend(&mut self.out, input(Self::PORT_BEND), frames, gap);
+        self.player.pressure(&mut self.out, input(Self::PORT_PRESSURE), frames, gap);
 
         // CCs: wherever they move, as each lane's mode sends them
         for lane in 0..CC_LANES {
@@ -479,9 +339,7 @@ impl DspModule for MidiOut {
     }
 
     fn reset(&mut self) {
-        self.release_all(0);
-        self.relax(0);
-        self.gates = [Edge::LOW; MAX_CHANNELS];
+        self.player.reset(&mut self.out);
         self.lanes = [ControlLane::new(); CC_LANES];
         self.program.reset();
         self.bend_range = None;
@@ -490,35 +348,17 @@ impl DspModule for MidiOut {
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
         let mut readout = Readout::default();
         let values = &mut readout.values;
-        for (note, &count) in self.held.iter().enumerate() {
-            if count > 0 {
-                let slot = &mut values[Self::READOUT_NOTES + note / 24];
-                *slot = (*slot as u32 | 1 << (note % 24)) as f32;
-            }
-        }
+        Self::light_notes(values, Self::READOUT_NOTES, &self.player);
         for lane in 0..CC_LANES {
             values[Self::READOUT_CC + lane] = Self::lane_value(self.lanes[lane].sent());
         }
-        values[Self::READOUT_PLAYING] = if self.was_playing { 1.0 } else { 0.0 };
+        values[Self::READOUT_PLAYING] = if self.player.playing() { 1.0 } else { 0.0 };
         values[Self::READOUT_BEAT] = self.beat;
-        values[Self::READOUT_NOTES_SENT] = self.notes_sent as f32;
+        values[Self::READOUT_NOTES_SENT] = self.player.notes_sent() as f32;
         values[Self::READOUT_DROPPED] = self.out.dropped() as f32;
         values[Self::READOUT_LIVE] = if self.out.is_live() { 1.0 } else { 0.0 };
-        values[Self::READOUT_BEND] = match self.bend.sent() {
-            Some(Control::Bend { value, .. }) => (value as f32 - BEND_CENTER as f32) / BEND_CENTER as f32,
-            _ => -2.0,
-        };
-        let poly = self.poly_pressure.iter().filter_map(|lane| match lane.sent() {
-            Some(Control::PolyPressure { value, .. }) => Some(value),
-            _ => None,
-        });
-        let (pressure, is_poly) = match self.pressure.sent() {
-            Some(Control::Pressure { value, .. }) => (value as f32 / 127.0, false),
-            _ => match poly.max() {
-                Some(value) => (value as f32 / 127.0, true),
-                None => (-1.0, false),
-            },
-        };
+        values[Self::READOUT_BEND] = self.player.bend_sent().unwrap_or(-2.0);
+        let (pressure, is_poly) = self.player.pressure_sent().unwrap_or((-1.0, false));
         values[Self::READOUT_PRESSURE] = pressure;
         values[Self::READOUT_POLY] = if is_poly { 1.0 } else { 0.0 };
         values[Self::READOUT_PROGRAMS_SENT] = self.programs_sent as f32;

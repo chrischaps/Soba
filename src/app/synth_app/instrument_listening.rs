@@ -89,6 +89,8 @@ impl SynthApp {
         self.status_message = Some(match crate::hardware::save_in(&crate::hardware::folder(), &profile) {
             Ok(path) => {
                 self.midi.listening = None;
+                // The Instruments' menus offer it at once
+                crate::hardware::reload();
                 format!("Saved {} with {} knobs to {}", profile.name, profile.parameters.len(), path.display())
             }
             Err(e) => format!("Couldn't save the profile: {e}"),

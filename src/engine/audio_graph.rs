@@ -23,6 +23,8 @@ use crate::engine::graph_plan::{
     MAX_INPUTS,
 };
 use crate::engine::spectrum_tap::SpectrumTap;
+use crate::hardware::SlotMap;
+use crate::modules::instrument::SLOTS;
 use crate::modules::scenes::SceneKnob;
 
 /// A connection between two ports in the audio graph.
@@ -175,6 +177,8 @@ pub struct AudioGraph {
     take_handoffs: Vec<PlanMessage>,
     /// Each Scenes module's knobs, which the plan turns as its Morph moves.
     scenes: HashMap<NodeId, Vec<SceneKnob>>,
+    /// What each Instrument's knobs were last given to send (#442).
+    slots: HashMap<NodeId, [SlotMap; SLOTS]>,
 }
 
 impl AudioGraph {
@@ -194,6 +198,7 @@ impl AudioGraph {
             sample_loads: Vec::new(),
             take_handoffs: Vec::new(),
             scenes: HashMap::new(),
+            slots: HashMap::new(),
         }
     }
 
@@ -338,6 +343,7 @@ impl AudioGraph {
         self.sample_loads.retain(|(id, _)| *id != node_id);
         self.take_handoffs.retain(|handoff| handoff.node_id() != node_id);
         self.scenes.remove(&node_id);
+        self.slots.remove(&node_id);
 
         // Remove all connections involving this node
         self.connections.retain(|conn| {
@@ -502,6 +508,7 @@ impl AudioGraph {
         self.sample_loads.clear();
         self.take_handoffs.clear();
         self.scenes.clear();
+        self.slots.clear();
     }
 
     /// Gives a Scenes module the knobs it turns as its Morph moves, from
@@ -592,6 +599,31 @@ impl AudioGraph {
     /// The markers a module was last given.
     pub fn markers(&self, node_id: NodeId) -> Option<&Markers> {
         self.nodes.get(&node_id).map(|spec| &spec.markers)
+    }
+
+    /// Gives an Instrument's knob `slot` what it sends, and has it send its
+    /// value again. A module not yet handed to a plan gets it at once; one
+    /// already on the audio thread gets it through
+    /// [`take_take_handoffs`](Self::take_take_handoffs).
+    ///
+    /// Returns false if there is no such module.
+    pub fn map_slot(&mut self, node_id: NodeId, slot: usize, map: SlotMap) -> bool {
+        let Some(spec) = self.nodes.get_mut(&node_id) else {
+            return false;
+        };
+        if let Some(place) = self.slots.entry(node_id).or_insert([SlotMap::EMPTY; SLOTS]).get_mut(slot) {
+            *place = map;
+        }
+        match spec.fresh.as_mut() {
+            Some(module) => module.map_slot(slot, map),
+            None => self.take_handoffs.push(PlanMessage::MapSlot { node_id, slot, map }),
+        }
+        true
+    }
+
+    /// What an Instrument's knobs were last given to send.
+    pub fn slot_maps(&self, node_id: NodeId) -> Option<&[SlotMap; SLOTS]> {
+        self.slots.get(&node_id)
     }
 
     /// Gives a module room to record a take into. A module not yet handed
@@ -802,6 +834,7 @@ impl AudioGraph {
             EngineCommand::GiveRoom { node_id, room } => self.give_room(node_id, room),
             EngineCommand::SettleTake { node_id, take, sample } => self.settle_take(node_id, take, sample),
             EngineCommand::SetMarkers { node_id, markers } => self.set_markers(node_id, markers),
+            EngineCommand::MapSlot { node_id, slot, map } => self.map_slot(node_id, slot, map),
             EngineCommand::SeedModule { node_id, seed } => self.seed_module(node_id, seed),
             EngineCommand::SetScenes { node_id, knobs } => self.set_scenes(node_id, knobs),
             // Played on the running module, not kept in the graph

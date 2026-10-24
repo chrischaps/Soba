@@ -750,6 +750,7 @@ mod tests {
                         PlanMessage::Audition { chord, .. } => if chord.is_some() { "audition" } else { "audition off" },
                         PlanMessage::LoadSample { .. } => "sample",
                         PlanMessage::SetMarkers { .. } => "markers",
+                        PlanMessage::MapSlot { .. } => "slot",
                         PlanMessage::GiveRoom { .. } => "room",
                         PlanMessage::SettleTake { .. } => "settle",
                     });

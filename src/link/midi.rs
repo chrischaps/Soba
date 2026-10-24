@@ -247,6 +247,10 @@ pub enum Control {
     /// A 14-bit CC: its coarse half on `number` (0 to 31), then its fine
     /// half on `number + 32`.
     Cc14 { channel: u8, number: u8, value: u16 },
+    /// A 14-bit value on two CCs of a device's own choosing: its coarse
+    /// half on `msb`, then its fine half on `lsb` (the Digitakt's LFO
+    /// depth is CC 109 and 61).
+    Pair { channel: u8, msb: u8, lsb: u8, value: u16 },
     /// A Non-Registered Parameter: CC 99 and 98 choose it, then Data
     /// Entry (CC 6 and 38) sets it.
     Nrpn { channel: u8, parameter: u16, value: u16 },
@@ -295,11 +299,20 @@ impl Control {
         match *self {
             Self::Cc { channel, .. }
             | Self::Cc14 { channel, .. }
+            | Self::Pair { channel, .. }
             | Self::Nrpn { channel, .. }
             | Self::Rpn { channel, .. }
             | Self::Bend { channel, .. }
             | Self::Pressure { channel, .. }
             | Self::PolyPressure { channel, .. } => channel & 0x0F,
+        }
+    }
+
+    /// The value it sends, as sent: 7 bits or 14.
+    pub fn value(&self) -> u16 {
+        match *self {
+            Self::Cc { value, .. } | Self::Pressure { value, .. } | Self::PolyPressure { value, .. } => value as u16,
+            Self::Cc14 { value, .. } | Self::Pair { value, .. } | Self::Nrpn { value, .. } | Self::Rpn { value, .. } | Self::Bend { value, .. } => value,
         }
     }
 
@@ -314,6 +327,7 @@ impl Control {
             Self::Bend { .. } => (4, 0),
             Self::Pressure { .. } => (5, 0),
             Self::PolyPressure { note, .. } => (6, note as u32),
+            Self::Pair { msb, .. } => (7, msb as u32),
         };
         kind << 24 | (self.channel() as u32) << 16 | number
     }
@@ -329,6 +343,11 @@ impl Control {
                 let (msb, lsb) = split(value);
                 burst.push(Message::control(channel, number, msb));
                 burst.push(Message::control(channel, number + cc::LSB_OFFSET, lsb));
+            }
+            Self::Pair { channel, msb: coarse, lsb: fine, value } => {
+                let (msb, lsb) = split(value);
+                burst.push(Message::control(channel, coarse, msb));
+                burst.push(Message::control(channel, fine, lsb));
             }
             Self::Nrpn { channel, parameter, value } | Self::Rpn { channel, parameter, value } => {
                 let nrpn = matches!(self, Self::Nrpn { .. });
@@ -1123,6 +1142,10 @@ mod tests {
         assert_eq!(bytes(fine.burst()), [vec![0xB0, 1, 127], vec![0xB0, 33, 127]]);
         assert_eq!(Control::lane(CcMode::Bits14, 0, 74, 0, 0.0), Control::Cc14 { channel: 0, number: 31, value: 0 }, "pairs stop at 31");
         assert_eq!(bytes(Control::lane(CcMode::Bits7, 0, 74, 0, 0.5).burst()), [vec![0xB0, 74, 64]]);
+        // A pair of a device's own: coarse on one, fine on the other
+        let pair = Control::Pair { channel: 1, msb: 109, lsb: 61, value: 8192 + 5 };
+        assert_eq!(bytes(pair.burst()), [vec![0xB1, 109, 64], vec![0xB1, 61, 5]]);
+        assert_ne!(pair.key(), Control::Cc { channel: 1, number: 109, value: 0 }.key());
         // NRPN 3:5 (389) at 1000: which, then the value
         let nrpn = Control::Nrpn { channel: 2, parameter: 389, value: 1000 };
         assert_eq!(bytes(nrpn.burst()), [vec![0xB2, 99, 3], vec![0xB2, 98, 5], vec![0xB2, 6, 7], vec![0xB2, 38, 104]]);

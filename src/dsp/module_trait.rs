@@ -486,6 +486,12 @@ pub trait DspModule: Send + 'static {
     /// REAL-TIME SAFE: the markers come by value.
     fn set_markers(&mut self, _markers: Markers) {}
 
+    /// Gives an Instrument's knob `slot` what it sends (#442), and has it
+    /// send its value afresh. Ignored by other modules.
+    ///
+    /// REAL-TIME SAFE: the map comes by value.
+    fn map_slot(&mut self, _slot: usize, _map: crate::hardware::SlotMap) {}
+
     /// Starts the module's random numbers from `seed`, so a patch plays the
     /// same noise wherever it runs: in the editor, in a capture or in the
     /// render tool. The graph seeds each module as it's added, before it

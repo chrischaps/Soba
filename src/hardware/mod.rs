@@ -8,14 +8,18 @@
 //! listening to a device's knobs ([`listening`]). One of yours with a
 //! shipped profile's name takes its place.
 
+pub mod instrument;
 pub mod listening;
 #[cfg(test)]
 mod pages;
 pub mod profile;
+pub mod slot;
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 pub use profile::{Address, Button, ButtonMode, Clock, Curve, Kind, Naming, Parameter, Part, Profile, Programs, Step, Voices};
+pub use slot::SlotMap;
 
 /// A profile that ships with the app.
 struct Bundled {
@@ -138,6 +142,25 @@ impl Profiles {
             .filter(|k| !k.profile.port.is_empty() && port.contains(&k.profile.port.to_lowercase()))
             .max_by_key(|k| k.profile.port.len())
     }
+}
+
+/// The profiles this computer knows, read once and shared: the
+/// Instruments' faces look theirs up every frame. [`reload`] reads them
+/// again, after one is saved.
+pub fn known() -> Arc<Profiles> {
+    shelf().lock().map(|known| known.clone()).unwrap_or_default()
+}
+
+/// Reads the profiles again, for a folder that's changed.
+pub fn reload() {
+    if let Ok(mut known) = shelf().lock() {
+        *known = Arc::new(Profiles::load());
+    }
+}
+
+fn shelf() -> &'static Mutex<Arc<Profiles>> {
+    static KNOWN: OnceLock<Mutex<Arc<Profiles>>> = OnceLock::new();
+    KNOWN.get_or_init(|| Mutex::new(Arc::new(Profiles::load())))
 }
 
 /// Names that differ only in case or the spaces around them are one name.

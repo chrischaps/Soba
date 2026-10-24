@@ -2,7 +2,7 @@
 
 To MIDI, every synth is just numbers: "CC 74 on channel 3". A **profile** puts a device's numbers into its own words. It names the device, says which CC is its Cutoff, says what each value of its oscillator type means, which note plays its kick, and how its programs are numbered ("A05", "Scene 12"). It also says whether the device keeps time with MIDI clock.
 
-Profiles are what the Instrument module and the Setlist read. A profile on its own sends nothing: it describes the device for the modules that do.
+Profiles are what the [Instrument](../modules/midi/instrument.md) module and the Setlist read. A profile on its own sends nothing: it describes the device for the modules that do.
 
 ## The profiles that ship
 
@@ -25,7 +25,7 @@ Where a chart left something out, such as a factory channel or what an oscillato
 
 ## Your own profiles
 
-Your own profiles go in **Documents/Soba/Instruments**, one JSON file each. Soba reads the folder each time it looks for a profile. If one of yours has the same name as a shipped profile (in any case), yours replaces it. That's how you'd add the parameters the shipped one leaves out, or swap its first twelve knobs for the twelve you play most.
+Your own profiles go in **Documents/Soba/Instruments**, one JSON file each. Soba reads the folder when it starts, and again each time you open an Instrument's list of profiles. If one of yours has the same name as a shipped profile (in any case), yours replaces it. That's how you'd add the parameters the shipped one leaves out, or swap its first twelve knobs for the twelve you play most.
 
 A file that isn't a profile is skipped, and Soba tells you why. That covers a CC past 127, two parameters with the same name, and a kit with no parts.
 

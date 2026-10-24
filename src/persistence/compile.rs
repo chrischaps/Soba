@@ -99,6 +99,14 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
             });
         }
 
+        // An Instrument's knobs, from its profile or as the patch wrote them
+        if node.template.module_id() == crate::modules::instrument::ID {
+            let maps = crate::hardware::instrument::maps(&graph[node.graph_id].user_data.labels, &crate::hardware::known());
+            for (slot, map) in maps.into_iter().enumerate().filter(|(_, map)| !map.is_empty()) {
+                compiled.commands.push(EngineCommand::MapSlot { node_id: engine_node_id, slot, map });
+            }
+        }
+
         if let Some(file) = &graph[node.graph_id].user_data.file {
             compiled.files.push((engine_node_id, file.clone()));
         }
@@ -189,6 +197,32 @@ mod tests {
         patch.nodes.push(NodeData::new(20, "output.audio", (200.0, 0.0)));
         patch.connections.push(ConnectionData::new(10, "Out", 20, "Mono"));
         patch
+    }
+
+    #[test]
+    fn test_an_instrument_sends_every_knob_it_holds_as_it_loads() {
+        // Send all, on opening the patch (#442): a known profile's knob and
+        // an unknown one's, each as the patch wrote it down
+        let mut patch = Patch::new("rig");
+        let mut freak = NodeData::new(1, crate::modules::instrument::ID, (0.0, 0.0));
+        freak.labels.insert("profile".into(), "MicroFreak".into());
+        freak.labels.insert("slot 1".into(), r#"{"name":"Cutoff","cc":1}"#.into());
+        freak.labels.insert("slot 4".into(), r#"{"name":"Fold","cc":31}"#.into());
+        patch.nodes.push(freak);
+        let compiled = compile_patch(&patch).unwrap();
+        let maps: Vec<(usize, crate::hardware::SlotMap)> = compiled
+            .commands
+            .iter()
+            .filter_map(|command| match command {
+                EngineCommand::MapSlot { slot, map, .. } => Some((*slot, *map)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(maps.iter().map(|(slot, _)| *slot).collect::<Vec<_>>(), [0, 3], "only the knobs that hold something");
+        let profiles = crate::hardware::known();
+        let cutoff = profiles.find("MicroFreak").unwrap().profile.parameter("Cutoff").unwrap();
+        assert_eq!(maps[0].1, crate::hardware::SlotMap::of(cutoff), "the profile's own Cutoff, not CC 1 as written");
+        assert_eq!(maps[1].1.address, Some(crate::hardware::Address::Cc(31)));
     }
 
     #[test]

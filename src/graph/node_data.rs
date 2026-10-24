@@ -267,13 +267,16 @@ pub enum NodeDisplay {
     ControlFaders,
     /// Pads: eight pads in two rows, flashing as they're hit.
     PadGrid,
+    /// Instrument: the hardware it plays and its profile, over its knobs
+    /// in the hardware's own names (#442).
+    InstrumentFace,
 }
 
 impl NodeDisplay {
     /// Whether the display lays out the node's knobs itself, in place of
     /// the knob rows under it.
     pub fn draws_own_knobs(self) -> bool {
-        self == NodeDisplay::MixerStrips
+        matches!(self, NodeDisplay::MixerStrips | NodeDisplay::InstrumentFace)
     }
 }
 
@@ -838,6 +841,10 @@ impl SynthNodeData {
                         let SynthValueType::Number { value, spec } = &input.value else {
                             return None;
                         };
+                        // An Instrument's knob wears the parameter it holds
+                        let dressed = (self.module_id == crate::modules::instrument::ID)
+                            .then(|| super::instrument_face::dress(self, &knob_param.param_name, display_signal.unwrap_or(*value)))
+                            .flatten();
                         // Range, default, unit and curve all come from the DSP definition
                         let config = KnobConfig {
                             size: knob_size,
@@ -847,10 +854,14 @@ impl SynthNodeData {
                             logarithmic: spec.logarithmic,
                             stepped: spec.stepped,
                             // An untitled knob sits under a column title instead
-                            label: (!label.is_empty()).then(|| label.to_string()),
+                            label: match &dressed {
+                                // ...unless a group's face gives it a name of its own
+                                Some(dressed) if label == knob_param.label => Some(dressed.label.clone()),
+                                _ => (!label.is_empty()).then(|| label.to_string()),
+                            },
                             show_value: true,
-                            value_text: takeover.map(|takeover| takeover.text),
-                            accent: self.category.color(),
+                            value_text: takeover.map(|takeover| takeover.text).or_else(|| dressed.as_ref().map(|dressed| dressed.text.clone())),
+                            accent: dressed.as_ref().map_or(self.category.color(), |dressed| dressed.accent),
                             style: user_state.knob_style,
                             modulated: modulated.map(|m| m.clamp(spec.min, spec.max)),
                             spotlight,
@@ -927,6 +938,10 @@ impl SynthNodeData {
                 let menu_response = crate::widgets::menu::context_menu(&interact_response, |ui| {
                     // The menu is as wide as its longest entry, not wrapped to the knob
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                    // An Instrument's knob: which of the hardware's controls it is
+                    if self.module_id == crate::modules::instrument::ID && !place.is_face() {
+                        responses.extend(super::instrument_face::slot_items(ui, self, node_id, &knob_param.param_name).into_iter().map(NodeResponse::User));
+                    }
                     if place.is_face() {
                         responses.extend(self.face_name_item(ui, node_id, &knob_param.param_name, named).map(NodeResponse::User));
                     }
@@ -1524,6 +1539,9 @@ impl NodeDataTrait for SynthNodeData {
             NodeDisplay::EqCurve => {
                 let changes = super::eq_display::eq_display(ui, node_id, graph, user_state, zoom);
                 responses.extend(changes.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::InstrumentFace => {
+                responses.extend(super::instrument_face::instrument_face(self, ui, node_id, graph, user_state, zoom));
             }
             NodeDisplay::ControlFaders => {
                 let asked = super::controls_face::controls_face(ui, node_id, graph, user_state, zoom);

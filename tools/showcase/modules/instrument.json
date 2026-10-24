@@ -1,0 +1,124 @@
+{
+  "name": "Instrument close-up",
+  "version": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "module_id": "mod.lfo",
+      "position": [
+        0.0,
+        40.0
+      ],
+      "parameters": [
+        {
+          "name": "Rate",
+          "type": "Number",
+          "value": 0.25
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "module_id": "source.instrument",
+      "position": [
+        260.0,
+        40.0
+      ],
+      "parameters": [
+        {
+          "name": "Port",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Channel",
+          "type": "Select",
+          "value": 0
+        },
+        {
+          "name": "Slot 1",
+          "type": "Number",
+          "value": 0.62
+        },
+        {
+          "name": "Slot 2",
+          "type": "Number",
+          "value": 0.35
+        },
+        {
+          "name": "Slot 3",
+          "type": "Number",
+          "value": 0.5
+        },
+        {
+          "name": "Slot 4",
+          "type": "Number",
+          "value": 0.4
+        },
+        {
+          "name": "Slot 5",
+          "type": "Number",
+          "value": 0.7
+        },
+        {
+          "name": "Slot 6",
+          "type": "Number",
+          "value": 0.2
+        },
+        {
+          "name": "Slot 7",
+          "type": "Number",
+          "value": 0.55
+        },
+        {
+          "name": "Slot 8",
+          "type": "Number",
+          "value": 0.8
+        },
+        {
+          "name": "Slot 9",
+          "type": "Number",
+          "value": 0.3
+        },
+        {
+          "name": "Slot 10",
+          "type": "Number",
+          "value": 0.45
+        },
+        {
+          "name": "Slot 11",
+          "type": "Number",
+          "value": 0.6
+        },
+        {
+          "name": "Slot 12",
+          "type": "Number",
+          "value": 0.25
+        }
+      ],
+      "labels": {
+        "profile": "MicroFreak",
+        "slot 1": "{\"name\":\"Cutoff\",\"cc\":23,\"group\":\"Filter\"}",
+        "slot 2": "{\"name\":\"Resonance\",\"cc\":83,\"group\":\"Filter\"}",
+        "slot 3": "{\"name\":\"Osc Type\",\"cc\":9,\"group\":\"Oscillator\"}",
+        "slot 4": "{\"name\":\"Osc Wave\",\"cc\":10,\"group\":\"Oscillator\"}",
+        "slot 5": "{\"name\":\"Osc Timbre\",\"cc\":12,\"group\":\"Oscillator\"}",
+        "slot 6": "{\"name\":\"Osc Shape\",\"cc\":13,\"group\":\"Oscillator\"}",
+        "slot 7": "{\"name\":\"Filter Amount\",\"cc\":26,\"group\":\"Filter\"}",
+        "slot 8": "{\"name\":\"Attack\",\"cc\":105,\"group\":\"Envelope\"}",
+        "slot 9": "{\"name\":\"Decay\",\"cc\":106,\"group\":\"Envelope\"}",
+        "slot 10": "{\"name\":\"Sustain\",\"cc\":29,\"group\":\"Envelope\"}",
+        "slot 11": "{\"name\":\"Glide\",\"cc\":5,\"group\":\"Voice\"}",
+        "slot 12": "{\"name\":\"Spice\",\"cc\":2,\"group\":\"Oscillator\"}"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from_node": 1,
+      "from_port": "Out",
+      "to_node": 2,
+      "to_port": "Slot 1"
+    }
+  ]
+}

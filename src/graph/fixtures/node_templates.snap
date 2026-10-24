@@ -3248,3 +3248,37 @@ knob Program            "Prog" KnobOnly
 knob Bank MSB           "Bank" KnobOnly
 knob Bank LSB           "LSB" KnobOnly
 display MidiOutKeys
+
+== source.instrument "Instrument" finder="Instrument" Source
+in   Pitch              Control  ConnectionOnly       inline=true  port
+in   Gate               Gate     ConnectionOnly       inline=true  port
+in   Velocity           Control  ConnectionOnly       inline=true  port
+in   Bend               Control  ConnectionOnly       inline=true  port
+in   Pressure           Control  ConnectionOnly       inline=true  port
+in   Port               Control  ConstantOnly         inline=true  select 0 ["A", "B", "C", "D", "E", "F", "G", "H"] "Port"
+in   Channel            Control  ConstantOnly         inline=true  select 0 ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] "Ch"
+in   Slot 1             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 2             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 3             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 4             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 5             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 6             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 7             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 8             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 9             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 10            Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 11            Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 12            Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+knob Slot 1             "Slot 1" Exposed
+knob Slot 2             "Slot 2" Exposed
+knob Slot 3             "Slot 3" Exposed
+knob Slot 4             "Slot 4" Exposed
+knob Slot 5             "Slot 5" Exposed
+knob Slot 6             "Slot 6" Exposed
+knob Slot 7             "Slot 7" Exposed
+knob Slot 8             "Slot 8" Exposed
+knob Slot 9             "Slot 9" Exposed
+knob Slot 10            "Slot 10" Exposed
+knob Slot 11            "Slot 11" Exposed
+knob Slot 12            "Slot 12" Exposed
+display InstrumentFace

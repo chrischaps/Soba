@@ -606,6 +606,29 @@ static MODULE_UI: &[ModuleUi] = &[
         knobs_per_row: 4,
         ..ModuleUi::DEFAULT
     },
+    ModuleUi {
+        module_id: crate::modules::instrument::ID,
+        // The hardware's own controls, four to a row, named by its profile
+        // and laid out by its face (#442). A patched jack takes its knob
+        knobs: &[
+            knob("Slot 1"),
+            knob("Slot 2"),
+            knob("Slot 3"),
+            knob("Slot 4"),
+            knob("Slot 5"),
+            knob("Slot 6"),
+            knob("Slot 7"),
+            knob("Slot 8"),
+            knob("Slot 9"),
+            knob("Slot 10"),
+            knob("Slot 11"),
+            knob("Slot 12"),
+        ],
+        labels: &[("Channel", "Ch")],
+        display: NodeDisplay::InstrumentFace,
+        knobs_per_row: 4,
+        ..ModuleUi::DEFAULT
+    },
 ];
 
 /// Every entry in the table.

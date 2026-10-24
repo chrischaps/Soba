@@ -29,6 +29,7 @@ use soba::engine::{
 };
 use soba::modules::looper::{LoopState, Looper};
 use soba::dsp::primitives::{Markers, ONSETS};
+use soba::hardware::{Address, Parameter, SlotMap, Step};
 use soba::modules::{Chopper, Cloud, Controls, MidiOut, Mixer, Pads, Resonator};
 
 struct CountingAllocator;
@@ -232,6 +233,28 @@ fn audio_callback_never_allocates() {
         ui.send_command(EngineCommand::SetParameter { node_id: midi_out, param_index, value });
     }
 
+    // An Instrument (#442) playing the Clock's gate, its first knob a CC
+    // the LFO sweeps, its second a 14-bit pair of the device's own and its
+    // third a stepped one. Below, its knobs are mapped again mid-run, as
+    // Send all does
+    let instrument = node_of(&nodes, "source.instrument");
+    ui.send_command(EngineCommand::Connect {
+        from_node: clock,
+        from_port: port("util.clock", "Gate"),
+        to_node: instrument,
+        to_port: port("source.instrument", "Gate"),
+    });
+    ui.send_command(EngineCommand::Connect {
+        from_node: node_of(&nodes, "mod.lfo"),
+        from_port: 0,
+        to_node: instrument,
+        to_port: port("source.instrument", "Slot 1"),
+    });
+    let knobs = instrument_knobs();
+    for (slot, map) in knobs.iter().enumerate() {
+        ui.send_command(EngineCommand::MapSlot { node_id: instrument, slot, map: *map });
+    }
+
     // A Controls (#427) hearing the mod wheel, the bend and the pressure
     // played below, a fader on CC 74 swinging -1 to 1, and an endless
     // encoder on CC 20 counting up and down. Its A cable runs on down the
@@ -419,6 +442,11 @@ fn audio_callback_never_allocates() {
         if round % 43 == 13 {
             ui.send_command(EngineCommand::LoadSample { node_id: cloud, sample: tone(330.0 + round as f32) });
         }
+        if round % 29 == 7 {
+            for (slot, map) in knobs.iter().enumerate() {
+                ui.send_command(EngineCommand::MapSlot { node_id: instrument, slot, map: *map });
+            }
+        }
         match round % 200 {
             50 => ui.send_command(cloud_in()),
             110 => ui.send_command(cloud_param(Cloud::PARAM_FREEZE, 1.0)),
@@ -598,6 +626,18 @@ fn asio_callback_never_allocates() {
 }
 
 /// Index of the port called `name` on a registered module.
+/// An Instrument's knobs: a CC, a 14-bit pair on two CCs of the device's
+/// own (the Digitakt's LFO depth), and a stepped one with values of its own.
+fn instrument_knobs() -> [SlotMap; 3] {
+    let cutoff = Parameter::cc("Cutoff", 23);
+    let mut depth = Parameter::cc("LFO1 Depth", 109);
+    depth.address = Address::Cc14 { msb: 109, lsb: 61 };
+    depth.range = (0, 16383);
+    let mut arp = Parameter::cc("Arp Type", 49);
+    arp.values = vec![Step::At { label: "Off".into(), value: 6 }, Step::At { label: "Rise".into(), value: 19 }];
+    [SlotMap::of(&cutoff), SlotMap::of(&depth), SlotMap::of(&arp)]
+}
+
 fn port(module_id: &str, name: &str) -> usize {
     let module = create_module_registry().create(module_id).unwrap();
     module.ports().iter().position(|p| p.name == name).unwrap_or_else(|| panic!("{module_id} has no {name}"))

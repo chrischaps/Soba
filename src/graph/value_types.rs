@@ -224,7 +224,8 @@ impl WidgetValueTrait for SynthValueType {
         let (name, control) = match self {
             Self::Port | Self::Number { .. } => {
                 // A jack's name opens its menu: shown on the group around it, or not
-                let name = hints::attach(steady_text::label(ui, param_name, egui::Sense::click()), hint());
+                let shown = super::instrument_face::jack_name(node_data, param_name);
+                let name = hints::attach(steady_text::label(ui, shown.as_deref().unwrap_or(param_name), egui::Sense::click()), hint());
                 return group_face::port_menu(&name, node_id, Side::Input, param_name, user_state).into_iter().collect();
             }
             Self::Toggle { value, label } => {
@@ -323,7 +324,8 @@ impl WidgetValueTrait for SynthValueType {
         user_state: &mut Self::UserState,
         node_data: &Self::NodeData,
     ) -> Vec<Self::Response> {
-        let label = steady_text::label(ui, param_name, egui::Sense::click());
+        let shown = super::instrument_face::jack_name(node_data, param_name);
+        let label = steady_text::label(ui, shown.as_deref().unwrap_or(param_name), egui::Sense::click());
         let name = hints::attach(label, Hint::input(node_data.module_id, param_name));
         group_face::port_menu(&name, node_id, Side::Input, param_name, user_state).into_iter().collect()
     }
