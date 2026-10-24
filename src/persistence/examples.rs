@@ -188,6 +188,13 @@ pub const EXAMPLES: &[Example] = &[
         json: include_str!("../../patches/pad-kit.json"),
     },
     Example {
+        name: "Hands On",
+        shelf: Shelf::Recipe,
+        file_name: "hands-on.json",
+        description: "Played on an Arturia MiniLab 3, as it comes from the box: a bassline plays itself while the keys play a lead, one pad bank the drums and the other a Looper and four scenes. Every encoder and fader has a job",
+        json: include_str!("../../patches/hands-on.json"),
+    },
+    Example {
         name: "Pinwheel",
         shelf: Shelf::Recipe,
         file_name: "pinwheel.json",

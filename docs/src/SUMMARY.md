@@ -81,6 +81,7 @@
 - [Drum Machine](./recipes/drum-machine.md)
 - [Roll Call](./recipes/roll-call.md)
 - [Pad Kit](./recipes/pad-kit.md)
+- [Hands On](./recipes/hands-on.md)
 - [Pinwheel](./recipes/pinwheel.md)
 - [Afterglow](./recipes/afterglow.md)
 - [Front Porch](./recipes/front-porch.md)

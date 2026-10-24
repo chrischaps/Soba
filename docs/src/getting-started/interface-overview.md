@@ -302,6 +302,8 @@ The cross at the end of a row clears that mapping. Hover a row and its control l
 
 ### Playing with a controller
 
+The [Hands On](../recipes/hands-on.md) example puts all of this to work on an Arturia MiniLab 3.
+
 Mapping is for a patch you've finished. While you're building one, you want the encoders under your hand to be the knobs of whatever you're working on: click an oscillator and they turn its knobs, click a filter and they turn the filter's. That's **Hands Follow Selection**.
 
 **Teach Soba your controller first.** You do this once per controller. Choose **Teach Your Controller…** in the **MIDI In** menu, and the status bar walks you through it:

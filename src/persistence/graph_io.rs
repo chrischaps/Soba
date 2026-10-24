@@ -222,6 +222,11 @@ fn build_into(
             ));
             continue;
         };
+        // A Scenes pad's mapping names its pad, not a parameter (#423)
+        if mapping.scene.is_some() {
+            midi_mappings.push(mapping.clone());
+            continue;
+        }
         let Some(param_index) = parameter_index(builder.graph, graph_id, &mapping.param_name) else {
             builder.warnings.push(format!(
                 "Dropped MIDI CC {} mapping: no parameter '{}'",
@@ -1112,6 +1117,18 @@ mod tests {
         let indices: Vec<_> = mappings.iter().map(|m| (m.cc_number, m.param_index)).collect();
         assert_eq!(indices, vec![(74, 0), (71, 1)]);
         assert_eq!(staged.warnings.len(), 1, "{:?}", staged.warnings);
+    }
+
+    #[test]
+    fn test_a_scene_pad_mapping_loads_though_it_names_no_parameter() {
+        let mut patch = patch_from_json(V2_FIXTURE).unwrap();
+        let pad = MidiMapping::new(48, 10, 7, 0, "Scene A", 0.0, 1.0).note().recalling(0);
+        patch.midi_mappings.push(pad.clone());
+
+        let staged = stage_patch(&patch).unwrap();
+        let mappings = staged.remap_midi_mappings(|_| Some(0));
+        assert!(mappings.iter().any(|m| m.scene == Some(0) && m.cc_number == 48), "{mappings:?}");
+        assert!(staged.warnings.is_empty(), "{:?}", staged.warnings);
     }
 
     #[test]

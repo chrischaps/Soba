@@ -495,15 +495,26 @@ pub const PAD_BEAT_BPM: f32 = 96.0;
 /// How long each pad of [`PAD_BEAT`] is held, in seconds.
 pub const PAD_BEAT_HOLD: f32 = 0.08;
 
-/// [`PAD_BEAT`] on every Pads module of `patch`, as (wire channel, note,
+/// [`PAD_BEAT`] on the Pads modules of `patch`, as (wire channel, note,
 /// seconds, velocity). A pad on Omni is played on channel 10.
+///
+/// It's a drum beat, so where some Pads strike a Drum, only those play it:
+/// a second bank of pads cabled to a Looper's Rec and Undo (Hands On, #434)
+/// is left alone. Where none do, every Pads module plays it.
 pub fn pad_beat(patch: &Patch) -> Vec<(u8, u8, f32, u8)> {
     use crate::dsp::DspModule;
     use crate::modules::pads::{self, Pads};
     let definition = Pads::new();
     let sixteenth = 60.0 / PAD_BEAT_BPM / 4.0;
+    let nodes = patch.all_nodes();
+    let every: Vec<_> = nodes.iter().filter(|n| n.module_id == pads::ID).collect();
+    let drums: Vec<u64> = nodes.iter().filter(|n| n.module_id == crate::modules::drum::ID).map(|n| n.id).collect();
+    let mut cables = Vec::new();
+    collect_connections(&patch.connections, &patch.groups, &mut cables);
+    let striking: Vec<_> = every.iter().filter(|n| cables.iter().any(|c| c.from_node == n.id && drums.contains(&c.to_node))).copied().collect();
+    let players = if striking.is_empty() { every } else { striking };
     let mut beat = Vec::new();
-    for node in patch.all_nodes().into_iter().filter(|n| n.module_id == pads::ID) {
+    for node in players {
         let params: Vec<f32> = definition
             .parameters()
             .iter()
@@ -517,6 +528,18 @@ pub fn pad_beat(patch: &Patch) -> Vec<(u8, u8, f32, u8)> {
         }
     }
     beat
+}
+
+/// Every cable in the patch, in groups or not.
+fn collect_connections<'a>(
+    connections: &'a [crate::persistence::ConnectionData],
+    groups: &'a [crate::persistence::GroupData],
+    out: &mut Vec<&'a crate::persistence::ConnectionData>,
+) {
+    out.extend(connections);
+    for group in groups {
+        collect_connections(&group.connections, &group.groups, out);
+    }
 }
 
 /// The phrase [`OfflineRenderer::render_audition`] plays, as (MIDI note,
@@ -670,6 +693,28 @@ mod tests {
         assert!(beat.iter().all(|&(channel, note, _, _)| channel == 1 && (60..68).contains(&note)));
         let last = beat.iter().map(|&(_, _, at, _)| at).fold(0.0, f32::max);
         assert!((last - 32.0 * 60.0 / PAD_BEAT_BPM / 4.0).abs() < 1e-4, "two bars, and the downbeat after");
+    }
+
+    #[test]
+    fn test_audition_plays_its_beat_only_on_pads_that_strike_drums() {
+        let mut patch = Patch::new("two banks");
+        let mut loops = NodeData::new(2, crate::modules::pads::ID, (0.0, 0.0));
+        loops.parameters = vec![NamedParameter::new("Base", ParameterValue::Number(44.0))];
+        patch.nodes.push(NodeData::new(1, crate::modules::pads::ID, (0.0, 0.0)));
+        patch.nodes.push(loops);
+        // With no Drum, both banks play it
+        assert_eq!(pad_beat(&patch).len(), 2 * PAD_BEAT.len());
+
+        patch.nodes.push(NodeData::new(3, crate::modules::drum::ID, (0.0, 0.0)));
+        patch.connections.push(crate::persistence::ConnectionData {
+            from_node: 1,
+            from_port: "Gate 1".into(),
+            to_node: 3,
+            to_port: "Trig".into(),
+        });
+        let beat = pad_beat(&patch);
+        assert_eq!(beat.len(), PAD_BEAT.len());
+        assert!(beat.iter().all(|&(_, note, _, _)| (36..44).contains(&note)), "the bank on the Looper is left alone");
     }
 
     #[test]
