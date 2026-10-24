@@ -265,6 +265,12 @@ What a control does depends on what it's mapped to:
 | A footswitch or **Rec** | presses it from halfway up | presses it while held |
 | A Scenes pad | recalls the scene from halfway up | recalls the scene |
 
+**Faders that don't jump.** A fader or knob with ends doesn't yank the knob it's mapped to. Until you move the hardware past where the knob stands, a purple tick on the knob's rim shows where the hardware is, with a faint arc back to the knob, so you can see which way to go. Once the hardware reaches the knob it picks it up, the tick fades, and the knob follows. Turn the knob with the mouse, recall a scene or undo, and it waits to be picked up again. To have it jump instead, untick **Pick up** in its right-click menu.
+
+**Endless encoders.** Many controllers have knobs that turn forever and send steps rather than a position. Soba listens to the first few values after you learn one and tells it apart from a fader, so the knob steps from wherever it stands, a hundred steps end to end, and one number at a time on a whole-number knob. If it guesses wrong, choose under **Hardware** in the knob's right-click menu. **Invert** turns any mapping upside down.
+
+A controller turns a knob the way the mouse does: a fader sweeps a frequency by octaves, so the middle of its throw is in the middle of what you hear.
+
 A mapping listens on the MIDI channel it was learned on, so the keys and the pads of one controller can send the same note numbers without mixing up. (Mappings made before Soba learned channels still listen on all of them.)
 
 To back out before moving anything, press `Escape`, or right-click the blinking control and choose **Cancel MIDI Learn**. Choosing **Learn MIDI** on a different control moves learn mode there instead.

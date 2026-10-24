@@ -64,6 +64,58 @@ impl MidiControl {
     }
 }
 
+/// How a CC's values move its control (#424).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum MidiEncoding {
+    /// A knob or fader with ends: the value says where it is.
+    #[default]
+    Absolute,
+    /// An endless encoder sending 64 plus the steps it turned up, or 64
+    /// minus those it turned down.
+    Relative64,
+    /// An endless encoder sending 1 to 63 for steps up, and 127 down to 65
+    /// for steps down.
+    TwosComplement,
+}
+
+impl MidiEncoding {
+    fn is_absolute(&self) -> bool {
+        *self == Self::Absolute
+    }
+
+    /// The steps an encoder turned to send `value`, up or down, or `None`
+    /// from a knob or fader with ends.
+    pub fn steps(self, value: u8) -> Option<i32> {
+        let value = value as i32;
+        match self {
+            Self::Absolute => None,
+            Self::Relative64 => Some(value - 64),
+            Self::TwosComplement if value >= 64 => Some(value - 128),
+            Self::TwosComplement => Some(value),
+        }
+    }
+
+    /// What the first few values a control sent say it is. An endless
+    /// encoder sends the same value or two over and over, near 64 or near
+    /// the ends; a knob or fader with ends walks through its values.
+    pub fn guess(values: &[u8]) -> Self {
+        let mut seen: Vec<u8> = values.to_vec();
+        seen.sort_unstable();
+        seen.dedup();
+        if values.len() < 3 || seen.len() > 2 {
+            return Self::Absolute;
+        }
+        if seen.iter().all(|v| (57..=71).contains(v)) {
+            Self::Relative64
+        } else if seen.iter().all(|v| (1..=15).contains(v) || (113..=127).contains(v)) {
+            Self::TwosComplement
+        } else {
+            Self::Absolute
+        }
+    }
+}
+
 /// What a mapped CC or note asks of its control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MidiInput {
@@ -119,6 +171,20 @@ pub struct MidiMapping {
     /// `param_index` is unused then.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scene: Option<u8>,
+    /// A knob or fader with ends, or an endless encoder (#424).
+    #[serde(default, skip_serializing_if = "MidiEncoding::is_absolute")]
+    pub encoding: MidiEncoding,
+    /// A knob the CC turns jumps to wherever the hardware is, rather than
+    /// waiting for the hardware to pick it up where it stands (#424).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub jump: bool,
+    /// The hardware's top is the control's bottom.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub invert: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 impl MidiMapping {
@@ -144,6 +210,9 @@ impl MidiMapping {
             source: MidiSource::Cc,
             control: MidiControl::Knob,
             scene: None,
+            encoding: MidiEncoding::Absolute,
+            jump: false,
+            invert: false,
         }
     }
 
@@ -1110,8 +1179,35 @@ mod tests {
         // A CC on a knob, all there was before #423, gains no fields
         let old = serde_json::to_value(&cc).unwrap();
         assert_eq!(old.as_object().unwrap().len(), 7, "{old}");
+        let styled = MidiMapping { encoding: MidiEncoding::TwosComplement, jump: true, invert: true, ..cc.clone() };
+        let json = serde_json::to_string(&styled).unwrap();
+        assert!(json.contains("\"twos-complement\""), "{json}");
+        assert_eq!(serde_json::from_str::<MidiMapping>(&json).unwrap(), styled);
         let read: MidiMapping = serde_json::from_value(old).unwrap();
         assert_eq!((read.source, read.control, read.scene), (MidiSource::Cc, MidiControl::Knob, None));
+    }
+
+    #[test]
+    fn test_an_encoder_is_told_from_a_fader_by_its_first_few_values() {
+        assert_eq!(MidiEncoding::guess(&[65, 65, 65, 63]), MidiEncoding::Relative64);
+        assert_eq!(MidiEncoding::guess(&[1, 1, 2]), MidiEncoding::TwosComplement);
+        assert_eq!(MidiEncoding::guess(&[127, 127, 127]), MidiEncoding::TwosComplement);
+        // A fader walks through its values, wherever it starts
+        assert_eq!(MidiEncoding::guess(&[63, 64, 65, 66]), MidiEncoding::Absolute);
+        assert_eq!(MidiEncoding::guess(&[1, 2, 3, 4]), MidiEncoding::Absolute);
+        assert_eq!(MidiEncoding::guess(&[40, 40, 40]), MidiEncoding::Absolute);
+        // Too few to say
+        assert_eq!(MidiEncoding::guess(&[65]), MidiEncoding::Absolute);
+    }
+
+    #[test]
+    fn test_an_encoder_counts_its_steps() {
+        assert_eq!(MidiEncoding::Relative64.steps(66), Some(2));
+        assert_eq!(MidiEncoding::Relative64.steps(63), Some(-1));
+        assert_eq!(MidiEncoding::TwosComplement.steps(1), Some(1));
+        assert_eq!(MidiEncoding::TwosComplement.steps(127), Some(-1));
+        assert_eq!(MidiEncoding::TwosComplement.steps(120), Some(-8));
+        assert_eq!(MidiEncoding::Absolute.steps(127), None);
     }
 
     #[test]

@@ -15,8 +15,12 @@
 use rtrb::Consumer;
 
 use crate::engine::{MidiDeviceInfo, MidiEngine, MidiEvent, TimestampedMidiEvent, UiNotes};
-use crate::persistence::{MidiControl, MidiInput, MidiMapping, MidiSource};
-use super::midi_mappings::MidiMappings;
+use crate::persistence::{MidiControl, MidiEncoding, MidiInput, MidiMapping, MidiSource};
+use super::midi_mappings::{MidiMappings, Standing};
+
+/// How many CCs a newly learned knob listens to before saying whether
+/// it's an endless encoder (#424).
+const GUESS_FROM: usize = 4;
 
 /// The control MIDI Learn is waiting for a CC or a note for.
 #[derive(Debug, Clone)]
@@ -42,7 +46,8 @@ pub struct MidiLearnTarget {
 pub struct Heard {
     /// A note started or stopped: the pianos show [`MidiSession::held`].
     pub notes_changed: bool,
-    /// MIDI Learn took a CC or a note, and has stopped listening.
+    /// MIDI Learn took a CC or a note, and has stopped listening; or what
+    /// a learned CC is (an endless encoder) has come clear since.
     pub learned: bool,
     /// Controls turned by mapped CCs and notes: engine node, parameter
     /// index and value.
@@ -53,6 +58,15 @@ pub struct Heard {
     pub footswitches: Vec<(u64, usize, f32, bool)>,
     /// Scenes pads recalled by mapped CCs and notes: engine node and slot.
     pub recalls: Vec<(u64, u8)>,
+}
+
+/// A CC just learned, listened to a moment longer.
+struct Guess {
+    node_id: u64,
+    param_index: usize,
+    controller: u8,
+    channel: u8,
+    values: Vec<u8>,
 }
 
 /// MIDI in, as the UI holds it.
@@ -77,6 +91,9 @@ pub struct MidiSession {
     /// them, so they say for themselves whether the patch has changed.
     saved_mappings: MidiMappings,
     learning: Option<MidiLearnTarget>,
+    /// The CC just learned, and the values it has sent since: enough of
+    /// them tell an endless encoder from a fader.
+    guessing: Option<Guess>,
     /// The ring the UI's own notes take to the audio thread.
     notes: Option<UiNotes>,
     /// Notes played on the UI since the last [`drain`](Self::drain), for
@@ -169,9 +186,9 @@ impl MidiSession {
 
     /// Takes every event waiting, and the notes the UI played, handing
     /// each to `each` (the MIDI Monitor's log) as it's heard. `current`
-    /// gives a parameter's value, which a toggle flips and a dropdown steps
-    /// on from.
-    pub fn drain(&mut self, mut each: impl FnMut(MidiEvent), current: impl Fn(u64, usize) -> Option<f32>) -> Heard {
+    /// gives where a parameter stands, which a toggle flips, a dropdown
+    /// steps on from, an encoder turns from and a fader picks up.
+    pub fn drain(&mut self, mut each: impl FnMut(MidiEvent), current: impl Fn(u64, usize) -> Option<Standing>) -> Heard {
         let mut heard = Heard::default();
         if let Some(mut events) = self.events.take() {
             while let Ok(timestamped) = events.pop() {
@@ -189,7 +206,7 @@ impl MidiSession {
 
     /// What one event does: a note is held or let go, and a CC or a note is
     /// learned, or turns the controls mapped to it.
-    pub fn hear(&mut self, event: MidiEvent, heard: &mut Heard, current: &impl Fn(u64, usize) -> Option<f32>) {
+    pub fn hear(&mut self, event: MidiEvent, heard: &mut Heard, current: &impl Fn(u64, usize) -> Option<Standing>) {
         let (source, number, channel, input) = match event {
             MidiEvent::NoteOn { channel, note, velocity } => {
                 if !self.held.iter().any(|&(n, _)| n == note) {
@@ -229,37 +246,65 @@ impl MidiSession {
                 if let Some(slot) = target.scene {
                     mapping = mapping.recalling(slot);
                 }
+                // A knob's or dropdown's CC may be an endless encoder: it
+                // says so over the next few values
+                self.guessing = (source == MidiSource::Cc && matches!(target.control, MidiControl::Knob | MidiControl::Select))
+                    .then(|| Guess { node_id: target.node_id, param_index: target.param_index, controller: number, channel, values: vec![value_of(input)] });
                 self.mappings.learn(mapping);
                 heard.learned = true;
                 return;
             }
         }
-        for mapping in &self.mappings {
+        if source == MidiSource::Cc && self.guess(number, channel, value_of(input)) {
+            heard.learned = true;
+            // The control holds still while it's told apart
+            return;
+        }
+        for index in 0..self.mappings.len() {
+            let mapping = &self.mappings.as_slice()[index];
             if !mapping.hears(source, number, channel) {
                 continue;
             }
+            let (node_id, param_index, control) = (mapping.node_id, mapping.param_index, mapping.control);
             match mapping.scene {
                 Some(slot) => {
                     if input.presses() {
-                        heard.recalls.push((mapping.node_id, slot));
+                        heard.recalls.push((node_id, slot));
                     }
                 }
                 None => {
-                    let now = current(mapping.node_id, mapping.param_index).unwrap_or(mapping.min_value);
-                    let Some(value) = mapping.respond(input, now) else { continue };
-                    if mapping.control == MidiControl::Button {
-                        heard.footswitches.push((mapping.node_id, mapping.param_index, value, input.presses()));
+                    let Some(value) = self.mappings.turn(index, input, current(node_id, param_index)) else { continue };
+                    if control == MidiControl::Button {
+                        heard.footswitches.push((node_id, param_index, value, input.presses()));
                     } else {
-                        heard.turns.push((mapping.node_id, mapping.param_index, value));
+                        heard.turns.push((node_id, param_index, value));
                     }
                 }
             }
         }
     }
 
+    /// Listens to the CC just learned while it says what it is: true while
+    /// it does. Its last value names it an endless encoder or not.
+    fn guess(&mut self, controller: u8, channel: u8, value: u8) -> bool {
+        let Some(guess) = self.guessing.as_mut().filter(|g| g.controller == controller && g.channel == channel) else {
+            return false;
+        };
+        guess.values.push(value);
+        if guess.values.len() < GUESS_FROM {
+            return true;
+        }
+        let encoding = MidiEncoding::guess(&guess.values);
+        let (node_id, param_index) = (guess.node_id, guess.param_index);
+        self.guessing = None;
+        self.mappings.restyle(node_id, param_index, None, |m| m.encoding = encoding);
+        true
+    }
+
     /// Waits for a CC or a note for `target`, in place of any control it
     /// waited for.
     pub fn start_learn(&mut self, target: MidiLearnTarget) {
+        self.guessing = None;
         self.learning = Some(target);
     }
 
@@ -277,12 +322,14 @@ impl MidiSession {
     pub fn open(&mut self, mappings: Vec<MidiMapping>) {
         self.mappings.load(mappings);
         self.learning = None;
+        self.guessing = None;
     }
 
     /// No mappings, and nothing being learned: a new patch's.
     pub fn clear(&mut self) {
         self.mappings.clear();
         self.learning = None;
+        self.guessing = None;
     }
 
     /// The mappings as they stand are the patch's file's.
@@ -293,6 +340,14 @@ impl MidiSession {
     /// Have the mappings changed since the patch was opened or saved?
     pub fn unsaved(&self) -> bool {
         self.mappings != self.saved_mappings
+    }
+}
+
+/// A CC's value; a note has none to guess from.
+fn value_of(input: MidiInput) -> u8 {
+    match input {
+        MidiInput::Cc(value) => value,
+        MidiInput::NoteOn | MidiInput::NoteOff => 0,
     }
 }
 
@@ -356,7 +411,7 @@ mod tests {
     fn hear_at(session: &mut MidiSession, events: &[MidiEvent], current: Option<f32>) -> Heard {
         let mut heard = Heard::default();
         for &event in events {
-            session.hear(event, &mut heard, &|_, _| current);
+            session.hear(event, &mut heard, &|_, _| current.map(|value| Standing { value, logarithmic: false, stepped: false }));
         }
         heard
     }
@@ -385,6 +440,11 @@ mod tests {
         assert!(session.learning().is_none());
         assert!(session.unsaved());
 
+        // It listens to a few more, to tell a fader from an encoder: a
+        // fader walks through its values
+        assert!(hear(&mut session, &[cc(3, 74, 1), cc(3, 74, 2), cc(3, 74, 3)]).turns.is_empty());
+        assert_eq!(session.mappings.as_slice()[0].encoding, MidiEncoding::Absolute);
+
         // Learned on its channel, it turns across the parameter's range
         let heard = hear(&mut session, &[cc(3, 74, 127), cc(9, 74, 0), cc(3, 75, 64)]);
         assert_eq!(heard.turns, [(7, 0, 100.0)]);
@@ -394,11 +454,27 @@ mod tests {
     }
 
     #[test]
+    fn an_endless_encoder_is_told_apart_and_then_steps_the_knob() {
+        let mut session = MidiSession::default();
+        session.start_learn(target(7));
+        hear(&mut session, &[cc(0, 20, 65)]);
+        let heard = hear(&mut session, &[cc(0, 20, 65), cc(0, 20, 65), cc(0, 20, 65)]);
+        assert!(heard.learned, "the badge has news");
+        assert!(heard.turns.is_empty(), "the knob held still meanwhile");
+        assert_eq!(session.mappings.as_slice()[0].encoding, MidiEncoding::Relative64);
+
+        let heard = hear_at(&mut session, &[cc(0, 20, 66)], Some(50.0));
+        assert_eq!(heard.turns, [(7, 0, 52.0)]);
+    }
+
+    #[test]
     fn a_mapping_from_before_channels_were_learned_hears_every_channel() {
         let mut session = MidiSession::default();
         session.open(vec![MidiMapping::new(74, 0, 7, 0, "Cutoff", 0.0, 100.0)]);
         let heard = hear(&mut session, &[cc(0, 74, 127), cc(9, 74, 0)]);
         assert_eq!(heard.turns, [(7, 0, 100.0), (7, 0, 0.0)]);
+        // Where a knob stands, a fader waits to pick it up
+        assert!(hear_at(&mut session, &[cc(0, 74, 0)], Some(60.0)).turns.is_empty());
     }
 
     #[test]
@@ -449,7 +525,7 @@ mod tests {
         assert_eq!(hear_at(&mut session, &[on(9, 41)], Some(3.0)).turns, [(5, 0, 0.0)], "past the last it goes round");
 
         session.start_learn(select);
-        hear(&mut session, &[cc(0, 22, 0)]);
+        hear(&mut session, &[cc(0, 22, 0), cc(0, 22, 20), cc(0, 22, 40), cc(0, 22, 60)]);
         let heard = hear(&mut session, &[cc(0, 22, 0), cc(0, 22, 50), cc(0, 22, 127)]);
         assert_eq!(heard.turns, [(5, 0, 0.0), (5, 0, 1.0), (5, 0, 3.0)]);
     }

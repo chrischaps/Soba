@@ -82,6 +82,18 @@ pub struct ScopeData {
 /// one follow it, as they would a MIDI CC.
 pub const MACRO_COUNT: u8 = 8;
 
+/// How long, in seconds, the tick of a fader that's just picked its knob up
+/// takes to fade.
+pub const PICKUP_FADE: f64 = 0.35;
+
+/// How a CC mapping moves its control, as its menu sets it (#424).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MidiStyle {
+    pub encoding: crate::persistence::MidiEncoding,
+    pub jump: bool,
+    pub invert: bool,
+}
+
 /// Info about a MIDI CC or note mapping for display in the UI.
 #[derive(Clone, Debug)]
 pub struct MidiMappingInfo {
@@ -93,9 +105,22 @@ pub struct MidiMappingInfo {
     pub macro_slot: Option<u8>,
     /// A CC, or a note (a pad or a key).
     pub source: crate::persistence::MidiSource,
+    /// What kind of control it turns.
+    pub control: crate::persistence::MidiControl,
+    /// A knob or fader with ends, or an endless encoder.
+    pub encoding: crate::persistence::MidiEncoding,
+    /// A knob jumps to the hardware rather than waiting to be picked up.
+    pub jump: bool,
+    /// The hardware's top is the control's bottom.
+    pub invert: bool,
 }
 
 impl MidiMappingInfo {
+    /// How it moves its control.
+    pub fn style(&self) -> MidiStyle {
+        MidiStyle { encoding: self.encoding, jump: self.jump, invert: self.invert }
+    }
+
     /// What turns it, for its menu: "CC 74 · ch 1", "C2 · ch 10", "Macro 3".
     pub fn text(&self) -> String {
         let what = match (self.macro_slot, self.source) {
@@ -214,6 +239,11 @@ pub struct SynthGraphState {
 
     /// The Scenes pad MIDI Learn waits for, as (engine_node_id, slot).
     pub midi_learn_scene: Option<(EngineNodeId, usize)>,
+
+    /// Knobs a fader hasn't picked up yet: where the fader is round each
+    /// one's travel, and when it caught the knob, from which its tick fades
+    /// for [`PICKUP_FADE`] seconds.
+    pub midi_pickups: HashMap<(EngineNodeId, usize), (f32, Option<f64>)>,
 
     /// Flag set when a widget context menu is shown this frame.
     /// Used to prevent the add-node menu from also appearing.
@@ -374,6 +404,7 @@ impl Default for SynthGraphState {
             midi_learn_active: false,
             midi_learn_target: None,
             midi_learn_scene: None,
+            midi_pickups: HashMap::new(),
             widget_context_menu_open: false,
             scope_data: HashMap::new(),
             zoom: 1.0,
@@ -527,6 +558,7 @@ impl SynthGraphState {
         self.midi_learn_active = false;
         self.midi_learn_target = None;
         self.midi_learn_scene = None;
+        self.midi_pickups.clear();
         self.scene_midi_mappings.clear();
         self.widget_context_menu_open = false;
         self.scope_data.clear();

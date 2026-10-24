@@ -168,6 +168,10 @@ pub struct KnobConfig {
     /// hovered cable carries CV to: its bead swells and glows, or, with no
     /// bead to show, a ring lights around the dial.
     pub spotlight: f32,
+    /// Where a MIDI fader stands round the travel (0 to 1) while it hasn't
+    /// picked the knob up, and how strongly to show it (0 to 1): a purple
+    /// tick on the rim, with a faint arc back to the knob's value.
+    pub pickup: Option<(f32, f32)>,
 }
 
 impl Default for KnobConfig {
@@ -188,6 +192,7 @@ impl Default for KnobConfig {
             style: KnobStyle::default(),
             modulated: None,
             spotlight: 0.0,
+            pickup: None,
         }
     }
 }
@@ -459,6 +464,7 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
                 KnobStyle::Classic => unreachable!(),
             }
             paint_modulation(painter, center, config, normalized, swath);
+            paint_pickup(painter, center, config, normalized);
             paint_readout(painter, knob_rect, face.s, config, *value, hot);
             return response;
         }
@@ -539,6 +545,7 @@ pub fn knob(ui: &mut Ui, value: &mut f32, config: &KnobConfig) -> Response {
         painter.circle_filled(center, 3.0 * scale, theme::text::SECONDARY);
 
         paint_modulation(painter, center, config, normalized, swath);
+        paint_pickup(painter, center, config, normalized);
 
         // Draw outer ring border
         painter.circle_stroke(
@@ -868,6 +875,23 @@ fn paint_modulation(painter: &egui::Painter, center: Pos2, config: &KnobConfig, 
     }
     painter.circle_filled(bead, (2.6 + 1.0 * spot) * s, color.gamma_multiply(0.25 + 0.3 * spot));
     painter.circle_filled(bead, (1.5 + 0.5 * spot) * s, mix(color, Color32::WHITE, 0.35 * spot));
+}
+
+/// Where a MIDI fader stands that hasn't picked the knob up yet (#424): a
+/// purple tick across the rim, and a faint arc from it to the knob's value
+/// `from`, so it's plain which way to move the fader.
+fn paint_pickup(painter: &egui::Painter, center: Pos2, config: &KnobConfig, from: f32) {
+    let Some((at, strength)) = config.pickup.filter(|&(_, strength)| strength > 0.0) else { return };
+    let s = config.size / 36.0;
+    let radius = config.size / 2.0 - 0.6 * s;
+    let angle = |t: f32| Face::START + t * Face::SWEEP;
+    let (from, at) = (from.clamp(0.0, 1.0), at.clamp(0.0, 1.0));
+    let purple = theme::signal::MIDI;
+    if (at - from).abs() > 1e-3 {
+        stroke_arc(painter, center, radius, angle(from.min(at)), angle(from.max(at)), 1.0 * s, purple.gamma_multiply(0.25 * strength));
+    }
+    let tick = [polar(center, angle(at), radius - 3.5 * s), polar(center, angle(at), radius + 2.0 * s)];
+    painter.line_segment(tick, Stroke::new(1.8 * s, purple.gamma_multiply(0.95 * strength)));
 }
 
 /// How long the swath takes to let go of where the CV has been: each end

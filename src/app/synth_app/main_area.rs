@@ -340,6 +340,9 @@ impl SynthApp {
                     scene,
                 });
             }
+            crate::graph::SynthResponse::MidiStyle { engine_node_id, param_index, scene, style } => {
+                self.restyle_mapping(engine_node_id, param_index, scene, style);
+            }
             crate::graph::SynthResponse::MidiLearnCancel => {
                 self.cancel_midi_learn();
             }

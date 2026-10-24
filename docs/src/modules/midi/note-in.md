@@ -160,7 +160,7 @@ Any knob in the patch can follow a MIDI controller (a mod wheel, a fader, a knob
 
 Changed your mind, or no controller to hand? Press `Escape`, or right-click the blinking knob and choose **Cancel MIDI Learn**, and nothing is mapped. Starting learn on another knob moves it there instead.
 
-The controller sweeps the knob's whole range, on the channel it was learned on. Right-click a mapped knob to see its CC number and channel, to **Re-learn MIDI**, or to **Clear MIDI**. Mappings are saved with the patch. Moves made by a controller aren't added to the undo history. [MIDI Learn](../../getting-started/interface-overview.md#midi-learn) in the interface overview says what pads do to each kind of control.
+The controller sweeps the knob's whole range, on the channel it was learned on. A fader picks the knob up where it stands rather than jumping it, and an endless encoder steps it. Right-click a mapped knob to see its CC number and channel, to **Re-learn MIDI**, or to **Clear MIDI**. Mappings are saved with the patch. Moves made by a controller aren't added to the undo history. [MIDI Learn](../../getting-started/interface-overview.md#midi-learn) in the interface overview says what pads do to each kind of control.
 
 ## Patch examples
 

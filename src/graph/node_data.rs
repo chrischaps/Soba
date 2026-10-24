@@ -704,6 +704,16 @@ impl SynthNodeData {
                 let (min_value, max_value) = input.value.range();
 
                 // Build MIDI config for the knob
+                // A fader that hasn't picked the knob up yet shows where it is,
+                // and once it has, its tick fades into the ring
+                let pickup = engine_node_id.and_then(|eid| user_state.midi_pickups.get(&(eid, current_param_index))).map(|&(at, caught)| match caught {
+                    None => (at, 1.0),
+                    Some(when) => {
+                        let now = ui.input(|i| i.time);
+                        let fade = (1.0 - (now - when) / super::PICKUP_FADE).clamp(0.0, 1.0) as f32;
+                        (super::scenes::travel(&input.value, input.value.actual_value()), fade)
+                    }
+                });
                 let midi_config = KnobMidiConfig {
                     has_midi_mapping: midi_mapping.is_some(),
                     mapping: midi_mapping.cloned(),
@@ -829,6 +839,7 @@ impl SynthNodeData {
                             style: user_state.knob_style,
                             modulated: modulated.map(|m| m.clamp(spec.min, spec.max)),
                             spotlight,
+                            pickup,
                             ..Default::default()
                         };
                         let (response, turned) = Self::number_knob(ui, *value, spec, display_signal, should_disable, &config);
@@ -1692,6 +1703,37 @@ impl NodeDataTrait for SynthNodeData {
     }
 }
 
+/// How a CC moves the knob or dropdown it's mapped to (#424): a fader or
+/// an endless encoder, picking the knob up or jumping it, and which way up.
+fn style_items(ui: &mut egui::Ui, mapping: &super::MidiMappingInfo, learn: &SynthResponse) -> Option<SynthResponse> {
+    use crate::persistence::{MidiControl, MidiEncoding, MidiSource};
+    let SynthResponse::MidiLearnStart { engine_node_id, param_index, scene, .. } = *learn else { return None };
+    if mapping.source != MidiSource::Cc || mapping.macro_slot.is_some() || !matches!(mapping.control, MidiControl::Knob | MidiControl::Select) {
+        return None;
+    }
+    let mut style = mapping.style();
+    crate::widgets::menu::menu_button(ui, "Hardware", |ui| {
+        let kinds = [
+            (MidiEncoding::Absolute, "Knob or fader", "It has ends, and sends where it is"),
+            (MidiEncoding::Relative64, "Encoder (64 ± steps)", "Endless: sends 65 for a step up, 63 for a step down"),
+            (MidiEncoding::TwosComplement, "Encoder (1 / 127)", "Endless: sends 1 for a step up, 127 for a step down"),
+        ];
+        for (encoding, name, tip) in kinds {
+            if ui.selectable_label(style.encoding == encoding, name).on_hover_text(tip).clicked() {
+                style.encoding = encoding;
+            }
+        }
+    });
+    if mapping.control == MidiControl::Knob && style.encoding == MidiEncoding::Absolute {
+        let mut pick_up = !style.jump;
+        let tip = "The knob waits where it is until the hardware reaches it, rather than jumping to the hardware";
+        ui.checkbox(&mut pick_up, "Pick up").on_hover_text(tip);
+        style.jump = !pick_up;
+    }
+    ui.checkbox(&mut style.invert, "Invert").on_hover_text("The hardware's top is the bottom here");
+    (style != mapping.style()).then_some(SynthResponse::MidiStyle { engine_node_id, param_index, scene, style })
+}
+
 /// A mapped control's MIDI items, after any value of its own: what turns it,
 /// Clear and Re-learn, or Learn when nothing does yet. `learn` is the
 /// response that starts MIDI Learn on it.
@@ -1705,8 +1747,8 @@ pub(super) fn midi_items(ui: &mut egui::Ui, mapping: Option<&super::MidiMappingI
         return clicked.then_some(learn);
     };
     ui.label(RichText::new(mapping.text()).small().weak());
+    let mut chosen = style_items(ui, mapping, &learn);
     ui.separator();
-    let mut chosen = None;
     if ui.button("Clear MIDI").clicked() {
         if let SynthResponse::MidiLearnStart { engine_node_id, param_index, scene, .. } = &learn {
             chosen = Some(SynthResponse::MidiLearnClear { engine_node_id: *engine_node_id, param_index: *param_index, scene: *scene });

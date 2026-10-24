@@ -90,6 +90,14 @@ pub enum SynthResponse {
         param_index: usize,
         scene: Option<u8>,
     },
+    /// Request to restyle the MIDI mapping of a parameter: an endless
+    /// encoder or not, picking up or jumping, and which way up.
+    MidiStyle {
+        engine_node_id: u64,
+        param_index: usize,
+        scene: Option<u8>,
+        style: super::MidiStyle,
+    },
     /// Request to leave MIDI Learn mode without mapping anything.
     MidiLearnCancel,
     /// In the plugin, map the host's macro `slot` (0-7) to a parameter, in

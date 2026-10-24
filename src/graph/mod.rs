@@ -98,7 +98,7 @@ pub use groups::{GroupId, NodeKind};
 pub use port_mapping::SynthGraph;
 pub use node_data::{KnobParam, LedIndicator, NodeDisplay, SynthNodeData};
 pub use responses::{SceneAction, SynthResponse, Tidy};
-pub use state::{create_editor_state, DisplayMidiEvent, MidiMappingInfo, MACRO_COUNT, SamplerCue, SynthGraphEditorState, SynthGraphState};
+pub use state::{create_editor_state, DisplayMidiEvent, MidiMappingInfo, MidiStyle, MACRO_COUNT, PICKUP_FADE, SamplerCue, SynthGraphEditorState, SynthGraphState};
 pub use templates::{AllNodeTemplates, SynthNodeTemplate};
 pub use validation::{validate_connection, ConnectionError, ValidationResult};
 pub use value_types::{NumberSpec, SynthValueType};

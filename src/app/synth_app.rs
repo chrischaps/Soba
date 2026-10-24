@@ -119,6 +119,7 @@ const BUFFER_FRAMES_KEY: &str = "buffer_frames";
 const RECORDING_PATIENCE: std::time::Duration = std::time::Duration::from_secs(1);
 
 pub use super::midi_session::MidiLearnTarget;
+use super::midi_mappings::Standing;
 
 /// Main application state for the Soba
 pub struct SynthApp {
@@ -696,9 +697,10 @@ impl SynthApp {
     /// Notes reach Note In modules on the audio thread, sample-accurately;
     /// nothing here affects what they play.
     fn process_midi_events(&mut self, now: f64) {
+        let standings = self.midi_standings();
         let user_state = &mut self.user_state;
-        let cached = &self.cached_params;
-        let heard = self.midi.drain(|event| user_state.push_midi_event(event, now), |node, param| cached.get(&(node, param)).copied());
+        let heard = self.midi.drain(|event| user_state.push_midi_event(event, now), |node, param| standings.get(&(node, param)).copied());
+        self.show_midi_pickups(now);
 
         if heard.learned {
             self.show_midi_badges();
@@ -727,6 +729,58 @@ impl SynthApp {
 
         if heard.notes_changed {
             self.user_state.set_midi_active_notes(self.midi.held());
+        }
+    }
+
+    /// Where each control a CC or note turns stands, and how its knob runs:
+    /// a fader sweeps a frequency by octaves, and an encoder steps a whole
+    /// number knob a number at a time.
+    fn midi_standings(&self) -> HashMap<(u64, usize), Standing> {
+        let mut standings = HashMap::new();
+        for mapping in &self.midi.mappings {
+            let key = (mapping.node_id, mapping.param_index);
+            if mapping.scene.is_some() || standings.contains_key(&key) {
+                continue;
+            }
+            let Some(input) = self.user_state.graph_node_id(mapping.node_id).and_then(|node| self.param_input(node, mapping.param_index)) else {
+                continue;
+            };
+            let value = &self.graph_state.graph.get_input(input).value;
+            let (logarithmic, stepped) = match value {
+                crate::graph::SynthValueType::Number { spec, .. } => (spec.logarithmic, spec.stepped),
+                _ => (false, true),
+            };
+            let value = self.cached_params.get(&key).copied().unwrap_or_else(|| value.actual_value());
+            standings.insert(key, Standing { value, logarithmic, stepped });
+        }
+        standings
+    }
+
+    /// The input of a node's `param_index`th parameter.
+    fn param_input(&self, node_id: egui_node_graph2::NodeId, param_index: usize) -> Option<egui_node_graph2::InputId> {
+        let node = self.graph_state.graph.nodes.get(node_id)?;
+        node.inputs
+            .iter()
+            .map(|(_, input)| *input)
+            .filter(|input| {
+                matches!(self.graph_state.graph.inputs.get(*input).map(|i| i.kind), Some(InputParamKind::ConstantOnly | InputParamKind::ConnectionOrConstant))
+            })
+            .nth(param_index)
+    }
+
+    /// Shows a tick where each fader is that hasn't picked its knob up
+    /// yet, and fades it once it has.
+    fn show_midi_pickups(&mut self, now: f64) {
+        let waiting = self.midi.mappings.waiting();
+        let pickups = &mut self.user_state.midi_pickups;
+        for (key, (_, caught)) in pickups.iter_mut() {
+            if !waiting.contains_key(key) && caught.is_none() {
+                *caught = Some(now);
+            }
+        }
+        pickups.retain(|_, (_, caught)| caught.is_none_or(|at| now - at < crate::graph::PICKUP_FADE));
+        for (key, at) in waiting {
+            pickups.insert(key, (at, None));
         }
     }
 
@@ -815,6 +869,17 @@ impl SynthApp {
     /// Check if currently in MIDI Learn mode.
     pub fn is_midi_learning(&self) -> bool {
         self.midi.learning().is_some()
+    }
+
+    /// Restyles the MIDI mapping of a parameter: an endless encoder or not,
+    /// picking up or jumping, and which way up.
+    pub fn restyle_mapping(&mut self, node_id: u64, param_index: usize, scene: Option<u8>, style: crate::graph::MidiStyle) {
+        self.midi.mappings.restyle(node_id, param_index, scene, |m| {
+            m.encoding = style.encoding;
+            m.jump = style.jump;
+            m.invert = style.invert;
+        });
+        self.show_midi_badges();
     }
 
     /// Remove the MIDI mapping of a parameter, or with `scene` of a Scenes pad.
@@ -2621,6 +2686,10 @@ impl SynthApp {
         // A footswitch tapped from MIDI is let go once it's been seen down
         if self.midi_presses.waiting() {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(crate::app::midi_presses::MIN_PRESS_SECONDS));
+        }
+        // A knob just picked up lets its tick fade
+        if self.user_state.midi_pickups.values().any(|(_, caught)| caught.is_some()) {
+            ctx.request_repaint();
         }
 
         self.show_notes(ctx);
