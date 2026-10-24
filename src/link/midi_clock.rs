@@ -58,7 +58,10 @@ impl MidiClock {
             let at = sent_at.unwrap_or_else(Instant::now);
             self.push(Outgoing::Block { sample: self.sample, at, rate, port: 0 });
         }
-        match wanted.then(transport).flatten() {
+        let transport = wanted.then(transport).flatten();
+        // Before its ticks, so the leader's ports never get them (#438)
+        self.bus.set_leader(transport.and_then(|transport| transport.leader));
+        match transport {
             Some(transport) => self.ticks(&transport, frames, rate),
             None => self.stop(),
         }

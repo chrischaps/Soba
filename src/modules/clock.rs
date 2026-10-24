@@ -33,7 +33,8 @@ pub const DIVISION_LABELS: [&str; DIVISIONS.len()] = tempo::labels(&DIVISIONS);
 ///
 /// The third choice is the outside clock: an Ableton Link session in the
 /// app, the DAW's transport in the plugin. So a patch made with one follows
-/// the other.
+/// the other. Builds with neither leave it out of the menu. Auto comes
+/// after it, so a patch keeps its choice in every build.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClockSource {
     /// Its own Tempo knob.
@@ -46,18 +47,24 @@ pub enum ClockSource {
     /// The DAW's transport, when Soba is a plugin (see [`crate::hosted`]).
     /// Without the host's transport, the Clock keeps its own time.
     Host,
+    /// Leads or follows (#438): its own time at Tempo until a MIDI clock
+    /// master plays, that master's while it does, and its own again when
+    /// the master stops, carrying on at the master's tempo from the beat it
+    /// had reached.
+    Auto,
 }
 
 impl ClockSource {
     /// The Source choice's labels: the outside clock only where there is
-    /// one, Link in builds that have it, the host in a plugin.
+    /// one, Link in builds that have it, the host in a plugin. An empty
+    /// label is a choice the menu leaves out.
     pub fn labels() -> &'static [&'static str] {
         if crate::hosted::is_hosted() {
-            &["Internal", "MIDI", "Host"]
+            &["Internal", "MIDI", "Host", "Auto"]
         } else if cfg!(feature = "ableton-link") {
-            &["Internal", "MIDI", "Link"]
+            &["Internal", "MIDI", "Link", "Auto"]
         } else {
-            &["Internal", "MIDI"]
+            &["Internal", "MIDI", "", "Auto"]
         }
     }
 
@@ -68,6 +75,7 @@ impl ClockSource {
             1 => ClockSource::Midi,
             2 if crate::hosted::is_hosted() => ClockSource::Host,
             2 if cfg!(feature = "ableton-link") => ClockSource::Link,
+            3 => ClockSource::Auto,
             _ => ClockSource::Internal,
         }
     }
@@ -83,6 +91,12 @@ const TEMPO_WINDOW: usize = 48;
 /// stopped sending clock for a while, and the tempo fit starts over. A tick
 /// at the Clock's slowest tempo (20 BPM) is 125 ms.
 const TICK_GAP_SECONDS: f64 = 0.25;
+
+/// A tick this many intervals late is missing: a Clock on Auto stops
+/// waiting for it and runs on at the master's pace, so that if the master
+/// has gone, the handover at [`TICK_GAP_SECONDS`] comes without a stall.
+/// USB jitter is a millisecond or so, against a 20 ms tick at 120 BPM.
+const OVERDUE_TICKS: f64 = 1.5;
 
 /// What a MIDI message did to the transport.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -124,6 +138,12 @@ pub struct MidiClockFollower {
     /// Whether a tick has come since playing (re)started. Until one does, the
     /// position holds where Start, Continue or Song Position left it.
     ticked: bool,
+    /// When the master was last heard: a tick, Start or Continue, on `now`.
+    heard: Option<u64>,
+    /// The input the last tick came from (see [`MidiEvent::port`]).
+    ///
+    /// [`MidiEvent::port`]: crate::dsp::MidiEvent::port
+    port: u8,
 }
 
 impl Default for MidiClockFollower {
@@ -144,7 +164,20 @@ impl MidiClockFollower {
             playing: None,
             next_tick: 0,
             ticked: false,
+            heard: None,
+            port: crate::dsp::SOBA_PORT,
         }
+    }
+
+    /// Handles one MIDI message from input `port` at the current sample.
+    pub fn handle_from(&mut self, port: u8, message: MidiMessage, sample_rate: f32) -> MidiClockChange {
+        if matches!(message, MidiMessage::Clock | MidiMessage::Start | MidiMessage::Continue) {
+            self.heard = Some(self.now);
+        }
+        if message == MidiMessage::Clock {
+            self.port = port;
+        }
+        self.handle(message, sample_rate)
     }
 
     /// Handles one MIDI message at the current sample.
@@ -198,6 +231,44 @@ impl MidiClockFollower {
     /// Whether ticks are coming in.
     pub fn is_receiving(&self, sample_rate: f32) -> bool {
         self.count > 0 && ((self.now - self.newest()) as f64) < TICK_GAP_SECONDS * sample_rate as f64
+    }
+
+    /// Whether the master leads (#438): it's playing, or sends ticks
+    /// without ever saying, and has been heard within the tick gap. A
+    /// master that's stopped but still ticks, as many drum machines do,
+    /// doesn't lead.
+    pub fn leads(&self, sample_rate: f32) -> bool {
+        self.playing.unwrap_or(true) && self.heard.is_some_and(|at| ((self.now - at) as f64) < TICK_GAP_SECONDS * sample_rate as f64)
+    }
+
+    /// The input the last tick came from.
+    pub fn port(&self) -> u8 {
+        self.port
+    }
+
+    /// Whether the next tick is missing: [`OVERDUE_TICKS`] late, by the
+    /// tempo fitted so far.
+    pub fn overdue(&self) -> bool {
+        self.count > 0 && self.samples_per_tick.is_some_and(|spt| (self.now - self.newest()) as f64 > OVERDUE_TICKS * spt)
+    }
+
+    /// Where the beat would be now had the ticks gone on at the fitted
+    /// tempo: where a Clock runs on from past a missing tick.
+    pub fn beat_by_now(&self) -> Option<f64> {
+        let spt = self.samples_per_tick?;
+        let last = self.next_tick.checked_sub(1).filter(|_| self.count > 0)?;
+        Some((last as f64 + (self.now - self.newest()) as f64 / spt) / MIDI_TICKS_PER_BEAT as f64)
+    }
+
+    /// Has the next tick mark the tick nearest `beat`: a master that only
+    /// ticks, picked up again, carries on from where the Clock got to.
+    pub fn align(&mut self, beat: f64) {
+        self.next_tick = (beat * MIDI_TICKS_PER_BEAT as f64).round().max(0.0) as u64;
+    }
+
+    /// Whether the master says it's playing: `None` until it says either.
+    pub fn playing(&self) -> Option<bool> {
+        self.playing
     }
 
     /// The beat the next tick marks. The beat never runs past it between
@@ -297,7 +368,9 @@ pub const ID: &str = "util.clock";
 /// - **Source** (choice): Internal keeps its own time at Tempo; MIDI follows
 ///   the MIDI clock coming in (its ticks, Start, Continue and Stop); Link
 ///   (in builds with Ableton Link) plays in a Link session's time, and
-///   turning Tempo or switching Run changes the session's.
+///   turning Tempo or switching Run changes the session's. Auto keeps its
+///   own time until a master plays, follows it while it does, and carries
+///   on at its tempo when it stops.
 /// - **Swing** (50-75%): Where the second pulse of each pair lands, as a
 ///   share of the pair. 50% is straight; 66% is a triplet shuffle. The first
 ///   pulse of each pair stays on the grid, so bars keep their length.
@@ -317,8 +390,18 @@ pub struct Clock {
     prev_run: Option<bool>,
     /// The Reset trigger.
     reset_out: Pulse,
-    /// Follows the MIDI clock, when Source is MIDI.
+    /// Follows the MIDI clock, when Source is MIDI or Auto.
     midi: MidiClockFollower,
+    /// On Auto, whether the MIDI clock master leads now.
+    leading: bool,
+    /// On Auto, the tempo the last master to stop was playing at, and the
+    /// Tempo knob then. The Clock carries on at it until the knob moves:
+    /// the app moves it to match, or the player turns it.
+    carried: Option<(f64, f32)>,
+    /// How many times a master has handed the lead back on Auto. Each
+    /// moves the Tempo knob to the carried tempo (the app's side is
+    /// `link_follow`).
+    handovers: u32,
     /// Follows a Link session, when Source is Link.
     #[cfg(feature = "ableton-link")]
     link: link::LinkFollower,
@@ -344,6 +427,9 @@ impl Clock {
             prev_run: None,
             reset_out: Pulse::IDLE,
             midi: MidiClockFollower::new(),
+            leading: false,
+            carried: None,
+            handovers: 0,
             #[cfg(feature = "ableton-link")]
             link: link::LinkFollower::new(),
             host_tempo: None,
@@ -396,11 +482,11 @@ impl Clock {
                     ClockSource::labels(),
                     0,
                 ).describe(if crate::hosted::is_hosted() {
-                    "Internal keeps time at Tempo; MIDI follows a MIDI clock coming in; Host plays in time with the DAW, starting and stopping with it"
+                    "Internal keeps time at Tempo; MIDI follows a MIDI clock coming in; Host plays in time with the DAW, starting and stopping with it; Auto keeps time until a MIDI clock plays, and carries on when it stops"
                 } else if cfg!(feature = "ableton-link") {
-                    "Internal keeps time at Tempo; MIDI follows the clock of a DAW or drum machine on the MIDI input; Link plays in time with Ableton Link apps on the network"
+                    "Internal keeps time at Tempo; MIDI follows the clock of a DAW or drum machine on the MIDI input; Link plays in time with Ableton Link apps on the network; Auto keeps time until a MIDI clock plays, follows it, and carries on when it stops"
                 } else {
-                    "Internal keeps time at Tempo; MIDI follows the clock of a DAW or drum machine on the MIDI input"
+                    "Internal keeps time at Tempo; MIDI follows the clock of a DAW or drum machine on the MIDI input; Auto keeps time until that clock plays, follows it, and carries on when it stops"
                 }),
                 // Where the second pulse of each pair lands
                 ParameterDefinition::new(
@@ -450,18 +536,70 @@ impl Clock {
     pub const READOUT_LINK_TEMPO_CHANGES: usize = 5;
     pub const READOUT_LINK_PLAY_CHANGES: usize = 6;
     pub const READOUT_LINK_PLAYING: usize = 7;
+    /// Who leads (#438): the MIDI input whose clock it follows, plus one,
+    /// or 0 while it keeps its own time. [`SOBA_PORT`] plus one is Soba's
+    /// own MIDI: a render's, say.
+    ///
+    /// [`SOBA_PORT`]: crate::dsp::SOBA_PORT
+    pub const READOUT_LEADER: usize = 8;
+    /// On Auto, how many times a master has handed the lead back: the app
+    /// moves the Tempo knob to the tempo carried on.
+    pub const READOUT_HANDOVERS: usize = 9;
+    /// On Auto, the tempo carried on from the last master to hand back, as
+    /// the Tempo knob would set it (unbent by Tempo CV), or 0 for none.
+    pub const READOUT_CARRIED: usize = 10;
 
     /// The tempo this clock keeps: the master's, when following MIDI and
-    /// it has been heard, otherwise the Tempo knob's as Tempo CV bends it.
+    /// it has been heard, otherwise its own as Tempo CV bends it.
     fn tempo(&self, params: &[f32]) -> f32 {
         let knob = params.get(Self::PARAM_TEMPO).copied().unwrap_or(120.0);
         match Self::source(params) {
             ClockSource::Midi => self.midi.tempo_bpm(self.sample_rate).unwrap_or(knob),
+            ClockSource::Auto if self.leading => self.midi.tempo_bpm(self.sample_rate).unwrap_or(knob),
             #[cfg(feature = "ableton-link")]
             ClockSource::Link if self.link.last.is_some() => self.link.last.map_or(knob, |block| block.tempo as f32),
             ClockSource::Host if self.host_tempo.is_some() => self.host_tempo.map_or(knob, |bpm| bpm as f32),
-            ClockSource::Internal | ClockSource::Link | ClockSource::Host => Self::bent_tempo(knob as f64, self.tempo_scale) as f32,
+            ClockSource::Internal | ClockSource::Link | ClockSource::Host | ClockSource::Auto => {
+                Self::bent_tempo(self.own_tempo(knob), self.tempo_scale) as f32
+            }
         }
+    }
+
+    /// The tempo it keeps by itself with the Tempo knob at `knob`: the
+    /// knob's, or the one a master handed back on Auto while the knob is
+    /// where it was then.
+    fn own_tempo(&self, knob: f32) -> f64 {
+        self.carried.filter(|&(_, at)| at == knob).map_or(knob as f64, |(tempo, _)| tempo)
+    }
+
+    /// The MIDI input whose clock it follows now, if any: on MIDI, the one
+    /// ticking; on Auto, the one leading.
+    fn leader(&self, params: &[f32]) -> Option<u8> {
+        let follows = match Self::source(params) {
+            ClockSource::Midi => self.midi.is_receiving(self.sample_rate),
+            ClockSource::Auto => self.leading,
+            _ => false,
+        };
+        follows.then(|| self.midi.port())
+    }
+
+    /// On Auto, takes up the master's lead as it starts playing, or takes
+    /// the lead back as it stops: a Stop, or no clock for the tick gap.
+    /// Handed back, it carries on from the beat it reached at the master's
+    /// tempo. Returns whether it took the lead back.
+    fn follow_lead(&mut self, knob: f32) -> bool {
+        let leads = self.midi.leads(self.sample_rate);
+        if leads == self.leading {
+            return false;
+        }
+        self.leading = leads;
+        if leads {
+            return false;
+        }
+        let tempo = self.midi.tempo_bpm(self.sample_rate).map_or(self.own_tempo(knob), f64::from);
+        self.carried = Some((tempo.clamp(Self::MIN_TEMPO, Self::MAX_TEMPO), knob));
+        self.handovers = self.handovers.wrapping_add(1);
+        true
     }
 
     /// The Tempo knob's `knob` BPM bent by Tempo CV's `scale`, kept within
@@ -584,12 +722,20 @@ impl DspModule for Clock {
         params: &[f32],
         context: &ProcessContext,
     ) {
-        let tempo = params[Self::PARAM_TEMPO] as f64;
+        let knob = params[Self::PARAM_TEMPO];
         let gate_length = params[Self::PARAM_GATE_LENGTH] as f64 / 100.0;
         let division = Self::division_beats(params[Self::PARAM_DIVISION]);
         let run = params[Self::PARAM_RUN] > 0.5;
         let mut source = Self::source(params);
         let swing = params.get(Self::PARAM_SWING).map_or(0.5, |&swing| (swing as f64 / 100.0).clamp(0.5, 0.75));
+        // A master's tempo is carried on Auto only, and only until the knob moves
+        if source != ClockSource::Auto {
+            self.leading = false;
+        }
+        if source != ClockSource::Auto || self.carried.is_some_and(|(_, at)| at != knob) {
+            self.carried = None;
+        }
+        let mut tempo = self.own_tempo(knob);
 
         // Link: the session's time for this block, once the Clock's own
         // changes are proposed to it. Without a session, the Clock's own
@@ -617,7 +763,8 @@ impl DspModule for Clock {
         }
 
         // Switching Run on starts from the top, as a drum machine's Play does
-        if source == ClockSource::Internal && run && self.prev_run == Some(false) {
+        let own_time = |clock: &Self| source == ClockSource::Internal || source == ClockSource::Auto && !clock.leading;
+        if own_time(self) && run && self.prev_run == Some(false) {
             self.restart();
         }
         self.prev_run = Some(run);
@@ -635,24 +782,49 @@ impl DspModule for Clock {
             // Check for sync reset
             let sync_rising = self.sync.rising(sync_in.map_or(0.0, |buf| buf.at(i)));
             // Following MIDI, the master's ticks place the beat instead
-            if sync_rising && source == ClockSource::Internal {
+            if sync_rising && own_time(self) {
                 self.beats = 0.0;
             }
 
             // MIDI lands on its sample, whatever the source, so the follower
             // already knows the tempo when Source is switched to MIDI
             while let Some(event) = midi.next_if(|event| event.sample_offset as usize <= i) {
-                match self.midi.handle(event.message, self.sample_rate) {
-                    _ if source == ClockSource::Internal => {}
+                let auto = source == ClockSource::Auto;
+                let took_over = auto && !self.leading;
+                // A master picked up by its ticks alone, with no Start or
+                // Continue to say where it is, carries on from the beat the
+                // Clock reached
+                if took_over && event.message == MidiMessage::Clock && self.midi.playing() != Some(false) {
+                    self.midi.align(self.beats);
+                }
+                let change = self.midi.handle_from(event.port, event.message, self.sample_rate);
+                if auto && self.follow_lead(knob) {
+                    tempo = self.own_tempo(knob);
+                    beats_per_sample = Self::bent_tempo(tempo, self.tempo_scale) * minutes_per_sample;
+                }
+                match change {
+                    _ if source == ClockSource::Internal || auto && !self.leading => {}
+                    // A beat run on past a missing tick waits for the ticks
+                    // to catch up, rather than step back over a pulse
+                    MidiClockChange::Beat(beat) if auto => self.beats = self.beats.max(beat),
                     MidiClockChange::Beat(beat) | MidiClockChange::Locate(beat) => self.beats = beat,
                     MidiClockChange::Restart => self.restart(),
+                    // Continue, taking the lead: from where Song Position put it
+                    MidiClockChange::None if took_over => self.beats = self.midi.next_beat(),
                     MidiClockChange::None => {}
                 }
+            }
+            // A master that went quiet hands the lead back
+            if source == ClockSource::Auto && self.follow_lead(knob) {
+                tempo = self.own_tempo(knob);
+                beats_per_sample = Self::bent_tempo(tempo, self.tempo_scale) * minutes_per_sample;
             }
 
             self.running = match source {
                 ClockSource::Internal => run,
                 ClockSource::Midi => run && self.midi.is_running(),
+                ClockSource::Auto if self.leading => run && self.midi.is_running(),
+                ClockSource::Auto => run,
                 ClockSource::Link => self.follow_link(link_block.as_ref(), i),
                 ClockSource::Host => host.is_some_and(|host| self.follow_host(&host, run, i, self.sample_rate)),
             };
@@ -677,6 +849,7 @@ impl DspModule for Clock {
             if self.running {
                 match source {
                     ClockSource::Internal => self.beats += beats_per_sample,
+                    ClockSource::Auto if !self.leading => self.beats += beats_per_sample,
                     // Placed from the session's or the DAW's beat
                     ClockSource::Link | ClockSource::Host => {}
                     // Between ticks, at the master's pace, but never past the
@@ -686,6 +859,19 @@ impl DspModule for Clock {
                             let step = 1.0 / (spt * MIDI_TICKS_PER_BEAT as f64);
                             self.beats = (self.beats + step).min(self.midi.next_beat() - 1e-9);
                         }
+                    }
+                    // The same on Auto, at its own pace until the master's is
+                    // known, and on past a missing tick at the master's, so
+                    // the groove never stalls if it's gone
+                    ClockSource::Auto => {
+                        let step = self.midi.samples_per_tick().map_or(beats_per_sample, |spt| 1.0 / (spt * MIDI_TICKS_PER_BEAT as f64));
+                        let on = self.beats + step;
+                        self.beats = if self.midi.overdue() {
+                            // Where the ticks would have put it, not on from the wait
+                            on.max(self.midi.beat_by_now().unwrap_or(on))
+                        } else {
+                            on.min(self.midi.next_beat() - 1e-9).max(self.beats)
+                        };
                     }
                 }
             }
@@ -701,6 +887,8 @@ impl DspModule for Clock {
         self.prev_run = None;
         self.reset_out.clear();
         self.midi = MidiClockFollower::new();
+        self.leading = false;
+        self.carried = None;
         #[cfg(feature = "ableton-link")]
         self.link.rest();
         self.host_tempo = None;
@@ -709,13 +897,14 @@ impl DspModule for Clock {
     fn transport(&self, params: &[f32]) -> Option<TransportState> {
         // Before the first block, a running clock is about to play
         let playing = match self.prev_run {
-            None => params.get(Self::PARAM_RUN).is_some_and(|&run| run > 0.5) && Self::source(params) == ClockSource::Internal,
+            None => params.get(Self::PARAM_RUN).is_some_and(|&run| run > 0.5) && matches!(Self::source(params), ClockSource::Internal | ClockSource::Auto),
             Some(_) => self.running,
         };
         Some(TransportState {
             playing,
             tempo_bpm: Some(self.tempo(params)),
             beat_position: Some(self.beats),
+            leader: self.leader(params),
             ..TransportState::new()
         })
     }
@@ -733,6 +922,9 @@ impl DspModule for Clock {
             _ => self.midi.is_receiving(self.sample_rate),
         };
         readout.values[Self::READOUT_RECEIVING] = if receiving { 1.0 } else { 0.0 };
+        readout.values[Self::READOUT_LEADER] = self.leader(params).map_or(0.0, |port| port as f32 + 1.0);
+        readout.values[Self::READOUT_HANDOVERS] = self.handovers as f32;
+        readout.values[Self::READOUT_CARRIED] = self.carried.map_or(0.0, |(tempo, _)| tempo as f32);
         #[cfg(feature = "ableton-link")]
         if let Some(block) = self.link.last.filter(|_| Self::source(params) == ClockSource::Link) {
             readout.values[Self::READOUT_PEERS] = crate::ableton_link::peers() as f32;
@@ -1421,8 +1613,8 @@ mod tests {
     fn test_link_is_a_source_only_in_builds_with_it() {
         let clock = Clock::new();
         let source = &clock.parameters()[Clock::PARAM_SOURCE];
-        let offered = source.max as usize + 1;
-        assert_eq!(offered, if cfg!(feature = "ableton-link") { 3 } else { 2 });
+        let ParameterDisplay::Discrete { labels } = source.display else { panic!("Source is a choice") };
+        assert_eq!(labels[2], if cfg!(feature = "ableton-link") { "Link" } else { "" }, "left out of the menu without it");
         let expected = if cfg!(feature = "ableton-link") { ClockSource::Link } else { ClockSource::Internal };
         assert_eq!(ClockSource::from_param(2.0), expected);
         assert_eq!(ClockSource::from_param(1.0), ClockSource::Midi);
@@ -1622,6 +1814,128 @@ mod tests {
         assert_eq!(clock.transport(&internal).unwrap().tempo_bpm, Some(100.0));
         let tempo = clock.transport(&MIDI).unwrap().tempo_bpm.unwrap();
         assert!((tempo - 140.0).abs() < 0.1);
+    }
+
+    // --- Auto: leading, and following (#438) ---
+
+    const AUTO: [f32; 5] = [120.0, 50.0, 2.0, 1.0, 3.0];
+
+    /// At 100 BPM and 48 kHz, a tick is 1200 frames and a beat 28,800.
+    const TICK_100: u64 = 1200;
+    const BEAT_100: u64 = 28_800;
+
+    /// Every edge within `slack` samples of where it should be.
+    fn assert_edges_at(edges: &[usize], expected: &[u64], slack: u64) {
+        assert_eq!(edges.len(), expected.len(), "{edges:?}, expected {expected:?}");
+        for (&edge, &at) in edges.iter().zip(expected) {
+            assert!((edge as u64).abs_diff(at) <= slack, "edge at {edge}, expected {at}: {edges:?}");
+        }
+    }
+
+    #[test]
+    fn test_auto_is_a_source_in_every_build() {
+        assert_eq!(ClockSource::from_param(3.0), ClockSource::Auto);
+        assert_eq!(ClockSource::labels()[3], "Auto");
+        assert_eq!(Clock::new().parameters()[Clock::PARAM_SOURCE].max, 3.0);
+    }
+
+    #[test]
+    fn test_auto_without_a_master_keeps_its_own_time() {
+        let internal = [120.0, 50.0, 2.0, 1.0, 0.0];
+        let (mut a, mut b) = (Clock::new(), Clock::new());
+        a.prepare(48000.0, 512);
+        b.prepare(48000.0, 512);
+        let ctx = ProcessContext::new(48000.0, 512);
+        for _ in 0..200 {
+            let (mut out_a, mut out_b) = (outputs(512), outputs(512));
+            a.process(&[], &mut out_a, &AUTO, &ctx);
+            b.process(&[], &mut out_b, &internal, &ctx);
+            assert_eq!(out_a[0].samples, out_b[0].samples);
+        }
+        let transport = a.transport(&AUTO).unwrap();
+        assert!(transport.playing);
+        assert_eq!(transport.leader, None, "Soba leads");
+        assert_eq!(a.readout(&AUTO).unwrap().values[Clock::READOUT_LEADER], 0.0);
+    }
+
+    #[test]
+    fn test_auto_follows_a_master_while_it_plays() {
+        let mut clock = Clock::new();
+        clock.prepare(48000.0, 256);
+        let mut events = vec![(10_000, MidiMessage::Start)];
+        events.extend(ticks(100.0, 48000.0, 10_500, 24 * 8, |_| 0.0));
+        let [gate, _, reset] = feed(&mut clock, &AUTO, &events, 240_000, 48000.0);
+        // Its own time until the master's Start, then the master's downbeat
+        // on its first tick, and a beat every 24 ticks
+        assert_eq!(rises(&reset), vec![10_000]);
+        let expected: Vec<u64> = (0..8).map(|n| 10_500 + n * BEAT_100).collect();
+        assert_edges_at(&rises(&gate), &expected, 0);
+        let transport = clock.transport(&AUTO).unwrap();
+        assert!((transport.tempo_bpm.unwrap() - 100.0).abs() < 0.01);
+        assert_eq!(transport.leader, Some(crate::dsp::SOBA_PORT), "the master leads");
+        assert!(clock.readout(&AUTO).unwrap().values[Clock::READOUT_LEADER] > 0.5);
+    }
+
+    #[test]
+    fn test_auto_carries_on_at_the_masters_tempo_and_beat_when_it_stops() {
+        // The master plays four and a half beats at 100 BPM and stops, and
+        // ticks on while stopped, as drum machines do
+        let mut clock = Clock::new();
+        clock.prepare(48000.0, 256);
+        let mut events = vec![(500, MidiMessage::Start)];
+        events.extend(ticks(100.0, 48000.0, 1000, 24 * 10, |_| 0.0));
+        let stop = 1000 + 4 * BEAT_100 + BEAT_100 / 2;
+        events.push((stop, MidiMessage::Stop));
+        events.sort_by_key(|&(frame, _)| frame);
+        let [gate, run, _] = feed(&mut clock, &AUTO, &events, 1000 + 10 * BEAT_100 + 100, 48000.0);
+        // Every beat on the master's grid, before the Stop and after it
+        let expected: Vec<u64> = (0..=10).map(|n| 1000 + n * BEAT_100).collect();
+        assert_edges_at(&rises(&gate), &expected, 1);
+        assert!(run[1000..].iter().all(|&r| r == 1.0), "it never stopped running");
+        let transport = clock.transport(&AUTO).unwrap();
+        assert_eq!(transport.leader, None, "Soba leads again");
+        assert!((transport.tempo_bpm.unwrap() - 100.0).abs() < 0.01, "at the master's tempo");
+        let readout = clock.readout(&AUTO).unwrap().values;
+        assert_eq!(readout[Clock::READOUT_HANDOVERS], 1.0);
+        assert!((readout[Clock::READOUT_CARRIED] - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_auto_plays_on_through_a_master_gone_quiet() {
+        // Ticks alone at 100 BPM, picked up partway through the Clock's own
+        // first beat, then gone with no Stop (a cable pulled)
+        let mut clock = Clock::new();
+        clock.prepare(48000.0, 256);
+        let events = ticks(100.0, 48000.0, 6000, 24 * 3 + 9, |_| 0.0);
+        let [gate, run, _] = feed(&mut clock, &AUTO, &events, 6000 + 10 * BEAT_100, 48000.0);
+        // At 6000 the Clock was a quarter beat in: the master's first tick is
+        // tick 6, so its next beat is 18 ticks on. The beat never stalls
+        // across the gap, nor jumps
+        let first = 6000 + 18 * TICK_100;
+        let expected: Vec<u64> = (0..10).map(|n| first + n * BEAT_100).collect();
+        assert_edges_at(&rises(&gate), &expected, 2);
+        assert!(run[1..].iter().all(|&r| r == 1.0));
+        assert_eq!(clock.transport(&AUTO).unwrap().leader, None);
+    }
+
+    #[test]
+    fn test_auto_takes_the_knobs_tempo_once_it_turns() {
+        let mut clock = Clock::new();
+        clock.prepare(48000.0, 256);
+        let mut events = vec![(0, MidiMessage::Start)];
+        events.extend(ticks(100.0, 48000.0, 500, 48, |_| 0.0));
+        events.push((60_000, MidiMessage::Stop));
+        feed(&mut clock, &AUTO, &events, 70_000, 48000.0);
+        assert!((clock.transport(&AUTO).unwrap().tempo_bpm.unwrap() - 100.0).abs() < 0.01);
+        // The app moves the knob to the tempo carried: no change
+        let carried = clock.readout(&AUTO).unwrap().values[Clock::READOUT_CARRIED];
+        let moved = [carried, 50.0, 2.0, 1.0, 3.0];
+        feed(&mut clock, &moved, &[], 512, 48000.0);
+        assert_eq!(clock.transport(&moved).unwrap().tempo_bpm, Some(carried));
+        // Turned, it's the knob's
+        let turned = [140.0, 50.0, 2.0, 1.0, 3.0];
+        feed(&mut clock, &turned, &[], 512, 48000.0);
+        assert_eq!(clock.transport(&turned).unwrap().tempo_bpm, Some(140.0));
     }
 
     #[test]

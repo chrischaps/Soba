@@ -28,6 +28,10 @@ pub struct TransportState {
     pub time_sig_numerator: u8,
     /// Time signature denominator (beat unit).
     pub time_sig_denominator: u8,
+    /// The MIDI input whose clock the transport follows (see
+    /// [`MidiEvent::port`](super::MidiEvent::port)), or `None` while it
+    /// keeps its own time (#438). Its device isn't sent the clock back.
+    pub leader: Option<u8>,
 }
 
 impl TransportState {
@@ -42,6 +46,7 @@ impl TransportState {
             beat_position: None,
             time_sig_numerator: 4,
             time_sig_denominator: 4,
+            leader: None,
         }
     }
 
@@ -54,6 +59,7 @@ impl TransportState {
             beat_position: None,
             time_sig_numerator: 4,
             time_sig_denominator: 4,
+            leader: None,
         }
     }
 

@@ -504,7 +504,8 @@ fn switch_chip(
                             .selected_text(options.get(*value).map(|s| s.as_str()).unwrap_or(""))
                             .show_ui(ui, |ui| {
                                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                                for (i, option) in options.iter().enumerate() {
+                                // An empty choice is one this build leaves out (the Clock's Link)
+                                for (i, option) in options.iter().enumerate().filter(|(_, option)| !option.is_empty()) {
                                     ui.selectable_value(value, i, option);
                                 }
                             })

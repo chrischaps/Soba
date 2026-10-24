@@ -348,7 +348,7 @@ With a room of hardware plugged in, choose **The Rig…** at the foot of the **M
   - how many modules have their **Device** set to it alone. Hover to see their names.
 - **MIDI Out** has a row for each of the eight ports, **A** to **H**, that a [MIDI Out](../modules/output/midi-out.md) plays. Each row has:
   - the port's device, which you choose here or on a MIDI Out's face;
-  - its **Clock**: what it sends of the patch's Clock. **Clock + Transport** sends the tempo with Start and Stop, **Clock only** the tempo alone, and **Off** nothing. The port sends it whether or not a MIDI Out plays it;
+  - its **Clock**: what it sends of the patch's Clock. **Clock + Transport** sends the tempo with Start and Stop, **Clock only** the tempo alone, and **Off** nothing. The port sends it whether or not a MIDI Out plays it. While its device leads the Clock (see [Leading or following](../modules/modulation/clock.md#leading-or-following-auto)), it reads **leads** in purple and sends nothing;
   - its **Offset**: how many milliseconds later than the sound its notes, CCs and clock go out, to line a slow device up with the rest. Drag it, or click to type. It's amber when it asks for earlier than your audio device's delay allows;
   - how the port is doing: **Sending**, **Ready** (it has a device but nothing plays it), **Unplugged**, **No device**, or **In use** (another app has the device);
   - a dot that lights on each beat while clock goes out;

@@ -71,6 +71,7 @@ mod idle;
 mod instrument_listening;
 mod launch;
 mod lessons;
+mod auto_follow;
 #[cfg(feature = "ableton-link")]
 mod link_follow;
 #[cfg(target_arch = "wasm32")]
@@ -1298,6 +1299,8 @@ impl SynthApp {
                         // A Link Clock's peers may have moved its knob and switch
                         #[cfg(feature = "ableton-link")]
                         link_follow::follow_peers(&mut self.graph_state.graph, &mut self.history, &self.user_state, node_id, _previous);
+                        // An Auto Clock's leader may have handed back at its tempo
+                        auto_follow::follow_handover(&mut self.graph_state.graph, &mut self.history, &self.user_state, node_id, _previous);
                     }
                     crate::engine::EngineEvent::Cue { node_id, place } => {
                         // Where a Sampler's file heard from its face has got to

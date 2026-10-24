@@ -9,13 +9,15 @@ The Clock is the patch's metronome. It sends a steady stream of gate pulses at a
 
 It also sets the **patch tempo and beat**. Tempo-synced modules follow it without a cable: the [Delay](../effects/delay.md) with its **Sync** set to a note length, and the [LFO](./lfo.md) with its **Tempo** set to a division. See [Tempo and Sync](../../concepts/tempo-and-sync.md).
 
-The Clock can keep its own time, follow the **MIDI clock** of a DAW, drum machine or another synth, or join an **Ableton Link** session, so the patch plays in time with them.
+The Clock can keep its own time, follow the **MIDI clock** of a DAW, drum machine or another synth, or join an **Ableton Link** session, so the patch plays in time with them. On **Auto** it does both: it leads until a drum machine plays, follows it while it does, and carries the groove on when it stops.
 
 ## The display
 
 Four lamps show the beats of the bar. The lamp of the beat playing flashes as the beat lands and fades through it, and the downbeat flashes brightest. A thin line under the lamps sweeps across the bar, with a dot where each pulse falls. With **Swing** turned up, the late pulses are drawn in orange, pushed along towards the next one. When the Clock stops, the beat it stopped on keeps a faint outline.
 
-Beside the lamps, a badge shows where the time comes from: **INT** for the Clock's own **BPM**, **MIDI** when it follows a MIDI clock, or **LINK** when it plays in a Link session. The MIDI badge fills in while clock ticks are coming in. The LINK badge fills in while anyone else is in the session, with a bubble on its corner counting them. Hover over the display to see what the Clock is doing.
+Beside the lamps, a badge shows where the time comes from: **INT** for the Clock's own **BPM**, **MIDI** when it follows a MIDI clock, **AUTO** when it leads or follows, or **LINK** when it plays in a Link session. The MIDI badge fills in while clock ticks are coming in, and the AUTO badge while a device leads. The LINK badge fills in while anyone else is in the session, with a bubble on its corner counting them. Hover over the display to see what the Clock is doing.
+
+On **MIDI** and **Auto**, a line under the lamps says who leads: **Soba leads**, or the device's name in MIDI purple, such as **Digitakt leads**. On MIDI it reads *Waiting for clock* until ticks arrive.
 
 ## Inputs
 
@@ -30,7 +32,7 @@ Beside the lamps, a badge shows where the time comes from: **INT** for the Clock
 |------|-------------|-------------|
 | **Gate** | Gate (Green) | One pulse per division. The jack lights while the gate is high |
 | **Run** | Gate (Green) | High while the Clock runs. Patch it into a sequencer's **Run** so it stops when the Clock does |
-| **Reset** | Gate (Green) | A 5 ms pulse when the Clock starts from the top: when **Run** is ticked, a MIDI **Start** arrives, or a Link session starts playing. Patch it into a sequencer's **Reset** |
+| **Reset** | Gate (Green) | A 5 ms pulse when the Clock starts from the top: when **Run** is ticked, a MIDI **Start** arrives (on MIDI or Auto), or a Link session starts playing. Patch it into a sequencer's **Reset** |
 
 ## Parameters
 
@@ -40,7 +42,7 @@ Beside the lamps, a badge shows where the time comes from: **INT** for the Clock
 | **Gate** | 1 – 99% | 50% | How much of each pulse the gate stays high |
 | **Div** | 1, 1/2, 1/4, 1/8, 1/16 | 1/4 | Dropdown on the node. Pulse rate relative to the beat |
 | **Run** | On / Off | On | Checkbox on the node. Off holds the gate low and pauses the clock; on starts it from the top |
-| **Source** | Internal / MIDI / Link | Internal | Dropdown on the node. Internal keeps time at **BPM**; MIDI follows the MIDI clock on the MIDI input; Link plays in an Ableton Link session (builds with Link only) |
+| **Source** | Internal / MIDI / Link / Auto | Internal | Dropdown on the node. Internal keeps time at **BPM**; MIDI follows the MIDI clock on the MIDI input; Link plays in an Ableton Link session (builds with Link only); Auto leads until a MIDI clock plays, follows it, and carries on when it stops. See [Leading or following](#leading-or-following-auto) |
 | **Swing** | 50 – 75% | 50% | Delays every second pulse. 50% is straight; see [Swing](#swing) |
 
 ## Divisions
@@ -130,7 +132,23 @@ With several devices open, choose the master under **Device** in the Clock's rig
 
 The **Gate** follows the master's beat too, so Div 1/16 pulses on every sixteenth of the DAW's grid. Patch **Run** and **Reset** into a sequencer to have it start, stop and restart with the DAW's transport.
 
+Soba never sends its clock back to the device it follows. A port in [the Rig](../../getting-started/interface-overview.md#the-rig) that plays the same device as the master (a Digitakt in and a Digitakt out, say) is sent none of the clock while the master leads, and its **Clock** reads **leads** in purple. So a drum machine set to both send and receive clock can't hear its own clock come back late and chase itself. The rest of the rig still gets Soba's clock, so the master leads the whole room.
+
 Soba's own **Play** button still has to be on: while Soba is stopped, it doesn't listen.
+
+## Leading or following: Auto
+
+Sometimes Soba leads the room, and sometimes a drum machine or a tracker does. Set **Source** to **Auto** and the Clock takes whichever role is free, with no knob to turn when the leader changes:
+
+- **Soba leads** to begin with. The Clock keeps its own time at **BPM**, as on Internal, and sends it to every port whose **Clock** is on.
+- **A device starts playing** (it sends **Start**, or its clock ticks start arriving) and the Clock follows it, exactly as on MIDI: its tempo, its beat, its Start and Continue. **Start** restarts the Clock from the top and fires **Reset**. The **BPM** knob dims and reads the device's tempo.
+- **The device stops** (it sends **Stop**, or its ticks stop for a quarter of a second) and Soba leads again. The Clock carries on from the beat it had reached, at the device's tempo, with no gap and no jump, and the **BPM** knob turns to that tempo. Turn the knob and the tempo is yours again.
+
+Many drum machines keep sending clock ticks while they're stopped. Those don't make them lead: only playing does. A device that sends only ticks, never Start or Stop, leads while they come, and picks up from the beat Soba had reached rather than restarting it.
+
+Choose the device under **Device** in the Clock's right-click menu, so only that one can lead. On **Any**, whichever device sends clock leads.
+
+When Soba takes the lead back, the ports of the device that led get Soba's clock again, so it can follow along, but not a **Continue**: you stopped it, so it stays stopped until Soba's transport next starts (press Stop and Play). Ports set to **Clock only** follow the tempo straight away.
 
 ## Playing in a Link session
 

@@ -65,6 +65,8 @@ struct OutRow {
     traffic: Traffic,
     /// What it sends of the Clock.
     clock: ClockMode,
+    /// Whether its device leads the Clock (#438), and is sent none of it.
+    leads: bool,
     /// How much later than the sound it sends, in milliseconds.
     offset: f32,
     /// The MIDI Outs on this port.
@@ -220,6 +222,7 @@ impl SynthApp {
                     status: MIDI.status(port),
                     traffic: MIDI.traffic(port),
                     clock: MIDI.clock(port),
+                    leads: MIDI.led_ports() & 1 << port != 0 && MIDI.clock(port) != ClockMode::Off,
                     offset: MIDI.offset(port),
                     played_by,
                 }
@@ -441,11 +444,17 @@ fn device_menu(ui: &mut egui::Ui, row: &OutRow, devices: &[String], edits: &mut 
 fn clock_menu(ui: &mut egui::Ui, row: &OutRow, edits: &mut Vec<Edit>) {
     ui.spacing_mut().button_padding.y = 1.0;
     ui.spacing_mut().interact_size.y = ROW_HEIGHT - 4.0;
-    let ink = if row.clock == ClockMode::Off { theme::text::DISABLED } else { theme::text::PRIMARY };
+    // A device the Clock follows reads "leads", in MIDI purple, until it stops
+    let ink = match row.clock {
+        _ if row.leads => theme::signal::MIDI,
+        ClockMode::Off => theme::text::DISABLED,
+        _ => theme::text::PRIMARY,
+    };
+    let selected = if row.leads { "leads" } else { row.clock.label() };
     let response = egui::ComboBox::from_id_salt(("rig_out_clock", row.port))
         .width(COLUMNS[3] - 4.0)
         .truncate()
-        .selected_text(RichText::new(row.clock.label()).small().color(ink))
+        .selected_text(RichText::new(selected).small().color(ink))
         .show_ui(ui, |ui| {
             ui.set_min_width(150.0);
             for mode in ClockMode::ALL {
@@ -460,10 +469,15 @@ fn clock_menu(ui: &mut egui::Ui, row: &OutRow, edits: &mut Vec<Edit>) {
             }
         })
         .response;
-    response.on_hover_text(format!(
-        "What port {} sends of the patch's Clock, once for the port however many MIDI Outs play it",
-        PORT_LABELS[row.port]
-    ));
+    response.on_hover_text(if row.leads {
+        format!(
+            "Port {}'s device leads the Clock, so it's sent none of the clock back. When it stops, Soba plays on and sends it {} again, starting it with Soba's next Start",
+            PORT_LABELS[row.port],
+            row.clock.label()
+        )
+    } else {
+        format!("What port {} sends of the patch's Clock, once for the port however many MIDI Outs play it", PORT_LABELS[row.port])
+    });
 }
 
 /// A port's offset, in milliseconds, to drag: amber when it asks for

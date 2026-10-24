@@ -36,6 +36,8 @@ Set the Clock's **Source** to **MIDI** and it follows a MIDI clock master: a DAW
 
 The whole patch then plays in the master's time: sequencers step on its grid, LFOs sweep with its bars, and the Delay echoes on its eighth notes. See [Following MIDI clock](../modules/modulation/clock.md#following-midi-clock) for setting it up.
 
+Set **Source** to **Auto** and the Clock leads and follows by turns: its own time until a device plays, the device's while it does, and its own again when the device stops, carrying on at the device's tempo from the beat it had reached. See [Leading or following](../modules/modulation/clock.md#leading-or-following-auto).
+
 Set **Source** to **Link** instead, and the Clock joins an [Ableton Link](https://www.ableton.com/link/) session on the network. There's no master: Live, Bitwig, phone apps and other copies of Soba all share one tempo and one bar line, and any of them can change the tempo or start and stop the others. The Clock:
 
 - **plays at the session's tempo**, and its **BPM** knob turns to match when another app changes it. Turning the knob changes the tempo for everyone;
@@ -54,7 +56,7 @@ It works the other way round too. Turn on a port's **Clock** in [the Rig](../get
 
 With **Clock only** it sends the ticks alone, for gear that should follow the tempo but start and stop by itself. Each port also has an **Offset**, to line up gear that's slow to sound (see [MIDI Out](../modules/output/midi-out.md#how-it-works)).
 
-A follower measures the tempo from the ticks' spacing, so change the Clock's BPM and it follows. Don't send clock back to the gear the Clock follows: two clocks can't lead one another. A Clock playing in a Link session can lead MIDI gear, though. A [MIDI Out](../modules/output/midi-out.md) on the same port can also play the device's notes.
+A follower measures the tempo from the ticks' spacing, so change the Clock's BPM and it follows. Soba doesn't send clock back to the gear the Clock follows, since two clocks can't lead one another: while a device leads, the ports that play it are sent none. A Clock playing in a Link session can lead MIDI gear, though. A [MIDI Out](../modules/output/midi-out.md) on the same port can also play the device's notes.
 
 ## Precision
 

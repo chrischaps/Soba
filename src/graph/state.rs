@@ -228,6 +228,9 @@ pub struct SynthGraphState {
     /// The names of the MIDI inputs open (#435), for the Device a module
     /// listens to and the MIDI Monitor's log.
     pub midi_inputs: Vec<String>,
+    /// The same inputs, each beside its slot (see
+    /// [`crate::dsp::MidiEvent::port`]): who leads a Clock (#438).
+    pub midi_input_slots: Vec<(u8, String)>,
 
     /// The badges of the knobs a MIDI CC or host macro turns, keyed by
     /// (engine_node_id, param_index). The app works them out afresh from
@@ -417,6 +420,7 @@ impl Default for SynthGraphState {
             midi_note_count: 0,
             note_claims: crate::dsp::NoteClaims::EMPTY,
             midi_inputs: Vec::new(),
+            midi_input_slots: Vec::new(),
             midi_mappings: HashMap::new(),
             scene_midi_mappings: HashMap::new(),
             midi_learn_active: false,

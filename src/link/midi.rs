@@ -22,6 +22,10 @@
 //! time. Each port also has an **offset**, to line a slow device up with
 //! the rest (see [`MidiBus::set_offset`]).
 //!
+//! A device the Clock follows (#438) is sent none of it while it leads: a
+//! drum machine set to send and receive clock would otherwise hear its own
+//! back (see [`MidiBus::set_leader`]).
+//!
 //! Unlike the Seoul link's newest-value atomics, MIDI needs every message,
 //! in order and on time: a lost Note Off is a stuck note. So the ring
 //! carries events, and the sender keeps track of which notes each module
@@ -36,7 +40,11 @@ use web_time::Instant;
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
+use crate::dsp::MIDI_INPUTS;
 use crate::engine::device_names;
+
+/// The [`MidiBus`]'s leader while the patch keeps its own time.
+const NO_LEADER: u8 = u8::MAX;
 
 /// Ports a MIDI Out can play, each mapped to a device in the settings:
 /// enough for a room of USB gear and a DIN interface's ports (#436).
@@ -263,6 +271,10 @@ pub struct MidiBus {
     offsets: [AtomicU32; PORTS],
     /// The patch's clock ring, made since the sender last looked.
     new_clock: Mutex<Option<Consumer<Outgoing>>>,
+    /// The MIDI input whose clock the patch follows now, or [`NO_LEADER`].
+    leader: AtomicU8,
+    /// For each MIDI input, the ports playing the same device, a bit each.
+    same_device: [AtomicU8; MIDI_INPUTS],
     /// The output device's delay, so MIDI goes out as the audio beside it
     /// is heard: in microseconds.
     latency_micros: AtomicU64,
@@ -282,6 +294,8 @@ impl MidiBus {
             clock: [const { AtomicU8::new(ClockMode::Off as u8) }; PORTS],
             offsets: [const { AtomicU32::new(0) }; PORTS],
             new_clock: Mutex::new(None),
+            leader: AtomicU8::new(NO_LEADER),
+            same_device: [const { AtomicU8::new(0) }; MIDI_INPUTS],
             latency_micros: AtomicU64::new(0),
             rescan: AtomicBool::new(true),
         }
@@ -379,6 +393,27 @@ impl MidiBus {
         if let Some(slot) = self.clock.get(port) {
             slot.store(mode as u8, Relaxed);
         }
+    }
+
+    /// Says which MIDI input's clock the patch follows, if any (#438): the
+    /// ports playing that device are sent none of the clock while it
+    /// leads, so it never hears its own back. REAL-TIME SAFE.
+    pub fn set_leader(&self, input: Option<u8>) {
+        self.leader.store(input.filter(|&input| (input as usize) < MIDI_INPUTS).unwrap_or(NO_LEADER), Relaxed);
+    }
+
+    /// Says which ports play the same device as MIDI input `input`, a bit
+    /// each: the app's side, as devices open and ports are chosen.
+    pub fn set_same_device(&self, input: usize, ports: u8) {
+        if let Some(slot) = self.same_device.get(input) {
+            slot.store(ports, Relaxed);
+        }
+    }
+
+    /// The ports whose device leads the clock, a bit each: sent none of it.
+    pub fn led_ports(&self) -> u8 {
+        let leader = self.leader.load(Relaxed) as usize;
+        self.same_device.get(leader).map_or(0, |ports| ports.load(Relaxed))
     }
 
     /// How much later than the audio port `port`'s messages go out, in

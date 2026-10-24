@@ -260,7 +260,8 @@ impl WidgetValueTrait for SynthValueType {
                             .selected_text(selected)
                             .show_ui(&mut slot, |ui: &mut egui::Ui| {
                                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                                for (i, option) in options.iter().enumerate() {
+                                // An empty choice is one this build leaves out (the Clock's Link)
+                                for (i, option) in options.iter().enumerate().filter(|(_, option)| !option.is_empty()) {
                                     ui.selectable_value(value, i, option);
                                 }
                             })

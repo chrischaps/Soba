@@ -522,7 +522,8 @@ fn restore_parameters(graph: &mut SynthGraph, node_id: NodeId, node_data: &NodeD
         // whichever choice is last
         let value = &mut graph.inputs[input_id].value;
         if let SynthValueType::Select { options, .. } = value {
-            if saved.value.as_f32().round() as usize >= options.len() {
+            let choice = saved.value.as_f32().round().max(0.0) as usize;
+            if options.get(choice).is_none_or(|option| option.is_empty()) {
                 warnings.push(format!(
                     "{}: '{}' choice {} isn't in this build, so it was left at its default",
                     node_data.module_id,

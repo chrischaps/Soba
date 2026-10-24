@@ -150,6 +150,11 @@ struct Port {
     mode: ClockMode,
     /// Whether its device has been sent Start or Continue, and not Stop since.
     transport_on: bool,
+    /// Whether its device has led the clock since it was last sent Start
+    /// or Continue (#438). It's brought back into the transport by the
+    /// next one, not partway through the song, so a drum machine stopped
+    /// by hand stays stopped while Soba plays on.
+    led: bool,
 }
 
 /// One MIDI Out's ring, and what sending it remembers.
@@ -233,7 +238,7 @@ impl ClockStream {
             }
             if port.mode == ClockMode::Transport {
                 match bytes[0] {
-                    status::CLOCK if !port.transport_on => {
+                    status::CLOCK if !port.transport_on && !port.led => {
                         if let Some(tick) = self.tick.filter(|tick| tick % 6 == 0) {
                             if tick == 0 {
                                 queue.push_back((sample, Message::real_time(status::START)));
@@ -244,7 +249,10 @@ impl ClockStream {
                             port.transport_on = true;
                         }
                     }
-                    status::START | status::CONTINUE => port.transport_on = true,
+                    status::START | status::CONTINUE => {
+                        port.transport_on = true;
+                        port.led = false;
+                    }
                     status::STOP => port.transport_on = false,
                     _ => {}
                 }
@@ -392,11 +400,18 @@ impl MidiSender {
 
     /// Takes up each port's clock setting. A port that stops sending the
     /// transport while the clock runs is sent Stop, and what it had waiting
-    /// that it no longer wants goes.
+    /// that it no longer wants goes. A port whose device leads the clock
+    /// is sent none of it, and no Stop: it's playing.
     fn follow_clock_modes(&mut self, now: Instant) {
         let modes = self.bus.clock_modes();
+        let led = self.bus.led_ports();
         let Self { ports, clock, outputs, devices, .. } = self;
-        for (index, (port, mode)) in ports.iter_mut().zip(modes).enumerate() {
+        for (index, (port, mut mode)) in ports.iter_mut().zip(modes).enumerate() {
+            if led & 1 << index != 0 && mode != ClockMode::Off {
+                mode = ClockMode::Off;
+                port.led = true;
+                port.transport_on = false;
+            }
             if port.mode == mode {
                 continue;
             }
@@ -995,6 +1010,43 @@ mod tests {
         sender.tick(start + TICK * 2);
         sender.tick(start + TICK * 2 + STALE);
         assert_eq!(sent_to(&log, "Synth").last().unwrap(), &[status::STOP]);
+    }
+
+    #[test]
+    fn the_device_the_clock_follows_is_sent_none_back() {
+        // "Synth" on port A sends clock into input 2, and the Clock follows it
+        let (bus, mut sender, log, mut clock) = clocked([ClockMode::Transport, ClockMode::Transport]);
+        bus.set_same_device(2, 0b01);
+        let start = Instant::now();
+        clock.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        clock.push(real_time(status::START)).unwrap();
+        clock.push(real_time(status::CLOCK)).unwrap();
+        sender.tick(start);
+        bus.set_leader(Some(2));
+        assert_eq!(bus.led_ports(), 0b01);
+        clock.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        // It restarts the song: Soba's Start goes to the DAW, not back to it
+        clock.push(real_time(status::START)).unwrap();
+        for _ in 0..12 {
+            clock.push(real_time(status::CLOCK)).unwrap();
+        }
+        sender.tick(start + TICK);
+        assert_eq!(sent_to(&log, "Synth"), [[status::START], [status::CLOCK]], "no clock back, and no Stop: it's playing");
+        assert_eq!(sent_to(&log, "DAW").len(), 2 + 1 + 12, "the rest of the room follows");
+
+        // It stops, and Soba leads: clock again, but no Continue until Soba's next Start
+        bus.set_leader(None);
+        clock.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        for _ in 0..12 {
+            clock.push(real_time(status::CLOCK)).unwrap();
+        }
+        sender.tick(start + TICK * 2);
+        let after = sent_to(&log, "Synth")[2..].to_vec();
+        assert_eq!(after, vec![vec![status::CLOCK]; 12], "its tempo, and nothing to start it");
+        clock.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        clock.push(real_time(status::START)).unwrap();
+        sender.tick(start + TICK * 3);
+        assert_eq!(sent_to(&log, "Synth").last().unwrap(), &[status::START]);
     }
 
     #[test]

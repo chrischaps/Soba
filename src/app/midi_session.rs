@@ -298,6 +298,11 @@ impl MidiSession {
         self.engine.as_ref().map_or_else(Vec::new, |e| e.open_inputs().map(|(_, name)| name.to_string()).collect())
     }
 
+    /// The inputs open, each beside its slot: the port its events come on.
+    pub fn open_slots(&self) -> Vec<(u8, String)> {
+        self.engine.as_ref().map_or_else(Vec::new, |e| e.open_inputs().map(|(slot, name)| (slot, name.to_string())).collect())
+    }
+
     /// Is the input called `name` open?
     pub fn is_open(&self, name: &str) -> bool {
         self.engine.as_ref().is_some_and(|e| e.slot_of(name).is_some())

@@ -6,9 +6,11 @@
 //! on that line mark where the pulses fall; with Swing, the late ones are
 //! drawn in orange, pushed along towards the next pulse. Beside
 //! them a badge says where the time comes from: INT for the Clock's own
-//! Tempo, MIDI for a clock master, lit while its ticks are coming in, and
+//! Tempo, MIDI for a clock master, lit while its ticks are coming in,
 //! LINK for an Ableton Link session, lit with a count of its peers while
-//! anyone else is in it.
+//! anyone else is in it, and AUTO for a Clock that leads or follows, lit
+//! while it follows (#438). A Clock that can follow MIDI says under the
+//! bar who leads: Soba, or the device by name, in MIDI purple.
 //!
 //! Knobs whose job another control has taken over are drawn still and
 //! dimmed, reading what's actually in charge: an LFO's Rate shows its
@@ -75,6 +77,22 @@ fn follows_midi(graph: &SynthGraph, node_id: NodeId) -> bool {
     selected(graph, node_id, "Source") == Some(1)
 }
 
+/// Whether a Clock node leads or follows MIDI, on Auto (#438).
+pub fn follows_auto(graph: &SynthGraph, node_id: NodeId) -> bool {
+    selected(graph, node_id, "Source") == Some(3)
+}
+
+/// The name of the device a Clock follows, from its readout: `None` while
+/// it keeps its own time, and "MIDI" for Soba's own clock or an input since
+/// closed.
+fn leader_name(readout: &Readout, user_state: &SynthGraphState) -> Option<String> {
+    let leader = readout.values[Clock::READOUT_LEADER].round() as i32 - 1;
+    (leader >= 0).then(|| {
+        let slots = &user_state.midi_input_slots;
+        slots.iter().find(|(slot, _)| *slot as i32 == leader).map_or_else(|| "MIDI".to_string(), |(_, name)| name.clone())
+    })
+}
+
 /// Whether a Clock node plays in a Link session. In the plugin, the same
 /// choice follows the DAW instead (see [`follows_host`]).
 pub fn follows_link(graph: &SynthGraph, node_id: NodeId) -> bool {
@@ -123,6 +141,13 @@ pub fn knob_takeover(
                 locked: true,
             })
         }
+        // On Auto, the leader's tempo while a device leads; the knob's own,
+        // which the app moves to the tempo carried on, while Soba does
+        (clock::ID, "Tempo") if follows_auto(graph, node_id) => {
+            let readout = readout.filter(|r| r.values[Clock::READOUT_LEADER] > 0.5)?;
+            let tempo = readout.values[Clock::READOUT_TEMPO];
+            Some(KnobTakeover { value: Some(tempo), text: format!("{tempo:.1} BPM"), locked: true })
+        }
         (clock::ID, "Tempo") if follows_midi(graph, node_id) => {
             let receiving = readout.is_some_and(|r| r.values[Clock::READOUT_RECEIVING] > 0.5);
             let tempo = readout.map(|r| r.values[Clock::READOUT_TEMPO]);
@@ -168,6 +193,7 @@ pub fn knob_takeover(
 pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphState, zoom: f32) {
     let z = zoom;
     let midi = follows_midi(graph, node_id);
+    let auto = follows_auto(graph, node_id);
     let link = follows_link(graph, node_id);
     let host = follows_host(graph, node_id);
     let readout = readout(user_state, node_id).copied().unwrap_or_default();
@@ -175,6 +201,7 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     let running = readout.values[Clock::READOUT_RUNNING] > 0.5 && user_state.is_playing;
     let receiving = readout.values[Clock::READOUT_RECEIVING] > 0.5 && user_state.is_playing;
     let peers = readout.values[Clock::READOUT_PEERS].round() as usize;
+    let leader = leader_name(&readout, user_state).filter(|_| user_state.is_playing);
 
     // Separator, as the other displays have, as wide as the display: the
     // node is no wider than its rows, which may be narrower than the space
@@ -191,6 +218,8 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     ui.add_space(6.0 * z);
 
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 22.0 * z), Sense::hover());
+    // A line under the bar for who leads, laid out whether it's seen or not
+    let caption = (midi || auto).then(|| ui.allocate_exact_size(Vec2::new(width, 13.0 * z), Sense::hover()).0);
     if !ui.is_rect_visible(rect) {
         return;
     }
@@ -220,6 +249,14 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
             ("MIDI", Color32::WHITE, purple.gamma_multiply(0.85), purple)
         } else {
             ("MIDI", purple, Color32::TRANSPARENT, purple.gamma_multiply(0.6))
+        }
+    } else if auto {
+        // Lit purple while a device leads, plain while Soba does
+        let purple = theme::signal::MIDI;
+        if leader.is_some() {
+            ("AUTO", Color32::WHITE, purple.gamma_multiply(0.85), purple)
+        } else {
+            ("AUTO", theme::text::SECONDARY, theme::background::WIDGET, purple.gamma_multiply(0.6))
         }
     } else {
         ("INT", theme::text::SECONDARY, theme::background::WIDGET, theme::background::GRID_MAJOR)
@@ -297,11 +334,32 @@ pub fn clock_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
         1 => "1 peer".to_string(),
         n => format!("{n} peers"),
     };
+    // --- Who leads, under the bar, for a Clock that can follow MIDI ---
+    if let Some(caption) = caption {
+        let (text, ink) = match &leader {
+            Some(name) => (format!("{name} leads"), theme::signal::MIDI),
+            None if midi => ("Waiting for clock".to_string(), theme::text::DISABLED),
+            None => ("Soba leads".to_string(), theme::text::SECONDARY),
+        };
+        ui.painter_at(caption).text(
+            caption.left_center(),
+            egui::Align2::LEFT_CENTER,
+            text,
+            egui::FontId::proportional(9.5 * z),
+            ink,
+        );
+    }
+
     let state = match (midi, running, receiving) {
         _ if link && running => format!("Playing in a Link session at {:.1} BPM, with {peer_text}", readout.values[Clock::READOUT_TEMPO]),
         _ if link => format!("In a Link session, stopped, with {peer_text}. Run starts every peer"),
         _ if host && running => format!("Playing in time with the DAW at {:.1} BPM", readout.values[Clock::READOUT_TEMPO]),
         _ if host => "Waiting for the DAW to play".to_string(),
+        _ if auto => match &leader {
+            Some(name) => format!("Following {name}'s clock at {:.1} BPM. When it stops, Soba carries on at its tempo", readout.values[Clock::READOUT_TEMPO]),
+            None if running => format!("Keeping its own time at {:.1} BPM, until a MIDI clock plays", readout.values[Clock::READOUT_TEMPO]),
+            None => "Stopped, until Run or a MIDI clock starts it".to_string(),
+        },
         (true, true, _) => "Following MIDI clock".to_string(),
         (true, false, true) => "The MIDI clock master is stopped".to_string(),
         (true, false, false) => "Waiting for MIDI clock on the MIDI input".to_string(),

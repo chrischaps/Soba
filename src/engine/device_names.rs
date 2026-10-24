@@ -64,6 +64,14 @@ pub fn same(a: &str, b: &str) -> bool {
     a == b || key(a) == key(b)
 }
 
+/// Are the MIDI input called `input` and the output called `output` the
+/// same device (#438)? Most devices give both the same name; Windows calls
+/// a device's numbered ports "MIDIIN2 (...)" one way and "MIDIOUT2 (...)"
+/// the other.
+pub fn in_and_out(input: &str, output: &str) -> bool {
+    !input.is_empty() && !output.is_empty() && (same(input, output) || same(&input.to_lowercase().replace("midiin", "midiout"), output))
+}
+
 /// The device of those `found` that `wanted` names: the one called that,
 /// or else the only one whose [`key`] is the same.
 pub fn find<'a>(wanted: &str, found: &'a [String]) -> Option<&'a str> {
@@ -135,6 +143,17 @@ mod tests {
         assert_eq!(find("SP-404MKII", &found), None);
         assert!(same("2- Digitakt", "Digitakt"));
         assert!(!same("Digitakt", "Digitakt II"));
+    }
+
+    #[test]
+    fn a_devices_input_and_output_are_told_to_be_one() {
+        assert!(in_and_out("Digitakt", "Digitakt"));
+        assert!(in_and_out("2- Digitakt", "Digitakt"));
+        assert!(in_and_out("MIDIIN2 (FANTOM-06)", "MIDIOUT2 (FANTOM-06)"));
+        assert!(in_and_out("FANTOM-06", "FANTOM-06"));
+        assert!(!in_and_out("FANTOM-06", "MIDIOUT2 (FANTOM-06)"), "the main port isn't the second");
+        assert!(!in_and_out("Digitakt", "Digitakt II"));
+        assert!(!in_and_out("Digitakt", ""), "a port with no device is no one's");
     }
 
     #[test]

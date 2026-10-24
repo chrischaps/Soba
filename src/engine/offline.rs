@@ -1277,6 +1277,42 @@ mod tests {
     }
 
     #[test]
+    fn test_an_auto_clock_follows_its_device_and_plays_on_when_it_goes() {
+        use crate::dsp::ListenTo;
+        // An Auto Clock at 120 BPM, listening to device A. Device B starts
+        // at 150 BPM and is ignored; A's ticks alone come in at 100 BPM at
+        // 2.01 s, ten beats of them, and stop
+        let sr = 48000.0;
+        let mut r = OfflineRenderer::new(sr, 256);
+        synced_lfo_patch(&mut r, 3.0);
+        r.apply(EngineCommand::Listen { node_id: 1, listen: ListenTo::Port(0) });
+        let ticks = |from: f64, bpm: f64, count: usize| (0..count).map(move |n| ((from + n as f64 * 60.0 / (bpm * 24.0)) * sr as f64) as u64);
+        r.queue_midi_from((0.5 * sr) as u64, 1, 0, MidiMessage::Start);
+        for tick in ticks(0.5, 150.0, 24 * 20) {
+            r.queue_midi_from(tick, 1, 0, MidiMessage::Clock);
+        }
+        for tick in ticks(2.01, 100.0, 24 * 10) {
+            r.queue_midi_from(tick, 0, 0, MidiMessage::Clock);
+        }
+
+        let edges = onsets(&r.render_seconds(10.0).left, 0.5, sr);
+        let latency = edges[0];
+        let beats: Vec<f32> = edges.iter().map(|edge| edge - latency).collect();
+        // Its own beats until A comes in, a quarter of a beat into beat 4:
+        // A's next beat is 24 ticks on from the tick nearest that, and
+        // every 0.6 s after, on through A's going quiet at 8 s
+        let mut expected: Vec<f32> = vec![0.0, 0.5, 1.0, 1.5, 2.0];
+        expected.extend((0..13).map(|n| 2.61 + n as f32 * 0.6));
+        assert_eq!(beats.len(), expected.len(), "{beats:?}");
+        for (n, (&beat, &at)) in beats.iter().zip(&expected).enumerate() {
+            // The first beat after the tempo changes can be a block out: the
+            // LFO paces each block at the tempo it knew at its start
+            let allowed = if n == 5 { 256.0 / sr } else { 0.001 };
+            assert!((beat - at).abs() <= allowed, "beat {n} at {beat} s, expected {at} s: {beats:?}");
+        }
+    }
+
+    #[test]
     fn test_a_clock_following_one_device_isnt_thrown_by_anothers_clock() {
         use crate::dsp::ListenTo;
         // Device A runs at 100 BPM, device B at 150; the Clock follows A
