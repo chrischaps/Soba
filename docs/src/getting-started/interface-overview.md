@@ -306,7 +306,7 @@ Mapping is for a patch you've finished. While you're building one, you want the 
 
 **Teach Soba your controller first.** You do this once per controller. Choose **Teach Your Controller…** in the **MIDI In** menu, and the status bar walks you through it:
 
-1. "Turn encoder 1 a few slow clicks". Turn the first encoder a few clicks, slowly, in one direction. The status bar says what it heard (`Encoder 1 is CC 74 · ch 1, endless`) and asks for the next one, through encoder 8.
+1. "Turn encoder 1 a few clicks". Turn the first encoder a few clicks in one direction, at any speed. The status bar says what it heard (`Encoder 1 is CC 74 · ch 1, endless`) and asks for the next one, through encoder 8.
 2. "Move fader 1". Move each fader in turn, through fader 4.
 
 If your controller has fewer encoders or faders, press `Tab` (or **Skip**) to pass one, and `Enter` (or **Done**) to finish early. `Escape` gives up and keeps what Soba knew before. Turning slowly lets Soba tell an endless encoder, which sends steps, from a knob with ends, which sends where it is. Soba keeps what it learned under the controller's name, not in the patch, so it's there for every patch, and each controller you teach is remembered separately.

@@ -161,7 +161,7 @@ impl Step {
     /// What the player is asked to do.
     pub fn ask(self) -> String {
         match self {
-            Step::Encoder(n) => format!("turn encoder {} a few slow clicks", n + 1),
+            Step::Encoder(n) => format!("turn encoder {} a few clicks", n + 1),
             Step::Fader(n) => format!("move fader {}", n + 1),
         }
     }
@@ -500,7 +500,7 @@ mod tests {
     use super::*;
     use crate::app::midi_mappings::ENCODER_STEP;
 
-    /// Turns encoder `n` (CC 70 + n, channel 1) four slow clicks up, or
+    /// Turns encoder `n` (CC 70 + n, channel 1) four clicks up, or
     /// moves fader `n` (CC 20 + n) a little.
     fn teach_encoder(teaching: &mut Teaching, n: u8, values: [u8; 4]) {
         for value in values {
@@ -527,6 +527,13 @@ mod tests {
         assert_eq!(taught.slot(0), Some(Taught { cc: 70, channel: 1, encoding: MidiEncoding::Relative64 }));
         assert_eq!(taught.slot(1), Some(Taught { cc: 71, channel: 1, encoding: MidiEncoding::Absolute }));
         assert_eq!(teaching.step(), Some(Step::Encoder(2)));
+    }
+
+    #[test]
+    fn a_briskly_turned_encoder_is_still_taken_for_endless() {
+        let mut teaching = Teaching::new("pads");
+        teach_encoder(&mut teaching, 0, [65, 67, 70, 66]);
+        assert_eq!(teaching.taught().slot(0).map(|t| t.encoding), Some(MidiEncoding::Relative64));
     }
 
     #[test]

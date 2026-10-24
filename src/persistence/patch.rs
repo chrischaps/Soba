@@ -96,22 +96,39 @@ impl MidiEncoding {
         }
     }
 
-    /// What the first few values a control sent say it is. An endless
-    /// encoder sends the same value or two over and over, near 64 or near
-    /// the ends; a knob or fader with ends walks through its values.
+    /// What the first few values a control sent say it is.
+    ///
+    /// An endless encoder stays close to its resting value (64, or the ends
+    /// for two's complement). A knob or fader with ends walks: one value
+    /// after another in one direction, never the same twice, never more
+    /// than two apart. So values near the rest are an encoder unless they
+    /// walk. An encoder turned at one speed repeats a value, a brisk one
+    /// jumps about or turns back (65, 67, 70, 66), and one that speeds up
+    /// (65, 66, 68, 71) takes a step of three or more. All of those lean
+    /// to an encoder.
+    ///
+    /// Two cases can't be told apart: a fader flicked so fast that its
+    /// first few values near the middle skip by three or more (read as an
+    /// encoder), and an encoder turned one slow click at a time in one
+    /// direction for every value heard (read as a fader). Either is put
+    /// right in the knob's MIDI menu.
     pub fn guess(values: &[u8]) -> Self {
-        let mut seen: Vec<u8> = values.to_vec();
-        seen.sort_unstable();
-        seen.dedup();
-        if values.len() < 3 || seen.len() > 2 {
+        if values.len() < 3 {
             return Self::Absolute;
         }
-        if seen.iter().all(|v| (57..=71).contains(v)) {
-            Self::Relative64
-        } else if seen.iter().all(|v| (1..=15).contains(v) || (113..=127).contains(v)) {
-            Self::TwosComplement
-        } else {
+        let near_64 = values.iter().all(|v| (57..=71).contains(v));
+        let near_ends = values.iter().all(|v| (1..=15).contains(v) || (113..=127).contains(v));
+        if !near_64 && !near_ends {
+            return Self::Absolute;
+        }
+        let steps: Vec<i16> = values.windows(2).map(|w| i16::from(w[1]) - i16::from(w[0])).collect();
+        let walks = steps.iter().all(|d| (1..=2).contains(d)) || steps.iter().all(|d| (-2..=-1).contains(d));
+        if walks {
             Self::Absolute
+        } else if near_64 {
+            Self::Relative64
+        } else {
+            Self::TwosComplement
         }
     }
 }
@@ -1198,6 +1215,35 @@ mod tests {
         assert_eq!(MidiEncoding::guess(&[40, 40, 40]), MidiEncoding::Absolute);
         // Too few to say
         assert_eq!(MidiEncoding::guess(&[65]), MidiEncoding::Absolute);
+    }
+
+    #[test]
+    fn test_an_accelerated_encoder_is_not_taken_for_a_fader() {
+        // Brisk turns jump about and turn back
+        assert_eq!(MidiEncoding::guess(&[65, 67, 70, 66]), MidiEncoding::Relative64);
+        assert_eq!(MidiEncoding::guess(&[1, 3, 2, 5]), MidiEncoding::TwosComplement);
+        assert_eq!(MidiEncoding::guess(&[63, 61, 58, 62]), MidiEncoding::Relative64);
+        assert_eq!(MidiEncoding::guess(&[127, 125, 126, 122]), MidiEncoding::TwosComplement);
+        // Speeding up in one direction takes a step of three or more
+        assert_eq!(MidiEncoding::guess(&[65, 66, 68, 71]), MidiEncoding::Relative64);
+        assert_eq!(MidiEncoding::guess(&[127, 126, 124, 121]), MidiEncoding::TwosComplement);
+        // A steady turn repeats a value
+        assert_eq!(MidiEncoding::guess(&[65, 65, 65]), MidiEncoding::Relative64);
+        // Crossing the ends is a jump, not a walk
+        assert_eq!(MidiEncoding::guess(&[127, 1, 2]), MidiEncoding::TwosComplement);
+    }
+
+    #[test]
+    fn test_a_fader_that_walks_is_still_a_fader() {
+        assert_eq!(MidiEncoding::guess(&[62, 63, 64, 65]), MidiEncoding::Absolute);
+        assert_eq!(MidiEncoding::guess(&[1, 2, 3, 4]), MidiEncoding::Absolute);
+        assert_eq!(MidiEncoding::guess(&[66, 65, 64, 63]), MidiEncoding::Absolute);
+        assert_eq!(MidiEncoding::guess(&[125, 124, 123, 121]), MidiEncoding::Absolute);
+        // Moved briskly, skipping a value now and then
+        assert_eq!(MidiEncoding::guess(&[60, 62, 64, 66]), MidiEncoding::Absolute);
+        // Away from the rest it is a fader whatever it does
+        assert_eq!(MidiEncoding::guess(&[20, 40, 41, 80]), MidiEncoding::Absolute);
+        assert_eq!(MidiEncoding::guess(&[0, 0, 1]), MidiEncoding::Absolute);
     }
 
     #[test]
