@@ -26,6 +26,13 @@
 //! drum machine set to send and receive clock would otherwise hear its own
 //! back (see [`MidiBus::set_leader`]).
 //!
+//! **Controllers** (#439) travel as a [`Control`]: a CC lane's value, a
+//! 14-bit pair, an NRPN, the bend or the pressure, each one thing however
+//! many messages it takes. A port with a **budget** (a DIN cable carries
+//! about a thousand messages a second, see [`MidiBus::set_budget`]) keeps
+//! only the newest value of each while it's full, so notes, programs and
+//! clock, which travel as plain [`Message`]s, are never held up behind them.
+//!
 //! Unlike the Seoul link's newest-value atomics, MIDI needs every message,
 //! in order and on time: a lost Note Off is a stuck note. So the ring
 //! carries events, and the sender keeps track of which notes each module
@@ -53,14 +60,21 @@ pub const PORTS: usize = 8;
 pub const PORT_LABELS: &[&str] = &["A", "B", "C", "D", "E", "F", "G", "H"];
 
 /// Events a module's ring holds: a busy block of chords, CCs and clock is
-/// a few dozen, and the sender drains it every millisecond.
-pub const RING: usize = 1024;
+/// a few dozen, and the sender drains it every millisecond. CCs sent where
+/// they change (#439), as often as every millisecond a lane, fill more: a
+/// 40 ms buffer of four lanes, the bend, and pressure on every voice is
+/// about a thousand.
+pub const RING: usize = 4096;
 
 /// Status bytes this module sends.
 pub mod status {
     pub const NOTE_OFF: u8 = 0x80;
     pub const NOTE_ON: u8 = 0x90;
+    pub const POLY_PRESSURE: u8 = 0xA0;
     pub const CONTROL_CHANGE: u8 = 0xB0;
+    pub const PROGRAM_CHANGE: u8 = 0xC0;
+    pub const CHANNEL_PRESSURE: u8 = 0xD0;
+    pub const PITCH_BEND: u8 = 0xE0;
     pub const SONG_POSITION: u8 = 0xF2;
     pub const CLOCK: u8 = 0xF8;
     pub const START: u8 = 0xFA;
@@ -70,6 +84,47 @@ pub mod status {
 
 /// CC 123, All Notes Off.
 pub const ALL_NOTES_OFF: u8 = 123;
+
+/// The controller numbers MIDI 1.0 itself gives a meaning, as the MIDI
+/// Association's Control Change table lists them
+/// (midi.org/midi-1-0-control-change-messages).
+pub mod cc {
+    /// Bank Select MSB.
+    pub const BANK_MSB: u8 = 0;
+    /// Data Entry MSB: the value of the RPN or NRPN chosen.
+    pub const DATA_ENTRY: u8 = 6;
+    /// Bank Select LSB.
+    pub const BANK_LSB: u8 = 32;
+    /// Data Entry LSB.
+    pub const DATA_ENTRY_LSB: u8 = 38;
+    /// Which NRPN: its LSB and its MSB.
+    pub const NRPN_LSB: u8 = 98;
+    pub const NRPN_MSB: u8 = 99;
+    /// Which RPN: its LSB and its MSB.
+    pub const RPN_LSB: u8 = 100;
+    pub const RPN_MSB: u8 = 101;
+    /// The controllers 0 to 31 each have their fine half this many higher.
+    pub const LSB_OFFSET: u8 = 32;
+}
+
+/// RPN 0, Pitch Bend Sensitivity: Data Entry MSB in semitones, LSB in cents.
+pub const RPN_BEND_RANGE: u16 = 0;
+/// RPN 127/127, the Null RPN: closes the one chosen, so a stray Data Entry
+/// changes nothing.
+pub const RPN_NULL: u16 = 0x3FFF;
+
+/// The highest 14-bit value, as bends, 14-bit CCs and NRPNs carry.
+pub const MAX_14: u16 = 0x3FFF;
+/// A bend at rest: the middle of 14 bits.
+pub const BEND_CENTER: u16 = 0x2000;
+
+/// How many messages a second a DIN cable carries: 31,250 baud is 3,125
+/// bytes a second, about a thousand three-byte messages. A port's budget
+/// set to this keeps a DIN interface from falling behind (#439).
+pub const DIN_RATE: u32 = 1000;
+
+/// The most messages a second a budget can allow: more than any cable needs.
+pub const MAX_BUDGET: u32 = 100_000;
 
 /// How far a port's offset reaches either way, in milliseconds.
 pub const OFFSET_RANGE: f32 = 50.0;
@@ -135,8 +190,211 @@ pub enum Outgoing {
     /// [`ProcessContext::sent_at`](crate::dsp::context::ProcessContext::sent_at)).
     /// The sender learns from these when each sample will be heard.
     Block { sample: u64, at: Instant, rate: f32, port: u8 },
-    /// A message to send when sample `sample` is heard.
+    /// A message to send when sample `sample` is heard. A port's budget
+    /// never holds these back: notes, programs and clock go this way.
     Message { sample: u64, message: Message },
+    /// A controller's value to send when sample `sample` is heard. While
+    /// its port is over budget, only the newest of each goes (#439).
+    Control { sample: u64, control: Control },
+}
+
+/// A few messages that go out together and in order: a controller's value
+/// (an NRPN is four), or a Bank Select and its Program Change.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Burst {
+    messages: [Message; Burst::MAX],
+    len: u8,
+}
+
+impl Burst {
+    /// An RPN is the longest: which, its value, and the Null RPN.
+    pub const MAX: usize = 6;
+
+    const EMPTY: Self = Self { messages: [Message::real_time(0); Self::MAX], len: 0 };
+
+    fn push(&mut self, message: Message) {
+        if (self.len as usize) < Self::MAX {
+            self.messages[self.len as usize] = message;
+            self.len += 1;
+        }
+    }
+
+    pub fn messages(&self) -> &[Message] {
+        &self.messages[..self.len as usize]
+    }
+
+    /// How many bytes it is on the wire.
+    pub fn bytes(&self) -> usize {
+        self.messages().iter().map(|m| m.bytes().len()).sum()
+    }
+}
+
+/// One controller's value, however many messages it takes to send (#439).
+/// Values are as sent: 7 bits (0 to 127) or 14 bits (0 to [`MAX_14`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Control {
+    /// A 7-bit CC.
+    Cc { channel: u8, number: u8, value: u8 },
+    /// A 14-bit CC: its coarse half on `number` (0 to 31), then its fine
+    /// half on `number + 32`.
+    Cc14 { channel: u8, number: u8, value: u16 },
+    /// A Non-Registered Parameter: CC 99 and 98 choose it, then Data
+    /// Entry (CC 6 and 38) sets it.
+    Nrpn { channel: u8, parameter: u16, value: u16 },
+    /// A Registered Parameter (the bend range is RPN 0): CC 101 and 100
+    /// choose it, Data Entry sets it, and the Null RPN closes it.
+    Rpn { channel: u8, parameter: u16, value: u16 },
+    /// Pitch Bend, [`BEND_CENTER`] at rest.
+    Bend { channel: u8, value: u16 },
+    /// Channel Pressure.
+    Pressure { channel: u8, value: u8 },
+    /// Polyphonic Key Pressure on one note.
+    PolyPressure { channel: u8, note: u8, value: u8 },
+}
+
+impl Control {
+    /// A CC lane's value, 0 to 1, as `mode` sends it: on CC `number`, or
+    /// on NRPN `parameter`.
+    pub fn lane(mode: CcMode, channel: u8, number: u8, parameter: u16, value: f32) -> Self {
+        let value = if value.is_finite() { value.clamp(0.0, 1.0) } else { 0.0 };
+        let fine = (value * MAX_14 as f32).round() as u16;
+        match mode {
+            CcMode::Bits7 => Self::Cc { channel, number: number & 0x7F, value: (value * 127.0).round() as u8 },
+            CcMode::Bits14 => Self::Cc14 { channel, number: number.min(cc::LSB_OFFSET - 1), value: fine },
+            CcMode::Nrpn => Self::Nrpn { channel, parameter: parameter & MAX_14, value: fine },
+        }
+    }
+
+    /// A bend of -1 to 1 (full throw down to full throw up), in 14 bits.
+    pub fn bend(channel: u8, bend: f32) -> Self {
+        let bend = if bend.is_finite() { bend.clamp(-1.0, 1.0) } else { 0.0 };
+        let value = (BEND_CENTER as f32 + bend * BEND_CENTER as f32).round().min(MAX_14 as f32) as u16;
+        Self::Bend { channel, value }
+    }
+
+    /// 0 to 1 as 7 bits.
+    pub fn seven(value: f32) -> u8 {
+        if value.is_finite() {
+            (value.clamp(0.0, 1.0) * 127.0).round() as u8
+        } else {
+            0
+        }
+    }
+
+    /// The channel it goes out on, from 0.
+    pub fn channel(&self) -> u8 {
+        match *self {
+            Self::Cc { channel, .. }
+            | Self::Cc14 { channel, .. }
+            | Self::Nrpn { channel, .. }
+            | Self::Rpn { channel, .. }
+            | Self::Bend { channel, .. }
+            | Self::Pressure { channel, .. }
+            | Self::PolyPressure { channel, .. } => channel & 0x0F,
+        }
+    }
+
+    /// What it sets, whatever the value: while a port is over budget, a
+    /// newer value with the same key takes an older one's place.
+    pub fn key(&self) -> u32 {
+        let (kind, number) = match *self {
+            Self::Cc { number, .. } => (0, number as u32),
+            Self::Cc14 { number, .. } => (1, number as u32),
+            Self::Nrpn { parameter, .. } => (2, parameter as u32),
+            Self::Rpn { parameter, .. } => (3, parameter as u32),
+            Self::Bend { .. } => (4, 0),
+            Self::Pressure { .. } => (5, 0),
+            Self::PolyPressure { note, .. } => (6, note as u32),
+        };
+        kind << 24 | (self.channel() as u32) << 16 | number
+    }
+
+    /// The messages that send it, in order: a 14-bit value's coarse half
+    /// first, then its fine half.
+    pub fn burst(&self) -> Burst {
+        let mut burst = Burst::EMPTY;
+        let split = |value: u16| (((value >> 7) & 0x7F) as u8, (value & 0x7F) as u8);
+        match *self {
+            Self::Cc { channel, number, value } => burst.push(Message::control(channel, number, value)),
+            Self::Cc14 { channel, number, value } => {
+                let (msb, lsb) = split(value);
+                burst.push(Message::control(channel, number, msb));
+                burst.push(Message::control(channel, number + cc::LSB_OFFSET, lsb));
+            }
+            Self::Nrpn { channel, parameter, value } | Self::Rpn { channel, parameter, value } => {
+                let nrpn = matches!(self, Self::Nrpn { .. });
+                let (which_msb, which_lsb) = if nrpn { (cc::NRPN_MSB, cc::NRPN_LSB) } else { (cc::RPN_MSB, cc::RPN_LSB) };
+                let (parameter_msb, parameter_lsb) = split(parameter);
+                let (msb, lsb) = split(value);
+                burst.push(Message::control(channel, which_msb, parameter_msb));
+                burst.push(Message::control(channel, which_lsb, parameter_lsb));
+                burst.push(Message::control(channel, cc::DATA_ENTRY, msb));
+                burst.push(Message::control(channel, cc::DATA_ENTRY_LSB, lsb));
+                if !nrpn {
+                    let (null_msb, null_lsb) = split(RPN_NULL);
+                    burst.push(Message::control(channel, cc::RPN_MSB, null_msb));
+                    burst.push(Message::control(channel, cc::RPN_LSB, null_lsb));
+                }
+            }
+            Self::Bend { channel, value } => burst.push(Message::pitch_bend(channel, value)),
+            Self::Pressure { channel, value } => burst.push(Message::channel_pressure(channel, value)),
+            Self::PolyPressure { channel, note, value } => burst.push(Message::poly_pressure(channel, note, value)),
+        }
+        burst
+    }
+}
+
+/// How a CC lane sends its value (#439).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CcMode {
+    /// One CC, 0 to 127.
+    #[default]
+    Bits7 = 0,
+    /// Two CCs, `n` and `n + 32`, for 16,384 steps: the controllers 0 to 31.
+    Bits14 = 1,
+    /// An NRPN with 14 bits of value.
+    Nrpn = 2,
+}
+
+impl CcMode {
+    pub const ALL: [Self; 3] = [Self::Bits7, Self::Bits14, Self::Nrpn];
+    /// As a lane's menu names them, in [`ALL`](Self::ALL)'s order.
+    pub const LABELS: &'static [&'static str] = &["7-bit", "14-bit", "NRPN"];
+
+    pub fn from_param(value: f32) -> Self {
+        match value.round() as i32 {
+            1 => Self::Bits14,
+            2 => Self::Nrpn,
+            _ => Self::Bits7,
+        }
+    }
+}
+
+/// A Program Change, and the bank to choose first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Program {
+    /// Bank Select MSB (CC 0), if the device wants one.
+    pub bank_msb: Option<u8>,
+    /// Bank Select LSB (CC 32), if the device wants one.
+    pub bank_lsb: Option<u8>,
+    /// The program, 0 to 127 as sent.
+    pub program: u8,
+}
+
+impl Program {
+    /// The Bank Select, MSB then LSB, and then the Program Change, which
+    /// is what makes a device take the bank up.
+    pub fn burst(&self, channel: u8) -> Burst {
+        let mut burst = Burst::EMPTY;
+        if let Some(msb) = self.bank_msb {
+            burst.push(Message::control(channel, cc::BANK_MSB, msb));
+        }
+        if let Some(lsb) = self.bank_lsb {
+            burst.push(Message::control(channel, cc::BANK_LSB, lsb));
+        }
+        burst.push(Message::program(channel, self.program));
+        burst
+    }
 }
 
 /// One MIDI message of up to three bytes.
@@ -159,6 +417,27 @@ impl Message {
         Self::three(status::CONTROL_CHANGE | (channel & 0x0F), controller & 0x7F, value & 0x7F)
     }
 
+    /// Program Change: `program` 0 to 127, as sent (a manual that counts
+    /// its programs from 1 calls this one `program + 1`).
+    pub const fn program(channel: u8, program: u8) -> Self {
+        Self::two(status::PROGRAM_CHANGE | (channel & 0x0F), program & 0x7F)
+    }
+
+    /// Pitch Bend: 14 bits, [`BEND_CENTER`] at rest, sent LSB first.
+    pub const fn pitch_bend(channel: u8, value: u16) -> Self {
+        Self::three(status::PITCH_BEND | (channel & 0x0F), (value & 0x7F) as u8, ((value >> 7) & 0x7F) as u8)
+    }
+
+    /// Channel Pressure: aftertouch for the whole channel.
+    pub const fn channel_pressure(channel: u8, value: u8) -> Self {
+        Self::two(status::CHANNEL_PRESSURE | (channel & 0x0F), value & 0x7F)
+    }
+
+    /// Polyphonic Key Pressure: aftertouch for one note.
+    pub const fn poly_pressure(channel: u8, note: u8, value: u8) -> Self {
+        Self::three(status::POLY_PRESSURE | (channel & 0x0F), note & 0x7F, value & 0x7F)
+    }
+
     /// Song Position Pointer, in sixteenths from the top.
     pub const fn song_position(sixteenths: u16) -> Self {
         Self::three(status::SONG_POSITION, (sixteenths & 0x7F) as u8, ((sixteenths >> 7) & 0x7F) as u8)
@@ -167,6 +446,10 @@ impl Message {
     /// A one-byte real-time message: clock, start, continue or stop.
     pub const fn real_time(byte: u8) -> Self {
         Self { bytes: [byte, 0, 0], len: 1 }
+    }
+
+    const fn two(a: u8, b: u8) -> Self {
+        Self { bytes: [a, b, 0], len: 2 }
     }
 
     const fn three(a: u8, b: u8, c: u8) -> Self {
@@ -183,6 +466,12 @@ impl Message {
         let mut message = Self { bytes: [0; 3], len: len as u8 };
         message.bytes[..len].copy_from_slice(bytes);
         Some(message)
+    }
+
+    /// The channel of a channel message (a note, CC, bend, pressure or
+    /// program), from 0.
+    pub fn channel(&self) -> Option<u8> {
+        (self.bytes[0] < 0xF0).then_some(self.bytes[0] & 0x0F)
     }
 
     pub fn bytes(&self) -> &[u8] {
@@ -245,6 +534,9 @@ pub struct Traffic {
     pub clocks: u32,
     /// The last message sent, but for real-time ones.
     pub last: Option<Message>,
+    /// Controller values the port's budget let go of, or folded into newer
+    /// ones, while it was full (#439).
+    pub thinned: u32,
 }
 
 impl PortStatus {
@@ -274,9 +566,11 @@ pub struct MidiBus {
     /// Each port's device by name; empty for none.
     chosen: Mutex<[String; PORTS]>,
     status: [AtomicU8; PORTS],
-    /// What each port has sent: messages, clock ticks, and the last
-    /// message packed (see [`Message::packed`]).
-    sent: [[AtomicU32; 3]; PORTS],
+    /// What each port has sent: messages, clock ticks, the last message
+    /// packed (see [`Message::packed`]), and values thinned.
+    sent: [[AtomicU32; 4]; PORTS],
+    /// Each port's budget, in messages a second: 0 for none (#439).
+    budgets: [AtomicU32; PORTS],
     /// What each port sends of the patch's clock (a [`ClockMode`]).
     clock: [AtomicU8; PORTS],
     /// Each port's offset in milliseconds, an f32's bits.
@@ -302,7 +596,8 @@ impl MidiBus {
             devices: Mutex::new(Vec::new()),
             chosen: Mutex::new([const { String::new() }; PORTS]),
             status: [const { AtomicU8::new(PortStatus::Idle as u8) }; PORTS],
-            sent: [const { [const { AtomicU32::new(0) }; 3] }; PORTS],
+            sent: [const { [const { AtomicU32::new(0) }; 4] }; PORTS],
+            budgets: [const { AtomicU32::new(0) }; PORTS],
             clock: [const { AtomicU8::new(ClockMode::Off as u8) }; PORTS],
             offsets: [const { AtomicU32::new(0) }; PORTS],
             new_clock: Mutex::new(None),
@@ -474,6 +769,39 @@ impl MidiBus {
         }
     }
 
+    /// Port `port`'s budget in messages a second, or 0 for none: a USB
+    /// device takes all Soba sends, a DIN cable about [`DIN_RATE`].
+    pub fn budget(&self, port: usize) -> u32 {
+        self.budgets.get(port).map_or(0, |b| b.load(Relaxed))
+    }
+
+    /// Every port's budget.
+    pub fn budgets(&self) -> [u32; PORTS] {
+        std::array::from_fn(|port| self.budget(port))
+    }
+
+    /// Holds port `port` to `per_second` messages a second, or to none
+    /// with 0. While it's full, controllers send only their newest values;
+    /// notes, programs and clock always go, on time.
+    pub fn set_budget(&self, port: usize, per_second: u32) {
+        if let Some(slot) = self.budgets.get(port) {
+            slot.store(per_second.min(MAX_BUDGET), Relaxed);
+        }
+    }
+
+    /// Every port's budget as the settings keep it: a line each.
+    pub fn budget_setting(&self) -> String {
+        self.budgets().map(|b| b.to_string()).join("\n")
+    }
+
+    /// Takes up what [`budget_setting`](Self::budget_setting) kept. A line
+    /// it can't read leaves its port without one.
+    pub fn restore_budget(&self, setting: &str) {
+        for (port, line) in setting.lines().take(PORTS).enumerate() {
+            self.set_budget(port, line.trim().parse().unwrap_or(0));
+        }
+    }
+
     /// Asks the sender to look for devices again, soon.
     pub fn rescan(&self) {
         self.rescan.store(true, Relaxed);
@@ -491,8 +819,13 @@ impl MidiBus {
 
     /// What port `port` has sent.
     pub fn traffic(&self, port: usize) -> Traffic {
-        let Some([messages, clocks, last]) = self.sent.get(port) else { return Traffic::default() };
-        Traffic { messages: messages.load(Relaxed), clocks: clocks.load(Relaxed), last: Message::unpacked(last.load(Relaxed)) }
+        let Some([messages, clocks, last, thinned]) = self.sent.get(port) else { return Traffic::default() };
+        Traffic {
+            messages: messages.load(Relaxed),
+            clocks: clocks.load(Relaxed),
+            last: Message::unpacked(last.load(Relaxed)),
+            thinned: thinned.load(Relaxed),
+        }
     }
 
     // --- For the sender ---
@@ -532,10 +865,11 @@ impl MidiBus {
     }
 
     pub fn set_traffic(&self, port: usize, traffic: Traffic) {
-        if let Some([messages, clocks, last]) = self.sent.get(port) {
+        if let Some([messages, clocks, last, thinned]) = self.sent.get(port) {
             messages.store(traffic.messages, Relaxed);
             clocks.store(traffic.clocks, Relaxed);
             last.store(traffic.last.map_or(0, |m| m.packed()), Relaxed);
+            thinned.store(traffic.thinned, Relaxed);
         }
     }
 }
@@ -651,12 +985,65 @@ mod tests {
     fn traffic_survives_the_trip_through_atomics() {
         let bus = MidiBus::new();
         assert_eq!(bus.traffic(0), Traffic::default());
-        let traffic = Traffic { messages: 3, clocks: 96, last: Some(Message::control(2, 74, 64)) };
+        let traffic = Traffic { messages: 3, clocks: 96, last: Some(Message::control(2, 74, 64)), thinned: 7 };
         bus.set_traffic(5, traffic);
         assert_eq!(bus.traffic(5), traffic);
         bus.set_traffic(5, Traffic { last: Some(Message::real_time(status::START)), ..traffic });
         assert_eq!(bus.traffic(5).last.unwrap().bytes(), &[status::START]);
         assert!(Message::real_time(status::STOP).is_real_time());
         assert!(!Message::song_position(4).is_real_time());
+    }
+
+    #[test]
+    fn controllers_bend_pressure_and_programs_make_the_right_bytes() {
+        let bytes = |burst: Burst| burst.messages().iter().map(|m| m.bytes().to_vec()).collect::<Vec<_>>();
+        // Pitch Bend: LSB first, the middle 8192
+        assert_eq!(bytes(Control::bend(0, 0.0).burst()), [vec![0xE0, 0x00, 0x40]]);
+        assert_eq!(bytes(Control::bend(3, 1.0).burst()), [vec![0xE3, 0x7F, 0x7F]]);
+        assert_eq!(bytes(Control::bend(3, -1.0).burst()), [vec![0xE3, 0, 0]]);
+        assert_eq!(Control::bend(0, f32::NAN), Control::bend(0, 0.0), "nonsense rests");
+        // Pressure, the channel's and a note's
+        assert_eq!(bytes(Control::Pressure { channel: 1, value: 90 }.burst()), [vec![0xD1, 90]]);
+        assert_eq!(bytes(Control::PolyPressure { channel: 1, note: 60, value: 90 }.burst()), [vec![0xA1, 60, 90]]);
+        // Bank Select MSB and LSB, then the Program Change
+        let program = Program { bank_msb: Some(85), bank_lsb: Some(1), program: 11 };
+        assert_eq!(bytes(program.burst(15)), [vec![0xBF, 0, 85], vec![0xBF, 32, 1], vec![0xCF, 11]]);
+        assert_eq!(bytes(Program { bank_msb: None, bank_lsb: None, program: 200 }.burst(0)), [vec![0xC0, 72]], "seven bits");
+        // 14-bit: coarse on n, fine on n + 32
+        let fine = Control::lane(CcMode::Bits14, 0, 1, 0, 1.0);
+        assert_eq!(bytes(fine.burst()), [vec![0xB0, 1, 127], vec![0xB0, 33, 127]]);
+        assert_eq!(Control::lane(CcMode::Bits14, 0, 74, 0, 0.0), Control::Cc14 { channel: 0, number: 31, value: 0 }, "pairs stop at 31");
+        assert_eq!(bytes(Control::lane(CcMode::Bits7, 0, 74, 0, 0.5).burst()), [vec![0xB0, 74, 64]]);
+        // NRPN 3:5 (389) at 1000: which, then the value
+        let nrpn = Control::Nrpn { channel: 2, parameter: 389, value: 1000 };
+        assert_eq!(bytes(nrpn.burst()), [vec![0xB2, 99, 3], vec![0xB2, 98, 5], vec![0xB2, 6, 7], vec![0xB2, 38, 104]]);
+        // RPN 0, the bend range: 2 semitones, then the Null RPN
+        let range = Control::Rpn { channel: 0, parameter: RPN_BEND_RANGE, value: 2 << 7 };
+        assert_eq!(
+            bytes(range.burst()),
+            [vec![0xB0, 101, 0], vec![0xB0, 100, 0], vec![0xB0, 6, 2], vec![0xB0, 38, 0], vec![0xB0, 101, 127], vec![0xB0, 100, 127]]
+        );
+        assert_eq!(range.burst().bytes(), 18);
+        // Keys: the controller, not its value
+        assert_eq!(Control::lane(CcMode::Bits7, 0, 74, 0, 0.1).key(), Control::lane(CcMode::Bits7, 0, 74, 0, 0.9).key());
+        assert_ne!(Control::lane(CcMode::Bits7, 0, 74, 0, 0.1).key(), Control::lane(CcMode::Bits7, 1, 74, 0, 0.1).key());
+        assert_ne!(Control::PolyPressure { channel: 0, note: 60, value: 1 }.key(), Control::PolyPressure { channel: 0, note: 61, value: 1 }.key());
+        assert_eq!(Message::program(4, 2).channel(), Some(4));
+        assert_eq!(Message::real_time(status::CLOCK).channel(), None);
+    }
+
+    #[test]
+    fn budgets_are_kept_a_line_a_port() {
+        let bus = MidiBus::new();
+        assert_eq!(bus.budgets(), [0; PORTS], "none: USB takes it all");
+        bus.set_budget(2, DIN_RATE);
+        bus.set_budget(7, u32::MAX);
+        assert_eq!(bus.budget(7), MAX_BUDGET);
+        let other = MidiBus::new();
+        other.restore_budget(&bus.budget_setting());
+        assert_eq!(other.budgets(), bus.budgets());
+        other.restore_budget("fast\n500");
+        assert_eq!(other.budget(0), 0);
+        assert_eq!(other.budget(1), 500);
     }
 }

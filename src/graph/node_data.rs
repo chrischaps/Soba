@@ -1510,7 +1510,10 @@ impl NodeDataTrait for SynthNodeData {
             }
             NodeDisplay::SlopeShape => super::slope_display::slope_display(ui, node_id, graph, user_state, zoom),
             NodeDisplay::LinkLanes => super::link_display::link_display(ui, node_id, graph, user_state, zoom),
-            NodeDisplay::MidiOutKeys => super::midi_out_display::midi_out_display(ui, node_id, graph, user_state, zoom),
+            NodeDisplay::MidiOutKeys => {
+                let asked = super::midi_out_display::midi_out_display(ui, node_id, graph, user_state, zoom);
+                responses.extend(asked.into_iter().map(NodeResponse::User));
+            }
             NodeDisplay::TapeReels => super::tape_display::tape_display(ui, node_id, graph, user_state, zoom),
             NodeDisplay::VocoderBands => super::vocoder_display::vocoder_display(ui, node_id, graph, user_state, zoom),
             NodeDisplay::CompressorCurve => super::compressor_display::compressor_display(ui, node_id, graph, user_state, zoom),

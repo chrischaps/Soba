@@ -36,6 +36,10 @@ pub enum ParamFormat {
     /// How many slices a recording is cut into: "Off" below 2, and
     /// "Onsets" past 64.
     Slices,
+    /// A whole number, with its lowest value, `off`, reading "Off": a
+    /// MIDI Out's Program before one is chosen (#439). `unit` follows the
+    /// number, if there is one.
+    OrOff { off: f32, unit: &'static str },
 }
 
 impl ParamFormat {
@@ -101,6 +105,11 @@ impl ParamFormat {
                 count if count < 2.0 => "Off".to_string(),
                 count if count >= crate::dsp::primitives::ONSETS => "Onsets".to_string(),
                 count => format!("{count:.0}"),
+            },
+            ParamFormat::OrOff { off, unit } => match value.round() {
+                n if n <= *off => "Off".to_string(),
+                n if unit.is_empty() => format!("{n:.0}"),
+                n => format!("{n:.0} {unit}"),
             },
             ParamFormat::Pan => {
                 let percent = (value * 100.0).round();
@@ -1009,6 +1018,20 @@ mod tests {
         assert_eq!(ParamFormat::Slices.format(11.6), "12");
         assert_eq!(ParamFormat::Slices.format(64.0), "64");
         assert_eq!(ParamFormat::Slices.format(65.0), "Onsets");
+    }
+
+    #[test]
+    fn test_param_format_or_off() {
+        let program = ParamFormat::OrOff { off: -1.0, unit: "" };
+        assert_eq!(program.format(-1.0), "Off");
+        assert_eq!(program.format(0.0), "0");
+        assert_eq!(program.format(87.2), "87");
+        let range = ParamFormat::OrOff { off: 0.0, unit: "st" };
+        assert_eq!(range.format(0.0), "Off");
+        assert_eq!(range.format(12.0), "12 st");
+        assert_eq!(range.parse("off", 4.0), Some(0.0));
+        assert_eq!(program.parse("Off", 4.0), Some(-1.0));
+        assert_eq!(program.parse("12", 4.0), Some(12.0));
     }
 
     #[test]

@@ -30,6 +30,7 @@ pub mod midi;
 pub mod midi_clock;
 pub mod midi_sender;
 pub mod midi_thru;
+pub mod midi_writer;
 pub mod osc;
 pub mod ping;
 #[cfg(not(target_arch = "wasm32"))]

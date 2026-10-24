@@ -7,8 +7,9 @@
 //!   hear it alone.
 //! - **MIDI Out**, a row for each port, A to H: a lamp that flashes as it
 //!   sends, its device to choose, what it sends of the Clock (#437), its
-//!   offset, how it's doing, the last message sent (and a dot on each beat
-//!   while clock goes out), and the MIDI Outs that play it.
+//!   offset, its budget (#439: a DIN cable carries about a thousand
+//!   messages a second), how it's doing, the last message sent (and a dot
+//!   on each beat while clock goes out), and the MIDI Outs that play it.
 //! - **Thru** (#446), a row for each route from a MIDI In straight to a
 //!   port, past the patch: see [`thru`].
 //!
@@ -27,7 +28,7 @@ use super::*;
 use crate::engine::device_names;
 use crate::engine::MidiEvent;
 use crate::graph::midi_log_display::format_midi_event;
-use crate::link::midi::{ClockMode, PortStatus, Traffic, MIDI, OFFSET_RANGE, PORTS, PORT_LABELS};
+use crate::link::midi::{ClockMode, PortStatus, Traffic, DIN_RATE, MIDI, OFFSET_RANGE, PORTS, PORT_LABELS};
 use crate::persistence::graph_io::clocked_ports;
 use measure::{measure_line, ping_button, Measure, MeasureEdit};
 
@@ -46,9 +47,14 @@ const FLASH: f64 = 0.25;
 /// How long the last message stays bright before it settles, in seconds.
 const FRESH: f64 = 4.0;
 /// The columns' widths, in order: the lamp, the tick or port, the device,
-/// the port's clock and offset, how it's doing, the last message, and the
-/// modules. An input's row has no clock or offset: see [`in_columns`].
-const COLUMNS: [f32; 8] = [14.0, 22.0, 184.0, 116.0, 86.0, 84.0, 160.0, 96.0];
+/// the port's clock, offset and budget, how it's doing, the last message,
+/// and the modules. An input's row has none of the port's: see [`in_columns`].
+const COLUMNS: [f32; 9] = [14.0, 22.0, 184.0, 116.0, 86.0, 76.0, 84.0, 160.0, 96.0];
+/// The budgets a port offers, in messages a second: none, a DIN cable's,
+/// and half that for gear that falls behind at full speed.
+const BUDGETS: [u32; 3] = [0, DIN_RATE, DIN_RATE / 2];
+/// How long a port counts as full after its budget last thinned, in seconds.
+const FULL_FOR: f64 = 0.5;
 /// The space between columns.
 const GAP: f32 = 6.0;
 const ROW_HEIGHT: f32 = 22.0;
@@ -81,6 +87,8 @@ struct OutRow {
     leads: bool,
     /// How much later than the sound it sends, in milliseconds.
     offset: f32,
+    /// Its budget, in messages a second: 0 for none.
+    budget: u32,
     /// The MIDI Outs on this port.
     played_by: Vec<String>,
 }
@@ -93,6 +101,7 @@ enum Edit {
     Clock(usize, ClockMode),
     Offset(usize, f32),
     Measure(MeasureEdit),
+    Budget(usize, u32),
     Refresh,
 }
 
@@ -167,7 +176,7 @@ impl SynthApp {
 
                 ui.add_space(12.0);
                 section(ui, "MIDI Out", "what Soba plays");
-                header(ui, &["", "Port", "Device", "Clock", "Offset", "", "Last sent", "Played by"], &COLUMNS);
+                header(ui, &["", "Port", "Device", "Clock", "Offset", "Budget", "", "Last sent", "Played by"], &COLUMNS);
                 for row in &outs {
                     out_row(ui, row, &devices, earliest, now, measure, &mut edits);
                     measure_line(ui, measure, row.port, input, &mut edits);
@@ -190,6 +199,7 @@ impl SynthApp {
                 Edit::Clock(port, mode) => MIDI.set_clock(port, mode),
                 Edit::Offset(port, ms) => MIDI.set_offset(port, ms),
                 Edit::Measure(edit) => self.measure_edit(edit),
+                Edit::Budget(port, per_second) => MIDI.set_budget(port, per_second),
                 Edit::Refresh => {
                     self.refresh_midi_devices();
                     MIDI.rescan();
@@ -247,6 +257,7 @@ impl SynthApp {
                     clock: MIDI.clock(port),
                     leads: MIDI.led_ports() & 1 << port != 0 && MIDI.clock(port) != ClockMode::Off,
                     offset: MIDI.offset(port),
+                    budget: MIDI.budget(port),
                     played_by,
                 }
             })
@@ -277,10 +288,10 @@ pub(super) fn clock_old_midi_outs(patch: &crate::persistence::Patch) -> Vec<Stri
 }
 
 /// An input's columns: [`COLUMNS`] with the device spanning the ports'
-/// clock and offset.
+/// clock, offset and budget.
 fn in_columns() -> [f32; 6] {
-    let [lamp, tick, device, clock, offset, state, last, who] = COLUMNS;
-    [lamp, tick, device + clock + offset + 2.0 * GAP, state, last, who]
+    let [lamp, tick, device, clock, offset, budget, state, last, who] = COLUMNS;
+    [lamp, tick, device + clock + offset + budget + 3.0 * GAP, state, last, who]
 }
 
 /// The panel's name, after a short purple bar, what's open, and the way
@@ -395,9 +406,12 @@ fn out_row(ui: &mut egui::Ui, row: &OutRow, devices: &[String], earliest: f32, n
         PortStatus::Idle => ("Ready", theme::signal::GATE.gamma_multiply(0.55)),
     };
     let flashing = (row.status == PortStatus::Sending).then_some(since);
+    // Its budget full just now: the CC streams thinning (#439)
+    let full = row.budget > 0 && row.status == PortStatus::Sending && self::since(ui, id.with("thinned"), row.traffic.thinned, now) < FULL_FOR;
+    let (state, color) = if full { ("Full", theme::accent::WARNING) } else { (state, color) };
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = GAP;
-        let [lamp_w, port_w, device_w, clock_w, offset_w, state_w, last_w, who_w] = COLUMNS;
+        let [lamp_w, port_w, device_w, clock_w, offset_w, budget_w, state_w, last_w, who_w] = COLUMNS;
         cell(ui, lamp_w, |ui| lamp(ui, color, flashing));
         cell(ui, port_w, |ui| badge(ui, PORT_LABELS[row.port], row.chosen.is_some() || used));
         cell(ui, device_w, |ui| device_menu(ui, row, devices, edits));
@@ -406,10 +420,14 @@ fn out_row(ui: &mut egui::Ui, row: &OutRow, devices: &[String], earliest: f32, n
             offset_drag(ui, row, earliest, edits);
             ping_button(ui, measure, row.port, edits);
         });
+        cell(ui, budget_w, |ui| budget_menu(ui, row, edits));
         cell(ui, state_w, |ui| {
             let text = if state.is_empty() && used { "No device" } else { state };
             let ink = if state.is_empty() && used { theme::accent::WARNING } else if state == "Ready" || state.is_empty() { theme::text::QUIET } else { color };
-            ui.label(RichText::new(text).small().color(ink));
+            let label = ui.label(RichText::new(text).small().color(ink));
+            if full {
+                label.on_hover_text("Sending as fast as the budget allows: CC streams are thinned to their newest values, and notes and clock keep their time");
+            }
             beat(ui, id, row.traffic.clocks, now);
         });
         cell(ui, last_w, |ui| {
@@ -504,6 +522,41 @@ fn clock_menu(ui: &mut egui::Ui, row: &OutRow, edits: &mut Vec<Edit>) {
     } else {
         format!("What port {} sends of the patch's Clock, once for the port however many MIDI Outs play it", PORT_LABELS[row.port])
     });
+}
+
+/// A port's budget, to choose: none for USB, about a thousand messages a
+/// second for a DIN cable, or half that.
+fn budget_menu(ui: &mut egui::Ui, row: &OutRow, edits: &mut Vec<Edit>) {
+    ui.spacing_mut().button_padding.y = 1.0;
+    ui.spacing_mut().interact_size.y = ROW_HEIGHT - 4.0;
+    let label = |per_second: u32| if per_second == 0 { "No limit".to_string() } else { format!("{per_second}/s") };
+    let ink = if row.budget == 0 { theme::text::DISABLED } else { theme::text::PRIMARY };
+    let response = egui::ComboBox::from_id_salt(("rig_out_budget", row.port))
+        .width(COLUMNS[5] - 4.0)
+        .truncate()
+        .selected_text(RichText::new(label(row.budget)).small().color(ink))
+        .show_ui(ui, |ui| {
+            ui.set_min_width(170.0);
+            for per_second in BUDGETS {
+                let (name, hint) = match per_second {
+                    0 => ("No limit · USB", "A USB device takes everything Soba sends"),
+                    DIN_RATE => ("DIN · 1000/s", "A 5-pin DIN cable carries about a thousand messages a second: CC streams thin to fit, and notes and clock keep their time"),
+                    _ => ("Gentle · 500/s", "Half a DIN cable's speed, for gear that falls behind when it's sent CCs flat out"),
+                };
+                if ui.selectable_label(row.budget == per_second, name).on_hover_text(hint).clicked() {
+                    edits.push(Edit::Budget(row.port, per_second));
+                }
+            }
+            // One set some other way, kept as it is
+            if !BUDGETS.contains(&row.budget) {
+                let _ = ui.selectable_label(true, label(row.budget));
+            }
+        })
+        .response;
+    response.on_hover_text(format!(
+        "How many messages a second port {} may send. Over it, CC lanes, bend and pressure send only their newest values; notes, programs and clock always go on time",
+        PORT_LABELS[row.port]
+    ));
 }
 
 /// A port's offset, in milliseconds, to drag: amber when it asks for

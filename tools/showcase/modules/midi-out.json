@@ -259,6 +259,11 @@
           "name": "Send Clock",
           "type": "Toggle",
           "value": true
+        },
+        {
+          "name": "Program",
+          "type": "Number",
+          "value": 4.0
         }
       ]
     }
@@ -293,6 +298,18 @@
       "from_port": "Out",
       "to_node": 4,
       "to_port": "CC 2"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Out",
+      "to_node": 4,
+      "to_port": "Bend"
+    },
+    {
+      "from_node": 3,
+      "from_port": "Out",
+      "to_node": 4,
+      "to_port": "Pressure"
     }
   ],
   "midi_mappings": [],

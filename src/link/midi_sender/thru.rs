@@ -24,6 +24,24 @@ impl Thru {
     pub(super) fn uses(&self, port: usize) -> bool {
         self.routes.iter().flatten().any(|route| route.port as usize == port)
     }
+
+    /// The channels the routes on port `port` hold notes on, a bit each,
+    /// and the notes: what a MIDI Out letting go mustn't silence (#439).
+    pub(super) fn notes_on(&self, port: usize) -> (u16, [u128; 16]) {
+        let mut channels = 0;
+        let mut held = [0u128; 16];
+        for (route, notes) in self.routes.iter().zip(&self.held) {
+            if route.is_some_and(|route| route.port as usize == port) {
+                for (channel, (all, &notes)) in held.iter_mut().zip(notes).enumerate() {
+                    if notes != 0 {
+                        channels |= 1 << channel;
+                    }
+                    *all |= notes;
+                }
+            }
+        }
+        (channels, held)
+    }
 }
 
 impl MidiSender {
@@ -55,6 +73,9 @@ impl MidiSender {
                 continue;
             }
             let port = &mut ports[(port as usize).min(PORTS - 1)];
+            // At once, whatever the port's budget, which counts it all the
+            // same (#439): the CCs, bends and pressures waiting on the port
+            // make room for what's played through it
             Self::send(port, outputs, devices, &mut thru.held[index], message, now, now);
             thru.counts[index] = thru.counts[index].wrapping_add(1);
             passed = true;
@@ -74,8 +95,11 @@ impl MidiSender {
             let route = bus.route(index);
             let was = std::mem::replace(&mut self.thru.routes[index], route);
             if let Some(was) = was.filter(|&was| Some(was) != route) {
-                let port = &mut self.ports[(was.port as usize).min(PORTS - 1)];
-                Self::release(port, &mut self.outputs, &self.devices, &mut self.thru.held[index], now);
+                // The MIDI Outs on its port keep their notes (#439)
+                let index_port = (was.port as usize).min(PORTS - 1);
+                let (shared, others) = neighbours(&self.streams, usize::MAX, index_port);
+                let port = &mut self.ports[index_port];
+                Self::release(port, &mut self.outputs, &self.devices, &mut self.thru.held[index], shared, &others, now);
             }
         }
     }
@@ -86,7 +110,8 @@ impl MidiSender {
         let Self { thru, ports, outputs, devices, .. } = self;
         for (route, held) in thru.routes.iter().zip(&mut thru.held) {
             if route.is_some_and(|route| route.port as usize == port) {
-                Self::release(&mut ports[port], outputs, devices, held, now);
+                // The whole port leaves its device: All Notes Off for all
+                Self::release(&mut ports[port], outputs, devices, held, 0, &[0; 16], now);
             }
         }
     }
@@ -133,6 +158,27 @@ mod tests {
         sender.tick(start + TICK);
         assert_eq!(bus.traffic(0).messages, 1, "the port's lamp flashes");
         assert_eq!(bus.status(0), PortStatus::Sending, "a route uses its port");
+    }
+
+    #[test]
+    fn what_a_route_plays_counts_against_its_ports_budget() {
+        // #439: it goes at once, and the CCs on the port make room for it
+        let (bus, _thru, mut sender, log, mut input) = routed(vec![ThruRoute::new("Keys", 0)]);
+        bus.set_budget(0, crate::link::midi::DIN_RATE);
+        let start = Instant::now();
+        sender.tick(start);
+        for note in [60, 64, 67] {
+            input.forward(0, &[0x90, note, 100]);
+        }
+        sender.forward(start);
+        assert_eq!(sent_to(&log, "Synth").len(), 3, "a chord, at once");
+        let mut ring = bus.open_stream().unwrap();
+        ring.push(Outgoing::Block { sample: 0, at: start, rate: 48_000.0, port: 0 }).unwrap();
+        ring.push(Outgoing::Control { sample: 0, control: Control::Cc { channel: 0, number: 74, value: 9 } }).unwrap();
+        sender.tick(start);
+        assert_eq!(sent_to(&log, "Synth").len(), 3, "the CC waits: the chord took the room");
+        sender.tick(start + Duration::from_millis(1));
+        assert_eq!(sent_to(&log, "Synth").last().unwrap(), &vec![0xB0, 74, 9], "and goes as it fills");
     }
 
     #[test]

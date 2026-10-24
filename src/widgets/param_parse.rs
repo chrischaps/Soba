@@ -39,6 +39,10 @@ impl ParamFormat {
                 _ => None,
             },
             ParamFormat::Note => number.or_else(|| note_from_name(&text).map(f32::from)),
+            ParamFormat::OrOff { off, .. } => match (number, unit) {
+                (None, "off") => Some(*off),
+                (number, _) => number,
+            },
             ParamFormat::Slices => match (number, unit) {
                 (None, "off") => Some(0.0),
                 (None, "onsets") => Some(crate::dsp::primitives::ONSETS),

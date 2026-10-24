@@ -92,7 +92,7 @@ The **ID** is the name a patch file uses to refer to the module.
 |--------|----|--------------|
 | [Audio Output](./output/audio-output.md) | `output.audio` | Stereo master output with volume, DC blocking and a peak limiter |
 | [Link Out](./output/link-out.md) | `output.link` | Send eight CV lanes, four gates and the Clock to the Seoul visualizer, to play its pictures from the patch |
-| [MIDI Out](./output/midi-out.md) | `output.midi` | Play hardware and other apps: gates and pitch as notes (poly cables as chords), four CCs, and the Clock as MIDI clock |
+| [MIDI Out](./output/midi-out.md) | `output.midi` | Play hardware and other apps: gates and pitch as notes (poly cables as chords), bend and aftertouch, four CCs (7-bit, 14-bit or NRPN), programs and banks, and the Clock as MIDI clock |
 
 Header colors describe what a module *is*. The colors of its jacks and cables describe the *signals* it handles, which is a separate palette: see [Signal Types](../concepts/signal-types.md).
 

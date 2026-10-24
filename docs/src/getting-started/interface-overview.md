@@ -351,7 +351,8 @@ With a room of hardware plugged in, choose **The Rig…** at the foot of the **M
   - its **Clock**: what it sends of the patch's Clock. **Clock + Transport** sends the tempo with Start and Stop, **Clock only** the tempo alone, and **Off** nothing. The port sends it whether or not a MIDI Out plays it. While its device leads the Clock (see [Leading or following](../modules/modulation/clock.md#leading-or-following-auto)), it reads **leads** in purple and sends nothing;
   - its **Offset**: how many milliseconds later than the sound its notes, CCs and clock go out, to line a slow device up with the rest. Drag it, or click to type. It's amber when it asks for earlier than your audio device's delay allows;
   - beside the offset, a ping (•)) to measure the device's delay and set the offset for you: see [Measuring a device's delay](#measuring-a-devices-delay);
-  - how the port is doing: **Sending**, **Ready** (it has a device but nothing plays it), **Unplugged**, **No device**, or **In use** (another app has the device);
+  - its **Budget**: how many messages a second it may send. **No limit** suits a USB device. A 5-pin DIN cable carries only about a thousand, so set **DIN · 1000/s** for a port that plays through a MIDI interface, or **Gentle · 500/s** for gear that falls behind at full speed. Over its budget, a port sends only the newest value of each CC, bend and pressure, and notes, programs and clock go on time;
+  - how the port is doing: **Sending**, **Full** (in amber, while its budget is thinning CCs), **Ready** (it has a device but nothing plays it), **Unplugged**, **No device**, or **In use** (another app has the device);
   - a dot that lights on each beat while clock goes out;
   - the last message sent;
   - how many MIDI Outs play the port.
@@ -365,7 +366,7 @@ With a room of hardware plugged in, choose **The Rig…** at the foot of the **M
 
   A route goes out the moment it comes in, ahead of anything else on the thread that sends MIDI, without waiting for the audio or for the port's **Offset**: it's for playing, and adds well under a millisecond. A route that would play the device it comes from is refused and says **Loop**, since a device that echoes what it hears would feed back forever; the **To** menu won't offer that port. The patch still hears an open input: a Note In set to any device plays along, so set its **Device** to another one to keep them apart. Up to sixteen routes.
 
-Ports, with their clocks and offsets, routes, and inputs are settings of this computer, not of the patch. **🔄 Refresh** looks for devices again at once. Otherwise Soba looks every couple of seconds.
+Ports, with their clocks, offsets and budgets, routes, and inputs are settings of this computer, not of the patch. **🔄 Refresh** looks for devices again at once. Otherwise Soba looks every couple of seconds.
 
 **After a reboot.** Windows numbers devices that share a name in the order they were plugged in (`2- Digitakt`), and numbers a device's extra ports (`MIDIIN3 (FANTOM-06)`). Linux adds the device's client and port numbers to its name. Those numbers can change when you reboot or plug things in a different order. Soba finds a device by its exact name first, then by its name without those numbers, so every port and input finds its device again. A module whose **Device** is set to it, or a mapping learned from it, still hears it. If two devices are left that both fit, Soba uses neither, rather than guess. Hover a port's device to see whether it was found under a new number.
 

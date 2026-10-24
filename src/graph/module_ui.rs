@@ -587,10 +587,23 @@ static MODULE_UI: &[ModuleUi] = &[
     },
     ModuleUi {
         module_id: "output.midi",
-        // Each CC lane's controller number, under the bar it fills
-        knobs: &[knob_as("CC 1 #", "CC 1"), knob_as("CC 2 #", "CC 2"), knob_as("CC 3 #", "CC 3"), knob_as("CC 4 #", "CC 4")],
+        // Each CC lane's controller number, under the bar it fills; then
+        // the bend range and the sound to pick (#439). A lane's mode and
+        // NRPN are set from its bar's menu
+        knobs: &[
+            knob_as("CC 1 #", "CC 1"),
+            knob_as("CC 2 #", "CC 2"),
+            knob_as("CC 3 #", "CC 3"),
+            knob_as("CC 4 #", "CC 4"),
+            knob_as("Bend Range", "Bend"),
+            knob_as("Program", "Prog"),
+            knob_as("Bank MSB", "Bank"),
+            knob_as("Bank LSB", "LSB"),
+        ],
         labels: &[("Channel", "Ch")],
+        hidden: &["CC Mode *", "NRPN *"],
         display: NodeDisplay::MidiOutKeys,
+        knobs_per_row: 4,
         ..ModuleUi::DEFAULT
     },
 ];

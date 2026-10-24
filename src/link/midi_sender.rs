@@ -12,9 +12,11 @@
 //! **Stuck notes.** The sender watches every Note On and Note Off it
 //! sends, per module. When a module's ring is dropped (the module deleted,
 //! or another patch loaded) or it stops running (the audio stopped), the
-//! notes it still holds are let go, with an All Notes Off on their
-//! channels. A port moved to another device lets go of its notes on the
-//! old one first.
+//! notes it still holds are let go, and a bend it left off-centre springs
+//! back. All Notes Off follows on each channel no other MIDI Out on the
+//! port plays, so one module's cleanup doesn't silence another's notes
+//! (#439). A port moved to another device lets go of its notes on the old
+//! one first.
 //!
 //! **Renamed devices.** A port looks for its device by name, and if the
 //! system has renumbered it ("2- Digitakt" is now "3- Digitakt"), by the
@@ -31,6 +33,18 @@
 //! **Offsets.** Each port's notes, CCs and clock go out its offset later
 //! than the audio beside them, or earlier, but only by as much as the
 //! output's delay: a message can't go before its block is made.
+//!
+//! **Budgets** (#439). A port can be held to so many messages a second
+//! ([`MidiBus::set_budget`]): a DIN cable carries about a thousand, and
+//! four fast LFOs into CCs would swamp it, making the notes behind them
+//! late. Notes, programs and clock always go the moment they're due, as
+//! does what a thru route plays, and all of it counts against the budget; controllers ([`Control`]s) go while there is
+//! room. While there isn't, each waits with only its newest value kept, a
+//! value the device already has is dropped, and the port's traffic counts
+//! what was thinned. A [`Budget`] is a token bucket in bytes, a few
+//! milliseconds deep, so a note never waits behind more than that of CCs
+//! in the interface. SysEx (#440) can pace a dump by
+//! [`Budget::ready_at`].
 //!
 //! **Ahead of time.** The desktop's thread wakes every millisecond and
 //! sends each message as it falls due. The browser has no thread, only a
@@ -50,7 +64,7 @@ use std::time::Duration;
 use rtrb::Consumer;
 use web_time::Instant;
 
-use super::midi::{status, ClockMode, Message, MidiBus, Outgoing, PortStatus, Traffic, ALL_NOTES_OFF, PORTS};
+use super::midi::{status, ClockMode, Control, Message, MidiBus, Outgoing, PortStatus, Traffic, ALL_NOTES_OFF, BEND_CENTER, PORTS};
 use crate::engine::device_names;
 
 mod thru;
@@ -76,6 +90,98 @@ const RETRY_AFTER: Duration = Duration::from_secs(2);
 /// computer's clock, and small enough that callbacks running a little late
 /// don't drag the timing late with them.
 const CREEP: Duration = Duration::from_micros(2);
+
+/// How deep a budget's bucket is: this long of its rate, so a note waits
+/// behind no more than this of CCs already in the interface.
+const BUCKET: f32 = 0.003;
+/// How far into debt notes and clock may take a budget: past this, what
+/// they sent is forgiven, so controllers aren't silenced for long after a
+/// burst of chords.
+const DEBT: f32 = 0.25;
+/// Controllers a port holds while it's full, and values it remembers as
+/// sent: more than eight MIDI Outs' lanes, bends and pressures.
+const HOLD: usize = 256;
+
+/// A port's share of its cable (#439): a token bucket in bytes, filled at
+/// its rate and [`BUCKET`] deep. Off, everything fits.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Budget {
+    /// Messages a second, as the Rig sets it: 0 for none.
+    per_second: u32,
+    /// Bytes it may send now.
+    tokens: f32,
+    /// When it was last filled.
+    at: Option<Instant>,
+}
+
+impl Budget {
+    /// A budget of `per_second` three-byte messages a second, or none for 0.
+    pub fn new(per_second: u32) -> Self {
+        let mut budget = Self::default();
+        budget.set(per_second);
+        budget
+    }
+
+    /// Changes the rate, keeping what's saved up within the new depth.
+    pub fn set(&mut self, per_second: u32) {
+        if per_second != self.per_second {
+            self.per_second = per_second;
+            self.tokens = self.depth();
+        }
+    }
+
+    pub fn is_on(&self) -> bool {
+        self.per_second > 0
+    }
+
+    fn rate(&self) -> f32 {
+        self.per_second as f32 * 3.0
+    }
+
+    /// The most bytes it saves up.
+    fn depth(&self) -> f32 {
+        (self.rate() * BUCKET).max(9.0)
+    }
+
+    /// Fills it for the time since it was last filled.
+    pub fn refill(&mut self, now: Instant) {
+        if let Some(at) = self.at.filter(|&at| now > at) {
+            self.tokens = (self.tokens + now.duration_since(at).as_secs_f32() * self.rate()).min(self.depth());
+        }
+        self.at = Some(self.at.map_or(now, |at| at.max(now)));
+    }
+
+    /// Whether `bytes` may go now. Something bigger than the bucket goes
+    /// once it's full.
+    pub fn fits(&self, bytes: usize) -> bool {
+        !self.is_on() || self.tokens >= (bytes as f32).min(self.depth())
+    }
+
+    /// Counts `bytes` sent, into debt if need be: notes and clock go
+    /// whether they fit or not.
+    pub fn spend(&mut self, bytes: usize) {
+        if self.is_on() {
+            self.tokens = (self.tokens - bytes as f32).max(-self.rate() * DEBT);
+        }
+    }
+
+    /// When `bytes` will fit, if nothing else is spent: for pacing a long
+    /// message (SysEx, #440).
+    pub fn ready_at(&self, bytes: usize, now: Instant) -> Instant {
+        let short = (bytes as f32).min(self.depth()) - self.tokens;
+        if !self.is_on() || short <= 0.0 {
+            return now;
+        }
+        now + Duration::from_secs_f32(short / self.rate())
+    }
+}
+
+/// What a stream has waiting: a message, or a controller's value.
+#[derive(Clone, Copy, Debug)]
+enum Item {
+    Message(Message),
+    Control(Control),
+}
 
 /// Asks the system to run the calling thread ahead of ordinary work, as
 /// audio threads are: MIDI clock that waits behind a busy UI or a build
@@ -163,6 +269,14 @@ struct Port {
     /// next one, not partway through the song, so a drum machine stopped
     /// by hand stays stopped while Soba plays on.
     led: bool,
+    /// Its share of the cable, as last applied from the bus.
+    budget: Budget,
+    /// Controllers waiting for room while it's full, oldest first, each
+    /// with when it was due: only the newest value of each.
+    waiting: Vec<(Control, Instant)>,
+    /// The value of each controller last sent while it had a budget, to
+    /// drop one the device already has.
+    sent: Vec<Control>,
 }
 
 /// One MIDI Out's ring, and what sending it remembers.
@@ -174,14 +288,18 @@ struct Stream {
     origin: Option<Instant>,
     last_block: Option<Instant>,
     /// Messages waiting for their sample, in the order they're due.
-    pending: VecDeque<(u64, Message)>,
+    pending: VecDeque<(u64, Item)>,
     /// The notes it holds, a bit per note, per channel.
     held: [u128; 16],
+    /// The channels it has played on its port, a bit each.
+    channels: u16,
+    /// The channels it last bent off-centre, a bit each.
+    bent: u16,
 }
 
 impl Stream {
     fn new(events: Consumer<Outgoing>) -> Self {
-        Self { events, port: 0, rate: 48_000.0, origin: None, last_block: None, pending: VecDeque::new(), held: [0; 16] }
+        Self { events, port: 0, rate: 48_000.0, origin: None, last_block: None, pending: VecDeque::new(), held: [0; 16], channels: 0, bent: 0 }
     }
 
     /// When sample `sample` is heard, if a block has said yet.
@@ -203,13 +321,36 @@ impl Stream {
 
     /// Keeps `message` in time order: after everything due at or before
     /// its sample, so a block's own order stands.
-    fn queue(&mut self, sample: u64, message: Message) {
+    fn queue(&mut self, sample: u64, item: Item) {
+        let channel = match item {
+            Item::Message(message) => message.channel(),
+            Item::Control(control) => Some(control.channel()),
+        };
+        if let Some(channel) = channel {
+            self.channels |= 1 << channel;
+        }
         let at = self.pending.partition_point(|&(s, _)| s <= sample);
-        self.pending.insert(at, (sample, message));
+        self.pending.insert(at, (sample, item));
     }
 
     fn holds_notes(&self) -> bool {
         self.held.iter().any(|&notes| notes != 0)
+    }
+
+    /// Whether letting go would send anything: notes held, or a bend.
+    fn has_loose_ends(&self) -> bool {
+        self.holds_notes() || self.bent != 0
+    }
+
+    /// Keeps track of the bend it leaves each channel at.
+    fn bends(&mut self, control: &Control) {
+        if let Control::Bend { channel, value } = *control {
+            if value == BEND_CENTER {
+                self.bent &= !(1 << channel);
+            } else {
+                self.bent |= 1 << channel;
+            }
+        }
     }
 }
 
@@ -316,6 +457,7 @@ impl MidiSender {
         self.follow_choices();
         self.find_devices();
         self.follow_clock_modes(now);
+        self.follow_budgets(now);
         self.forward(now);
 
         let latency = self.bus.latency();
@@ -330,7 +472,7 @@ impl MidiSender {
             // Everything due goes out; a module that's gone or stopped
             // sends what it left at once, then lets go of its notes
             let flush = gone || stale;
-            while let Some(&(sample, message)) = stream.pending.front() {
+            while let Some(&(sample, item)) = stream.pending.front() {
                 let due = stream.due(sample, latency).map(|due| shifted(due, offsets[stream.port], latency));
                 if !flush && due.is_none_or(|due| due > now + self.ahead) {
                     break;
@@ -339,11 +481,19 @@ impl MidiSender {
                 let port = &mut self.ports[stream.port];
                 // What's left of a module that's gone goes after what's on its way
                 let at = if flush { port.after(now) } else { due.unwrap_or(now).max(now) };
-                Self::send(port, &mut self.outputs, &self.devices, &mut stream.held, message, now, at);
+                match item {
+                    Item::Message(message) => Self::send(port, &mut self.outputs, &self.devices, &mut stream.held, message, now, at),
+                    Item::Control(control) => {
+                        stream.bends(&control);
+                        Self::offer(port, &mut self.outputs, &self.devices, control, now, at);
+                    }
+                }
             }
-            if flush && stream.holds_notes() {
+            if flush && stream.has_loose_ends() {
                 let port = stream.port;
-                Self::release(&mut self.ports[port], &mut self.outputs, &self.devices, &mut stream.held, now);
+                let (shared, others) = self.neighbours(index, port);
+                let stream = &mut self.streams[index];
+                Self::release_stream(&mut self.ports[port], &mut self.outputs, &self.devices, stream, shared, &others, now);
             }
             if gone {
                 self.streams.swap_remove(index);
@@ -351,6 +501,11 @@ impl MidiSender {
             }
             busy |= !stale;
             index += 1;
+        }
+        // What waited for room goes as the budgets fill
+        for port in &mut self.ports {
+            Self::send_waiting(port, &mut self.outputs, &self.devices, now);
+            busy |= !port.waiting.is_empty();
         }
         self.report();
         now + if busy {
@@ -364,22 +519,27 @@ impl MidiSender {
 
     /// Takes stream `index`'s new events. Returns whether its module is gone.
     fn drain(&mut self, index: usize, now: Instant) -> bool {
-        loop {
-            let stream = &mut self.streams[index];
-            let Ok(event) = stream.events.pop() else { break };
+        while let Ok(event) = self.streams[index].events.pop() {
             match event {
                 Outgoing::Block { sample, at, rate, port } => {
                     let port = (port as usize).min(PORTS - 1);
-                    if port != stream.port && stream.holds_notes() {
-                        // Moved to another port: its notes stop where they play
-                        let old = stream.port;
-                        Self::release(&mut self.ports[old], &mut self.outputs, &self.devices, &mut stream.held, now);
+                    let old = self.streams[index].port;
+                    if port != old {
+                        if self.streams[index].has_loose_ends() {
+                            // Moved to another port: its notes stop where they play
+                            let (shared, others) = self.neighbours(index, old);
+                            let stream = &mut self.streams[index];
+                            Self::release_stream(&mut self.ports[old], &mut self.outputs, &self.devices, stream, shared, &others, now);
+                        }
+                        self.streams[index].channels = 0;
                     }
+                    let stream = &mut self.streams[index];
                     stream.port = port;
                     stream.learn(sample, at, rate);
                     stream.last_block = Some(now);
                 }
-                Outgoing::Message { sample, message } => stream.queue(sample, message),
+                Outgoing::Message { sample, message } => self.streams[index].queue(sample, Item::Message(message)),
+                Outgoing::Control { sample, control } => self.streams[index].queue(sample, Item::Control(control)),
             }
         }
         self.streams[index].events.is_abandoned() && self.streams[index].events.is_empty()
@@ -395,7 +555,8 @@ impl MidiSender {
             }
             let now = Instant::now();
             for stream in self.streams.iter_mut().filter(|s| s.port == index) {
-                Self::release(&mut self.ports[index], &mut self.outputs, &self.devices, &mut stream.held, now);
+                // Everyone leaves the old device: All Notes Off for all
+                Self::release_stream(&mut self.ports[index], &mut self.outputs, &self.devices, stream, 0, &[0; 16], now);
             }
             self.release_thru(index, now);
             let port = &mut self.ports[index];
@@ -404,7 +565,7 @@ impl MidiSender {
                 let at = port.after(now);
                 Self::send(port, &mut self.outputs, &self.devices, &mut [0; 16], Message::real_time(status::STOP), now, at);
             }
-            self.ports[index] = Port { device, traffic: port.traffic, mode: port.mode, ..Port::default() };
+            self.ports[index] = Port { device, traffic: port.traffic, mode: port.mode, budget: port.budget, ..Port::default() };
         }
     }
 
@@ -436,6 +597,20 @@ impl MidiSender {
         }
     }
 
+    /// Takes up each port's budget, and fills each for the time gone by.
+    /// A port whose budget is lifted sends what it held at once.
+    fn follow_budgets(&mut self, now: Instant) {
+        let budgets = self.bus.budgets();
+        for (port, per_second) in self.ports.iter_mut().zip(budgets) {
+            port.budget.set(per_second);
+            port.budget.refill(now);
+            if per_second == 0 {
+                // What was sent with no budget isn't kept: start afresh
+                port.sent.clear();
+            }
+        }
+    }
+
     /// Takes in the patch's clock, shared out among the ports that want
     /// it, and sends what's due on each. Returns whether it's running.
     fn send_clock(&mut self, now: Instant, latency: Duration, offsets: &[f32; PORTS]) -> bool {
@@ -448,6 +623,8 @@ impl MidiSender {
                     clock.stream.last_block = Some(now);
                 }
                 Outgoing::Message { sample, message } => clock.fan(sample, message, ports),
+                // The clock's ring carries none
+                Outgoing::Control { .. } => {}
             }
         }
         let gone = clock.stream.events.is_abandoned() && clock.stream.events.is_empty();
@@ -502,6 +679,7 @@ impl MidiSender {
             held[channel as usize] &= !(1 << note);
         }
         port.latest = Some(port.latest.map_or(at, |latest| latest.max(at)));
+        port.budget.spend(message.bytes().len());
         if let Some(connection) = Self::connection(port, outputs, devices, now) {
             match connection.send_at(message.bytes(), at) {
                 Ok(()) if message.is_real_time() && message.bytes()[0] == status::CLOCK => {
@@ -521,20 +699,110 @@ impl MidiSender {
         }
     }
 
-    /// Lets go of every note in `held` on `port`, with All Notes Off on
-    /// their channels.
-    fn release(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], held: &mut [u128; 16], now: Instant) {
+    /// Lets go of every note `stream` holds on `port`, and springs its
+    /// bends back, as [`release`](Self::release) does.
+    #[allow(clippy::too_many_arguments)]
+    fn release_stream(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], stream: &mut Stream, shared: u16, others: &[u128; 16], now: Instant) {
         let at = port.after(now);
+        let mut ignored = [0u128; 16];
+        for channel in (0..16u8).filter(|&channel| stream.bent & (1 << channel) != 0) {
+            Self::send(port, outputs, devices, &mut ignored, Message::pitch_bend(channel, BEND_CENTER), now, at);
+        }
+        stream.bent = 0;
+        Self::release(port, outputs, devices, &mut stream.held, shared, others, now);
+    }
+
+    /// Lets go of every note in `held` on `port`. All Notes Off follows on
+    /// each channel only when nothing else on the port plays it (`shared`,
+    /// a bit a channel: another MIDI Out, or a thru route), and a note
+    /// another holds too (`others`) is left for it to end (#439).
+    #[allow(clippy::too_many_arguments)]
+    fn release(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], held: &mut [u128; 16], shared: u16, others: &[u128; 16], now: Instant) {
+        let at = port.after(now);
+        let mut ignored = [0u128; 16];
         for channel in 0..16u8 {
             let notes = std::mem::take(&mut held[channel as usize]);
             if notes == 0 {
                 continue;
             }
-            let mut ignored = [0u128; 16];
-            for note in (0..128u8).filter(|&n| notes & (1 << n) != 0) {
+            let mine = notes & !others[channel as usize];
+            for note in (0..128u8).filter(|&n| mine & (1 << n) != 0) {
                 Self::send(port, outputs, devices, &mut ignored, Message::note_off(channel, note), now, at);
             }
-            Self::send(port, outputs, devices, &mut ignored, Message::control(channel, ALL_NOTES_OFF, 0), now, at);
+            if shared & (1 << channel) == 0 {
+                Self::send(port, outputs, devices, &mut ignored, Message::control(channel, ALL_NOTES_OFF, 0), now, at);
+            }
+        }
+    }
+
+    /// What else plays port `port` but stream `except` (none, for
+    /// `usize::MAX`): the channels, a bit each, and the notes held, of the
+    /// other MIDI Outs and of the thru routes.
+    fn neighbours(&self, except: usize, port: usize) -> (u16, [u128; 16]) {
+        let (mut channels, mut held) = neighbours(&self.streams, except, port);
+        let (thru_channels, thru_held) = self.thru.notes_on(port);
+        channels |= thru_channels;
+        for (all, notes) in held.iter_mut().zip(thru_held) {
+            *all |= notes;
+        }
+        (channels, held)
+    }
+
+    /// Sends a controller's value on `port` at `at`, or, while the port's
+    /// budget is full, holds it with only the newest of each kept.
+    fn offer(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], control: Control, now: Instant, at: Instant) {
+        if !port.budget.is_on() {
+            Self::send_control(port, outputs, devices, control, now, at);
+            return;
+        }
+        let key = control.key();
+        if let Some(waiting) = port.waiting.iter_mut().find(|(c, _)| c.key() == key) {
+            // A newer value of one still waiting takes its place
+            *waiting = (control, waiting.1.max(at));
+            port.traffic.thinned = port.traffic.thinned.wrapping_add(1);
+        } else if port.sent.contains(&control) {
+            // The device has it already
+            port.traffic.thinned = port.traffic.thinned.wrapping_add(1);
+            return;
+        } else {
+            if port.waiting.len() >= HOLD {
+                port.waiting.remove(0);
+                port.traffic.thinned = port.traffic.thinned.wrapping_add(1);
+            }
+            port.waiting.push((control, at));
+        }
+        Self::send_waiting(port, outputs, devices, now);
+    }
+
+    /// Sends what's waiting on `port`, oldest first, while its budget has room.
+    fn send_waiting(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], now: Instant) {
+        while let Some(&(control, at)) = port.waiting.first() {
+            if !port.budget.fits(control.burst().bytes()) {
+                break;
+            }
+            port.waiting.remove(0);
+            Self::send_control(port, outputs, devices, control, now, at.max(now));
+        }
+    }
+
+    /// Sends a controller's messages, together, and remembers the value
+    /// while the port has a budget.
+    fn send_control(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], control: Control, now: Instant, at: Instant) {
+        let mut ignored = [0u128; 16];
+        for &message in control.burst().messages() {
+            Self::send(port, outputs, devices, &mut ignored, message, now, at);
+        }
+        if port.budget.is_on() {
+            let key = control.key();
+            match port.sent.iter_mut().find(|c| c.key() == key) {
+                Some(sent) => *sent = control,
+                None => {
+                    if port.sent.len() >= HOLD {
+                        port.sent.remove(0);
+                    }
+                    port.sent.push(control);
+                }
+            }
         }
     }
 
@@ -580,6 +848,20 @@ impl MidiSender {
             self.bus.set_status(index, status);
         }
     }
+}
+
+/// The channels the other streams on port `port` play, a bit each, and the
+/// notes they hold: what stream `except` mustn't silence as it lets go.
+fn neighbours(streams: &[Stream], except: usize, port: usize) -> (u16, [u128; 16]) {
+    let mut channels = 0;
+    let mut held = [0u128; 16];
+    for (_, stream) in streams.iter().enumerate().filter(|&(index, s)| index != except && s.port == port && !s.events.is_abandoned()) {
+        channels |= stream.channels;
+        for (all, notes) in held.iter_mut().zip(stream.held) {
+            *all |= notes;
+        }
+    }
+    (channels, held)
 }
 
 impl Port {
@@ -1069,5 +1351,166 @@ mod tests {
         sender.tick(start);
         assert_eq!(bus.status(0), PortStatus::Failed);
         assert!(sent(&log).is_empty());
+    }
+
+    fn cc(number: u8, value: u8) -> Control {
+        Control::Cc { channel: 0, number, value }
+    }
+
+    #[test]
+    fn notes_and_clock_keep_time_while_four_lfo_lanes_saturate_a_din_port() {
+        let (bus, mut sender, log, mut clock) = clocked([ClockMode::ClockOnly, ClockMode::Off]);
+        bus.set_budget(0, crate::link::midi::DIN_RATE);
+        let mut ring = bus.open_stream().unwrap();
+        let start = Instant::now();
+        let ms = |t: u64| start + Duration::from_millis(t);
+        let numbers = [1, 74, 71, 10];
+        // Half a second: four LFOs, each a new value every millisecond (4,000
+        // a second, four times what a DIN cable takes), a note every 50 ms,
+        // and clock every 20
+        const RUN: u64 = 500;
+        let lfo = |lane: usize, t: u64| ((t as f32 * 0.05 + lane as f32).sin() * 63.0 + 64.0) as u8;
+        for t in 0..RUN {
+            let sample = t * 48;
+            ring.push(Outgoing::Block { sample, at: ms(t), rate: RATE, port: 0 }).unwrap();
+            clock.push(Outgoing::Block { sample, at: ms(t), rate: RATE, port: 0 }).unwrap();
+            for (lane, &number) in numbers.iter().enumerate() {
+                ring.push(Outgoing::Control { sample, control: cc(number, lfo(lane, t)) }).unwrap();
+            }
+            if t % 50 == 0 {
+                ring.push(Outgoing::Message { sample, message: Message::note_on(0, 60, 100) }).unwrap();
+            }
+            if t % 50 == 25 {
+                ring.push(Outgoing::Message { sample, message: Message::note_off(0, 60) }).unwrap();
+            }
+            if t % 20 == 0 {
+                clock.push(Outgoing::Message { sample, message: Message::real_time(status::CLOCK) }).unwrap();
+            }
+            sender.tick(ms(t));
+        }
+        // And on, quiet, until what waited has gone
+        for t in RUN..RUN + 20 {
+            ring.push(Outgoing::Block { sample: t * 48, at: ms(t), rate: RATE, port: 0 }).unwrap();
+            sender.tick(ms(t));
+        }
+        let log = log.lock().unwrap();
+        let synth: Vec<_> = log.iter().filter(|(d, _, _)| d == "Synth").collect();
+        // Every note and tick went the moment it was due
+        let timed: Vec<_> = synth.iter().filter(|(_, b, _)| b[0] & 0xF0 != 0xB0).collect();
+        assert_eq!(timed.len(), (RUN / 50 * 2 + RUN / 20) as usize);
+        for (_, bytes, at) in &timed {
+            let late = at.duration_since(start).as_secs_f64() * 1000.0;
+            assert!((late - late.round()).abs() < 0.01, "{bytes:?} at {late} ms: on its millisecond");
+        }
+        let note_times: Vec<u64> = timed.iter().filter(|(_, b, _)| b[0] == 0x90).map(|(_, _, at)| at.duration_since(start).as_millis() as u64).collect();
+        assert_eq!(note_times, (0..RUN).step_by(50).collect::<Vec<_>>(), "notes on time");
+        // The CCs kept to what was left of a thousand messages a second
+        let ccs: Vec<_> = synth.iter().filter(|(_, b, _)| b[0] & 0xF0 == 0xB0).collect();
+        let bytes: usize = synth.iter().filter(|(_, _, at)| *at < ms(RUN)).map(|(_, b, _)| b.len()).sum();
+        let allowed = 3.0 * crate::link::midi::DIN_RATE as f64 * RUN as f64 / 1000.0;
+        assert!(bytes as f64 <= allowed + 20.0, "{bytes} bytes in {RUN} ms, more than the {allowed} a DIN cable takes");
+        assert!(ccs.len() as f64 > 0.8 * allowed / 3.0 - timed.len() as f64, "the lanes still flow: {} CCs", ccs.len());
+        assert!(bus.traffic(0).thinned > 1000, "thinned {}", bus.traffic(0).thinned);
+        // And each lane ends where its LFO did
+        for (lane, &number) in numbers.iter().enumerate() {
+            let last = ccs.iter().rev().find(|(_, b, _)| b[1] == number).unwrap();
+            assert_eq!(last.1[2], lfo(lane, RUN - 1), "lane {lane}");
+        }
+    }
+
+    #[test]
+    fn with_no_budget_every_value_goes() {
+        let (bus, mut sender, log) = setup(false);
+        let mut ring = bus.open_stream().unwrap();
+        let start = Instant::now();
+        ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        for value in 0..100 {
+            ring.push(Outgoing::Control { sample: 0, control: cc(74, value) }).unwrap();
+        }
+        ring.push(Outgoing::Control { sample: 0, control: cc(74, 99) }).unwrap();
+        sender.tick(start);
+        assert_eq!(sent(&log).len(), 101, "a repeat too: nothing's thinned");
+        assert_eq!(bus.traffic(0).thinned, 0);
+    }
+
+    #[test]
+    fn a_budget_drops_what_the_device_has_and_keeps_the_newest() {
+        let (bus, mut sender, log) = setup(false);
+        bus.set_budget(0, 1000);
+        let mut ring = bus.open_stream().unwrap();
+        let start = Instant::now();
+        ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        // The bucket holds three messages: the fourth and fifth wait, the
+        // fifth in the fourth's place, and the same value again is dropped
+        for value in [10, 11, 12, 13, 14, 12] {
+            let number = if value == 12 { 71 } else { 74 };
+            ring.push(Outgoing::Control { sample: 0, control: cc(number, value) }).unwrap();
+        }
+        sender.tick(start);
+        assert_eq!(sent(&log), [vec![0xB0, 74, 10], vec![0xB0, 74, 11], vec![0xB0, 71, 12]]);
+        sender.tick(start + Duration::from_millis(1));
+        assert_eq!(sent(&log)[3..], [vec![0xB0, 74, 14]], "the newest only");
+        assert_eq!(bus.traffic(0).thinned, 2);
+        // An NRPN goes whole, or waits whole
+        ring.push(Outgoing::Control { sample: 0, control: Control::Nrpn { channel: 0, parameter: 148, value: 300 } }).unwrap();
+        sender.tick(start + Duration::from_millis(2));
+        sender.tick(start + Duration::from_millis(10));
+        assert_eq!(sent(&log)[4..].iter().map(|m| m[1]).collect::<Vec<_>>(), [99, 98, 6, 38]);
+    }
+
+    #[test]
+    fn a_budget_fills_with_time_and_says_when_a_message_fits() {
+        let start = Instant::now();
+        let mut budget = Budget::new(1000);
+        budget.refill(start);
+        assert!(budget.fits(9) && !Budget::default().is_on() && Budget::default().fits(10_000));
+        budget.spend(9);
+        assert!(!budget.fits(3));
+        assert_eq!(budget.ready_at(3, start), start + Duration::from_millis(1), "3 bytes a millisecond");
+        budget.refill(start + Duration::from_millis(1));
+        assert!(budget.fits(3));
+        // A long one waits for a full bucket, then goes
+        assert!(!budget.fits(4_000));
+        budget.refill(start + Duration::from_millis(10));
+        assert!(budget.fits(4_000));
+        budget.spend(4_000);
+        assert!(budget.ready_at(3, start) > start + Duration::from_millis(200), "in debt, but not for ever");
+    }
+
+    #[test]
+    fn deleting_one_of_two_midi_outs_on_a_channel_leaves_the_others_notes() {
+        let (bus, mut sender, log) = setup(false);
+        let start = Instant::now();
+        let mut rings: Vec<_> = (0..2).map(|_| bus.open_stream().unwrap()).collect();
+        // Both on channel 1: the first holds C and E, the second E and G
+        for (ring, notes) in rings.iter_mut().zip([[60, 64], [64, 67]]) {
+            ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+            for note in notes {
+                ring.push(Outgoing::Message { sample: 0, message: Message::note_on(0, note, 90) }).unwrap();
+            }
+        }
+        sender.tick(start);
+        let first = rings.remove(0);
+        drop(first);
+        rings[0].push(Outgoing::Block { sample: 48, at: start + TICK, rate: RATE, port: 0 }).unwrap();
+        sender.tick(start + TICK);
+        assert_eq!(&sent(&log)[4..], [vec![0x80, 60, 0]], "its own C, not the E the other holds, and no All Notes Off");
+        // The last one gone, its channel is its own: All Notes Off
+        drop(rings);
+        sender.tick(start + TICK * 2);
+        assert_eq!(&sent(&log)[5..], [vec![0x80, 64, 0], vec![0x80, 67, 0], vec![0xB0, ALL_NOTES_OFF, 0]]);
+    }
+
+    #[test]
+    fn a_bend_left_off_centre_springs_back_when_its_module_goes() {
+        let (bus, mut sender, log) = setup(false);
+        let mut ring = bus.open_stream().unwrap();
+        let start = Instant::now();
+        ring.push(Outgoing::Block { sample: 0, at: start, rate: RATE, port: 0 }).unwrap();
+        ring.push(Outgoing::Control { sample: 0, control: Control::bend(2, 0.5) }).unwrap();
+        sender.tick(start);
+        drop(ring);
+        sender.tick(start + TICK);
+        assert_eq!(sent(&log), [vec![0xE2, 0, 0x60], vec![0xE2, 0, 0x40]]);
     }
 }

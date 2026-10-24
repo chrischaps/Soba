@@ -53,6 +53,8 @@ impl NumberSpec {
                 "st" => ParamFormat::Semitones,
                 "note" => ParamFormat::Note,
                 "slices" => ParamFormat::Slices,
+                // The lowest step reads Off (#439): "or off", "st or off"
+                unit if unit.ends_with("or off") => ParamFormat::OrOff { off: self.min, unit: unit.trim_end_matches("or off").trim_end() },
                 "" => ParamFormat::Raw { decimals: 0 },
                 unit => ParamFormat::RawWithUnit { decimals: 0, unit },
             };

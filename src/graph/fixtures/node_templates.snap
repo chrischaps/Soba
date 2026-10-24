@@ -3214,18 +3214,37 @@ display LinkLanes
 in   Pitch              Control  ConnectionOnly       inline=true  port
 in   Gate               Gate     ConnectionOnly       inline=true  port
 in   Velocity           Control  ConnectionOnly       inline=true  port
+in   Bend               Control  ConnectionOnly       inline=true  port
+in   Pressure           Control  ConnectionOnly       inline=true  port
 in   CC 1               Control  ConnectionOnly       inline=true  port
 in   CC 2               Control  ConnectionOnly       inline=true  port
 in   CC 3               Control  ConnectionOnly       inline=true  port
 in   CC 4               Control  ConnectionOnly       inline=true  port
+in   Send Program       Gate     ConnectionOnly       inline=true  port
 in   Port               Control  ConstantOnly         inline=true  select 0 ["A", "B", "C", "D", "E", "F", "G", "H"] "Port"
 in   Channel            Control  ConstantOnly         inline=true  select 0 ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] "Ch"
 in   CC 1 #             Control  ConstantOnly         inline=false num 1 [0..127]  stepped
 in   CC 2 #             Control  ConstantOnly         inline=false num 74 [0..127]  stepped
 in   CC 3 #             Control  ConstantOnly         inline=false num 71 [0..127]  stepped
 in   CC 4 #             Control  ConstantOnly         inline=false num 10 [0..127]  stepped
+in   Bend Range         Control  ConstantOnly         inline=false num 0 [0..24] st or off stepped
+in   Program            Control  ConstantOnly         inline=false num -1 [-1..127] or off stepped
+in   Bank MSB           Control  ConstantOnly         inline=false num -1 [-1..127] or off stepped
+in   Bank LSB           Control  ConstantOnly         inline=false num -1 [-1..127] or off stepped
+in   CC Mode 1          Control  ConstantOnly         inline=false select 0 ["7-bit", "14-bit", "NRPN"] ""
+in   CC Mode 2          Control  ConstantOnly         inline=false select 0 ["7-bit", "14-bit", "NRPN"] ""
+in   CC Mode 3          Control  ConstantOnly         inline=false select 0 ["7-bit", "14-bit", "NRPN"] ""
+in   CC Mode 4          Control  ConstantOnly         inline=false select 0 ["7-bit", "14-bit", "NRPN"] ""
+in   NRPN 1             Control  ConstantOnly         inline=false num 0 [0..16383]  stepped
+in   NRPN 2             Control  ConstantOnly         inline=false num 0 [0..16383]  stepped
+in   NRPN 3             Control  ConstantOnly         inline=false num 0 [0..16383]  stepped
+in   NRPN 4             Control  ConstantOnly         inline=false num 0 [0..16383]  stepped
 knob CC 1 #             "CC 1" KnobOnly
 knob CC 2 #             "CC 2" KnobOnly
 knob CC 3 #             "CC 3" KnobOnly
 knob CC 4 #             "CC 4" KnobOnly
+knob Bend Range         "Bend" KnobOnly
+knob Program            "Prog" KnobOnly
+knob Bank MSB           "Bank" KnobOnly
+knob Bank LSB           "LSB" KnobOnly
 display MidiOutKeys

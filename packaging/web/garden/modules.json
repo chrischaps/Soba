@@ -706,7 +706,7 @@
     "output.midi": {
       "category": "Output",
       "color": "#7e57c2",
-      "height": 434.0,
+      "height": 520.0,
       "inputs": [
         {
           "name": "Pitch",
@@ -718,6 +718,14 @@
         },
         {
           "name": "Velocity",
+          "type": "Control"
+        },
+        {
+          "name": "Bend",
+          "type": "Control"
+        },
+        {
+          "name": "Pressure",
           "type": "Control"
         },
         {
@@ -735,6 +743,10 @@
         {
           "name": "CC 4",
           "type": "Control"
+        },
+        {
+          "name": "Send Program",
+          "type": "Gate"
         }
       ],
       "name": "MIDI Out",

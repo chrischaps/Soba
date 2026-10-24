@@ -3,23 +3,27 @@
 //! - **Along the top**, a lamp, the port and its device: green while
 //!   messages go out, amber when the port has no device or it's unplugged,
 //!   red when it won't open. Click the device to choose another; every
-//!   MIDI Out on the port follows. At the right, the channel.
+//!   MIDI Out on the port follows. At the right, the program, if one is
+//!   chosen, glowing as it's sent, and the channel.
+//! - **Two wheels** at the left, as a keyboard has: the bend, from the
+//!   middle, and the pressure, from the bottom (#439).
 //! - **A keyboard** of five octaves (C2 to C7), each held note lit, so a
 //!   chord shows as its shape. A note beyond either end lights an arrow.
-//! - **Four bars** for the CC lanes, each with its controller number, and
-//!   at the right the Clock's beat while the port sends clock (the Rig
-//!   sets that, for the port: #437).
+//! - **Four bars** for the CC lanes, each with what it sends (a CC, a
+//!   14-bit pair or an NRPN, chosen from its right-click menu), and at the
+//!   right the Clock's beat while the port sends clock (the Rig sets that,
+//!   for the port: #437).
 
 use eframe::egui::{self, Color32, Id, Pos2, Rect, Sense, Stroke, Vec2};
 use egui_node_graph2::NodeId;
 
 use crate::app::theme;
-use crate::link::midi::{ClockMode, PortStatus, MIDI, PORTS, PORT_LABELS};
+use crate::link::midi::{CcMode, ClockMode, PortStatus, MAX_14, MIDI, PORTS, PORT_LABELS};
 use crate::modules::midi_out::CC_LANES;
 use crate::modules::MidiOut;
 
 use super::display_frame::{self, PANEL};
-use super::{SynthGraph, SynthGraphState};
+use super::{SynthGraph, SynthGraphState, SynthResponse};
 
 /// The keyboard's lowest note, C2, and how many it shows: five octaves and
 /// the top C.
@@ -29,8 +33,42 @@ const KEYS: u8 = 61;
 /// How long a note's strike glows, in seconds.
 const FLASH: f64 = 0.2;
 
-/// Draws the face.
-pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &SynthGraphState, zoom: f32) {
+/// How long the port's budget counts as full after it last thinned, in seconds.
+const FULL_FOR: f64 = 0.5;
+
+/// How a lane sends, as its parameters say.
+struct Lane {
+    mode: CcMode,
+    number: u8,
+    nrpn: u16,
+}
+
+impl Lane {
+    fn read(graph: &SynthGraph, node_id: NodeId, lane: usize) -> Self {
+        let value = |name: String| display_frame::value_of(graph, node_id, &name).unwrap_or(0.0);
+        Self {
+            mode: CcMode::from_param(value(format!("CC Mode {}", lane + 1))),
+            number: value(format!("CC {} #", lane + 1)).round().clamp(0.0, 127.0) as u8,
+            nrpn: value(format!("NRPN {}", lane + 1)).round().clamp(0.0, MAX_14 as f32) as u16,
+        }
+    }
+
+    /// What it sends, short, for under its bar: "CC 74", "CC 1+33", "NRPN 1:20".
+    fn label(&self) -> String {
+        match self.mode {
+            CcMode::Bits7 => format!("CC {}", self.number),
+            CcMode::Bits14 => {
+                let number = self.number.min(31);
+                format!("CC {number}+{}", number + 32)
+            }
+            CcMode::Nrpn => format!("NRPN {}:{}", self.nrpn >> 7, self.nrpn & 0x7F),
+        }
+    }
+}
+
+/// Draws the face, and returns what a lane's menu asked for.
+pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_state: &mut SynthGraphState, zoom: f32) -> Vec<SynthResponse> {
+    let mut asked = Vec::new();
     let z = zoom;
     let port = (display_frame::value_of(graph, node_id, "Port").unwrap_or(0.0).round().max(0.0) as usize).min(PORTS - 1);
     let channel = display_frame::value_of(graph, node_id, "Channel").unwrap_or(0.0).round() as usize + 1;
@@ -44,7 +82,7 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
 
     let width = display_frame::knob_row_width(ui, CC_LANES, z);
     let accent = theme::module::OUTPUT;
-    let Some((rect, response, painter)) = display_frame::frame_of_height(ui, width, 76.0 * z, accent, z) else { return };
+    let Some((rect, response, painter)) = display_frame::frame_of_height(ui, width, 76.0 * z, accent, z) else { return asked };
     let small = egui::FontId::proportional(8.0 * z);
     let tiny = egui::FontId::proportional(6.5 * z);
     let purple = theme::signal::MIDI;
@@ -64,7 +102,7 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     let lamp_at = rect.left_top() + Vec2::new(7.0 * z, 6.5 * z);
     if status == Some(PortStatus::Sending) {
         // A flash as each note goes out
-        let flash = flash_of(ui, node_id, values[MidiOut::READOUT_NOTES_SENT] as u32, now);
+        let flash = flash_of(ui, Id::unique(("midi_out_flash", node_id)), values[MidiOut::READOUT_NOTES_SENT] as u32, now, FLASH);
         painter.circle_filled(lamp_at, (4.0 + 2.0 * flash) * z, lamp.gamma_multiply(0.12 + 0.3 * flash));
     }
     painter.circle_filled(lamp_at, 2.5 * z, lamp);
@@ -74,9 +112,11 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         (Some(name), Some(PortStatus::Failed)) => format!("{name} (in use)"),
         (Some(name), _) => found.clone().unwrap_or_else(|| name.clone()),
     };
+    // Room for the channel, and the program if there is one
+    let header_room = if display_frame::value_of(graph, node_id, "Program").unwrap_or(-1.0).round() >= 0.0 { 54.0 } else { 26.0 };
     let label_rect = Rect::from_min_max(
         lamp_at + Vec2::new(5.0 * z, -5.0 * z),
-        Pos2::new(rect.right() - 26.0 * z, lamp_at.y + 5.0 * z),
+        Pos2::new(rect.right() - header_room * z, lamp_at.y + 5.0 * z),
     );
     let picker = ui.interact(label_rect, Id::unique(("midi_out_device", node_id)), Sense::click());
     let text_color = if picker.hovered() && live {
@@ -89,6 +129,16 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     let galley = painter.layout_no_wrap(format!("{} · {name}", PORT_LABELS[port]), small.clone(), text_color);
     let clip = painter.with_clip_rect(label_rect.intersect(painter.clip_rect()));
     clip.galley(Pos2::new(label_rect.left(), lamp_at.y - galley.size().y / 2.0), galley, text_color);
+    // The program, if one is chosen, glowing as it goes; then the channel
+    let program = display_frame::value_of(graph, node_id, "Program").unwrap_or(-1.0).round();
+    if program >= 0.0 {
+        let sent = flash_of(ui, Id::unique(("midi_out_program", node_id)), values[MidiOut::READOUT_PROGRAMS_SENT] as u32, now, FLASH * 3.0);
+        let ink = theme::text::DISABLED.lerp_to_gamma(purple.lerp_to_gamma(theme::text::PRIMARY, 0.4), 0.45 + 0.55 * sent);
+        if sent > 0.0 {
+            crate::app::pace::animate(ui.ctx());
+        }
+        painter.text(rect.right_top() + Vec2::new(-28.0 * z, 2.0 * z), egui::Align2::RIGHT_TOP, format!("P{program:.0}"), small.clone(), ink);
+    }
     painter.text(
         rect.right_top() + Vec2::new(-4.0 * z, 2.0 * z),
         egui::Align2::RIGHT_TOP,
@@ -98,8 +148,43 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     );
     device_menu(ui, &picker, port, device.as_deref(), found.as_deref());
 
+    // --- The wheels: the bend from the middle, the pressure from the bottom ---
+    let wheels_top = rect.top() + 15.0 * z;
+    let wheels_bottom = rect.top() + 44.0 * z;
+    // As sent, while a cable is in: the readout's rest is no cable's
+    let bend = if display_frame::input_patched(graph, node_id, "Bend") { values[MidiOut::READOUT_BEND].max(-1.0) } else { -2.0 };
+    let pressure = if display_frame::input_patched(graph, node_id, "Pressure") { values[MidiOut::READOUT_PRESSURE].max(0.0) } else { -1.0 };
+    let wheel = |x: f32| Rect::from_min_max(Pos2::new(x, wheels_top), Pos2::new(x + 4.5 * z, wheels_bottom));
+    let (bend_wheel, pressure_wheel) = (wheel(rect.left() + 6.0 * z), wheel(rect.left() + 13.0 * z));
+    for (r, on) in [(bend_wheel, bend >= -1.0), (pressure_wheel, pressure >= 0.0)] {
+        painter.rect(r, 2.0 * z, theme::background::MAIN, Stroke::new(0.5 * z, if on { orange.gamma_multiply(0.5) } else { theme::background::GRID_MAJOR }), egui::StrokeKind::Middle);
+    }
+    let middle = bend_wheel.center().y;
+    painter.line_segment([Pos2::new(bend_wheel.left() + 0.8 * z, middle), Pos2::new(bend_wheel.right() - 0.8 * z, middle)], Stroke::new(0.5 * z, theme::background::GRID_MAJOR));
+    if bend >= -1.0 {
+        let to = middle - bend.clamp(-1.0, 1.0) * (bend_wheel.height() / 2.0 - 0.8 * z);
+        let fill = Rect::from_x_y_ranges(bend_wheel.shrink(0.8 * z).x_range(), middle.min(to)..=middle.max(to));
+        painter.rect_filled(fill.expand2(Vec2::new(0.0, 0.4 * z)), 1.2 * z, orange);
+    }
+    if pressure > 0.0 {
+        let inner = pressure_wheel.shrink(0.8 * z);
+        let fill = Rect::from_min_max(Pos2::new(inner.left(), inner.bottom() - inner.height() * pressure.min(1.0)), inner.right_bottom());
+        painter.rect_filled(fill, 1.2 * z, orange);
+    }
+    let wheels = bend_wheel.union(pressure_wheel).expand(1.5 * z);
+    let poly = values[MidiOut::READOUT_POLY] > 0.5;
+    ui.interact(wheels, Id::unique(("midi_out_wheels", node_id)), Sense::hover()).on_hover_text(format!(
+        "Bend {} · Pressure {}",
+        if bend >= -1.0 { format!("{bend:+.2}") } else { "unpatched".to_string() },
+        match (pressure >= 0.0, poly) {
+            (false, _) => "unpatched".to_string(),
+            (true, false) => format!("{pressure:.2}, the channel's"),
+            (true, true) => format!("up to {pressure:.2}, each note's own"),
+        }
+    ));
+
     // --- The keyboard: white keys across, black keys over them ---
-    let board = Rect::from_min_max(rect.left_top() + Vec2::new(9.0 * z, 15.0 * z), rect.right_top() + Vec2::new(-9.0 * z, 44.0 * z));
+    let board = Rect::from_min_max(rect.left_top() + Vec2::new(27.0 * z, 15.0 * z), rect.right_top() + Vec2::new(-9.0 * z, 44.0 * z));
     let whites = (0..KEYS).filter(|k| !is_black(LOWEST + k)).count() as f32;
     let key_w = board.width() / whites;
     let lit = |note: u8| MidiOut::note_in(&readout, note);
@@ -150,8 +235,13 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     for lane in 0..CC_LANES {
         let value = values[MidiOut::READOUT_CC + lane];
         let patched = value >= 0.0;
-        let number = display_frame::value_of(graph, node_id, ["CC 1 #", "CC 2 #", "CC 3 #", "CC 4 #"][lane]).unwrap_or(0.0).round();
+        let view = Lane::read(graph, node_id, lane);
         let slot = Rect::from_min_size(Pos2::new(row.left() + pitch * lane as f32 + 2.0 * z, row.top()), Vec2::new(pitch - 4.0 * z, 5.0 * z));
+        let column = Rect::from_min_max(slot.min - Vec2::splat(1.0 * z), Pos2::new(slot.right() + 1.0 * z, row.bottom()));
+        let lane_response = ui.interact(column, Id::unique(("midi_out_lane", node_id, lane)), Sense::click());
+        if lane_response.hovered() {
+            painter.rect_filled(column, 2.0 * z, Color32::from_white_alpha(6));
+        }
         painter.rect(slot, 2.0 * z, theme::background::MAIN, Stroke::new(0.5 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
         if patched {
             let fill = Rect::from_min_size(slot.min, Vec2::new(slot.width() * value / 127.0, slot.height())).shrink(0.8 * z);
@@ -162,10 +252,20 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         painter.text(
             Pos2::new(slot.center().x, slot.bottom() + 1.5 * z),
             egui::Align2::CENTER_TOP,
-            format!("CC {number:.0}"),
+            view.label(),
             tiny.clone(),
             if patched { orange } else { theme::text::DISABLED },
         );
+        let tip = match view.mode {
+            CcMode::Bits7 => format!("CC {} lane: sends {} wherever its cable moves", lane + 1, view.label()),
+            CcMode::Bits14 => format!("CC {} lane: sends {}, coarse then fine, 16,384 steps", lane + 1, view.label()),
+            CcMode::Nrpn => format!("CC {} lane: sends {} (MSB:LSB), with 14 bits of value", lane + 1, view.label()),
+        };
+        let lane_response = lane_response.on_hover_text(format!("{tip}\nRight-click for 7-bit, 14-bit or NRPN"));
+        let menu = crate::widgets::menu::context_menu(&lane_response, |ui| lane_menu(ui, node_id, lane, &view, &mut asked));
+        if menu.is_some() {
+            user_state.widget_context_menu_open = true;
+        }
     }
 
     // --- The clock: four beat lamps, lit in turn while the port sends it ---
@@ -192,6 +292,13 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     );
 
     let dropped = values[MidiOut::READOUT_DROPPED] > 0.0;
+    // The port's budget full: its CC streams thinning (#439)
+    let thinned = MIDI.traffic(port).thinned;
+    let full = live && MIDI.budget(port) > 0 && since(ui, Id::unique(("midi_out_thinned", port)), thinned, now) < FULL_FOR;
+    if full {
+        painter.circle_stroke(lamp_at, 4.2 * z, Stroke::new(0.8 * z, amber));
+        crate::app::pace::animate(ui.ctx());
+    }
     response.on_hover_text(match status {
         // The browser holds the sound, and so MIDI Out, until a click
         None => "MIDI Out sends once the sound starts".to_string(),
@@ -201,8 +308,13 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         Some(PortStatus::Missing) => "The device isn't plugged in. Notes go out again once it is".to_string(),
         Some(PortStatus::Failed) => "The device wouldn't open. Another app may be using it: close that, and Soba tries again".to_string(),
         _ if dropped => "Some messages were lost: the patch sent more than the device could take".to_string(),
+        _ if full => format!(
+            "Port {} is sending as fast as its budget allows ({} a second, in the Rig): CC streams are thinned to their newest values, and notes and clock keep their time",
+            PORT_LABELS[port],
+            MIDI.budget(port)
+        ),
         _ => format!(
-            "Playing port {} on channel {channel}: gates and pitch as notes, the CC lanes as controllers{}",
+            "Playing port {} on channel {channel}: gates and pitch as notes, bend and pressure, the CC lanes as controllers{}",
             PORT_LABELS[port],
             match clock {
                 ClockMode::Off => ". The port sends no clock: the Rig (Ctrl+Shift+H) turns it on",
@@ -211,6 +323,45 @@ pub fn midi_out_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
             }
         ),
     });
+    asked
+}
+
+/// A lane's right-click menu: how it sends, and which NRPN.
+fn lane_menu(ui: &mut egui::Ui, node_id: NodeId, lane: usize, view: &Lane, asked: &mut Vec<SynthResponse>) {
+    let n = lane + 1;
+    let set = |asked: &mut Vec<SynthResponse>, param_name: String, value: f32| asked.push(SynthResponse::ParameterChanged { node_id, param_name, value });
+    ui.label(egui::RichText::new(format!("CC {n} lane · {}", view.label())).small().weak());
+    let tips = [
+        "One CC, 0 to 127: what most gear listens for",
+        "Two CCs, the number and 32 above it, for 16,384 steps: for the controllers 0 to 31",
+        "A Non-Registered Parameter, chosen by number, with 14 bits of value",
+    ];
+    for (index, mode) in CcMode::ALL.into_iter().enumerate() {
+        if ui.selectable_label(view.mode == mode, CcMode::LABELS[index]).on_hover_text(tips[index]).clicked() {
+            set(asked, format!("CC Mode {n}"), index as f32);
+        }
+    }
+    match view.mode {
+        CcMode::Bits14 if view.number > 31 => {
+            ui.separator();
+            ui.label(egui::RichText::new(format!("CC {} has no fine half: this sends CC 31 and 63. Choose 0 to 31 on its knob", view.number)).small().color(theme::accent::WARNING));
+        }
+        CcMode::Nrpn => {
+            ui.separator();
+            let (mut msb, mut lsb) = ((view.nrpn >> 7) as u32, (view.nrpn & 0x7F) as u32);
+            let mut changed = false;
+            ui.horizontal(|ui| {
+                ui.label("NRPN");
+                changed |= ui.add(egui::DragValue::new(&mut msb).range(0..=127).prefix("MSB ")).changed();
+                changed |= ui.add(egui::DragValue::new(&mut lsb).range(0..=127).prefix("LSB ")).changed();
+            });
+            if changed {
+                set(asked, format!("NRPN {n}"), (msb * 128 + lsb) as f32);
+            }
+            ui.label(egui::RichText::new(format!("Number {} · as the device's manual lists it", msb * 128 + lsb)).small().weak());
+        }
+        _ => {}
+    }
 }
 
 /// The menu a click on the device's name opens: every output found, or none.
@@ -268,16 +419,19 @@ fn is_black(note: u8) -> bool {
     matches!(note % 12, 1 | 3 | 6 | 8 | 10)
 }
 
-/// How bright the lamp's flash is, 0 to 1: full when the count of notes
-/// sent has moved since the last frame, fading over [`FLASH`].
-fn flash_of(ui: &egui::Ui, node_id: NodeId, count: u32, now: f64) -> f32 {
-    let id = Id::unique(("midi_out_flash", node_id));
+/// How bright a flash is, 0 to 1: full when `count` has moved since the
+/// last frame, fading over `length` seconds.
+fn flash_of(ui: &egui::Ui, id: Id, count: u32, now: f64, length: f64) -> f32 {
+    (1.0 - since(ui, id, count, now) / length).clamp(0.0, 1.0) as f32
+}
+
+/// Seconds since `count` last moved, as the frames have seen it: none
+/// passed while it hasn't moved since the face first looked.
+fn since(ui: &egui::Ui, id: Id, count: u32, now: f64) -> f64 {
     let (seen, at) = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(id, || (count, f64::NEG_INFINITY)));
-    let at = if seen != count {
+    if seen != count {
         ui.ctx().data_mut(|d| d.insert_temp(id, (count, now)));
-        now
-    } else {
-        at
-    };
-    (1.0 - (now - at) / FLASH).clamp(0.0, 1.0) as f32
+        return 0.0;
+    }
+    now - at
 }

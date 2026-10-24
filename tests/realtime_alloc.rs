@@ -28,7 +28,7 @@ use soba::engine::{
 };
 use soba::modules::looper::{LoopState, Looper};
 use soba::dsp::primitives::{Markers, ONSETS};
-use soba::modules::{Chopper, Cloud, Controls, Mixer, Pads, Resonator};
+use soba::modules::{Chopper, Cloud, Controls, MidiOut, Mixer, Pads, Resonator};
 
 struct CountingAllocator;
 
@@ -210,6 +210,26 @@ fn audio_callback_never_allocates() {
         to_node: midi_out,
         to_port: port("output.midi", "CC 1"),
     });
+    // ...and the LFO as the bend, the pressure, a 14-bit CC and an NRPN,
+    // with a program, a bank and a bend range to send (#439)
+    for input in ["Bend", "Pressure", "CC 2", "CC 3"] {
+        ui.send_command(EngineCommand::Connect {
+            from_node: node_of(&nodes, "mod.lfo"),
+            from_port: 0,
+            to_node: midi_out,
+            to_port: port("output.midi", input),
+        });
+    }
+    for (param_index, value) in [
+        (MidiOut::PARAM_CC_MODE + 1, 1.0),
+        (MidiOut::PARAM_CC_MODE + 2, 2.0),
+        (MidiOut::PARAM_NRPN + 2, 148.0),
+        (MidiOut::PARAM_PROGRAM, 4.0),
+        (MidiOut::PARAM_BANK_MSB, 87.0),
+        (MidiOut::PARAM_BEND_RANGE, 12.0),
+    ] {
+        ui.send_command(EngineCommand::SetParameter { node_id: midi_out, param_index, value });
+    }
 
     // A Controls (#427) hearing the mod wheel, the bend and the pressure
     // played below, a fader on CC 74 swinging -1 to 1, and an endless
