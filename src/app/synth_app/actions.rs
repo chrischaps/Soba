@@ -150,7 +150,7 @@ const HANDS_SHEET: &str = "The controller's encoders and faders follow the selec
 /// What the Keyboard Shortcuts sheet says the Hands overlay's key does.
 const OVERLAY_SHEET: &str = "Show or hide the sketch of the controller, saying what each control does";
 /// What the Keyboard Shortcuts sheet says the Rig panel's key does.
-const RIG_SHEET: &str = "The Rig: every MIDI input and MIDI Out port, and the device each plays";
+const RIG_SHEET: &str = "The Rig: every MIDI input and MIDI Out port, the device each plays, and the thru routes between them";
 
 /// The app's own shortcuts, taken in this order: where one chord holds
 /// another (Ctrl+Shift+S holds Ctrl+S), the longer comes first. Editing's
