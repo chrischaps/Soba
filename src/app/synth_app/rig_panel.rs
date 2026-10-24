@@ -9,6 +9,8 @@
 //!   sends, its device to choose, what it sends of the Clock (#437), its
 //!   offset, how it's doing, the last message sent (and a dot on each beat
 //!   while clock goes out), and the MIDI Outs that play it.
+//! - **Thru** (#446), a row for each route from a MIDI In straight to a
+//!   port, past the patch: see [`thru`].
 //!
 //! Both are this computer's settings, not the patch's. A device the system
 //! renumbers after a reboot ("2- Digitakt", now "3- Digitakt") is found
@@ -22,6 +24,8 @@ use crate::engine::MidiEvent;
 use crate::graph::midi_log_display::format_midi_event;
 use crate::link::midi::{ClockMode, PortStatus, Traffic, MIDI, OFFSET_RANGE, PORTS, PORT_LABELS};
 use crate::persistence::graph_io::clocked_ports;
+
+mod thru;
 
 /// The panel: open or not.
 #[derive(Debug, Default)]
@@ -108,6 +112,7 @@ impl SynthApp {
         let width: f32 = COLUMNS.iter().sum::<f32>() + GAP * (COLUMNS.len() - 1) as f32;
         let earliest = MIDI.earliest();
         let now = ctx.input(|i| i.time);
+        let routes = self.follow_thru_routes();
         egui::Window::new("The Rig")
             .id(egui::Id::unique("rig_panel"))
             .title_bar(false)
@@ -127,7 +132,7 @@ impl SynthApp {
                     return;
                 }
                 // The eight ports always show; the inputs scroll in what's left
-                let room = (editor.height() - 300.0 - PORTS as f32 * (ROW_HEIGHT + 4.0)).max(3.0 * ROW_HEIGHT);
+                let room = (editor.height() - 300.0 - PORTS as f32 * (ROW_HEIGHT + 4.0) - thru::thru_height(routes.len())).max(3.0 * ROW_HEIGHT);
 
                 ui.add_space(10.0);
                 section(ui, "MIDI In", "what plays Soba");
@@ -153,6 +158,9 @@ impl SynthApp {
                 for row in &outs {
                     out_row(ui, row, &devices, earliest, now, &mut edits);
                 }
+
+                ui.add_space(12.0);
+                thru::thru_section(ui, &ins, &outs, &routes, now, &mut edits);
 
                 ui.add_space(8.0);
                 footer(ui, &mut edits);

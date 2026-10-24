@@ -173,6 +173,18 @@ impl Message {
         Self { bytes: [a, b, c], len: 3 }
     }
 
+    /// The message in `bytes` as it came in, if it's one to three bytes:
+    /// for passing MIDI through (#446).
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        let len = bytes.len();
+        if !(1..=3).contains(&len) {
+            return None;
+        }
+        let mut message = Self { bytes: [0; 3], len: len as u8 };
+        message.bytes[..len].copy_from_slice(bytes);
+        Some(message)
+    }
+
     pub fn bytes(&self) -> &[u8] {
         &self.bytes[..self.len as usize]
     }

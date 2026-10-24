@@ -22,6 +22,7 @@ use std::time::{Duration, Instant};
 
 use super::midi::MIDI;
 use super::midi_sender::{raise_priority, Midir, MidiSender};
+use super::midi_thru::THRU;
 use super::osc::{Arg, BundleWriter};
 use super::{LinkBus, LinkStatus, SlotReading, BUS, CV_LANES, GATE_LANES, PORTS, VERSION};
 
@@ -42,25 +43,29 @@ const REFUSED_FOR: Duration = Duration::from_millis(1500);
 
 /// Starts the link's sender thread, once however often it's called: OSC
 /// to Seoul from [`BUS`], and MIDI to devices from the MIDI bus. One thread
-/// carries both protocols, each waking it when it next has work.
+/// carries both protocols, each waking it when it next has work. A MIDI In
+/// passing a thru route (#446) wakes it at once, and is sent first.
 pub fn start() {
     static STARTED: Once = Once::new();
     STARTED.call_once(|| {
         let mut osc = Sender::new(&BUS, PORTS);
-        let mut midi = MidiSender::new(&MIDI, Box::new(Midir));
+        let mut midi = MidiSender::new(&MIDI, Box::new(Midir)).with_thru(&THRU);
         let spawned = std::thread::Builder::new().name("soba-link".into()).spawn(move || {
             raise_priority();
+            THRU.set_waker(std::thread::current());
             let mut osc_due = Instant::now();
             let mut midi_due = osc_due;
             loop {
                 let now = Instant::now();
+                midi.forward(now);
                 if now >= osc_due {
                     osc_due = osc.poll(now, osc_due);
                 }
                 if now >= midi_due {
                     midi_due = midi.tick(now);
                 }
-                std::thread::sleep(osc_due.min(midi_due).saturating_duration_since(Instant::now()));
+                // Until the next is due, or a thru route has something to pass
+                std::thread::park_timeout(osc_due.min(midi_due).saturating_duration_since(Instant::now()));
             }
         });
         if let Err(error) = spawned {

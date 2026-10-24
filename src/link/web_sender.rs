@@ -22,6 +22,7 @@ use web_time::Instant;
 
 use super::midi::MIDI;
 use super::midi_sender::{Connection, MidiSender, Outputs};
+use super::midi_thru::THRU;
 use crate::engine::web_midi;
 
 /// How far ahead of its moment a message is sent. Longer than a slow
@@ -78,7 +79,7 @@ pub fn start() {
     if SENDER.with_borrow(|s| s.is_some()) {
         return;
     }
-    SENDER.set(Some(MidiSender::new(&MIDI, Box::new(WebOutputs)).ahead(AHEAD)));
+    SENDER.set(Some(MidiSender::new(&MIDI, Box::new(WebOutputs)).ahead(AHEAD).with_thru(&THRU)));
     TIMER.set(Some(Closure::new(tick)));
     tick();
 }
@@ -92,6 +93,19 @@ fn tick() {
     TIMER.with_borrow(|timer| {
         if let (Some(window), Some(timer)) = (web_sys::window(), timer) {
             let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(timer.as_ref().unchecked_ref(), wait);
+        }
+    });
+}
+
+/// Sends what a MIDI In just passed down a thru route (#446), from the
+/// Web MIDI callback that heard it: there's no thread to wake. The page
+/// has one thread, so the sender is never mid-tick when it's called.
+pub fn forward_now() {
+    SENDER.with(|sender| {
+        if let Ok(mut sender) = sender.try_borrow_mut() {
+            if let Some(sender) = sender.as_mut() {
+                sender.forward(Instant::now());
+            }
         }
     });
 }

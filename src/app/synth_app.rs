@@ -119,6 +119,8 @@ const KNOB_STYLE_KEY: &str = "knob_style";
 const MIDI_OUT_PORTS_KEY: &str = "midi_out_ports";
 /// What each MIDI Out port sends of the clock, and its offset, a line per port (#437).
 const MIDI_OUT_CLOCK_KEY: &str = "midi_out_clock";
+/// The thru routes, from a MIDI In to a MIDI Out port, a line each (#446).
+const MIDI_THRU_KEY: &str = "midi_thru";
 /// The name of the MIDI In device to open again (#425).
 const MIDI_IN_DEVICE_KEY: &str = "midi_in_device";
 /// Where the audio system chosen under Output is remembered.
@@ -729,6 +731,7 @@ impl SynthApp {
     /// nothing here affects what they play.
     fn process_midi_events(&mut self, now: f64) {
         self.follow_midi_listening();
+        self.follow_thru_routes();
         self.follow_hands(now);
         // The pads' notes, which the pianos and their ears leave be (#428)
         let claims = crate::graph::pads_claims(&self.graph_state.graph, |name| self.midi.slot_of(name));
@@ -2334,6 +2337,9 @@ impl SynthApp {
         if let Some(clock) = storage.and_then(|s| s.get_string(MIDI_OUT_CLOCK_KEY)) {
             crate::link::midi::MIDI.restore_clock(&clock);
         }
+        if let Some(routes) = storage.and_then(|s| s.get_string(MIDI_THRU_KEY)) {
+            crate::link::midi_thru::THRU.restore(&routes);
+        }
         // A DAW supplies the plugin's MIDI
         if self.hosted.is_none() {
             self.midi.remember(storage.and_then(|s| s.get_string(MIDI_IN_DEVICE_KEY)).map_or_else(Vec::new, |s| crate::app::midi_session::remembered_from(&s)));
@@ -2926,6 +2932,7 @@ impl eframe::App for SynthApp {
         storage.set_string(KNOB_STYLE_KEY, self.user_state.knob_style.name().to_string());
         storage.set_string(MIDI_OUT_PORTS_KEY, crate::link::midi::MIDI.setting());
         storage.set_string(MIDI_OUT_CLOCK_KEY, crate::link::midi::MIDI.clock_setting());
+        storage.set_string(MIDI_THRU_KEY, crate::link::midi_thru::THRU.setting());
         storage.set_string(MIDI_IN_DEVICE_KEY, self.midi.remembered_setting());
         if let Ok(engine) = &self.audio.engine {
             storage.set_string(AUDIO_SYSTEM_KEY, engine.audio_system().key().to_string());

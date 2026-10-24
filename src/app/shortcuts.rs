@@ -95,7 +95,7 @@ pub const SHEET: &[Group] = &[
             ("`Ctrl + L`", "Map Mode: click controls one after another to map them to MIDI"),
             ("`Ctrl + Shift + L`", "The controller's encoders and faders follow the selection, or let go"),
             ("`Ctrl + H`", "Show or hide the sketch of the controller, saying what each control does"),
-            ("`Ctrl + Shift + H`", "The Rig: every MIDI input and MIDI Out port, and the device each plays"),
+            ("`Ctrl + Shift + H`", "The Rig: every MIDI input and MIDI Out port, the device each plays, and the thru routes between them"),
             ("`Alt` over a cable", "Hear what the cable carries"),
         ],
     },

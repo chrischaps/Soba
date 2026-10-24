@@ -41,7 +41,7 @@ A patch doesn't name a device. It names a **port**, A to H, and this computer re
 
 Click the device's name on the face to choose. The list shows every MIDI output this computer has, and it updates as you plug devices in. In the browser the menu offers **🎹 Connect MIDI** first, until you've allowed it. A port's device stays chosen while it's unplugged and plays again once it's back, even if the system has renumbered it (`2- Digitakt` is now `3- Digitakt`).
 
-To see all eight ports at once, open [the Rig](../../getting-started/interface-overview.md#the-rig) (`Ctrl + Shift + H`, or **The Rig…** in the **MIDI In** menu). It shows each port's device, its clock and offset, how the port is doing, and the last message it sent. It lists the MIDI inputs too.
+To see all eight ports at once, open [the Rig](../../getting-started/interface-overview.md#the-rig) (`Ctrl + Shift + H`, or **The Rig…** in the **MIDI In** menu). It shows each port's device, its clock and offset, how the port is doing, and the last message it sent. It lists the MIDI inputs too, and its **Thru** routes pass an input straight to a port with no MIDI Out at all: a keyboard playing a synth through Soba, with no cables in the patch.
 
 On Windows only one app can open a MIDI port at a time. If the lamp is red, close whatever else has the device (a DAW, or the maker's editor app), and MIDI Out tries again within a couple of seconds. To play a DAW on the same computer, use a virtual MIDI port such as [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html): MIDI Out plays the port, and the DAW listens to it.
 

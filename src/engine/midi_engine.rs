@@ -15,6 +15,10 @@
 //! Up to [`MIDI_INPUTS`] devices are open at once (#435), each in a slot of
 //! its own that stamps its events, so a module set to one device hears it
 //! and not the others.
+//!
+//! Each message also runs down the thru routes from its device (#446, see
+//! [`crate::link::midi_thru`]) before anything else, straight to the MIDI
+//! Out sender: what passes skips the audio thread and its block.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -27,6 +31,7 @@ use midir::MidiInputConnection;
 use rtrb::{Consumer, Producer, RingBuffer};
 
 use crate::dsp::{MIDI_INPUTS, SOBA_PORT};
+use crate::link::midi_thru::{ThruInput, THRU};
 
 /// Default buffer size for MIDI events.
 pub const DEFAULT_MIDI_BUFFER_SIZE: usize = 512;
@@ -336,6 +341,8 @@ struct MidiSenders {
     /// Wakes the UI for what it's sent, which it reads only when it draws
     /// and it doesn't draw while nothing moves (#307)
     waker: Option<eframe::egui::Context>,
+    /// The thru routes' way to the MIDI Out sender, while one runs (#446).
+    thru: Option<ThruInput>,
 }
 
 impl MidiSenders {
@@ -469,7 +476,7 @@ impl MidiEngine {
         let engine = Self {
             devices,
             inputs: Default::default(),
-            senders: Arc::new(Mutex::new(MidiSenders { audio: audio_producer, ui: ui_producer, waker: None })),
+            senders: Arc::new(Mutex::new(MidiSenders { audio: audio_producer, ui: ui_producer, waker: None, thru: THRU.open_input() })),
             state,
             scan_running,
             scan_thread,
@@ -542,9 +549,13 @@ impl MidiEngine {
             // Stamped on arrival rather than with the device's timestamp,
             // whose clock starts at connection and differs per platform;
             // the audio callback reads this same clock
-            if let Some(event) = MidiEvent::from_bytes(data) {
-                let stamped = TimestampedMidiEvent::heard(port, event);
-                if let Ok(mut senders) = senders.lock() {
+            let stamped = MidiEvent::from_bytes(data).map(|event| TimestampedMidiEvent::heard(port, event));
+            if let Ok(mut senders) = senders.lock() {
+                // Thru first: it's for playing, and waits for nothing
+                if let Some(thru) = &mut senders.thru {
+                    thru.forward(port, data);
+                }
+                if let Some(stamped) = stamped {
                     senders.send(stamped);
                 }
             }
@@ -608,6 +619,10 @@ impl MidiEngine {
         // Close the connection - this drops it
         input.connection.close();
         if let Ok(mut senders) = self.senders.lock() {
+            // Its routes stop, so a device opened in its slot isn't passed down them
+            if let Some(thru) = &senders.thru {
+                thru.forget(slot);
+            }
             for channel in 0..16 {
                 let all_off = MidiEvent::ControlChange { channel, controller: ALL_NOTES_OFF, value: 0 };
                 let _ = senders.audio.push(TimestampedMidiEvent::heard(slot, all_off));

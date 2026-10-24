@@ -354,8 +354,17 @@ With a room of hardware plugged in, choose **The Rig…** at the foot of the **M
   - a dot that lights on each beat while clock goes out;
   - the last message sent;
   - how many MIDI Outs play the port.
+- **Thru** has a row for each route. A route passes what one MIDI In plays straight to one port, past the patch, so with everything plugged into the computer, the computer is your patch bay: the Fantom's keys play the MicroFreak, or the Tracker drives the Volcas, while the patch does something else. Click **+ Route** to add one. Each row has:
+  - a lamp that flashes as the route passes something, and a tick to set the route aside without losing it;
+  - **From**, the MIDI In it hears, and **To**, the port it plays. The input must be open (ticked under MIDI In) for Soba to hear anything to pass;
+  - **Channel**, the channel it passes (**All**, or one), and **Becomes**, the channel they go out on (**Same**, or all moved to one). Pass channel 1 and make it channel 10 to play a drum machine from any keyboard;
+  - what it passes: **Notes**, **CC**, **Bend** (pitch bend and pressure), **Clock** (clock, Start, Stop and Song Position) and **Prog** (program changes). Click one to turn it on or off. A new route passes everything but clock, since a keyboard's clock and the port's own Clock together would run the device at double time;
+  - what it's doing: **Thru**, **Open input** (click to open it), **No input**, **No device**, **Unplugged** or **Loop**;
+  - a ✕ to take it away. Notes it was holding are let go.
 
-Ports, with their clocks and offsets, and inputs are settings of this computer, not of the patch. **🔄 Refresh** looks for devices again at once. Otherwise Soba looks every couple of seconds.
+  A route goes out the moment it comes in, ahead of anything else on the thread that sends MIDI, without waiting for the audio or for the port's **Offset**: it's for playing, and adds well under a millisecond. A route that would play the device it comes from is refused and says **Loop**, since a device that echoes what it hears would feed back forever; the **To** menu won't offer that port. The patch still hears an open input: a Note In set to any device plays along, so set its **Device** to another one to keep them apart. Up to sixteen routes.
+
+Ports, with their clocks and offsets, routes, and inputs are settings of this computer, not of the patch. **🔄 Refresh** looks for devices again at once. Otherwise Soba looks every couple of seconds.
 
 **After a reboot.** Windows numbers devices that share a name in the order they were plugged in (`2- Digitakt`), and numbers a device's extra ports (`MIDIIN3 (FANTOM-06)`). Linux adds the device's client and port numbers to its name. Those numbers can change when you reboot or plug things in a different order. Soba finds a device by its exact name first, then by its name without those numbers, so every port and input finds its device again. A module whose **Device** is set to it, or a mapping learned from it, still hears it. If two devices are left that both fit, Soba uses neither, rather than guess. Hover a port's device to see whether it was found under a new number.
 
@@ -508,7 +517,7 @@ On a Mac, hold `⌘ Command` where these say `Ctrl`, and `Option` for `Alt`. The
 | `Ctrl + L` | Map Mode: click controls one after another to map them to MIDI |
 | `Ctrl + Shift + L` | The controller's encoders and faders follow the selection, or let go |
 | `Ctrl + H` | Show or hide the sketch of the controller, saying what each control does |
-| `Ctrl + Shift + H` | The Rig: every MIDI input and MIDI Out port, and the device each plays |
+| `Ctrl + Shift + H` | The Rig: every MIDI input and MIDI Out port, the device each plays, and the thru routes between them |
 | `Alt` over a cable | Hear what the cable carries |
 
 The letter keys play notes: see [The computer keyboard](#the-computer-keyboard).

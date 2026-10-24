@@ -39,6 +39,10 @@
 //! it's due, which Web MIDI keeps to (`web_sender`). Notes it lets go are
 //! stamped after the last message it scheduled on their port, so a Note On
 //! already on its way can't land after the All Notes Off.
+//!
+//! **Thru** (#446). What a MIDI In passes down a route
+//! ([`midi_thru`](super::midi_thru)) wakes the thread and goes out at once,
+//! without the output's delay or the port's offset ([`MidiSender::forward`]).
 
 use std::collections::VecDeque;
 use std::time::Duration;
@@ -48,6 +52,8 @@ use web_time::Instant;
 
 use super::midi::{status, ClockMode, Message, MidiBus, Outgoing, PortStatus, Traffic, ALL_NOTES_OFF, PORTS};
 use crate::engine::device_names;
+
+mod thru;
 
 /// How often messages are looked at while a MIDI Out runs. MIDI clock ticks
 /// every 20 ms at 125 BPM, so a millisecond keeps a following DAW steady.
@@ -129,6 +135,8 @@ pub struct MidiSender {
     scanned_at: Option<Instant>,
     /// How far ahead of its moment a message is sent: none on the desktop.
     ahead: Duration,
+    /// What MIDI Ins pass straight through (#446).
+    thru: thru::Thru,
 }
 
 /// One port's device, as opened.
@@ -283,7 +291,7 @@ impl MidiSender {
     /// A sender for `bus`, playing to `outputs`. The bus hands out rings from now on.
     pub fn new(bus: &'static MidiBus, outputs: Box<dyn Outputs>) -> Self {
         bus.start_draining();
-        Self { bus, outputs, streams: Vec::new(), clock: None, ports: Default::default(), devices: Vec::new(), scanned_at: None, ahead: Duration::ZERO }
+        Self { bus, outputs, streams: Vec::new(), clock: None, ports: Default::default(), devices: Vec::new(), scanned_at: None, ahead: Duration::ZERO, thru: Default::default() }
     }
 
     /// Sends each message up to `ahead` before it's due, stamped with when
@@ -308,6 +316,7 @@ impl MidiSender {
         self.follow_choices();
         self.find_devices();
         self.follow_clock_modes(now);
+        self.forward(now);
 
         let latency = self.bus.latency();
         let offsets = self.bus.offsets();
@@ -388,6 +397,7 @@ impl MidiSender {
             for stream in self.streams.iter_mut().filter(|s| s.port == index) {
                 Self::release(&mut self.ports[index], &mut self.outputs, &self.devices, &mut stream.held, now);
             }
+            self.release_thru(index, now);
             let port = &mut self.ports[index];
             if std::mem::take(&mut port.transport_on) {
                 // The device it leaves stops; the new one comes in on a sixteenth
@@ -552,7 +562,7 @@ impl MidiSender {
         let clocked = self.clock.as_ref().is_some_and(|clock| clock.stream.last_block.is_some());
         for (index, port) in self.ports.iter_mut().enumerate() {
             // A port with no MIDI Out still sends the clock
-            let used = self.streams.iter().any(|s| s.port == index && s.last_block.is_some()) || (clocked && port.mode != ClockMode::Off);
+            let used = self.streams.iter().any(|s| s.port == index && s.last_block.is_some()) || (clocked && port.mode != ClockMode::Off) || self.thru.uses(index);
             self.bus.set_traffic(index, port.traffic);
             let status = if !used {
                 PortStatus::Idle
@@ -619,7 +629,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     /// What a test's outputs were sent: (device, bytes, when).
-    type Log = Arc<Mutex<Vec<(String, Vec<u8>, Instant)>>>;
+    pub(super) type Log = Arc<Mutex<Vec<(String, Vec<u8>, Instant)>>>;
 
     struct Recorder {
         devices: Vec<String>,
@@ -654,7 +664,7 @@ mod tests {
         }
     }
 
-    fn setup(refuse: bool) -> (&'static MidiBus, MidiSender, Log) {
+    pub(super) fn setup(refuse: bool) -> (&'static MidiBus, MidiSender, Log) {
         let bus: &'static MidiBus = Box::leak(Box::new(MidiBus::new()));
         let log = Log::default();
         let outputs = Recorder { devices: vec!["Synth".into(), "DAW".into()], log: log.clone(), refuse };
@@ -895,7 +905,7 @@ mod tests {
     }
 
     /// What `device` was sent: its bytes.
-    fn sent_to(log: &Log, device: &str) -> Vec<Vec<u8>> {
+    pub(super) fn sent_to(log: &Log, device: &str) -> Vec<Vec<u8>> {
         log.lock().unwrap().iter().filter(|(d, _, _)| d == device).map(|(_, bytes, _)| bytes.clone()).collect()
     }
 
