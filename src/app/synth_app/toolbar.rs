@@ -395,7 +395,7 @@ impl SynthApp {
                 }
                 ui.label(RichText::new("MIDI In").color(theme::text::SECONDARY));
                 ui.add_space(8.0);
-                actions.extend(midi_in_menu(ui, &self.midi));
+                actions.extend(midi_in_menu(ui, &self.midi, self.map_mode_on(), self.controller_map.open));
             }
             Err(e) => {
                 bar.group_break(ui);
@@ -602,7 +602,7 @@ fn input_menu(ui: &mut egui::Ui, audio: &AudioDevices) -> Vec<AppAction> {
 }
 
 /// The MIDI In selector: the device that plays Note In modules and MIDI Learn.
-fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession) -> Vec<AppAction> {
+fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession, map_mode: bool, controller_map: bool) -> Vec<AppAction> {
     let mut actions = Vec::new();
     // Get current MIDI device name for display
     let current_midi = midi.selected_device()
@@ -651,6 +651,19 @@ fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession) -> Vec<AppAction> {
             ui.separator();
             if ui.button("🔄 Refresh").clicked() {
                 actions.push(AppAction::RefreshMidiDevices);
+            }
+
+            // Mapping a controller, a control at a time, and the map of it (#426)
+            ui.separator();
+            let keys = shortcuts::keys(ui.ctx(), "Ctrl+L");
+            let item = egui::Button::selectable(map_mode, "Map Mode").shortcut_text(keys);
+            let tip = "Click a control, then move a knob or fader or hit a pad on your controller to map it; then the next. Esc leaves";
+            if ui.add(item).on_hover_text(tip).clicked() {
+                actions.push(AppAction::ToggleMapMode);
+            }
+            let item = egui::Button::selectable(controller_map, "Controller Map…");
+            if ui.add(item).on_hover_text("Every MIDI mapping in the patch: its range, hardware, pickup and invert").clicked() {
+                actions.push(AppAction::ToggleControllerMap);
             }
         });
     actions

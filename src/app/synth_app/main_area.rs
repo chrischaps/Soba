@@ -165,6 +165,7 @@ impl SynthApp {
             Vec::default(),
         );
         ui.set_clip_rect(view_clip);
+        crate::graph::map_mode::paint_edge(ui.painter(), editor_rect, &self.user_state);
         let dt = ctx.input(|i| i.stable_dt).min(0.1);
         self.user_state.cable_spotlight.end_frame(graph_response.hovered_cable, dt);
         self.tend_probe(ctx, graph_response.hovered_cable);

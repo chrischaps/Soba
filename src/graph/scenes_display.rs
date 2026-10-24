@@ -155,8 +155,31 @@ pub fn scenes_display(
             Some(mapping) => tip.push_str(&format!("\nMIDI {} recalls it. Right-click to change", mapping.text())),
             None => tip.push_str("\nRight-click to recall it from a MIDI pad"),
         }
+        let learn = engine_id.map(|eid| SynthResponse::MidiLearnStart {
+            engine_node_id: eid,
+            param_index: 0,
+            param_name: format!("Scene {letter}"),
+            min_value: 0.0,
+            max_value: 1.0,
+            control: MidiControl::Button,
+            scene: Some(slot as u8),
+            into: None,
+        });
+        // In Map Mode a click maps the pad instead of recalling it (#426)
+        let outline = super::map_mode::Outline::around(pad, z);
+        let caught = learn.as_ref().and_then(|learn| super::map_mode::catch(ui, pad, outline, learn, user_state));
+        let in_map_mode = caught.is_some();
+        let response = match caught {
+            Some(caught) => {
+                if let Some(learn) = caught.learn {
+                    clicked = Some(learn);
+                }
+                caught.response
+            }
+            None => response,
+        };
         let response = response.on_hover_text(tip);
-        if response.clicked() {
+        if response.clicked() && !in_map_mode {
             let modifiers = ui.input(|i| i.modifiers);
             clicked = Some(match (scene.is_some(), modifiers.alt, modifiers.shift) {
                 (true, true, _) => SynthResponse::Scene { node_id, slot, action: SceneAction::Clear },
@@ -166,7 +189,7 @@ pub fn scenes_display(
             });
         }
         let menu = crate::widgets::menu::context_menu(&response, |ui| {
-            let Some(eid) = engine_id else { return };
+            let Some(learn) = learn else { return };
             if learning {
                 if ui.button("Cancel MIDI Learn").clicked() {
                     clicked = Some(SynthResponse::MidiLearnCancel);
@@ -174,16 +197,6 @@ pub fn scenes_display(
                 }
                 return;
             }
-            let learn = SynthResponse::MidiLearnStart {
-                engine_node_id: eid,
-                param_index: 0,
-                param_name: format!("Scene {letter}"),
-                min_value: 0.0,
-                max_value: 1.0,
-                control: MidiControl::Button,
-                scene: Some(slot as u8),
-                into: None,
-            };
             if let Some(chosen) = super::node_data::midi_items(ui, mapping.as_ref(), learn) {
                 clicked = Some(chosen);
             }

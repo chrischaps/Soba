@@ -54,6 +54,10 @@ pub(super) enum AppAction {
     RefreshMidiDevices,
     ConnectMidi(usize),
     DisconnectMidi,
+    /// Turn Map Mode on or off: a click on a control maps it (#426).
+    ToggleMapMode,
+    /// Open or close the Controller Map.
+    ToggleControllerMap,
     // The browser has no updater
     #[cfg(not(target_arch = "wasm32"))]
     CheckUpdates,
@@ -127,6 +131,9 @@ const fn bind(chord: Chord, listens: Listens, action: AppAction, sheet: &'static
     Binding { chord, listens, action, sheet }
 }
 
+/// What the Keyboard Shortcuts sheet says Map Mode's key does.
+const MAP_MODE_SHEET: &str = "Map Mode: click controls one after another to map them to MIDI";
+
 /// The app's own shortcuts, taken in this order: where one chord holds
 /// another (Ctrl+Shift+S holds Ctrl+S), the longer comes first. Editing's
 /// copy, paste, groups, framing, scenes and Mutate have their own handlers,
@@ -141,6 +148,7 @@ pub(super) const KEYS: &[Binding] = &[
     bind(Chord::Command(Modifiers::NONE, Key::Z), Listens::UnlessTyping, AppAction::Undo, "Undo"),
     bind(Chord::Command(Modifiers::NONE, Key::B), Listens::OnCanvas, AppAction::Bypass, "Bypass or switch on the selected filters and effects"),
     bind(Chord::Command(Modifiers::NONE, Key::R), Listens::OnCanvas, AppAction::ToggleRecording, "Record, or end the take"),
+    bind(Chord::Command(Modifiers::NONE, Key::L), Listens::OnCanvas, AppAction::ToggleMapMode, MAP_MODE_SHEET),
     // Before the palette's Space, which Shift+Space would match too
     bind(Chord::Play, Listens::OnCanvas, AppAction::TogglePlaying, "Play or stop the patch"),
 ];
@@ -220,6 +228,8 @@ impl SynthApp {
             AppAction::RefreshMidiDevices => self.refresh_midi_devices(),
             AppAction::ConnectMidi(index) => self.connect_midi_device(index),
             AppAction::DisconnectMidi => self.disconnect_midi_device(),
+            AppAction::ToggleMapMode => self.toggle_map_mode(),
+            AppAction::ToggleControllerMap => self.toggle_controller_map(),
             #[cfg(not(target_arch = "wasm32"))]
             AppAction::CheckUpdates => self.updater.check_now(ctx),
             #[cfg(not(target_arch = "wasm32"))]

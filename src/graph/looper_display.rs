@@ -327,6 +327,16 @@ pub fn looper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, us
             (_, Some(m)) => format!("{}: MIDI {} presses it. Right-click to change", pedal_tip(n), m.text()),
             _ => format!("{}. Right-click to learn a MIDI footswitch or pad", pedal_tip(n)),
         };
+        // In Map Mode a click maps the footswitch instead of pressing it (#426)
+        let learn = engine_node_id.map(|eid| SynthResponse::midi_learn_start(eid, param_index, param.clone(), 0.0, 1.0, MidiControl::Button));
+        let ring = super::map_mode::Outline::Ring { center: disc_center, radius: disc + 2.5 * z };
+        let pedal = match learn.and_then(|learn| super::map_mode::catch(ui, hit, ring, &learn, user_state)) {
+            Some(caught) => {
+                responses.extend(caught.learn);
+                caught.response
+            }
+            None => pedal,
+        };
         let pedal = pedal.on_hover_text(tip);
         crate::widgets::menu::context_menu(&pedal, |ui| {
             let Some(eid) = engine_node_id else { return };

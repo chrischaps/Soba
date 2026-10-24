@@ -19,7 +19,7 @@ From left to right:
 | **❓ Help** | **📖 Manual** opens this manual, and **⌨ Keyboard Shortcuts** (`F1`) lists the [shortcuts](#keyboard-shortcuts), and **🎓 Lessons** opens the [lessons](lessons.md) you take inside the app. **Check for Updates…**, **Check for Updates Automatically**, and **Roll Back** after an update: see [Updates](installation.md#updates) |
 | **Output** | The audio device to play through |
 | **Input** | The microphone, guitar or line input that [Audio Input](../modules/sources/audio-input.md) modules hear. It starts at **None**: nothing is opened until you choose a device. A filled dot (●) means it's open. |
-| **MIDI In** | The MIDI controller to listen to. A filled dot (●) means it's connected. |
+| **MIDI In** | The MIDI controller to listen to. A filled dot (●) means it's connected. At the foot of the menu, **Map Mode** (`Ctrl + L`) and the **Controller Map**: see [MIDI Learn](#midi-learn). |
 
 At the right end, the toolbar shows a CPU meter while the patch plays, the device's sample rate and channel count, and whether the audio engine is running. While an input is open, **In** shows how much audio is held between the input and output devices, in milliseconds; it turns amber for a moment after a dropout. Hover it for details.
 
@@ -277,6 +277,29 @@ A mapping listens on the MIDI channel it was learned on, so the keys and the pad
 
 To back out before moving anything, press `Escape`, or right-click the blinking control and choose **Cancel MIDI Learn**. Choosing **Learn MIDI** on a different control moves learn mode there instead.
 
+#### Map Mode
+
+To map a whole controller, turn on **Map Mode**: press `Ctrl + L`, or choose **Map Mode** at the foot of the **MIDI In** menu. A thin purple line runs round the canvas, and every control that can be learned wears a soft purple outline: knobs, toggles, dropdowns, footswitches, **Rec** and the Scenes pads. The ones already mapped keep their badges.
+
+Now a click on a control doesn't turn, flip or press it. It starts MIDI Learn on it instead, and its outline breathes while it waits. Move a knob or fader or hit a pad on your controller, and the control is mapped. Map Mode stays on, so click the next control and move the next thing, and so on down the controller: eight encoders, four faders and eight pads are twenty clicks and twenty moves, and no menus. Clicking another control before you move anything moves the learn there. The status bar says what Map Mode is waiting for, and what was mapped last.
+
+Right-click still opens a control's menu in Map Mode, to clear a mapping or change its hardware. Press `Escape` or `Ctrl + L` again to leave.
+
+#### The Controller Map
+
+Choose **Controller Map…** at the foot of the **MIDI In** menu to see every mapping in the patch on one panel, in the order you made them. Each row is one mapping:
+
+| Column | What it shows |
+|---|---|
+| **Source** | What turns it: `CC 74 · ch 1`, `C2 · ch 10` for a pad, or `Macro 3` in a DAW |
+| **Module** and **Control** | The module, and the knob, switch or Scenes pad it turns |
+| **Range** | The two ends a knob or fader sweeps the knob between, typed in the knob's own units (`200 Hz`, `8 kHz`, `40%`). Press `Enter` to set one. They stay inside the knob's own range |
+| **Hardware** | **Knob or fader**, or one of the two kinds of **Encoder**, as under Hardware in the knob's menu |
+| **Pick up** | A knob or fader waits to pick the knob up rather than jumping it |
+| **Invert** | The hardware's top is the control's bottom |
+
+The cross at the end of a row clears that mapping. Hover a row and its control lights up on the canvas, so you can find which knob it is. Changes here are changes to the patch: they're saved with it, and the patch shows it has unsaved changes until you save. A DAW macro's range and style are the DAW's, so its row only lists it. Map Mode has a button at the foot of the panel too, so you can keep mapping with the map open.
+
 ## Recording
 
 When something good happens (a filter sweep you rode by hand, a lucky generative passage, an improvisation on a MIDI keyboard), press **● Rec** or `Ctrl + R` to keep it. If the patch is stopped, Rec starts it.
@@ -372,7 +395,7 @@ On a Mac, hold `⌘ Command` where these say `Ctrl`, and `Option` for `Alt`. The
 | `F` | Zoom to the selection, or with nothing selected, to fit the whole patch |
 | `Shift + F` | Zoom to fit the whole patch |
 | `F1` | Show or hide the Keyboard Shortcuts window |
-| `Escape` | Close the add menu, quick-add box or Keyboard Shortcuts window, cancel MIDI Learn, finish typing a frame's name or a note, or go back out of a group |
+| `Escape` | Close the add menu, quick-add box or Keyboard Shortcuts window, cancel MIDI Learn or leave Map Mode, finish typing a frame's name or a note, or go back out of a group |
 
 ### Editing
 
@@ -423,6 +446,7 @@ On a Mac, hold `⌘ Command` where these say `Ctrl`, and `Option` for `Alt`. The
 |----------|--------|
 | `Shift + Space` | Play or stop the patch |
 | `Ctrl + R` | Record, or end the take |
+| `Ctrl + L` | Map Mode: click controls one after another to map them to MIDI |
 | `Alt` over a cable | Hear what the cable carries |
 
 The letter keys play notes: see [The computer keyboard](#the-computer-keyboard).

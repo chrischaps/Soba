@@ -140,6 +140,24 @@ impl MidiMappings {
         self.hands.remove(&(node_id, param_index));
     }
 
+    /// Sets the ends a parameter's CC turns it between, kept inside
+    /// `limits`, the parameter's own range, and the right way round (Invert
+    /// turns it upside down). Returns whether they took: ends that meet
+    /// leave nothing to turn, and don't.
+    pub fn set_range(&mut self, node_id: EngineNodeId, param_index: usize, (min, max): (f32, f32), limits: (f32, f32)) -> bool {
+        let (low, high) = (limits.0.min(limits.1), limits.0.max(limits.1));
+        let (a, b) = (min.clamp(low, high), max.clamp(low, high));
+        let (min, max) = (a.min(b), a.max(b));
+        if max - min <= (high - low).abs() * 1e-6 || !(min.is_finite() && max.is_finite()) {
+            return false;
+        }
+        self.restyle(node_id, param_index, None, |m| {
+            m.min_value = min;
+            m.max_value = max;
+        });
+        true
+    }
+
     /// What `input` turns the control of mapping `index` to, from where it
     /// stands, or `None` to leave it be: a fader that hasn't picked it up
     /// yet, or a toggle's note let go.
@@ -213,7 +231,7 @@ impl MidiMappings {
 }
 
 /// What a mapping's badge says.
-fn info(m: &MidiMapping) -> MidiMappingInfo {
+pub fn info(m: &MidiMapping) -> MidiMappingInfo {
     let info = MidiMappingInfo {
         cc_number: m.cc_number,
         channel: m.channel,
@@ -470,6 +488,27 @@ mod tests {
         assert_eq!(mappings.turn(0, MidiInput::Cc(65), standing(1.0)), Some(2.0));
         assert_eq!(mappings.turn(0, MidiInput::Cc(60), standing(1.0)), Some(0.0));
         assert_eq!(mappings.badges()[&(10, 0)].encoding, MidiEncoding::Relative64);
+    }
+
+    #[test]
+    fn a_range_stays_inside_the_parameter_and_the_right_way_round() {
+        let mut mappings = MidiMappings::default();
+        mappings.learn(MidiMapping { jump: true, ..MidiMapping::new(1, 0, 10, 0, "Cutoff", 20.0, 20000.0) });
+        assert!(mappings.set_range(10, 0, (8000.0, 200.0), (20.0, 20000.0)));
+        assert_eq!((mappings.as_slice()[0].min_value, mappings.as_slice()[0].max_value), (200.0, 8000.0));
+        assert!(mappings.set_range(10, 0, (5.0, 90000.0), (20.0, 20000.0)));
+        assert_eq!((mappings.as_slice()[0].min_value, mappings.as_slice()[0].max_value), (20.0, 20000.0));
+        assert!(!mappings.set_range(10, 0, (300.0, 300.0), (20.0, 20000.0)), "ends that meet");
+        assert_eq!(mappings.as_slice()[0].max_value, 20000.0);
+
+        // The fader turns the knob between the new ends
+        mappings.set_range(10, 0, (100.0, 1000.0), (20.0, 20000.0));
+        assert_eq!(mappings.turn(0, MidiInput::Cc(127), standing(500.0)), Some(1000.0));
+        assert_eq!(mappings.turn(0, MidiInput::Cc(0), standing(500.0)), Some(100.0));
+        // A macro's range is the DAW's
+        mappings.map_macro(MidiMapping::from_macro(0, 20, 0, "Knob", 0.0, 1.0));
+        mappings.set_range(20, 0, (0.2, 0.4), (0.0, 1.0));
+        assert_eq!(mappings.as_slice()[1].max_value, 1.0);
     }
 
     #[test]

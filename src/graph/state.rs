@@ -245,6 +245,10 @@ pub struct SynthGraphState {
     /// for [`PICKUP_FADE`] seconds.
     pub midi_pickups: HashMap<(EngineNodeId, usize), (f32, Option<f64>)>,
 
+    /// Map Mode, where a click on a control maps it, and the control the
+    /// Controller Map lights (#426).
+    pub map_mode: super::map_mode::MapMode,
+
     /// Flag set when a widget context menu is shown this frame.
     /// Used to prevent the add-node menu from also appearing.
     pub widget_context_menu_open: bool,
@@ -405,6 +409,7 @@ impl Default for SynthGraphState {
             midi_learn_target: None,
             midi_learn_scene: None,
             midi_pickups: HashMap::new(),
+            map_mode: Default::default(),
             widget_context_menu_open: false,
             scope_data: HashMap::new(),
             zoom: 1.0,
@@ -559,6 +564,7 @@ impl SynthGraphState {
         self.midi_learn_target = None;
         self.midi_learn_scene = None;
         self.midi_pickups.clear();
+        self.map_mode.highlight = None;
         self.scene_midi_mappings.clear();
         self.widget_context_menu_open = false;
         self.scope_data.clear();

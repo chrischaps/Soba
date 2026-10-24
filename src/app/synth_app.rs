@@ -57,6 +57,7 @@ use super::web;
 
 mod actions;
 mod add_menu;
+mod controller_map;
 mod cue;
 mod dive;
 mod file_hover;
@@ -74,6 +75,7 @@ mod loops;
 mod lossy_load;
 mod main_area;
 mod learn_into;
+mod map_mode;
 mod mutating;
 mod out_of_sight;
 mod page_audio;
@@ -303,6 +305,8 @@ pub struct SynthApp {
     mutating: mutating::Mutating,
     /// Where each Scenes module's Morph was when its knobs last followed it.
     gliding: scenes::Gliding,
+    /// The Controller Map: every MIDI mapping in the patch, to edit (#426).
+    controller_map: controller_map::ControllerMap,
     /// Patch files the visitor picked, which the browser hands over later.
     #[cfg(target_arch = "wasm32")]
     uploads: (std::sync::mpsc::Sender<web::Upload>, std::sync::mpsc::Receiver<web::Upload>),
@@ -445,6 +449,7 @@ impl SynthApp {
             probe: Default::default(),
             mutating: Default::default(),
             gliding: Default::default(),
+            controller_map: Default::default(),
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
             hosted: None,
@@ -710,11 +715,13 @@ impl SynthApp {
     /// nothing here affects what they play.
     fn process_midi_events(&mut self, now: f64) {
         let standings = self.midi_standings();
+        let was_learning = self.is_midi_learning();
         let user_state = &mut self.user_state;
         let heard = self.midi.drain(|event| user_state.push_midi_event(event, now), |node, param| standings.get(&(node, param)).copied());
         self.show_midi_pickups(now);
 
         if heard.learned {
+            self.note_map_mode_learned(was_learning);
             self.show_midi_badges();
             self.show_midi_learn();
             self.status_message = Some(if heard.learned_into.is_empty() { "MIDI mapped" } else { "MIDI learned" }.to_string());
@@ -2363,12 +2370,10 @@ impl SynthApp {
 
     /// Delete, duplicate, copy, cut, paste, Ctrl+Shift+F to frame the
     /// selection, Space or Tab for the quick-add palette, and Escape to leave
-    /// MIDI Learn.
+    /// MIDI Learn or Map Mode.
     fn handle_editing_shortcuts(&mut self, ctx: &egui::Context) {
         use egui::{Event, Key, KeyboardShortcut, Modifiers};
-        if self.is_midi_learning() && ctx.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Escape)) {
-            self.cancel_midi_learn();
-        }
+        self.escape_midi_learn(ctx);
         let mut copy = false;
         let mut cut = false;
         let mut paste = None;
@@ -2724,6 +2729,7 @@ impl SynthApp {
             self.shortcuts.show(ctx, self.editor_rect, &held);
         }
         self.show_variations(ctx);
+        self.show_controller_map(ctx);
         // A lesson's caption, glows and ghost, over the editor
         self.tend_lesson(ctx);
 

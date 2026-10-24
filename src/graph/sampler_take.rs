@@ -410,6 +410,16 @@ pub fn rec_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, user_state: &S
         }
     };
     let menu = if tidy_menu { "Right-click to tidy takes as they're kept, or learn a MIDI footswitch or pad" } else { "Right-click to learn a MIDI footswitch or pad" };
+    // In Map Mode a click maps Rec instead of pressing it (#426)
+    let learn = engine_node_id.map(|eid| SynthResponse::midi_learn_start(eid, param_index, REC_BUTTON, 0.0, 1.0, MidiControl::Button));
+    let outline = super::map_mode::Outline::around(rect, z);
+    let button = match learn.and_then(|learn| super::map_mode::catch(ui, rect, outline, &learn, user_state)) {
+        Some(caught) => {
+            responses.extend(caught.learn);
+            caught.response
+        }
+        None => button,
+    };
     let button = button.on_hover_text(format!("{tip}\n{menu}"));
     crate::widgets::menu::context_menu(&button, |ui| {
         if tidy_menu {

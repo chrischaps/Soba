@@ -9,6 +9,8 @@ use super::*;
 /// What the left of the status bar shows, most pressing first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Shown {
+    /// Map Mode is on: what it waits for, and how to leave (#426).
+    MapMode,
     /// The prompt to move a control or hit a pad, for as long as MIDI Learn
     /// waits for one.
     Learn,
@@ -36,7 +38,9 @@ impl SynthApp {
 
     pub(super) fn status_bar_shows(&mut self) -> Shown {
         let failed = self.status.as_ref().is_some_and(|line| line.severity >= Severity::Warning);
-        if self.is_midi_learning() {
+        if self.map_mode_on() {
+            Shown::MapMode
+        } else if self.is_midi_learning() {
             Shown::Learn
         } else if failed {
             Shown::Failure
@@ -132,6 +136,10 @@ impl SynthApp {
             ui.label(RichText::new(format!("⚠ {}", text)).color(color).small());
         };
         match self.status_bar_shows() {
+            Shown::MapMode => {
+                let text = self.map_mode_status(ui.ctx());
+                ui.label(RichText::new(text).color(theme::signal::MIDI.lerp_to_gamma(theme::text::PRIMARY, 0.35)).small());
+            }
             Shown::Learn => {
                 let prompt = self.midi.learning().map_or_else(String::new, |target| target.prompt());
                 ui.label(RichText::new(prompt)

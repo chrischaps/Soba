@@ -275,7 +275,8 @@ impl WidgetValueTrait for SynthValueType {
         super::marks::mark(ui.ctx(), node_id, format_args!("knob:{param_name}"), control.rect);
         // Mapped to MIDI, or waiting to be: a purple badge on its corner, as
         // a knob has
-        if let Some(midi) = node_data.midi_learn(node_id, param_name, self, user_state).filter(|midi| midi.badged()) {
+        let midi = node_data.midi_learn(node_id, param_name, self, user_state);
+        if let Some(midi) = midi.as_ref().filter(|midi| midi.badged()) {
             let alpha = if midi.learning {
                 crate::app::pace::animate(ui.ctx());
                 0.4 + 0.6 * (ui.input(|i| i.time) * 4.0).sin().abs() as f32
@@ -285,11 +286,21 @@ impl WidgetValueTrait for SynthValueType {
             let corner = control.rect.right_top() + egui::vec2(-1.0, 1.0) * user_state.zoom;
             ui.painter().circle_filled(corner, 2.2 * user_state.zoom, crate::app::theme::signal::MIDI.gamma_multiply(alpha));
         }
+        // In Map Mode a click on its name or itself maps it instead (#426)
+        let row = name.rect.union(control.rect);
+        let outline = super::map_mode::Outline::around(row, user_state.zoom);
+        let caught = midi.and_then(|midi| super::map_mode::catch(ui, row, outline, &midi.learn, user_state));
+        let mut asked = Vec::new();
+        let menus = match caught {
+            Some(caught) => {
+                asked.extend(caught.learn);
+                vec![caught.response]
+            }
+            None => vec![name, control],
+        };
         let value = &*self;
-        [name, control]
-            .iter()
-            .filter_map(|response| node_data.switch_menu(response, node_id, param_name, param_name, value, KnobPlace::Module, user_state))
-            .collect()
+        asked.extend(menus.iter().filter_map(|response| node_data.switch_menu(response, node_id, param_name, param_name, value, KnobPlace::Module, user_state)));
+        asked
     }
 
     /// A patched input shows just its name, with the same tooltip.

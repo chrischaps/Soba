@@ -74,6 +74,7 @@ mod reverb_display;
 pub mod scenes;
 mod scenes_display;
 pub mod hovered_file;
+pub mod map_mode;
 pub mod marks;
 pub mod resample;
 pub mod sample_shelf;

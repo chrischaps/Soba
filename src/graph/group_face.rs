@@ -536,7 +536,20 @@ fn switch_chip(
             }));
         }
 
-        for response in [name, response] {
+        // In Map Mode a click on the chip maps it instead (#426)
+        let chip = name.rect.union(response.rect);
+        let outline = super::map_mode::Outline::around(chip, user_state.zoom);
+        let caught = data
+            .midi_learn(control.node, &control.param, &input.value, user_state)
+            .and_then(|midi| super::map_mode::catch(ui, chip, outline, &midi.learn, user_state));
+        let menus = match caught {
+            Some(caught) => {
+                responses.extend(caught.learn.map(NodeResponse::User));
+                vec![caught.response]
+            }
+            None => vec![name, response],
+        };
+        for response in menus {
             if let Some(pin) = data.switch_menu(&response, control.node, &control.param, label, &input.value, place, user_state) {
                 responses.push(NodeResponse::User(pin));
             }

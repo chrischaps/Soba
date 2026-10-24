@@ -864,12 +864,34 @@ impl SynthNodeData {
                     super::marks::mark(ui.ctx(), node_id, format_args!("knob:{}", knob_param.param_name), dial);
                 }
 
+                // In Map Mode a click maps the knob instead of turning it (#426)
+                let caught = engine_node_id.zip(knob_response.inner.as_ref()).and_then(|(eid, control)| {
+                    let learn = SynthResponse::midi_learn_start(
+                        eid,
+                        current_param_index,
+                        knob_param.param_name.clone(),
+                        midi_config.min_value,
+                        midi_config.max_value,
+                        crate::persistence::MidiControl::Knob,
+                    );
+                    let dial = super::map_mode::Outline::Ring {
+                        center: control.rect.min + egui::Vec2::splat(knob_size / 2.0),
+                        radius: knob_size / 2.0 + 2.0 * zoom,
+                    };
+                    super::map_mode::catch(ui, control.rect, dial, &learn, user_state)
+                });
+
                 // The right-click menu hangs on the knob itself: an area laid
                 // over it would be the topmost widget and take its clicks, so
                 // a double-click would never reach the knob to reset it. A
-                // disabled knob senses nothing, so it gets an area of its own
-                let interact_response = match knob_response.inner {
-                    Some(control) if control.enabled() => control,
+                // disabled knob senses nothing, so it gets an area of its own.
+                // In Map Mode, Map Mode's catch is over it, and carries it
+                let interact_response = match (caught, knob_response.inner) {
+                    (Some(caught), _) => {
+                        responses.extend(caught.learn.map(NodeResponse::User));
+                        caught.response
+                    }
+                    (None, Some(control)) if control.enabled() => control,
                     _ => ui.interact(
                         knob_response.response.rect,
                         egui::Id::unique(("knob_context", node_id, current_param_index, place.is_face())),

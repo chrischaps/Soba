@@ -36,7 +36,7 @@ pub const SHEET: &[Group] = &[
             ("`F`", "Zoom to the selection, or with nothing selected, to fit the whole patch"),
             ("`Shift + F`", "Zoom to fit the whole patch"),
             ("`F1`", "Show or hide the Keyboard Shortcuts window"),
-            ("`Escape`", "Close the add menu, quick-add box or Keyboard Shortcuts window, cancel MIDI Learn, finish typing a frame's name or a note, or go back out of a group"),
+            ("`Escape`", "Close the add menu, quick-add box or Keyboard Shortcuts window, cancel MIDI Learn or leave Map Mode, finish typing a frame's name or a note, or go back out of a group"),
         ],
     },
     Group {
@@ -92,6 +92,7 @@ pub const SHEET: &[Group] = &[
         rows: &[
             ("`Shift + Space`", "Play or stop the patch"),
             ("`Ctrl + R`", "Record, or end the take"),
+            ("`Ctrl + L`", "Map Mode: click controls one after another to map them to MIDI"),
             ("`Alt` over a cable", "Hear what the cable carries"),
         ],
     },
