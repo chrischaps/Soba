@@ -1,6 +1,6 @@
 # Instrument
 
-**Module ID** `source.instrument` · **Category** Source
+**Module ID** `source.instrument` · **Category** Output
 
 An Instrument is a piece of hardware as a node. Choose **MicroFreak** on its face and its twelve knobs become the MicroFreak's own: **Cutoff**, **Resonance**, **Osc Type**, **Osc Wave**. Each knob has a jack beside it with the same name. Patch an [LFO](../modulation/lfo.md) into **Cutoff** and the real filter sweeps. A [Scene](../utilities/scenes.md) can morph the knobs, and the patch remembers where every one of them is.
 

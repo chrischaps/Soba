@@ -3249,7 +3249,7 @@ knob Bank MSB           "Bank" KnobOnly
 knob Bank LSB           "LSB" KnobOnly
 display MidiOutKeys
 
-== source.instrument "Instrument" finder="Instrument" Source
+== source.instrument "Instrument" finder="Instrument" Output
 in   Pitch              Control  ConnectionOnly       inline=true  port
 in   Gate               Gate     ConnectionOnly       inline=true  port
 in   Velocity           Control  ConnectionOnly       inline=true  port
@@ -3283,7 +3283,7 @@ knob Slot 11            "Slot 11" Exposed
 knob Slot 12            "Slot 12" Exposed
 display InstrumentFace
 
-== source.kit "Kit" finder="Kit" Source
+== source.kit "Kit" finder="Kit" Output
 in   Gate 1             Gate     ConnectionOnly       inline=true  port
 in   Vel 1              Control  ConnectionOnly       inline=true  port
 in   Gate 2             Gate     ConnectionOnly       inline=true  port

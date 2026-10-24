@@ -1220,8 +1220,8 @@
       ]
     },
     "source.instrument": {
-      "category": "Source",
-      "color": "#42a5f5",
+      "category": "Output",
+      "color": "#7e57c2",
       "height": 678.0,
       "inputs": [
         {
@@ -1297,8 +1297,8 @@
       "outputs": []
     },
     "source.kit": {
-      "category": "Source",
-      "color": "#42a5f5",
+      "category": "Output",
+      "color": "#7e57c2",
       "height": 908.0,
       "inputs": [
         {

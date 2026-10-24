@@ -283,7 +283,7 @@ impl DspModule for Instrument {
         static INFO: ModuleInfo = ModuleInfo {
             id: ID,
             name: "Instrument",
-            category: ModuleCategory::Source,
+            category: ModuleCategory::Output,
             description: "A piece of hardware as a node: a synth's or drum machine's own knobs, by name, to turn and patch, and its notes over MIDI",
         };
         &INFO
@@ -423,7 +423,7 @@ mod tests {
     fn info_ports_and_parameters() {
         let (module, _) = module();
         assert_eq!(module.info().id, "source.instrument");
-        assert_eq!(module.info().category, ModuleCategory::Source);
+        assert_eq!(module.info().category, ModuleCategory::Output);
         assert_eq!(module.ports()[Instrument::PORT_SLOT + 11].name, "Slot 12");
         assert_eq!(module.parameters()[Instrument::PARAM_SLOT + 11].name, "Slot 12");
         assert_eq!(module.parameters().len(), Instrument::PARAM_SLOT + SLOTS);

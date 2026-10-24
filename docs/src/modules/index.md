@@ -23,8 +23,6 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Note In](./midi/note-in.md) | `input.poly_midi` | Play notes from the computer keyboard, its piano or a MIDI controller: one voice, or up to eight for chords |
 | [Controls](./midi/controls.md) | `input.controls` | A MIDI controller's faders, knobs, mod wheel, pitch bend and pressure as cables, learned from the hardware |
 | [Pads](./midi/pads.md) | `input.pads` | A pad controller's pads as eight gates, with velocity and pressure: finger drums, triggers and latches |
-| [Instrument](./midi/instrument.md) | `source.instrument` | A piece of hardware as a node: a synth's or drum machine's own knobs, by name, to turn and patch, and its notes over MIDI |
-| [Kit](./midi/kit.md) | `source.kit` | A hardware drum machine, sampler or groovebox as a node: its tracks, pads or parts as eight lanes to strike from a Trigger Sequencer, and its knobs by name, over MIDI |
 
 ### Filter
 
@@ -95,6 +93,8 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Audio Output](./output/audio-output.md) | `output.audio` | Stereo master output with volume, DC blocking and a peak limiter |
 | [Link Out](./output/link-out.md) | `output.link` | Send eight CV lanes, four gates and the Clock to the Seoul visualizer, to play its pictures from the patch |
 | [MIDI Out](./output/midi-out.md) | `output.midi` | Play hardware and other apps: gates and pitch as notes (poly cables as chords), bend and aftertouch, four CCs (7-bit, 14-bit or NRPN), programs and banks, and the Clock as MIDI clock |
+| [Instrument](./midi/instrument.md) | `source.instrument` | A piece of hardware as a node: a synth's or drum machine's own knobs, by name, to turn and patch, and its notes over MIDI |
+| [Kit](./midi/kit.md) | `source.kit` | A hardware drum machine, sampler or groovebox as a node: its tracks, pads or parts as eight lanes to strike from a Trigger Sequencer, and its knobs by name, over MIDI |
 
 Header colors describe what a module *is*. The colors of its jacks and cables describe the *signals* it handles, which is a separate palette: see [Signal Types](../concepts/signal-types.md).
 

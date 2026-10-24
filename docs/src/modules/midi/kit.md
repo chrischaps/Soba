@@ -1,6 +1,6 @@
 # Kit
 
-**Module ID** `source.kit` · **Category** Source
+**Module ID** `source.kit` · **Category** Output
 
 A Kit is a drum machine, sampler or groovebox as a node. An [Instrument](./instrument.md) plays one voice, but a drum machine doesn't. A Digitakt has a track on each channel, the SP-404MKII's pads are notes, and a volca drum has a channel for each part. Choose one on the Kit's face, and its eight **lanes** take the device's own parts by name: **Track 1** to **Track 8**, **Pad 1** to **Pad 8**, **Part 1** to **Part 6**.
 

@@ -100,7 +100,7 @@ pub fn instrument_face(
     let z = zoom;
     let mut responses = Vec::new();
     let width = PER_ROW as f32 * CELL * z;
-    if let Some((rect, response, painter)) = display_frame::frame_of_height(ui, width, HEADER * z, theme::module::SOURCE, z) {
+    if let Some((rect, response, painter)) = display_frame::frame_of_height(ui, width, HEADER * z, theme::module::OUTPUT, z) {
         header(data, ui, node_id, graph, user_state, rect, &response, &painter, z, &mut responses);
     }
     if data.module_id == kit::ID {

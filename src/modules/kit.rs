@@ -237,7 +237,7 @@ impl DspModule for Kit {
         static INFO: ModuleInfo = ModuleInfo {
             id: ID,
             name: "Kit",
-            category: ModuleCategory::Source,
+            category: ModuleCategory::Output,
             description: "A hardware drum machine, sampler or groovebox as a node: its tracks, pads or parts as eight lanes to strike from a Trigger Sequencer, and its knobs by name, over MIDI",
         };
         &INFO
