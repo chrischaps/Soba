@@ -32,7 +32,7 @@ use std::sync::Arc;
 
 use web_time::Instant;
 
-use crate::dsp::{Audition, DspModule, FinishedTake, NoteClaims, OutputLevels, ProcessContext, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
+use crate::dsp::{Audition, DspModule, FinishedTake, ListenTo, MidiEvent, NoteClaims, OutputLevels, ProcessContext, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
 use crate::dsp::finite::all_finite;
 use crate::dsp::primitives::Markers;
 use crate::engine::commands::{ChannelPeaks, NodeId, PlanMessage, PortIndex};
@@ -44,6 +44,11 @@ pub use crate::dsp::module_trait::MAX_INPUTS;
 
 /// How long bypassing a module, or bringing it back, crossfades for.
 pub const BYPASS_FADE_SECONDS: f32 = 0.02;
+
+/// The most MIDI events a module listening to one device hears in a
+/// block: as many as the biggest block brings (an offline one's, see
+/// [`super::AudioProcessor::process_offline`]). Any more are dropped.
+const HEARD_MIDI_CAPACITY: usize = super::audio_processor::OFFLINE_MIDI_CAPACITY;
 
 /// Filler for unused entries of the per-module input array.
 static EMPTY_BUFFER: SignalBuffer = SignalBuffer::EMPTY;
@@ -103,6 +108,8 @@ pub(crate) struct PlanNode {
     /// Whether it made a NaN or infinity since [`GraphPlan::take_faults`]
     /// last asked, and was reset for it.
     pub(crate) faulted: bool,
+    /// The MIDI input it hears (#435).
+    pub(crate) listen: ListenTo,
 }
 
 #[cfg(test)]
@@ -122,6 +129,7 @@ impl PlanNode {
             hears_live: false,
             spectrum: None,
             faulted: false,
+            listen: ListenTo::Any,
         }
     }
 }
@@ -234,6 +242,9 @@ pub struct GraphPlan {
     /// The notes they claim, worked out again every block from their
     /// parameters as they stand, so a learn or an edit counts at once.
     pub(crate) claims: NoteClaims,
+    /// The block's MIDI a module listening to one device hears, picked out
+    /// of the rest. Allocated once, never grown.
+    pub(crate) heard_midi: Vec<MidiEvent>,
     /// Where the UI reads the taps, meters and readouts, once the UI side
     /// has given the plan a board (see [`super::monitor_board`]).
     pub(crate) monitor: Option<MonitorWriter>,
@@ -258,6 +269,7 @@ impl GraphPlan {
             scenes: Vec::new(),
             claimers: Vec::new(),
             claims: NoteClaims::EMPTY,
+            heard_midi: Vec::with_capacity(HEARD_MIDI_CAPACITY),
             monitor: None,
             block_len: max_block_size,
             max_block_size,
@@ -433,6 +445,14 @@ impl GraphPlan {
             .is_some()
     }
 
+    /// Has a module hear one MIDI input, or every one (#435). Returns
+    /// false if the node isn't in this plan.
+    ///
+    /// REAL-TIME SAFE.
+    pub fn set_listen(&mut self, node_id: NodeId, listen: ListenTo) -> bool {
+        self.nodes.iter_mut().find(|node| node.node_id == node_id).map(|node| node.listen = listen).is_some()
+    }
+
     /// Plays a chord on a module's outputs from its face, or stops (see
     /// [`DspModule::audition`]). Ignored if the node isn't in this plan.
     ///
@@ -457,6 +477,10 @@ impl GraphPlan {
             }
             PlanMessage::SetBypass { node_id, bypassed } => {
                 self.set_bypass(node_id, bypassed);
+                None
+            }
+            PlanMessage::Listen { node_id, listen } => {
+                self.set_listen(node_id, listen);
                 None
             }
             PlanMessage::Audition { node_id, chord } => {
@@ -536,7 +560,7 @@ impl GraphPlan {
             }
         }
 
-        let Self { nodes, outputs, defaults, mixdowns, late, max_block_size, claims, .. } = self;
+        let Self { nodes, outputs, defaults, mixdowns, late, max_block_size, claims, heard_midi, .. } = self;
         let context = context.with_claims(claims);
         // Only modules live input reaches hear how late it is
         let live_context = context;
@@ -596,6 +620,17 @@ impl GraphPlan {
             }
 
             let context = if node.hears_live { &live_context } else { context };
+            // Set to one device, it hears that device's MIDI and Soba's own
+            let picked;
+            let context = if node.listen == ListenTo::Any || context.midi.is_empty() {
+                context
+            } else {
+                heard_midi.clear();
+                let room = heard_midi.capacity();
+                heard_midi.extend(context.midi.iter().filter(|event| node.listen.hears(event.port)).take(room).copied());
+                picked = context.with_midi(heard_midi);
+                &picked
+            };
             module.process(inputs, own, &node.params, &context.hearing(node.heard));
 
             let target = if node.bypassed { 0.0 } else { 1.0 };
@@ -690,6 +725,11 @@ impl GraphPlan {
     /// Whether a node is bypassed, or `None` if it isn't in this plan.
     pub fn is_bypassed(&self, node_id: NodeId) -> Option<bool> {
         self.nodes.iter().find(|node| node.node_id == node_id).map(|node| node.bypassed)
+    }
+
+    /// The MIDI input a node hears, or `None` if it isn't in this plan.
+    pub fn listen(&self, node_id: NodeId) -> Option<ListenTo> {
+        self.nodes.iter().find(|node| node.node_id == node_id).map(|node| node.listen)
     }
 
     /// The patch transport: its tempo and beat, set by the first tempo source

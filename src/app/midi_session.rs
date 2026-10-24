@@ -1,5 +1,5 @@
-//! The UI's side of MIDI in (#343): the inputs to choose from and the one
-//! chosen, the notes held on it, which CC or pad turns which control, and
+//! The UI's side of MIDI in (#343): the inputs to choose from and those
+//! open, the notes held on them, which CC or pad turns which control, and
 //! MIDI Learn.
 //! Kept apart from the frame loop, with no egui in it, so what a note or a
 //! CC does can be tested.
@@ -8,12 +8,17 @@
 //! nothing here changes what they play. The UI's copy of each event lights
 //! the pianos and the MIDI Monitor, and turns mapped knobs.
 //!
+//! Several inputs can be open at once (#435). Each event is heard with the
+//! name of the device it came from, so a mapping learned from one device
+//! isn't turned by another, and the hands follow one controller.
+//!
 //! Notes played on the UI itself (the computer keys, the piano) go to the
 //! audio thread on a ring of their own ([`UiNotes`]), with or without a
 //! MIDI device, and are heard here as MIDI in is.
 
 use rtrb::Consumer;
 
+use crate::dsp::{MIDI_INPUTS, SOBA_PORT};
 use crate::engine::{MidiDeviceInfo, MidiEngine, MidiEvent, TimestampedMidiEvent, UiNotes};
 use crate::persistence::{MidiControl, MidiEncoding, MidiInput, MidiMapping, MidiSource};
 use super::midi_mappings::{MidiMappings, Standing};
@@ -27,20 +32,20 @@ const GUESS_FROM: usize = 4;
 /// How often the inputs are looked at again.
 const FOLLOW_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
 
-/// The input to open for the one remembered (#425): its place in `devices`,
-/// if it's listed. Nothing is opened over an input already open, or once
-/// the player has chosen None by hand (which forgets the name).
-pub fn device_to_connect(remembered: Option<&str>, devices: &[MidiDeviceInfo], selected: Option<usize>, by_hand: bool) -> Option<usize> {
-    if selected.is_some() {
-        return None;
-    }
-    let name = remembered?;
-    // A hand-picked input is remembered the moment it is picked, so what
-    // is remembered is always the last choice; this only guards a blank name
-    if by_hand && name.is_empty() {
-        return None;
-    }
-    devices.iter().find(|d| d.name == name).map(|d| d.index)
+/// The inputs to open of those remembered (#425): each one's place in
+/// `devices`, if it's listed and not open already.
+pub fn devices_to_connect(remembered: &[String], devices: &[MidiDeviceInfo], open: &[String]) -> Vec<usize> {
+    devices
+        .iter()
+        .filter(|d| remembered.contains(&d.name) && !open.contains(&d.name))
+        .map(|d| d.index)
+        .collect()
+}
+
+/// The names of the inputs remembered, from the app's storage: one a line.
+/// A value from before #435 is a single name.
+pub fn remembered_from(setting: &str) -> Vec<String> {
+    setting.lines().map(str::trim).filter(|name| !name.is_empty()).map(str::to_string).collect()
 }
 
 /// The control MIDI Learn is waiting for a CC or a note for.
@@ -121,21 +126,19 @@ pub struct MidiSession {
     pub events: Option<Consumer<TimestampedMidiEvent>>,
     /// The inputs to choose from, as last listed.
     pub devices: Vec<MidiDeviceInfo>,
-    /// The input chosen, by its index in `devices`.
-    pub selected: Option<usize>,
-    /// Why MIDI can't be had, or the chosen input wouldn't open.
+    /// Why MIDI can't be had, or an input chosen wouldn't open.
     pub error: Option<String>,
-    /// The name of the input to have, kept between launches (#425): the
-    /// one last chosen, or none once None was.
-    pub remembered: Option<String>,
-    /// Has the input been chosen by hand this session?
-    by_hand: bool,
+    /// The names of the inputs to have open, kept between launches (#425):
+    /// those chosen, less those closed by hand.
+    pub remembered: Vec<String>,
     /// The names of the inputs as last followed, to see one come or go.
     listed: Vec<String>,
     /// When the inputs were last followed.
     followed: Option<web_time::Instant>,
     /// The notes held, in order of press, each with its velocity.
     held: Vec<(u8, u8)>,
+    /// The input each held note was played on, beside `held`.
+    held_on: Vec<u8>,
     /// The notes Pads modules claim (#428), which aren't held for the
     /// pianos, as an Omni Note In doesn't play them.
     pub claims: crate::dsp::NoteClaims,
@@ -174,31 +177,51 @@ impl MidiSession {
         }
     }
 
-    /// The input chosen by hand: opened, and remembered for next time.
-    pub fn choose(&mut self, index: usize) {
-        self.by_hand = true;
-        self.connect(index);
-        if let Some(device) = self.selected_device() {
-            self.remembered = Some(device.name.clone());
+    /// Opens input `index` if it's closed, or closes it if it's open, and
+    /// remembers the inputs open for next time.
+    pub fn toggle(&mut self, index: usize) {
+        let Some(name) = self.devices.get(index).map(|d| d.name.clone()) else { return };
+        if self.is_open(&name) {
+            self.remembered.retain(|n| *n != name);
+            self.disconnect(&name);
+        } else {
+            self.connect(index);
+            if self.is_open(&name) && !self.remembered.contains(&name) {
+                self.remembered.push(name);
+            }
         }
     }
 
-    /// None chosen by hand: closed, and forgotten.
-    pub fn choose_none(&mut self) {
-        self.by_hand = true;
-        self.remembered = None;
-        self.disconnect();
+    /// Opens input `index` beside those open, and remembers it. The browser
+    /// has no handover to resume them from.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn choose(&mut self, index: usize) {
+        let Some(name) = self.devices.get(index).map(|d| d.name.clone()) else { return };
+        if !self.is_open(&name) {
+            self.toggle(index);
+        }
     }
 
-    /// Tells of the input remembered from a past session. It's looked for
-    /// at the next [`follow_devices`](Self::follow_devices).
-    pub fn remember(&mut self, name: Option<String>) {
-        self.remembered = name.filter(|n| !n.is_empty());
+    /// None chosen by hand: every input closed, and forgotten.
+    pub fn choose_none(&mut self) {
+        self.remembered.clear();
+        self.disconnect_all();
+    }
+
+    /// Tells of the inputs remembered from a past session. They're looked
+    /// for at the next [`follow_devices`](Self::follow_devices).
+    pub fn remember(&mut self, names: Vec<String>) {
+        self.remembered = names.into_iter().filter(|n| !n.is_empty()).collect();
         self.listed.clear();
     }
 
+    /// The inputs remembered, for the app's storage: one a line.
+    pub fn remembered_setting(&self) -> String {
+        self.remembered.join("\n")
+    }
+
     /// Follows the inputs, if a second has gone since the last time (the
-    /// scanner thread looks every 2 s). Returns whether the input open
+    /// scanner thread looks every 2 s). Returns whether the inputs open
     /// changed.
     pub fn follow_devices_soon(&mut self) -> bool {
         let now = web_time::Instant::now();
@@ -209,16 +232,13 @@ impl MidiSession {
         self.follow_devices()
     }
 
-    /// Lists the inputs again and follows them. The input open keeps its
-    /// name as the list is numbered afresh, and is let go if it was
-    /// unplugged. The one remembered is opened when it appears, unless
-    /// something is open or None was chosen. Returns whether the input
-    /// open changed.
+    /// Lists the inputs again and follows them. An input open that was
+    /// unplugged is let go, and those remembered open as they appear.
+    /// Returns whether the inputs open changed.
     pub fn follow_devices(&mut self) -> bool {
         if self.engine.is_none() {
             return false;
         }
-        let open = self.selected_device().map(|d| d.name.clone());
         self.refresh_devices();
         let names: Vec<String> = self.devices.iter().map(|d| d.name.clone()).collect();
         if names == self.listed {
@@ -226,57 +246,77 @@ impl MidiSession {
         }
         self.listed = names;
         let mut changed = false;
-        if let Some(name) = open {
-            match self.devices.iter().position(|d| d.name == name) {
-                Some(index) => self.selected = Some(index),
-                None => {
-                    self.disconnect();
-                    changed = true;
-                }
+        for name in self.open_names() {
+            if !self.devices.iter().any(|d| d.name == name) {
+                self.disconnect(&name);
+                changed = true;
             }
         }
-        if let Some(index) = device_to_connect(self.remembered.as_deref(), &self.devices, self.selected, self.by_hand) {
+        for index in devices_to_connect(&self.remembered, &self.devices, &self.open_names()) {
             self.connect(index);
             changed = true;
         }
         changed
     }
 
-    /// The chosen input, if one is.
-    pub fn selected_device(&self) -> Option<&MidiDeviceInfo> {
-        self.selected.and_then(|i| self.devices.get(i))
+    /// The names of the inputs open, in the order they were opened into
+    /// their slots.
+    pub fn open_names(&self) -> Vec<String> {
+        self.engine.as_ref().map_or_else(Vec::new, |e| e.open_inputs().map(|(_, name)| name.to_string()).collect())
     }
 
-    /// Is the chosen input open?
+    /// Is the input called `name` open?
+    pub fn is_open(&self, name: &str) -> bool {
+        self.engine.as_ref().is_some_and(|e| e.slot_of(name).is_some())
+    }
+
+    /// The slot of the input called `name`, if it's open: the port its
+    /// events come on.
+    pub fn slot_of(&self, name: &str) -> Option<u8> {
+        self.engine.as_ref()?.slot_of(name)
+    }
+
+    /// Is any input open?
     pub fn is_connected(&self) -> bool {
-        self.selected.is_some() && self.engine.as_ref().is_some_and(|e| e.is_connected())
+        self.engine.as_ref().is_some_and(|e| e.is_connected())
     }
 
-    /// Opens input `index` in place of the one open. The notes held on the
-    /// last were let go (All Notes Off), so none are held after.
-    pub fn connect(&mut self, index: usize) {
+    /// Opens input `index` beside those open.
+    fn connect(&mut self, index: usize) {
         let Some(engine) = self.engine.as_mut() else { return };
         match engine.connect(index) {
-            Ok(()) => {
-                self.selected = Some(index);
-                self.error = None;
-            }
-            Err(e) => {
-                // connect() drops the previous connection before trying
-                self.selected = None;
-                self.error = Some(e.to_string());
-            }
+            Ok(_) => self.error = None,
+            Err(e) => self.error = Some(e.to_string()),
         }
-        self.held.clear();
     }
 
-    /// Closes the input open, letting go of its notes.
-    pub fn disconnect(&mut self) {
+    /// Closes the input called `name`, letting go of its notes.
+    fn disconnect(&mut self, name: &str) {
         let Some(engine) = self.engine.as_mut() else { return };
-        engine.disconnect();
-        self.selected = None;
+        let Some(slot) = engine.slot_of(name) else { return };
+        engine.disconnect(name);
         self.error = None;
-        self.held.clear();
+        self.let_go(slot);
+    }
+
+    /// Closes every input open, letting go of their notes.
+    fn disconnect_all(&mut self) {
+        for name in self.open_names() {
+            self.disconnect(&name);
+        }
+    }
+
+    /// Lets go of the notes held on input `port`, which was closed.
+    fn let_go(&mut self, port: u8) {
+        let mut at = 0;
+        while at < self.held.len() {
+            if self.held_on[at] == port {
+                self.held.remove(at);
+                self.held_on.remove(at);
+            } else {
+                at += 1;
+            }
+        }
     }
 
     /// The notes held, in order of press, each with its velocity.
@@ -310,32 +350,44 @@ impl MidiSession {
     }
 
     /// Takes every event waiting, and the notes the UI played, handing
-    /// each to `each` (the MIDI Monitor's log) as it's heard. `current`
+    /// each to `each` (the MIDI Monitor's log) as it's heard, with the
+    /// name of the device it came from (`None` for Soba's own). `current`
     /// gives where a parameter stands, which a toggle flips, a dropdown
     /// steps on from, an encoder turns from and a fader picks up.
-    pub fn drain(&mut self, mut each: impl FnMut(MidiEvent), current: impl Fn(u64, usize) -> Option<Standing>) -> Heard {
+    pub fn drain(&mut self, mut each: impl FnMut(MidiEvent, Option<&str>), current: impl Fn(u64, usize) -> Option<Standing>) -> Heard {
         let mut heard = Heard::default();
+        // Named once: the inputs don't open or close while this drains
+        let names: [Option<String>; MIDI_INPUTS] =
+            std::array::from_fn(|slot| self.engine.as_ref().and_then(|e| e.name_of(slot as u8)).map(str::to_string));
         if let Some(mut events) = self.events.take() {
             while let Ok(timestamped) = events.pop() {
-                each(timestamped.event);
-                self.hear(timestamped.event, &mut heard, &current);
+                let device = names.get(timestamped.port as usize).and_then(Option::as_deref);
+                each(timestamped.event, device);
+                self.hear_from(timestamped.port, device, timestamped.event, &mut heard, &current);
             }
             self.events = Some(events);
         }
         for event in std::mem::take(&mut self.played) {
-            each(event);
+            each(event, None);
             self.hear(event, &mut heard, &current);
         }
         heard
     }
 
-    /// What one event does: a note is held or let go, and a CC or a note is
-    /// learned, or turns the controls mapped to it.
+    /// What one event Soba played itself does (see [`hear_from`](Self::hear_from)).
     pub fn hear(&mut self, event: MidiEvent, heard: &mut Heard, current: &impl Fn(u64, usize) -> Option<Standing>) {
+        self.hear_from(SOBA_PORT, None, event, heard, current);
+    }
+
+    /// What one event from input `port`, the device called `device`, does:
+    /// a note is held or let go, and a CC or a note is learned, or turns
+    /// the controls mapped to it.
+    pub fn hear_from(&mut self, port: u8, device: Option<&str>, event: MidiEvent, heard: &mut Heard, current: &impl Fn(u64, usize) -> Option<Standing>) {
         let (source, number, channel, input) = match event {
             MidiEvent::NoteOn { channel, note, velocity } => {
                 if !self.held.iter().any(|&(n, _)| n == note) && !self.claims.claims(channel, note) {
                     self.held.push((note, velocity));
+                    self.held_on.push(port);
                     heard.notes_changed = true;
                 }
                 (MidiSource::Note, note, channel, MidiInput::NoteOn)
@@ -343,6 +395,7 @@ impl MidiSession {
             MidiEvent::NoteOff { channel, note, .. } => {
                 if let Some(at) = self.held.iter().position(|&(n, _)| n == note) {
                     self.held.remove(at);
+                    self.held_on.remove(at);
                     heard.notes_changed = true;
                 }
                 (MidiSource::Note, note, channel, MidiInput::NoteOff)
@@ -353,8 +406,10 @@ impl MidiSession {
                 return;
             }
         };
+        // The hands are one controller's: another device's CCs pass them by
+        let for_hands = device.is_none_or(|device| device == self.hands.device());
         // While Soba is taught the controller, its CCs are for that alone (#429)
-        if let (MidiInput::Cc(value), Some(_)) = (input, self.hands.teaching()) {
+        if let (MidiInput::Cc(value), Some(_), true) = (input, self.hands.teaching(), for_hands) {
             self.hands.hear(number, channel, value, current, &mut heard.turns);
             return;
         }
@@ -382,6 +437,11 @@ impl MidiSession {
                 if let Some(slot) = target.scene {
                     mapping = mapping.recalling(slot);
                 }
+                // With several devices open, from the one it came from, so
+                // the same CC on another turns something else (#435)
+                if self.engine.as_ref().is_some_and(|e| e.open_inputs().nth(1).is_some()) {
+                    mapping.device = device.map(str::to_string);
+                }
                 // A knob's or dropdown's CC may be an endless encoder: it
                 // says so over the next few values
                 self.guessing = (source == MidiSource::Cc && matches!(target.control, MidiControl::Knob | MidiControl::Select))
@@ -398,14 +458,14 @@ impl MidiSession {
         }
         // A taught control turns the selection's knob while the hands follow,
         // and the patch's mappings on it pause
-        if let MidiInput::Cc(value) = input {
+        if let (MidiInput::Cc(value), true) = (input, for_hands) {
             if self.hands.hear(number, channel, value, current, &mut heard.turns) {
                 return;
             }
         }
         for index in 0..self.mappings.len() {
             let mapping = &self.mappings.as_slice()[index];
-            if !mapping.hears(source, number, channel) {
+            if !mapping.hears(source, number, channel) || !mapping.hears_device(device) {
                 continue;
             }
             let (node_id, param_index, control) = (mapping.node_id, mapping.param_index, mapping.control);
@@ -568,11 +628,11 @@ mod tests {
         session.play_note(60, false);
 
         let mut logged = Vec::new();
-        let heard = session.drain(|event| logged.push(event), |_, _| None);
+        let heard = session.drain(|event, _| logged.push(event), |_, _| None);
         assert!(heard.notes_changed);
         assert_eq!(logged.len(), 3, "the MIDI Monitor logs them");
         assert_eq!(session.held(), [(64, crate::engine::UI_VELOCITY)]);
-        assert_eq!(session.drain(|_| {}, |_, _| None), Heard::default(), "heard once");
+        assert_eq!(session.drain(|_, _| {}, |_, _| None), Heard::default(), "heard once");
 
         let sent: Vec<_> = std::iter::from_fn(|| audio.pop().ok()).map(|e| e.event).collect();
         assert!(matches!(sent[..], [
@@ -804,14 +864,42 @@ mod tests {
     }
 
     #[test]
+    fn a_mapping_from_one_device_isnt_turned_by_another() {
+        let mut session = MidiSession::default();
+        let fantom = MidiMapping { device: Some("Fantom-06".into()), ..MidiMapping::new(74, 0, 7, 0, "Cutoff", 0.0, 100.0) };
+        session.open(vec![fantom, MidiMapping { jump: true, ..MidiMapping::new(74, 0, 8, 0, "Res", 0.0, 1.0) }]);
+        let mut heard = Heard::default();
+        let none = |_: u64, _: usize| None;
+        session.hear_from(1, Some("MiniLab3 MIDI"), cc(0, 74, 127), &mut heard, &none);
+        assert_eq!(heard.turns, [(8, 0, 1.0)], "the MiniLab turns only the mapping from any device");
+        let mut heard = Heard::default();
+        session.hear_from(0, Some("Fantom-06"), cc(0, 74, 127), &mut heard, &none);
+        assert_eq!(heard.turns, [(7, 0, 100.0), (8, 0, 1.0)]);
+    }
+
+    #[test]
+    fn a_note_held_on_a_device_is_let_go_when_its_closed_and_the_others_stay() {
+        let mut session = MidiSession::default();
+        let mut heard = Heard::default();
+        let none = |_: u64, _: usize| None;
+        session.hear_from(0, Some("Fantom-06"), on(0, 60), &mut heard, &none);
+        session.hear_from(1, Some("MiniLab3 MIDI"), on(0, 64), &mut heard, &none);
+        session.hear(on(0, 67), &mut heard, &none);
+        session.let_go(0);
+        assert_eq!(session.held(), [(64, 100), (67, 100)]);
+        session.hear_from(1, Some("MiniLab3 MIDI"), off(0, 64), &mut heard, &none);
+        assert_eq!(session.held(), [(67, 100)]);
+    }
+
+    #[test]
     fn drain_hands_every_event_to_the_monitor() {
         let (mut producer, consumer) = rtrb::RingBuffer::new(8);
         let mut session = MidiSession::new(None, Some(consumer), None);
         for event in [MidiEvent::NoteOn { channel: 0, note: 60, velocity: 1 }, cc(0, 1, 2)] {
-            producer.push(TimestampedMidiEvent { event, received: web_time::Instant::now() }).unwrap();
+            producer.push(TimestampedMidiEvent::heard(0, event)).unwrap();
         }
         let mut logged = Vec::new();
-        let heard = session.drain(|event| logged.push(event), |_, _| None);
+        let heard = session.drain(|event, _| logged.push(event), |_, _| None);
         assert_eq!(logged.len(), 2);
         assert!(heard.notes_changed);
         assert!(session.events.is_some());
@@ -826,43 +914,50 @@ mod remember_tests {
         names.iter().enumerate().map(|(index, n)| MidiDeviceInfo { name: n.to_string(), index }).collect()
     }
 
+    fn names(names: &[&str]) -> Vec<String> {
+        names.iter().map(|n| n.to_string()).collect()
+    }
+
     #[test]
-    fn the_remembered_device_is_found_by_name_wherever_it_is_listed() {
-        let devices = list(&["Loopback", "MiniLab3 MIDI"]);
-        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &devices, None, false), Some(1));
-        let shuffled = list(&["MiniLab3 MIDI", "Loopback"]);
-        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &shuffled, None, false), Some(0));
+    fn the_remembered_devices_are_found_by_name_wherever_they_are_listed() {
+        let remembered = names(&["MiniLab3 MIDI", "Fantom-06"]);
+        let devices = list(&["Loopback", "MiniLab3 MIDI", "Fantom-06"]);
+        assert_eq!(devices_to_connect(&remembered, &devices, &[]), [1, 2]);
+        let shuffled = list(&["Fantom-06", "MiniLab3 MIDI", "Loopback"]);
+        assert_eq!(devices_to_connect(&remembered, &shuffled, &[]), [0, 1]);
     }
 
     #[test]
     fn nothing_is_opened_while_unplugged_or_nothing_is_remembered() {
         let devices = list(&["Loopback"]);
-        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &devices, None, false), None);
-        assert_eq!(device_to_connect(None, &devices, None, false), None);
-        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &[], None, false), None);
+        assert!(devices_to_connect(&names(&["MiniLab3 MIDI"]), &devices, &[]).is_empty());
+        assert!(devices_to_connect(&[], &devices, &[]).is_empty());
+        assert!(devices_to_connect(&names(&["MiniLab3 MIDI"]), &[], &[]).is_empty());
     }
 
     #[test]
-    fn nothing_is_opened_over_an_input_already_open() {
-        let devices = list(&["Loopback", "MiniLab3 MIDI"]);
-        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &devices, Some(0), true), None);
-        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &devices, Some(0), false), None);
+    fn an_input_open_already_isnt_opened_again() {
+        let devices = list(&["Loopback", "MiniLab3 MIDI", "Fantom-06"]);
+        let remembered = names(&["MiniLab3 MIDI", "Fantom-06"]);
+        assert_eq!(devices_to_connect(&remembered, &devices, &names(&["MiniLab3 MIDI"])), [2]);
     }
 
     #[test]
     fn choosing_none_leaves_nothing_to_open() {
         let mut session = MidiSession::default();
-        session.remember(Some("MiniLab3 MIDI".into()));
+        session.remember(names(&["MiniLab3 MIDI"]));
         session.choose_none();
-        assert_eq!(session.remembered, None);
-        let devices = list(&["MiniLab3 MIDI"]);
-        assert_eq!(device_to_connect(session.remembered.as_deref(), &devices, session.selected, session.by_hand), None);
+        assert!(session.remembered.is_empty());
+        assert!(devices_to_connect(&session.remembered, &list(&["MiniLab3 MIDI"]), &[]).is_empty());
     }
 
     #[test]
-    fn a_blank_saved_name_is_nothing_remembered() {
+    fn the_setting_keeps_a_name_a_line_and_reads_the_single_name_kept_before() {
         let mut session = MidiSession::default();
-        session.remember(Some(String::new()));
-        assert_eq!(session.remembered, None);
+        session.remember(remembered_from("MiniLab3 MIDI"));
+        assert_eq!(session.remembered, ["MiniLab3 MIDI"]);
+        session.remember(names(&["MiniLab3 MIDI", "Fantom-06"]));
+        assert_eq!(remembered_from(&session.remembered_setting()), ["MiniLab3 MIDI", "Fantom-06"]);
+        assert!(remembered_from("").is_empty(), "a blank setting is nothing remembered");
     }
 }

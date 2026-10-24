@@ -131,7 +131,7 @@ const BACKGROUND_FRAMES_PER_FRAME: usize = 256;
 /// The most MIDI events one [`process_offline`](AudioProcessor::process_offline)
 /// buffer holds once the UI's notes join the caller's: the plugin passes up
 /// to 1024 of the host's. UI notes that don't fit wait for the next buffer.
-const OFFLINE_MIDI_CAPACITY: usize = 1024 + MAX_MIDI_EVENTS_PER_CALLBACK;
+pub(crate) const OFFLINE_MIDI_CAPACITY: usize = 1024 + MAX_MIDI_EVENTS_PER_CALLBACK;
 
 impl AudioProcessor {
     /// Creates a new audio processor.

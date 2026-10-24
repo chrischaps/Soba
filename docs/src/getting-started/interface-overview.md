@@ -19,7 +19,7 @@ From left to right:
 | **❓ Help** | **📖 Manual** opens this manual, and **⌨ Keyboard Shortcuts** (`F1`) lists the [shortcuts](#keyboard-shortcuts), and **🎓 Lessons** opens the [lessons](lessons.md) you take inside the app. **Check for Updates…**, **Check for Updates Automatically**, and **Roll Back** after an update: see [Updates](installation.md#updates) |
 | **Output** | The audio device to play through |
 | **Input** | The microphone, guitar or line input that [Audio Input](../modules/sources/audio-input.md) modules hear. It starts at **None**: nothing is opened until you choose a device. A filled dot (●) means it's open. |
-| **MIDI In** | The MIDI controller to listen to. A filled dot (●) means it's connected. At the foot of the menu, **Map Mode** (`Ctrl + L`) and the **Controller Map**: see [MIDI Learn](#midi-learn). Below them, **Teach Your Controller…**, **Hands Follow Selection** (`Ctrl + Shift + L`) and **Show the Controller** (`Ctrl + H`): see [Playing with a controller](#playing-with-a-controller). |
+| **MIDI In** | The MIDI controllers to listen to, as many at once as are ticked. A filled dot (●) means one is open. At the foot of the menu, **Map Mode** (`Ctrl + L`) and the **Controller Map**: see [MIDI Learn](#midi-learn). Below them, **Teach Your Controller…**, **Hands Follow Selection** (`Ctrl + Shift + L`) and **Show the Controller** (`Ctrl + H`): see [Playing with a controller](#playing-with-a-controller). |
 
 At the right end, the toolbar shows a CPU meter while the patch plays, the device's sample rate and channel count, and whether the audio engine is running. While an input is open, **In** shows how much audio is held between the input and output devices, in milliseconds; it turns amber for a moment after a dropout. Hover it for details.
 
@@ -240,11 +240,11 @@ The keys play every [Note In](../modules/midi/note-in.md#key-layout) module in t
 
 ### MIDI
 
-Choose your controller in the toolbar's **MIDI In** menu; Soba doesn't connect to one until you do. If the controller isn't listed, plug it in and click **🔄 Refresh** at the bottom of the menu. **None (Disconnect)** lets it go. Soba remembers your choice: next launch it connects the same controller, and if you plug it in after Soba starts it connects within a couple of seconds (choosing **None** makes it forget). Disconnecting or switching devices releases any notes that were held. If a controller can't be opened, the reason appears in the status bar.
+Tick your controller in the toolbar's **MIDI In** menu; Soba doesn't connect to one until you do. Tick more to play several at once, up to eight. If the controller isn't listed, plug it in and click **🔄 Refresh** at the bottom of the menu. Untick a device to close it, or choose **None (Disconnect)** to close them all. Soba remembers what's ticked: next launch it opens the same controllers, and if you plug one in after Soba starts it connects within a couple of seconds (unticking one, or choosing **None**, makes it forget). Closing a device releases the notes held on it. If a controller can't be opened, the reason appears in the status bar.
 
 **In the browser**, **MIDI In** starts as a **🎹 Connect MIDI** button. A web page may use MIDI only once you allow it, so click it and your browser asks; Firefox first offers a small add-on for the site that allows it. Then the menu lists your controllers, and a controller you plug in later appears by itself, with no Refresh needed. Allowing it lets [MIDI Out](../modules/output/midi-out.md) play your devices too. If you said no, allow MIDI in the site settings (the icon to the left of the address) and click **Connect MIDI** again. Chrome, Edge and Firefox have MIDI; Safari doesn't, and the button says so.
 
-Two modules listen to the controller: [Note In](../modules/midi/note-in.md), for one voice or chords, and [MIDI Monitor](../modules/midi/midi-monitor.md) to see what's arriving.
+Two modules listen to the controller: [Note In](../modules/midi/note-in.md), for one voice or chords, and [MIDI Monitor](../modules/midi/midi-monitor.md) to see what's arriving. With several devices open, each of them hears them all, until you give it a **Device** in its right-click menu: see [Listening to one device](../modules/midi/note-in.md#listening-to-one-device). A mapping learned while several devices are open answers only the device it was learned from.
 
 ### MIDI Learn
 
@@ -306,7 +306,7 @@ The [Hands On](../recipes/hands-on.md) example puts all of this to work on an Ar
 
 Mapping is for a patch you've finished. While you're building one, you want the encoders under your hand to be the knobs of whatever you're working on: click an oscillator and they turn its knobs, click a filter and they turn the filter's. That's **Hands Follow Selection**.
 
-**Teach Soba your controller first.** You do this once per controller. Choose **Teach Your Controller…** in the **MIDI In** menu, and the status bar walks you through it:
+**Teach Soba your controller first.** You do this once per controller. Choose **Teach Your Controller…** in the **MIDI In** menu, and the status bar walks you through it. With several devices open, it teaches the first one ticked, and once one is taught, the hands follow that one:
 
 1. "Turn encoder 1 a few clicks". Turn the first encoder a few clicks in one direction, at any speed. The status bar says what it heard (`Encoder 1 is CC 74 · ch 1, endless`) and asks for the next one, through encoder 8.
 2. "Move fader 1". Move each fader in turn, through fader 4.

@@ -309,6 +309,18 @@ impl Hands {
         }
     }
 
+    /// The name of the device whose controller the hands are ("" for none).
+    pub fn device(&self) -> &str {
+        &self.device
+    }
+
+    /// Of the devices `open`, the one whose controller the hands are
+    /// (#435): the first that has been taught, or else the first, to teach.
+    pub fn choose_device<'a>(&self, open: &'a [String]) -> Option<&'a str> {
+        let taught = open.iter().find(|name| self.controllers.get(*name).is_some_and(|c| !c.is_empty()));
+        taught.or(open.first()).map(String::as_str)
+    }
+
     /// The controller of the device open, if it has been taught.
     pub fn controller(&self) -> Option<&Controller> {
         self.controllers.get(&self.device).filter(|c| !c.is_empty())

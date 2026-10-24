@@ -334,6 +334,9 @@ pub struct SynthNodeData {
 /// How much of the node body shows through while it's bypassed.
 const BYPASSED_OPACITY: f32 = 0.4;
 
+/// The room a note after a module's title leaves for the close button.
+const TITLE_CLOSE_ROOM: f32 = 26.0;
+
 /// What a knob cell draws in and answers to: its module, the graph around
 /// it, the view's zoom, whether it's on the module or a group's face, and
 /// where its edits go.
@@ -1141,6 +1144,7 @@ impl SynthNodeData {
         ui: &mut egui::Ui,
         node_id: egui_node_graph2::NodeId,
         graph: &super::SynthGraph,
+        midi_inputs: &[String],
         responses: &mut Vec<NodeResponse<SynthResponse, Self>>,
     ) {
         ui.set_min_width(170.0);
@@ -1158,6 +1162,12 @@ impl SynthNodeData {
         }
         item(ui, "Reset to defaults", "", SynthResponse::ResetNode(node_id));
         item(ui, "Group", "Ctrl+G", SynthResponse::GroupNode(node_id));
+        // The MIDI device it hears (#435)
+        let mut device = None;
+        if super::midi_device::listens_to_devices(self.module_id) {
+            ui.separator();
+            device = super::midi_device::device_menu(ui, node_id, self, midi_inputs);
+        }
         let mut recorded = None;
         if !super::resample::sources(graph, node_id).is_empty() {
             ui.separator();
@@ -1166,6 +1176,7 @@ impl SynthNodeData {
         ui.separator();
         item(ui, "Delete", "Del", SynthResponse::DeleteNode(node_id));
         responses.extend(recorded.map(NodeResponse::User));
+        responses.extend(device.map(NodeResponse::User));
     }
 }
 
@@ -1325,7 +1336,7 @@ impl NodeDataTrait for SynthNodeData {
             if window.secondary_clicked() {
                 responses.push(NodeResponse::User(SynthResponse::NodeSelected(node_id)));
             }
-            let menu = crate::widgets::menu::context_menu(&window, |ui| self.node_menu(ui, node_id, graph, &mut responses));
+            let menu = crate::widgets::menu::context_menu(&window, |ui| self.node_menu(ui, node_id, graph, &user_state.midi_inputs, &mut responses));
             if menu.is_some() {
                 user_state.widget_context_menu_open = true;
             }
@@ -1369,18 +1380,26 @@ impl NodeDataTrait for SynthNodeData {
         );
         self.draw_category_icon(ui.painter(), icon_center, icon_size, self.titlebar_ink());
 
-        // The Arranger shows its name and the section playing, after the title
-        if self.display == NodeDisplay::Timeline {
-            if let Some(note) = super::arranger_display::title_note(graph, user_state, node_id) {
-                // After the title, which the editor draws next
-                let title_font = self.titlebar_text_style().resolve(ui.style());
-                let title = ui.painter().layout_no_wrap(graph[node_id].label.clone(), title_font, Color32::WHITE).size().x;
-                let font = egui::FontId::proportional(11.0 * zoom);
-                let ink = self.titlebar_ink();
-                let galley = ui.painter().layout_no_wrap(note, font, ink.gamma_multiply(0.85));
-                let at = egui::pos2(icon_rect.right() + title + 12.0 * zoom, icon_rect.center().y - galley.size().y / 2.0);
-                ui.painter().galley(at, galley, ink);
-            }
+        // The Arranger shows its name and the section playing after the
+        // title, and a module set to one MIDI device names it (#435)
+        let note = if self.display == NodeDisplay::Timeline {
+            super::arranger_display::title_note(graph, user_state, node_id)
+        } else {
+            super::midi_device::title_note(self, &user_state.midi_inputs)
+        };
+        if let Some(note) = note {
+            // After the title, which the editor draws next
+            let title_font = self.titlebar_text_style().resolve(ui.style());
+            let title = ui.painter().layout_no_wrap(graph[node_id].label.clone(), title_font, Color32::WHITE).size().x;
+            let font = egui::FontId::proportional(11.0 * zoom);
+            let ink = self.titlebar_ink();
+            let x = icon_rect.right() + title + 12.0 * zoom;
+            // A long name stops short of the close button, with an ellipsis
+            let mut job = egui::text::LayoutJob::simple_singleline(note, font, ink.gamma_multiply(0.85));
+            job.wrap = egui::text::TextWrapping::truncate_at_width((ui.max_rect().right() - TITLE_CLOSE_ROOM * zoom - x).max(0.0));
+            let galley = ui.painter().layout_job(job);
+            let at = egui::pos2(x, icon_rect.center().y - galley.size().y / 2.0);
+            ui.painter().galley(at, galley, ink);
         }
 
         responses

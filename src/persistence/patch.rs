@@ -198,6 +198,10 @@ pub struct MidiMapping {
     /// The hardware's top is the control's bottom.
     #[serde(default, skip_serializing_if = "is_false")]
     pub invert: bool,
+    /// The device it's heard from, by name (#435), or `None` for any: a
+    /// mapping learned while several were open keeps the one it came from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device: Option<String>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -230,6 +234,7 @@ impl MidiMapping {
             encoding: MidiEncoding::Absolute,
             jump: false,
             invert: false,
+            device: None,
         }
     }
 
@@ -256,6 +261,15 @@ impl MidiMapping {
     /// Does it hear `number` from `source` on `channel` (0-15)?
     pub fn hears(&self, source: MidiSource, number: u8, channel: u8) -> bool {
         self.macro_slot.is_none() && self.source == source && self.cc_number == number && (self.channel == 0 || self.channel == channel + 1)
+    }
+
+    /// Does it hear what the device called `device` sends? What Soba plays
+    /// itself (`None`), every mapping hears.
+    pub fn hears_device(&self, device: Option<&str>) -> bool {
+        match (self.device.as_deref(), device) {
+            (Some(own), Some(device)) => own == device,
+            _ => true,
+        }
     }
 
     /// What `input` sets its control to, from `current`, or `None` when it
@@ -1202,6 +1216,21 @@ mod tests {
         assert_eq!(serde_json::from_str::<MidiMapping>(&json).unwrap(), styled);
         let read: MidiMapping = serde_json::from_value(old).unwrap();
         assert_eq!((read.source, read.control, read.scene), (MidiSource::Cc, MidiControl::Knob, None));
+    }
+
+    #[test]
+    fn test_a_mapping_from_one_device_hears_only_it_and_round_trips() {
+        let any = MidiMapping::new(74, 0, 1, 0, "Cutoff", 0.0, 1.0);
+        let fantom = MidiMapping { device: Some("Fantom-06".into()), ..any.clone() };
+        assert!(any.hears_device(Some("MiniLab3 MIDI")) && any.hears_device(None));
+        assert!(fantom.hears_device(Some("Fantom-06")));
+        assert!(!fantom.hears_device(Some("MiniLab3 MIDI")));
+        assert!(fantom.hears_device(None), "what Soba plays itself, every mapping hears");
+
+        let json = serde_json::to_string(&fantom).unwrap();
+        assert!(json.contains("\"device\":\"Fantom-06\""), "{json}");
+        assert_eq!(serde_json::from_str::<MidiMapping>(&json).unwrap(), fantom);
+        assert!(!serde_json::to_string(&any).unwrap().contains("device"), "any device is written as before");
     }
 
     #[test]

@@ -25,6 +25,7 @@ mod divider_display;
 mod link_display;
 mod midi_out_display;
 mod midi_log_display;
+pub mod midi_device;
 mod output_meter_display;
 mod scope_display;
 mod noise_display;

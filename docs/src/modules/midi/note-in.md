@@ -72,15 +72,23 @@ The keys play every Note In whose **Source** isn't MIDI, in the browser and insi
 
 ### Choosing a MIDI device
 
-MIDI comes in from the device chosen in **MIDI In** on the toolbar. The menu lists every MIDI input the system can see. Pick one and the dot beside its name fills in (●) once it's connected. **None (Disconnect)** lets go of it.
+MIDI comes in from the devices ticked in **MIDI In** on the toolbar. The menu lists every MIDI input the system can see. Tick one and the dot fills in (●) once it's open. Tick as many as you play at once, up to eight: a keyboard, a pad controller and a drum machine sending clock can all be open together. Untick one to close it. **None (Disconnect)** closes them all.
 
 - **Plugged in a device after starting Soba?** Open the menu and click **🔄 Refresh**.
 - **In the browser,** the menu is a **🎹 Connect MIDI** button until you allow MIDI, and a device plugged in later appears by itself. See [MIDI](../../getting-started/interface-overview.md#midi).
-- **Connection failed?** The reason appears in the status bar at the bottom of the window, and the selection goes back to None. On Windows, a device another app already has open (a DAW, a browser, a controller's editor) can't be opened a second time, so close the other app and pick the device again.
-- **Switching or disconnecting a device** releases any notes still held on it, so nothing sticks.
+- **Connection failed?** The reason appears in the status bar at the bottom of the window, and the device stays unticked. On Windows, a device another app already has open (a DAW, a browser, a controller's editor) can't be opened a second time, so close the other app and tick the device again.
+- **Closing or unplugging a device** releases the notes still held on it, so nothing sticks. Notes held on the other devices play on.
 - **Inside a DAW,** Soba plays the notes on its track, and there's no **MIDI In** menu.
 
-The choice isn't saved with the patch or between sessions. One device feeds every Note In and [MIDI Monitor](./midi-monitor.md) module in the patch.
+Soba remembers the devices ticked and opens them again next launch, or as soon as each is plugged in.
+
+### Listening to one device
+
+Every Note In hears every device open, until you give it a **Device**. Right-click the module, open **Device** and choose one of the devices open. Its name appears faintly after the module's title, and from then on the module hears that device alone. Two keyboards can then play two synths, each through its own Note In, on the same MIDI channel. **Any** hears them all again.
+
+The Device is saved with the patch, by the device's name, so the patch finds it on another computer with the same gear. While no device of that name is open, the name dims and the module hears no MIDI. It still hears the computer keys and the piano, which aren't a device.
+
+[Pads](./pads.md), [Controls](./controls.md), the [Clock](../modulation/clock.md) and the [MIDI Monitor](./midi-monitor.md) have a Device too.
 
 ### Claimed notes
 

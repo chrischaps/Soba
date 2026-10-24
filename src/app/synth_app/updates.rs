@@ -134,14 +134,15 @@ impl SynthApp {
             Ok(engine) => (self.audio.output().map(|d| d.name.clone()), engine.input_name().map(str::to_string)),
             Err(_) => (None, None),
         };
-        let midi_device = self.midi.selected_device().map(|d| d.name.clone());
+        let midi_devices = self.midi.open_names();
         Ok(Resume {
             patch: autosave,
             unsaved: self.has_unsaved_changes(),
             view,
             output_device,
             input_device,
-            midi_device,
+            midi_device: midi_devices.first().cloned(),
+            midi_devices,
             playing: self.is_playing,
             from_version: release::CURRENT.to_string(),
         })
@@ -170,8 +171,12 @@ impl SynthApp {
                 self.select_input(Some(index));
             }
         }
-        if let Some(index) = resume.midi_device.and_then(|name| self.midi.devices.iter().find(|d| d.name == name)).map(|d| d.index) {
-            self.connect_midi_device(index);
+        // From before #435, the one device open
+        let midi_devices = if resume.midi_devices.is_empty() { resume.midi_device.into_iter().collect() } else { resume.midi_devices };
+        for name in midi_devices {
+            if let Some(index) = self.midi.devices.iter().find(|d| d.name == name).map(|d| d.index) {
+                self.midi.choose(index);
+            }
         }
         self.pending_view = resume.view.map(|(zoom, [x, y])| (zoom, egui::pos2(x, y)));
         if resume.playing {

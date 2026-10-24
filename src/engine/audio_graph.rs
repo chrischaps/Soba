@@ -15,7 +15,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::dsp::bypass::{bypass_routes, can_bypass};
-use crate::dsp::{DspModule, ModuleRegistry, PortDefinition, SampleData, SignalBuffer, SignalType, SpectrumPorts};
+use crate::dsp::{DspModule, ListenTo, ModuleRegistry, PortDefinition, SampleData, SignalBuffer, SignalType, SpectrumPorts};
 use crate::dsp::primitives::Markers;
 use crate::engine::commands::{EngineCommand, NodeId, PlanMessage, PortIndex};
 use crate::engine::graph_plan::{
@@ -62,6 +62,8 @@ struct NodeSpec {
     bypass_routes: Vec<Option<usize>>,
     /// Whether the module is bypassed.
     bypassed: bool,
+    /// The MIDI input it hears (#435).
+    listen: ListenTo,
     /// Whether the module works per channel of a polyphonic cable.
     polyphonic: bool,
     /// Whether the module brings live input into the patch.
@@ -94,6 +96,7 @@ impl NodeSpec {
             parameters: module.parameters().iter().map(|p| p.default).collect(),
             bypass_routes,
             bypassed: false,
+            listen: ListenTo::Any,
             polyphonic: module.polyphonic(),
             live_input: module.is_live_input(),
             note_claims: module.note_claims(),
@@ -475,6 +478,18 @@ impl AudioGraph {
         self.nodes.get(&node_id).map(|spec| spec.bypassed)
     }
 
+    /// The MIDI input a module hears, or `None` if it doesn't exist.
+    pub fn listen(&self, node_id: NodeId) -> Option<ListenTo> {
+        self.nodes.get(&node_id).map(|spec| spec.listen)
+    }
+
+    /// Has a module hear one MIDI input, or every one (#435), in the next
+    /// compiled plan; a running plan is told with [`GraphPlan::set_listen`].
+    /// Returns false if the node doesn't exist.
+    pub fn set_listen(&mut self, node_id: NodeId, listen: ListenTo) -> bool {
+        self.nodes.get_mut(&node_id).map(|spec| spec.listen = listen).is_some()
+    }
+
     /// Clears the entire graph.
     pub fn clear(&mut self) {
         self.nodes.clear();
@@ -758,6 +773,7 @@ impl AudioGraph {
                 value,
             } => self.set_parameter(node_id, param_index, value),
             EngineCommand::SetBypass { node_id, bypassed } => self.set_bypass(node_id, bypassed),
+            EngineCommand::Listen { node_id, listen } => self.set_listen(node_id, listen),
             EngineCommand::SetPlaying(_) => {
                 // Handled on the audio side
                 true
@@ -930,6 +946,7 @@ impl AudioGraph {
                 hears_live: live,
                 spectrum: spec.spectrum_watch(node_id, &self.connections),
                 faulted: false,
+                listen: spec.listen,
             });
         }
 
@@ -1849,6 +1866,23 @@ mod tests {
         plan.process(&ProcessContext::new(44100.0, 4));
 
         assert_eq!(plan.outputs[0].samples, [1.0; 4]);
+    }
+
+    #[test]
+    fn test_a_recompile_keeps_the_device_a_module_listens_to() {
+        use crate::dsp::ListenTo;
+        let mut graph = AudioGraph::new(44100.0, 256);
+        graph.add_module_instance(1, Box::new(TestOscillator::new(0.5)));
+        let mut plan = run_block(&mut graph, 256);
+        assert_eq!(plan.listen(1), Some(ListenTo::Any), "any, until set");
+        assert!(graph.set_listen(1, ListenTo::Port(2)));
+        assert!(plan.set_listen(1, ListenTo::Port(2)));
+        assert!(!graph.set_listen(9, ListenTo::Port(2)), "no such module");
+
+        graph.add_module_instance(2, Box::new(TestOscillator::default()));
+        install(&mut graph, &mut plan);
+        assert_eq!(plan.listen(1), Some(ListenTo::Port(2)));
+        assert_eq!(graph.listen(1), Some(ListenTo::Port(2)));
     }
 
     #[test]

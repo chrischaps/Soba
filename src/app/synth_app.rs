@@ -78,6 +78,7 @@ mod lossy_load;
 mod main_area;
 mod learn_into;
 mod map_mode;
+mod midi_listen;
 mod mutating;
 mod out_of_sight;
 mod page_audio;
@@ -690,23 +691,23 @@ impl SynthApp {
         self.midi.refresh_devices();
     }
 
-    /// Lists the MIDI inputs again and follows them: the one open keeps its
-    /// name and is let go if unplugged, and the one remembered opens when
-    /// it appears (#425).
+    /// Lists the MIDI inputs again and follows them: one unplugged is let
+    /// go, and those remembered open as they appear (#425).
     fn follow_midi_devices(&mut self) {
         if self.midi.follow_devices() {
             self.user_state.set_midi_active_notes(self.midi.held());
         }
     }
 
-    /// Connect to a MIDI device by index, and remember it for next time
-    fn connect_midi_device(&mut self, index: usize) {
-        self.midi.choose(index);
-        // Notes held on the previous device were released (All Notes Off)
+    /// Opens a MIDI input beside those open, or closes it if it's open
+    /// (#435), and remembers the inputs open for next time
+    fn toggle_midi_device(&mut self, index: usize) {
+        self.midi.toggle(index);
+        // Notes held on a device closed were released (All Notes Off)
         self.user_state.set_midi_active_notes(self.midi.held());
     }
 
-    /// Disconnect from the current MIDI device
+    /// Closes every MIDI input
     fn disconnect_midi_device(&mut self) {
         self.midi.choose_none();
         self.user_state.set_midi_active_notes(self.midi.held());
@@ -719,6 +720,7 @@ impl SynthApp {
     /// Notes reach Note In modules on the audio thread, sample-accurately;
     /// nothing here affects what they play.
     fn process_midi_events(&mut self, now: f64) {
+        self.follow_midi_listening();
         self.follow_hands(now);
         // The pads' notes, which the pianos and their ears leave be (#428)
         let claims = crate::graph::pads_claims(&self.graph_state.graph);
@@ -727,7 +729,7 @@ impl SynthApp {
         let standings = self.midi_standings();
         let was_learning = self.is_midi_learning();
         let (user_state, overlay) = (&mut self.user_state, &mut self.hands_overlay);
-        let heard = self.midi.drain(|event| { user_state.push_midi_event(event, now); overlay.hear(event, now) }, |node, param| standings.get(&(node, param)).copied());
+        let heard = self.midi.drain(|event, device| { user_state.push_midi_event(event, device, now); overlay.hear(event, now) }, |node, param| standings.get(&(node, param)).copied());
         self.show_midi_pickups(now);
 
         if heard.learned {
@@ -2320,7 +2322,7 @@ impl SynthApp {
         }
         // A DAW supplies the plugin's MIDI
         if self.hosted.is_none() {
-            self.midi.remember(storage.and_then(|s| s.get_string(MIDI_IN_DEVICE_KEY)));
+            self.midi.remember(storage.and_then(|s| s.get_string(MIDI_IN_DEVICE_KEY)).map_or_else(Vec::new, |s| crate::app::midi_session::remembered_from(&s)));
             self.follow_midi_devices();
         }
         if let Some(style) = storage.and_then(|s| s.get_string(KNOB_STYLE_KEY)) {
@@ -2907,7 +2909,7 @@ impl eframe::App for SynthApp {
         self.hands_overlay.store(storage);
         storage.set_string(KNOB_STYLE_KEY, self.user_state.knob_style.name().to_string());
         storage.set_string(MIDI_OUT_PORTS_KEY, crate::link::midi::MIDI.setting());
-        storage.set_string(MIDI_IN_DEVICE_KEY, self.midi.remembered.clone().unwrap_or_default());
+        storage.set_string(MIDI_IN_DEVICE_KEY, self.midi.remembered_setting());
         if let Ok(engine) = &self.audio.engine {
             storage.set_string(AUDIO_SYSTEM_KEY, engine.audio_system().key().to_string());
             storage.set_string(BUFFER_FRAMES_KEY, engine.buffer_request().map(|f| f.to_string()).unwrap_or_default());

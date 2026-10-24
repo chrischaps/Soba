@@ -601,49 +601,51 @@ fn input_menu(ui: &mut egui::Ui, audio: &AudioDevices) -> Vec<AppAction> {
     actions
 }
 
-/// The MIDI In selector: the device that plays Note In modules and MIDI Learn.
+/// What the MIDI In selector shows shut: the input open, or the first of
+/// those open and how many more.
+pub(super) fn midi_in_summary(open: &[String]) -> String {
+    let Some(first) = open.first() else { return "None".to_string() };
+    // Truncate long device names
+    let first = if first.chars().count() > 22 { format!("{}...", first.chars().take(19).collect::<String>()) } else { first.clone() };
+    match open.len() {
+        1 => first,
+        n => format!("{first} +{}", n - 1),
+    }
+}
+
+/// The MIDI In selector: the devices that play Note In modules and MIDI
+/// Learn, as many open at once as are ticked (#435).
 fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession, map_mode: bool, controller_map: bool, overlay: bool) -> Vec<AppAction> {
     let mut actions = Vec::new();
-    // Get current MIDI device name for display
-    let current_midi = midi.selected_device()
-        .map(|d| d.name.as_str())
-        .unwrap_or("None");
-
-    // Truncate long device names
-    let midi_display_name = if current_midi.len() > 25 {
-        format!("{}...", &current_midi[..22])
-    } else {
-        current_midi.to_string()
-    };
+    let open = midi.open_names();
 
     // MIDI connection indicator
     let midi_indicator = if midi.is_connected() { "● " } else { "○ " };
 
     egui::ComboBox::from_id_salt("midi_device_selector")
-        .selected_text(format!("{}{}", midi_indicator, midi_display_name))
+        .selected_text(format!("{}{}", midi_indicator, midi_in_summary(&open)))
         .width(180.0)
         .height(DEVICE_MENU_HEIGHT)
+        // Ticking a device leaves the list open, to tick the next
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
         .show_ui(ui, |ui| {
             // Option to disconnect / select none
-            if ui.selectable_label(
-                midi.selected.is_none(),
-                "None (Disconnect)"
-            ).clicked() {
+            if ui.selectable_label(open.is_empty(), "None (Disconnect)").clicked() {
                 actions.push(AppAction::DisconnectMidi);
             }
 
             ui.separator();
 
-            // List available MIDI devices
+            // List available MIDI devices, each open or not
             if midi.devices.is_empty() {
                 ui.label(RichText::new("No MIDI devices found")
                     .color(theme::text::DISABLED)
                     .italics());
             } else {
                 for device in &midi.devices {
-                    let is_selected = midi.selected == Some(device.index);
-                    if ui.selectable_label(is_selected, &device.name).clicked() {
-                        actions.push(AppAction::ConnectMidi(device.index));
+                    let mut is_open = open.contains(&device.name);
+                    if ui.checkbox(&mut is_open, &device.name).clicked() {
+                        actions.push(AppAction::ToggleMidi(device.index));
                     }
                 }
             }

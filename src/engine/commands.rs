@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use crate::dsp::primitives::Markers;
-use crate::dsp::{Audition, MeterLevels, OutputLevels, Readout, SampleData, SignalBuffer, Snapshot, MAX_CHANNELS};
+use crate::dsp::{Audition, ListenTo, MeterLevels, OutputLevels, Readout, SampleData, SignalBuffer, Snapshot, MAX_CHANNELS};
 use crate::modules::oscilloscope::SCOPE_BUFFER_SIZE;
 use crate::modules::scenes::SceneKnob;
 
@@ -94,6 +94,13 @@ pub enum EngineCommand {
         node_id: NodeId,
         /// True to pass the module's audio input straight to its output.
         bypassed: bool,
+    },
+
+    /// Have a module hear one MIDI input, or every one (#435): its Device.
+    Listen {
+        /// Target node.
+        node_id: NodeId,
+        listen: ListenTo,
     },
 
     /// Start or stop audio processing.
@@ -237,6 +244,8 @@ pub enum PlanMessage {
     },
     /// Bypass a running module, or bring it back.
     SetBypass { node_id: NodeId, bypassed: bool },
+    /// Have a running module hear one MIDI input, or every one.
+    Listen { node_id: NodeId, listen: ListenTo },
     /// Play a chord on a running module's outputs, or stop.
     Audition { node_id: NodeId, chord: Option<Audition> },
     /// Give a running module a recording to play, or take its away. The
@@ -258,6 +267,7 @@ impl PlanMessage {
         match *self {
             Self::SetParameter { node_id, .. }
             | Self::SetBypass { node_id, .. }
+            | Self::Listen { node_id, .. }
             | Self::Audition { node_id, .. }
             | Self::LoadSample { node_id, .. }
             | Self::SetMarkers { node_id, .. }

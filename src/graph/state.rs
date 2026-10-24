@@ -62,6 +62,8 @@ pub struct DisplayMidiEvent {
     pub event: MidiEvent,
     /// Relative timestamp (seconds since first event).
     pub timestamp: f32,
+    /// The device it came from, by name (#435), or `None` for Soba's own.
+    pub device: Option<String>,
 }
 
 /// Oscilloscope waveform data for display.
@@ -223,6 +225,9 @@ pub struct SynthGraphState {
     /// The notes Pads modules claim (#428), which the piano ears skip, as
     /// an Omni Note In does.
     pub note_claims: crate::dsp::NoteClaims,
+    /// The names of the MIDI inputs open (#435), for the Device a module
+    /// listens to and the MIDI Monitor's log.
+    pub midi_inputs: Vec<String>,
 
     /// The badges of the knobs a MIDI CC or host macro turns, keyed by
     /// (engine_node_id, param_index). The app works them out afresh from
@@ -411,6 +416,7 @@ impl Default for SynthGraphState {
             midi_notes: VecDeque::new(),
             midi_note_count: 0,
             note_claims: crate::dsp::NoteClaims::EMPTY,
+            midi_inputs: Vec::new(),
             midi_mappings: HashMap::new(),
             scene_midi_mappings: HashMap::new(),
             midi_learn_active: false,
@@ -700,11 +706,11 @@ impl SynthGraphState {
     /// `now` is the UI's clock (egui's input time), which a capture steps
     /// frame by frame, so a filmed log reads the same every time.
     /// Only the most recent MAX_MIDI_EVENTS are kept.
-    pub fn push_midi_event(&mut self, event: MidiEvent, now: f64) {
+    pub fn push_midi_event(&mut self, event: MidiEvent, device: Option<&str>, now: f64) {
         let first = *self.midi_first_event_time.get_or_insert(now);
         let timestamp = (now - first) as f32;
 
-        self.midi_events.push_back(DisplayMidiEvent { event, timestamp });
+        self.midi_events.push_back(DisplayMidiEvent { event, timestamp, device: device.map(str::to_string) });
         // A pad's notes aren't for the ears
         match event {
             MidiEvent::NoteOn { channel, note, .. } | MidiEvent::NoteOff { channel, note, .. } if self.note_claims.claims(channel, note) => {}
@@ -917,23 +923,23 @@ mod tests {
         // A note tapped and let go between frames, among more events than a
         // MIDI Monitor keeps
         for controller in 0..20 {
-            state.push_midi_event(MidiEvent::ControlChange { channel: 0, controller, value: 64 }, 0.0);
+            state.push_midi_event(MidiEvent::ControlChange { channel: 0, controller, value: 64 }, None, 0.0);
         }
-        state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 60, velocity: 40 }, 0.0);
-        state.push_midi_event(MidiEvent::NoteOff { channel: 0, note: 60, velocity: 64 }, 0.0);
+        state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 60, velocity: 40 }, None, 0.0);
+        state.push_midi_event(MidiEvent::NoteOff { channel: 0, note: 60, velocity: 64 }, None, 0.0);
         assert_eq!(state.midi_notes_since(seen), vec![(60, 40), (60, 0)]);
         assert_eq!(state.midi_notes_since(state.midi_note_count()), vec![]);
         // Only as many as are kept
         for _ in 0..MAX_MIDI_NOTES {
-            state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 61, velocity: 90 }, 0.0);
+            state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 61, velocity: 90 }, None, 0.0);
         }
         assert_eq!(state.midi_notes_since(seen).len(), MAX_MIDI_NOTES);
 
         // A pad's notes aren't for the ears (#428)
         state.note_claims.claim(Some(9), 36);
         let seen = state.midi_note_count();
-        state.push_midi_event(MidiEvent::NoteOn { channel: 9, note: 36, velocity: 90 }, 0.0);
-        state.push_midi_event(MidiEvent::NoteOff { channel: 9, note: 36, velocity: 0 }, 0.0);
+        state.push_midi_event(MidiEvent::NoteOn { channel: 9, note: 36, velocity: 90 }, None, 0.0);
+        state.push_midi_event(MidiEvent::NoteOff { channel: 9, note: 36, velocity: 0 }, None, 0.0);
         assert_eq!(state.midi_notes_since(seen), vec![]);
         assert!(matches!(state.midi_events().back().map(|e| e.event), Some(MidiEvent::NoteOff { channel: 9, .. })), "though the MIDI Monitor logs them");
     }

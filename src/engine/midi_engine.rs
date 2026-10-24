@@ -11,6 +11,10 @@
 //!
 //! In the browser the devices come from Web MIDI ([`super::web_midi`]) once
 //! Connect MIDI is allowed, and arrive in the same queues.
+//!
+//! Up to [`MIDI_INPUTS`] devices are open at once (#435), each in a slot of
+//! its own that stamps its events, so a module set to one device hears it
+//! and not the others.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -21,6 +25,8 @@ use midir::{MidiInput, MidiInputPort};
 #[cfg(not(target_arch = "wasm32"))]
 use midir::MidiInputConnection;
 use rtrb::{Consumer, Producer, RingBuffer};
+
+use crate::dsp::{MIDI_INPUTS, SOBA_PORT};
 
 /// Default buffer size for MIDI events.
 pub const DEFAULT_MIDI_BUFFER_SIZE: usize = 512;
@@ -237,7 +243,8 @@ impl MidiEvent {
         }
     }
 
-    /// The audio-thread form of this event, placed at `sample_offset`.
+    /// The audio-thread form of this event, placed at `sample_offset`, as
+    /// played by Soba itself (see [`crate::dsp::MidiEvent::from_port`]).
     /// Every message a module could use has one, so it's always `Some`.
     pub fn to_dsp(&self, sample_offset: u32) -> Option<crate::dsp::MidiEvent> {
         use crate::dsp::MidiMessage;
@@ -297,12 +304,19 @@ pub struct TimestampedMidiEvent {
     pub event: MidiEvent,
     /// When the event arrived, on the same clock the audio callback reads.
     pub received: Instant,
+    /// The input it came in on, or [`SOBA_PORT`] for what Soba played.
+    pub port: u8,
 }
 
 impl TimestampedMidiEvent {
-    /// Stamps `event` as arriving now.
+    /// Stamps `event` as played by Soba now.
     pub fn now(event: MidiEvent) -> Self {
-        Self { event, received: Instant::now() }
+        Self::heard(SOBA_PORT, event)
+    }
+
+    /// Stamps `event` as arriving now on input `port`.
+    pub fn heard(port: u8, event: MidiEvent) -> Self {
+        Self { event, received: Instant::now(), port }
     }
 }
 
@@ -387,16 +401,20 @@ struct MidiState {
     port_names: Vec<String>,
 }
 
+/// A device being listened to, and its name.
+struct OpenInput {
+    name: String,
+    connection: InputConnection,
+}
+
 /// MIDI engine for receiving MIDI input.
 pub struct MidiEngine {
     /// Cached device list.
     devices: Vec<MidiDeviceInfo>,
-    /// Currently selected device index (None = no device).
-    selected_device: Option<usize>,
-    /// Active MIDI connection.
-    connection: Option<InputConnection>,
+    /// The devices open, each in the slot its events are stamped with.
+    inputs: [Option<OpenInput>; MIDI_INPUTS],
     /// Producers for sending events to the audio thread and the UI. Shared
-    /// with the midir callback; each connection clones the Arc, and closing
+    /// with the midir callbacks; each connection clones the Arc, and closing
     /// the connection drops that clone, so the producers outlive any one
     /// device. Only MIDI input and UI threads lock this, never audio.
     senders: Arc<Mutex<MidiSenders>>,
@@ -450,8 +468,7 @@ impl MidiEngine {
 
         let engine = Self {
             devices,
-            selected_device: None,
-            connection: None,
+            inputs: Default::default(),
             senders: Arc::new(Mutex::new(MidiSenders { audio: audio_producer, ui: ui_producer, waker: None })),
             state,
             scan_running,
@@ -488,28 +505,45 @@ impl MidiEngine {
         &self.devices
     }
 
-    /// Get the currently selected device index.
-    pub fn selected_device(&self) -> Option<usize> {
-        self.selected_device
+    /// The devices open: each one's slot and name, in slot order.
+    pub fn open_inputs(&self) -> impl Iterator<Item = (u8, &str)> {
+        self.inputs.iter().enumerate().filter_map(|(slot, input)| Some((slot as u8, input.as_ref()?.name.as_str())))
     }
 
-    /// Connect to a MIDI device by index.
-    pub fn connect(&mut self, device_index: usize) -> Result<(), MidiError> {
-        // Disconnect existing connection
-        self.disconnect();
+    /// The slot of the device called `name`, if it's open.
+    pub fn slot_of(&self, name: &str) -> Option<u8> {
+        self.open_inputs().find(|&(_, open)| open == name).map(|(slot, _)| slot)
+    }
 
+    /// The name of the device open in `slot`.
+    pub fn name_of(&self, slot: u8) -> Option<&str> {
+        self.inputs.get(slot as usize)?.as_ref().map(|input| input.name.as_str())
+    }
+
+    /// Opens the device at `device_index`, beside any already open, and
+    /// returns its slot. A device open already keeps the slot it has.
+    pub fn connect(&mut self, device_index: usize) -> Result<u8, MidiError> {
         let name = self
             .devices
             .get(device_index)
             .map(|d| d.name.clone())
             .ok_or(MidiError::DeviceNotFound)?;
+        if let Some(slot) = self.slot_of(&name) {
+            return Ok(slot);
+        }
+        let slot = self
+            .inputs
+            .iter()
+            .position(Option::is_none)
+            .ok_or_else(|| MidiError::ConnectionError(format!("{name}: {MIDI_INPUTS} MIDI inputs are open already")))?;
+        let port = slot as u8;
         let senders = Arc::clone(&self.senders);
         let on_message = move |data: &[u8]| {
             // Stamped on arrival rather than with the device's timestamp,
             // whose clock starts at connection and differs per platform;
             // the audio callback reads this same clock
             if let Some(event) = MidiEvent::from_bytes(data) {
-                let stamped = TimestampedMidiEvent::now(event);
+                let stamped = TimestampedMidiEvent::heard(port, event);
                 if let Ok(mut senders) = senders.lock() {
                     senders.send(stamped);
                 }
@@ -517,12 +551,10 @@ impl MidiEngine {
         };
         let connection = self.open(&name, on_message)?;
 
-        self.connection = Some(connection);
-        self.selected_device = Some(device_index);
+        eprintln!("MIDI connected to device {}: {} (input {})", device_index, name, slot + 1);
+        self.inputs[slot] = Some(OpenInput { name, connection });
 
-        eprintln!("MIDI connected to device {}: {}", device_index, name);
-
-        Ok(())
+        Ok(port)
     }
 
     /// Listens to the input called `name`.
@@ -565,22 +597,30 @@ impl MidiEngine {
         super::web_midi::open_input(name, on_message).ok_or(MidiError::DeviceNotFound)
     }
 
-    /// Disconnect from the current MIDI device.
+    /// Closes the device called `name`, if it's open.
     ///
     /// Notes still held on it will never get their Note Off, so the audio
-    /// thread is sent All Notes Off on every channel.
-    pub fn disconnect(&mut self) {
-        if let Some(connection) = self.connection.take() {
-            // Close the connection - this drops it
-            connection.close();
-            self.selected_device = None;
-            if let Ok(mut senders) = self.senders.lock() {
-                for channel in 0..16 {
-                    let all_off = MidiEvent::ControlChange { channel, controller: ALL_NOTES_OFF, value: 0 };
-                    let _ = senders.audio.push(TimestampedMidiEvent::now(all_off));
-                }
+    /// thread is sent All Notes Off on every channel, from its slot: a
+    /// module listening to another device keeps its notes.
+    pub fn disconnect(&mut self, name: &str) {
+        let Some(slot) = self.slot_of(name) else { return };
+        let Some(input) = self.inputs[slot as usize].take() else { return };
+        // Close the connection - this drops it
+        input.connection.close();
+        if let Ok(mut senders) = self.senders.lock() {
+            for channel in 0..16 {
+                let all_off = MidiEvent::ControlChange { channel, controller: ALL_NOTES_OFF, value: 0 };
+                let _ = senders.audio.push(TimestampedMidiEvent::heard(slot, all_off));
             }
-            eprintln!("MIDI disconnected");
+        }
+        eprintln!("MIDI disconnected from {}", input.name);
+    }
+
+    /// Closes every device open.
+    pub fn disconnect_all(&mut self) {
+        let names: Vec<String> = self.open_inputs().map(|(_, name)| name.to_string()).collect();
+        for name in names {
+            self.disconnect(&name);
         }
     }
 
@@ -600,9 +640,9 @@ impl MidiEngine {
         }
     }
 
-    /// Check if currently connected to a device.
+    /// Is any device open?
     pub fn is_connected(&self) -> bool {
-        self.connection.is_some()
+        self.inputs.iter().any(Option::is_some)
     }
 }
 
@@ -648,8 +688,8 @@ impl Drop for MidiEngine {
         // Stop the scan thread
         self.scan_running.store(false, Ordering::Relaxed);
 
-        // Disconnect if connected
-        self.disconnect();
+        // Close every device open
+        self.disconnect_all();
 
         // Wait for scan thread to finish
         if let Some(thread) = self.scan_thread.take() {

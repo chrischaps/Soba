@@ -366,6 +366,41 @@ impl MidiMessage {
 /// device's (see [`crate::engine::ui_notes`]).
 pub const KEYS_CHANNEL: u8 = 16;
 
+/// How many MIDI inputs can be open at once (#435), each a slot an event
+/// is stamped with: its [`MidiEvent::port`], 0 to `MIDI_INPUTS - 1`.
+pub const MIDI_INPUTS: usize = 8;
+
+/// The port of what Soba plays itself rather than hears from a device: the
+/// computer keys, the pianos, a capture's or a render's notes, and the
+/// MIDI a DAW hands the plugin. Every module hears it, whatever device it
+/// listens to; the keys are told apart by [`KEYS_CHANNEL`] instead.
+pub const SOBA_PORT: u8 = u8::MAX;
+
+/// Which MIDI input a module hears (#435): its Device.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ListenTo {
+    /// Every input, as before there were several.
+    #[default]
+    Any,
+    /// The input open in this slot.
+    Port(u8),
+    /// A device that isn't open: no input's events.
+    Unplugged,
+}
+
+impl ListenTo {
+    /// Does a module listening so hear an event from `port`? What Soba
+    /// plays itself it always does.
+    pub fn hears(self, port: u8) -> bool {
+        port == SOBA_PORT
+            || match self {
+                ListenTo::Any => true,
+                ListenTo::Port(slot) => slot == port,
+                ListenTo::Unplugged => false,
+            }
+    }
+}
+
 /// A MIDI event with timing information.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MidiEvent {
@@ -373,18 +408,26 @@ pub struct MidiEvent {
     pub sample_offset: u32,
     /// The MIDI channel (0-15), or [`KEYS_CHANNEL`] for the keys.
     pub channel: u8,
+    /// The input it came in on (see [`MIDI_INPUTS`]), or [`SOBA_PORT`].
+    pub port: u8,
     /// The MIDI message.
     pub message: MidiMessage,
 }
 
 impl MidiEvent {
-    /// Creates a new MIDI event.
+    /// Creates a new MIDI event, played by Soba itself.
     pub fn new(sample_offset: u32, channel: u8, message: MidiMessage) -> Self {
         Self {
             sample_offset,
             channel,
+            port: SOBA_PORT,
             message,
         }
+    }
+
+    /// The event, as heard from input `port`.
+    pub fn from_port(self, port: u8) -> Self {
+        Self { port, ..self }
     }
 
     /// Creates a Note On event.
@@ -409,6 +452,19 @@ impl MidiEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_module_hears_its_device_and_soba_but_no_other_device() {
+        assert!(ListenTo::Any.hears(0) && ListenTo::Any.hears(7) && ListenTo::Any.hears(SOBA_PORT));
+        assert!(ListenTo::Port(2).hears(2));
+        assert!(!ListenTo::Port(2).hears(3));
+        assert!(ListenTo::Port(2).hears(SOBA_PORT), "the keys and a render's notes reach every module");
+        assert!(!ListenTo::Unplugged.hears(0));
+        assert!(ListenTo::Unplugged.hears(SOBA_PORT));
+        let event = MidiEvent::note_on(5, 0, 60, 100);
+        assert_eq!(event.port, SOBA_PORT, "made here, it's Soba's");
+        assert_eq!(event.from_port(4).port, 4);
+    }
 
     #[test]
     fn test_same_type_connections() {

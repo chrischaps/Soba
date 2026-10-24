@@ -31,7 +31,11 @@ pub struct Resume {
     pub(crate) view: Option<(f32, [f32; 2])>,
     pub(crate) output_device: Option<String>,
     pub(crate) input_device: Option<String>,
+    /// The first MIDI input open, for a copy from before #435 to read.
     pub(crate) midi_device: Option<String>,
+    /// Every MIDI input open (#435).
+    #[serde(default)]
+    pub(crate) midi_devices: Vec<String>,
     pub(crate) playing: bool,
     /// The version that handed over, so the new one can say what changed.
     pub(crate) from_version: String,
@@ -97,6 +101,7 @@ mod tests {
             output_device: Some("Speakers".into()),
             input_device: None,
             midi_device: Some("Keystep".into()),
+            midi_devices: vec!["Keystep".into(), "Fantom-06".into()],
             playing: true,
             from_version: "0.3.1".into(),
         };
@@ -117,6 +122,7 @@ mod tests {
         assert_eq!(back.view, Some((0.5, [120.0, -40.0])));
         assert_eq!(back.patch.path, Some(PathBuf::from("song.json")));
         assert_eq!(back.midi_device.as_deref(), Some("Keystep"));
+        assert_eq!(back.midi_devices, ["Keystep", "Fantom-06"]);
         assert!(back.unsaved && back.playing);
         assert!(!path.exists());
         assert!(Resume::take(&path).is_none());

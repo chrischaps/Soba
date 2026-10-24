@@ -231,6 +231,9 @@ impl OfflineRenderer {
             EngineCommand::SetBypass { node_id, bypassed } => {
                 self.plan.set_bypass(node_id, bypassed);
             }
+            EngineCommand::Listen { node_id, listen } => {
+                self.plan.set_listen(node_id, listen);
+            }
             EngineCommand::Audition { node_id, chord } => {
                 self.plan.audition(node_id, chord);
                 return true;
@@ -275,8 +278,14 @@ impl OfflineRenderer {
     /// clock (see [`position`](Self::position)), as live MIDI would be
     /// placed by the audio thread.
     pub fn queue_midi(&mut self, frame: u64, channel: u8, message: MidiMessage) {
+        self.queue_midi_from(frame, crate::dsp::SOBA_PORT, channel, message);
+    }
+
+    /// [`queue_midi`](Self::queue_midi), as from the device open in input
+    /// slot `port` (#435).
+    pub fn queue_midi_from(&mut self, frame: u64, port: u8, channel: u8, message: MidiMessage) {
         let at = self.midi.partition_point(|&(queued, _)| queued <= frame);
-        self.midi.insert(at, (frame, MidiEvent::new(0, channel, message)));
+        self.midi.insert(at, (frame, MidiEvent::new(0, channel, message).from_port(port)));
     }
 
     /// Sets what Audio Input modules hear, as the input device would bring
@@ -1229,6 +1238,67 @@ mod tests {
             let tick = tick_frames[n * 24] as f32 / sr;
             let allowed = if n == 21 { block } else { 0.0001 };
             assert!((edge - latency - tick).abs() <= allowed, "beat {n} at {edge} s, its tick at {tick} s");
+        }
+    }
+
+    #[test]
+    fn test_a_note_in_set_to_one_device_hears_it_and_not_another() {
+        use crate::dsp::ListenTo;
+        let sr = 48000.0;
+        let patch = played_sine(Source::Midi);
+        let (mut r, compiled) = OfflineRenderer::from_patch(&patch, sr, 256).unwrap();
+        let note_in = compiled.node_ids[&1];
+        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::Port(0) });
+        let block = (0.25 * sr) as u64;
+        let on = MidiMessage::NoteOn { note: 60, velocity: 100 };
+
+        // Another device's note passes it by
+        r.queue_midi_from(0, 1, 0, on);
+        r.queue_midi_from(block / 2, 1, 0, MidiMessage::NoteOff { note: 60, velocity: 0 });
+        assert!(rms(&r.render(block as usize).left) < 1e-4, "device B's note sounded");
+
+        // Its own plays, and goes on through the other's All Notes Off,
+        // sent as that one is unplugged
+        r.queue_midi_from(block, 0, 0, on);
+        r.queue_midi_from(block + 100, 1, 0, MidiMessage::ControlChange { controller: crate::engine::midi_engine::ALL_NOTES_OFF, value: 0 });
+        let held = r.render(2 * block as usize);
+        assert!(rms(&held.left[block as usize..]) > 0.05, "device A's note didn't hold");
+
+        // Its own All Notes Off lets it go
+        r.queue_midi_from(3 * block, 0, 0, MidiMessage::ControlChange { controller: crate::engine::midi_engine::ALL_NOTES_OFF, value: 0 });
+        let out = r.render(block as usize);
+        assert!(rms(&out.left[out.left.len() / 2..]) < 0.01, "device A's All Notes Off didn't stop it");
+
+        // Set to Any, it hears both again
+        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::Any });
+        r.queue_midi_from(4 * block, 1, 0, on);
+        let out = r.render(block as usize);
+        assert!(rms(&out.left[out.left.len() / 2..]) > 0.05, "Any didn't hear device B");
+    }
+
+    #[test]
+    fn test_a_clock_following_one_device_isnt_thrown_by_anothers_clock() {
+        use crate::dsp::ListenTo;
+        // Device A runs at 100 BPM, device B at 150; the Clock follows A
+        let sr = 48000.0;
+        let mut r = OfflineRenderer::new(sr, 256);
+        synced_lfo_patch(&mut r, 1.0);
+        r.apply(EngineCommand::Listen { node_id: 1, listen: ListenTo::Port(0) });
+        r.queue_midi_from(100, 0, 0, MidiMessage::Start);
+        r.queue_midi_from(300, 1, 0, MidiMessage::Start);
+        let ticks = |bpm: f64, count: usize| (0..count).map(move |n| (1000.0 + n as f64 * 60.0 * sr as f64 / (bpm * 24.0)) as u64);
+        for tick in ticks(150.0, 24 * 30) {
+            r.queue_midi_from(tick + 7, 1, 0, MidiMessage::Clock);
+        }
+        let a: Vec<u64> = ticks(100.0, 24 * 20).collect();
+        for &tick in &a {
+            r.queue_midi_from(tick, 0, 0, MidiMessage::Clock);
+        }
+
+        let edges = onsets(&r.render(*a.last().unwrap() as usize).left, 0.5, sr);
+        assert_eq!(edges.len(), 20, "{edges:?}");
+        for pair in edges[1..].windows(2) {
+            assert!((pair[1] - pair[0] - 0.6).abs() < 0.001, "a beat of A's 100 BPM took {} s", pair[1] - pair[0]);
         }
     }
 

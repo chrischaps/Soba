@@ -93,7 +93,7 @@ impl MidiScheduler {
             let offset = offset.clamp(earliest, last_frame);
             earliest = offset;
 
-            if let Some(event) = stamped.event.to_dsp(offset as u32) {
+            if let Some(event) = stamped.event.to_dsp(offset as u32).map(|event| event.from_port(stamped.port)) {
                 self.events.push(event);
             }
         }
@@ -123,7 +123,7 @@ impl MidiScheduler {
         if let Some(ui) = self.ui.as_mut() {
             while self.events.len() < room && due(ui, now) {
                 let Ok(stamped) = ui.pop() else { break };
-                if let Some(event) = stamped.event.to_dsp(0) {
+                if let Some(event) = stamped.event.to_dsp(0).map(|event| event.from_port(stamped.port)) {
                     self.events.push(event);
                 }
             }
@@ -213,7 +213,7 @@ mod tests {
     }
 
     fn note_on_at(received: Instant, note: u8) -> TimestampedMidiEvent {
-        TimestampedMidiEvent { event: WireEvent::NoteOn { channel: 0, note, velocity: 100 }, received }
+        TimestampedMidiEvent { event: WireEvent::NoteOn { channel: 0, note, velocity: 100 }, received, port: 0 }
     }
 
     fn seconds(s: f64) -> Duration {

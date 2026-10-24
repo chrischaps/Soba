@@ -19,7 +19,7 @@ use std::cell::Cell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use soba::dsp::{InputAudio, MidiEvent as DspMidiEvent, SampleData, Snapshot, SnapshotOutcome};
+use soba::dsp::{InputAudio, ListenTo, MidiEvent as DspMidiEvent, SampleData, Snapshot, SnapshotOutcome};
 
 use soba::engine::{
     Probe, ProbeScope, SCOPE_WINDOW,
@@ -229,6 +229,11 @@ fn audio_callback_never_allocates() {
     ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::PARAM_CHANNEL, value: 1.0 });
     ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::note_param(7), value: 36.0 });
     ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::channel_param(7), value: 10.0 });
+
+    // Two devices play (#435): the Controls hears the first, the Pads the
+    // second, picked out of the block's MIDI each callback
+    ui.send_command(EngineCommand::Listen { node_id: controls, listen: ListenTo::Port(0) });
+    ui.send_command(EngineCommand::Listen { node_id: pads, listen: ListenTo::Port(1) });
 
     // A Chopper on the same Clock, cut at markers, given a new loop (and
     // new markers) every so often, mid-slice or not
@@ -441,8 +446,14 @@ fn audio_callback_never_allocates() {
             MidiEvent::PolyPressure { channel: 0, note: note.wrapping_sub(1), pressure: (round * 5 % 128) as u8 },
             if round % 2 == 0 { MidiEvent::NoteOn { channel: 9, note: 36, velocity: 90 } } else { MidiEvent::NoteOff { channel: 9, note: 36, velocity: 0 } },
         ];
-        for event in events {
-            midi.push(TimestampedMidiEvent::now(event)).unwrap();
+        // From two devices, turn about
+        for (n, event) in events.into_iter().enumerate() {
+            midi.push(TimestampedMidiEvent::heard((n % 2) as u8, event)).unwrap();
+        }
+        // The Pads' device unplugged and plugged back in, every so often
+        if round % 40 == 13 {
+            let listen = if round % 80 == 13 { ListenTo::Unplugged } else { ListenTo::Port(1) };
+            ui.send_command(EngineCommand::Listen { node_id: pads, listen });
         }
         ui.flush();
         // Snapshots coming back are dropped here, off the audio thread

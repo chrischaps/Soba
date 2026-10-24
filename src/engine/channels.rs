@@ -293,6 +293,14 @@ impl UiHandle {
                     self.graph.mark_dirty();
                 }
             }
+            EngineCommand::Listen { node_id, listen } => {
+                self.graph.set_listen(node_id, listen);
+                if self.message_tx.push(AudioMessage::Plan(PlanMessage::Listen { node_id, listen })).is_err()
+                    || self.unsent_plan.is_some()
+                {
+                    self.graph.mark_dirty();
+                }
+            }
             EngineCommand::Audition { node_id, chord } => {
                 // Kept until there's room, in order: a chord let go of mustn't
                 // be lost, or it would go on sounding
@@ -730,6 +738,7 @@ mod tests {
                     seen.push(match &message {
                         PlanMessage::SetParameter { .. } => "param",
                         PlanMessage::SetBypass { .. } => "bypass",
+                        PlanMessage::Listen { .. } => "listen",
                         PlanMessage::Audition { chord, .. } => if chord.is_some() { "audition" } else { "audition off" },
                         PlanMessage::LoadSample { .. } => "sample",
                         PlanMessage::SetMarkers { .. } => "markers",

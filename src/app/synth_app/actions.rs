@@ -52,7 +52,9 @@ pub(super) enum AppAction {
     /// Bypass the selected modules, or switch them back on.
     Bypass,
     RefreshMidiDevices,
-    ConnectMidi(usize),
+    /// Open a MIDI input beside those open, or close it if it's open (#435).
+    ToggleMidi(usize),
+    /// Close every MIDI input.
     DisconnectMidi,
     /// Turn Map Mode on or off: a click on a control maps it (#426).
     ToggleMapMode,
@@ -238,7 +240,7 @@ impl SynthApp {
                 }
             }
             AppAction::RefreshMidiDevices => self.refresh_midi_devices(),
-            AppAction::ConnectMidi(index) => self.connect_midi_device(index),
+            AppAction::ToggleMidi(index) => self.toggle_midi_device(index),
             AppAction::DisconnectMidi => self.disconnect_midi_device(),
             AppAction::ToggleMapMode => self.toggle_map_mode(),
             AppAction::ToggleControllerMap => self.toggle_controller_map(),

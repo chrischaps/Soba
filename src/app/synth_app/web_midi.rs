@@ -52,16 +52,18 @@ impl SynthApp {
         if connect_button(ui) {
             return;
         }
-        let connected = self.midi.selected_device();
-        let shown = connected.map_or("None", |d| d.name.as_str());
+        let open = self.midi.open_names();
+        let shown = super::toolbar::midi_in_summary(&open);
         // Keyed on the count: egui keeps a menu's size from when it first
         // opened, which would cut off a device plugged in since
         egui::ComboBox::from_id_salt(("midi_device_selector", self.midi.devices.len()))
-            .selected_text(format!("{}{shown}", if connected.is_some() { "● " } else { "○ " }))
+            .selected_text(format!("{}{shown}", if open.is_empty() { "○ " } else { "● " }))
             .width(180.0)
             .truncate()
+            // Ticking a device leaves the list open, to tick the next (#435)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .show_ui(ui, |ui| {
-                if ui.selectable_label(connected.is_none(), "None (Disconnect)").clicked() {
+                if ui.selectable_label(open.is_empty(), "None (Disconnect)").clicked() {
                     actions.push(AppAction::DisconnectMidi);
                 }
                 ui.separator();
@@ -69,8 +71,9 @@ impl SynthApp {
                     ui.label(RichText::new("No MIDI inputs plugged in").color(theme::text::DISABLED).italics());
                 }
                 for device in &self.midi.devices {
-                    if ui.selectable_label(self.midi.selected == Some(device.index), &device.name).clicked() {
-                        actions.push(AppAction::ConnectMidi(device.index));
+                    let mut is_open = open.contains(&device.name);
+                    if ui.checkbox(&mut is_open, &device.name).clicked() {
+                        actions.push(AppAction::ToggleMidi(device.index));
                     }
                 }
             });
@@ -82,9 +85,9 @@ impl SynthApp {
         let (changes, access) = (web_midi::changes(), web_midi::access());
         let (seen_changes, seen_access) = SEEN.with_borrow(|seen| seen.clone());
         if changes != seen_changes {
-            // The list is numbered afresh: MIDI In follows its device by
-            // name, lets go (and of its notes) if it was unplugged, and
-            // opens the one remembered (#425) once it is listed
+            // The list is numbered afresh: MIDI In follows its devices by
+            // name, lets go of one (and its notes) if it was unplugged, and
+            // opens those remembered (#425) once they are listed
             self.follow_midi_devices();
         }
         if access != seen_access {

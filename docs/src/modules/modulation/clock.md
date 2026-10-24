@@ -116,7 +116,9 @@ If a patch has more than one Clock, synced modules follow the first one in the p
 
 ## Following MIDI clock
 
-Set **Source** to **MIDI** to slave the Clock to a MIDI clock master, such as a DAW, a drum machine or a hardware sequencer. Choose the master's port in the MIDI device menu, and set the master to send MIDI clock to it. In most DAWs this is a *Send MIDI Clock* or *Sync* setting on the MIDI output.
+Set **Source** to **MIDI** to slave the Clock to a MIDI clock master, such as a DAW, a drum machine or a hardware sequencer. Tick the master's port in the **MIDI In** menu, and set the master to send MIDI clock to it. In most DAWs this is a *Send MIDI Clock* or *Sync* setting on the MIDI output.
+
+With several devices open, choose the master under **Device** in the Clock's right-click menu, so a second device sending clock doesn't pull it off time (see [Listening to one device](../midi/note-in.md#listening-to-one-device)).
 
 - **Tempo.** The Clock measures the master's tempo from the spacing of its clock ticks (24 per beat), fitted over the last two beats so that MIDI timing jitter averages out. The **BPM** knob dims and reads the received tempo, and every synced module follows it. When the master changes tempo, the Clock catches up within two beats. Until ticks arrive, the knob reads *No clock*.
 - **Position.** The Clock counts the ticks, so its beat is always exactly where the master's is, whatever the tempo. It can't drift.

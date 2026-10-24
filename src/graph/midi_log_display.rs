@@ -1,5 +1,6 @@
 //! The MIDI Monitor's display: the latest events, newest first, after its
-//! channel and type filters.
+//! device, channel and type filters. Hearing any device while several are
+//! open, it names each event's (#435).
 
 use eframe::egui::{self, Color32};
 use egui_node_graph2::NodeId;
@@ -36,6 +37,17 @@ pub(super) fn note_to_name(note: u8) -> String {
 const MIDI_LOG_ROWS: usize = 8;
 /// The longest line the log usually shows, which sets its width.
 const MIDI_LOG_WIDEST: &str = "NoteOn Ch16 C#-1 vel=127";
+/// The most of a device's name the log shows, in letters.
+const DEVICE_LETTERS: usize = 10;
+
+/// A device's name as the log shows it, cut to [`DEVICE_LETTERS`].
+fn short_device(name: &str) -> String {
+    if name.chars().count() <= DEVICE_LETTERS {
+        name.to_string()
+    } else {
+        format!("{}…", name.chars().take(DEVICE_LETTERS - 1).collect::<String>())
+    }
+}
 
 /// Where a note came from: its MIDI channel, or the computer keys.
 fn note_channel(channel: u8) -> String {
@@ -127,11 +139,15 @@ pub fn midi_log_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
 
     // Render MIDI event log
     let midi_events = user_state.midi_events();
+    // The device it listens to, or any; Soba's own keys it always hears
+    let device = graph.nodes.get(node_id).and_then(|node| super::midi_device::device(&node.user_data));
+    let name_devices = device.is_none() && user_state.midi_inputs.len() > 1;
 
-    // Newest first, after the channel and type filters
+    // Newest first, after the device, channel and type filters
     let visible: Vec<_> = midi_events
         .iter()
         .rev()
+        .filter(|event| device.is_none() || event.device.is_none() || event.device.as_deref() == device)
         .filter(|event| {
             // Channel filter: 0 = all, 1-16 = that channel
             let channel_ok = channel_filter == 0
@@ -153,11 +169,12 @@ pub fn midi_log_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
     let font = egui::FontId::monospace(egui::TextStyle::Small.resolve(ui.style()).size);
     let row_height = ui.fonts_mut(|f| f.row_height(&font)) + 2.0 * zoom;
     let gap = 6.0 * zoom;
-    let (stamp_width, width) = ui.fonts_mut(|f| {
+    let (stamp_width, text_width, device_width) = ui.fonts_mut(|f| {
         let mut measure = |text: &str| f.layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE).size().x;
-        let stamp = measure("000.0s");
-        (stamp, (stamp + gap + measure(MIDI_LOG_WIDEST)).max(180.0 * zoom))
+        let device = if name_devices { gap + measure(&"M".repeat(DEVICE_LETTERS)) } else { 0.0 };
+        (measure("000.0s"), measure(MIDI_LOG_WIDEST), device)
     });
+    let width = (stamp_width + gap + text_width).max(180.0 * zoom) + device_width;
     let (rect, _) = ui.allocate_exact_size(
         egui::vec2(width, MIDI_LOG_ROWS as f32 * row_height),
         egui::Sense::hover(),
@@ -186,5 +203,8 @@ pub fn midi_log_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
             weak,
         );
         painter.text(egui::pos2(rect.left() + stamp_width + gap, y), egui::Align2::LEFT_CENTER, text, font.clone(), color);
+        if let Some(name) = event.device.as_deref().filter(|_| name_devices) {
+            painter.text(egui::pos2(rect.right() - device_width + gap, y), egui::Align2::LEFT_CENTER, short_device(name), font.clone(), weak);
+        }
     }
 }

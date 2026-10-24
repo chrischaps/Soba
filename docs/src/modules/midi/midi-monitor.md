@@ -7,7 +7,7 @@
 
 The MIDI Monitor shows the MIDI arriving from your device as it happens. Use it when you connect new gear, when a note won't play, or to find out which CC number a knob on your controller sends before you map it.
 
-It has no ports and makes no sound. It listens to the same device as every other MIDI module (the one chosen in **MIDI In** on the toolbar; see [Choosing a MIDI device](./note-in.md#choosing-a-midi-device)), so you can drop it anywhere in a patch without patching anything.
+It has no ports and makes no sound. It listens to every device ticked in **MIDI In** on the toolbar (see [Choosing a MIDI device](./note-in.md#choosing-a-midi-device)), so you can drop it anywhere in a patch without patching anything. To watch one device only, right-click it and choose it under **Device**.
 
 ## Controls
 
@@ -35,6 +35,8 @@ The log shows the most recent events, newest at the top. Each line starts with t
 Note names put middle C (MIDI note 60) at C4. Pitch bend runs from −8192 to 8191, with 0 at the center. Pressure and program change can't be filtered out.
 
 The log holds the last few events and applies the filters to those, so turning a filter on hides lines rather than reaching further back. Notes played on the computer keys into a [Note In](./note-in.md) module show up here too, marked **Keys** where a channel would be.
+
+While two or more devices are open and the Monitor hears any of them, each line ends with the name of the device it came from, shortened to ten letters.
 
 ## Uses
 

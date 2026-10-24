@@ -361,7 +361,7 @@ impl SynthApp {
     /// What the strip's plate says: the controller, and what its controls
     /// are doing.
     fn hands_plate(&self, sketch: &Sketch) -> Plate {
-        let device = self.midi.selected_device().map_or("Controller", |d| d.name.as_str()).to_string();
+        let device = Some(self.midi.hands.device()).filter(|d| !d.is_empty()).unwrap_or("Controller").to_string();
         let quiet = theme::text::QUIET;
         let (doing, ink, ask) = match sketch.source {
             Source::Teaching(Some(slot)) if slot < ENCODERS => (format!("Teaching: encoder {}", slot + 1), theme::signal::MIDI, None),
