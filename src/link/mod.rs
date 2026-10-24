@@ -33,6 +33,7 @@ pub mod midi_thru;
 pub mod midi_writer;
 pub mod osc;
 pub mod ping;
+pub mod sysex;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod sender;
 #[cfg(target_arch = "wasm32")]

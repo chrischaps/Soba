@@ -579,7 +579,7 @@ mod tests {
             match event {
                 Outgoing::Message { sample, message } => out.push((sample, message.bytes().to_vec())),
                 Outgoing::Control { sample, control } => out.extend(control.burst().messages().iter().map(|m| (sample, m.bytes().to_vec()))),
-                Outgoing::Block { .. } => {}
+                Outgoing::Block { .. } | Outgoing::Sysex { .. } => {}
             }
         }
         out

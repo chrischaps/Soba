@@ -109,3 +109,16 @@ pub fn forward_now() {
         }
     });
 }
+
+/// Sends what the UI just sent (SysEx, #440) now, rather than when the
+/// timer next runs. The page has one thread, so the sender is never
+/// mid-tick when it's called; the timer keeps its own time.
+pub fn send_now() {
+    SENDER.with(|sender| {
+        if let Ok(mut sender) = sender.try_borrow_mut() {
+            if let Some(sender) = sender.as_mut() {
+                sender.tick(Instant::now());
+            }
+        }
+    });
+}

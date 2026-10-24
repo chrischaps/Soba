@@ -33,6 +33,10 @@
 //! only the newest value of each while it's full, so notes, programs and
 //! clock, which travel as plain [`Message`]s, are never held up behind them.
 //!
+//! **SysEx** (#440) goes whole, any length, from the UI
+//! ([`MidiBus::send_sysex`]) or, timed to a sample, from the audio thread
+//! through a pool of slots made before it starts ([`sysex`](super::sysex)).
+//!
 //! Unlike the Seoul link's newest-value atomics, MIDI needs every message,
 //! in order and on time: a lost Note Off is a stuck note. So the ring
 //! carries events, and the sender keeps track of which notes each module
@@ -40,13 +44,14 @@
 //! patch loaded) or stops running.
 
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering::Relaxed};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use web_time::Instant;
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
+use super::sysex::{self, SysexError, SysexPool};
 use crate::dsp::MIDI_INPUTS;
 use crate::engine::device_names;
 
@@ -196,6 +201,10 @@ pub enum Outgoing {
     /// A controller's value to send when sample `sample` is heard. While
     /// its port is over budget, only the newest of each goes (#439).
     Control { sample: u64, control: Control },
+    /// A SysEx message to send when sample `sample` is heard, in slot
+    /// `slot` of the bus's [`SysexPool`] (#440). The sender frees the slot
+    /// once it's sent. It goes whole, as the port's budget allows.
+    Sysex { sample: u64, slot: u8 },
 }
 
 /// A few messages that go out together and in order: a controller's value
@@ -537,6 +546,14 @@ pub struct Traffic {
     /// Controller values the port's budget let go of, or folded into newer
     /// ones, while it was full (#439).
     pub thinned: u32,
+    /// SysEx messages sent (#440).
+    pub sysex: u32,
+    /// How long the last SysEx sent was, in bytes.
+    pub sysex_bytes: u32,
+    /// SysEx bytes still waiting to go: a long dump pacing itself.
+    pub sysex_waiting: u32,
+    /// Whether the last message sent, but for real-time ones, was SysEx.
+    pub last_sysex: bool,
 }
 
 impl PortStatus {
@@ -567,8 +584,10 @@ pub struct MidiBus {
     chosen: Mutex<[String; PORTS]>,
     status: [AtomicU8; PORTS],
     /// What each port has sent: messages, clock ticks, the last message
-    /// packed (see [`Message::packed`]), and values thinned.
-    sent: [[AtomicU32; 4]; PORTS],
+    /// packed (see [`Message::packed`]), values thinned, and the SysEx
+    /// sent, the last one's length, the bytes waiting and whether it was
+    /// the last thing sent (see [`Traffic`]).
+    sent: [[AtomicU32; 8]; PORTS],
     /// Each port's budget, in messages a second: 0 for none (#439).
     budgets: [AtomicU32; PORTS],
     /// What each port sends of the patch's clock (a [`ClockMode`]).
@@ -586,6 +605,16 @@ pub struct MidiBus {
     latency_micros: AtomicU64,
     /// Asks the sender to look for devices now.
     rescan: AtomicBool,
+    /// Asks the sender to open every device afresh: the browser has
+    /// allowed SysEx, which the outputs it opened before can't send.
+    reconnect: AtomicBool,
+    /// The audio thread's SysEx slots, made when a sender starts.
+    sysex_pool: OnceLock<Arc<SysexPool>>,
+    /// SysEx the UI has sent since the sender last looked, by port.
+    ui_sysex: Mutex<Vec<(u8, Box<[u8]>)>>,
+    /// The sender's thread, to wake when the UI sends SysEx.
+    #[cfg(not(target_arch = "wasm32"))]
+    waker: OnceLock<std::thread::Thread>,
 }
 
 impl MidiBus {
@@ -596,7 +625,7 @@ impl MidiBus {
             devices: Mutex::new(Vec::new()),
             chosen: Mutex::new([const { String::new() }; PORTS]),
             status: [const { AtomicU8::new(PortStatus::Idle as u8) }; PORTS],
-            sent: [const { [const { AtomicU32::new(0) }; 4] }; PORTS],
+            sent: [const { [const { AtomicU32::new(0) }; 8] }; PORTS],
             budgets: [const { AtomicU32::new(0) }; PORTS],
             clock: [const { AtomicU8::new(ClockMode::Off as u8) }; PORTS],
             offsets: [const { AtomicU32::new(0) }; PORTS],
@@ -605,6 +634,11 @@ impl MidiBus {
             same_device: [const { AtomicU8::new(0) }; MIDI_INPUTS],
             latency_micros: AtomicU64::new(0),
             rescan: AtomicBool::new(true),
+            reconnect: AtomicBool::new(false),
+            sysex_pool: OnceLock::new(),
+            ui_sysex: Mutex::new(Vec::new()),
+            #[cfg(not(target_arch = "wasm32"))]
+            waker: OnceLock::new(),
         }
     }
 
@@ -632,7 +666,52 @@ impl MidiBus {
         Some(producer)
     }
 
+    /// The pool a module claims SysEx slots from on the audio thread, or
+    /// `None` while no sender drains the bus.
+    pub fn sysex_pool(&self) -> Option<Arc<SysexPool>> {
+        self.sysex_pool.get().cloned()
+    }
+
+    /// The pool, for the sender to take up the slots modules send.
+    pub fn pool(&self) -> Option<&SysexPool> {
+        self.sysex_pool.get().map(|pool| &**pool)
+    }
+
     // --- For the UI ---
+
+    /// Sends one SysEx message on port `port`, whole, as soon as the
+    /// port's budget has room for it, after any SysEx sent before it.
+    pub fn send_sysex(&self, port: usize, message: &[u8]) -> Result<(), SysexError> {
+        sysex::check(message)?;
+        if message.len() > sysex::MAX_UI {
+            return Err(SysexError::TooLong);
+        }
+        if !self.draining.load(Relaxed) {
+            return Err(SysexError::NoSender);
+        }
+        self.ui_sysex.lock().map_err(|_| SysexError::NoSender)?.push((port.min(PORTS - 1) as u8, message.into()));
+        // Sent at once, not on the sender's next idle look
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(thread) = self.waker.get() {
+            thread.unpark();
+        }
+        #[cfg(target_arch = "wasm32")]
+        super::web_sender::send_now();
+        Ok(())
+    }
+
+    /// Sends every message in a `.syx` file on port `port`, in order (see
+    /// [`sysex::split`]). Returns how many, and how many bytes.
+    pub fn send_sysex_file(&self, port: usize, file: &[u8]) -> Result<(usize, usize), SysexError> {
+        let messages = sysex::split(file)?;
+        if messages.iter().any(|message| message.len() > sysex::MAX_UI) {
+            return Err(SysexError::TooLong);
+        }
+        for message in &messages {
+            self.send_sysex(port, message)?;
+        }
+        Ok((messages.len(), messages.iter().map(|message| message.len()).sum()))
+    }
 
     /// The output devices found, by name.
     pub fn devices(&self) -> Vec<String> {
@@ -807,6 +886,11 @@ impl MidiBus {
         self.rescan.store(true, Relaxed);
     }
 
+    /// Asks the sender to open every device afresh, soon.
+    pub fn reconnect(&self) {
+        self.reconnect.store(true, Relaxed);
+    }
+
     /// Tells the sender how long the output device takes to play a sample.
     pub fn set_latency(&self, latency: Option<Duration>) {
         self.latency_micros.store(latency.map_or(0, |l| l.as_micros() as u64), Relaxed);
@@ -819,20 +903,41 @@ impl MidiBus {
 
     /// What port `port` has sent.
     pub fn traffic(&self, port: usize) -> Traffic {
-        let Some([messages, clocks, last, thinned]) = self.sent.get(port) else { return Traffic::default() };
+        let Some([messages, clocks, last, thinned, sysex, sysex_bytes, sysex_waiting, last_sysex]) = self.sent.get(port) else { return Traffic::default() };
         Traffic {
             messages: messages.load(Relaxed),
             clocks: clocks.load(Relaxed),
             last: Message::unpacked(last.load(Relaxed)),
             thinned: thinned.load(Relaxed),
+            sysex: sysex.load(Relaxed),
+            sysex_bytes: sysex_bytes.load(Relaxed),
+            sysex_waiting: sysex_waiting.load(Relaxed),
+            last_sysex: last_sysex.load(Relaxed) != 0,
         }
     }
 
     // --- For the sender ---
 
-    /// Says a sender drains this bus from now on.
+    /// Says a sender drains this bus from now on, and makes the SysEx
+    /// pool its modules claim from.
     pub fn start_draining(&self) {
+        self.sysex_pool.get_or_init(|| Arc::new(SysexPool::new()));
         self.draining.store(true, Relaxed);
+    }
+
+    /// The SysEx the UI has sent since the last look, by port, in order.
+    pub fn take_sysex(&self) -> Vec<(u8, Box<[u8]>)> {
+        self.ui_sysex.try_lock().map(|mut s| std::mem::take(&mut *s)).unwrap_or_default()
+    }
+
+    /// Has the UI's SysEx wake `thread`, the sender's.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_waker(&self, thread: std::thread::Thread) {
+        let _ = self.waker.set(thread);
+    }
+
+    pub fn take_reconnect(&self) -> bool {
+        self.reconnect.swap(false, Relaxed)
     }
 
     pub fn take_new_streams(&self) -> Vec<Consumer<Outgoing>> {
@@ -865,11 +970,15 @@ impl MidiBus {
     }
 
     pub fn set_traffic(&self, port: usize, traffic: Traffic) {
-        if let Some([messages, clocks, last, thinned]) = self.sent.get(port) {
+        if let Some([messages, clocks, last, thinned, sysex, sysex_bytes, sysex_waiting, last_sysex]) = self.sent.get(port) {
             messages.store(traffic.messages, Relaxed);
             clocks.store(traffic.clocks, Relaxed);
             last.store(traffic.last.map_or(0, |m| m.packed()), Relaxed);
             thinned.store(traffic.thinned, Relaxed);
+            sysex.store(traffic.sysex, Relaxed);
+            sysex_bytes.store(traffic.sysex_bytes, Relaxed);
+            sysex_waiting.store(traffic.sysex_waiting, Relaxed);
+            last_sysex.store(traffic.last_sysex as u32, Relaxed);
         }
     }
 }
@@ -985,7 +1094,7 @@ mod tests {
     fn traffic_survives_the_trip_through_atomics() {
         let bus = MidiBus::new();
         assert_eq!(bus.traffic(0), Traffic::default());
-        let traffic = Traffic { messages: 3, clocks: 96, last: Some(Message::control(2, 74, 64)), thinned: 7 };
+        let traffic = Traffic { messages: 3, clocks: 96, last: Some(Message::control(2, 74, 64)), thinned: 7, sysex: 2, sysex_bytes: 163, sysex_waiting: 4104, last_sysex: true };
         bus.set_traffic(5, traffic);
         assert_eq!(bus.traffic(5), traffic);
         bus.set_traffic(5, Traffic { last: Some(Message::real_time(status::START)), ..traffic });
@@ -1045,5 +1154,24 @@ mod tests {
         other.restore_budget("fast\n500");
         assert_eq!(other.budget(0), 0);
         assert_eq!(other.budget(1), 500);
+    }
+
+    #[test]
+    fn the_ui_sends_whole_sysex_once_a_sender_drains() {
+        let bus = MidiBus::new();
+        assert_eq!(bus.send_sysex(0, &[0xF0, 1, 0xF7]), Err(SysexError::NoSender), "no sender, nothing to send it");
+        assert!(bus.sysex_pool().is_none());
+        bus.start_draining();
+        assert!(bus.sysex_pool().is_some(), "the pool is made as the sender starts");
+        assert_eq!(bus.send_sysex(0, &[0x90, 60, 100]), Err(SysexError::NotSysex));
+        bus.send_sysex(2, &[0xF0, 0x43, 0x00, 0xF7]).unwrap();
+        assert_eq!(bus.send_sysex_file(9, &[0xF0, 1, 0xF7, 0xF0, 2, 3, 0xF7]), Ok((2, 7)));
+        let taken = bus.take_sysex();
+        assert_eq!(taken.iter().map(|(port, bytes)| (*port, bytes.to_vec())).collect::<Vec<_>>(), [
+            (2, vec![0xF0, 0x43, 0x00, 0xF7]),
+            (7, vec![0xF0, 1, 0xF7]),
+            (7, vec![0xF0, 2, 3, 0xF7]),
+        ]);
+        assert!(bus.take_sysex().is_empty(), "taken once");
     }
 }

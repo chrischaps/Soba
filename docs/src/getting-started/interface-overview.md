@@ -347,14 +347,14 @@ With a room of hardware plugged in, choose **The Rig…** at the foot of the **M
   - the last message heard, as the [MIDI Monitor](../modules/midi/midi-monitor.md) writes it. It's bright when it arrives and fades to grey over a few seconds;
   - how many modules have their **Device** set to it alone. Hover to see their names.
 - **MIDI Out** has a row for each of the eight ports, **A** to **H**, that a [MIDI Out](../modules/output/midi-out.md) plays. Each row has:
-  - the port's device, which you choose here or on a MIDI Out's face;
+  - the port's device, which you choose here or on a MIDI Out's face. Its menu can also **📤 Send a SysEx file…** to it: see [Sending SysEx](#sending-sysex);
   - its **Clock**: what it sends of the patch's Clock. **Clock + Transport** sends the tempo with Start and Stop, **Clock only** the tempo alone, and **Off** nothing. The port sends it whether or not a MIDI Out plays it. While its device leads the Clock (see [Leading or following](../modules/modulation/clock.md#leading-or-following-auto)), it reads **leads** in purple and sends nothing;
   - its **Offset**: how many milliseconds later than the sound its notes, CCs and clock go out, to line a slow device up with the rest. Drag it, or click to type. It's amber when it asks for earlier than your audio device's delay allows;
   - beside the offset, a ping (•)) to measure the device's delay and set the offset for you: see [Measuring a device's delay](#measuring-a-devices-delay);
   - its **Budget**: how many messages a second it may send. **No limit** suits a USB device. A 5-pin DIN cable carries only about a thousand, so set **DIN · 1000/s** for a port that plays through a MIDI interface, or **Gentle · 500/s** for gear that falls behind at full speed. Over its budget, a port sends only the newest value of each CC, bend and pressure, and notes, programs and clock go on time;
   - how the port is doing: **Sending**, **Full** (in amber, while its budget is thinning CCs), **Ready** (it has a device but nothing plays it), **Unplugged**, **No device**, or **In use** (another app has the device);
   - a dot that lights on each beat while clock goes out;
-  - the last message sent;
+  - the last message sent. After SysEx it reads **SysEx · 163 B**, and while a long dump is still going out, how much is left (**SysEx · 2.4 KB to go**);
   - how many MIDI Outs play the port.
 - **Thru** has a row for each route. A route passes what one MIDI In plays straight to one port, past the patch, so with everything plugged into the computer, the computer is your patch bay: the Fantom's keys play the MicroFreak, or the Tracker drives the Volcas, while the patch does something else. Click **+ Route** to add one. Each row has:
   - a lamp that flashes as the route passes something, and a tick to set the route aside without losing it;
@@ -367,6 +367,10 @@ With a room of hardware plugged in, choose **The Rig…** at the foot of the **M
   A route goes out the moment it comes in, ahead of anything else on the thread that sends MIDI, without waiting for the audio or for the port's **Offset**: it's for playing, and adds well under a millisecond. A route that would play the device it comes from is refused and says **Loop**, since a device that echoes what it hears would feed back forever; the **To** menu won't offer that port. The patch still hears an open input: a Note In set to any device plays along, so set its **Device** to another one to keep them apart. Up to sixteen routes.
 
 Ports, with their clocks, offsets and budgets, routes, and inputs are settings of this computer, not of the patch. **🔄 Refresh** looks for devices again at once. Otherwise Soba looks every couple of seconds.
+
+<a id="sending-sysex"></a>**Sending SysEx.** Some things only SysEx can do: give a Volca FM a DX7 voice, load a bank of 32, or set a device's settings that have no CC. Open a port's device menu, choose **📤 Send a SysEx file…** and pick a `.syx` file. Every message in it goes to that port's device whole and in order, and a line under the ports says how many went. A port with a **Budget** paces a long dump to it, since some devices drop SysEx that comes faster than their cable carries: a bank of 32 DX7 voices (4,104 bytes) takes about 1.4 seconds at **DIN · 1000/s**. The notes and clock keep their time meanwhile, and CCs wait for the dump.
+
+In the browser, the first file you send asks for one more permission, since SysEx can rewrite a device's sounds and settings: the browser asks to let Soba "control and reprogram your MIDI devices". Allow it, then send the file again. Notes and CCs never need it.
 
 **After a reboot.** Windows numbers devices that share a name in the order they were plugged in (`2- Digitakt`), and numbers a device's extra ports (`MIDIIN3 (FANTOM-06)`). Linux adds the device's client and port numbers to its name. Those numbers can change when you reboot or plug things in a different order. Soba finds a device by its exact name first, then by its name without those numbers, so every port and input finds its device again. A module whose **Device** is set to it, or a mapping learned from it, still hears it. If two devices are left that both fit, Soba uses neither, rather than guess. Hover a port's device to see whether it was found under a new number.
 

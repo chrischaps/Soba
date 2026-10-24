@@ -432,7 +432,7 @@ mod tests {
                     blocks += 1;
                 }
                 Outgoing::Message { sample, message } => messages.push((sample, message)),
-                Outgoing::Control { .. } => panic!("a ping sends notes only"),
+                Outgoing::Control { .. } | Outgoing::Sysex { .. } => panic!("a ping sends notes only"),
             }
         }
         assert_eq!(blocks, plan.frames().div_ceil(256));

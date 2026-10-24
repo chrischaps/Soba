@@ -21,6 +21,8 @@
 //!
 //! By each port's offset, a ping glyph measures its device's delay and
 //! offers the offset that lines it up (#449): see [`measure`].
+//!
+//! Each port's device menu sends a `.syx` file to it (#440): see [`sysex`].
 
 mod measure;
 
@@ -34,12 +36,17 @@ use measure::{measure_line, ping_button, Measure, MeasureEdit};
 
 mod thru;
 
+mod sysex;
+use sysex::{sysex_last, sysex_line, SysexNote};
+
 /// The panel: open or not.
 #[derive(Debug, Default)]
 pub(super) struct RigPanel {
     pub open: bool,
     /// A port's device being measured, or the last one measured (#449).
     measure: Measure,
+    /// What the last SysEx file sent came to (#440).
+    sysex: Option<SysexNote>,
 }
 
 /// How long a lamp's flash glows, in seconds.
@@ -102,6 +109,8 @@ enum Edit {
     Offset(usize, f32),
     Measure(MeasureEdit),
     Budget(usize, u32),
+    SendSysex(usize),
+    DismissSysex,
     Refresh,
 }
 
@@ -120,6 +129,8 @@ impl SynthApp {
         if !self.rig_panel.open {
             return;
         }
+        self.tend_sysex_note();
+        let sysex_note = self.rig_panel.sysex.clone();
         let ins = self.rig_ins();
         let outs = self.rig_outs();
         let devices = MIDI.devices();
@@ -185,6 +196,12 @@ impl SynthApp {
                 ui.add_space(12.0);
                 thru::thru_section(ui, &ins, &outs, &routes, now, &mut edits);
 
+                if let Some(note) = &sysex_note {
+                    if sysex_line(ui, note) {
+                        edits.push(Edit::DismissSysex);
+                    }
+                }
+
                 ui.add_space(8.0);
                 footer(ui, &mut edits);
             });
@@ -200,6 +217,8 @@ impl SynthApp {
                 Edit::Offset(port, ms) => MIDI.set_offset(port, ms),
                 Edit::Measure(edit) => self.measure_edit(edit),
                 Edit::Budget(port, per_second) => MIDI.set_budget(port, per_second),
+                Edit::SendSysex(port) => self.send_sysex_file(ctx, port),
+                Edit::DismissSysex => self.rig_panel.sysex = None,
                 Edit::Refresh => {
                     self.refresh_midi_devices();
                     MIDI.rescan();
@@ -393,7 +412,7 @@ fn in_row(ui: &mut egui::Ui, row: &InRow, now: f64, edits: &mut Vec<Edit>) {
 /// A port's row, its edits joining `edits`.
 fn out_row(ui: &mut egui::Ui, row: &OutRow, devices: &[String], earliest: f32, now: f64, measure: &Measure, edits: &mut Vec<Edit>) {
     let id = egui::Id::unique(("rig_out", row.port));
-    let since = since(ui, id, row.traffic.messages, now);
+    let since = since(ui, id, row.traffic.messages.wrapping_add(row.traffic.sysex), now);
     // A port sending clock is in use, whether a MIDI Out plays it or not
     let used = !row.played_by.is_empty() || row.clock != ClockMode::Off;
     let (state, color) = match row.status {
@@ -431,8 +450,12 @@ fn out_row(ui: &mut egui::Ui, row: &OutRow, devices: &[String], earliest: f32, n
             beat(ui, id, row.traffic.clocks, now);
         });
         cell(ui, last_w, |ui| {
-            let event = row.traffic.last.and_then(|message| MidiEvent::from_bytes(message.bytes()));
-            last(ui, event, since);
+            if row.traffic.last_sysex || row.traffic.sysex_waiting > 0 {
+                sysex_last(ui, &row.traffic, since);
+            } else {
+                let event = row.traffic.last.and_then(|message| MidiEvent::from_bytes(message.bytes()));
+                last(ui, event, since);
+            }
         });
         cell(ui, who_w, |ui| who(ui, &row.played_by, "MIDI Out", "MIDI Outs", "playing this port"));
     });
@@ -471,6 +494,13 @@ fn device_menu(ui: &mut egui::Ui, row: &OutRow, devices: &[String], edits: &mut 
             ui.separator();
             if ui.selectable_label(row.chosen.is_none(), "None").clicked() {
                 edits.push(Edit::Choose(row.port, None));
+            }
+            if row.found.is_some() {
+                ui.separator();
+                let hint = "Send a .syx file's SysEx to this device, whole and within the port's budget: a voice, a bank, its settings";
+                if ui.selectable_label(false, "📤 Send a SysEx file…").on_hover_text(hint).clicked() {
+                    edits.push(Edit::SendSysex(row.port));
+                }
             }
         })
         .response;

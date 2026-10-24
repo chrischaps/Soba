@@ -9,6 +9,8 @@
 //!   [`LANE_GAP`]: a CC lane, the bend, the pressure.
 //! - [`ProgramSlot`] sends a Bank Select and Program Change when they
 //!   change, and again on a trigger.
+//! - [`MidiWriter::sysex`] sends a whole SysEx message (#440), copied into
+//!   a slot of the bus's pool, made before the audio started.
 //!
 //! What a writer sends, the sender sends to the port's device when its
 //! sample is heard, within the port's budget (see [`MidiBus::set_budget`]):
@@ -17,10 +19,13 @@
 
 use std::ops::Range;
 
+use std::sync::Arc;
+
 use rtrb::Producer;
 use web_time::Instant;
 
 use super::midi::{Control, Message, MidiBus, Outgoing, Program, PORTS};
+use super::sysex::{SysexError, SysexPool};
 use crate::dsp::context::ProcessContext;
 use crate::dsp::gate::Edge;
 
@@ -40,6 +45,8 @@ pub struct MidiWriter {
     sample: u64,
     /// Events the ring had no room for, wrapping at [`WRAP`].
     dropped: u32,
+    /// Where SysEx is copied to on its way, while a sender drains the bus.
+    pool: Option<Arc<SysexPool>>,
 }
 
 impl MidiWriter {
@@ -47,7 +54,9 @@ impl MidiWriter {
     /// no sender drains it (the offline renderer). On the UI thread, as
     /// the module is made: the ring is allocated here.
     pub fn on_bus(bus: &MidiBus) -> Self {
-        Self { ring: bus.open_stream(), sample: 0, dropped: 0 }
+        let ring = bus.open_stream();
+        let pool = ring.as_ref().and_then(|_| bus.sysex_pool());
+        Self { ring, sample: 0, dropped: 0, pool }
     }
 
     /// Whether a sender reads what this writes.
@@ -91,6 +100,31 @@ impl MidiWriter {
     pub fn program(&mut self, offset: usize, channel: u8, program: Program) {
         for &message in program.burst(channel).messages() {
             self.message(offset, message);
+        }
+    }
+
+    /// Sends a whole SysEx message, `message` from its F0 to its F7, at
+    /// `offset` samples into this block: it's copied into a slot of the
+    /// pool, which the sender frees once it's gone. A message that won't
+    /// fit, or finds every slot in use, isn't sent, and says why.
+    /// REAL-TIME SAFE: no locks, no allocation, never waits.
+    pub fn sysex(&mut self, offset: usize, message: &[u8]) -> Result<(), SysexError> {
+        let (Some(ring), Some(pool)) = (&mut self.ring, &self.pool) else { return Err(SysexError::NoSender) };
+        let lease = pool.claim(message).inspect_err(|_| self.dropped = (self.dropped + 1) % WRAP)?;
+        // The slot's number goes down the ring, still held: should the
+        // ring be full, the lease comes back and frees it
+        let sample = self.sample + offset as u64;
+        match ring.slots() {
+            0 => {
+                drop(lease);
+                self.dropped = (self.dropped + 1) % WRAP;
+                Err(SysexError::Full)
+            }
+            _ => {
+                let slot = lease.into_slot();
+                let _ = ring.push(Outgoing::Sysex { sample, slot });
+                Ok(())
+            }
         }
     }
 
@@ -292,5 +326,32 @@ mod tests {
         let at = |sample: u64| burst.iter().map(move |m| (sample, m.clone()));
         let expected: Vec<_> = at(0).chain(at(5)).chain(at(0)).collect();
         assert_eq!(sent, expected, "once, again on the trigger, again on another port");
+    }
+
+    #[test]
+    fn sysex_goes_down_the_ring_in_a_slot_of_the_pool() {
+        let bus: &'static MidiBus = Box::leak(Box::new(MidiBus::new()));
+        bus.start_draining();
+        let mut writer = MidiWriter::on_bus(bus);
+        let mut ring = bus.take_new_streams().pop().unwrap();
+        let pool = bus.sysex_pool().unwrap();
+        writer.end(100);
+        writer.sysex(7, &[0xF0, 0x43, 0x10, 0x01, 0xF7]).unwrap();
+        assert_eq!(writer.sysex(0, &[0x90, 60, 100]), Err(SysexError::NotSysex));
+        assert_eq!(writer.dropped(), 1, "counted with what didn't go");
+        let Ok(Outgoing::Sysex { sample, slot }) = ring.pop() else { panic!("a slot's number") };
+        assert_eq!(sample, 107);
+        assert_eq!(pool.in_use(), 1);
+        assert_eq!(pool.adopt(slot).unwrap().bytes(), &[0xF0, 0x43, 0x10, 0x01, 0xF7]);
+        assert_eq!(pool.in_use(), 0, "the sender frees it");
+        // A full ring frees the slot it couldn't send
+        for _ in 0..crate::link::midi::RING {
+            writer.message(0, Message::note_on(0, 60, 1));
+        }
+        assert_eq!(writer.sysex(0, &[0xF0, 1, 0xF7]), Err(SysexError::Full));
+        assert_eq!(pool.in_use(), 0, "no slot lost");
+        // With no sender, nothing to send it through
+        let quiet = MidiWriter::on_bus(Box::leak(Box::new(MidiBus::new())));
+        assert!(quiet.pool.is_none());
     }
 }

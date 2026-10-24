@@ -14,6 +14,12 @@
 //!
 //! Safari has no Web MIDI: [`request`] says so rather than failing quietly.
 //!
+//! **SysEx** (#440) is asked for apart, the first time something sends it
+//! ([`request_sysex`]), so a visitor who only plays notes is never asked to
+//! let Soba reprogram their gear. The access the browser hands back can
+//! send it; the outputs opened before can't, so the sender opens them
+//! afresh.
+//!
 //! Compiled only for the web build.
 
 use std::cell::RefCell;
@@ -21,7 +27,7 @@ use std::cell::RefCell;
 use eframe::egui;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{MidiAccess, MidiInput, MidiMessageEvent, MidiOutput, MidiPortDeviceState};
+use web_sys::{MidiAccess, MidiInput, MidiMessageEvent, MidiOptions, MidiOutput, MidiPortDeviceState};
 
 /// Whether the page may use MIDI devices.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,9 +44,23 @@ pub enum Access {
     Unsupported,
 }
 
+/// Whether the page may send SysEx (#440), which the browser asks about
+/// apart, as letting it "control and reprogram your MIDI devices".
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SysexAccess {
+    /// Not asked yet: the first SysEx sent asks.
+    Unasked,
+    /// Asked; the browser is waiting on the visitor.
+    Asking,
+    Allowed,
+    /// The visitor (or the browser) said no, and why.
+    Refused(String),
+}
+
 /// What this page holds of Web MIDI, on its one thread.
 struct State {
     access: Access,
+    sysex: SysexAccess,
     midi: Option<MidiAccess>,
     /// Counts the times the devices changed, so the UI lists them again.
     changes: u32,
@@ -49,12 +69,57 @@ struct State {
 }
 
 thread_local! {
-    static STATE: RefCell<State> = const { RefCell::new(State { access: Access::Unasked, midi: None, changes: 0, _on_change: None }) };
+    static STATE: RefCell<State> = const { RefCell::new(State { access: Access::Unasked, sysex: SysexAccess::Unasked, midi: None, changes: 0, _on_change: None }) };
 }
 
 /// Whether the page may use MIDI devices yet.
 pub fn access() -> Access {
     STATE.with_borrow(|s| s.access.clone())
+}
+
+/// Whether the page may send SysEx yet.
+pub fn sysex_access() -> SysexAccess {
+    STATE.with_borrow(|s| s.sysex.clone())
+}
+
+/// Asks the browser to let the page send SysEx, and for MIDI devices if
+/// they haven't been allowed yet: one question for both. Called from a
+/// click, the first time SysEx is sent. The answer comes later; `ctx`
+/// draws a frame for it.
+pub fn request_sysex(ctx: &egui::Context) {
+    if matches!(sysex_access(), SysexAccess::Asking | SysexAccess::Allowed) {
+        return;
+    }
+    let Some(navigator) = web_sys::window().map(|w| w.navigator()) else { return };
+    if !js_sys::Reflect::has(&navigator, &"requestMIDIAccess".into()).unwrap_or(false) {
+        set_access(Access::Unsupported);
+        return;
+    }
+    let options = MidiOptions::new();
+    options.set_sysex(true);
+    let Ok(promise) = navigator.request_midi_access_with_options(&options) else { return };
+    STATE.with_borrow_mut(|s| s.sysex = SysexAccess::Asking);
+    let ctx = ctx.clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        match wasm_bindgen_futures::JsFuture::from(promise).await {
+            Ok(midi) => {
+                STATE.with_borrow_mut(|s| s.sysex = SysexAccess::Allowed);
+                allowed(midi.unchecked_into(), ctx.clone());
+                // The outputs opened before can't send it
+                crate::link::midi::MIDI.reconnect();
+            }
+            Err(error) => {
+                let name = js_sys::Reflect::get(&error, &"name".into()).ok().and_then(|n| n.as_string()).unwrap_or_default();
+                let why = if matches!(name.as_str(), "NotAllowedError" | "SecurityError") {
+                    "SysEx wasn't allowed, so notes and CCs go but SysEx doesn't. Allow it in the site settings (the icon left of the address) to send it".to_string()
+                } else {
+                    refusal(&error)
+                };
+                STATE.with_borrow_mut(|s| s.sysex = SysexAccess::Refused(why));
+            }
+        }
+        ctx.request_repaint();
+    });
 }
 
 /// How many times the devices have changed: compare with the last count
@@ -97,6 +162,10 @@ fn allowed(midi: MidiAccess, ctx: egui::Context) {
     });
     midi.set_onstatechange(Some(on_change.as_ref().unchecked_ref()));
     STATE.with_borrow_mut(|s| {
+        // One asked for again, for SysEx: the last mustn't call a closure dropped below
+        if let Some(old) = s.midi.take() {
+            old.set_onstatechange(None);
+        }
         s.access = Access::Allowed;
         s.midi = Some(midi);
         s.changes = s.changes.wrapping_add(1);

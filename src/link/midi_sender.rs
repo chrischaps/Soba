@@ -43,8 +43,15 @@
 //! value the device already has is dropped, and the port's traffic counts
 //! what was thinned. A [`Budget`] is a token bucket in bytes, a few
 //! milliseconds deep, so a note never waits behind more than that of CCs
-//! in the interface. SysEx (#440) can pace a dump by
-//! [`Budget::ready_at`].
+//! in the interface.
+//!
+//! **SysEx** (#440) goes whole and in order, each port's after the last.
+//! On a port with a budget, a message waits for a full bucket, then goes
+//! and puts the port in debt for every byte of it, so the next one, and
+//! the CCs, wait until the cable has carried it: a bank of 32 DX7 voices
+//! takes 1.3 seconds of a DIN cable, and some devices drop SysEx that
+//! comes faster. Notes and clock still go when they're due. While a
+//! message waits, the CCs do too, so it isn't starved of room.
 //!
 //! **Ahead of time.** The desktop's thread wakes every millisecond and
 //! sends each message as it falls due. The browser has no thread, only a
@@ -65,6 +72,7 @@ use rtrb::Consumer;
 use web_time::Instant;
 
 use super::midi::{status, ClockMode, Control, Message, MidiBus, Outgoing, PortStatus, Traffic, ALL_NOTES_OFF, BEND_CENTER, PORTS};
+use super::sysex::Lease;
 use crate::engine::device_names;
 
 mod thru;
@@ -158,10 +166,20 @@ impl Budget {
     }
 
     /// Counts `bytes` sent, into debt if need be: notes and clock go
-    /// whether they fit or not.
+    /// whether they fit or not. What they take past [`DEBT`] is forgiven,
+    /// but never a debt they didn't make (a SysEx dump's).
     pub fn spend(&mut self, bytes: usize) {
         if self.is_on() {
-            self.tokens = (self.tokens - bytes as f32).max(-self.rate() * DEBT);
+            let floor = (-self.rate() * DEBT).min(self.tokens);
+            self.tokens = (self.tokens - bytes as f32).max(floor);
+        }
+    }
+
+    /// Counts every byte of a long message sent, however deep the debt:
+    /// the cable is busy with it until the budget has filled again (#440).
+    pub fn spend_whole(&mut self, bytes: usize) {
+        if self.is_on() {
+            self.tokens -= bytes as f32;
         }
     }
 
@@ -176,11 +194,29 @@ impl Budget {
     }
 }
 
-/// What a stream has waiting: a message, or a controller's value.
+/// What a stream has waiting: a message, a controller's value, or a SysEx
+/// message in a slot of the bus's pool.
 #[derive(Clone, Copy, Debug)]
 enum Item {
     Message(Message),
     Control(Control),
+    Sysex(u8),
+}
+
+/// A SysEx message waiting on a port: in a slot of the pool, from the
+/// audio thread, or as the UI sent it.
+enum Sysex {
+    Pooled(Lease<'static>),
+    Owned(Box<[u8]>),
+}
+
+impl Sysex {
+    fn bytes(&self) -> &[u8] {
+        match self {
+            Self::Pooled(lease) => lease.bytes(),
+            Self::Owned(bytes) => bytes,
+        }
+    }
 }
 
 /// Asks the system to run the calling thread ahead of ordinary work, as
@@ -277,6 +313,8 @@ struct Port {
     /// The value of each controller last sent while it had a budget, to
     /// drop one the device already has.
     sent: Vec<Control>,
+    /// SysEx waiting to go, in order, each with when it was due (#440).
+    sysex: VecDeque<(Sysex, Instant)>,
 }
 
 /// One MIDI Out's ring, and what sending it remembers.
@@ -325,6 +363,7 @@ impl Stream {
         let channel = match item {
             Item::Message(message) => message.channel(),
             Item::Control(control) => Some(control.channel()),
+            Item::Sysex(_) => None,
         };
         if let Some(channel) = channel {
             self.channels |= 1 << channel;
@@ -445,6 +484,12 @@ impl MidiSender {
     /// Sends whatever is due, and says when to look again.
     pub fn tick(&mut self, now: Instant) -> Instant {
         self.streams.extend(self.bus.take_new_streams().into_iter().map(Stream::new));
+        if self.bus.take_reconnect() {
+            for port in &mut self.ports {
+                port.connection = None;
+                port.failed_at = None;
+            }
+        }
         if let Some(events) = self.bus.take_clock_stream() {
             // The engine made a new one: the audio device changed
             self.clock = Some(ClockStream::new(events));
@@ -459,6 +504,9 @@ impl MidiSender {
         self.follow_clock_modes(now);
         self.follow_budgets(now);
         self.forward(now);
+        for (port, bytes) in self.bus.take_sysex() {
+            self.ports[(port as usize).min(PORTS - 1)].sysex.push_back((Sysex::Owned(bytes), now));
+        }
 
         let latency = self.bus.latency();
         let offsets = self.bus.offsets();
@@ -487,6 +535,13 @@ impl MidiSender {
                         stream.bends(&control);
                         Self::offer(port, &mut self.outputs, &self.devices, control, now, at);
                     }
+                    Item::Sysex(slot) => {
+                        if let Some(lease) = self.bus.pool().and_then(|pool| pool.adopt(slot)) {
+                            port.sysex.push_back((Sysex::Pooled(lease), at));
+                            // Now, if there's room: in its place among the block's messages
+                            Self::send_sysex(port, &mut self.outputs, &self.devices, now, self.ahead);
+                        }
+                    }
                 }
             }
             if flush && stream.has_loose_ends() {
@@ -502,10 +557,11 @@ impl MidiSender {
             busy |= !stale;
             index += 1;
         }
-        // What waited for room goes as the budgets fill
+        // What waited for room goes as the budgets fill, SysEx first
         for port in &mut self.ports {
+            Self::send_sysex(port, &mut self.outputs, &self.devices, now, self.ahead);
             Self::send_waiting(port, &mut self.outputs, &self.devices, now);
-            busy |= !port.waiting.is_empty();
+            busy |= !port.waiting.is_empty() || !port.sysex.is_empty();
         }
         self.report();
         now + if busy {
@@ -540,6 +596,7 @@ impl MidiSender {
                 }
                 Outgoing::Message { sample, message } => self.streams[index].queue(sample, Item::Message(message)),
                 Outgoing::Control { sample, control } => self.streams[index].queue(sample, Item::Control(control)),
+                Outgoing::Sysex { sample, slot } => self.streams[index].queue(sample, Item::Sysex(slot)),
             }
         }
         self.streams[index].events.is_abandoned() && self.streams[index].events.is_empty()
@@ -565,6 +622,7 @@ impl MidiSender {
                 let at = port.after(now);
                 Self::send(port, &mut self.outputs, &self.devices, &mut [0; 16], Message::real_time(status::STOP), now, at);
             }
+            // SysEx meant for the device it leaves is dropped, its slots freed
             self.ports[index] = Port { device, traffic: port.traffic, mode: port.mode, budget: port.budget, ..Port::default() };
         }
     }
@@ -614,7 +672,7 @@ impl MidiSender {
     /// Takes in the patch's clock, shared out among the ports that want
     /// it, and sends what's due on each. Returns whether it's running.
     fn send_clock(&mut self, now: Instant, latency: Duration, offsets: &[f32; PORTS]) -> bool {
-        let Self { clock: slot, ports, outputs, devices, ahead, .. } = self;
+        let Self { clock: slot, ports, outputs, devices, ahead, bus, .. } = self;
         let Some(clock) = slot.as_mut() else { return false };
         while let Ok(event) = clock.stream.events.pop() {
             match event {
@@ -625,6 +683,7 @@ impl MidiSender {
                 Outgoing::Message { sample, message } => clock.fan(sample, message, ports),
                 // The clock's ring carries none
                 Outgoing::Control { .. } => {}
+                Outgoing::Sysex { slot, .. } => drop(bus.pool().and_then(|pool| pool.adopt(slot))),
             }
         }
         let gone = clock.stream.events.is_abandoned() && clock.stream.events.is_empty();
@@ -689,6 +748,7 @@ impl MidiSender {
                 Ok(()) => {
                     port.traffic.messages = port.traffic.messages.wrapping_add(1);
                     port.traffic.last = Some(message);
+                    port.traffic.last_sysex = false;
                 }
                 Err(error) => {
                     eprintln!("MIDI Out: sending to {} failed: {error}", port.device);
@@ -774,8 +834,12 @@ impl MidiSender {
         Self::send_waiting(port, outputs, devices, now);
     }
 
-    /// Sends what's waiting on `port`, oldest first, while its budget has room.
+    /// Sends what's waiting on `port`, oldest first, while its budget has
+    /// room and no SysEx waits for it.
     fn send_waiting(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], now: Instant) {
+        if port.budget.is_on() && port.sysex.front().is_some_and(|&(_, due)| due <= now) {
+            return;
+        }
         while let Some(&(control, at)) = port.waiting.first() {
             if !port.budget.fits(control.burst().bytes()) {
                 break;
@@ -806,6 +870,32 @@ impl MidiSender {
         }
     }
 
+    /// Sends the SysEx waiting on `port` that's due (up to `ahead` early),
+    /// one whole message at a time, each once the port's budget is full,
+    /// spending every byte of it (#440). A message the device won't take
+    /// is let go without closing the port: the notes still play.
+    fn send_sysex(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], now: Instant, ahead: Duration) {
+        while let Some((sysex, due)) = port.sysex.front() {
+            let length = sysex.bytes().len();
+            if *due > now + ahead || !port.budget.fits(length) {
+                break;
+            }
+            let at = (*due).max(now);
+            let Some((sysex, _)) = port.sysex.pop_front() else { break };
+            port.latest = Some(port.latest.map_or(at, |latest| latest.max(at)));
+            port.budget.spend_whole(length);
+            let Some(connection) = Self::connection(port, outputs, devices, now) else { continue };
+            match connection.send_at(sysex.bytes(), at) {
+                Ok(()) => {
+                    port.traffic.sysex = port.traffic.sysex.wrapping_add(1);
+                    port.traffic.sysex_bytes = length as u32;
+                    port.traffic.last_sysex = true;
+                }
+                Err(error) => eprintln!("MIDI Out: {} wouldn't take {length} bytes of SysEx: {error}", port.device),
+            }
+        }
+    }
+
     /// `port`'s open device, opening it if it's plugged in and hasn't just
     /// refused.
     fn connection<'a>(port: &'a mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], now: Instant) -> Option<&'a mut Box<dyn Connection>> {
@@ -829,8 +919,12 @@ impl MidiSender {
     fn report(&mut self) {
         let clocked = self.clock.as_ref().is_some_and(|clock| clock.stream.last_block.is_some());
         for (index, port) in self.ports.iter_mut().enumerate() {
-            // A port with no MIDI Out still sends the clock
-            let used = self.streams.iter().any(|s| s.port == index && s.last_block.is_some()) || (clocked && port.mode != ClockMode::Off) || self.thru.uses(index);
+            port.traffic.sysex_waiting = port.sysex.iter().map(|(sysex, _)| sysex.bytes().len() as u32).sum();
+            // A port with no MIDI Out still sends the clock, and SysEx from the UI
+            let used = self.streams.iter().any(|s| s.port == index && s.last_block.is_some())
+                || (clocked && port.mode != ClockMode::Off)
+                || self.thru.uses(index)
+                || !port.sysex.is_empty();
             self.bus.set_traffic(index, port.traffic);
             let status = if !used {
                 PortStatus::Idle
@@ -1499,6 +1593,135 @@ mod tests {
         drop(rings);
         sender.tick(start + TICK * 2);
         assert_eq!(&sent(&log)[5..], [vec![0x80, 64, 0], vec![0x80, 67, 0], vec![0xB0, ALL_NOTES_OFF, 0]]);
+    }
+
+    /// A SysEx message `length` bytes long, its data counting up from `seed`.
+    fn sysex(length: usize, seed: u8) -> Vec<u8> {
+        let mut message: Vec<u8> = (0..length).map(|i| (seed as usize + i) as u8 & 0x7F).collect();
+        message[0] = 0xF0;
+        message[length - 1] = 0xF7;
+        message
+    }
+
+    #[test]
+    fn sysex_from_the_ui_goes_whole_and_in_order() {
+        let (bus, mut sender, log) = setup(false);
+        bus.choose(1, Some("DAW"));
+        let voice = sysex(163, 0);
+        let bank = sysex(4104, 9);
+        bus.send_sysex(0, &voice).unwrap();
+        bus.send_sysex(0, &bank).unwrap();
+        bus.send_sysex(1, &voice).unwrap();
+        let start = Instant::now();
+        sender.tick(start);
+        assert_eq!(sent_to(&log, "Synth"), [voice.clone(), bank.clone()], "whole, one after the other");
+        assert_eq!(sent_to(&log, "DAW"), [voice]);
+        let traffic = bus.traffic(0);
+        assert_eq!((traffic.sysex, traffic.sysex_bytes, traffic.sysex_waiting, traffic.last_sysex), (2, 4104, 0, true));
+        assert_eq!(traffic.messages, 0, "SysEx is counted apart");
+    }
+
+    #[test]
+    fn sysex_from_a_module_goes_when_its_sample_is_heard_and_frees_its_slot() {
+        let (bus, mut sender, log) = setup(false);
+        let mut writer = crate::link::midi_writer::MidiWriter::on_bus(bus);
+        let pool = bus.sysex_pool().unwrap();
+        let start = Instant::now();
+        let context = crate::dsp::context::ProcessContext::new(RATE, 480).sent_at(start);
+        writer.begin(&context, 0);
+        // 5 ms in: the pad lights change on a step
+        let lights = sysex(40, 3);
+        writer.sysex(240, &lights).unwrap();
+        writer.message(240, Message::note_on(0, 36, 100));
+        writer.end(480);
+        sender.tick(start);
+        assert!(sent(&log).is_empty(), "not yet");
+        assert_eq!(pool.in_use(), 1, "held while it waits");
+        sender.tick(start + Duration::from_millis(5));
+        assert_eq!(sent(&log), [lights, vec![0x90, 36, 100]], "on its sample, in the block's order");
+        assert_eq!(pool.in_use(), 0, "the slot is free again");
+        // One sent by a module that's deleted at once still goes, and frees its slot
+        writer.sysex(0, &sysex(8, 1)).unwrap();
+        drop(writer);
+        sender.tick(start + Duration::from_millis(6));
+        assert_eq!(sent(&log)[2..], [sysex(8, 1), vec![0x80, 36, 0], vec![0xB0, ALL_NOTES_OFF, 0]], "then it lets go of its note");
+        assert_eq!(pool.in_use(), 0);
+    }
+
+    #[test]
+    fn a_dump_never_exceeds_its_ports_budget() {
+        let (bus, mut sender, log) = setup(false);
+        bus.set_budget(0, crate::link::midi::DIN_RATE);
+        let rate = 3.0 * crate::link::midi::DIN_RATE as f64;
+        // Four banks of 32 DX7 voices, while a CC lane sweeps and a note plays each 100 ms
+        let banks: Vec<Vec<u8>> = (0..4).map(|k| sysex(4104, k)).collect();
+        for bank in &banks {
+            bus.send_sysex(0, bank).unwrap();
+        }
+        let mut ring = bus.open_stream().unwrap();
+        let start = Instant::now();
+        let ms = |t: u64| start + Duration::from_millis(t);
+        const RUN: u64 = 7000;
+        for t in 0..RUN {
+            ring.push(Outgoing::Block { sample: t * 48, at: ms(t), rate: RATE, port: 0 }).unwrap();
+            ring.push(Outgoing::Control { sample: t * 48, control: cc(74, (t / 10 % 128) as u8) }).unwrap();
+            if t % 100 == 0 {
+                ring.push(Outgoing::Message { sample: t * 48, message: Message::note_on(0, 60, 100) }).unwrap();
+                ring.push(Outgoing::Message { sample: t * 48, message: Message::note_off(0, 60) }).unwrap();
+            }
+            sender.tick(ms(t));
+        }
+        let log = log.lock().unwrap();
+        let dumps: Vec<_> = log.iter().filter(|(_, b, _)| b[0] == 0xF0).collect();
+        assert_eq!(dumps.iter().map(|(_, b, _)| b.clone()).collect::<Vec<_>>(), banks, "each whole, in order");
+        // Each started only once the cable had carried everything before it
+        let notes: usize = log.iter().filter(|(_, b, _)| b[0] & 0xE0 == 0x80).map(|(_, b, _)| b.len()).sum();
+        for (_, _, at) in &dumps {
+            let before: usize = log.iter().filter(|(_, _, sent)| sent < at).map(|(_, b, _)| b.len()).sum();
+            let allowed = rate * at.duration_since(start).as_secs_f64() + 9.0 + notes as f64;
+            assert!(before as f64 <= allowed, "{before} bytes before a dump at {:?}, more than the {allowed:.0} the budget allows", at.duration_since(start));
+        }
+        let gaps: Vec<f64> = dumps.windows(2).map(|w| w[1].2.duration_since(w[0].2).as_secs_f64()).collect();
+        assert!(gaps.iter().all(|&gap| gap >= 4104.0 / rate - 0.002), "each a DIN cable's 1.37 s after the last: {gaps:?}");
+        // The notes kept time throughout, and the lane found room between
+        let ons: Vec<u64> = log.iter().filter(|(_, b, _)| b[0] == 0x90).map(|(_, _, at)| at.duration_since(start).as_millis() as u64).collect();
+        assert_eq!(ons, (0..RUN).step_by(100).collect::<Vec<_>>());
+        let lane = log.iter().filter(|(_, b, _)| b[0] == 0xB0).count();
+        assert!(lane > 100, "the CCs go between the dumps: {lane}");
+        assert!(log.iter().rev().find(|(_, b, _)| b[0] == 0xB0).unwrap().1[2] >= ((RUN - 200) / 10 % 128) as u8, "and end near the lane's last");
+    }
+
+    #[test]
+    fn sysex_meant_for_a_device_left_behind_is_dropped() {
+        let (bus, mut sender, log) = setup(false);
+        bus.set_budget(0, crate::link::midi::DIN_RATE);
+        let mut writer = crate::link::midi_writer::MidiWriter::on_bus(bus);
+        let pool = bus.sysex_pool().unwrap();
+        let start = Instant::now();
+        writer.begin(&crate::dsp::context::ProcessContext::new(RATE, 480).sent_at(start), 0);
+        for k in 0..3 {
+            writer.sysex(0, &sysex(1000, k)).unwrap();
+        }
+        sender.tick(start);
+        assert_eq!(sent(&log).len(), 1, "one goes; the budget holds the others");
+        assert_eq!(bus.traffic(0).sysex_waiting, 2000);
+        bus.choose(0, Some("DAW"));
+        sender.tick(start + TICK);
+        assert_eq!(pool.in_use(), 0, "their slots are free");
+        sender.tick(start + Duration::from_secs(2));
+        assert!(sent_to(&log, "DAW").is_empty(), "none goes to the new device");
+    }
+
+    #[test]
+    fn notes_dont_forgive_a_dumps_debt() {
+        let start = Instant::now();
+        let mut budget = Budget::new(1000);
+        budget.refill(start);
+        budget.spend_whole(4104);
+        let owed = budget.ready_at(9, start);
+        budget.spend(3);
+        assert!(budget.ready_at(9, start) >= owed, "a note doesn't pay it off");
+        assert!(owed >= start + Duration::from_millis(1365));
     }
 
     #[test]

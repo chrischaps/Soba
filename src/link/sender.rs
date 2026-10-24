@@ -44,7 +44,8 @@ const REFUSED_FOR: Duration = Duration::from_millis(1500);
 /// Starts the link's sender thread, once however often it's called: OSC
 /// to Seoul from [`BUS`], and MIDI to devices from the MIDI bus. One thread
 /// carries both protocols, each waking it when it next has work. A MIDI In
-/// passing a thru route (#446) wakes it at once, and is sent first.
+/// passing a thru route (#446) wakes it at once, and is sent first, and
+/// SysEx from the UI (#440) wakes it too.
 pub fn start() {
     static STARTED: Once = Once::new();
     STARTED.call_once(|| {
@@ -53,6 +54,7 @@ pub fn start() {
         let spawned = std::thread::Builder::new().name("soba-link".into()).spawn(move || {
             raise_priority();
             THRU.set_waker(std::thread::current());
+            MIDI.set_waker(std::thread::current());
             let mut osc_due = Instant::now();
             let mut midi_due = osc_due;
             loop {

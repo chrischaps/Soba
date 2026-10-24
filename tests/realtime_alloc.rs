@@ -12,7 +12,8 @@
 //! record, overdub, undo, redo, stop, restart, clear, while its loop is
 //! copied out to be saved and a saved loop is loaded back into it. Edits are compiled on the "UI" side (outside the counted
 //! region); installing them happens inside it. The input device's callback
-//! is counted too.
+//! is counted too, and so is SysEx sent from the audio thread while slots
+//! of the pool are in flight (#440).
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
@@ -732,4 +733,90 @@ fn poly_patch_never_allocates_with_eight_voices() {
     assert_eq!(plan.output_channels(6, 0), Some(8), "so does the VCA");
     assert_eq!(plan.output_channels(7, 0), Some(1), "the mixer sums them");
     assert_eq!(allocations, 0, "audio callback allocated {allocations} times playing 8 voices");
+}
+
+/// Where the SysEx test's sender sends: nowhere, counting what arrives.
+struct Sink(Arc<AtomicUsize>);
+
+struct SinkPort(Arc<AtomicUsize>);
+
+impl soba::link::midi_sender::Outputs for Sink {
+    fn scan(&mut self) -> Vec<String> {
+        vec!["Sink".into()]
+    }
+    fn open(&mut self, _name: &str) -> Result<Box<dyn soba::link::midi_sender::Connection>, String> {
+        Ok(Box::new(SinkPort(self.0.clone())))
+    }
+}
+
+impl soba::link::midi_sender::Connection for SinkPort {
+    fn send(&mut self, bytes: &[u8]) -> Result<(), String> {
+        if bytes[0] == 0xF0 {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+        Ok(())
+    }
+}
+
+/// SysEx from the audio thread (#440) claims a slot of the pool and sends
+/// its number down the module's ring: no allocation, while the sender
+/// sends and frees the slots on its own thread, a DIN budget keeps many
+/// of them waiting (so the pool runs dry and claims are refused), and the
+/// UI sends dumps of its own.
+#[test]
+fn sysex_in_flight_never_allocates() {
+    use soba::dsp::context::ProcessContext;
+    use soba::link::midi::{Message, MidiBus, DIN_RATE};
+    use soba::link::midi_sender::MidiSender;
+    use soba::link::midi_writer::MidiWriter;
+    use std::time::{Duration, Instant};
+
+    let bus: &'static MidiBus = Box::leak(Box::new(MidiBus::new()));
+    let arrived = Arc::new(AtomicUsize::new(0));
+    let mut sender = MidiSender::new(bus, Box::new(Sink(arrived.clone())));
+    bus.choose(0, Some("Sink"));
+    bus.set_budget(0, DIN_RATE);
+    let mut writer = MidiWriter::on_bus(bus);
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let sending = {
+        let done = done.clone();
+        std::thread::spawn(move || {
+            let voice: Vec<u8> = std::iter::once(0xF0).chain(std::iter::repeat_n(0x11, 161)).chain(std::iter::once(0xF7)).collect();
+            let mut k = 0;
+            while !done.load(Ordering::Relaxed) {
+                if k % 50 == 0 {
+                    bus.send_sysex(0, &voice).unwrap();
+                }
+                sender.tick(Instant::now());
+                std::thread::sleep(Duration::from_millis(1));
+                k += 1;
+            }
+        })
+    };
+    // Pad colours, as a controller's lights take them: four a block
+    let lights: Vec<u8> = [0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x16, 0x01, 0x7F, 0x00, 0x40, 0xF7].to_vec();
+    let start = Instant::now();
+    let contexts: Vec<ProcessContext> = (0..300).map(|block| ProcessContext::new(48_000.0, 480).sent_at(start + Duration::from_millis(block * 10))).collect();
+    let mut refused = 0;
+    let allocations = count_allocations(|| {
+        for context in &contexts {
+            writer.begin(context, 0);
+            for k in 0..4 {
+                if writer.sysex(k * 100, &lights).is_err() {
+                    refused += 1;
+                }
+            }
+            writer.message(0, Message::note_on(0, 36, 100));
+            writer.message(240, Message::note_off(0, 36));
+            writer.end(480);
+            // About as an audio callback runs, so the sender sends as the blocks come
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    });
+    done.store(true, Ordering::Relaxed);
+    sending.join().unwrap();
+    println!("{} SysEx messages arrived; {refused} claims refused while the pool was in use", arrived.load(Ordering::Relaxed));
+    assert!(arrived.load(Ordering::Relaxed) > 50, "SysEx was in flight");
+    assert!(refused > 0, "the DIN budget held enough back to run the pool dry");
+    assert_eq!(allocations, 0, "sending SysEx from the audio thread allocated {allocations} times");
 }

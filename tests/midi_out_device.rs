@@ -270,3 +270,83 @@ fn clock_keeps_time() {
     assert!(late < 0.004, "a tick left {:.2} ms late", late * 1000.0);
     assert!((end - errors[..96.min(errors.len())].iter().sum::<f64>() / 96.0).abs() < 0.001, "the clock drifted");
 }
+
+/// **SysEx** (#440): a 4 KB message from the UI and a short one from a
+/// module's ring, through the link's real sender thread, reach the
+/// loopback port `SOBA_MIDI_LOOPBACK` names whole. Run it on its own
+/// (`--test-threads=1`, or name it), since the other test here opens the
+/// same port.
+///
+/// ```text
+/// SOBA_MIDI_LOOPBACK="loopMIDI Port" cargo test --release --test midi_out_device sysex -- --ignored --nocapture
+/// ```
+#[test]
+#[ignore = "needs a loopback MIDI port"]
+fn sysex_reaches_a_loopback_whole() {
+    let Ok(name) = std::env::var("SOBA_MIDI_LOOPBACK") else {
+        println!("Name a loopback port (loopMIDI's, say) in SOBA_MIDI_LOOPBACK to run this");
+        return;
+    };
+    soba::link::sender::start();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !MIDI.devices().contains(&name) {
+        assert!(Instant::now() < deadline, "{name} isn't among the MIDI outputs: {:?}", MIDI.devices());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    const PORT: usize = 1;
+    MIDI.choose(PORT, Some(&name));
+
+    // What comes back, a SysEx message at a time: WinMM hands a long one
+    // over in pieces of a kilobyte, which are put back together here
+    let heard: Arc<Mutex<Vec<Vec<u8>>>> = Arc::default();
+    let mut input = midir::MidiInput::new("Soba SysEx loopback").unwrap();
+    input.ignore(midir::Ignore::None);
+    let port = input.ports().into_iter().find(|p| input.port_name(p).is_ok_and(|n| n == name)).expect("no such loopback input");
+    let _listening = {
+        let heard = heard.clone();
+        let mut message: Option<Vec<u8>> = None;
+        input
+            .connect(
+                &port,
+                "Soba SysEx loopback",
+                move |_, bytes, _| {
+                    if bytes.first() == Some(&0xF0) {
+                        message = Some(Vec::new());
+                    }
+                    if let Some(whole) = message.as_mut() {
+                        whole.extend_from_slice(bytes);
+                        if bytes.last() == Some(&0xF7) {
+                            heard.lock().unwrap().push(message.take().unwrap());
+                        }
+                    }
+                },
+                (),
+            )
+            .unwrap()
+    };
+
+    // 4 KB from the UI: a non-commercial ID (0x7D), then a ramp
+    let mut dump: Vec<u8> = (0..4096).map(|i| (i % 128) as u8).collect();
+    dump[0] = 0xF0;
+    dump[1] = 0x7D;
+    dump[4095] = 0xF7;
+    MIDI.send_sysex(PORT, &dump).unwrap();
+    // And a short one from a module, on the audio thread's path
+    let lights = vec![0xF0, 0x7D, 0x01, 0x02, 0x03, 0xF7];
+    let mut writer = soba::link::midi_writer::MidiWriter::on_bus(&MIDI);
+    writer.begin(&ProcessContext::new(RATE, BLOCK).sent_at(Instant::now()), PORT);
+    writer.sysex(0, &lights).unwrap();
+    writer.end(BLOCK);
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while heard.lock().unwrap().len() < 2 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let mut heard = heard.lock().unwrap().clone();
+    println!("Heard {} SysEx messages: {:?} bytes", heard.len(), heard.iter().map(Vec::len).collect::<Vec<_>>());
+    heard.sort_by_key(Vec::len);
+    assert_eq!(heard.len(), 2, "both arrived");
+    assert_eq!(heard[0], lights, "the module's, intact");
+    assert!(heard[1] == dump, "the 4 KB dump, intact");
+    assert_eq!(MIDI.traffic(PORT).sysex, 2);
+}
