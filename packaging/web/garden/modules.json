@@ -1296,6 +1296,127 @@
       "name": "Instrument",
       "outputs": []
     },
+    "source.kit": {
+      "category": "Source",
+      "color": "#42a5f5",
+      "height": 908.0,
+      "inputs": [
+        {
+          "name": "Gate 1",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 1",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 2",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 2",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 3",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 3",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 4",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 4",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 5",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 5",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 6",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 6",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 7",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 7",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 8",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 8",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 1",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 2",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 3",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 4",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 5",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 6",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 7",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 8",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 9",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 10",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 11",
+          "type": "Control"
+        },
+        {
+          "name": "Slot 12",
+          "type": "Control"
+        }
+      ],
+      "name": "Kit",
+      "outputs": []
+    },
     "source.noise": {
       "category": "Source",
       "color": "#42a5f5",

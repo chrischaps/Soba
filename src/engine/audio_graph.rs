@@ -23,8 +23,9 @@ use crate::engine::graph_plan::{
     MAX_INPUTS,
 };
 use crate::engine::spectrum_tap::SpectrumTap;
-use crate::hardware::SlotMap;
+use crate::hardware::{LaneMap, SlotMap};
 use crate::modules::instrument::SLOTS;
+use crate::modules::kit::LANES;
 use crate::modules::scenes::SceneKnob;
 
 /// A connection between two ports in the audio graph.
@@ -179,6 +180,8 @@ pub struct AudioGraph {
     scenes: HashMap<NodeId, Vec<SceneKnob>>,
     /// What each Instrument's knobs were last given to send (#442).
     slots: HashMap<NodeId, [SlotMap; SLOTS]>,
+    /// What each Kit's lanes were last given to play (#443).
+    lanes: HashMap<NodeId, [LaneMap; LANES]>,
 }
 
 impl AudioGraph {
@@ -199,6 +202,7 @@ impl AudioGraph {
             take_handoffs: Vec::new(),
             scenes: HashMap::new(),
             slots: HashMap::new(),
+            lanes: HashMap::new(),
         }
     }
 
@@ -344,6 +348,7 @@ impl AudioGraph {
         self.take_handoffs.retain(|handoff| handoff.node_id() != node_id);
         self.scenes.remove(&node_id);
         self.slots.remove(&node_id);
+        self.lanes.remove(&node_id);
 
         // Remove all connections involving this node
         self.connections.retain(|conn| {
@@ -509,6 +514,7 @@ impl AudioGraph {
         self.take_handoffs.clear();
         self.scenes.clear();
         self.slots.clear();
+        self.lanes.clear();
     }
 
     /// Gives a Scenes module the knobs it turns as its Morph moves, from
@@ -624,6 +630,29 @@ impl AudioGraph {
     /// What an Instrument's knobs were last given to send.
     pub fn slot_maps(&self, node_id: NodeId) -> Option<&[SlotMap; SLOTS]> {
         self.slots.get(&node_id)
+    }
+
+    /// Gives a Kit's lane `lane` the part it plays (#443), as
+    /// [`map_slot`](Self::map_slot) gives a knob its parameter.
+    ///
+    /// Returns false if there is no such module.
+    pub fn map_lane(&mut self, node_id: NodeId, lane: usize, map: LaneMap) -> bool {
+        let Some(spec) = self.nodes.get_mut(&node_id) else {
+            return false;
+        };
+        if let Some(place) = self.lanes.entry(node_id).or_insert([LaneMap::EMPTY; LANES]).get_mut(lane) {
+            *place = map;
+        }
+        match spec.fresh.as_mut() {
+            Some(module) => module.map_lane(lane, map),
+            None => self.take_handoffs.push(PlanMessage::MapLane { node_id, lane, map }),
+        }
+        true
+    }
+
+    /// What a Kit's lanes were last given to play.
+    pub fn lane_maps(&self, node_id: NodeId) -> Option<&[LaneMap; LANES]> {
+        self.lanes.get(&node_id)
     }
 
     /// Gives a module room to record a take into. A module not yet handed
@@ -835,6 +864,7 @@ impl AudioGraph {
             EngineCommand::SettleTake { node_id, take, sample } => self.settle_take(node_id, take, sample),
             EngineCommand::SetMarkers { node_id, markers } => self.set_markers(node_id, markers),
             EngineCommand::MapSlot { node_id, slot, map } => self.map_slot(node_id, slot, map),
+            EngineCommand::MapLane { node_id, lane, map } => self.map_lane(node_id, lane, map),
             EngineCommand::SeedModule { node_id, seed } => self.seed_module(node_id, seed),
             EngineCommand::SetScenes { node_id, knobs } => self.set_scenes(node_id, knobs),
             // Played on the running module, not kept in the graph

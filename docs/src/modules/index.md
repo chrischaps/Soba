@@ -24,6 +24,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Controls](./midi/controls.md) | `input.controls` | A MIDI controller's faders, knobs, mod wheel, pitch bend and pressure as cables, learned from the hardware |
 | [Pads](./midi/pads.md) | `input.pads` | A pad controller's pads as eight gates, with velocity and pressure: finger drums, triggers and latches |
 | [Instrument](./midi/instrument.md) | `source.instrument` | A piece of hardware as a node: a synth's or drum machine's own knobs, by name, to turn and patch, and its notes over MIDI |
+| [Kit](./midi/kit.md) | `source.kit` | A hardware drum machine, sampler or groovebox as a node: its tracks, pads or parts as eight lanes to strike from a Trigger Sequencer, and its knobs by name, over MIDI |
 
 ### Filter
 
@@ -170,3 +171,4 @@ Drive a voice from a sequence instead of a keyboard:
 | Play visuals from the patch | [Link Out](./output/link-out.md), with Seoul |
 | Play a hardware synth or a DAW, or lead its tempo | [MIDI Out](./output/midi-out.md) |
 | Turn and patch a hardware synth's own knobs, and keep its sound in the patch | [Instrument](./midi/instrument.md) |
+| Play a hardware drum machine's tracks or pads from a Trigger Sequencer | [Kit](./midi/kit.md) |

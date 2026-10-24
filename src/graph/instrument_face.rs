@@ -13,6 +13,9 @@
 //!   holds, coloured by its group (an oscillator's blue, a filter's teal),
 //!   and reading out what it sends as the device names it: "Saw", "+12",
 //!   "74". Right-click a knob to give it another parameter.
+//!
+//! A Kit (#443) wears the same face, with its lanes' pads between the
+//! header and the knobs (see [`super::kit_face`]), and lists only kits.
 
 use eframe::egui::{self, Color32, Id, Pos2, Rect, Sense, UiBuilder, Vec2};
 use egui_node_graph2::{NodeId, NodeResponse};
@@ -21,6 +24,7 @@ use crate::app::theme;
 use crate::hardware::{self, instrument, Known, Origin, Parameter, Profile, SlotMap};
 use crate::link::midi::{PortStatus, MIDI, PORTS, PORT_LABELS};
 use crate::modules::instrument::{Instrument, SLOTS, SLOT_NAMES};
+use crate::modules::kit::{self, Kit, LANES};
 
 use super::display_frame;
 use super::midi_out_display::{device_menu, flash_of};
@@ -69,10 +73,16 @@ pub fn dress(data: &SynthNodeData, param_name: &str, travel: f32) -> Option<Dres
 }
 
 /// What an Instrument's knob jack is called: the parameter its knob holds,
-/// so an LFO is patched into Cutoff, not Slot 1.
+/// so an LFO is patched into Cutoff, not Slot 1. A Kit's lane jacks are
+/// named for their parts.
 pub fn jack_name(data: &SynthNodeData, param_name: &str) -> Option<String> {
-    if data.module_id != crate::modules::instrument::ID {
+    if !instrument::plays_a_profile(data.module_id) {
         return None;
+    }
+    if data.module_id == kit::ID {
+        if let Some(name) = super::kit_face::jack_name(data, param_name) {
+            return Some(name);
+        }
     }
     let slot = slot_of(param_name)?;
     instrument::held(&data.labels, slot, &hardware::known()).map(|held| held.parameter.name)
@@ -93,13 +103,18 @@ pub fn instrument_face(
     if let Some((rect, response, painter)) = display_frame::frame_of_height(ui, width, HEADER * z, theme::module::SOURCE, z) {
         header(data, ui, node_id, graph, user_state, rect, &response, &painter, z, &mut responses);
     }
+    if data.module_id == kit::ID {
+        ui.add_space(4.0 * z);
+        responses.extend(super::kit_face::lanes(data, ui, node_id, graph, user_state, width, CELL, z));
+    }
 
     // The knobs, each centred in a cell wide enough for its name
     ui.add_space(6.0 * z);
     let rows = SLOTS.div_ceil(PER_ROW);
     let (grid, _) = ui.allocate_exact_size(Vec2::new(width, rows as f32 * ROW * z), Sense::hover());
     let knob_width = 44.0 * z;
-    for (index, knob) in data.knob_params.iter().enumerate() {
+    for knob in &data.knob_params {
+        let Some(index) = slot_of(&knob.param_name) else { continue };
         let (row, column) = (index / PER_ROW, index % PER_ROW);
         let centre = grid.left() + (column as f32 + 0.5) * CELL * z;
         let cell = Rect::from_min_size(Pos2::new(centre - knob_width / 2.0 + 4.0 * z, grid.top() + row as f32 * ROW * z), Vec2::new(knob_width, ROW * z));
@@ -127,7 +142,14 @@ fn header(
     let channel = display_frame::value_of(graph, node_id, "Channel").unwrap_or(0.0).round() as usize + 1;
     let readout = display_frame::readout(user_state, node_id).unwrap_or_default();
     let values = &readout.values;
-    let live = values[Instrument::READOUT_LIVE] > 0.5;
+    let is_kit = data.module_id == kit::ID;
+    // The Kit keeps its counts in its own places
+    let (live_at, notes_at, knobs_at) = if is_kit {
+        (Kit::READOUT_LIVE, Kit::READOUT_NOTES_SENT, Kit::READOUT_KNOBS_SENT)
+    } else {
+        (Instrument::READOUT_LIVE, Instrument::READOUT_NOTES_SENT, Instrument::READOUT_KNOBS_SENT)
+    };
+    let live = values[live_at] > 0.5;
     let status = live.then(|| MIDI.status(port));
     let device = MIDI.chosen(port);
     let found = device.as_ref().and(MIDI.found()[port].clone());
@@ -145,7 +167,7 @@ fn header(
     let lamp_at = rect.left_top() + Vec2::new(7.0 * z, 7.0 * z);
     if status == Some(PortStatus::Sending) {
         // A flash as a note or a knob goes out
-        let sent = values[Instrument::READOUT_NOTES_SENT] as u32 * 4096 + values[Instrument::READOUT_KNOBS_SENT] as u32;
+        let sent = values[notes_at] as u32 * 4096 + values[knobs_at] as u32;
         let flash = flash_of(ui, Id::unique(("instrument_flash", node_id)), sent, now, FLASH);
         painter.circle_filled(lamp_at, (4.0 + 2.0 * flash) * z, lamp.gamma_multiply(0.12 + 0.3 * flash));
         if flash > 0.0 {
@@ -183,7 +205,7 @@ fn header(
     let chooser = ui.interact(name_rect, Id::unique(("instrument_profile", node_id)), Sense::click());
     let title = egui::FontId::new(11.0 * z, egui::FontFamily::Name(theme::TITLE_FAMILY.into()));
     let (text, ink) = match (chosen, known) {
-        (None, _) => ("Choose an instrument".to_string(), if chooser.hovered() { theme::text::PRIMARY } else { theme::text::DISABLED }),
+        (None, _) => (if is_kit { "Choose a kit" } else { "Choose an instrument" }.to_string(), if chooser.hovered() { theme::text::PRIMARY } else { theme::text::DISABLED }),
         (Some(name), Some(_)) => (name.to_string(), if chooser.hovered() { theme::text::PRIMARY } else { theme::text::SECONDARY.lerp_to_gamma(theme::text::PRIMARY, 0.5) }),
         (Some(name), None) => (format!("{name} ?"), amber),
     };
@@ -199,9 +221,10 @@ fn header(
     let chooser = match (chosen, known) {
         (Some(name), None) => chooser.on_hover_text(format!("This computer has no profile called {name}: its knobs play as the patch wrote them down. Add the profile to Documents/Soba/Instruments to name them again")),
         (Some(_), Some(known)) => chooser.on_hover_text(known.profile.about.clone()),
+        (None, _) if is_kit => chooser.on_hover_text("Click to choose the drum machine or sampler it plays: its lanes take its tracks, pads or parts, and its knobs the device's own names"),
         (None, _) => chooser.on_hover_text("Click to choose the hardware it plays: its knobs take the device's own names"),
     };
-    profile_menu(ui, &chooser, node_id, graph, chosen, profiles.all(), responses);
+    profile_menu(ui, &chooser, node_id, graph, chosen, profiles.all(), is_kit, responses);
 
     let send = ui.interact(send_rect, Id::unique(("instrument_send_all", node_id)), Sense::click());
     let can_send = chosen.is_some();
@@ -221,12 +244,14 @@ fn header(
         Some(PortStatus::NoDevice) | Some(PortStatus::Idle) if device.is_none() => format!("Port {} has no device yet: click its name to choose one", PORT_LABELS[port]),
         Some(PortStatus::Missing) => "The device isn't plugged in. Its knobs go out again once it is: Send all brings it back to the patch".to_string(),
         Some(PortStatus::Failed) => "The device wouldn't open. Another app may be using it: close that, and Soba tries again".to_string(),
+        _ if is_kit => format!("Playing port {} on channel {channel}: each lane strikes its part, and each knob is the device's own control", PORT_LABELS[port]),
         _ => format!("Playing port {} on channel {channel}: notes from Gate and Pitch, and each knob as the device's own control", PORT_LABELS[port]),
     });
 }
 
 /// The menu a click on the profile's name opens: every profile this
-/// computer knows, the shipped ones first.
+/// computer knows, the shipped ones first. A Kit's lists only kits.
+#[allow(clippy::too_many_arguments)]
 fn profile_menu(
     ui: &mut egui::Ui,
     chooser: &egui::Response,
@@ -234,6 +259,7 @@ fn profile_menu(
     graph: &SynthGraph,
     chosen: Option<&str>,
     profiles: &[Known],
+    is_kit: bool,
     responses: &mut Vec<NodeResponse<SynthResponse, SynthNodeData>>,
 ) {
     let popup = chooser.id.with("menu");
@@ -246,7 +272,7 @@ fn profile_menu(
         ui.set_min_width(170.0);
         ui.label(egui::RichText::new("Plays").small().weak());
         let mut yours = false;
-        for known in profiles {
+        for known in profiles.iter().filter(|known| !is_kit || instrument::is_kit(&known.profile)) {
             if matches!(known.origin, Origin::File(_)) && !yours {
                 ui.separator();
                 ui.label(egui::RichText::new("Yours").small().weak());
@@ -264,7 +290,11 @@ fn profile_menu(
             if ui.selectable_label(false, "None").clicked() {
                 let mut labels = vec![(instrument::PROFILE.to_string(), String::new())];
                 labels.extend((0..SLOTS).map(|slot| (instrument::slot_key(slot), String::new())));
-                responses.push(NodeResponse::User(SynthResponse::SetLabels { node_id, label: "Clear Instrument".to_string(), labels }));
+                if is_kit {
+                    labels.extend((0..LANES).map(|lane| (instrument::lane_key(lane), String::new())));
+                }
+                let label = if is_kit { "Clear Kit" } else { "Clear Instrument" }.to_string();
+                responses.push(NodeResponse::User(SynthResponse::SetLabels { node_id, label, labels }));
             }
         }
         let folder = hardware::folder();
@@ -274,11 +304,17 @@ fn profile_menu(
 
 /// What choosing `profile` asks for, as one undo step: its name and its
 /// first twelve parameters on the knobs, each knob at its default, the
-/// profile's channel, and the port whose device it is, if one is. Then
+/// profile's channel, and the port whose device it is, if one is. A Kit's
+/// lanes take its first eight parts, and the knobs the first's track. Then
 /// every knob is sent.
 fn choose(node_id: NodeId, graph: &SynthGraph, profile: &Profile) -> Vec<SynthResponse> {
-    let mut asked = vec![SynthResponse::SetLabels { node_id, label: format!("Play {}", profile.name), labels: instrument::choose(profile) }];
+    let is_kit = graph[node_id].user_data.module_id == kit::ID;
+    let labels = if is_kit { instrument::choose_kit(profile) } else { instrument::choose(profile) };
+    let mut asked = vec![SynthResponse::SetLabels { node_id, label: format!("Play {}", profile.name), labels }];
     let set = |param_name: &str, value: f32| SynthResponse::ParameterChanged { node_id, param_name: param_name.to_string(), value };
+    if is_kit {
+        asked.push(set("Track", 0.0));
+    }
     asked.extend(profile.parameters.iter().zip(SLOT_NAMES).map(|(parameter, slot)| set(slot, instrument::start(parameter))));
     asked.push(set("Channel", (profile.channel() as f32 - 1.0).clamp(0.0, 15.0)));
     if let Some(port) = port_of(profile) {

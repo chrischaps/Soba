@@ -19,6 +19,7 @@ mod data_types;
 pub mod hints;
 pub mod input_channel_menu;
 mod instrument_face;
+mod kit_face;
 pub mod input_display;
 mod dancer_display;
 mod dancer_moves;

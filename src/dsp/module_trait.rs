@@ -492,6 +492,12 @@ pub trait DspModule: Send + 'static {
     /// REAL-TIME SAFE: the map comes by value.
     fn map_slot(&mut self, _slot: usize, _map: crate::hardware::SlotMap) {}
 
+    /// Gives a Kit's lane `lane` the part it plays (#443). Ignored by
+    /// other modules.
+    ///
+    /// REAL-TIME SAFE: the map comes by value.
+    fn map_lane(&mut self, _lane: usize, _map: crate::hardware::LaneMap) {}
+
     /// Starts the module's random numbers from `seed`, so a patch plays the
     /// same noise wherever it runs: in the editor, in a capture or in the
     /// render tool. The graph seeds each module as it's added, before it

@@ -629,6 +629,31 @@ static MODULE_UI: &[ModuleUi] = &[
         knobs_per_row: 4,
         ..ModuleUi::DEFAULT
     },
+    ModuleUi {
+        module_id: crate::modules::kit::ID,
+        // The Instrument's face, with its lanes' pads and the Velocity knob
+        // between the header and the knobs (#443). The pads choose the Track
+        knobs: &[
+            knob("Velocity"),
+            knob("Slot 1"),
+            knob("Slot 2"),
+            knob("Slot 3"),
+            knob("Slot 4"),
+            knob("Slot 5"),
+            knob("Slot 6"),
+            knob("Slot 7"),
+            knob("Slot 8"),
+            knob("Slot 9"),
+            knob("Slot 10"),
+            knob("Slot 11"),
+            knob("Slot 12"),
+        ],
+        labels: &[("Channel", "Ch")],
+        hidden: &["Track"],
+        display: NodeDisplay::InstrumentFace,
+        knobs_per_row: 4,
+        ..ModuleUi::DEFAULT
+    },
 ];
 
 /// Every entry in the table.

@@ -2,7 +2,7 @@
 
 To MIDI, every synth is just numbers: "CC 74 on channel 3". A **profile** puts a device's numbers into its own words. It names the device, says which CC is its Cutoff, says what each value of its oscillator type means, which note plays its kick, and how its programs are numbered ("A05", "Scene 12"). It also says whether the device keeps time with MIDI clock.
 
-Profiles are what the [Instrument](../modules/midi/instrument.md) module and the Setlist read. A profile on its own sends nothing: it describes the device for the modules that do.
+Profiles are what the [Instrument](../modules/midi/instrument.md) and [Kit](../modules/midi/kit.md) modules and the Setlist read. A profile on its own sends nothing: it describes the device for the modules that do.
 
 ## The profiles that ship
 

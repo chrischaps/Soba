@@ -21,6 +21,7 @@ pub mod drum;
 pub mod envelope;
 pub mod eq;
 pub mod instrument;
+pub mod kit;
 pub mod filter;
 pub mod ladder;
 pub mod lfo;
@@ -123,6 +124,7 @@ builtin_modules! {
     LinkOut,
     MidiOut,
     Instrument,
+    Kit,
 }
 
 // Re-export commonly used types
@@ -147,6 +149,7 @@ pub use envelope::AdsrEnvelope;
 pub use eq::ParametricEq;
 pub use filter::SvfFilter;
 pub use instrument::Instrument;
+pub use kit::Kit;
 pub use ladder::LadderFilter;
 pub use lfo::Lfo;
 pub use link_out::LinkOut;

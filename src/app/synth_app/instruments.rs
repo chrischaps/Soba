@@ -2,13 +2,14 @@
 //! the parameter it holds, handed over wherever it isn't what the engine
 //! has. That covers a patch opened, a profile chosen, a knob given another
 //! parameter, an undo and a paste alike, and each sends the knob afresh.
-//! Send all from the face hands every knob over again.
+//! Send all from the face hands every knob over again. A Kit's knobs go
+//! the same way, and its lanes (#443) with them.
 
 use egui_node_graph2::NodeId;
 
 use crate::engine::EngineCommand;
 use crate::hardware::instrument;
-use crate::modules::instrument::{ID, SLOTS};
+use crate::modules::instrument::SLOTS;
 
 use super::SynthApp;
 
@@ -32,18 +33,31 @@ impl SynthApp {
     }
 
     /// The knobs to hand over: those that differ from what the engine has,
-    /// or all of `again`'s.
+    /// or all of `again`'s. A Kit's lanes, where they differ.
     fn instrument_sends(&self, again: Option<NodeId>) -> Vec<EngineCommand> {
         let Some(handle) = self.ui_handle.as_ref() else { return Vec::new() };
         let profiles = crate::hardware::known();
         let mut sends = Vec::new();
         for (node_id, node) in self.graph_state.graph.nodes.iter() {
-            if node.user_data.module_id != ID || again.is_some_and(|again| again != node_id) {
+            if !instrument::plays_a_profile(node.user_data.module_id) || again.is_some_and(|again| again != node_id) {
                 continue;
             }
             let Some(engine_id) = self.user_state.get_engine_node_id(node_id) else { continue };
             if !handle.graph().contains_module(engine_id) {
                 continue;
+            }
+            // The lanes first: a knob on a track goes to the track's channel
+            if node.user_data.module_id == crate::modules::kit::ID {
+                let had = handle.graph().lane_maps(engine_id);
+                for (lane, map) in instrument::lane_maps(&node.user_data.labels, &profiles).into_iter().enumerate() {
+                    let fresh = match had {
+                        Some(had) => had[lane] != map,
+                        None => !map.is_empty(),
+                    };
+                    if fresh {
+                        sends.push(EngineCommand::MapLane { node_id: engine_id, lane, map });
+                    }
+                }
             }
             let had = handle.graph().slot_maps(engine_id);
             let maps = instrument::maps(&node.user_data.labels, &profiles);

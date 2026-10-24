@@ -239,21 +239,21 @@ pub fn pads_face(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_st
     asked
 }
 
-/// How a pad is lit.
-struct PadLight {
+/// How a pad is lit. A Kit's pads (#443) are lit the same way.
+pub(super) struct PadLight {
     /// A hit's flash, 0 to 1, fading.
-    flash: f32,
+    pub flash: f32,
     /// Whether its gate is open: held, or latched.
-    open: bool,
+    pub open: bool,
     /// How hard it's pressed, 0 to 1.
-    pressure: f32,
-    hovered: bool,
+    pub pressure: f32,
+    pub hovered: bool,
     /// The blink while it learns.
-    learning: Option<f32>,
+    pub learning: Option<f32>,
 }
 
 /// A pad: soft rubber, lit from within.
-fn draw_pad(painter: &egui::Painter, cell: Rect, z: f32, light: PadLight) {
+pub(super) fn draw_pad(painter: &egui::Painter, cell: Rect, z: f32, light: PadLight) {
     let green = theme::signal::GATE;
     let radius = 4.0 * z;
     let rubber = if light.hovered { Color32::from_rgb(40, 43, 56) } else { Color32::from_rgb(33, 35, 46) };

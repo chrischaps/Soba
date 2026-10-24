@@ -99,11 +99,19 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
             });
         }
 
-        // An Instrument's knobs, from its profile or as the patch wrote them
-        if node.template.module_id() == crate::modules::instrument::ID {
-            let maps = crate::hardware::instrument::maps(&graph[node.graph_id].user_data.labels, &crate::hardware::known());
+        // An Instrument's knobs, from its profile or as the patch wrote them,
+        // and a Kit's knobs and lanes
+        if crate::hardware::instrument::plays_a_profile(node.template.module_id()) {
+            let labels = &graph[node.graph_id].user_data.labels;
+            let maps = crate::hardware::instrument::maps(labels, &crate::hardware::known());
             for (slot, map) in maps.into_iter().enumerate().filter(|(_, map)| !map.is_empty()) {
                 compiled.commands.push(EngineCommand::MapSlot { node_id: engine_node_id, slot, map });
+            }
+            if node.template.module_id() == crate::modules::kit::ID {
+                let lanes = crate::hardware::instrument::lane_maps(labels, &crate::hardware::known());
+                for (lane, map) in lanes.into_iter().enumerate().filter(|(_, map)| !map.is_empty()) {
+                    compiled.commands.push(EngineCommand::MapLane { node_id: engine_node_id, lane, map });
+                }
             }
         }
 
@@ -223,6 +231,31 @@ mod tests {
         let cutoff = profiles.find("MicroFreak").unwrap().profile.parameter("Cutoff").unwrap();
         assert_eq!(maps[0].1, crate::hardware::SlotMap::of(cutoff), "the profile's own Cutoff, not CC 1 as written");
         assert_eq!(maps[1].1.address, Some(crate::hardware::Address::Cc(31)));
+    }
+
+    #[test]
+    fn test_a_kit_hands_over_its_lanes_and_knobs_as_it_loads() {
+        // A Digitakt's pads as the patch chose them (#443): lane 2 on Track 5
+        let mut patch = Patch::new("rig");
+        let mut kit = NodeData::new(1, crate::modules::kit::ID, (0.0, 0.0));
+        kit.labels.insert("profile".into(), "Digitakt".into());
+        kit.labels.insert("lane 1".into(), r#"{"name":"Track 1","note":0,"channel":1}"#.into());
+        kit.labels.insert("lane 2".into(), r#"{"name":"Track 5","note":4,"channel":5}"#.into());
+        kit.labels.insert("slot 1".into(), r#"{"name":"Filter Freq","cc":74}"#.into());
+        patch.nodes.push(kit);
+        let compiled = compile_patch(&patch).unwrap();
+        let lanes: Vec<(usize, crate::hardware::LaneMap)> = compiled
+            .commands
+            .iter()
+            .filter_map(|command| match command {
+                EngineCommand::MapLane { lane, map, .. } => Some((*lane, *map)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(lanes.len(), 2, "only the lanes that play something: {lanes:?}");
+        assert_eq!((lanes[1].0, lanes[1].1.note(), lanes[1].1.channel(0)), (1, 4, 4));
+        assert!(lanes[1].1.track, "the Digitakt's knobs follow its tracks");
+        assert!(compiled.commands.iter().any(|command| matches!(command, EngineCommand::MapSlot { slot: 0, .. })));
     }
 
     #[test]

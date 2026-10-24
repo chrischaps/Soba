@@ -66,15 +66,126 @@ pub struct Instrument {
     /// The port it played last block.
     port: usize,
     player: Player,
+    knobs: Knobs,
+    ports: Vec<PortDefinition>,
+    parameters: Vec<ParameterDefinition>,
+}
+
+/// An Instrument's twelve knobs, as the audio thread sends them: a Kit's
+/// too (#443). Each sends the parameter its [`SlotMap`] says, from its
+/// cable where one's patched, wherever it moves.
+pub struct Knobs {
     maps: [SlotMap; SLOTS],
     lanes: [ControlLane; SLOTS],
-    /// A knob just given a relative parameter: its value counts as sent,
-    /// because sending it would nudge the device.
+    /// A knob whose value counts as sent without sending it: just given a
+    /// relative parameter, which sending would nudge, or (a Kit's) turned
+    /// to another track, whose sound it would overwrite.
     settle: [bool; SLOTS],
     /// Knob values sent so far, wrapping at [`WRAP`], for the face's lamp.
     sent: u32,
-    ports: Vec<PortDefinition>,
-    parameters: Vec<ParameterDefinition>,
+}
+
+impl Default for Knobs {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Knobs {
+    pub const fn new() -> Self {
+        Self { maps: [SlotMap::EMPTY; SLOTS], lanes: [ControlLane::new(); SLOTS], settle: [false; SLOTS], sent: 0 }
+    }
+
+    /// The knobs sent where they've moved: each from its jack (from
+    /// `first_port`) while patched, or else its knob (from `first_param`),
+    /// those without a channel of their own on `channel` (from 0).
+    /// REAL-TIME SAFE.
+    #[allow(clippy::too_many_arguments)]
+    pub fn run(&mut self, out: &mut MidiWriter, inputs: &[&SignalBuffer], first_port: usize, params: &[f32], first_param: usize, channel: u8, frames: usize, gap: usize) {
+        for slot in 0..SLOTS {
+            let map = self.maps[slot];
+            let Some(address) = map.address else {
+                self.lanes[slot].reset();
+                continue;
+            };
+            let lane = &mut self.lanes[slot];
+            let was = lane.sent();
+            match connected_input(inputs, first_port + slot) {
+                Some(cable) => {
+                    if std::mem::take(&mut self.settle[slot]) {
+                        lane.assume(map.control(address, channel, map.value(cable.at(0))));
+                    }
+                    lane.run(out, 0..frames, gap, |i| map.control(address, channel, map.value(cable.at(i))));
+                }
+                None => {
+                    let travel = params.get(first_param + slot).copied().unwrap_or(0.0);
+                    let control = map.control(address, channel, map.value(travel));
+                    if std::mem::take(&mut self.settle[slot]) {
+                        lane.assume(control);
+                    }
+                    if lane.sent() != Some(control) {
+                        lane.run(out, 0..frames, gap, |_| control);
+                    }
+                }
+            }
+            if lane.sent() != was {
+                self.sent = (self.sent + 1) % WRAP;
+            }
+        }
+    }
+
+    /// For a device or channel the knobs go to anew: each is sent afresh,
+    /// but for those that nudge, which would move its sound.
+    pub fn redirect(&mut self) {
+        for (settle, map) in self.settle.iter_mut().zip(&self.maps) {
+            *settle |= map.relative;
+        }
+    }
+
+    /// For another track of the same device: no knob that's been sent is
+    /// sent again until it's turned, so the track keeps its sound. One just
+    /// given its parameter (Send all, a profile chosen) still goes.
+    pub fn hold(&mut self) {
+        for (settle, lane) in self.settle.iter_mut().zip(&self.lanes) {
+            *settle |= lane.sent().is_some();
+        }
+    }
+
+    /// Forgets what every knob sent, so each is sent again (but those
+    /// settling).
+    pub fn forget(&mut self) {
+        self.lanes = [ControlLane::new(); SLOTS];
+    }
+
+    /// Gives knob `slot` what it sends, and has it send its value again,
+    /// but for a relative one, which would nudge.
+    pub fn map_slot(&mut self, slot: usize, map: SlotMap) {
+        let Some(place) = self.maps.get_mut(slot) else { return };
+        *place = map;
+        self.lanes[slot].reset();
+        self.settle[slot] = map.relative;
+    }
+
+    /// What knob `slot` holds now.
+    pub fn map(&self, slot: usize) -> SlotMap {
+        self.maps.get(slot).copied().unwrap_or_default()
+    }
+
+    /// Knob values sent so far, wrapping at [`WRAP`].
+    pub fn sent(&self) -> u32 {
+        self.sent
+    }
+
+    /// Each knob's value as last sent, into `values` from `at`, or -1
+    /// while it holds nothing.
+    pub fn read_into(&self, values: &mut [f32], at: usize) {
+        for (slot, lane) in self.lanes.iter().enumerate() {
+            values[at + slot] = match lane.sent().map(|control| control.value()) {
+                Some(value) if !self.maps[slot].is_empty() => value as f32,
+                _ => -1.0,
+            };
+        }
+    }
 }
 
 impl Instrument {
@@ -113,10 +224,7 @@ impl Instrument {
             out: MidiWriter::on_bus(bus),
             port: 0,
             player: Player::new(),
-            maps: [SlotMap::EMPTY; SLOTS],
-            lanes: [ControlLane::new(); SLOTS],
-            settle: [false; SLOTS],
-            sent: 0,
+            knobs: Knobs::new(),
             ports,
             parameters,
         }
@@ -160,7 +268,7 @@ impl Instrument {
 
     /// What knob `slot` holds now.
     pub fn map(&self, slot: usize) -> SlotMap {
-        self.maps.get(slot).copied().unwrap_or_default()
+        self.knobs.map(slot)
     }
 }
 
@@ -206,12 +314,10 @@ impl DspModule for Instrument {
         if port != self.port || channel != self.player.channel() {
             // The new device (or channel) hears every knob afresh, but for
             // those that nudge, which would move its sound
-            for (settle, map) in self.settle.iter_mut().zip(&self.maps) {
-                *settle |= map.relative;
-            }
+            self.knobs.redirect();
         }
         if port != self.port {
-            self.lanes = [ControlLane::new(); SLOTS];
+            self.knobs.forget();
             self.player.moved();
             self.port = port;
         }
@@ -224,65 +330,28 @@ impl DspModule for Instrument {
         self.player.pressure(&mut self.out, input(Self::PORT_PRESSURE), frames, gap);
 
         // The knobs: a cable where one's patched, wherever it moves
-        for slot in 0..SLOTS {
-            let map = self.maps[slot];
-            let Some(address) = map.address else {
-                self.lanes[slot].reset();
-                continue;
-            };
-            let lane = &mut self.lanes[slot];
-            let was = lane.sent();
-            match input(Self::PORT_SLOT + slot) {
-                Some(cable) => {
-                    if std::mem::take(&mut self.settle[slot]) {
-                        lane.assume(map.control(address, channel, map.value(cable.at(0))));
-                    }
-                    lane.run(&mut self.out, 0..frames, gap, |i| map.control(address, channel, map.value(cable.at(i))));
-                }
-                None => {
-                    let control = map.control(address, channel, map.value(param(Self::PARAM_SLOT + slot)));
-                    if std::mem::take(&mut self.settle[slot]) {
-                        lane.assume(control);
-                    }
-                    if lane.sent() != Some(control) {
-                        lane.run(&mut self.out, 0..frames, gap, |_| control);
-                    }
-                }
-            }
-            if lane.sent() != was {
-                self.sent = (self.sent + 1) % WRAP;
-            }
-        }
+        self.knobs.run(&mut self.out, inputs, Self::PORT_SLOT, params, Self::PARAM_SLOT, channel, frames, gap);
 
         self.out.end(frames);
     }
 
     fn reset(&mut self) {
         self.player.reset(&mut self.out);
-        self.lanes = [ControlLane::new(); SLOTS];
+        self.knobs.forget();
     }
 
     fn map_slot(&mut self, slot: usize, map: SlotMap) {
-        let Some(place) = self.maps.get_mut(slot) else { return };
-        *place = map;
-        // Sent again, but for a relative one, which would nudge
-        self.lanes[slot].reset();
-        self.settle[slot] = map.relative;
+        self.knobs.map_slot(slot, map);
     }
 
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
         let mut readout = Readout::default();
         let values = &mut readout.values;
-        for (slot, lane) in self.lanes.iter().enumerate() {
-            values[Self::READOUT_SENT + slot] = match lane.sent().map(|control| control.value()) {
-                Some(value) if !self.maps[slot].is_empty() => value as f32,
-                _ => -1.0,
-            };
-        }
+        self.knobs.read_into(values, Self::READOUT_SENT);
         MidiOut::light_notes(values, Self::READOUT_NOTES, &self.player);
         values[Self::READOUT_LIVE] = if self.out.is_live() { 1.0 } else { 0.0 };
         values[Self::READOUT_NOTES_SENT] = self.player.notes_sent() as f32;
-        values[Self::READOUT_KNOBS_SENT] = self.sent as f32;
+        values[Self::READOUT_KNOBS_SENT] = self.knobs.sent() as f32;
         values[Self::READOUT_DROPPED] = self.out.dropped() as f32;
         Some(readout)
     }

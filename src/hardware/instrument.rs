@@ -1,5 +1,6 @@
 //! An Instrument node's setup (#442): which profile it plays, and which of
-//! the profile's parameters each of its knobs holds.
+//! the profile's parameters each of its knobs holds. A Kit's (#443) too,
+//! and which of the profile's parts each of its lanes plays.
 //!
 //! The node keeps it in its labels, as an Arranger keeps its sections' names,
 //! so it saves, copies and undoes with the rest of the node:
@@ -7,16 +8,24 @@
 //! - `"profile"`: the profile's name, as the Sampler keeps its file.
 //! - `"slot 1"` … `"slot 12"`: the parameter the knob holds, written out as
 //!   the profile writes it (`{"name":"Cutoff","cc":23,"group":"Filter"}`).
+//! - A Kit's `"lane 1"` … `"lane 8"`: the part the lane plays, likewise
+//!   (`{"name":"Pad 13","note":36,"channel":1}`).
 //!
-//! A knob plays its profile's parameter of that name, so a CC corrected in
-//! the profile reaches every patch. One whose profile this computer doesn't
-//! know plays the parameter as the patch wrote it down: the patch carries
-//! enough to play the hardware on its own.
+//! A knob plays its profile's parameter of that name, and a lane its part,
+//! so a CC or a note corrected in the profile reaches every patch. One
+//! whose profile this computer doesn't know plays what the patch wrote
+//! down: the patch carries enough to play the hardware on its own.
 
 use std::collections::BTreeMap;
 
-use super::{Parameter, Profile, Profiles, SlotMap};
+use super::{Kind, LaneMap, Parameter, Part, Profile, Profiles, SlotMap};
 use crate::modules::instrument::SLOTS;
+use crate::modules::kit::LANES;
+
+/// Whether a module plays hardware from a profile: an Instrument or a Kit.
+pub fn plays_a_profile(module_id: &str) -> bool {
+    module_id == crate::modules::instrument::ID || module_id == crate::modules::kit::ID
+}
 
 /// The label that names the profile.
 pub const PROFILE: &str = "profile";
@@ -66,6 +75,44 @@ pub fn choose(profile: &Profile) -> Vec<(String, String)> {
     let mut labels = vec![(PROFILE.to_string(), profile.name.clone())];
     labels.extend((0..SLOTS).map(|slot| (slot_key(slot), profile.parameters.get(slot).map(written).unwrap_or_default())));
     labels
+}
+
+/// The label that holds lane `lane`'s part (from 0): "lane 1".
+pub fn lane_key(lane: usize) -> String {
+    format!("lane {}", lane + 1)
+}
+
+/// The part lane `lane` plays, if it plays one: its profile's, where the
+/// profile is known and has it, or else as the patch wrote it.
+pub fn part(labels: &BTreeMap<String, String>, lane: usize, profiles: &Profiles) -> Option<Part> {
+    let written: Part = serde_json::from_str(labels.get(&lane_key(lane))?).ok()?;
+    let profile = profile_name(labels).and_then(|name| profiles.find(name));
+    Some(profile.and_then(|known| known.profile.parts.iter().find(|p| p.name == written.name)).cloned().unwrap_or(written))
+}
+
+/// What every lane plays. Knobs follow a lane's track only where the
+/// profile, known, says its parts take the same CCs each on its channel.
+pub fn lane_maps(labels: &BTreeMap<String, String>, profiles: &Profiles) -> [LaneMap; LANES] {
+    let cc_per_part = profile_name(labels).and_then(|name| profiles.find(name)).is_some_and(|known| known.profile.cc_per_part);
+    std::array::from_fn(|lane| part(labels, lane, profiles).map_or(LaneMap::EMPTY, |part| LaneMap::of(&part, cc_per_part)))
+}
+
+/// The label that has a lane play `part`.
+pub fn written_part(part: &Part) -> String {
+    serde_json::to_string(part).expect("a part serializes")
+}
+
+/// The labels that have a Kit play `profile`: as [`choose`], and each lane
+/// playing one of its first eight parts.
+pub fn choose_kit(profile: &Profile) -> Vec<(String, String)> {
+    let mut labels = choose(profile);
+    labels.extend((0..LANES).map(|lane| (lane_key(lane), profile.parts.get(lane).map(written_part).unwrap_or_default())));
+    labels
+}
+
+/// Whether a Kit can play `profile`: a kit, with its parts.
+pub fn is_kit(profile: &Profile) -> bool {
+    profile.kind == Kind::Kit && !profile.parts.is_empty()
 }
 
 /// Where a knob sits to start `parameter` from: its default, if the chart

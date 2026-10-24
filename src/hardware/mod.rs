@@ -9,6 +9,7 @@
 //! shipped profile's name takes its place.
 
 pub mod instrument;
+pub mod lane;
 pub mod listening;
 #[cfg(test)]
 mod pages;
@@ -19,6 +20,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 pub use profile::{Address, Button, ButtonMode, Clock, Curve, Kind, Naming, Parameter, Part, Profile, Programs, Step, Voices};
+pub use lane::LaneMap;
 pub use slot::SlotMap;
 
 /// A profile that ships with the app.

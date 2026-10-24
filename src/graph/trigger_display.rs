@@ -173,7 +173,19 @@ fn short_drum(name: &str) -> String {
     .to_string()
 }
 
-/// What a lane's Gate cable plays: a Drum's type, or the module's name.
+/// A Kit's part as short as a lane's name wants it: a word and a number
+/// ("Track 3", "Pad 13") as its letter and the number ("T3", "P13").
+fn short_part(name: &str) -> String {
+    match name.split_once(' ') {
+        Some((word, number)) if name.len() > 5 && !number.is_empty() && number.chars().all(|c| c.is_ascii_digit()) => {
+            format!("{}{number}", word.chars().next().unwrap_or(' '))
+        }
+        _ => name.to_string(),
+    }
+}
+
+/// What a lane's Gate cable plays: a Drum's type, a Kit's part (#443), or
+/// the module's name.
 fn lane_name(graph: &SynthGraph, user_state: &SynthGraphState, node_id: NodeId, lane: usize) -> Option<String> {
     let output = graph.nodes.get(node_id)?.get_output(GATE_NAMES[lane]).ok()?;
     let input = user_state.cables_from.first(output)?;
@@ -182,6 +194,12 @@ fn lane_name(graph: &SynthGraph, user_state: &SynthGraphState, node_id: NodeId, 
         let type_input = target.get_input("Type").ok()?;
         if let SynthValueType::Select { value, options, .. } = &graph.get_input(type_input).value {
             return options.get(*value).map(|name| short_drum(name));
+        }
+    }
+    if target.user_data.module_id == crate::modules::kit::ID {
+        let jack = target.inputs.iter().find(|(_, id)| *id == input).map(|(name, _)| name.as_str());
+        if let Some(part) = jack.and_then(|jack| super::kit_face::jack_name(&target.user_data, jack)) {
+            return Some(short_part(&part));
         }
     }
     Some(target.label.clone())
@@ -855,6 +873,14 @@ fn pattern_tab_menu(ui: &mut egui::Ui, node_id: NodeId, params: &Params, pattern
 mod tests {
     use super::*;
     use crate::modules::trigger_sequencer::CHAIN_CHOICES;
+
+    #[test]
+    fn a_kits_parts_are_named_short_enough_for_a_lane() {
+        assert_eq!(short_part("Track 3"), "T3");
+        assert_eq!(short_part("Pad 13"), "P13");
+        assert_eq!(short_part("Kick"), "Kick");
+        assert_eq!(short_part("Low Tom"), "Low Tom", "a name, not a number, is kept");
+    }
 
     #[test]
     fn chain_choices_name_the_patterns() {

@@ -3282,3 +3282,51 @@ knob Slot 10            "Slot 10" Exposed
 knob Slot 11            "Slot 11" Exposed
 knob Slot 12            "Slot 12" Exposed
 display InstrumentFace
+
+== source.kit "Kit" finder="Kit" Source
+in   Gate 1             Gate     ConnectionOnly       inline=true  port
+in   Vel 1              Control  ConnectionOnly       inline=true  port
+in   Gate 2             Gate     ConnectionOnly       inline=true  port
+in   Vel 2              Control  ConnectionOnly       inline=true  port
+in   Gate 3             Gate     ConnectionOnly       inline=true  port
+in   Vel 3              Control  ConnectionOnly       inline=true  port
+in   Gate 4             Gate     ConnectionOnly       inline=true  port
+in   Vel 4              Control  ConnectionOnly       inline=true  port
+in   Gate 5             Gate     ConnectionOnly       inline=true  port
+in   Vel 5              Control  ConnectionOnly       inline=true  port
+in   Gate 6             Gate     ConnectionOnly       inline=true  port
+in   Vel 6              Control  ConnectionOnly       inline=true  port
+in   Gate 7             Gate     ConnectionOnly       inline=true  port
+in   Vel 7              Control  ConnectionOnly       inline=true  port
+in   Gate 8             Gate     ConnectionOnly       inline=true  port
+in   Vel 8              Control  ConnectionOnly       inline=true  port
+in   Port               Control  ConstantOnly         inline=true  select 0 ["A", "B", "C", "D", "E", "F", "G", "H"] "Port"
+in   Channel            Control  ConstantOnly         inline=true  select 0 ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] "Ch"
+in   Slot 1             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 2             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 3             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 4             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 5             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 6             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 7             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 8             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 9             Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 10            Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 11            Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Slot 12            Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Track              Control  ConstantOnly         inline=false select 0 ["Lane 1", "Lane 2", "Lane 3", "Lane 4", "Lane 5", "Lane 6", "Lane 7", "Lane 8"] ""
+in   Velocity           Control  ConstantOnly         inline=false num 0.8 [0..1]
+knob Velocity           "Velocity" KnobOnly
+knob Slot 1             "Slot 1" Exposed
+knob Slot 2             "Slot 2" Exposed
+knob Slot 3             "Slot 3" Exposed
+knob Slot 4             "Slot 4" Exposed
+knob Slot 5             "Slot 5" Exposed
+knob Slot 6             "Slot 6" Exposed
+knob Slot 7             "Slot 7" Exposed
+knob Slot 8             "Slot 8" Exposed
+knob Slot 9             "Slot 9" Exposed
+knob Slot 10            "Slot 10" Exposed
+knob Slot 11            "Slot 11" Exposed
+knob Slot 12            "Slot 12" Exposed
+display InstrumentFace

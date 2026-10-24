@@ -63,6 +63,8 @@ The first 12 are an Instrument's knobs when it's first made.
 
 ## Parts
 
+A [Kit](../modules/midi/kit.md)'s eight lanes play the first eight when it's first made. A part without a note is struck with middle C (60).
+
 | Part | Note | Channel |
 |---|---|---|
 | Pad 1 | 48 | 1 |

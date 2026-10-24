@@ -842,7 +842,7 @@ impl SynthNodeData {
                             return None;
                         };
                         // An Instrument's knob wears the parameter it holds
-                        let dressed = (self.module_id == crate::modules::instrument::ID)
+                        let dressed = crate::hardware::instrument::plays_a_profile(self.module_id)
                             .then(|| super::instrument_face::dress(self, &knob_param.param_name, display_signal.unwrap_or(*value)))
                             .flatten();
                         // Range, default, unit and curve all come from the DSP definition
@@ -939,7 +939,7 @@ impl SynthNodeData {
                     // The menu is as wide as its longest entry, not wrapped to the knob
                     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                     // An Instrument's knob: which of the hardware's controls it is
-                    if self.module_id == crate::modules::instrument::ID && !place.is_face() {
+                    if crate::hardware::instrument::plays_a_profile(self.module_id) && !place.is_face() {
                         responses.extend(super::instrument_face::slot_items(ui, self, node_id, &knob_param.param_name).into_iter().map(NodeResponse::User));
                     }
                     if place.is_face() {

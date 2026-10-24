@@ -256,8 +256,8 @@ impl SynthApp {
                 let played_by = graph
                     .nodes
                     .iter()
-                    // MIDI Outs and Instruments both play a port
-                    .filter(|(_, node)| [crate::modules::midi_out::ID, crate::modules::instrument::ID].contains(&node.user_data.module_id))
+                    // MIDI Outs, Instruments and Kits all play a port
+                    .filter(|(_, node)| node.user_data.module_id == crate::modules::midi_out::ID || crate::hardware::instrument::plays_a_profile(node.user_data.module_id))
                     .filter(|(_, node)| {
                         let input = node.inputs.iter().find(|(name, _)| name == "Port").map(|(_, id)| graph.get_input(*id));
                         let on = match input.map(|input| &input.value) {

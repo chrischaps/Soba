@@ -81,5 +81,6 @@ Knobs that **nudge** rather than set are left out. The FANTOM-06's Cutoff is one
 ## Related
 
 - [Instrument Profiles](../../hardware/instruments.md): what a profile is, the ones that ship, and how to make your own by listening to a device
+- [Kit](./kit.md): a drum machine's tracks or pads as eight lanes, for a Trigger Sequencer
 - [MIDI Out](../output/midi-out.md): for gear without a profile, or for CCs by number
 - [The Rig](../../getting-started/interface-overview.md#the-rig): which device each port plays
