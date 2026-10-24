@@ -435,6 +435,9 @@ impl OfflineRenderer {
     /// each one's Key Velocity, and as MIDI at velocity 100 when every one
     /// hears MIDI; a patch with Note Ins of each kind gets both. Each note
     /// lands on its sample.
+    ///
+    /// Every Pads module (#428) is played [`PAD_BEAT`] on its own pads'
+    /// notes and channels.
     pub fn render_audition(&mut self, patch: &Patch, seconds: f32) -> StereoBuffer {
         let channels = audition_channels(patch);
         let (start, sample_rate) = (self.position, self.context.sample_rate);
@@ -444,6 +447,10 @@ impl OfflineRenderer {
                 self.queue_midi(frame(at), channel, MidiMessage::NoteOn { note, velocity: 100 });
                 self.queue_midi(frame(at + length), channel, MidiMessage::NoteOff { note, velocity: 0 });
             }
+        }
+        for (channel, note, at, velocity) in pad_beat(patch) {
+            self.queue_midi(frame(at), channel, MidiMessage::NoteOn { note, velocity });
+            self.queue_midi(frame(at + PAD_BEAT_HOLD), channel, MidiMessage::NoteOff { note, velocity: 0 });
         }
         self.render_seconds(seconds)
     }
@@ -466,6 +473,50 @@ pub fn audition_channels(patch: &Patch) -> Vec<u8> {
     let as_keys = sources.iter().any(|&s| s != Source::Midi);
     let as_midi = sources.contains(&Source::Midi) || !as_keys && !sources.is_empty();
     [(as_keys, KEYS_CHANNEL), (as_midi, 0)].into_iter().filter(|(plays, _)| *plays).map(|(_, channel)| channel).collect()
+}
+
+/// The beat [`OfflineRenderer::render_audition`] plays on a Pads module,
+/// as (pad from 0, sixteenth, velocity): two bars of a backbeat on the
+/// General MIDI pads, kick (1), snare (3), clap (4), tom (6) and closed
+/// hat (7), with ghost notes and a tom fill into the second bar's end.
+pub const PAD_BEAT: &[(usize, u32, u8)] = &[
+    // Bar 1
+    (0, 0, 112), (6, 0, 84), (6, 2, 52), (2, 4, 100), (6, 4, 80), (0, 6, 70), (6, 6, 50), (2, 7, 34),
+    (0, 8, 104), (6, 8, 82), (6, 10, 54), (2, 12, 104), (3, 12, 64), (6, 12, 80), (6, 13, 40), (6, 14, 52), (2, 15, 30),
+    // Bar 2
+    (0, 16, 112), (6, 16, 84), (6, 18, 52), (2, 20, 100), (6, 20, 80), (0, 22, 70), (6, 22, 50), (2, 23, 34),
+    (0, 24, 104), (6, 24, 82), (0, 26, 80), (6, 26, 54), (2, 28, 104), (3, 28, 64), (5, 29, 84), (5, 30, 72), (5, 31, 62),
+    (0, 32, 112), (3, 32, 70),
+];
+
+/// [`PAD_BEAT`]'s tempo, in beats per minute.
+pub const PAD_BEAT_BPM: f32 = 96.0;
+
+/// How long each pad of [`PAD_BEAT`] is held, in seconds.
+pub const PAD_BEAT_HOLD: f32 = 0.08;
+
+/// [`PAD_BEAT`] on every Pads module of `patch`, as (wire channel, note,
+/// seconds, velocity). A pad on Omni is played on channel 10.
+pub fn pad_beat(patch: &Patch) -> Vec<(u8, u8, f32, u8)> {
+    use crate::dsp::DspModule;
+    use crate::modules::pads::{self, Pads};
+    let definition = Pads::new();
+    let sixteenth = 60.0 / PAD_BEAT_BPM / 4.0;
+    let mut beat = Vec::new();
+    for node in patch.all_nodes().into_iter().filter(|n| n.module_id == pads::ID) {
+        let params: Vec<f32> = definition
+            .parameters()
+            .iter()
+            .map(|p| node.parameters.iter().find(|named| named.name == p.name).map_or(p.default, |named| named.value.as_f32()))
+            .collect();
+        let listens = pads::listens(&params);
+        for &(pad, step, velocity) in PAD_BEAT {
+            let Some(note) = listens[pad].note else { continue };
+            let channel = listens[pad].channel.checked_sub(1).unwrap_or(pads::DEFAULT_CHANNEL - 1);
+            beat.push((channel, note, step as f32 * sixteenth, velocity));
+        }
+    }
+    beat
 }
 
 /// The phrase [`OfflineRenderer::render_audition`] plays, as (MIDI note,
@@ -601,6 +652,24 @@ mod tests {
             let cents = 1200.0 * (f / (Oscillator::C4_HZ as f64 * 2f64.powf(4.0 / 12.0))).log2();
             assert!(cents.abs() < 5.0, "{:?}: expected E4, measured {:.2} Hz", player, f);
         }
+    }
+
+    #[test]
+    fn test_audition_plays_a_beat_on_each_pads_own_notes() {
+        let mut patch = Patch::new("pads");
+        patch.nodes.push(NodeData::new(1, crate::modules::pads::ID, (0.0, 0.0)));
+        let beat = pad_beat(&patch);
+        assert_eq!(beat.len(), PAD_BEAT.len());
+        assert!(beat.iter().all(|&(channel, note, _, _)| channel == 9 && (36..44).contains(&note)), "the GM pads on channel 10");
+        assert!(audition_channels(&patch).is_empty(), "no Note In to play the phrase to");
+
+        // Learned onto C4 on channel 2, it's played there
+        patch.nodes[0].parameters =
+            vec![NamedParameter::new("Base", ParameterValue::Number(60.0)), NamedParameter::new("Channel", ParameterValue::Select(2))];
+        let beat = pad_beat(&patch);
+        assert!(beat.iter().all(|&(channel, note, _, _)| channel == 1 && (60..68).contains(&note)));
+        let last = beat.iter().map(|&(_, _, at, _)| at).fold(0.0, f32::max);
+        assert!((last - 32.0 * 60.0 / PAD_BEAT_BPM / 4.0).abs() < 1e-4, "two bars, and the downbeat after");
     }
 
     #[test]

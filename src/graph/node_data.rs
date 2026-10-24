@@ -265,6 +265,8 @@ pub enum NodeDisplay {
     /// Controls: a slim fader per slot, moving with the hardware, and what
     /// each hears.
     ControlFaders,
+    /// Pads: eight pads in two rows, flashing as they're hit.
+    PadGrid,
 }
 
 impl NodeDisplay {
@@ -1503,6 +1505,10 @@ impl NodeDataTrait for SynthNodeData {
             }
             NodeDisplay::ControlFaders => {
                 let asked = super::controls_face::controls_face(ui, node_id, graph, user_state, zoom);
+                responses.extend(asked.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::PadGrid => {
+                let asked = super::pads_face::pads_face(ui, node_id, graph, user_state, zoom);
                 responses.extend(asked.into_iter().map(NodeResponse::User));
             }
             NodeDisplay::ScenePads => {

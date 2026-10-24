@@ -27,7 +27,7 @@ Once the patch is playing, each polyphonic output shows its channel count in a s
 | Control | Range | Default | Description |
 |---------|-------|---------|-------------|
 | **Source** | Both / Keys / MIDI | Both | Where the notes come from: the computer keys and the piano, a MIDI device, or both (see [Sources](#sources)) |
-| **Ch** (Channel) | Omni / 1 – 16 | Omni | The MIDI channel to listen to. Omni hears all of them. The keys aren't on a channel, so this never turns them away |
+| **Ch** (Channel) | Omni / 1 – 16 | Omni | The MIDI channel to listen to. Omni hears all of them, except the notes a [Pads](./pads.md) module claims (see [Claimed notes](#claimed-notes)). The keys aren't on a channel, so this never turns them away |
 | **Voices** | 1 – 8 | 8 | How many notes can sound at once, and so how many channels the cables carry. 1 plays one at a time |
 | **Mode** (Allocation) | Rotate / Reuse | Rotate | With several voices, how a new note picks its voice (see [Voice allocation](#voice-allocation)) |
 | **Priority** | Last / Low / High | Last | With one voice, which held key sounds (see [One voice](#one-voice)) |
@@ -81,6 +81,12 @@ MIDI comes in from the device chosen in **MIDI In** on the toolbar. The menu lis
 - **Inside a DAW,** Soba plays the notes on its track, and there's no **MIDI In** menu.
 
 The choice isn't saved with the patch or between sessions. One device feeds every Note In and [MIDI Monitor](./midi-monitor.md) module in the patch.
+
+### Claimed notes
+
+A [Pads](./pads.md) module claims the notes its pads listen to, on their channel: by default notes 36 to 43 on channel 10, which most pad controllers send. A Note In on Omni skips those notes, so hitting a pad plays its drum and not the synth as well. The piano doesn't light for them either.
+
+A Note In set to a channel hears all of that channel's notes, claimed or not. Set **Ch** to the pads' channel to play notes from the pads too. The computer keys and the piano are never claimed.
 
 ## How notes become CV
 
@@ -207,6 +213,8 @@ Note In takes the place of three modules: Keyboard (the computer keys, one voice
 
 **Only one note of a chord sounds.** **Voices** is at 1, or the cables run into a module that isn't polyphonic, which hears one channel.
 
+**Some notes don't play.** A [Pads](./pads.md) module in the patch claims its pads' notes from a Note In on Omni (see [Claimed notes](#claimed-notes)). Learn the pads onto other notes, or set **Ch** to the channel you play on.
+
 **Wrong pitch.** Check **Oct**, and that the pitch bend wheel is centered.
 
 **Stuck note.** Send All Notes Off from your controller, or select the device again in **MIDI In**. Either releases every held note.
@@ -214,6 +222,7 @@ Note In takes the place of three modules: Keyboard (the computer keys, one voice
 ## Related modules
 
 - [MIDI Monitor](./midi-monitor.md) – see the notes that are arriving
+- [Pads](./pads.md) – a pad controller's pads as gates, for finger drums
 - [Oscillator](../sources/oscillator.md) – where **Pitch** usually goes
 - [ADSR Envelope](../modulation/adsr.md) – where **Gate** and **Velocity** usually go
 - [Chord Sequencer](../utilities/chord-sequencer.md) – plays chords for you

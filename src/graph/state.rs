@@ -220,6 +220,9 @@ pub struct SynthGraphState {
     /// here.
     midi_notes: VecDeque<(u8, u8)>,
     midi_note_count: u64,
+    /// The notes Pads modules claim (#428), which the piano ears skip, as
+    /// an Omni Note In does.
+    pub note_claims: crate::dsp::NoteClaims,
 
     /// The badges of the knobs a MIDI CC or host macro turns, keyed by
     /// (engine_node_id, param_index). The app works them out afresh from
@@ -407,6 +410,7 @@ impl Default for SynthGraphState {
             midi_first_event_time: None,
             midi_notes: VecDeque::new(),
             midi_note_count: 0,
+            note_claims: crate::dsp::NoteClaims::EMPTY,
             midi_mappings: HashMap::new(),
             scene_midi_mappings: HashMap::new(),
             midi_learn_active: false,
@@ -701,7 +705,9 @@ impl SynthGraphState {
         let timestamp = (now - first) as f32;
 
         self.midi_events.push_back(DisplayMidiEvent { event, timestamp });
+        // A pad's notes aren't for the ears
         match event {
+            MidiEvent::NoteOn { channel, note, .. } | MidiEvent::NoteOff { channel, note, .. } if self.note_claims.claims(channel, note) => {}
             MidiEvent::NoteOn { note, velocity, .. } => self.push_midi_note(note, velocity),
             MidiEvent::NoteOff { note, .. } => self.push_midi_note(note, 0),
             _ => {}
@@ -922,6 +928,14 @@ mod tests {
             state.push_midi_event(MidiEvent::NoteOn { channel: 0, note: 61, velocity: 90 }, 0.0);
         }
         assert_eq!(state.midi_notes_since(seen).len(), MAX_MIDI_NOTES);
+
+        // A pad's notes aren't for the ears (#428)
+        state.note_claims.claim(Some(9), 36);
+        let seen = state.midi_note_count();
+        state.push_midi_event(MidiEvent::NoteOn { channel: 9, note: 36, velocity: 90 }, 0.0);
+        state.push_midi_event(MidiEvent::NoteOff { channel: 9, note: 36, velocity: 0 }, 0.0);
+        assert_eq!(state.midi_notes_since(seen), vec![]);
+        assert!(matches!(state.midi_events().back().map(|e| e.event), Some(MidiEvent::NoteOff { channel: 9, .. })), "though the MIDI Monitor logs them");
     }
 
     /// `n` distinct node ids, from nodes added to a graph

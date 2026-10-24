@@ -322,6 +322,9 @@ pub enum MidiMessage {
     PitchBend { value: i16 },
     /// Channel Aftertouch: (pressure 0-127)
     Aftertouch { pressure: u8 },
+    /// Polyphonic Aftertouch: how hard one held key or pad is pressed
+    /// (note 0-127, pressure 0-127). Pads hears it (#428).
+    PolyPressure { note: u8, pressure: u8 },
     /// Program Change: (program number 0-127)
     ProgramChange { program: u8 },
     /// Timing Clock (0xF8): 24 ticks per beat while a MIDI clock master runs.

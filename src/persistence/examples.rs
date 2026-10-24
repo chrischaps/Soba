@@ -181,6 +181,13 @@ pub const EXAMPLES: &[Example] = &[
         json: include_str!("../../patches/roll-call.json"),
     },
     Example {
+        name: "Pad Kit",
+        shelf: Shelf::Recipe,
+        file_name: "pad-kit.json",
+        description: "Played on a pad controller: eight pads, five Drum voices and a little room. Each pad strikes its drum as hard as it's hit, and never plays the synth",
+        json: include_str!("../../patches/pad-kit.json"),
+    },
+    Example {
         name: "Pinwheel",
         shelf: Shelf::Recipe,
         file_name: "pinwheel.json",

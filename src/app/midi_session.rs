@@ -136,6 +136,9 @@ pub struct MidiSession {
     followed: Option<web_time::Instant>,
     /// The notes held, in order of press, each with its velocity.
     held: Vec<(u8, u8)>,
+    /// The notes Pads modules claim (#428), which aren't held for the
+    /// pianos, as an Omni Note In doesn't play them.
+    pub claims: crate::dsp::NoteClaims,
     /// Which CC, note or macro turns which control.
     pub mappings: MidiMappings,
     /// The mappings as last opened or saved. Undo history doesn't hold
@@ -331,7 +334,7 @@ impl MidiSession {
     pub fn hear(&mut self, event: MidiEvent, heard: &mut Heard, current: &impl Fn(u64, usize) -> Option<Standing>) {
         let (source, number, channel, input) = match event {
             MidiEvent::NoteOn { channel, note, velocity } => {
-                if !self.held.iter().any(|&(n, _)| n == note) {
+                if !self.held.iter().any(|&(n, _)| n == note) && !self.claims.claims(channel, note) {
                     self.held.push((note, velocity));
                     heard.notes_changed = true;
                 }
@@ -604,6 +607,17 @@ mod tests {
         assert_eq!(session.held(), [(64, 90)]);
         // Letting go of a note not held changes nothing
         assert!(!hear(&mut session, &[MidiEvent::NoteOff { channel: 0, note: 1, velocity: 0 }]).notes_changed);
+    }
+
+    #[test]
+    fn a_pads_notes_arent_held_for_the_pianos_but_still_learn() {
+        let mut session = MidiSession::default();
+        session.claims.claim(Some(9), 36);
+        hear(&mut session, &[MidiEvent::NoteOn { channel: 9, note: 36, velocity: 100 }, MidiEvent::NoteOn { channel: 0, note: 36, velocity: 90 }]);
+        assert_eq!(session.held(), [(36, 90)], "the same note on another channel is a key");
+        // A learn still hears the pad
+        session.start_learn(target(3));
+        assert!(hear(&mut session, &[MidiEvent::NoteOn { channel: 9, note: 36, velocity: 100 }]).learned);
     }
 
     #[test]

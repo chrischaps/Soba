@@ -32,7 +32,7 @@ use std::sync::Arc;
 
 use web_time::Instant;
 
-use crate::dsp::{Audition, DspModule, FinishedTake, OutputLevels, ProcessContext, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
+use crate::dsp::{Audition, DspModule, FinishedTake, NoteClaims, OutputLevels, ProcessContext, SampleData, SignalBuffer, Snapshot, SnapshotOutcome, TransportState};
 use crate::dsp::finite::all_finite;
 use crate::dsp::primitives::Markers;
 use crate::engine::commands::{ChannelPeaks, NodeId, PlanMessage, PortIndex};
@@ -228,6 +228,12 @@ pub struct GraphPlan {
     pub(crate) output_taps: Vec<OutputTap>,
     /// Scenes modules' knobs, turned as each one's Morph moves.
     pub(crate) scenes: Vec<PlanScenes>,
+    /// Modules that claim notes (Pads, #428), by index into `nodes`, and
+    /// how each works its claims out from its parameters.
+    pub(crate) claimers: Vec<(usize, fn(&[f32], &mut NoteClaims))>,
+    /// The notes they claim, worked out again every block from their
+    /// parameters as they stand, so a learn or an edit counts at once.
+    pub(crate) claims: NoteClaims,
     /// Where the UI reads the taps, meters and readouts, once the UI side
     /// has given the plan a board (see [`super::monitor_board`]).
     pub(crate) monitor: Option<MonitorWriter>,
@@ -250,6 +256,8 @@ impl GraphPlan {
             input_taps: Vec::new(),
             output_taps: Vec::new(),
             scenes: Vec::new(),
+            claimers: Vec::new(),
+            claims: NoteClaims::EMPTY,
             monitor: None,
             block_len: max_block_size,
             max_block_size,
@@ -520,12 +528,21 @@ impl GraphPlan {
         if let Some(transport) = self.transport() {
             context.transport = transport;
         }
+        // The notes Pads claim, from their parameters as they stand
+        if !self.claimers.is_empty() {
+            self.claims.clear();
+            for &(node, claim) in &self.claimers {
+                claim(&self.nodes[node].params, &mut self.claims);
+            }
+        }
+
+        let Self { nodes, outputs, defaults, mixdowns, late, max_block_size, claims, .. } = self;
+        let context = context.with_claims(claims);
         // Only modules live input reaches hear how late it is
         let live_context = context;
         let context = &context.with_input_latency(0);
         let fade_step = 1.0 / (BYPASS_FADE_SECONDS * context.sample_rate).max(1.0);
 
-        let Self { nodes, outputs, defaults, mixdowns, late, max_block_size, .. } = self;
         for line in late.iter_mut() {
             line.read(*max_block_size);
         }

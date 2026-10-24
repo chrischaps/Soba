@@ -2,6 +2,7 @@
 //!
 //! Provides runtime information that modules need during audio processing.
 
+use super::note_claims::{NoteClaims, NO_CLAIMS};
 use super::signal::MidiEvent;
 use web_time::Instant;
 
@@ -159,6 +160,9 @@ pub struct ProcessContext<'a> {
     /// outside a compiled graph, so a module tested on its own works out all
     /// of them. See [`output_heard`](Self::output_heard).
     pub heard_outputs: u64,
+    /// The notes Pads modules claim (#428), which a Note In on Omni skips.
+    /// None outside a compiled graph.
+    pub claimed_notes: &'a NoteClaims,
 }
 
 /// The DAW's transport at the first sample of a block, as the plugin's host
@@ -198,6 +202,7 @@ impl<'a> ProcessContext<'a> {
             sent_at: None,
             host: None,
             heard_outputs: u64::MAX,
+            claimed_notes: &NO_CLAIMS,
         }
     }
 
@@ -213,6 +218,7 @@ impl<'a> ProcessContext<'a> {
             sent_at: None,
             host: None,
             heard_outputs: u64::MAX,
+            claimed_notes: &NO_CLAIMS,
         }
     }
 
@@ -222,6 +228,14 @@ impl<'a> ProcessContext<'a> {
         'a: 'b,
     {
         ProcessContext { midi, ..self }
+    }
+
+    /// The same context, with the notes Pads modules claim.
+    pub fn with_claims<'b>(self, claimed_notes: &'b NoteClaims) -> ProcessContext<'b>
+    where
+        'a: 'b,
+    {
+        ProcessContext { claimed_notes, ..self }
     }
 
     /// The same context, carrying `input` as this block's audio input.

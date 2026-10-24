@@ -441,6 +441,16 @@ pub trait DspModule: Send + 'static {
         false
     }
 
+    /// How a module that claims notes (Pads, #428) works out which, from
+    /// its parameters, so a Note In on Omni skips them (see
+    /// [`NoteClaims`](super::NoteClaims)). The plan calls it every block,
+    /// on the audio thread, so a learned note is claimed from the next.
+    ///
+    /// Returns `None` for modules that claim none.
+    fn note_claims(&self) -> Option<fn(&[f32], &mut super::NoteClaims)> {
+        None
+    }
+
     /// Plays `chord` on the module's outputs in place of its own until
     /// it's taken away with `None`, for a module whose face lets a chord be
     /// heard as it's played in. Modules that don't audition ignore it.

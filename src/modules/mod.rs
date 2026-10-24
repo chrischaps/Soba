@@ -32,6 +32,7 @@ pub mod mix;
 pub mod mixer;
 pub mod noise;
 pub mod note_in;
+pub mod pads;
 pub mod oscillator;
 pub mod oscilloscope;
 pub mod output;
@@ -84,6 +85,7 @@ builtin_modules! {
     AudioInput,
     NoteIn,
     Controls,
+    Pads,
     Poly<SvfFilter>,
     Poly<LadderFilter>,
     Poly<AdsrEnvelope>,
@@ -131,6 +133,7 @@ pub use chorus::Chorus;
 pub use clock::Clock;
 pub use cloud::Cloud;
 pub use controls::Controls;
+pub use pads::Pads;
 pub use compressor::Compressor;
 pub use dancer::Dancer;
 pub use delay::StereoDelay;

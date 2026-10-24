@@ -66,6 +66,8 @@ struct NodeSpec {
     polyphonic: bool,
     /// Whether the module brings live input into the patch.
     live_input: bool,
+    /// How it claims notes, for Pads (see [`DspModule::note_claims`]).
+    note_claims: Option<fn(&[f32], &mut crate::dsp::NoteClaims)>,
     /// A module created and prepared here but not yet handed to a plan.
     /// Once compiled into a plan it lives on the audio thread, and later
     /// plans take it over from their predecessor.
@@ -94,6 +96,7 @@ impl NodeSpec {
             bypassed: false,
             polyphonic: module.polyphonic(),
             live_input: module.is_live_input(),
+            note_claims: module.note_claims(),
             spectrum: module.spectrum_ports().map(|ports| (ports, Arc::new(SpectrumTap::new()))),
             fresh: Some(module),
             sample: None,
@@ -910,6 +913,9 @@ impl AudioGraph {
                 hears_live.insert(node_id);
             }
 
+            if let Some(claim) = spec.note_claims {
+                plan.claimers.push((plan.nodes.len(), claim));
+            }
             plan.nodes.push(PlanNode {
                 node_id,
                 module: None,
@@ -2342,6 +2348,35 @@ mod tests {
         let hears = |id: NodeId| plan.nodes.iter().find(|n| n.node_id == id).unwrap().hears_live;
         assert!(hears(1) && hears(2) && hears(3) && hears(4));
         assert!(!hears(5), "a Looper nothing live feeds");
+    }
+
+    /// Pads claim their notes (#428): an Omni Note In skips them, from the
+    /// block a learn moves them in, with no recompile.
+    #[test]
+    fn test_pads_claim_their_notes_from_an_omni_note_in() {
+        use crate::dsp::{MidiEvent, MidiMessage};
+        use crate::modules::Pads;
+        // Note In's Gate, after its Pitch
+        const NOTE_IN_GATE: usize = 1;
+        let mut graph = AudioGraph::with_registry(48000.0, 256, crate::engine::create_module_registry());
+        for (node_id, module_id) in [(1, crate::modules::note_in::ID), (2, crate::modules::pads::ID)] {
+            assert!(graph.handle_command(EngineCommand::AddModule { node_id, module_id }));
+        }
+        let mut plan = graph.compile();
+        assert_eq!(plan.claimers.len(), 1);
+        let hit = [MidiEvent::new(0, 9, MidiMessage::NoteOn { note: 36, velocity: 100 })];
+        let context = ProcessContext::new(48000.0, 256).with_midi(&hit);
+        plan.process(&context);
+        let gate = |plan: &GraphPlan, node, output| plan.output(node, output).unwrap().samples[255];
+        assert_eq!(gate(&plan, 2, 0), 1.0, "pad 1 is struck");
+        assert_eq!(gate(&plan, 1, NOTE_IN_GATE), 0.0, "and the synth isn't");
+
+        // Pad 1 learns note 48: 36 is anyone's again
+        plan.process(&ProcessContext::new(48000.0, 256).with_midi(&[MidiEvent::new(0, 9, MidiMessage::NoteOff { note: 36, velocity: 0 })]));
+        assert!(plan.set_parameter(2, Pads::PARAM_BASE, 48.0));
+        plan.process(&context);
+        assert_eq!(gate(&plan, 1, NOTE_IN_GATE), 1.0);
+        assert_eq!(gate(&plan, 2, 0), 0.0);
     }
 
     /// A filter's spectrum tap hears what goes in and the output that's

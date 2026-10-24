@@ -391,6 +391,59 @@
         }
       ]
     },
+    "input.pads": {
+      "category": "Source",
+      "color": "#42a5f5",
+      "height": 438.0,
+      "inputs": [],
+      "name": "Pads",
+      "outputs": [
+        {
+          "name": "Gate 1",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 2",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 3",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 4",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 5",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 6",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 7",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 8",
+          "type": "Gate"
+        },
+        {
+          "name": "Velocity",
+          "type": "Control"
+        },
+        {
+          "name": "Hit",
+          "type": "Control"
+        },
+        {
+          "name": "Pressure",
+          "type": "Control"
+        }
+      ]
+    },
     "input.poly_midi": {
       "category": "Source",
       "color": "#42a5f5",

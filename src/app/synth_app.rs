@@ -716,6 +716,10 @@ impl SynthApp {
     /// nothing here affects what they play.
     fn process_midi_events(&mut self, now: f64) {
         self.follow_hands(now);
+        // The pads' notes, which the pianos and their ears leave be (#428)
+        let claims = crate::graph::pads_claims(&self.graph_state.graph);
+        self.midi.claims = claims;
+        self.user_state.note_claims = claims;
         let standings = self.midi_standings();
         let was_learning = self.is_midi_learning();
         let user_state = &mut self.user_state;

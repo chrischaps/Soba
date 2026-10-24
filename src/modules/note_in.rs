@@ -11,6 +11,10 @@
 //! every note starts on its sample, from a device or from the keys alike
 //! (they come on [`KEYS_CHANNEL`], see [`crate::engine::ui_notes`]).
 //!
+//! On Omni it skips the notes a Pads module claims (#428), so hitting a pad
+//! never also plays the synth. Set to a channel, it hears all of that
+//! channel's notes, claimed or not.
+//!
 //! It was Poly MIDI, and keeps its ID, so Poly MIDI patches open as they
 //! were. Keyboard and MIDI Note patches open as Note In with one voice (see
 //! `persistence::patch`).
@@ -630,10 +634,17 @@ impl DspModule for NoteIn {
         }
         self.next %= count;
 
+        // On Omni, the pads' notes are theirs. Only a strike is skipped: a
+        // release still lets go, so a note held when a pad claimed it ends
+        let omni = channel.round() == 0.0;
+        let claimed = |event: &MidiEvent| match event.message {
+            MidiMessage::NoteOn { note, velocity } if velocity > 0 => omni && context.claimed_notes.claims(event.channel, note),
+            _ => false,
+        };
         let mut events = context
             .midi
             .iter()
-            .filter(|event| source.hears(channel, event))
+            .filter(|event| source.hears(channel, event) && !claimed(event))
             .peekable();
 
         for i in 0..context.block_size {
@@ -1063,6 +1074,46 @@ mod tests {
         // Omni hears every MIDI channel, and only the keys come on theirs
         assert!(Source::Midi.hears(0.0, &MidiEvent::note_on(0, 15, 60, 100)));
         assert!(!Source::Midi.hears(0.0, &key_on(0, 60)));
+    }
+
+    #[test]
+    fn test_omni_skips_the_notes_pads_claim_and_a_channel_hears_them() {
+        let mut claims = crate::dsp::NoteClaims::EMPTY;
+        claims.claim(Some(9), 36);
+        let play = |channel: f32, midi: &[MidiEvent]| {
+            let mut p = DEFAULTS;
+            p[NoteIn::PARAM_CHANNEL] = channel;
+            let mut m = module();
+            let mut out = vec![
+                SignalBuffer::polyphonic(BLOCK, SignalType::Control),
+                SignalBuffer::polyphonic(BLOCK, SignalType::Gate),
+                SignalBuffer::polyphonic(BLOCK, SignalType::Control),
+                SignalBuffer::polyphonic(BLOCK, SignalType::Control),
+            ];
+            let context = ProcessContext::new(SR, BLOCK).with_midi(midi).with_claims(&claims);
+            m.process(&[], &mut out, &p, &context);
+            sounding(&out, BLOCK - 1).into_iter().flatten().collect::<Vec<_>>()
+        };
+        // A pad on channel 10, a key on 1, the same note on channel 2
+        let midi = [MidiEvent::note_on(0, 9, 36, 100), MidiEvent::note_on(0, 0, 60, 100), MidiEvent::note_on(0, 1, 36, 100)];
+        assert_eq!(play(0.0, &midi), [60, 36], "Omni skips the pad, and hears 36 where no pad claims it");
+        assert_eq!(play(10.0, &midi), [36], "set to channel 10, it hears the pad's note");
+        // The computer keys are never claimed
+        assert_eq!(play(0.0, &[key_on(0, 36)]), [36]);
+        // A release isn't skipped, so a note held before the claim ends
+        let mut p = DEFAULTS;
+        p[NoteIn::PARAM_CHANNEL] = 0.0;
+        let mut m = module();
+        run(&mut m, &p, &[MidiEvent::note_on(0, 9, 36, 100)]);
+        let mut out = vec![
+            SignalBuffer::polyphonic(BLOCK, SignalType::Control),
+            SignalBuffer::polyphonic(BLOCK, SignalType::Gate),
+            SignalBuffer::polyphonic(BLOCK, SignalType::Control),
+            SignalBuffer::polyphonic(BLOCK, SignalType::Control),
+        ];
+        let off = [MidiEvent::new(0, 9, MidiMessage::NoteOff { note: 36, velocity: 0 })];
+        m.process(&[], &mut out, &p, &ProcessContext::new(SR, BLOCK).with_midi(&off).with_claims(&claims));
+        assert!(sounding(&out, BLOCK - 1).into_iter().flatten().next().is_none());
     }
 
     #[test]

@@ -238,7 +238,7 @@ impl MidiEvent {
     }
 
     /// The audio-thread form of this event, placed at `sample_offset`.
-    /// Returns `None` for messages no module uses (polyphonic aftertouch).
+    /// Every message a module could use has one, so it's always `Some`.
     pub fn to_dsp(&self, sample_offset: u32) -> Option<crate::dsp::MidiEvent> {
         use crate::dsp::MidiMessage;
         let (channel, message) = match *self {
@@ -258,7 +258,9 @@ impl MidiEvent {
             MidiEvent::ProgramChange { channel, program } => {
                 (channel, MidiMessage::ProgramChange { program })
             }
-            MidiEvent::PolyPressure { .. } => return None,
+            MidiEvent::PolyPressure { channel, note, pressure } => {
+                (channel, MidiMessage::PolyPressure { note, pressure })
+            }
             MidiEvent::Clock => (0, MidiMessage::Clock),
             MidiEvent::Start => (0, MidiMessage::Start),
             MidiEvent::Continue => (0, MidiMessage::Continue),
@@ -792,8 +794,10 @@ mod tests {
         let pressure = MidiEvent::ChannelPressure { channel: 0, pressure: 90 };
         assert_eq!(pressure.to_dsp(0).unwrap().message, MidiMessage::Aftertouch { pressure: 90 });
 
-        let poly = MidiEvent::PolyPressure { channel: 0, note: 60, pressure: 90 };
-        assert!(poly.to_dsp(0).is_none());
+        // Pads hear how hard each pad is pressed (#428)
+        let poly = MidiEvent::PolyPressure { channel: 9, note: 36, pressure: 90 };
+        let dsp = poly.to_dsp(0).unwrap();
+        assert_eq!((dsp.channel, dsp.message), (9, MidiMessage::PolyPressure { note: 36, pressure: 90 }));
     }
 
     #[test]

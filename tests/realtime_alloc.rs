@@ -28,7 +28,7 @@ use soba::engine::{
 };
 use soba::modules::looper::{LoopState, Looper};
 use soba::dsp::primitives::{Markers, ONSETS};
-use soba::modules::{Chopper, Cloud, Controls, MidiOut, Mixer, Resonator};
+use soba::modules::{Chopper, Cloud, Controls, MidiOut, Mixer, Pads, Resonator};
 
 struct CountingAllocator;
 
@@ -221,6 +221,15 @@ fn audio_callback_never_allocates() {
     ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::encoding_param(2), value: 1.0 });
     ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::range_param(3), value: 2.0 });
 
+    // Pads (#428) on channel 1 from note 48, so the notes played below hit
+    // them, and claim them from every Note In on Omni; pad 8 on its own
+    // note on channel 10. Its mode and Base move below, claims and all
+    let pads = node_of(&nodes, "input.pads");
+    ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::PARAM_BASE, value: 48.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::PARAM_CHANNEL, value: 1.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::note_param(7), value: 36.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::channel_param(7), value: 10.0 });
+
     // A Chopper on the same Clock, cut at markers, given a new loop (and
     // new markers) every so often, mid-slice or not
     let chopper = node_of(&nodes, "source.chopper");
@@ -402,6 +411,13 @@ fn audio_callback_never_allocates() {
             ui.send_command(EngineCommand::RemoveModule { node_id });
             ui.send_command(EngineCommand::AddModule { node_id, module_id });
         }
+        if round % 40 == 13 {
+            // A pad pressed on the face or let go, a new mode, a new Base
+            let pad = round / 40 % 8;
+            ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::press_param(pad), value: (round % 80 / 40) as f32 * 0.7 });
+            ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::PARAM_MODE, value: (round / 40 % 3) as f32 });
+            ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::PARAM_BASE, value: 44.0 + (round / 40 % 8) as f32 });
+        }
         if round % 30 == 7 {
             let probe = (round % 90 != 7).then(|| {
                 let (node_id, _) = nodes[round / 30 % nodes.len()];
@@ -421,6 +437,9 @@ fn audio_callback_never_allocates() {
             MidiEvent::ControlChange { channel: 0, controller: 74, value: (round * 3 % 128) as u8 },
             MidiEvent::ControlChange { channel: 0, controller: 1, value: (round % 128) as u8 },
             MidiEvent::ControlChange { channel: 0, controller: 20, value: if round % 3 == 0 { 63 } else { 65 } },
+            // How hard a held pad is pressed, and pad 8 on channel 10
+            MidiEvent::PolyPressure { channel: 0, note: note.wrapping_sub(1), pressure: (round * 5 % 128) as u8 },
+            if round % 2 == 0 { MidiEvent::NoteOn { channel: 9, note: 36, velocity: 90 } } else { MidiEvent::NoteOff { channel: 9, note: 36, velocity: 0 } },
         ];
         for event in events {
             midi.push(TimestampedMidiEvent::now(event)).unwrap();
