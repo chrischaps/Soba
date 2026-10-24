@@ -23,7 +23,9 @@
 //! Sequencer, or `--audition` is given to play a short phrase into them.
 //! Audio Input modules are silent too, unless `--input` gives them a WAV file
 //! to hear in place of the input device (resampled, if it was recorded at
-//! another rate than the render's).
+//! another rate than the render's). Every channel of the file is an input
+//! channel, up to 16, so one recording of a whole mixer feeds each Audio
+//! Input the channels its Channel picks.
 //!
 //! `--cue` plays a script of parameter changes into the patch, in the
 //! capture kit's `param` form, one per line (`#` starts a comment):
@@ -58,7 +60,7 @@ use std::sync::{Arc, Mutex};
 use soba::dsp::analysis::{amp_to_db, peak, rms};
 use soba::dsp::loudness::{loudness, true_peak, Loudness};
 use soba::dsp::SignalType;
-use soba::engine::{create_module_registry, Bench, GraphPlan, NodeId, StereoBuffer, read_wav, read_wav_at, EngineCommand, LimiterReport, OfflineRenderer, BLOCK_SIZE};
+use soba::engine::{create_module_registry, Bench, GraphPlan, NodeId, StereoBuffer, read_input_at, read_wav, EngineCommand, LimiterReport, OfflineRenderer, BLOCK_SIZE};
 use soba::persistence::sample_files::SampleBase;
 use soba::persistence::{load_from_file, CompiledPatch, NodeData, Patch};
 
@@ -267,7 +269,7 @@ fn render(
         warn(format!("warning: {}", warning));
     }
     if let Some(path) = &args.input {
-        let (input, rate) = read_wav_at(path, args.sample_rate).map_err(|e| format!("{}: {}", path.display(), e))?;
+        let (input, rate) = read_input_at(path, args.sample_rate).map_err(|e| format!("{}: {}", path.display(), e))?;
         if rate != args.sample_rate {
             warn(format!("note: {} is {} Hz, resampled to {} Hz", path.display(), rate, args.sample_rate));
         }

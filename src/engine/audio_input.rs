@@ -3,8 +3,11 @@
 //!
 //! The two callbacks run on their own clocks, in their own buffer sizes, and
 //! sometimes at their own sample rates. The input side's [`InputSender`]
-//! pushes every frame it gets, as stereo, into an `rtrb` ring, converting it
-//! to the output's rate first if the input device runs at another one. The
+//! pushes every frame it gets into an `rtrb` ring, converting it to the
+//! output's rate first if the input device runs at another one. A frame
+//! keeps every channel of the device, up to [`MAX_INPUT_CHANNELS`], so a
+//! mixer's worth of instruments can each come back on their own (#450); a
+//! mono device's one channel is carried as two, heard on both sides. The
 //! output side's [`InputFeed`] is a small jitter buffer over that ring:
 //!
 //! - It waits until the ring holds a little more than the largest input
@@ -60,7 +63,14 @@ use web_time::Instant;
 
 use super::latency::LatencyGauge;
 use crate::dsp::finite::finite;
+use crate::dsp::input_channels::MAX_INPUT_CHANNELS;
 use crate::dsp::primitives::hermite;
+
+/// The channels a ring carries for a device of `channels`: all of them, up
+/// to [`MAX_INPUT_CHANNELS`], and never fewer than two.
+pub fn ring_channels(channels: usize) -> usize {
+    channels.clamp(2, MAX_INPUT_CHANNELS)
+}
 
 /// How much audio the ring can hold, in seconds. Far more than the jitter
 /// buffer ever keeps: room for the output to stall without losing input.
@@ -100,8 +110,8 @@ struct InputStats {
     device_latency: LatencyGauge,
 }
 
-/// Converts a stream of stereo frames from one sample rate to another, a
-/// frame at a time, by 4-point cubic Hermite interpolation.
+/// Converts a stream of frames from one sample rate to another, a frame at
+/// a time, by 4-point cubic Hermite interpolation.
 ///
 /// Clean for voice and guitar. Content right at the top of the band (above
 /// the lower rate's Nyquist, when converting down) folds back faintly, as
@@ -110,15 +120,25 @@ struct InputStats {
 struct Resampler {
     /// Input frames per output frame.
     step: f64,
-    /// Where the next output frame falls: 0 at `history[1]`, 1 at `history[2]`.
+    /// Where the next output frame falls: 0 at the second-oldest frame of
+    /// `history`, 1 at the second-newest.
     position: f64,
-    /// The last four input frames, oldest first.
-    history: [[f32; 2]; 4],
+    /// The last four input frames, in a ring: the newest at `newest`.
+    history: [[f32; MAX_INPUT_CHANNELS]; 4],
+    newest: usize,
+    /// Channels in a frame.
+    width: usize,
 }
 
 impl Resampler {
-    fn new(input_rate: u32, output_rate: u32) -> Self {
-        Self { step: input_rate as f64 / output_rate.max(1) as f64, position: 1.0, history: [[0.0; 2]; 4] }
+    fn new(input_rate: u32, output_rate: u32, width: usize) -> Self {
+        Self {
+            step: input_rate as f64 / output_rate.max(1) as f64,
+            position: 1.0,
+            history: [[0.0; MAX_INPUT_CHANNELS]; 4],
+            newest: 3,
+            width,
+        }
     }
 
     /// The most output frames one input frame can complete.
@@ -126,30 +146,36 @@ impl Resampler {
         (1.0 / self.step).ceil() as usize + 1
     }
 
-    /// Takes in one input frame, handing each output frame it completes to
-    /// `emit`.
+    /// Takes in one input frame (its first `width` channels), handing each
+    /// output frame it completes to `emit`.
     #[inline]
-    fn push(&mut self, frame: [f32; 2], mut emit: impl FnMut([f32; 2])) {
-        self.history.rotate_left(1);
-        self.history[3] = frame;
+    fn push(&mut self, frame: &[f32; MAX_INPUT_CHANNELS], mut emit: impl FnMut(&[f32])) {
+        let width = self.width;
+        self.newest = (self.newest + 1) % 4;
+        self.history[self.newest][..width].copy_from_slice(&frame[..width]);
         self.position -= 1.0;
+        // Oldest first
+        let [x0, x1, x2, x3] = [1, 2, 3, 0].map(|back| &self.history[(self.newest + back) % 4]);
+        let mut out = [0.0; MAX_INPUT_CHANNELS];
         while self.position < 1.0 {
             let t = self.position.max(0.0) as f32;
-            let [x0, x1, x2, x3] = self.history;
-            emit([hermite(x0[0], x1[0], x2[0], x3[0], t), hermite(x0[1], x1[1], x2[1], x3[1], t)]);
+            for (c, out) in out[..width].iter_mut().enumerate() {
+                *out = hermite(x0[c], x1[c], x2[c], x3[c], t);
+            }
+            emit(&out[..width]);
             self.position += self.step;
         }
     }
 }
 
-/// Writes interleaved stereo frames into the ring, as many as fit, counting
-/// the rest as dropped. Returns the frames written.
-fn write_stereo(producer: &mut Producer<f32>, stats: &InputStats, samples: &[f32]) -> usize {
-    let frames = samples.len() / 2;
-    let fit = (producer.slots() / 2).min(frames);
+/// Writes interleaved frames of `width` channels into the ring, as many as
+/// fit, counting the rest as dropped. Returns the frames written.
+fn write_frames(producer: &mut Producer<f32>, stats: &InputStats, samples: &[f32], width: usize) -> usize {
+    let frames = samples.len() / width;
+    let fit = (producer.slots() / width).min(frames);
     if fit > 0 {
-        if let Ok(chunk) = producer.write_chunk_uninit(fit * 2) {
-            chunk.fill_from_iter(samples[..fit * 2].iter().copied());
+        if let Ok(chunk) = producer.write_chunk_uninit(fit * width) {
+            chunk.fill_from_iter(samples[..fit * width].iter().copied());
         }
     }
     if fit < frames {
@@ -166,12 +192,15 @@ pub struct InputSender {
     resampler: Option<Resampler>,
     /// When the channel opened, shared with the feed.
     epoch: Instant,
+    /// Channels in each frame of the ring.
+    width: usize,
 }
 
 impl InputSender {
-    /// Pushes one callback's interleaved input of `channels` channels as
-    /// stereo: a mono device is heard on both sides, and only the first two
-    /// channels of a bigger interface. Frames that don't fit are counted.
+    /// Pushes one callback's interleaved input of `channels` channels: each
+    /// channel the ring carries (a mono device's one on both of its two,
+    /// and no more than [`MAX_INPUT_CHANNELS`] of a bigger interface).
+    /// Frames that don't fit are counted.
     ///
     /// REAL-TIME SAFE: no allocation, locking or waiting.
     pub fn push<T: Copy>(&mut self, data: &[T], channels: usize, to_f32: impl Fn(T) -> f32) {
@@ -190,20 +219,25 @@ impl InputSender {
 
     /// Writes one callback's input into the ring: see [`push`](Self::push).
     fn write<T: Copy>(&mut self, data: &[T], channels: usize, to_f32: impl Fn(T) -> f32) {
-        // A driver's NaN or wild value goes no further than here
-        let stereo = |frame: &[T]| {
-            let left = finite(to_f32(frame[0]));
-            [left, if channels > 1 { finite(to_f32(frame[1])) } else { left }]
+        let width = self.width;
+        // Channel `c` of the ring's frame: a mono device's one on both
+        // sides, and silence for one a device leaves out. A driver's NaN or
+        // wild value goes no further than here
+        let sample = |frame: &[T], c: usize| {
+            let c = if channels == 1 { 0 } else { c };
+            frame.get(c).map_or(0.0, |&s| finite(to_f32(s)))
         };
         let Self { producer, stats, resampler, .. } = self;
 
         let Some(resampler) = resampler.as_mut() else {
             let frames = data.len() / channels;
             stats.largest_input.fetch_max(frames, Ordering::Relaxed);
-            let fit = (producer.slots() / 2).min(frames);
+            let fit = (producer.slots() / width).min(frames);
             if fit > 0 {
-                if let Ok(chunk) = producer.write_chunk_uninit(fit * 2) {
-                    chunk.fill_from_iter(data.chunks_exact(channels).take(fit).flat_map(stereo));
+                if let Ok(chunk) = producer.write_chunk_uninit(fit * width) {
+                    let sample = &sample;
+                    let frames = data.chunks_exact(channels).take(fit);
+                    chunk.fill_from_iter(frames.flat_map(|frame| (0..width).map(move |c| sample(frame, c))));
                 }
             }
             if fit < frames {
@@ -213,24 +247,27 @@ impl InputSender {
         };
 
         // Converted a few hundred frames at a time through the stack
-        let mut converted = [0.0f32; 512];
+        let mut converted = [0.0f32; 2048];
         let mut len = 0;
         let mut produced = 0;
-        let headroom = 2 * resampler.max_burst();
+        let headroom = width * resampler.max_burst();
+        let mut taken = [0.0; MAX_INPUT_CHANNELS];
         for frame in data.chunks_exact(channels) {
-            resampler.push(stereo(frame), |out| {
-                converted[len] = out[0];
-                converted[len + 1] = out[1];
-                len += 2;
+            for (c, slot) in taken[..width].iter_mut().enumerate() {
+                *slot = sample(frame, c);
+            }
+            resampler.push(&taken, |out| {
+                converted[len..len + width].copy_from_slice(out);
+                len += width;
             });
             if len + headroom > converted.len() {
-                write_stereo(producer, stats, &converted[..len]);
-                produced += len / 2;
+                write_frames(producer, stats, &converted[..len], width);
+                produced += len / width;
                 len = 0;
             }
         }
-        write_stereo(producer, stats, &converted[..len]);
-        produced += len / 2;
+        write_frames(producer, stats, &converted[..len], width);
+        produced += len / width;
         stats.largest_input.fetch_max(produced, Ordering::Relaxed);
     }
 
@@ -282,7 +319,9 @@ pub struct InputFeed {
     slew: usize,
     /// The last frame taken from the ring, which a squeezed or stretched
     /// read curves on from.
-    last: [f32; 2],
+    last: [f32; MAX_INPUT_CHANNELS],
+    /// Channels in each frame of the ring.
+    width: usize,
     /// Whether the last frame heard was quiet enough to cut after.
     quiet: bool,
     /// Frames read since the last underrun or relaxed cushion.
@@ -370,14 +409,20 @@ impl InputFeed {
         }
     }
 
+    /// Channels in each frame it reads: every channel of the device, up to
+    /// [`MAX_INPUT_CHANNELS`], and at least two.
+    pub fn channels(&self) -> usize {
+        self.width
+    }
+
     /// Frames waiting in the ring.
     fn level(&self) -> usize {
-        self.consumer.slots() / 2
+        self.consumer.slots() / self.width
     }
 
     /// Drops the oldest `frames` frames.
     fn drop_frames(&mut self, frames: usize) {
-        if let Ok(chunk) = self.consumer.read_chunk(frames * 2) {
+        if let Ok(chunk) = self.consumer.read_chunk(frames * self.width) {
             chunk.commit_all();
         }
     }
@@ -496,16 +541,19 @@ impl InputFeed {
         Some(ended)
     }
 
-    /// Reads the next `left.len()` frames into `left` and `right` (the same
-    /// length). Until the buffer has filled, or past the input it holds,
-    /// the frames are silence; running dry counts as an underrun and waits
-    /// for the buffer to refill. While a trim or stretch is planned, a read
+    /// Reads the next frames into `out`, interleaved, [`channels`] to a
+    /// frame. Until the buffer has filled, or past the input it holds, the
+    /// frames are silence; running dry counts as an underrun and waits for
+    /// the buffer to refill. While a trim or stretch is planned, a read
     /// takes in a frame more or less than it hands out, or a trim cuts at
     /// once if the input is quiet.
     ///
     /// REAL-TIME SAFE.
-    pub fn read(&mut self, left: &mut [f32], right: &mut [f32]) {
-        let wanted = left.len().min(right.len());
+    ///
+    /// [`channels`]: Self::channels
+    pub fn read(&mut self, out: &mut [f32]) {
+        let width = self.width;
+        let wanted = out.len() / width;
         let mut got = 0;
         if self.primed {
             let nudge = self.settle(wanted);
@@ -513,48 +561,43 @@ impl InputFeed {
                 // Taken a little faster or slower, looking two frames on
                 got = wanted;
                 let taken = wanted.saturating_add_signed(nudge);
-                if let Ok(chunk) = self.consumer.read_chunk((taken + 2) * 2) {
+                if let Ok(chunk) = self.consumer.read_chunk((taken + 2) * width) {
                     let (first, second) = chunk.as_slices();
-                    resample(first, second, self.last, &mut left[..wanted], &mut right[..wanted], taken);
+                    resample(first, second, &self.last[..width], &mut out[..wanted * width], width, taken);
                     let at = |i: usize| if i < first.len() { first[i] } else { second[i - first.len()] };
-                    self.last = [at(2 * taken - 2), at(2 * taken - 1)];
-                    chunk.commit(taken * 2);
+                    for (c, last) in self.last[..width].iter_mut().enumerate() {
+                        *last = at((taken - 1) * width + c);
+                    }
+                    chunk.commit(taken * width);
                 }
             } else {
                 got = self.level().min(wanted);
-                if let Ok(chunk) = self.consumer.read_chunk(got * 2) {
+                if let Ok(chunk) = self.consumer.read_chunk(got * width) {
                     let (first, second) = chunk.as_slices();
-                    let samples = first.iter().chain(second);
-                    for (i, &sample) in samples.enumerate() {
-                        if i % 2 == 0 {
-                            left[i / 2] = sample;
-                        } else {
-                            right[i / 2] = sample;
-                        }
-                    }
+                    out[..first.len()].copy_from_slice(first);
+                    out[first.len()..first.len() + second.len()].copy_from_slice(second);
                     chunk.commit_all();
                 }
                 if got > 0 {
-                    self.last = [left[got - 1], right[got - 1]];
+                    self.last[..width].copy_from_slice(&out[(got - 1) * width..got * width]);
                 }
             }
             if got > 0 {
-                self.quiet = left[got - 1].abs() < Self::QUIET && right[got - 1].abs() < Self::QUIET;
+                self.quiet = out[(got - 1) * width..got * width].iter().all(|s| s.abs() < Self::QUIET);
             }
             self.owed = self.owed.saturating_sub(wanted);
             if got < wanted {
                 self.underrun(wanted - got);
             }
         }
-        left[got..wanted].fill(0.0);
-        right[got..wanted].fill(0.0);
+        out[got * width..wanted * width].fill(0.0);
     }
 
     /// Runs dry: counts the silence, grows the cushion, and waits to refill.
     fn underrun(&mut self, frames: usize) {
         self.stats.underrun_frames.fetch_add(frames as u64, Ordering::Relaxed);
         self.primed = false;
-        self.last = [0.0; 2];
+        self.last = [0.0; MAX_INPUT_CHANNELS];
         self.quiet = true;
         self.cushion = (self.cushion + Self::CUSHION_STEP).min(Self::MAX_CUSHION);
         self.calm = 0;
@@ -610,7 +653,7 @@ impl InputFeed {
 
     /// Whether the oldest `frames` frames waiting are all quiet.
     fn quiet_through(&mut self, frames: usize) -> bool {
-        let Ok(chunk) = self.consumer.read_chunk(frames * 2) else {
+        let Ok(chunk) = self.consumer.read_chunk(frames * self.width) else {
             return false;
         };
         let (first, second) = chunk.as_slices();
@@ -625,29 +668,29 @@ impl InputFeed {
         let level = self.level();
         self.drop_frames(level);
         self.primed = false;
-        self.last = [0.0; 2];
+        self.last = [0.0; MAX_INPUT_CHANNELS];
         self.quiet = true;
     }
 }
 
-/// Plays `taken` of the interleaved stereo frames in `first` then `second`
-/// into `left` and `right`, in the time of `left.len()`: a little fast or
+/// Plays `taken` of the interleaved frames of `width` channels in `first`
+/// then `second` into `out`, in the time of its frames: a little fast or
 /// slow, read between frames along the Hermite curve. `before` is the frame
 /// before the first. The first frame lands exactly, and the curve looks up
 /// to two frames past the last one taken, which the next read starts from.
-fn resample(first: &[f32], second: &[f32], before: [f32; 2], left: &mut [f32], right: &mut [f32], taken: usize) {
+fn resample(first: &[f32], second: &[f32], before: &[f32], out: &mut [f32], width: usize, taken: usize) {
     let sample = |i: usize| if i < first.len() { first[i] } else { second[i - first.len()] };
-    let frames = left.len();
+    let frames = out.len() / width;
     for i in 0..frames {
         // Frame i lands at i * taken / frames: frame k, and t of the way on
         // to the next
         let at = i * taken;
         let (k, t) = (at / frames, (at % frames) as f32 / frames as f32);
-        let x = |n: usize, side: usize| if n == 0 { before[side] } else { sample(2 * (n - 1) + side) };
+        let x = |n: usize, c: usize| if n == 0 { before[c] } else { sample(width * (n - 1) + c) };
         // x(n) is frame n - 1, so x(k + 1) is frame k
-        let curve = |side| if t == 0.0 { x(k + 1, side) } else { hermite(x(k, side), x(k + 1, side), x(k + 2, side), x(k + 3, side), t) };
-        left[i] = curve(0);
-        right[i] = curve(1);
+        for (c, out) in out[i * width..(i + 1) * width].iter_mut().enumerate() {
+            *out = if t == 0.0 { x(k + 1, c) } else { hermite(x(k, c), x(k + 1, c), x(k + 2, c), x(k + 3, c), t) };
+        }
     }
 }
 
@@ -731,35 +774,37 @@ impl InputMonitor {
     }
 }
 
-/// Creates the three ends of an input whose device runs at the output's
-/// `sample_rate`.
+/// Creates the three ends of an input whose stereo device runs at the
+/// output's `sample_rate`.
 pub fn input_channel(sample_rate: u32) -> (InputSender, InputFeed, InputMonitor) {
-    input_channel_converting(sample_rate, sample_rate)
+    input_channel_converting(sample_rate, sample_rate, 2)
 }
 
-/// Creates the three ends of an input whose device runs at `input_rate`,
-/// converted to the output's `output_rate` if they differ.
-pub fn input_channel_converting(input_rate: u32, output_rate: u32) -> (InputSender, InputFeed, InputMonitor) {
-    channel(input_rate, output_rate, Clock::Separate)
+/// Creates the three ends of an input whose device of `channels` channels
+/// runs at `input_rate`, converted to the output's `output_rate` if they
+/// differ.
+pub fn input_channel_converting(input_rate: u32, output_rate: u32, channels: usize) -> (InputSender, InputFeed, InputMonitor) {
+    channel(input_rate, output_rate, Clock::Separate, channels)
 }
 
-/// Creates the three ends of an input served by the output's own driver, on
-/// its clock and at its `sample_rate`: the feed holds one input buffer and
-/// no cushion. `input_first` when the driver runs the input's callback
-/// before the output's at each buffer switch, so each read takes the input
-/// that arrived moments before.
-pub fn input_channel_same_clock(sample_rate: u32, input_first: bool) -> (InputSender, InputFeed, InputMonitor) {
-    channel(sample_rate, sample_rate, Clock::Shared { input_first })
+/// Creates the three ends of an input of `channels` channels served by the
+/// output's own driver, on its clock and at its `sample_rate`: the feed
+/// holds one input buffer and no cushion. `input_first` when the driver
+/// runs the input's callback before the output's at each buffer switch, so
+/// each read takes the input that arrived moments before.
+pub fn input_channel_same_clock(sample_rate: u32, input_first: bool, channels: usize) -> (InputSender, InputFeed, InputMonitor) {
+    channel(sample_rate, sample_rate, Clock::Shared { input_first }, channels)
 }
 
-fn channel(input_rate: u32, output_rate: u32, clock: Clock) -> (InputSender, InputFeed, InputMonitor) {
+fn channel(input_rate: u32, output_rate: u32, clock: Clock, channels: usize) -> (InputSender, InputFeed, InputMonitor) {
+    let width = ring_channels(channels);
     let frames = ((output_rate as f32 * RING_SECONDS) as usize).max(1024);
-    let (producer, consumer) = RingBuffer::new(frames * 2);
+    let (producer, consumer) = RingBuffer::new(frames * width);
     let stats = Arc::new(InputStats::default());
     let epoch = Instant::now();
-    let resampler = (input_rate != output_rate && input_rate > 0).then(|| Resampler::new(input_rate, output_rate));
+    let resampler = (input_rate != output_rate && input_rate > 0).then(|| Resampler::new(input_rate, output_rate, width));
     (
-        InputSender { producer, stats: Arc::clone(&stats), resampler, epoch },
+        InputSender { producer, stats: Arc::clone(&stats), resampler, epoch, width },
         InputFeed {
             consumer,
             stats: Arc::clone(&stats),
@@ -777,7 +822,8 @@ fn channel(input_rate: u32, output_rate: u32, clock: Clock) -> (InputSender, Inp
             measured: None,
             plan: 0,
             slew: 0,
-            last: [0.0; 2],
+            last: [0.0; MAX_INPUT_CHANNELS],
+            width,
             quiet: true,
             calm: 0,
             relax_after: InputFeed::RELAX_SECONDS * output_rate.max(1) as usize,
@@ -794,6 +840,122 @@ mod tests {
     /// Interleaved stereo frames counting up from `start`: left n, right -n.
     fn ramp(start: usize, frames: usize) -> Vec<f32> {
         (start..start + frames).flat_map(|n| [n as f32, -(n as f32)]).collect()
+    }
+
+    /// Reads a stereo feed's next `left.len()` frames into `left` and `right`.
+    fn read_stereo(feed: &mut InputFeed, left: &mut [f32], right: &mut [f32]) {
+        assert_eq!(feed.channels(), 2);
+        let mut out = vec![0.0; left.len() * 2];
+        feed.read(&mut out);
+        for (i, frame) in out.as_chunks::<2>().0.iter().enumerate() {
+            left[i] = frame[0];
+            right[i] = frame[1];
+        }
+    }
+
+    /// Interleaved frames of `channels` channels, counting up from `start`:
+    /// channel c of frame n is `n + 1000 c`, so each channel is told apart.
+    fn wide_ramp(start: usize, frames: usize, channels: usize) -> Vec<f32> {
+        (start..start + frames).flat_map(|n| (0..channels).map(move |c| (n + 1000 * c) as f32)).collect()
+    }
+
+    #[test]
+    fn test_a_twelve_channel_device_keeps_every_channel_apart() {
+        assert_eq!(input_channel(48000).1.channels(), 2, "a stereo device's ring is as it was");
+        let (mut sender, mut feed, _) = input_channel_converting(48000, 48000, 12);
+        assert_eq!(feed.channels(), 12);
+        for chunk in 0..4 {
+            sender.push_f32(&wide_ramp(chunk * 128, 128, 12), 12);
+        }
+        feed.begin(128);
+        let mut out = vec![0.0; 128 * 12];
+        feed.read(&mut out);
+        for (n, frame) in out.as_chunks::<12>().0.iter().enumerate() {
+            // Channel 7 (from 1) is c = 6, all the way through
+            assert_eq!(frame[6], (n + 6000) as f32);
+            assert_eq!(frame, &wide_ramp(n, 1, 12)[..]);
+        }
+    }
+
+    #[test]
+    fn test_an_interface_bigger_than_the_most_keeps_the_first_sixteen() {
+        let (mut sender, mut feed, _) = input_channel_converting(48000, 48000, 24);
+        assert_eq!(feed.channels(), MAX_INPUT_CHANNELS);
+        for chunk in 0..4 {
+            sender.push_f32(&wide_ramp(chunk * 128, 128, 24), 24);
+        }
+        feed.begin(128);
+        let mut out = vec![0.0; 128 * MAX_INPUT_CHANNELS];
+        feed.read(&mut out);
+        assert_eq!(&out[..MAX_INPUT_CHANNELS], &wide_ramp(0, 1, MAX_INPUT_CHANNELS)[..]);
+    }
+
+    #[test]
+    fn test_wide_input_converts_between_rates_channel_by_channel() {
+        // Each of eight channels a 1 kHz sine at its own level, 48 -> 44.1 kHz
+        let tone = sine(48000, 0.5);
+        let wide: Vec<f32> = tone.iter().flat_map(|&s| (1..=8).map(move |c| s * c as f32 / 8.0)).collect();
+        let (mut sender, mut feed, _) = input_channel_converting(48000, 44100, 8);
+        let stereo = convert(&tone, 48000, 44100, 480);
+        let mut heard = Vec::new();
+        for piece in wide.chunks(480 * 8) {
+            sender.push_f32(piece, 8);
+            let mut out = vec![0.0; feed.level() * 8];
+            feed.primed = true;
+            feed.read(&mut out);
+            heard.extend_from_slice(&out);
+        }
+        assert_eq!(heard.len() / 8, stereo.len());
+        for (frame, &expected) in heard.as_chunks::<8>().0.iter().zip(&stereo) {
+            for (c, &s) in frame.iter().enumerate() {
+                assert!((s - expected * (c + 1) as f32 / 8.0).abs() < 1e-6, "channel {c}: {s} against {expected}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_wide_input_settles_without_mixing_its_channels() {
+        // Six channels, jittery 480-frame packets against 256-frame reads
+        // with a fast input clock: the feed trims and squeezes, and each
+        // channel's ramp runs on in step with the first
+        let (mut sender, mut feed, monitor) = input_channel_converting(48000, 48000, 6);
+        let mut out = vec![0.0; 256 * 6];
+        let mut pushed = 0;
+        let mut heard = Vec::new();
+        for read in 0..(20 * 48000 / 256) {
+            let now = read * 256;
+            while (pushed + 480) as f64 / 1.002 <= now as f64 {
+                sender.push_f32(&wide_ramp(pushed + 1, 480, 6), 6);
+                pushed += 480;
+                sender.stamp(Duration::from_secs_f64(pushed as f64 / 1.002 / 48000.0));
+            }
+            feed.begin_at(256, Duration::from_secs_f64(now as f64 / 48000.0));
+            feed.read(&mut out);
+            heard.extend_from_slice(&out);
+        }
+        assert!(monitor.settled_frames() > 0, "it followed the fast clock");
+        let start = heard.as_chunks::<6>().0.iter().position(|f| f[0] != 0.0).expect("input was heard");
+        assert!(heard.as_chunks::<6>().0.iter().skip(start).map(|f| f[0]).collect::<Vec<_>>().windows(2).all(|w| w[1] > w[0]), "never backwards");
+        for frame in heard.as_chunks::<6>().0.iter().skip(start) {
+            for (c, &s) in frame.iter().enumerate() {
+                // Within f32's rounding of a million or so
+                assert!((s - frame[0] - 1000.0 * c as f32).abs() < 0.5, "channel {c} drifted from the first: {frame:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_a_mono_device_fills_both_sides_of_a_wide_ring() {
+        // A mono device pushed into a ring opened as one channel is two
+        let (mut sender, mut feed, _) = input_channel_converting(48000, 48000, 1);
+        assert_eq!(feed.channels(), 2);
+        for _ in 0..4 {
+            sender.push_f32(&[0.5; 128], 1);
+        }
+        feed.begin(128);
+        let mut out = vec![0.0; 256];
+        feed.read(&mut out);
+        assert!(out.iter().all(|&s| s == 0.5));
     }
 
     /// Runs `seconds` of a 48 kHz input pushing `input` frames at a time
@@ -853,7 +1015,7 @@ mod tests {
                 next_input = next_input.max(due + wobble());
             }
             feed.begin_at(output, at(now));
-            feed.read(&mut left, &mut right);
+            read_stereo(&mut feed, &mut left, &mut right);
             heard.extend_from_slice(&left);
         }
         let late_underruns = monitor.underrun_frames() - late_underruns;
@@ -976,7 +1138,7 @@ mod tests {
                 packets += 1;
             }
             feed.begin_at(256, Duration::from_secs_f64(now as f64 / 48000.0));
-            feed.read(&mut left, &mut right);
+            read_stereo(&mut feed, &mut left, &mut right);
             if now % seconds(5) < 256 {
                 target_at.push((now / 48000, monitor.target_frames(), monitor.underrun_frames()));
             }
@@ -1020,7 +1182,7 @@ mod tests {
                     sender.stamp(Duration::from_secs_f64(pushed as f64 / 48000.0));
                 }
                 feed.begin_at(256, Duration::from_secs_f64(now as f64 / 48000.0));
-                feed.read(&mut left, &mut right);
+                read_stereo(&mut feed, &mut left, &mut right);
                 // The first window ends two seconds after priming
                 if read == 2 * 48000 / 256 + 10 {
                     settled_soon_after = monitor.settled_frames();
@@ -1048,7 +1210,7 @@ mod tests {
         }
         feed.begin(256);
         let (mut left, mut right) = (vec![0.0; 256], vec![0.0; 256]);
-        feed.read(&mut left, &mut right);
+        read_stereo(&mut feed, &mut left, &mut right);
         assert!(left.iter().all(|&s| s == 0.5));
         assert_eq!(left, right);
     }
@@ -1062,7 +1224,7 @@ mod tests {
         }
         feed.begin(128);
         let (mut left, mut right) = (vec![0.0; 128], vec![0.0; 128]);
-        feed.read(&mut left, &mut right);
+        read_stereo(&mut feed, &mut left, &mut right);
         assert!(left.iter().all(|&s| s == 0.25));
         assert!(right.iter().all(|&s| s == -0.25));
     }
@@ -1075,7 +1237,7 @@ mod tests {
         }
         feed.begin(128);
         let (mut left, mut right) = (vec![0.0; 128], vec![0.0; 128]);
-        feed.read(&mut left, &mut right);
+        read_stereo(&mut feed, &mut left, &mut right);
         assert!(left.iter().all(|&s| s == -1.0));
     }
 
@@ -1092,7 +1254,7 @@ mod tests {
         let mut heard = Vec::new();
         for _ in 0..5 {
             feed.begin_at(256, late);
-            feed.read(&mut left, &mut right);
+            read_stereo(&mut feed, &mut left, &mut right);
             heard.extend_from_slice(&left);
         }
         // All 960 frames, in order, then silence for the rest
@@ -1107,13 +1269,13 @@ mod tests {
         sender.push_f32(&ramp(2000, 480), 2);
         feed.begin_at(256, late);
         assert_eq!(monitor.buffered_frames(), target);
-        feed.read(&mut left, &mut right);
+        read_stereo(&mut feed, &mut left, &mut right);
         assert!(left.iter().all(|&s| s == 0.0), "still refilling");
         assert_eq!(monitor.underrun_frames(), (4 * 256 - 960) as u64, "refilling isn't an underrun");
 
         sender.push_f32(&ramp(2480, 480), 2);
         feed.begin_at(256, late);
-        feed.read(&mut left, &mut right);
+        read_stereo(&mut feed, &mut left, &mut right);
         assert_eq!(left[0], 2000.0, "reading resumes where the input did");
     }
 
@@ -1161,13 +1323,13 @@ mod tests {
         sender.push_f32(&ramp(1, 480), 2);
         sender.push_f32(&ramp(481, 480), 2);
         feed.begin(256);
-        feed.read(&mut left, &mut right);
+        read_stereo(&mut feed, &mut left, &mut right);
         // The output stalls for 100 ms while input keeps coming
         for chunk in 0..10 {
             sender.push_f32(&ramp(961 + chunk * 480, 480), 2);
         }
         feed.begin(256);
-        feed.read(&mut left, &mut right);
+        read_stereo(&mut feed, &mut left, &mut right);
         let target = monitor.target_frames();
         assert_eq!(monitor.overflow_frames() as usize, 960 + 4800 - 256 - target);
         // What's read is the newest input, `target` frames behind
@@ -1178,7 +1340,7 @@ mod tests {
     /// running both callbacks, the input's first if `input_first`. Returns
     /// the frames heard (left side), and the monitor.
     fn run_lockstep(frames: usize, buffers: usize, input_first: bool) -> (Vec<f32>, InputMonitor) {
-        let (mut sender, mut feed, monitor) = input_channel_same_clock(48000, input_first);
+        let (mut sender, mut feed, monitor) = input_channel_same_clock(48000, input_first, 2);
         let (mut left, mut right) = (vec![0.0; frames], vec![0.0; frames]);
         let mut heard = Vec::new();
         for switch in 0..buffers {
@@ -1187,7 +1349,7 @@ mod tests {
                 sender.push_f32(&input, 2);
             }
             feed.begin(frames);
-            feed.read(&mut left, &mut right);
+            read_stereo(&mut feed, &mut left, &mut right);
             heard.extend_from_slice(&left);
             if !input_first {
                 sender.push_f32(&input, 2);
@@ -1224,7 +1386,7 @@ mod tests {
         // been running the input's: that read runs dry, and the cushion
         // grows by a step, so the order no longer matters
         let frames = 128;
-        let (mut sender, mut feed, monitor) = input_channel_same_clock(48000, true);
+        let (mut sender, mut feed, monitor) = input_channel_same_clock(48000, true, 2);
         let (mut left, mut right) = (vec![0.0; frames], vec![0.0; frames]);
         let mut pushed = 0;
         let mut push = |sender: &mut InputSender| {
@@ -1234,10 +1396,10 @@ mod tests {
         for _ in 0..10 {
             push(&mut sender);
             feed.begin(frames);
-            feed.read(&mut left, &mut right);
+            read_stereo(&mut feed, &mut left, &mut right);
         }
         feed.begin(frames);
-        feed.read(&mut left, &mut right);
+        read_stereo(&mut feed, &mut left, &mut right);
         assert_eq!(monitor.underrun_frames(), frames as u64);
         for i in 0..200 {
             if i == 1 {
@@ -1245,7 +1407,7 @@ mod tests {
             }
             push(&mut sender);
             feed.begin(frames);
-            feed.read(&mut left, &mut right);
+            read_stereo(&mut feed, &mut left, &mut right);
         }
         assert_eq!(monitor.underrun_frames(), frames as u64, "it settled");
         assert_eq!(monitor.overflow_frames(), 0);
@@ -1261,14 +1423,14 @@ mod tests {
     /// Converts mono `input` (pushed `chunk` frames at a time) and returns
     /// the left side of everything that came out.
     fn convert(input: &[f32], input_rate: u32, output_rate: u32, chunk: usize) -> Vec<f32> {
-        let (mut sender, mut feed, _) = input_channel_converting(input_rate, output_rate);
+        let (mut sender, mut feed, _) = input_channel_converting(input_rate, output_rate, 2);
         let mut out = Vec::new();
         for piece in input.chunks(chunk) {
             sender.push_f32(piece, 1);
             let level = feed.level();
             let (mut left, mut right) = (vec![0.0; level], vec![0.0; level]);
             feed.primed = true;
-            feed.read(&mut left, &mut right);
+            read_stereo(&mut feed, &mut left, &mut right);
             out.extend_from_slice(&left);
         }
         out
@@ -1327,13 +1489,13 @@ mod tests {
     fn test_converted_input_runs_steady_against_the_output() {
         // A 48 kHz microphone feeding a 44.1 kHz output: 480-frame input
         // buffers every 10 ms against 441-frame output reads every 10 ms
-        let (mut sender, mut feed, monitor) = input_channel_converting(48000, 44100);
+        let (mut sender, mut feed, monitor) = input_channel_converting(48000, 44100, 2);
         let (mut left, mut right) = (vec![0.0; 441], vec![0.0; 441]);
         let input = vec![0.25; 480];
         for _ in 0..1000 {
             sender.push_f32(&input, 1);
             feed.begin(441);
-            feed.read(&mut left, &mut right);
+            read_stereo(&mut feed, &mut left, &mut right);
         }
         assert_eq!(monitor.underrun_frames(), 0);
         assert_eq!(monitor.overflow_frames(), 0);
@@ -1349,7 +1511,7 @@ mod tests {
         sender.push_f32(&ramp(5000, 100), 2);
         feed.begin(256);
         let (mut left, mut right) = (vec![1.0; 256], vec![1.0; 256]);
-        feed.read(&mut left, &mut right);
+        read_stereo(&mut feed, &mut left, &mut right);
         assert!(left.iter().all(|&s| s == 0.0));
         assert_eq!(monitor.underrun_frames(), 0);
     }

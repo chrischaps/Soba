@@ -20,6 +20,7 @@ use web_time::Instant;
 use super::audio_input::{input_channel_converting, input_channel_same_clock, InputFeed, InputMonitor, InputSender};
 use super::audio_processor::AudioProcessor;
 use super::latency::LatencyGauge;
+use crate::dsp::input_channels::MAX_INPUT_CHANNELS;
 use crate::dsp::{InputAudio, MidiEvent};
 
 /// Errors that can occur during audio engine operation.
@@ -655,7 +656,9 @@ impl AudioEngine {
             .supported_input_configs()
             .map_err(|e| AudioError::ConfigurationFailed(e.to_string()))?
             .collect();
-        // The richest format the device offers at our rate, in stereo if it can
+        // As many channels as the device offers at our rate, up to the most
+        // the patch hears (so each instrument on a mixer comes back on its
+        // own), in the richest format it has them in
         let format_rank = |format: SampleFormat| match format {
             SampleFormat::F32 => Some(0),
             SampleFormat::I32 => Some(1),
@@ -663,16 +666,15 @@ impl AudioEngine {
             SampleFormat::U16 => Some(3),
             _ => None,
         };
-        let channel_rank = |channels: u16| match channels {
-            2 => 0,
-            1 => 1,
+        let channel_rank = |channels: u16| match channels as usize {
+            n if n <= MAX_INPUT_CHANNELS => MAX_INPUT_CHANNELS - n,
             n => n,
         };
         let at_output_rate = supported
             .iter()
             .filter(|range| range.min_sample_rate() <= rate && rate <= range.max_sample_rate())
             .filter_map(|range| format_rank(range.sample_format()).map(|rank| (rank, channel_rank(range.channels()), range)))
-            .min_by_key(|&(rank, channels, _)| (rank, channels))
+            .min_by_key(|&(rank, channels, _)| (channels, rank))
             .map(|(_, _, range)| (*range).with_sample_rate(rate));
         // Otherwise the device's own settings, converted on the way in
         let supported_config = match at_output_rate {
@@ -694,7 +696,7 @@ impl AudioEngine {
             sample_rate: supported_config.sample_rate(),
             buffer_size: cpal::BufferSize::Default,
         };
-        let (sender, feed, monitor) = input_channel_converting(config.sample_rate, rate);
+        let (sender, feed, monitor) = input_channel_converting(config.sample_rate, rate, config.channels as usize);
         let stream = build_input_stream(supported_config.sample_format(), &device, &config, sender, monitor.clone())?;
         stream.play().map_err(|e| AudioError::StreamPlaybackFailed(e.to_string()))?;
 
@@ -721,15 +723,15 @@ impl AudioEngine {
             .default_input_config()
             .map_err(|e| AudioError::ConfigurationFailed(e.to_string()))?;
         let config = StreamConfig {
-            // The patch hears the first two
-            channels: supported.channels().min(2),
+            // The patch hears them all, up to the most it carries
+            channels: supported.channels().min(MAX_INPUT_CHANNELS as u16),
             sample_rate: self.config.sample_rate,
             buffer_size: self.buffer_frames().map_or(self.config.buffer_size, BufferSize::Fixed),
         };
         // ASIO runs its streams' callbacks in the order they were opened, at
         // each buffer switch. The output's is opened again below, behind
         // this one, so each output reads the input that arrived just before
-        let (sender, feed, monitor) = input_channel_same_clock(config.sample_rate, true);
+        let (sender, feed, monitor) = input_channel_same_clock(config.sample_rate, true, config.channels as usize);
         let stream = build_input_stream(supported.sample_format(), &device, &config, sender, monitor.clone())?;
         stream.play().map_err(|e| AudioError::StreamPlaybackFailed(e.to_string()))?;
         self.input = Some(OpenInput {

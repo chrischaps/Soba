@@ -17,6 +17,7 @@ mod pads_face;
 mod compressor_display;
 mod data_types;
 pub mod hints;
+pub mod input_channel_menu;
 pub mod input_display;
 mod dancer_display;
 mod dancer_moves;

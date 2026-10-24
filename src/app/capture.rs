@@ -123,7 +123,7 @@ use egui::{Pos2, Rect, Vec2};
 
 use super::capture_aim::{self, Part, Spot, Which};
 use crate::dsp::InputAudio;
-use crate::engine::{read_wav_at, MidiEvent, StereoBuffer, BLOCK_SIZE};
+use crate::engine::{read_input_at, ChannelBuffer, MidiEvent, BLOCK_SIZE};
 
 /// The fewest frames drawn before recording starts, so the window size,
 /// theme and patch have settled. Cues at negative times lengthen the warmup
@@ -261,8 +261,8 @@ pub enum CaptureAction {
     Midi { event: MidiEvent, offset: u32 },
     /// Set a module's input to a value in real units.
     SetParam { module: String, which: Which, input: String, value: f32 },
-    /// Audio Input modules are now hearing this file.
-    InputFile(String),
+    /// Audio Input modules are now hearing this file, of this many channels.
+    InputFile(String, usize),
     /// Write where each module is drawn, in patch space, to this file.
     Layout(PathBuf),
     /// Frame the whole level, over this many seconds (0 cuts).
@@ -408,15 +408,16 @@ pub struct Capture {
 
     finished: bool,
     size_checked: bool,
-    /// A WAV playing into Audio Input modules, and the sample it started at.
-    input: Option<(StereoBuffer, i64)>,
+    /// A WAV playing into Audio Input modules, with every channel it has,
+    /// and the sample it started at.
+    input: Option<(ChannelBuffer, i64)>,
     /// A file dragged over the window, as from the desktop.
     hovering: Option<PathBuf>,
     /// Where this frame's presses and right-clicks landed, and their cue
     /// times, to check against what egui found under them.
     presses: Vec<(f64, &'static str, Pos2)>,
-    /// The share of `input` the engine renders this frame.
-    input_frame: StereoBuffer,
+    /// The share of `input` the engine renders this frame, interleaved.
+    input_frame: Vec<f32>,
     /// Whether the transport ran during any recorded frame. A capture
     /// starts stopped, so a script that never plays it films silence.
     played: bool,
@@ -519,7 +520,7 @@ impl Capture {
             finished: false,
             size_checked: false,
             input: None,
-            input_frame: StereoBuffer::default(),
+            input_frame: Vec::new(),
             hovering: None,
             presses: Vec::new(),
             played: false,
@@ -807,13 +808,13 @@ impl Capture {
                 Cue::Layout(name) => {
                     self.actions.push(CaptureAction::Layout(self.config.out_dir.join(format!("{name}.json"))));
                 }
-                Cue::Input(path) => match read_wav_at(&path, self.config.sample_rate) {
+                Cue::Input(path) => match read_input_at(&path, self.config.sample_rate) {
                     Ok((audio, rate)) => {
                         if rate != self.config.sample_rate {
                             eprintln!("capture: {} is {} Hz, resampled to {} Hz", path.display(), rate, self.config.sample_rate);
                         }
                         let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
-                        self.actions.push(CaptureAction::InputFile(name));
+                        self.actions.push(CaptureAction::InputFile(name, audio.channels()));
                         // From the next sample the engine renders: a cue's offset isn't kept
                         self.input = Some((audio, self.rendered));
                     }
@@ -988,15 +989,15 @@ impl Capture {
         if frames > 0 {
             self.audio.clear();
             self.audio.resize(frames * 2, 0.0);
-            self.input_frame.left.clear();
-            self.input_frame.right.clear();
+            self.input_frame.clear();
+            let mut channels = 0;
             if let Some((file, from)) = &self.input {
-                let len = file.left.len() as i64;
+                let len = file.frames() as i64;
                 let (a, b) = ((start - from).clamp(0, len) as usize, (horizon - from).clamp(0, len) as usize);
-                self.input_frame.left.extend_from_slice(&file.left[a..b]);
-                self.input_frame.right.extend_from_slice(&file.right[a..b]);
+                self.input_frame.extend_from_slice(file.frames_between(a, b));
+                channels = file.channels();
             }
-            let input = InputAudio { left: &self.input_frame.left, right: &self.input_frame.right };
+            let input = InputAudio::interleaved(&self.input_frame, channels);
             render(&mut self.audio, midi, input);
             self.rendered = horizon;
             // Only the warmup's first block starts before the frames do

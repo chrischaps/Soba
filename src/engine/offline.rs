@@ -6,6 +6,7 @@
 //! [`GraphPlan`] swapping as the live app.
 
 use crate::dsp::denormal::DenormalGuard;
+use crate::dsp::input_channels::MAX_INPUT_CHANNELS;
 use crate::dsp::{InputAudio, MidiEvent, MidiMessage, ProcessContext, KEYS_CHANNEL};
 use crate::modules::note_in::{self, Source};
 use std::collections::HashMap;
@@ -27,6 +28,62 @@ pub struct StereoBuffer {
     pub right: Vec<f32>,
 }
 
+/// Audio of any number of channels, interleaved: what an input device of
+/// that many channels brings, for Audio Input modules to hear. A mono
+/// recording is carried as two, heard on both sides, as a mono device is.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct ChannelBuffer {
+    /// Channels in each frame: none when empty, otherwise two to
+    /// [`MAX_INPUT_CHANNELS`].
+    channels: usize,
+    samples: Vec<f32>,
+}
+
+impl ChannelBuffer {
+    /// Each of `channels` (cut to the shortest, and to the first
+    /// [`MAX_INPUT_CHANNELS`]), interleaved.
+    pub fn from_channels(channels: &[Vec<f32>]) -> Self {
+        let channels = &channels[..channels.len().min(MAX_INPUT_CHANNELS)];
+        let Some(first) = channels.first() else {
+            return Self::default();
+        };
+        let frames = channels.iter().map(Vec::len).min().unwrap_or(0);
+        let width = channels.len().max(2);
+        let mut samples = Vec::with_capacity(frames * width);
+        for i in 0..frames {
+            samples.extend((0..width).map(|c| channels.get(c).unwrap_or(first)[i]));
+        }
+        Self { channels: width, samples }
+    }
+
+    /// Channels in each frame.
+    pub fn channels(&self) -> usize {
+        self.channels
+    }
+
+    /// How many frames it holds.
+    pub fn frames(&self) -> usize {
+        self.samples.len().checked_div(self.channels).unwrap_or(0)
+    }
+
+    /// Frames `start..end`, interleaved: as many of them as there are.
+    pub fn frames_between(&self, start: usize, end: usize) -> &[f32] {
+        let (start, end) = (start.min(self.frames()), end.min(self.frames()));
+        &self.samples[start * self.channels..end.max(start) * self.channels]
+    }
+
+    /// One channel's samples, from 0.
+    pub fn channel(&self, channel: usize) -> Vec<f32> {
+        self.samples.chunks_exact(self.channels.max(1)).map(|frame| frame.get(channel).copied().unwrap_or(0.0)).collect()
+    }
+}
+
+impl From<StereoBuffer> for ChannelBuffer {
+    fn from(stereo: StereoBuffer) -> Self {
+        Self::from_channels(&[stereo.left, stereo.right])
+    }
+}
+
 /// Drives an [`AudioGraph`] block by block without an audio device.
 pub struct OfflineRenderer {
     graph: AudioGraph,
@@ -40,9 +97,10 @@ pub struct OfflineRenderer {
     block_midi: Vec<MidiEvent>,
     /// What Audio Input modules hear, from frame 0 of the sample clock.
     /// Empty (silence) unless set.
-    input: StereoBuffer,
-    /// The current block of `input`.
-    block_input: StereoBuffer,
+    input: ChannelBuffer,
+    /// The current block of `input`, interleaved, with room for every
+    /// channel it can have.
+    block_input: Vec<f32>,
     /// What the output limiter has done so far.
     limiter: LimiterReport,
     /// Every module that made a NaN or infinity (and was reset), in the
@@ -140,8 +198,8 @@ impl OfflineRenderer {
             position: 0,
             midi: Vec::new(),
             block_midi: Vec::new(),
-            input: StereoBuffer::default(),
-            block_input: StereoBuffer { left: vec![0.0; block_size], right: vec![0.0; block_size] },
+            input: ChannelBuffer::default(),
+            block_input: vec![0.0; block_size * MAX_INPUT_CHANNELS],
             limiter: LimiterReport::default(),
             faults: Vec::new(),
             bench: None,
@@ -290,21 +348,20 @@ impl OfflineRenderer {
 
     /// Sets what Audio Input modules hear, as the input device would bring
     /// it, starting at frame 0 of the sample clock (see
-    /// [`position`](Self::position)). Past its end they hear silence.
-    pub fn set_audio_input(&mut self, input: StereoBuffer) {
-        self.input = input;
+    /// [`position`](Self::position)): stereo, or every channel of an
+    /// interface. Past its end they hear silence.
+    pub fn set_audio_input(&mut self, input: impl Into<ChannelBuffer>) {
+        self.input = input.into();
     }
 
     /// Copies the input that falls in the next block into `block_input`.
     fn take_block_input(&mut self) {
-        let start = (self.position as usize).min(self.input.left.len());
-        let end = (start + self.context.block_size).min(self.input.left.len());
-        let count = end - start;
-        let block = &mut self.block_input;
-        block.left[..count].copy_from_slice(&self.input.left[start..end]);
-        block.right[..count].copy_from_slice(&self.input.right[start..end]);
-        block.left[count..].fill(0.0);
-        block.right[count..].fill(0.0);
+        let channels = self.input.channels();
+        let start = self.position as usize;
+        let taken = self.input.frames_between(start, start + self.context.block_size);
+        let block = &mut self.block_input[..self.context.block_size * channels];
+        block[..taken.len()].copy_from_slice(taken);
+        block[taken.len()..].fill(0.0);
     }
 
     /// Frames processed so far. Renders run in whole blocks, so this can be
@@ -369,7 +426,8 @@ impl OfflineRenderer {
         while out.left.len() < frames {
             self.take_block_midi();
             self.take_block_input();
-            let input = InputAudio { left: &self.block_input.left, right: &self.block_input.right };
+            let channels = self.input.channels();
+            let input = InputAudio::interleaved(&self.block_input[..self.context.block_size * channels], channels);
             let context = self.context.with_midi(&self.block_midi).with_input(input);
             match &mut self.bench {
                 Some(bench) => {
@@ -570,6 +628,28 @@ pub fn read_wav(path: &std::path::Path) -> Result<(StereoBuffer, u32), String> {
     let sample = crate::persistence::sample_files::read_file(path)?.sample;
     let input = StereoBuffer { left: sample.left().to_vec(), right: sample.right().to_vec() };
     Ok((input, sample.sample_rate() as u32))
+}
+
+/// Reads a WAV, MP3, FLAC or Ogg file for Audio Input modules to hear, with
+/// every channel it has (up to [`MAX_INPUT_CHANNELS`]), resampled to
+/// `sample_rate` as [`read_wav_at`] does, returning it with the rate it was
+/// recorded at. A stereo file reads exactly as `read_wav_at` reads it.
+pub fn read_input_at(path: &std::path::Path, sample_rate: u32) -> Result<(ChannelBuffer, u32), String> {
+    let decoded = crate::persistence::sample_files::read_file_channels(path, MAX_INPUT_CHANNELS)?;
+    let recorded = decoded.sample_rate;
+    let channels: Vec<Vec<f32>> = decoded
+        .channels
+        .into_iter()
+        .map(|channel| {
+            // Made finite and converted one by one, as a Sampler's are
+            let mut channel = crate::dsp::SampleData::mono(channel, recorded as f32);
+            if recorded != sample_rate {
+                channel = channel.resampled(sample_rate as f32);
+            }
+            channel.left().to_vec()
+        })
+        .collect();
+    Ok((ChannelBuffer::from_channels(&channels), recorded))
 }
 
 /// Reads a WAV as [`read_wav`] does, resampled to `sample_rate` if it was

@@ -6,7 +6,7 @@
 //! its Clock changes tempo under a tempo-synced Delay and its effects are
 //! bypassed and brought back, live MIDI plays its Note In modules, a live
 //! audio input feeds its Audio Input module (the input device switched
-//! midway), the output is recorded (one take stopped and a new one
+//! midway to a twelve-channel one), the output is recorded (one take stopped and a new one
 //! started midway), its Sampler is given new recordings while it plays
 //! them, and its Looper is taken round its whole cycle again and again:
 //! record, overdub, undo, redo, stop, restart, clear, while its loop is
@@ -23,7 +23,7 @@ use soba::dsp::{InputAudio, ListenTo, MidiEvent as DspMidiEvent, SampleData, Sna
 
 use soba::engine::{
     Probe, ProbeScope, SCOPE_WINDOW,
-    create_module_registry, input_channel, input_channel_same_clock, AudioProcessor, EngineChannels, EngineCommand, EngineEvent, MidiEvent,
+    create_module_registry, input_channel, input_channel_converting, input_channel_same_clock, AudioProcessor, EngineChannels, EngineCommand, EngineEvent, MidiEvent,
     NodeId, Recording, TimestampedMidiEvent, UiHandle,
 };
 use soba::modules::looper::{LoopState, Looper};
@@ -318,6 +318,9 @@ fn audio_callback_never_allocates() {
     let (mut input, feed, mut monitor) = input_channel(48000);
     ui.connect_input(feed);
     let device_input: Vec<f32> = (0..480).flat_map(|n| [(n as f32 * 0.13).sin() * 0.5; 2]).collect();
+    // ...and the twelve-channel interface it's switched to (#450)
+    let wide_input: Vec<f32> = (0..480).flat_map(|n| [(n as f32 * 0.13).sin() * 0.5; 12]).collect();
+    let mut device_channels = 2;
     let mut input_due = 0usize;
     assert!(ui.flush());
 
@@ -330,10 +333,12 @@ fn audio_callback_never_allocates() {
     for round in 0..1000 {
         let frames = device_buffers[round % device_buffers.len()];
 
-        // Midway, switch input devices: the old feed comes back to be dropped
-        // here, the new one goes in
+        // Midway, switch input devices, to a mixer that brings each of its
+        // twelve channels: the old feed comes back to be dropped here, the
+        // new one goes in
         if round == 300 {
-            let (next, feed, next_monitor) = input_channel(48000);
+            let (next, feed, next_monitor) = input_channel_converting(48000, 48000, 12);
+            device_channels = 12;
             input = next;
             monitor = next_monitor;
             ui.connect_input(feed);
@@ -475,7 +480,10 @@ fn audio_callback_never_allocates() {
         while input_due >= 480 {
             allocations += count_allocations(|| {
                 input.record_latency(Some(std::time::Duration::from_micros(10_000 + round as u64)));
-                input.push_f32(&device_input, 2)
+                match device_channels {
+                    2 => input.push_f32(&device_input, 2),
+                    _ => input.push_f32(&wide_input, 12),
+                }
             });
             input_due -= 480;
         }
@@ -516,7 +524,7 @@ fn asio_callback_never_allocates() {
     let nodes = build_big_patch(&mut ui, PATCH_SIZE);
     ui.send_command(EngineCommand::SetPlaying(true));
 
-    let (mut input, feed, mut monitor) = input_channel_same_clock(48000, true);
+    let (mut input, feed, mut monitor) = input_channel_same_clock(48000, true, 2);
     ui.connect_input(feed);
     assert!(ui.flush());
 
@@ -531,7 +539,7 @@ fn asio_callback_never_allocates() {
         // The buffer size changes from the driver's panel, and the input
         // opens again on the new one
         if round == 1000 {
-            let (next, feed, next_monitor) = input_channel_same_clock(48000, true);
+            let (next, feed, next_monitor) = input_channel_same_clock(48000, true, 2);
             input = next;
             monitor = next_monitor;
             ui.connect_input(feed);

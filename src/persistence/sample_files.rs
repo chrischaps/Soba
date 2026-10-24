@@ -53,10 +53,40 @@ pub struct Decoded {
     pub truncated: bool,
 }
 
+/// A decoded sound file's channels, each its own run of samples.
+#[derive(Debug)]
+pub struct DecodedChannels {
+    /// One or more channels, all the same length.
+    pub channels: Vec<Vec<f32>>,
+    pub sample_rate: u32,
+    /// Whether it was longer than [`MAX_SAMPLE_SECONDS`] and was cut.
+    pub truncated: bool,
+}
+
+impl DecodedChannels {
+    /// As a Sampler hears it: mono, or its first two channels.
+    fn into_decoded(self) -> Decoded {
+        let rate = self.sample_rate as f32;
+        let mut channels = self.channels.into_iter();
+        let left = channels.next().unwrap_or_default();
+        let sample = match channels.next() {
+            Some(right) => SampleData::stereo(left, right, rate),
+            None => SampleData::mono(left, rate),
+        };
+        Decoded { sample, truncated: self.truncated }
+    }
+}
+
 /// Decodes a WAV file: integer or float, mono, stereo, or more (which
 /// keeps its first two channels). Anything past [`MAX_SAMPLE_SECONDS`] is
 /// left unread.
 pub fn decode_wav(reader: impl Read) -> Result<Decoded, String> {
+    decode_wav_channels(reader, 2).map(DecodedChannels::into_decoded)
+}
+
+/// Decodes a WAV file as [`decode_wav`] does, keeping its first `most`
+/// channels.
+fn decode_wav_channels(reader: impl Read, most: usize) -> Result<DecodedChannels, String> {
     let mut reader = hound::WavReader::new(reader).map_err(|e| e.to_string())?;
     let spec = reader.spec();
     let channels = spec.channels.max(1) as usize;
@@ -75,38 +105,44 @@ pub fn decode_wav(reader: impl Read) -> Result<Decoded, String> {
     .map_err(|e| e.to_string())?;
 
     let frames = samples.len() / channels;
-    let sample = if channels == 1 {
-        SampleData::mono(samples, rate as f32)
+    let kept: Vec<Vec<f32>> = if channels == 1 {
+        vec![samples]
     } else {
-        let mut left = Vec::with_capacity(frames);
-        let mut right = Vec::with_capacity(frames);
-        for frame in samples.chunks_exact(channels) {
-            left.push(frame[0]);
-            right.push(frame[1]);
-        }
-        SampleData::stereo(left, right, rate as f32)
+        (0..channels.min(most.max(1)))
+            .map(|c| {
+                let mut channel = Vec::with_capacity(frames);
+                channel.extend(samples.chunks_exact(channels).map(|frame| frame[c]));
+                channel
+            })
+            .collect()
     };
-    Ok(Decoded { sample, truncated: keep < total })
+    Ok(DecodedChannels { channels: kept, sample_rate: rate, truncated: keep < total })
 }
 
 /// Decodes a WAV, MP3, FLAC or Ogg file, telling a WAV by its first bytes
 /// and the others by what they hold. `name` is a hint, for an MP3 without
 /// tags at its start.
-pub fn decode(mut source: impl MediaSource + 'static, name: &str) -> Result<Decoded, String> {
+pub fn decode(source: impl MediaSource + 'static, name: &str) -> Result<Decoded, String> {
+    decode_channels(source, name, 2).map(DecodedChannels::into_decoded)
+}
+
+/// Decodes a WAV, MP3, FLAC or Ogg file as [`decode`] does, keeping its
+/// first `most` channels.
+pub fn decode_channels(mut source: impl MediaSource + 'static, name: &str, most: usize) -> Result<DecodedChannels, String> {
     let mut magic = [0u8; 4];
     let riff = source.read_exact(&mut magic).is_ok() && &magic == b"RIFF";
     source.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
     if riff {
-        decode_wav(std::io::BufReader::new(source))
+        decode_wav_channels(std::io::BufReader::new(source), most)
     } else {
-        decode_compressed(Box::new(source), name)
+        decode_compressed(Box::new(source), name, most)
     }
 }
 
 /// Decodes an MP3, FLAC or Ogg (Vorbis or Opus) file. Mono stays mono, and more than one
-/// channel keeps the first two. Anything past [`MAX_SAMPLE_SECONDS`] is
+/// channel keeps the first `most`. Anything past [`MAX_SAMPLE_SECONDS`] is
 /// left unread, and a damaged frame is skipped rather than failing the file.
-fn decode_compressed(source: Box<dyn MediaSource>, name: &str) -> Result<Decoded, String> {
+fn decode_compressed(source: Box<dyn MediaSource>, name: &str, most: usize) -> Result<DecodedChannels, String> {
     use symphonia::core::codecs::audio::AudioDecoderOptions;
     use symphonia::core::errors::Error;
     use symphonia::core::formats::probe::Hint;
@@ -131,8 +167,8 @@ fn decode_compressed(source: Box<dyn MediaSource>, name: &str) -> Result<Decoded
     // Gapless (the default): an MP3's encoder delay and padding are cut, so a loop loops
     let mut decoder = codecs().make_audio_decoder(params, &AudioDecoderOptions::default()).map_err(|_| not_ours())?;
 
-    let (mut left, mut right) = (Vec::new(), Vec::new());
-    let (mut rate, mut stereo, mut truncated) = (0, false, false);
+    let mut kept: Vec<Vec<f32>> = Vec::new();
+    let (mut rate, mut truncated) = (0, false);
     let mut interleaved = Vec::new();
     loop {
         let packet = match format.next_packet() {
@@ -151,18 +187,20 @@ fn decode_compressed(source: Box<dyn MediaSource>, name: &str) -> Result<Decoded
         };
         let channels = audio.spec().channels().count().max(1);
         rate = audio.spec().rate();
-        stereo = channels > 1;
+        // As many as the first packet has, up to `most`
+        if kept.is_empty() {
+            kept.resize_with(channels.min(most.max(1)), Vec::new);
+        }
         audio.copy_to_vec_interleaved(&mut interleaved);
         for frame in interleaved.chunks_exact(channels) {
-            left.push(frame[0]);
-            if stereo {
-                right.push(frame[1]);
+            for (c, channel) in kept.iter_mut().enumerate() {
+                // A packet with fewer channels than the first repeats its first
+                channel.push(frame.get(c).copied().unwrap_or(frame[0]));
             }
         }
         let keep = (MAX_SAMPLE_SECONDS * rate.max(1) as f32) as usize;
-        if left.len() > keep {
-            left.truncate(keep);
-            right.truncate(keep);
+        if kept[0].len() > keep {
+            kept.iter_mut().for_each(|channel| channel.truncate(keep));
             truncated = true;
             break;
         }
@@ -171,11 +209,9 @@ fn decode_compressed(source: Box<dyn MediaSource>, name: &str) -> Result<Decoded
         return Err("no audio in the file".to_string());
     }
     if let Some(length) = length {
-        left.truncate(length);
-        right.truncate(length);
+        kept.iter_mut().for_each(|channel| channel.truncate(length));
     }
-    let sample = if stereo { SampleData::stereo(left, right, rate as f32) } else { SampleData::mono(left, rate as f32) };
-    Ok(Decoded { sample, truncated })
+    Ok(DecodedChannels { channels: kept, sample_rate: rate, truncated })
 }
 
 /// symphonia's decoders, and ours for Opus.
@@ -193,6 +229,14 @@ fn codecs() -> &'static symphonia::core::codecs::registry::CodecRegistry {
 pub fn read_file(path: &Path) -> Result<Decoded, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     decode(file, &path.to_string_lossy())
+}
+
+/// Reads a WAV, MP3, FLAC or Ogg file from disk, keeping its first `most`
+/// channels: a recording of an interface's every input, to play into
+/// Audio Input modules.
+pub fn read_file_channels(path: &Path, most: usize) -> Result<DecodedChannels, String> {
+    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    decode_channels(file, &path.to_string_lossy(), most)
 }
 
 /// The bytes of a sample that ships with the examples, by key. In the

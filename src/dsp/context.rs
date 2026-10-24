@@ -98,32 +98,53 @@ impl TransportState {
     }
 }
 
-/// Live audio from the input device (a microphone, guitar or line source)
-/// for one block. Each side is `block_size` samples long, or empty when no
-/// input is open, as in the offline renderer.
+/// Live audio from the input device (a microphone, guitar, line source or
+/// a whole mixer's worth of instruments) for one block: `block_size`
+/// frames, interleaved, of as many channels as the device has (at least
+/// two, a mono device's one heard on both), or empty when no input is open,
+/// as in the offline renderer. See [`InputChannels`] for picking channels.
+///
+/// [`InputChannels`]: super::input_channels::InputChannels
 #[derive(Clone, Copy, Debug, Default)]
 pub struct InputAudio<'a> {
-    pub left: &'a [f32],
-    pub right: &'a [f32],
+    samples: &'a [f32],
+    channels: usize,
 }
 
 impl<'a> InputAudio<'a> {
-    /// The `frames` frames from `start`, or as many of them as there are.
-    pub fn slice(&self, start: usize, frames: usize) -> InputAudio<'a> {
-        let part = |side: &'a [f32]| {
-            let start = start.min(side.len());
-            &side[start..(start + frames).min(side.len())]
-        };
-        InputAudio { left: part(self.left), right: part(self.right) }
+    /// Interleaved frames of `channels` channels.
+    pub fn interleaved(samples: &'a [f32], channels: usize) -> Self {
+        if channels == 0 {
+            return Self::default();
+        }
+        Self { samples: &samples[..samples.len() / channels * channels], channels }
     }
 
-    /// The sample at `index` on each side, or silence past the end.
+    /// How many channels each frame holds.
+    pub fn channels(&self) -> usize {
+        self.channels
+    }
+
+    /// How many frames it holds.
+    pub fn frames(&self) -> usize {
+        self.samples.len().checked_div(self.channels).unwrap_or(0)
+    }
+
+    /// The `frames` frames from `start`, or as many of them as there are.
+    pub fn slice(&self, start: usize, frames: usize) -> InputAudio<'a> {
+        let start = start.min(self.frames());
+        let end = (start + frames).min(self.frames());
+        InputAudio { samples: &self.samples[start * self.channels..end * self.channels], channels: self.channels }
+    }
+
+    /// The sample of `channel` (from 0) at frame `index`, or silence past
+    /// the end or for a channel it hasn't.
     #[inline]
-    pub fn frame(&self, index: usize) -> (f32, f32) {
-        (
-            self.left.get(index).copied().unwrap_or(0.0),
-            self.right.get(index).copied().unwrap_or(0.0),
-        )
+    pub fn sample(&self, index: usize, channel: usize) -> f32 {
+        if channel >= self.channels {
+            return 0.0;
+        }
+        self.samples.get(index * self.channels + channel).copied().unwrap_or(0.0)
     }
 }
 

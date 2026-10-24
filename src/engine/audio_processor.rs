@@ -9,6 +9,7 @@ use cpal::{FromSample, Sample};
 use rtrb::Consumer;
 
 use crate::dsp::denormal::DenormalGuard;
+use crate::dsp::input_channels::MAX_INPUT_CHANNELS;
 use crate::dsp::{HostTransport, InputAudio, MidiEvent, ModuleRegistry, ProcessContext, Snapshot, SnapshotOutcome};
 
 use super::audio_input::InputFeed;
@@ -34,16 +35,18 @@ pub fn create_module_registry() -> ModuleRegistry {
 }
 
 /// The patch's audio input on the audio thread: the feed from the input
-/// device, if one is open, and the block it's read into.
+/// device, if one is open, and the block it's read into, interleaved, with
+/// room for every channel the feed can carry.
 struct LiveInput {
     feed: Option<InputFeed>,
-    left: Vec<f32>,
-    right: Vec<f32>,
+    block: Vec<f32>,
+    /// Frames in a block.
+    block_size: usize,
 }
 
 impl LiveInput {
     fn new(block_size: usize) -> Self {
-        Self { feed: None, left: vec![0.0; block_size], right: vec![0.0; block_size] }
+        Self { feed: None, block: vec![0.0; block_size * MAX_INPUT_CHANNELS], block_size }
     }
 
     /// Reads the next `frames` frames (at most a block), or silence with no
@@ -52,10 +55,10 @@ impl LiveInput {
         let Some(feed) = self.feed.as_mut() else {
             return InputAudio::default();
         };
-        let frames = frames.min(self.left.len());
-        let (left, right) = (&mut self.left[..frames], &mut self.right[..frames]);
-        feed.read(left, right);
-        InputAudio { left, right }
+        let channels = feed.channels();
+        let block = &mut self.block[..frames.min(self.block_size) * channels];
+        feed.read(block);
+        InputAudio::interleaved(block, channels)
     }
 
     /// Drops input that arrived while nothing reads it.

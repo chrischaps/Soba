@@ -331,6 +331,9 @@ pub struct SynthGraphState {
 
     /// The input device Audio Input modules are listening to, if one is open.
     pub audio_input_name: Option<String>,
+    /// How many channels it has, while it's open: the Channel choices
+    /// offer only those (see [`input_channel_menu`](super::input_channel_menu)).
+    pub audio_input_channels: Option<usize>,
 
     /// The files the patch's Samplers play, decoded, by sample key.
     pub samples: super::sample_shelf::SampleShelf,
@@ -447,6 +450,7 @@ impl Default for SynthGraphState {
             faults: Default::default(),
             spectra: Default::default(),
             audio_input_name: None,
+            audio_input_channels: None,
             samples: Default::default(),
             cue: None,
             file_drop_target: None,

@@ -15,8 +15,8 @@ Alongside the audio, the module listens to how loud the input is. **Follow** tra
 
 | Port | Signal Type | Description |
 |------|-------------|-------------|
-| **L** | Audio (Blue) | Input 1, after **Gain**; or, with **Channel** on **1** or **2**, that input |
-| **R** | Audio (Blue) | Input 2, after **Gain**; or, with **Channel** on **1** or **2**, that input |
+| **L** | Audio (Blue) | The first input of the **Channel** pair (input 1 on **1+2**), after **Gain**; or, with **Channel** on one input, that input |
+| **R** | Audio (Blue) | The second input of the pair (input 2 on **1+2**), after **Gain**; or, with **Channel** on one input, that input |
 | **Follow** | Control (Orange) | How loud the input is, on a dB scale: 0 at -60 dB, 1 at full scale |
 | **Gate** | Gate (Green) | High while **Follow** is above the **Threshold** |
 
@@ -26,7 +26,7 @@ The module has no inputs: its signal comes from the device.
 
 | Control | Range | Default | Description |
 |---------|-------|---------|-------------|
-| **Channel** | Stereo, 1, 2 | Stereo | Which of the device's inputs the module hears, on a menu at the top of the node. See [Choosing a channel](#choosing-a-channel) |
+| **Channel** | 1+2, 1, 2, 3+4, 3, 4 … 16 | 1+2 | Which of the device's inputs the module hears, on a menu at the top of the node. See [Choosing a channel](#choosing-a-channel) |
 | **Gain** | -24 – +24 dB | 0 dB | Level of the input, before everything else. Follow and Gate hear it too |
 | **Thresh** | -60 – 0 dB | -30 dB | Where the gate opens |
 | **Attack** | 0.1 – 100 ms | 5 ms | How fast **Follow** rises when the input gets louder |
@@ -38,17 +38,25 @@ An audio interface hands its inputs over as a pair: input 1 on the left, input 2
 
 | Channel | L hears | R hears | For |
 |---------|---------|---------|-----|
-| **Stereo** | input 1 | input 2 | A stereo source across both inputs, or a device with a single input (see below) |
+| **1+2** | input 1 | input 2 | A stereo source across both inputs, or a device with a single input (see below) |
 | **1** | input 1 | input 1 | A guitar or microphone in input 1, heard in the centre |
 | **2** | input 2 | input 2 | The same, in input 2 |
+| **3+4**, **5+6** … | input 3 | input 4 | A stereo source on a later pair: a synth's two outputs on a mixer's channels 3 and 4 |
+| **3**, **4** … | that input | that input | A mono source on any input |
 
-**Follow** and **Gate** hear what the module puts out. On **1** or **2** they follow that input alone. On **Stereo** they follow whichever side is louder.
+**Follow** and **Gate** hear what the module puts out. On one input they follow that input alone. On a pair they follow whichever side is louder.
 
-Each Audio Input module chooses for itself, so two of them can split an interface: one on **1** for a guitar through a filter and an echo, one on **2** for a voice through a reverb, each in its own chain.
+Each Audio Input module chooses for itself, so several of them can split an interface: one on **1** for a guitar through a filter and an echo, one on **2** for a voice through a reverb, each in its own chain.
 
-A device that has only one input, like a laptop's built-in microphone or a USB mic, already plays on both sides, whichever **Channel** you pick.
+### Every input of a mixer
 
-Only inputs 1 and 2 reach the patch. On an interface with more, like a Scarlett 18i20, plug what you want to play into the first two.
+Some interfaces and mixers hand the computer every input they have, each its own channel. A Tascam Model 12 or a Zoom L6 sends each mixer channel, so a drum machine, a sampler and a synth plugged into it can each come back on their own, with their own effects, rather than as one stereo mix. Give each its own Audio Input: say **1+2** for the drum machine's stereo pair, **3** for a mono synth and **5+6** for the sampler. An interface like a Scarlett 18i20 works the same way.
+
+While a device is open, the menu offers only the inputs it has: **1+2**, **1** and **2** on a stereo interface, up to **11+12** and **12** on a twelve-input one. Soba hears up to 16 inputs of a device. They're listed by number: the names an interface gives its inputs don't reach Soba through its audio library yet. A patch made on a bigger interface keeps its choice: an Audio Input set to an input this device hasn't is silent, and hovering its menu says so.
+
+A device that has only one input, like a laptop's built-in microphone or a USB mic, already plays on both sides of **1+2**, **1** or **2**.
+
+Patches saved before Soba heard every input open on the same choice they had: **Stereo** is now **1+2**.
 
 ## The display
 
@@ -88,7 +96,7 @@ The **Buffer** settles on its own. It opens holding enough for the worst timing 
 - **Different sample rates are fine.** Windows often runs a microphone at 48 kHz and speakers at 44.1 kHz, even on one interface. Soba converts the input to the output's rate on the way in. For the cleanest sound, set both to the same rate in your system's sound settings; the status bar tooltip says when it's converting.
 - **Changing the Output device** reopens the input at the new device's rate.
 - If the input device is unplugged, the status bar shows **⚠ Input lost**. Choose it again under **Input**.
-- A mono device is heard on both sides. With a two-input interface, set **Channel** to the input you're using; see [Choosing a channel](#choosing-a-channel).
+- A mono device is heard on both sides. With an interface of two inputs or more, set **Channel** to the input you're using; see [Choosing a channel](#choosing-a-channel).
 
 ## Low latency with ASIO (Windows)
 
@@ -126,7 +134,7 @@ The `render` tool has no input device, so Audio Input renders silence. Give it a
 cargo run --release --bin render -- my-patch.json out.wav --input voice.wav
 ```
 
-The file plays from the start of the render. It must be at the render's sample rate (48 kHz unless you pass `--sample-rate`). In a capture script, the cue `input voice.wav` does the same from the moment it fires.
+The file plays from the start of the render, converted to the render's sample rate (48 kHz unless you pass `--sample-rate`) if it was recorded at another. Every channel of the file is an input, up to 16, so a multitrack recording of a whole mixer plays each channel into the Audio Inputs whose **Channel** picks it. In a capture script, the cue `input voice.wav` does the same from the moment it fires.
 
 ## Patches
 

@@ -504,9 +504,13 @@ fn switch_chip(
                             .selected_text(options.get(*value).map(|s| s.as_str()).unwrap_or(""))
                             .show_ui(ui, |ui| {
                                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                                // An empty choice is one this build leaves out (the Clock's Link)
+                                // An empty choice is one this build leaves out (the Clock's Link),
+                                // and an input Channel offers only the device's channels
+                                let (chosen, device) = (*value, super::input_channel_menu::device_channels(user_state));
                                 for (i, option) in options.iter().enumerate().filter(|(_, option)| !option.is_empty()) {
-                                    ui.selectable_value(value, i, option);
+                                    if super::input_channel_menu::offers(options, i, chosen, device) {
+                                        ui.selectable_value(value, i, option);
+                                    }
                                 }
                             })
                             .response

@@ -9,6 +9,7 @@
 use crate::dsp::{
     db_to_gain, gain_to_db,
     context::ProcessContext,
+    input_channels::{self, InputChannels},
     module_trait::{DspModule, MeterLevels, ModuleCategory, ModuleInfo},
     parameter::ParameterDefinition,
     port::PortDefinition,
@@ -26,8 +27,9 @@ pub const FOLLOW_FLOOR_DB: f32 = -60.0;
 /// again, so a level hovering at the threshold doesn't chatter.
 pub const GATE_HYSTERESIS_DB: f32 = 6.0;
 
-/// The Channel choice: which of the device's inputs each side hears.
-pub const CHANNEL_LABELS: &[&str] = &["Stereo", "1", "2"];
+/// The Channel choice: which of the device's inputs each side hears. The
+/// first three are the old Stereo, 1 and 2 (see [`input_channels`]).
+pub const CHANNEL_LABELS: &[&str] = input_channels::LABELS;
 
 /// Converts a level in dBFS to Follow's scale: 0 at the floor, 1 at 0 dBFS.
 #[inline]
@@ -49,9 +51,9 @@ pub const ID: &str = "source.audio_input";
 /// # Ports
 ///
 /// **Outputs:**
-/// - **L**, **R** (Audio): The input, after Gain. In Stereo, input 1 on L
-///   and input 2 on R; on 1 or 2, that input on both. A mono device is
-///   heard on both either way.
+/// - **L**, **R** (Audio): The input, after Gain. On a pair (1+2, 3+4…),
+///   its first channel on L and its second on R; on one channel, that
+///   channel on both. A mono device is heard on both either way.
 /// - **Follow** (Control): How loud the input is, on a dB scale: 0 at
 ///   -60 dB, 1 at full scale.
 /// - **Gate** (Gate): High while the input is above the Threshold.
@@ -62,7 +64,8 @@ pub const ID: &str = "source.audio_input";
 /// - **Threshold** (-60 to 0 dB): Where the gate opens.
 /// - **Attack** (0.1-100 ms): How fast Follow rises.
 /// - **Release** (5-2000 ms): How fast Follow falls.
-/// - **Channel** (Stereo, 1, 2): Which input the module hears.
+/// - **Channel** (1+2, 1, 2, 3+4, 3, 4… up to 16): Which of the device's
+///   channels the module hears. Several Audio Inputs can each take their own.
 pub struct AudioInput {
     /// The Gain knob as a linear gain, smoothed.
     gain: SmoothedValue,
@@ -87,9 +90,9 @@ impl AudioInput {
             sample_rate,
             ports: vec![
                 PortDefinition::output("left", "L", SignalType::Audio)
-                    .describe("Input 1, or the chosen Channel, after Gain"),
+                    .describe("The Channel's first input, or its only one, after Gain"),
                 PortDefinition::output("right", "R", SignalType::Audio)
-                    .describe("Input 2, or the chosen Channel, after Gain"),
+                    .describe("The Channel's second input, or its only one, after Gain"),
                 PortDefinition::output("follow", "Follow", SignalType::Control)
                     .describe("How loud the input is: 0 at -60 dB up to 1 at full scale"),
                 PortDefinition::output("gate", "Gate", SignalType::Gate)
@@ -104,8 +107,8 @@ impl AudioInput {
                     .describe("How fast Follow rises when the input gets louder"),
                 ParameterDefinition::new("release", "Release", 5.0, 2000.0, 150.0, ParameterDisplay::logarithmic("ms"))
                     .describe("How fast Follow falls when the input gets quieter"),
-                ParameterDefinition::choice("channel", "Channel", CHANNEL_LABELS, 0)
-                    .describe("Stereo hears inputs 1 and 2 on L and R; 1 or 2 hears that input alone, on both"),
+                input_channels::parameter("channel", "Channel")
+                    .describe("Which of the input device's channels: a pair on L and R, or one alone on both"),
             ],
         }
     }
@@ -173,23 +176,18 @@ impl DspModule for AudioInput {
         let close_at = open_at - GATE_HYSTERESIS_DB / -FOLLOW_FLOOR_DB;
         let attack = coefficient(params[Self::PARAM_ATTACK], self.sample_rate);
         let release = coefficient(params[Self::PARAM_RELEASE], self.sample_rate);
-        let channel = params[Self::PARAM_CHANNEL].round() as usize;
+        let channels = InputChannels::from_value(params[Self::PARAM_CHANNEL]);
 
         for i in 0..context.block_size {
             let gain = self.gain.next();
-            let (one, two) = context.input.frame(i);
-            let (left, right) = match channel {
-                1 => (one, one),
-                2 => (two, two),
-                _ => (one, two),
-            };
+            let (left, right) = channels.frame(&context.input, i);
             let (left, right) = (left * gain, right * gain);
             left_out.samples[i] = left;
             right_out.samples[i] = right;
             self.peaks[0] = self.peaks[0].max(left.abs());
             self.peaks[1] = self.peaks[1].max(right.abs());
 
-            // The louder side; on 1 or 2 both sides are that input
+            // The louder side; on one channel both sides are that channel
             let level = left.abs().max(right.abs());
             let rate = if level > self.envelope { attack } else { release };
             self.envelope += rate * (level - self.envelope);
@@ -230,10 +228,10 @@ mod tests {
     const BLOCK: usize = 240; // 5 ms
 
     /// Default parameters: 0 dB gain, -30 dB threshold, 5 ms attack, 150 ms
-    /// release, Stereo.
+    /// release, 1+2.
     const DEFAULTS: [f32; 5] = [0.0, -30.0, 5.0, 150.0, 0.0];
 
-    /// The defaults with Channel set to `index` (0 Stereo, 1, 2).
+    /// The defaults with Channel set to `index` (0 for 1+2, 1, 2, 3 for 3+4…).
     fn on_channel(index: f32) -> [f32; 5] {
         let mut params = DEFAULTS;
         params[4] = index;
@@ -247,20 +245,34 @@ mod tests {
         gate: Vec<f32>,
     }
 
+    /// Interleaves `channels` into one block of input.
+    fn interleave(channels: &[&[f32]]) -> Vec<f32> {
+        (0..channels[0].len()).flat_map(|i| channels.iter().map(move |c| c[i])).collect()
+    }
+
     /// Plays stereo input through a fresh module, block by block.
     fn run(left: &[f32], right: &[f32], params: [f32; 5]) -> Run {
+        run_wide(&[left, right], params)
+    }
+
+    /// Plays input of `channels.len()` channels through a fresh module,
+    /// block by block.
+    fn run_wide(channels: &[&[f32]], params: [f32; 5]) -> Run {
         let mut module = AudioInput::new();
         module.prepare(SR, BLOCK);
         module.gain.set_immediate(db_to_gain(params[0]));
         let mut outputs: Vec<SignalBuffer> = (0..4).map(|_| SignalBuffer::audio(BLOCK)).collect();
         let mut out = Run { left: vec![], right: vec![], follow: vec![], gate: vec![] };
-        for (l, r) in left.chunks(BLOCK).zip(right.chunks(BLOCK)) {
-            let context = ProcessContext::new(SR, l.len()).with_input(InputAudio { left: l, right: r });
+        let samples = interleave(channels);
+        for block in samples.chunks(BLOCK * channels.len()) {
+            let input = InputAudio::interleaved(block, channels.len());
+            let frames = input.frames();
+            let context = ProcessContext::new(SR, frames).with_input(input);
             module.process(&[], &mut outputs, &params, &context);
-            out.left.extend_from_slice(&outputs[0].samples[..l.len()]);
-            out.right.extend_from_slice(&outputs[1].samples[..l.len()]);
-            out.follow.extend_from_slice(&outputs[2].samples[..l.len()]);
-            out.gate.extend_from_slice(&outputs[3].samples[..l.len()]);
+            out.left.extend_from_slice(&outputs[0].samples[..frames]);
+            out.right.extend_from_slice(&outputs[1].samples[..frames]);
+            out.follow.extend_from_slice(&outputs[2].samples[..frames]);
+            out.gate.extend_from_slice(&outputs[3].samples[..frames]);
         }
         out
     }
@@ -298,10 +310,13 @@ mod tests {
         assert_eq!(ports[3].signal_type, SignalType::Gate);
         let params: Vec<_> = module.parameters().iter().map(|p| p.name).collect();
         assert_eq!(params, ["Gain", "Threshold", "Attack", "Release", "Channel"]);
-        // Stereo by default, so patches saved before Channel sound the same
+        // 1+2 by default, so patches saved before Channel sound the same,
+        // and Stereo, 1 and 2 keep their places for those saved after
         let channel = &module.parameters()[4];
         assert_eq!(channel.default, 0.0);
         assert!(matches!(channel.display, ParameterDisplay::Discrete { labels } if labels == CHANNEL_LABELS));
+        assert_eq!(&CHANNEL_LABELS[..3], ["1+2", "1", "2"]);
+        assert_eq!(CHANNEL_LABELS.len(), 24, "every pair and channel of 16");
         assert!(!module.polyphonic());
     }
 
@@ -452,6 +467,28 @@ mod tests {
     }
 
     #[test]
+    fn test_channel_seven_of_twelve_is_heard_alone() {
+        // A twelve-channel mixer, each channel its own level of a tone
+        let tone = tone(-6.0, 0.2);
+        let levels: Vec<Vec<f32>> = (1..=12).map(|c| tone.iter().map(|s| s * c as f32 / 12.0).collect()).collect();
+        let channels: Vec<&[f32]> = levels.iter().map(Vec::as_slice).collect();
+
+        let seven = run_wide(&channels, on_channel(InputChannels::Mono(6).index() as f32));
+        assert_eq!(seven.left, levels[6]);
+        assert_eq!(seven.right, levels[6]);
+
+        // 7+8 on L and R, and each Audio Input can take its own
+        let pair = run_wide(&channels, on_channel(InputChannels::Pair(6).index() as f32));
+        assert_eq!((pair.left, pair.right), (levels[6].clone(), levels[7].clone()));
+        let eleven = run_wide(&channels, on_channel(InputChannels::Mono(10).index() as f32));
+        assert_eq!(eleven.left, levels[10]);
+
+        // A channel the device hasn't is silence
+        let fifteen = run_wide(&channels, on_channel(InputChannels::Mono(14).index() as f32));
+        assert!(fifteen.left.iter().chain(&fifteen.right).all(|&s| s == 0.0));
+    }
+
+    #[test]
     fn test_stereo_channel_matches_the_input_exactly() {
         let left = tone(-6.0, 0.2);
         let right: Vec<f32> = tone(-18.0, 0.2).iter().map(|s| -s).collect();
@@ -480,8 +517,8 @@ mod tests {
         let mut module = AudioInput::new();
         module.prepare(SR, BLOCK);
         let mut outputs: Vec<SignalBuffer> = (0..4).map(|_| SignalBuffer::audio(BLOCK)).collect();
-        let (left, right) = (vec![0.5; BLOCK], vec![-0.25; BLOCK]);
-        let context = ProcessContext::new(SR, BLOCK).with_input(InputAudio { left: &left, right: &right });
+        let input = interleave(&[&[0.5; BLOCK], &[-0.25; BLOCK]]);
+        let context = ProcessContext::new(SR, BLOCK).with_input(InputAudio::interleaved(&input, 2));
         module.process(&[], &mut outputs, &DEFAULTS, &context);
         let levels = module.take_meter_levels().unwrap();
         assert_eq!(&levels.peaks[..2], &[0.5, 0.25]);

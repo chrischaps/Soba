@@ -241,6 +241,8 @@ impl WidgetValueTrait for SynthValueType {
                 let zoom = user_state.zoom;
                 // A following Arranger's Loop is its leader's
                 let locked = super::arranger_follow::locks(node_data.module_id, param_name, node_id, user_state);
+                // An input Channel offers only the device's channels
+                let device = super::input_channel_menu::device_channels(user_state);
                 ui.horizontal(|ui: &mut egui::Ui| {
                     ui.multiply_opacity(opacity);
                     steady_text::steady_dropdowns(ui);
@@ -261,12 +263,18 @@ impl WidgetValueTrait for SynthValueType {
                             .show_ui(&mut slot, |ui: &mut egui::Ui| {
                                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
                                 // An empty choice is one this build leaves out (the Clock's Link)
+                                let chosen = *value;
                                 for (i, option) in options.iter().enumerate().filter(|(_, option)| !option.is_empty()) {
-                                    ui.selectable_value(value, i, option);
+                                    if super::input_channel_menu::offers(options, i, chosen, device) {
+                                        ui.selectable_value(value, i, option);
+                                    }
                                 }
                             })
                     });
-                    let response = combo.inner.response.on_disabled_hover_text("It follows another Arranger, and plays that one's Loop");
+                    let mut response = combo.inner.response.on_disabled_hover_text("It follows another Arranger, and plays that one's Loop");
+                    if let Some(missing) = super::input_channel_menu::missing(options, *value, device) {
+                        response = response.on_hover_text(missing);
+                    }
                     (name, response)
                 })
                 .inner

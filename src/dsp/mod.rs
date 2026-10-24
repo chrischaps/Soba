@@ -12,6 +12,7 @@ pub mod denormal;
 pub mod dynamics;
 pub mod finite;
 pub mod gate;
+pub mod input_channels;
 pub mod loudness;
 pub mod module_trait;
 pub mod note_claims;

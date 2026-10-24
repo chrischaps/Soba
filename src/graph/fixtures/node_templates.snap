@@ -310,7 +310,7 @@ in   Gain               Control  ConstantOnly         inline=false num 0 [-24..2
 in   Threshold          Control  ConstantOnly         inline=false num -30 [-60..0] dB
 in   Attack             Control  ConstantOnly         inline=false num 5 [0.1..100] ms log
 in   Release            Control  ConstantOnly         inline=false num 150 [5..2000] ms log
-in   Channel            Control  ConstantOnly         inline=true  select 0 ["Stereo", "1", "2"] "Channel"
+in   Channel            Control  ConstantOnly         inline=true  select 0 ["1+2", "1", "2", "3+4", "3", "4", "5+6", "5", "6", "7+8", "7", "8", "9+10", "9", "10", "11+12", "11", "12", "13+14", "13", "14", "15+16", "15", "16"] "Channel"
 out  L                  Audio
 out  R                  Audio
 out  Follow             Control

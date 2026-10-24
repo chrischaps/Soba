@@ -514,7 +514,10 @@ impl SynthApp {
                     }
                     midi.extend(event.to_dsp(offset));
                 }
-                CaptureAction::InputFile(name) => self.user_state.audio_input_name = Some(name),
+                CaptureAction::InputFile(name, channels) => {
+                    self.user_state.audio_input_name = Some(name);
+                    self.user_state.audio_input_channels = Some(channels);
+                }
                 CaptureAction::Layout(path) => self.write_layout(ctx, &path),
                 CaptureAction::Fit(seconds) => self.start_glide_over(ctx, framing::Target::All, seconds),
                 CaptureAction::Aim { at, zoom, seconds } => {
@@ -652,6 +655,7 @@ impl SynthApp {
         let Ok(engine) = self.audio.engine.as_mut() else { return };
         let opened = index.map(|index| engine.open_input(index));
         let input_name = engine.input_name().map(str::to_string);
+        let input_channels = engine.input_channels().map(usize::from);
         if index.is_none() {
             engine.close_input();
         }
@@ -662,6 +666,7 @@ impl SynthApp {
                 }
                 self.audio.input_opened(monitor);
                 self.user_state.audio_input_name = input_name;
+                self.user_state.audio_input_channels = input_channels;
                 self.warn_about_feedback();
             }
             failed => {
