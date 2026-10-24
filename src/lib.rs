@@ -8,6 +8,7 @@ pub mod app;
 pub mod dsp;
 pub mod engine;
 pub mod graph;
+pub mod hardware;
 pub mod hosted;
 pub mod link;
 pub mod modules;

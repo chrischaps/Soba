@@ -1,0 +1,91 @@
+# Digitakt
+
+*Elektron · kit, 8 voices · channel 1*
+
+Eight-track sample-based drum machine and sequencer.
+
+> **From the maker's chart:** Elektron Digitakt User Manual, OS 1.53 (2026-09), Appendix B: MIDI and sections 8.4 and 15.5, https://www.elektron.se/wp-content/uploads/2026/09/Digitakt-User-Manual_ENG_OS1.53_260909.pdf
+
+## Before you play
+
+In Settings > MIDI Config > Port Config turn Receive CC/NRPN and Receive Notes on. Tracks 1-8 are on their default channels 1-8 (notes 0-7 trigger tracks 1-8 only then). Program changes need Prg Ch Receive on in MIDI Sync; the channel is set by Prg Chg In Ch.
+
+## Parameters
+
+The first 12 are an Instrument's knobs when it's first made. Each part takes them on its own channel.
+
+| | Parameter | Message | Group | Values |
+|---|---|---|---|---|
+| ● | Filter Freq | CC 74 | Filter |  |
+| ● | Resonance | CC 75 | Filter |  |
+| ● | Tune | CC 16 | Sample | Mutate leaves it |
+| ● | Sample Select | CC 19 | Sample |  |
+| ● | Bit Reduction | CC 18 | Sample |  |
+| ● | Overdrive | CC 81 | Amp |  |
+| ● | Delay Send | CC 82 | FX |  |
+| ● | Reverb Send | CC 83 | FX |  |
+| ● | Decay | CC 80 | Amp |  |
+| ● | Env Depth | CC 77 | Filter |  |
+| ● | Level | CC 7 | Amp | Mutate leaves it |
+| ● | Pan | CC 10 | Amp | Mutate leaves it |
+|  | Sample Level | CC 23 | Sample | Mutate leaves it |
+|  | Play Mode | CC 17 | Sample |  |
+|  | Param E | CC 20 | Sample |  |
+|  | Param F | CC 21 | Sample |  |
+|  | Param G | CC 22 | Sample |  |
+|  | Filter Type | CC 76 | Filter |  |
+|  | Filter Attack | CC 70 | Filter |  |
+|  | Filter Decay | CC 71 | Filter |  |
+|  | Filter Sus | CC 72 | Filter |  |
+|  | Filter Release | CC 73 | Filter |  |
+|  | Filter Delay | CC 86 | Filter |  |
+|  | Filter Base | CC 84 | Filter |  |
+|  | Filter Width | CC 85 | Filter |  |
+|  | SRR | CC 87 | Filter |  |
+|  | SRR Routing | CC 88 | Filter |  |
+|  | Amp Attack | CC 78 | Amp |  |
+|  | Amp Hold | CC 79 | Amp |  |
+|  | LFO1 Speed | CC 102 | LFO |  |
+|  | LFO1 Mult | CC 103 | LFO |  |
+|  | LFO1 Fade | CC 104 | LFO |  |
+|  | LFO1 Dest | CC 105 | LFO |  |
+|  | LFO1 Wave | CC 106 | LFO |  |
+|  | LFO1 Phase | CC 107 | LFO |  |
+|  | LFO1 Trig | CC 108 | LFO |  |
+|  | LFO1 Depth | CC 109/61 (14-bit) | LFO |  |
+|  | LFO2 Speed | CC 112 | LFO |  |
+|  | LFO2 Mult | CC 113 | LFO |  |
+|  | LFO2 Fade | CC 114 | LFO |  |
+|  | LFO2 Dest | CC 115 | LFO |  |
+|  | LFO2 Wave | CC 116 | LFO |  |
+|  | LFO2 Phase | CC 117 | LFO |  |
+|  | LFO2 Trig | CC 118 | LFO |  |
+|  | LFO2 Depth | CC 119/63 (14-bit) | LFO |  |
+|  | Track Level | CC 95 | Mix | Mutate leaves it |
+|  | Mute | CC 94 | Mix | Mutate leaves it |
+|  | Trig Note | CC 3 | Voice | Mutate leaves it |
+|  | Trig Velocity | CC 4 | Voice | Mutate leaves it |
+|  | Trig Length | CC 5 | Voice |  |
+|  | Filter Trig | CC 13 | Voice |  |
+|  | LFO Trig | CC 14 | Voice |  |
+
+## Parts
+
+| Part | Note | Channel |
+|---|---|---|
+| Track 1 | 0 | 1 |
+| Track 2 | 1 | 2 |
+| Track 3 | 2 | 3 |
+| Track 4 | 3 | 4 |
+| Track 5 | 4 | 5 |
+| Track 6 | 5 | 6 |
+| Track 7 | 6 | 7 |
+| Track 8 | 7 | 8 |
+
+## Programs
+
+A program change chooses a pattern, shown A01 to H16, a letter a bank.
+
+## Clock
+
+Sends MIDI clock: yes · follows it: yes · starts and stops with it: yes

@@ -660,6 +660,11 @@ fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession, map_mode: bool, controlle
             if ui.add(item).on_hover_text("Every MIDI input and MIDI Out port: which device each is, and what it's sending").clicked() {
                 actions.push(AppAction::ToggleRig);
             }
+            // A profile of a device's knobs, from turning them (#441)
+            let item = egui::Button::selectable(midi.listening.is_some(), "Listen to an Instrument…");
+            if ui.add(item).on_hover_text("Turn each knob on a device that sends its CCs, and name it: Soba writes a profile of it").clicked() {
+                actions.push(AppAction::ListenToInstrument);
+            }
 
             // Mapping a controller, a control at a time, and the map of it (#426)
             ui.separator();

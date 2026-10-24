@@ -1,0 +1,50 @@
+{
+  "name": "SP-404MKII",
+  "maker": "Roland",
+  "about": "Roland's sampler and effector with 16 pads per bank, ten banks and five FX buses.",
+  "source": "Roland SP-404MK2 Reference Manual (applicable to version 4.00), MIDI implementation chart (v4.04, Apr. 4, 2024), p. 268-273, https://static.roland.com/assets/media/pdf/SP-404MK2_v4_reference_eng02_W.pdf",
+  "port": "SP-404MK2",
+  "kind": "kit",
+  "channels": [1],
+  "voices": {"poly": 16},
+  "parameters": [
+    {"name": "FX Ctrl 1", "cc": 16, "group": "FX"},
+    {"name": "FX Ctrl 2", "cc": 17, "group": "FX"},
+    {"name": "FX Ctrl 3", "cc": 18, "group": "FX"},
+    {"name": "FX Ctrl 4", "cc": 80, "group": "FX"},
+    {"name": "FX Ctrl 5", "cc": 81, "group": "FX"},
+    {"name": "FX Ctrl 6", "cc": 82, "group": "FX"},
+    {"name": "FX On", "cc": 19, "group": "FX", "values": [{"label": "Off", "value": 0}, {"label": "On", "value": 127}], "mutate": false},
+    {"name": "FX Number", "cc": 83, "group": "FX", "mutate": false},
+    {"name": "DJ Ch Volume", "cc": 7, "group": "Mix", "mutate": false},
+    {"name": "DJ X-Fade", "cc": 8, "group": "Mix", "mutate": false}
+  ],
+  "buttons": [
+    {"name": "Looper Delete", "cc": 87, "mode": "momentary", "on": 127, "off": 0},
+    {"name": "Looper Rec", "cc": 88, "mode": "momentary", "on": 127, "off": 0},
+    {"name": "Looper Resample", "cc": 89, "mode": "momentary", "on": 127, "off": 0},
+    {"name": "Looper Exit", "cc": 85, "mode": "momentary", "on": 127, "off": 0},
+    {"name": "Looper Pitch/Speed", "cc": 86, "mode": "momentary", "on": 127, "off": 0}
+  ],
+  "parts": [
+    {"name": "Pad 1", "note": 48, "channel": 1},
+    {"name": "Pad 2", "note": 49, "channel": 1},
+    {"name": "Pad 3", "note": 50, "channel": 1},
+    {"name": "Pad 4", "note": 51, "channel": 1},
+    {"name": "Pad 5", "note": 44, "channel": 1},
+    {"name": "Pad 6", "note": 45, "channel": 1},
+    {"name": "Pad 7", "note": 46, "channel": 1},
+    {"name": "Pad 8", "note": 47, "channel": 1},
+    {"name": "Pad 9", "note": 40, "channel": 1},
+    {"name": "Pad 10", "note": 41, "channel": 1},
+    {"name": "Pad 11", "note": 42, "channel": 1},
+    {"name": "Pad 12", "note": 43, "channel": 1},
+    {"name": "Pad 13", "note": 36, "channel": 1},
+    {"name": "Pad 14", "note": 37, "channel": 1},
+    {"name": "Pad 15", "note": 38, "channel": 1},
+    {"name": "Pad 16", "note": 39, "channel": 1}
+  ],
+  "programs": {"what": "Pattern", "style": "lettered", "letters": "ABCDEFGHIJ", "per_bank": 16, "first": 1},
+  "clock": {"sends": true, "receives": true, "transport": true},
+  "notes": "Pad notes and channel are MIDI mode A, bank A on channel 1: pads 1-4 are notes 48-51 (the bottom row is 13-16, notes 36-39), and bank B..J are channels 2..10 with the same notes (the chart's note-map layout); set the MIDI mode in UTILITY > SYSTEM > MIDI. In MIDI mode B the notes run across banks instead (12-91). The chart's default channel entry is ambiguous. The FX CCs address a bus by channel: 1-4 are buses 1-4 and 5 is Input FX, so one profile channel (1 = bus 1) reaches one bus; CC 83 picks the effect by number (see the manual's effect list). CC 7 and 8 work in DJ mode, buttons 85-89 in Looper mode on channel 1. Program change PC 0-15 picks pattern 1-16 of the bank given by the channel (example in the chart: PC 15 on channel 4 is Bank D pattern 16). Chart does not list a Bank Select."
+}

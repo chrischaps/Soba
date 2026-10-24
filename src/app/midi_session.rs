@@ -29,6 +29,7 @@ use crate::persistence::{MidiControl, MidiEncoding, MidiInput, MidiMapping, Midi
 use super::midi_mappings::{MidiMappings, Standing};
 use super::module_learn::ModuleLearn;
 use super::hands::Hands;
+use crate::hardware::listening::Listening;
 
 /// How many CCs a newly learned knob listens to before saying whether
 /// it's an endless encoder (#424).
@@ -188,6 +189,8 @@ pub struct MidiSession {
     pub hands: Hands,
     /// What each input open has sent, by slot (#436).
     pub traffic: [InputTraffic; MIDI_INPUTS],
+    /// A device's knobs being heard, to make its profile (#441).
+    pub listening: Option<Listening>,
 }
 
 impl MidiSession {
@@ -442,6 +445,14 @@ impl MidiSession {
                 return;
             }
         };
+        // A device being listened to for its profile hears its own CCs,
+        // which go on to do what they'd do anyway (#441)
+        // (with no device open, a capture's cues stand in for one)
+        if let (MidiInput::Cc(value), Some(listening)) = (input, self.listening.as_mut()) {
+            if device.map_or(listening.device.is_empty(), |device| device_names::same(device, &listening.device)) {
+                listening.hear(channel, number, value);
+            }
+        }
         // The hands are one controller's: another device's CCs pass them by
         let for_hands = device.is_none_or(|device| device_names::same(device, self.hands.device()));
         // While Soba is taught the controller, its CCs are for that alone (#429)
@@ -911,6 +922,21 @@ mod tests {
         let mut heard = Heard::default();
         session.hear_from(0, Some("Fantom-06"), cc(0, 74, 127), &mut heard, &none);
         assert_eq!(heard.turns, [(7, 0, 100.0), (8, 0, 1.0)]);
+    }
+
+    #[test]
+    fn a_device_listened_to_for_its_profile_is_heard_and_its_cc_still_turns() {
+        let mut session = MidiSession::default();
+        session.open(vec![MidiMapping::new(74, 0, 7, 0, "Cutoff", 0.0, 1.0)]);
+        session.listening = Some(Listening::new("MicroFreak"));
+        let mut heard = Heard::default();
+        let none = |_: u64, _: usize| None;
+        session.hear_from(1, Some("MiniLab3 MIDI"), cc(0, 20, 5), &mut heard, &none);
+        session.hear_from(0, Some("2- MicroFreak"), cc(0, 74, 127), &mut heard, &none);
+        session.hear(cc(0, 21, 5), &mut heard, &none);
+        let knobs: Vec<u8> = session.listening.as_ref().unwrap().knobs.iter().map(|k| k.cc).collect();
+        assert_eq!(knobs, [74], "only the MicroFreak, renumbered or not");
+        assert_eq!(heard.turns, [(7, 0, 1.0)]);
     }
 
     #[test]

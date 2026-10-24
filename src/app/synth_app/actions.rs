@@ -68,6 +68,8 @@ pub(super) enum AppAction {
     ToggleHandsOverlay,
     /// Open or close the Rig panel: every MIDI input and MIDI Out port (#436).
     ToggleRig,
+    /// Listen to a device's knobs to make its profile, or stop (#441).
+    ListenToInstrument,
     // The browser has no updater
     #[cfg(not(target_arch = "wasm32"))]
     CheckUpdates,
@@ -253,6 +255,7 @@ impl SynthApp {
             AppAction::TeachController => self.start_teaching(),
             AppAction::ToggleHandsOverlay => self.toggle_hands_overlay(),
             AppAction::ToggleRig => self.toggle_rig_panel(),
+            AppAction::ListenToInstrument => self.toggle_instrument_listening(),
             #[cfg(not(target_arch = "wasm32"))]
             AppAction::CheckUpdates => self.updater.check_now(ctx),
             #[cfg(not(target_arch = "wasm32"))]

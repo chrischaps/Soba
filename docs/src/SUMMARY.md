@@ -67,6 +67,22 @@
   - [Link Out](./modules/output/link-out.md)
   - [MIDI Out](./modules/output/midi-out.md)
 
+# Playing Hardware
+
+- [Instrument Profiles](./hardware/instruments.md)
+  - [Digitakt](./hardware/digitakt.md)
+  - [SP-404MKII](./hardware/sp-404mkii.md)
+  - [RC-505](./hardware/rc-505.md)
+  - [RC-505mkII](./hardware/rc-505mkii.md)
+  - [MicroFreak](./hardware/microfreak.md)
+  - [Polyend Tracker](./hardware/polyend-tracker.md)
+  - [volca fm2](./hardware/volca-fm2.md)
+  - [volca sample2](./hardware/volca-sample2.md)
+  - [volca drum](./hardware/volca-drum.md)
+  - [volca kick](./hardware/volca-kick.md)
+  - [FANTOM-06](./hardware/fantom-06.md)
+  - [ZOIA](./hardware/zoia.md)
+
 # Recipes
 
 - [Basic Subtractive Synth](./recipes/basic-subtractive.md)

@@ -1,0 +1,30 @@
+{
+  "name": "ZOIA",
+  "maker": "Empress Effects",
+  "about": "Empress's modular-style multi-effects pedal, whose patches are built from modules on a grid.",
+  "source": "Empress ZOIA User Manual, firmware 1.13, pp. 26-31 (starred CC, Config menu, MIDI); MIDI module descriptions at https://empresseffects.com/products/zoia ; https://empresseffects.com/cdn/shop/files/ZOIA_Manual_1_dot_13.pdf",
+  "port": "ZOIA",
+  "kind": "synth",
+  "channels": [1],
+  "parameters": [
+    {"name": "CC In 1", "cc": 102, "group": "FX"},
+    {"name": "CC In 2", "cc": 103, "group": "FX"},
+    {"name": "CC In 3", "cc": 104, "group": "FX"},
+    {"name": "CC In 4", "cc": 105, "group": "FX"},
+    {"name": "CC In 5", "cc": 106, "group": "FX"},
+    {"name": "CC In 6", "cc": 107, "group": "FX"},
+    {"name": "CC In 7", "cc": 108, "group": "FX"},
+    {"name": "CC In 8", "cc": 109, "group": "FX"},
+    {"name": "CC In 9", "cc": 110, "group": "FX"},
+    {"name": "CC In 10", "cc": 111, "group": "FX"},
+    {"name": "CC In 11", "cc": 112, "group": "FX"},
+    {"name": "CC In 12", "cc": 113, "group": "FX"},
+    {"name": "CC In 13", "cc": 114, "group": "FX"},
+    {"name": "CC In 14", "cc": 115, "group": "FX"},
+    {"name": "CC In 15", "cc": 116, "group": "FX"},
+    {"name": "CC In 16", "cc": 117, "group": "FX"}
+  ],
+  "programs": {"what": "Patch", "style": "numbered", "first": 0, "count": 64},
+  "clock": {"sends": false, "receives": true, "transport": false},
+  "notes": "ZOIA has no fixed CC map: put a MIDI CC In module in your patch for each knob and set its controller to 102-117 (CC In 1 = 102 ... CC In 16 = 117, CCs the MIDI spec leaves undefined; the manual reserves only CC 60-63 for engage/bypass and buttons). Set Config > Midi Ch (program changes and bypass) and Starred CC ch to the channel used here, and Control Port to MIDI if using the TRS jack. Patches are numbered 0-63. Tempo follows a MIDI Clock In module."
+}

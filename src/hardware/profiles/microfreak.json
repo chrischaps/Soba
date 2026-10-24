@@ -1,0 +1,37 @@
+{
+  "name": "MicroFreak",
+  "maker": "Arturia",
+  "about": "A four-voice paraphonic hybrid synth with a digital oscillator of 22 types, an analog filter and a poly-pressure keyboard.",
+  "source": "Arturia MicroFreak User Manual v5.0.1 (7/6/2023), Appendix D: CC# Values (p.141-142), https://dl.arturia.net/products/microfreak/manual/microfreak_Manual_5_0_1_EN.pdf",
+  "port": "MicroFreak",
+  "kind": "synth",
+  "channels": [1],
+  "voices": {"paraphonic": 4},
+  "parameters": [
+    {"name": "Cutoff", "cc": 23, "group": "Filter"},
+    {"name": "Resonance", "cc": 83, "group": "Filter"},
+    {"name": "Osc Type", "cc": 9, "group": "Oscillator"},
+    {"name": "Osc Wave", "cc": 10, "group": "Oscillator"},
+    {"name": "Osc Timbre", "cc": 12, "group": "Oscillator"},
+    {"name": "Osc Shape", "cc": 13, "group": "Oscillator"},
+    {"name": "Filter Amount", "cc": 26, "group": "Filter"},
+    {"name": "Attack", "cc": 105, "group": "Envelope"},
+    {"name": "Decay", "cc": 106, "group": "Envelope"},
+    {"name": "Sustain", "cc": 29, "group": "Envelope"},
+    {"name": "Glide", "cc": 5, "group": "Voice"},
+    {"name": "Spice", "cc": 2, "group": "Oscillator"},
+    {"name": "Cyc Env Amt", "cc": 24, "group": "Envelope"},
+    {"name": "Cyc Env Rise", "cc": 102, "group": "Envelope"},
+    {"name": "Cyc Env Fall", "cc": 103, "group": "Envelope"},
+    {"name": "Cyc Env Hold", "cc": 28, "group": "Envelope"},
+    {"name": "LFO Rate", "cc": 93, "group": "LFO"},
+    {"name": "LFO Sync Rate", "cc": 94, "group": "LFO"},
+    {"name": "Arp Rate", "cc": 91, "group": "Arp"},
+    {"name": "Arp Sync Rate", "cc": 92, "group": "Arp"}
+  ],
+  "buttons": [
+    {"name": "Keyboard Hold", "cc": 64, "mode": "toggle", "on": 127, "off": 0}
+  ],
+  "clock": {"sends": true, "receives": true, "transport": true},
+  "notes": "Set Utility > MIDI > Input Chan to match the channel Soba sends on (the manual does not state the factory input channel; output defaults to all channels). The knobs' CC send is a Utility setting; reception of CCs is the same CC list. Clock source is chosen in Utility (USB, MIDI or Sync). Set Local Control to match your use. The manual names the 22 oscillator types (BasicWaves to Vocoder) but not the CC 9 value each sits at, so Osc Type shows numbers."
+}

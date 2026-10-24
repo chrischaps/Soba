@@ -68,6 +68,7 @@ mod hands;
 mod hands_overlay;
 mod hosted;
 mod idle;
+mod instrument_listening;
 mod launch;
 mod lessons;
 #[cfg(feature = "ableton-link")]
@@ -2759,6 +2760,7 @@ impl SynthApp {
         self.show_variations(ctx);
         self.show_controller_map(ctx);
         self.show_rig_panel(ctx);
+        self.show_instrument_listening(ctx);
         self.show_hands_overlay(ctx);
         // A lesson's caption, glows and ghost, over the editor
         self.tend_lesson(ctx);

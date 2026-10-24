@@ -1,0 +1,22 @@
+{
+  "name": "RC-505",
+  "maker": "BOSS (Roland)",
+  "about": "BOSS five-track loop station with rhythm, input and track FX.",
+  "source": "BOSS RC-505 Owner's Manual (c. 2013), 'Assign' p. 17-18 and 'Controlling Devices via MIDI' p. 25-29, https://static.roland.com/assets/media/pdf/RC-505_e02_W.pdf; Version 2.0 Supplementary Manual, https://static.roland.com/assets/media/pdf/RC-505_V2_e02_W.pdf",
+  "port": "RC-505",
+  "kind": "synth",
+  "channels": [1],
+  "buttons": [
+    {"name": "Target Trk Rec/Play", "cc": 14, "mode": "momentary", "on": 127, "off": 0},
+    {"name": "Target Trk Stop", "cc": 15, "mode": "momentary", "on": 127, "off": 0},
+    {"name": "Target Trk Clear", "cc": 16, "mode": "momentary", "on": 127, "off": 0},
+    {"name": "Target Trk Undo/Redo", "cc": 17, "mode": "momentary", "on": 127, "off": 0},
+    {"name": "All Start/Stop", "cc": 18, "mode": "momentary", "on": 127, "off": 0},
+    {"name": "Tap Tempo", "cc": 19, "mode": "momentary", "on": 127, "off": 0},
+    {"name": "Input FX On/Off", "cc": 20, "mode": "momentary", "on": 127, "off": 0},
+    {"name": "Track FX On/Off", "cc": 21, "mode": "momentary", "on": 127, "off": 0}
+  ],
+  "programs": {"what": "Phrase Memory", "style": "numbered", "first": 1, "count": 99},
+  "clock": {"sends": true, "receives": true, "transport": true},
+  "notes": "Original RC-505 has 8 assigns per phrase memory (the default ones are an EXP pedal, CTL1 undo/redo and CTL2 rhythm level), so set up in the Assign page: Source = CC#1-#31 / CC#64-#95 as listed, Target = TGT TR REC/PLAY for CC 14, TGT TR STOP 15, TGT TR CLEAR 16, TGT TR UNDO/REDO 17, ALL START/STOP 18, TEMPO(TAP) 19, INPUT FX ON/OFF 20, TRACK FX ON/OFF 21, then save to the phrase memory. The TGT TR targets act on the Target Track set in the same page (not per-track CCs). Set Sys MIDI Rx Ch to the Soba channel (factory 1; Omni is a separate setting). CC on/off values are an assumption. Phrase memories 1-99 by program change 1-99; 100-128 ignored; Bank Select ignored."
+}
