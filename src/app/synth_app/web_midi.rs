@@ -83,15 +83,9 @@ impl SynthApp {
         let (seen_changes, seen_access) = SEEN.with_borrow(|seen| seen.clone());
         if changes != seen_changes {
             // The list is numbered afresh: MIDI In follows its device by
-            // name, and lets go (and of its notes) if it was unplugged
-            let selected = self.midi.selected_device().map(|d| d.name.clone());
-            self.refresh_midi_devices();
-            if let Some(name) = selected {
-                match self.midi.devices.iter().position(|d| d.name == name) {
-                    Some(index) => self.midi.selected = Some(index),
-                    None => self.disconnect_midi_device(),
-                }
-            }
+            // name, lets go (and of its notes) if it was unplugged, and
+            // opens the one remembered (#425) once it is listed
+            self.follow_midi_devices();
         }
         if access != seen_access {
             match &access {

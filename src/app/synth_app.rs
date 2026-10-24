@@ -108,6 +108,8 @@ const CABLE_THROUGH_KEY: &str = "cable_through";
 const KNOB_STYLE_KEY: &str = "knob_style";
 /// The device each MIDI Out port plays, a line per port.
 const MIDI_OUT_PORTS_KEY: &str = "midi_out_ports";
+/// The name of the MIDI In device to open again (#425).
+const MIDI_IN_DEVICE_KEY: &str = "midi_in_device";
 /// Where the audio system chosen under Output is remembered.
 const AUDIO_SYSTEM_KEY: &str = "audio_system";
 /// Where the buffer size chosen under Output is remembered, in frames
@@ -677,16 +679,25 @@ impl SynthApp {
         self.midi.refresh_devices();
     }
 
-    /// Connect to a MIDI device by index
+    /// Lists the MIDI inputs again and follows them: the one open keeps its
+    /// name and is let go if unplugged, and the one remembered opens when
+    /// it appears (#425).
+    fn follow_midi_devices(&mut self) {
+        if self.midi.follow_devices() {
+            self.user_state.set_midi_active_notes(self.midi.held());
+        }
+    }
+
+    /// Connect to a MIDI device by index, and remember it for next time
     fn connect_midi_device(&mut self, index: usize) {
-        self.midi.connect(index);
+        self.midi.choose(index);
         // Notes held on the previous device were released (All Notes Off)
         self.user_state.set_midi_active_notes(self.midi.held());
     }
 
     /// Disconnect from the current MIDI device
     fn disconnect_midi_device(&mut self) {
-        self.midi.disconnect();
+        self.midi.choose_none();
         self.user_state.set_midi_active_notes(self.midi.held());
     }
 
@@ -2282,6 +2293,11 @@ impl SynthApp {
         if let Some(ports) = storage.and_then(|s| s.get_string(MIDI_OUT_PORTS_KEY)) {
             crate::link::midi::MIDI.restore(&ports);
         }
+        // A DAW supplies the plugin's MIDI
+        if self.hosted.is_none() {
+            self.midi.remember(storage.and_then(|s| s.get_string(MIDI_IN_DEVICE_KEY)));
+            self.follow_midi_devices();
+        }
         if let Some(style) = storage.and_then(|s| s.get_string(KNOB_STYLE_KEY)) {
             self.user_state.knob_style = KnobStyle::ALL
                 .into_iter()
@@ -2539,6 +2555,10 @@ impl SynthApp {
         // MIDI devices plugged in or out, once Connect MIDI has them
         #[cfg(target_arch = "wasm32")]
         self.follow_web_midi();
+        // ...and a remembered controller plugged in after launch (the scanner looks every 2 s)
+        if self.hosted.is_none() && self.midi.follow_devices_soon() {
+            self.user_state.set_midi_active_notes(self.midi.held());
+        }
 
         // Process events from the audio engine
         self.process_engine_events();
@@ -2858,6 +2878,7 @@ impl eframe::App for SynthApp {
         self.planting.store(storage);
         storage.set_string(KNOB_STYLE_KEY, self.user_state.knob_style.name().to_string());
         storage.set_string(MIDI_OUT_PORTS_KEY, crate::link::midi::MIDI.setting());
+        storage.set_string(MIDI_IN_DEVICE_KEY, self.midi.remembered.clone().unwrap_or_default());
         if let Ok(engine) = &self.audio.engine {
             storage.set_string(AUDIO_SYSTEM_KEY, engine.audio_system().key().to_string());
             storage.set_string(BUFFER_FRAMES_KEY, engine.buffer_request().map(|f| f.to_string()).unwrap_or_default());

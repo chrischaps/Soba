@@ -22,6 +22,25 @@ use super::midi_mappings::{MidiMappings, Standing};
 /// it's an endless encoder (#424).
 const GUESS_FROM: usize = 4;
 
+/// How often the inputs are looked at again.
+const FOLLOW_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// The input to open for the one remembered (#425): its place in `devices`,
+/// if it's listed. Nothing is opened over an input already open, or once
+/// the player has chosen None by hand (which forgets the name).
+pub fn device_to_connect(remembered: Option<&str>, devices: &[MidiDeviceInfo], selected: Option<usize>, by_hand: bool) -> Option<usize> {
+    if selected.is_some() {
+        return None;
+    }
+    let name = remembered?;
+    // A hand-picked input is remembered the moment it is picked, so what
+    // is remembered is always the last choice; this only guards a blank name
+    if by_hand && name.is_empty() {
+        return None;
+    }
+    devices.iter().find(|d| d.name == name).map(|d| d.index)
+}
+
 /// The control MIDI Learn is waiting for a CC or a note for.
 #[derive(Debug, Clone)]
 pub struct MidiLearnTarget {
@@ -83,6 +102,15 @@ pub struct MidiSession {
     pub selected: Option<usize>,
     /// Why MIDI can't be had, or the chosen input wouldn't open.
     pub error: Option<String>,
+    /// The name of the input to have, kept between launches (#425): the
+    /// one last chosen, or none once None was.
+    pub remembered: Option<String>,
+    /// Has the input been chosen by hand this session?
+    by_hand: bool,
+    /// The names of the inputs as last followed, to see one come or go.
+    listed: Vec<String>,
+    /// When the inputs were last followed.
+    followed: Option<web_time::Instant>,
     /// The notes held, in order of press, each with its velocity.
     held: Vec<(u8, u8)>,
     /// Which CC, note or macro turns which control.
@@ -115,6 +143,74 @@ impl MidiSession {
         if let Some(engine) = self.engine.as_mut() {
             self.devices = engine.enumerate_devices();
         }
+    }
+
+    /// The input chosen by hand: opened, and remembered for next time.
+    pub fn choose(&mut self, index: usize) {
+        self.by_hand = true;
+        self.connect(index);
+        if let Some(device) = self.selected_device() {
+            self.remembered = Some(device.name.clone());
+        }
+    }
+
+    /// None chosen by hand: closed, and forgotten.
+    pub fn choose_none(&mut self) {
+        self.by_hand = true;
+        self.remembered = None;
+        self.disconnect();
+    }
+
+    /// Tells of the input remembered from a past session. It's looked for
+    /// at the next [`follow_devices`](Self::follow_devices).
+    pub fn remember(&mut self, name: Option<String>) {
+        self.remembered = name.filter(|n| !n.is_empty());
+        self.listed.clear();
+    }
+
+    /// Follows the inputs, if a second has gone since the last time (the
+    /// scanner thread looks every 2 s). Returns whether the input open
+    /// changed.
+    pub fn follow_devices_soon(&mut self) -> bool {
+        let now = web_time::Instant::now();
+        if self.followed.is_some_and(|t| now.duration_since(t) < FOLLOW_EVERY) {
+            return false;
+        }
+        self.followed = Some(now);
+        self.follow_devices()
+    }
+
+    /// Lists the inputs again and follows them. The input open keeps its
+    /// name as the list is numbered afresh, and is let go if it was
+    /// unplugged. The one remembered is opened when it appears, unless
+    /// something is open or None was chosen. Returns whether the input
+    /// open changed.
+    pub fn follow_devices(&mut self) -> bool {
+        if self.engine.is_none() {
+            return false;
+        }
+        let open = self.selected_device().map(|d| d.name.clone());
+        self.refresh_devices();
+        let names: Vec<String> = self.devices.iter().map(|d| d.name.clone()).collect();
+        if names == self.listed {
+            return false;
+        }
+        self.listed = names;
+        let mut changed = false;
+        if let Some(name) = open {
+            match self.devices.iter().position(|d| d.name == name) {
+                Some(index) => self.selected = Some(index),
+                None => {
+                    self.disconnect();
+                    changed = true;
+                }
+            }
+        }
+        if let Some(index) = device_to_connect(self.remembered.as_deref(), &self.devices, self.selected, self.by_hand) {
+            self.connect(index);
+            changed = true;
+        }
+        changed
     }
 
     /// The chosen input, if one is.
@@ -575,5 +671,54 @@ mod tests {
         assert_eq!(logged.len(), 2);
         assert!(heard.notes_changed);
         assert!(session.events.is_some());
+    }
+}
+
+#[cfg(test)]
+mod remember_tests {
+    use super::*;
+
+    fn list(names: &[&str]) -> Vec<MidiDeviceInfo> {
+        names.iter().enumerate().map(|(index, n)| MidiDeviceInfo { name: n.to_string(), index }).collect()
+    }
+
+    #[test]
+    fn the_remembered_device_is_found_by_name_wherever_it_is_listed() {
+        let devices = list(&["Loopback", "MiniLab3 MIDI"]);
+        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &devices, None, false), Some(1));
+        let shuffled = list(&["MiniLab3 MIDI", "Loopback"]);
+        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &shuffled, None, false), Some(0));
+    }
+
+    #[test]
+    fn nothing_is_opened_while_unplugged_or_nothing_is_remembered() {
+        let devices = list(&["Loopback"]);
+        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &devices, None, false), None);
+        assert_eq!(device_to_connect(None, &devices, None, false), None);
+        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &[], None, false), None);
+    }
+
+    #[test]
+    fn nothing_is_opened_over_an_input_already_open() {
+        let devices = list(&["Loopback", "MiniLab3 MIDI"]);
+        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &devices, Some(0), true), None);
+        assert_eq!(device_to_connect(Some("MiniLab3 MIDI"), &devices, Some(0), false), None);
+    }
+
+    #[test]
+    fn choosing_none_leaves_nothing_to_open() {
+        let mut session = MidiSession::default();
+        session.remember(Some("MiniLab3 MIDI".into()));
+        session.choose_none();
+        assert_eq!(session.remembered, None);
+        let devices = list(&["MiniLab3 MIDI"]);
+        assert_eq!(device_to_connect(session.remembered.as_deref(), &devices, session.selected, session.by_hand), None);
+    }
+
+    #[test]
+    fn a_blank_saved_name_is_nothing_remembered() {
+        let mut session = MidiSession::default();
+        session.remember(Some(String::new()));
+        assert_eq!(session.remembered, None);
     }
 }
