@@ -22,6 +22,7 @@ use super::midi_engine::TimestampedMidiEvent;
 use super::midi_scheduler::{take_chunk, MidiScheduler, MAX_MIDI_EVENTS_PER_CALLBACK};
 use super::recorder::RecordTap;
 use crate::link::midi_clock::MidiClock;
+use crate::link::ping::Pinger;
 
 /// Creates a module registry with all built-in modules.
 ///
@@ -127,6 +128,8 @@ pub struct AudioProcessor {
     host: Option<HostTransport>,
     /// The patch's Clock, as MIDI clock for the ports that send it (#437).
     clock: MidiClock,
+    /// A device's delay being measured: its pings, and the input heard (#449).
+    pinger: Pinger,
 }
 
 /// Frames of background copying (loops loaded or snapshotted) per frame a
@@ -168,6 +171,7 @@ impl AudioProcessor {
             probe: Box::default(),
             host: None,
             clock: MidiClock::new(),
+            pinger: Pinger::default(),
         }
     }
 
@@ -258,7 +262,11 @@ impl AudioProcessor {
             // Notes played while stopped shouldn't all sound at once on Play,
             // nor should the input arrive late
             self.midi.skip(start_time);
-            self.input.discard();
+            if self.pinger.is_pinging() && channels > 0 {
+                self.ping_while_stopped(output.len() / channels, start_time);
+            } else {
+                self.input.discard();
+            }
             // Reset CPU load when not playing
             self.cpu_load_avg = 0.0;
             self.cpu_load_peak = 0.0;
@@ -274,7 +282,7 @@ impl AudioProcessor {
             feed.begin(num_frames);
         }
         let latency = if self.input.feed.is_some() { self.engine_handle.input_latency() } else { 0 };
-        Self::render(&mut self.plan, &mut self.probe, &mut self.clock, self.sample_rate, output, channels, midi, RenderInput::Live(&mut self.input), latency, Some(start_time), None);
+        Self::render(&mut self.plan, &mut self.probe, &mut self.clock, &mut self.pinger, self.sample_rate, output, channels, midi, RenderInput::Live(&mut self.input), latency, Some(start_time), None);
         self.record(output, channels);
         self.probe.mix(output, channels);
         self.play_cue(output, channels);
@@ -342,7 +350,7 @@ impl AudioProcessor {
         };
 
         // Input given with the picture is already in time with it
-        Self::render(&mut self.plan, &mut self.probe, &mut self.clock, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0, None, self.host);
+        Self::render(&mut self.plan, &mut self.probe, &mut self.clock, &mut self.pinger, self.sample_rate, output, channels, midi, RenderInput::Given(input), 0, None, self.host);
         self.record(output, channels);
         self.probe.mix(output, channels);
         self.play_cue(output, channels);
@@ -359,12 +367,14 @@ impl AudioProcessor {
     /// listens to each block as it's made. Played live, the buffer leaves
     /// for the device at `sent_at`, and each block its frames after. In a
     /// DAW, `host` is its transport at the buffer's start. The patch's
-    /// transport goes out as MIDI clock beside each block.
+    /// transport goes out as MIDI clock beside each block, and a
+    /// measurement's pings, which hear the block's input.
     #[allow(clippy::too_many_arguments)]
     fn render(
         plan: &mut GraphPlan,
         probe: &mut ProbePlayer,
         clock: &mut MidiClock,
+        pinger: &mut Pinger,
         sample_rate: f32,
         output: &mut [f32],
         channels: usize,
@@ -394,9 +404,30 @@ impl AudioProcessor {
                 context = context.sent_at(at);
             }
             clock.run(|| plan.transport(), frames, sample_rate, block_at);
+            pinger.run(&chunk_input, frames, sample_rate, block_at);
             plan.process(&context);
             probe.listen(plan, frames, sample_rate);
             Self::write_output(plan, chunk, channels, frames);
+        }
+    }
+
+    /// Runs a measurement's pings over a callback of `frames` while the
+    /// transport is stopped, reading the input as a playing one does, in
+    /// blocks of the plan's size. The buffer leaves for the device at `at`.
+    ///
+    /// REAL-TIME SAFE.
+    fn ping_while_stopped(&mut self, frames: usize, at: Instant) {
+        if let Some(feed) = self.input.feed.as_mut() {
+            feed.begin(frames);
+        }
+        let block = self.plan.max_block_size().max(1);
+        let mut start = 0;
+        while start < frames {
+            let length = block.min(frames - start);
+            let block_at = at + std::time::Duration::from_secs_f64(start as f64 / self.sample_rate as f64);
+            let input = self.input.next_block(length);
+            self.pinger.run(&input, length, self.sample_rate, Some(block_at));
+            start += length;
         }
     }
 
@@ -499,6 +530,9 @@ impl AudioProcessor {
                 }
                 AudioMessage::Probe(probe) => {
                     self.probe.probe(probe);
+                }
+                AudioMessage::Ping(ping) => {
+                    self.pinger.start(ping);
                 }
                 AudioMessage::SnapshotLoop { node_id, mut snapshot } => {
                     if self.snapshots.len() < self.snapshots.capacity() {

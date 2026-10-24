@@ -67,12 +67,12 @@ The port sends it once, however many MIDI Outs play it, and a port no MIDI Out p
 
 Like a port's device, its clock is a setting of this computer. A patch saved when MIDI Out had its own **Send Clock** switch turns that port's clock on as it opens, if it was off, and the load notes say so.
 
-**Offset.** Every device takes its own time to turn MIDI into sound. A port's **Offset**, in the Rig, sends its notes, CCs and clock that many milliseconds later than the sound beside them, up to 50, to line a quick device up with a slow one. A negative offset sends them earlier, but only by as much as your audio device's delay, since a message can't leave before its sound is made. The Rig shows an offset it can't reach in amber.
+**Offset.** Every device takes its own time to turn MIDI into sound. A port's **Offset**, in the Rig, sends its notes, CCs and clock that many milliseconds later than the sound beside them, up to 50, to line a quick device up with a slow one. A negative offset sends them earlier, but only by as much as your audio device's delay, since a message can't leave before its sound is made. The Rig shows an offset it can't reach in amber. With the device's audio coming back into an input, the Rig can [measure its delay](../../getting-started/interface-overview.md#measuring-a-devices-delay) and set the offset for you.
 
 ## Tips
 
 - **One synth per channel.** Two MIDI Outs on the same port, on channels 1 and 2, play two parts on a multitimbral synth or two tracks in a DAW.
-- **Line the room up.** Play a Soba hi-hat beside a device's arpeggio, and nudge the device's port **Offset** until they land together. Every MIDI Out on the port moves with it.
+- **Line the room up.** Measure each device from the Rig (the ping beside its port's **Offset**), or play a Soba hi-hat beside its arpeggio and nudge the **Offset** until they land together. Every MIDI Out on the port moves with it.
 - **Velocity from anywhere.** A Step Sequencer's second row, an LFO or a [Sample & Hold](../utilities/sample-hold.md) on Velocity gives a part its accents.
 - **CCs for movement.** An [LFO](../modulation/lfo.md) with **Bipolar** off on CC 2 sweeps the synth's own filter. An [ADSR](../modulation/adsr.md) on the same gate opens it with each note.
 - **Bipolar sources** go below 0, which sends 0. Use an [Attenuverter](../utilities/attenuverter.md) to lift them into 0 to 1.

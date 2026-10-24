@@ -350,6 +350,7 @@ With a room of hardware plugged in, choose **The Rig…** at the foot of the **M
   - the port's device, which you choose here or on a MIDI Out's face;
   - its **Clock**: what it sends of the patch's Clock. **Clock + Transport** sends the tempo with Start and Stop, **Clock only** the tempo alone, and **Off** nothing. The port sends it whether or not a MIDI Out plays it. While its device leads the Clock (see [Leading or following](../modules/modulation/clock.md#leading-or-following-auto)), it reads **leads** in purple and sends nothing;
   - its **Offset**: how many milliseconds later than the sound its notes, CCs and clock go out, to line a slow device up with the rest. Drag it, or click to type. It's amber when it asks for earlier than your audio device's delay allows;
+  - beside the offset, a ping (•)) to measure the device's delay and set the offset for you: see [Measuring a device's delay](#measuring-a-devices-delay);
   - how the port is doing: **Sending**, **Ready** (it has a device but nothing plays it), **Unplugged**, **No device**, or **In use** (another app has the device);
   - a dot that lights on each beat while clock goes out;
   - the last message sent;
@@ -367,6 +368,22 @@ With a room of hardware plugged in, choose **The Rig…** at the foot of the **M
 Ports, with their clocks and offsets, routes, and inputs are settings of this computer, not of the patch. **🔄 Refresh** looks for devices again at once. Otherwise Soba looks every couple of seconds.
 
 **After a reboot.** Windows numbers devices that share a name in the order they were plugged in (`2- Digitakt`), and numbers a device's extra ports (`MIDIIN3 (FANTOM-06)`). Linux adds the device's client and port numbers to its name. Those numbers can change when you reboot or plug things in a different order. Soba finds a device by its exact name first, then by its name without those numbers, so every port and input finds its device again. A module whose **Device** is set to it, or a mapping learned from it, still hears it. If two devices are left that both fit, Soba uses neither, rather than guess. Hover a port's device to see whether it was found under a new number.
+
+#### Measuring a device's delay
+
+Every device takes its own time to turn a note into sound. With its audio plugged into your interface and open as the **Input** in the toolbar, Soba can time it for you:
+
+1. Click the ping (•)) beside a port's **Offset**. A line opens under the port.
+2. Choose the **channel** and **note** to ping, and which of the input's channels the device comes back on (**In 1+2**, **In 3**, and so on: a pair is heard as one). A sound with a sharp attack measures best: a kick, a rim shot or a pluck, on the channel of the track or part that plays it.
+3. Click **Measure**. Soba plays the note eight times, a little over half a second apart, and listens for each one. With the transport stopped it first waits a couple of seconds for the input to settle; while it plays, it starts at once. Quieten anything else the port plays while it listens.
+
+Soba then says how long the device took, from the note leaving to its sound, and how close together the eight answers were. It takes away the part of the trip that's Soba's and your interface's: the output's delay and the port's offset before the note leaves, and the input's delay and buffer once the sound is back. A strip draws the pings one over another from the note, that part shaded grey and the device's own in purple, with a green line where its sound begins.
+
+It also says where the device lands now against Soba's sound, and offers **Set Offset**: the offset that lines it up. A device slower than your audio device's delay can't be caught up all the way, since a message can't leave before its sound is made; the offer goes as early as it can, and says so. A larger buffer gives more room.
+
+It gives up rather than guess when too few pings come back clear of the noise, when they come back too far apart to trust, or when the input stalls or settles while it listens. One ping that lands far off (a stray sound) is left out. Only one port is measured at a time, and closing the Rig stops a measurement.
+
+How exact it is depends on how well the interface reports its own delays: an ASIO driver reports them to the sample. Windows' shared audio doesn't report the input's, so Soba takes it as the least it can be and says so; the device may then be a little quicker than measured.
 
 ## Recording
 

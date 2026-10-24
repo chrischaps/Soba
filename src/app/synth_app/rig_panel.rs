@@ -17,6 +17,11 @@
 //! again under its new name, and the row says so (see
 //! [`device_names`](crate::engine::device_names)). An input's device
 //! spans the ports' clock and offset, so the columns after line up.
+//!
+//! By each port's offset, a ping glyph measures its device's delay and
+//! offers the offset that lines it up (#449): see [`measure`].
+
+mod measure;
 
 use super::*;
 use crate::engine::device_names;
@@ -24,6 +29,7 @@ use crate::engine::MidiEvent;
 use crate::graph::midi_log_display::format_midi_event;
 use crate::link::midi::{ClockMode, PortStatus, Traffic, MIDI, OFFSET_RANGE, PORTS, PORT_LABELS};
 use crate::persistence::graph_io::clocked_ports;
+use measure::{measure_line, ping_button, Measure, MeasureEdit};
 
 mod thru;
 
@@ -31,6 +37,8 @@ mod thru;
 #[derive(Debug, Default)]
 pub(super) struct RigPanel {
     pub open: bool,
+    /// A port's device being measured, or the last one measured (#449).
+    measure: Measure,
 }
 
 /// How long a lamp's flash glows, in seconds.
@@ -40,7 +48,7 @@ const FRESH: f64 = 4.0;
 /// The columns' widths, in order: the lamp, the tick or port, the device,
 /// the port's clock and offset, how it's doing, the last message, and the
 /// modules. An input's row has no clock or offset: see [`in_columns`].
-const COLUMNS: [f32; 8] = [14.0, 22.0, 184.0, 116.0, 64.0, 84.0, 160.0, 96.0];
+const COLUMNS: [f32; 8] = [14.0, 22.0, 184.0, 116.0, 86.0, 84.0, 160.0, 96.0];
 /// The space between columns.
 const GAP: f32 = 6.0;
 const ROW_HEIGHT: f32 = 22.0;
@@ -84,6 +92,7 @@ enum Edit {
     Choose(usize, Option<String>),
     Clock(usize, ClockMode),
     Offset(usize, f32),
+    Measure(MeasureEdit),
     Refresh,
 }
 
@@ -98,6 +107,7 @@ impl SynthApp {
 
     /// The Rig panel, while it's open.
     pub(super) fn show_rig_panel(&mut self, ctx: &egui::Context) {
+        self.tend_measurement(self.rig_panel.open);
         if !self.rig_panel.open {
             return;
         }
@@ -113,6 +123,9 @@ impl SynthApp {
         let earliest = MIDI.earliest();
         let now = ctx.input(|i| i.time);
         let routes = self.follow_thru_routes();
+        let measure = &self.rig_panel.measure;
+        let input_width = self.audio.engine.as_ref().ok().and_then(|engine| engine.input_channels()).map_or(2, usize::from);
+        let input = (self.user_state.audio_input_name.as_deref(), input_width);
         egui::Window::new("The Rig")
             .id(egui::Id::unique("rig_panel"))
             .title_bar(false)
@@ -156,7 +169,8 @@ impl SynthApp {
                 section(ui, "MIDI Out", "what Soba plays");
                 header(ui, &["", "Port", "Device", "Clock", "Offset", "", "Last sent", "Played by"], &COLUMNS);
                 for row in &outs {
-                    out_row(ui, row, &devices, earliest, now, &mut edits);
+                    out_row(ui, row, &devices, earliest, now, measure, &mut edits);
+                    measure_line(ui, measure, row.port, input, &mut edits);
                 }
 
                 ui.add_space(12.0);
@@ -175,6 +189,7 @@ impl SynthApp {
                 Edit::Choose(port, device) => MIDI.choose(port, device.as_deref()),
                 Edit::Clock(port, mode) => MIDI.set_clock(port, mode),
                 Edit::Offset(port, ms) => MIDI.set_offset(port, ms),
+                Edit::Measure(edit) => self.measure_edit(edit),
                 Edit::Refresh => {
                     self.refresh_midi_devices();
                     MIDI.rescan();
@@ -365,7 +380,7 @@ fn in_row(ui: &mut egui::Ui, row: &InRow, now: f64, edits: &mut Vec<Edit>) {
 }
 
 /// A port's row, its edits joining `edits`.
-fn out_row(ui: &mut egui::Ui, row: &OutRow, devices: &[String], earliest: f32, now: f64, edits: &mut Vec<Edit>) {
+fn out_row(ui: &mut egui::Ui, row: &OutRow, devices: &[String], earliest: f32, now: f64, measure: &Measure, edits: &mut Vec<Edit>) {
     let id = egui::Id::unique(("rig_out", row.port));
     let since = since(ui, id, row.traffic.messages, now);
     // A port sending clock is in use, whether a MIDI Out plays it or not
@@ -387,7 +402,10 @@ fn out_row(ui: &mut egui::Ui, row: &OutRow, devices: &[String], earliest: f32, n
         cell(ui, port_w, |ui| badge(ui, PORT_LABELS[row.port], row.chosen.is_some() || used));
         cell(ui, device_w, |ui| device_menu(ui, row, devices, edits));
         cell(ui, clock_w, |ui| clock_menu(ui, row, edits));
-        cell(ui, offset_w, |ui| offset_drag(ui, row, earliest, edits));
+        cell(ui, offset_w, |ui| {
+            offset_drag(ui, row, earliest, edits);
+            ping_button(ui, measure, row.port, edits);
+        });
         cell(ui, state_w, |ui| {
             let text = if state.is_empty() && used { "No device" } else { state };
             let ink = if state.is_empty() && used { theme::accent::WARNING } else if state == "Ready" || state.is_empty() { theme::text::QUIET } else { color };
@@ -510,7 +528,8 @@ fn offset_drag(ui: &mut egui::Ui, row: &OutRow, earliest: f32, edits: &mut Vec<E
         .speed(0.2)
         .custom_formatter(|ms, _| if ms.abs() < 0.05 { "0".to_string() } else { format!("{ms:+.1}") })
         .suffix(" ms");
-    let response = ui.add_sized([COLUMNS[4] - 4.0, ROW_HEIGHT - 4.0], drag);
+    // Room beside it for the ping glyph
+    let response = ui.add_sized([COLUMNS[4] - 26.0, ROW_HEIGHT - 4.0], drag);
     if response.changed() {
         edits.push(Edit::Offset(row.port, ms));
     }

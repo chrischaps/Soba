@@ -228,6 +228,9 @@ pub enum AudioMessage {
     Cue(Option<Cue>),
     /// Hear what a cable carries, beside the patch, or with `None`, stop.
     Probe(Option<Probe>),
+    /// Measure a device's delay: ping its port and listen to the input,
+    /// playing or stopped; or with `None`, stop measuring (#449).
+    Ping(Option<crate::link::ping::Ping>),
 }
 
 /// Changes to a module in the running plan: the part of an

@@ -357,6 +357,14 @@ impl UiHandle {
         self.send_handoffs();
     }
 
+    /// Measures a device's delay (see [`Ping`](crate::link::ping::Ping)),
+    /// replacing any measurement running; or with `None`, stops it. Never
+    /// dropped: a stop mustn't be lost, or the notes would play on.
+    pub fn ping(&mut self, ping: Option<crate::link::ping::Ping>) {
+        self.unsent_handoffs.push(AudioMessage::Ping(ping));
+        self.send_handoffs();
+    }
+
     /// Hands an audio input's feed to the audio thread, which reads from it
     /// from the next callback, replacing any input it had. Never dropped.
     pub fn connect_input(&mut self, feed: InputFeed) {
@@ -765,6 +773,7 @@ mod tests {
                     seen.push("cue");
                 }
                 AudioMessage::Probe(_) => seen.push("probe"),
+                AudioMessage::Ping(_) => seen.push("ping"),
                 AudioMessage::SnapshotLoop { node_id, mut snapshot } => {
                     let mut budget = usize::MAX;
                     current.fill_snapshot(node_id, &mut snapshot, &mut budget);
