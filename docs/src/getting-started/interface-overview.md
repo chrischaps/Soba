@@ -19,7 +19,7 @@ From left to right:
 | **❓ Help** | **📖 Manual** opens this manual, and **⌨ Keyboard Shortcuts** (`F1`) lists the [shortcuts](#keyboard-shortcuts), and **🎓 Lessons** opens the [lessons](lessons.md) you take inside the app. **Check for Updates…**, **Check for Updates Automatically**, and **Roll Back** after an update: see [Updates](installation.md#updates) |
 | **Output** | The audio device to play through |
 | **Input** | The microphone, guitar or line input that [Audio Input](../modules/sources/audio-input.md) modules hear. It starts at **None**: nothing is opened until you choose a device. A filled dot (●) means it's open. |
-| **MIDI In** | The MIDI controller to listen to. A filled dot (●) means it's connected. At the foot of the menu, **Map Mode** (`Ctrl + L`) and the **Controller Map**: see [MIDI Learn](#midi-learn). Below them, **Teach Your Controller…** and **Hands Follow Selection** (`Ctrl + Shift + L`): see [Playing with a controller](#playing-with-a-controller). |
+| **MIDI In** | The MIDI controller to listen to. A filled dot (●) means it's connected. At the foot of the menu, **Map Mode** (`Ctrl + L`) and the **Controller Map**: see [MIDI Learn](#midi-learn). Below them, **Teach Your Controller…**, **Hands Follow Selection** (`Ctrl + Shift + L`) and **Show the Controller** (`Ctrl + H`): see [Playing with a controller](#playing-with-a-controller). |
 
 At the right end, the toolbar shows a CPU meter while the patch plays, the device's sample rate and channel count, and whether the audio engine is running. While an input is open, **In** shows how much audio is held between the input and output devices, in milliseconds; it turns amber for a moment after a dropout. Hover it for details.
 
@@ -322,6 +322,18 @@ If your controller has fewer encoders or faders, press `Tab` (or **Skip**) to pa
 
 Map Mode and MIDI Learn come first. While either is on, the encoders don't follow the selection, so you can map them in the usual way.
 
+#### Seeing what each control does
+
+On stage it's hard to remember which fader does what in this patch. Choose **Show the Controller** in the **MIDI In** menu, or press `Ctrl + H`, and a small sketch of your controller appears along the foot of the canvas. It has the eight encoders and four faders, with the same numbered purple badges as the knobs they turn, and a row of pads when the patch maps any. Beside each control is what it does right now: the knob's name, and under it the module's name in the module's colour. A control that does nothing stays faint and says what it sends (`CC 74`), so you can find the free ones.
+
+- **What it shows follows what the controller does.** While Hands Follow Selection is on, the encoders and faders show the selected module's knobs, and the sketch says which module they follow. Otherwise they show the patch's own mappings on the encoders and faders you taught.
+- **The pads** are a [Pads](../modules/midi/pads.md) module's, if the patch has one, each saying what its gate is patched into (**Kick** over **Drum**). After them come the patch's mappings to notes, the [Looper](../modules/utilities/looper.md)'s footswitches and the [Scenes](../modules/utilities/scenes.md) pads, lowest note first (**Rec** over **Looper**). A pad lights while you hold it.
+- **It moves as the hardware does.** An encoder's pointer and a fader's cap sit where the knob they turn is, a control brightens as its message arrives, and a fader that hasn't picked its knob up yet shows a purple tick where the fader is. Endless encoders are drawn with a knurled rim.
+- **If you haven't taught Soba your controller**, the sketch lays the patch's mappings on eight encoders and four faders in the order you made them, and offers **Teach Your Controller…**. While you teach it, the control Soba waits for breathes purple.
+- Mappings that don't fit, or are on controls Soba wasn't taught, are counted at the left, with a link to the [Controller Map](#the-controller-map).
+
+The sketch keeps its size as you zoom, stays clear of the status bar, and only takes the clicks that land on it. Hover a control to see what it sends. Soba remembers whether it's shown.
+
 ## Recording
 
 When something good happens (a filter sweep you rode by hand, a lucky generative passage, an improvisation on a MIDI keyboard), press **● Rec** or `Ctrl + R` to keep it. If the patch is stopped, Rec starts it.
@@ -470,6 +482,7 @@ On a Mac, hold `⌘ Command` where these say `Ctrl`, and `Option` for `Alt`. The
 | `Ctrl + R` | Record, or end the take |
 | `Ctrl + L` | Map Mode: click controls one after another to map them to MIDI |
 | `Ctrl + Shift + L` | The controller's encoders and faders follow the selection, or let go |
+| `Ctrl + H` | Show or hide the sketch of the controller, saying what each control does |
 | `Alt` over a cable | Hear what the cable carries |
 
 The letter keys play notes: see [The computer keyboard](#the-computer-keyboard).

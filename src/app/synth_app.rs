@@ -64,6 +64,7 @@ mod file_hover;
 mod framing;
 mod grouping;
 mod hands;
+mod hands_overlay;
 mod hosted;
 mod idle;
 mod launch;
@@ -308,6 +309,8 @@ pub struct SynthApp {
     gliding: scenes::Gliding,
     /// The Controller Map: every MIDI mapping in the patch, to edit (#426).
     controller_map: controller_map::ControllerMap,
+    /// The sketch of the controller along the canvas's foot (#431).
+    hands_overlay: hands_overlay::HandsOverlay,
     /// Patch files the visitor picked, which the browser hands over later.
     #[cfg(target_arch = "wasm32")]
     uploads: (std::sync::mpsc::Sender<web::Upload>, std::sync::mpsc::Receiver<web::Upload>),
@@ -451,6 +454,7 @@ impl SynthApp {
             mutating: Default::default(),
             gliding: Default::default(),
             controller_map: Default::default(),
+            hands_overlay: Default::default(),
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
             hosted: None,
@@ -722,8 +726,8 @@ impl SynthApp {
         self.user_state.note_claims = claims;
         let standings = self.midi_standings();
         let was_learning = self.is_midi_learning();
-        let user_state = &mut self.user_state;
-        let heard = self.midi.drain(|event| user_state.push_midi_event(event, now), |node, param| standings.get(&(node, param)).copied());
+        let (user_state, overlay) = (&mut self.user_state, &mut self.hands_overlay);
+        let heard = self.midi.drain(|event| { user_state.push_midi_event(event, now); overlay.hear(event, now) }, |node, param| standings.get(&(node, param)).copied());
         self.show_midi_pickups(now);
 
         if heard.learned {
@@ -2299,6 +2303,7 @@ impl SynthApp {
             self.probe.load(storage);
             self.planting.load(storage);
             self.midi.hands.load(storage);
+            self.hands_overlay.load(storage);
         }
         if let Some(glyph) = storage.and_then(|s| s.get_string(FLOW_GLYPH_KEY)) {
             self.user_state.flow_glyph = FlowGlyph::ALL
@@ -2741,6 +2746,7 @@ impl SynthApp {
         }
         self.show_variations(ctx);
         self.show_controller_map(ctx);
+        self.show_hands_overlay(ctx);
         // A lesson's caption, glows and ghost, over the editor
         self.tend_lesson(ctx);
 
@@ -2898,6 +2904,7 @@ impl eframe::App for SynthApp {
         self.probe.store(storage);
         self.planting.store(storage);
         self.midi.hands.store(storage);
+        self.hands_overlay.store(storage);
         storage.set_string(KNOB_STYLE_KEY, self.user_state.knob_style.name().to_string());
         storage.set_string(MIDI_OUT_PORTS_KEY, crate::link::midi::MIDI.setting());
         storage.set_string(MIDI_IN_DEVICE_KEY, self.midi.remembered.clone().unwrap_or_default());

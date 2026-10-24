@@ -10,7 +10,7 @@ pub mod groups;
 #[cfg(test)]
 mod garden_table;
 mod group_face;
-mod steady_text;
+pub mod steady_text;
 mod clock_display;
 mod controls_face;
 mod pads_face;
@@ -98,6 +98,7 @@ pub use chord_ear::{letter_keys_held, letter_keys_taken};
 pub use group_face::{miniature_transform, paint_miniature, paint_open_pill};
 pub use clock_display::{follows_host, follows_link};
 pub use pads_face::note_claims as pads_claims;
+pub use pads_face::params_of as pads_params;
 pub use data_types::SynthDataType;
 pub use groups::{GroupId, NodeKind};
 pub use port_mapping::SynthGraph;

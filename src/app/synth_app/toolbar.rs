@@ -395,7 +395,7 @@ impl SynthApp {
                 }
                 ui.label(RichText::new("MIDI In").color(theme::text::SECONDARY));
                 ui.add_space(8.0);
-                actions.extend(midi_in_menu(ui, &self.midi, self.map_mode_on(), self.controller_map.open));
+                actions.extend(midi_in_menu(ui, &self.midi, self.map_mode_on(), self.controller_map.open, self.hands_overlay.on));
             }
             Err(e) => {
                 bar.group_break(ui);
@@ -602,7 +602,7 @@ fn input_menu(ui: &mut egui::Ui, audio: &AudioDevices) -> Vec<AppAction> {
 }
 
 /// The MIDI In selector: the device that plays Note In modules and MIDI Learn.
-fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession, map_mode: bool, controller_map: bool) -> Vec<AppAction> {
+fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession, map_mode: bool, controller_map: bool, overlay: bool) -> Vec<AppAction> {
     let mut actions = Vec::new();
     // Get current MIDI device name for display
     let current_midi = midi.selected_device()
@@ -682,6 +682,13 @@ fn midi_in_menu(ui: &mut egui::Ui, midi: &MidiSession, map_mode: bool, controlle
             let tip = "The encoders turn the selected module's first eight knobs, and the faders the next four. The patch's own mappings on them pause meanwhile";
             if ui.add_enabled(taught.is_some(), item).on_hover_text(tip).on_disabled_hover_text("Teach Soba your controller first").clicked() {
                 actions.push(AppAction::ToggleHands);
+            }
+            // A sketch of the controller, saying what each control does (#431)
+            let keys = shortcuts::keys(ui.ctx(), "Ctrl+H");
+            let item = egui::Button::selectable(overlay, "Show the Controller").shortcut_text(keys);
+            let tip = "A sketch of the controller along the foot of the canvas: each encoder, fader and pad, and what it does right now";
+            if ui.add(item).on_hover_text(tip).clicked() {
+                actions.push(AppAction::ToggleHandsOverlay);
             }
         });
     actions
