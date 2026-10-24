@@ -328,6 +328,7 @@ impl SynthApp {
                 max_value,
                 control,
                 scene,
+                into,
             } => {
                 // Start MIDI Learn mode for this control
                 self.start_midi_learn(MidiLearnTarget {
@@ -338,6 +339,7 @@ impl SynthApp {
                     max_value,
                     control,
                     scene,
+                    into: into.map(|into| *into),
                 });
             }
             crate::graph::SynthResponse::MidiStyle { engine_node_id, param_index, scene, style } => {

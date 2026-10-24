@@ -366,6 +366,31 @@
         }
       ]
     },
+    "input.controls": {
+      "category": "Source",
+      "color": "#42a5f5",
+      "height": 344.0,
+      "inputs": [],
+      "name": "Controls",
+      "outputs": [
+        {
+          "name": "A",
+          "type": "Control"
+        },
+        {
+          "name": "B",
+          "type": "Control"
+        },
+        {
+          "name": "C",
+          "type": "Control"
+        },
+        {
+          "name": "D",
+          "type": "Control"
+        }
+      ]
+    },
     "input.poly_midi": {
       "category": "Source",
       "color": "#42a5f5",

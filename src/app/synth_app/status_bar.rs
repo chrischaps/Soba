@@ -133,8 +133,8 @@ impl SynthApp {
         };
         match self.status_bar_shows() {
             Shown::Learn => {
-                let param = self.midi.learning().map_or("", |target| target.param_name.as_str());
-                ui.label(RichText::new(format!("Move a knob or fader, or hit a pad, to map {}... (Esc to cancel)", param))
+                let prompt = self.midi.learning().map_or_else(String::new, |target| target.prompt());
+                ui.label(RichText::new(prompt)
                     .color(theme::accent::PRIMARY)
                     .small());
             }

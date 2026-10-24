@@ -28,7 +28,7 @@ use soba::engine::{
 };
 use soba::modules::looper::{LoopState, Looper};
 use soba::dsp::primitives::{Markers, ONSETS};
-use soba::modules::{Chopper, Cloud, MidiOut, Mixer, Resonator};
+use soba::modules::{Chopper, Cloud, Controls, MidiOut, Mixer, Resonator};
 
 struct CountingAllocator;
 
@@ -210,6 +210,16 @@ fn audio_callback_never_allocates() {
         to_port: port("output.midi", "CC 1"),
     });
     ui.send_command(EngineCommand::SetParameter { node_id: midi_out, param_index: MidiOut::PARAM_SEND_CLOCK, value: 1.0 });
+
+    // A Controls (#427) hearing the mod wheel, the bend and the pressure
+    // played below, a fader on CC 74 swinging -1 to 1, and an endless
+    // encoder on CC 20 counting up and down. Its A cable runs on down the
+    // chain, as every module's first output does
+    let controls = node_of(&nodes, "input.controls");
+    ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::cc_param(2), value: 20.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::source_param(2), value: 0.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::encoding_param(2), value: 1.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::range_param(3), value: 2.0 });
 
     // A Chopper on the same Clock, cut at markers, given a new loop (and
     // new markers) every so often, mid-slice or not
@@ -407,6 +417,10 @@ fn audio_callback_never_allocates() {
             MidiEvent::PitchBend { channel: 0, value: (round as i16 % 64) * 128 - 4096 },
             MidiEvent::ChannelPressure { channel: 0, pressure: (round % 128) as u8 },
             MidiEvent::NoteOff { channel: 0, note: note.wrapping_sub(3), velocity: 0 },
+            // The faders, the mod wheel and an encoder, for Controls
+            MidiEvent::ControlChange { channel: 0, controller: 74, value: (round * 3 % 128) as u8 },
+            MidiEvent::ControlChange { channel: 0, controller: 1, value: (round % 128) as u8 },
+            MidiEvent::ControlChange { channel: 0, controller: 20, value: if round % 3 == 0 { 63 } else { 65 } },
         ];
         for event in events {
             midi.push(TimestampedMidiEvent::now(event)).unwrap();

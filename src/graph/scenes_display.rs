@@ -182,6 +182,7 @@ pub fn scenes_display(
                 max_value: 1.0,
                 control: MidiControl::Button,
                 scene: Some(slot as u8),
+                into: None,
             };
             if let Some(chosen) = super::node_data::midi_items(ui, mapping.as_ref(), learn) {
                 clicked = Some(chosen);

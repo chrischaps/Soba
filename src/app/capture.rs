@@ -52,6 +52,8 @@
 //!                                   # a pad on channel 10
 //! 1.0  chord 60,64,67 90 3.0
 //! 1.0  cc 1 74 127                  # a MIDI CC: channel, number, value
+//! 1.0  bend 1 -8192                 # pitch bend: channel, -8192 to 8191
+//! 1.0  pressure 1 90                # channel pressure: channel, 0-127
 //! 1.0  midi start                   # MIDI Start, Stop or Continue
 //! 1.0  midiclock 120 8.0            # MIDI clock ticks at 120 BPM for 8 s
 //! 2.0  param osc.sine Detune 12 1.5 # module (#n for the nth, @id for its id
@@ -1279,6 +1281,22 @@ fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
                 };
                 cues.push((t, Cue::Midi(MidiEvent::ControlChange { channel, controller: byte(3)?, value: byte(4)? })));
             }
+            "bend" => {
+                let channel = midi_channel(num(2)?).ok_or_else(|| err("channel is 1-16"))?;
+                let value = match num(3)? {
+                    n if (-8192.0..=8191.0).contains(&n) => n as i16,
+                    _ => return Err(err("a bend is -8192 to 8191")),
+                };
+                cues.push((t, Cue::Midi(MidiEvent::PitchBend { channel, value })));
+            }
+            "pressure" => {
+                let channel = midi_channel(num(2)?).ok_or_else(|| err("channel is 1-16"))?;
+                let pressure = match num(3)? {
+                    n if (0.0..=127.0).contains(&n) => n as u8,
+                    _ => return Err(err("pressure is 0-127")),
+                };
+                cues.push((t, Cue::Midi(MidiEvent::ChannelPressure { channel, pressure })));
+            }
             "midi" => {
                 let event = match words.get(2).copied() {
                     Some("start") => MidiEvent::Start,
@@ -1443,6 +1461,10 @@ mod tests {
         assert!(parse_script("0 note 60 100 1\n1 end").is_ok_and(|cues| matches!(cues[0].1, Cue::Note { channel: 0, .. })));
         assert!(parse_script("0 cc 17 1 1\n1 end").is_err());
         assert!(parse_script("0 cc 1 1 128\n1 end").is_err());
+        let cues = parse_script("0 bend 2 -8192\n0 pressure 1 90\n1 end").unwrap();
+        assert!(matches!(cues[0].1, Cue::Midi(MidiEvent::PitchBend { channel: 1, value: -8192 })));
+        assert!(matches!(cues[1].1, Cue::Midi(MidiEvent::ChannelPressure { channel: 0, pressure: 90 })));
+        assert!(parse_script("0 bend 1 9000\n1 end").is_err());
     }
 
     #[test]

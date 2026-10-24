@@ -11,6 +11,7 @@ pub mod chord_sequencer;
 pub mod chorus;
 pub mod clock;
 pub mod cloud;
+pub mod controls;
 pub mod compressor;
 pub mod dancer;
 pub mod delay;
@@ -82,6 +83,7 @@ builtin_modules! {
     Cloud,
     AudioInput,
     NoteIn,
+    Controls,
     Poly<SvfFilter>,
     Poly<LadderFilter>,
     Poly<AdsrEnvelope>,
@@ -128,6 +130,7 @@ pub use chord_sequencer::ChordSequencer;
 pub use chorus::Chorus;
 pub use clock::Clock;
 pub use cloud::Cloud;
+pub use controls::Controls;
 pub use compressor::Compressor;
 pub use dancer::Dancer;
 pub use delay::StereoDelay;

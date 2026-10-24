@@ -271,6 +271,8 @@ What a control does depends on what it's mapped to:
 
 A controller turns a knob the way the mouse does: a fader sweeps a frequency by octaves, so the middle of its throw is in the middle of what you hear.
 
+To patch a fader or a wheel into a cable, rather than turn one knob with it, use a [Controls](../modules/midi/controls.md) module: its slots learn the same way.
+
 A mapping listens on the MIDI channel it was learned on, so the keys and the pads of one controller can send the same note numbers without mixing up. (Mappings made before Soba learned channels still listen on all of them.)
 
 To back out before moving anything, press `Escape`, or right-click the blinking control and choose **Cancel MIDI Learn**. Choosing **Learn MIDI** on a different control moves learn mode there instead.

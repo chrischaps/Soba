@@ -219,6 +219,14 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
+        module_id: crate::modules::controls::ID,
+        // What each slot hears is set from its fader's menu
+        knobs: &[knob("Slew")],
+        hidden: &["Source *", "CC *", "Channel *", "Encoding *", "Range *"],
+        display: NodeDisplay::ControlFaders,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
         module_id: "filter.svf",
         // The CV depth beside Res, where a 303 puts Env Mod
         knobs: &[modulatable("Cutoff", "Cutoff"), modulatable("Resonance", "Res"), knob_as("Cutoff CV", "CV Amt"), knob("Drive")],

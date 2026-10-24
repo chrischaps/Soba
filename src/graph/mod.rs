@@ -12,6 +12,7 @@ mod garden_table;
 mod group_face;
 mod steady_text;
 mod clock_display;
+mod controls_face;
 mod compressor_display;
 mod data_types;
 pub mod hints;

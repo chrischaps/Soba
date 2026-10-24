@@ -29,6 +29,7 @@
   - [Cloud](./modules/sources/cloud.md)
   - [Audio Input](./modules/sources/audio-input.md)
   - [Note In](./modules/midi/note-in.md)
+  - [Controls](./modules/midi/controls.md)
   - [SVF Filter](./modules/filters/svf-filter.md)
   - [Ladder Filter](./modules/filters/ladder-filter.md)
   - [ADSR Envelope](./modules/modulation/adsr.md)

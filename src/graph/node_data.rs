@@ -262,6 +262,9 @@ pub enum NodeDisplay {
     /// Scenes: a pad per scene, the From and To pads lit as Morph glides
     /// between them, and Morph riding a line from one to the other.
     ScenePads,
+    /// Controls: a slim fader per slot, moving with the hardware, and what
+    /// each hears.
+    ControlFaders,
 }
 
 impl NodeDisplay {
@@ -1468,6 +1471,10 @@ impl NodeDataTrait for SynthNodeData {
             NodeDisplay::EqCurve => {
                 let changes = super::eq_display::eq_display(ui, node_id, graph, user_state, zoom);
                 responses.extend(changes.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::ControlFaders => {
+                let asked = super::controls_face::controls_face(ui, node_id, graph, user_state, zoom);
+                responses.extend(asked.into_iter().map(NodeResponse::User));
             }
             NodeDisplay::ScenePads => {
                 if let Some(response) = super::scenes_display::scenes_display(ui, node_id, graph, user_state, zoom) {

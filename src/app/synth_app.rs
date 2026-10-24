@@ -73,6 +73,7 @@ mod listening;
 mod loops;
 mod lossy_load;
 mod main_area;
+mod learn_into;
 mod mutating;
 mod out_of_sight;
 mod page_audio;
@@ -716,7 +717,10 @@ impl SynthApp {
         if heard.learned {
             self.show_midi_badges();
             self.show_midi_learn();
-            self.status_message = Some("MIDI mapped".to_string());
+            self.status_message = Some(if heard.learned_into.is_empty() { "MIDI mapped" } else { "MIDI learned" }.to_string());
+        }
+        for (node_id, param_index, value) in heard.learned_into {
+            self.learn_into_module(node_id, param_index, value);
         }
 
         for (node_id, param_index, value, pressed) in heard.footswitches {

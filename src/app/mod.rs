@@ -18,6 +18,7 @@ mod long_press;
 pub mod midi_mappings;
 mod midi_presses;
 mod midi_session;
+pub mod module_learn;
 mod mutate;
 mod notice;
 mod palette;

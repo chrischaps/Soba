@@ -83,6 +83,10 @@ pub enum SynthResponse {
         control: crate::persistence::MidiControl,
         /// The Scenes pad (0-7) to recall, in place of a parameter.
         scene: Option<u8>,
+        /// Where in the module to write what's heard, in place of mapping
+        /// it: a Controls slot learning its fader (see
+        /// [`crate::app::module_learn`]). Boxed, as few learns have one.
+        into: Option<Box<crate::app::module_learn::ModuleLearn>>,
     },
     /// Request to clear the MIDI mapping of a parameter, or a Scenes pad.
     MidiLearnClear {
@@ -241,6 +245,7 @@ impl SynthResponse {
             max_value,
             control,
             scene: None,
+            into: None,
         }
     }
 
