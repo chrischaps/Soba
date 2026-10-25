@@ -546,3 +546,15 @@ On a Mac, hold `⌘ Command` where these say `Ctrl`, and `Option` for `Alt`. The
 | `Alt` over a cable | Hear what the cable carries |
 
 The letter keys play notes: see [The computer keyboard](#the-computer-keyboard).
+
+### Presenting
+
+While a presentation script plays (Help → Lessons → Present…), a beat at a time. A clicker sends Page Down and Page Up. The keys go to the presentation only while the canvas has them: a knob you've clicked keeps its arrows until you click the canvas.
+
+| Shortcut | Action |
+|----------|--------|
+| `Page Down` or `→` | Presenting: play the next beat |
+| `Shift + Page Down` or `Shift + →` | Presenting: finish the beat now, as it would have ended |
+| `Page Up` or `←` | Presenting: play the beat again, or the one before if it's only just begun |
+| `Escape` | Stop presenting |
+

@@ -383,8 +383,8 @@ impl MidiSession {
     }
 
     /// Sends `event` from the UI, as [`play_note`](Self::play_note) sends a
-    /// key's, but on any channel: a `?listen` audition plays MIDI Note Ins too.
-    #[cfg(target_arch = "wasm32")]
+    /// key's, but on any channel: a `?listen` audition plays MIDI Note Ins
+    /// too, and so does a presentation's beat.
     pub fn send_ui(&mut self, event: MidiEvent) {
         if let Some(notes) = self.notes.as_mut() {
             notes.send(event);

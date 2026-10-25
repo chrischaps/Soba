@@ -9,24 +9,36 @@ use std::sync::mpsc::Sender;
 use eframe::egui;
 use wasm_bindgen::JsCast;
 
-/// A patch file the visitor picked to open.
+/// A patch file the visitor picked to open, or a presentation script.
 pub struct Upload {
     /// The file's name, e.g. `lush-pad.json`.
     pub name: String,
     /// Its text, or why it couldn't be read.
     pub text: Result<String, String>,
+    /// A presentation script to present, not a patch (#488).
+    pub presentation: bool,
 }
 
 /// Asks the visitor for a patch file. The browser's picker answers later:
 /// the file arrives on `sender`, and a repaint is asked for to collect it.
 pub fn pick_patch(ctx: &egui::Context, sender: Sender<Upload>) {
+    pick_text(ctx, sender, ("Soba Patch", "json"), false);
+}
+
+/// Asks the visitor for a presentation script, as [`pick_patch`] asks for
+/// a patch.
+pub fn pick_presentation(ctx: &egui::Context, sender: Sender<Upload>) {
+    pick_text(ctx, sender, ("Presentation script", "txt"), true);
+}
+
+fn pick_text(ctx: &egui::Context, sender: Sender<Upload>, (kind, extension): (&'static str, &'static str), presentation: bool) {
     let ctx = ctx.clone();
     wasm_bindgen_futures::spawn_local(async move {
-        let Some(file) = rfd::AsyncFileDialog::new().add_filter("Soba Patch", &["json"]).pick_file().await else {
+        let Some(file) = rfd::AsyncFileDialog::new().add_filter(kind, &[extension]).pick_file().await else {
             return;
         };
         let text = String::from_utf8(file.read().await).map_err(|_| "it isn't a text file".to_string());
-        let _ = sender.send(Upload { name: file.file_name(), text });
+        let _ = sender.send(Upload { name: file.file_name(), text, presentation });
         ctx.request_repaint();
     });
 }

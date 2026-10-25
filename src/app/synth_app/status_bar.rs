@@ -122,6 +122,7 @@ impl SynthApp {
     pub(super) fn draw_status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.add_space(8.0);
+            self.presentation_chip(ui);
             self.draw_status_message(ui);
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

@@ -28,6 +28,20 @@ fn main() -> eframe::Result<()> {
     };
     // A lesson to start, e.g. `soba --lesson first-sound` (see lessons/)
     let lesson = args.iter().position(|a| a == "--lesson").and_then(|i| args.get(i + 1)).cloned();
+    // A presentation to step through live, e.g. `soba patch.json --present ep4.txt`
+    let present = args.iter().position(|a| a == "--present").map(|i| args.get(i + 1).map(PathBuf::from));
+    let present = match present {
+        Some(None) => {
+            eprintln!("--present needs a script");
+            std::process::exit(2);
+        }
+        Some(Some(_)) if capture.is_some() => {
+            eprintln!("--present plays live: a capture films a script by itself");
+            std::process::exit(2);
+        }
+        Some(Some(script)) => Some(script),
+        None => None,
+    };
     // A patch file to open, e.g. `soba patches/lush-pad.json`
     // (skipping the values that follow options)
     let patch_path = args
@@ -36,7 +50,11 @@ fn main() -> eframe::Result<()> {
         .skip(1)
         .find(|(i, arg)| {
             let after = &args[i - 1];
-            !arg.starts_with("--") && !CaptureConfig::is_option(after) && after != resume::OPTION && after != "--lesson"
+            !arg.starts_with("--")
+                && !CaptureConfig::is_option(after)
+                && after != resume::OPTION
+                && after != "--lesson"
+                && after != "--present"
         })
         .map(|(_, arg)| PathBuf::from(arg));
     // Restarted after an update: the session the copy before handed over.
@@ -101,6 +119,13 @@ fn main() -> eframe::Result<()> {
             if let Some(name) = &lesson {
                 if !app.open_lesson_named(&cc.egui_ctx, name) {
                     eprintln!("no lesson called {name}: see lessons/");
+                }
+            }
+            // Over whatever patch opened
+            if let Some(script) = &present {
+                if let Err(e) = app.start_presentation(script) {
+                    eprintln!("present: {e}");
+                    std::process::exit(2);
                 }
             }
             Ok(Box::new(app))

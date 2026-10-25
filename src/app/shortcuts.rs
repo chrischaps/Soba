@@ -99,6 +99,17 @@ pub const SHEET: &[Group] = &[
             ("`Alt` over a cable", "Hear what the cable carries"),
         ],
     },
+    Group {
+        name: "Presenting",
+        // The tally light's red, as a beat plays
+        color: theme::accent::ERROR,
+        rows: &[
+            ("`Page Down` or `→`", "Presenting: play the next beat"),
+            ("`Shift + Page Down` or `Shift + →`", "Presenting: finish the beat now, as it would have ended"),
+            ("`Page Up` or `←`", "Presenting: play the beat again, or the one before if it's only just begun"),
+            ("`Escape`", "Stop presenting"),
+        ],
+    },
 ];
 
 /// Did Command (Ctrl, or ⌘ on a Mac) and `key` go down this frame, with

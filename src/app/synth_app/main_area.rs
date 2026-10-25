@@ -135,14 +135,14 @@ impl SynthApp {
         // Draw the node graph editor
         let (zoom_before, pan_before) = (self.graph_state.pan_zoom.zoom, self.graph_state.pan_zoom.pan);
         self.follow_gestures(ui, editor_rect);
-        // A capture script moves the view like a camera, from where
-        // a `fit` lands once it has
-        if let Some(capture) = self.capture.as_mut().filter(|_| self.glide.is_none()) {
-            let zoom = capture.take_zoom();
+        // A capture's or a presentation's script moves the view like a
+        // camera, from where a `fit` lands once it has
+        if self.glide.is_none() {
+            let zoom = self.cue_zoom();
             if zoom != 1.0 {
                 self.graph_state.zoom(ui, zoom);
             }
-            if let Some(pan) = capture.take_pan(self.graph_state.pan_zoom.pan) {
+            if let Some(pan) = self.cue_pan(self.graph_state.pan_zoom.pan) {
                 self.graph_state.pan_zoom.pan = pan;
             }
         }

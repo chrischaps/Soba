@@ -110,7 +110,9 @@ struct Ramp {
     dur: f64,
 }
 
-/// Cues on their way into the app, and what they've set moving.
+/// Cues on their way into the app, and what they've set moving. A
+/// presentation keeps a copy as each beat begins, to play it again from.
+#[derive(Clone)]
 pub(crate) struct CueRunner {
     cues: Vec<(f64, Cue)>,
     next_cue: usize,
@@ -173,6 +175,81 @@ impl CueRunner {
             pending_zoom: 1.0,
             hovering: None,
             presses: Vec::new(),
+        }
+    }
+
+    /// Plays `cues` from here, a presentation's next beat, timed from 0
+    /// again. What the last beat left (the pointer, the camera) stays.
+    pub fn load(&mut self, cues: Vec<(f64, Cue)>) {
+        self.cues = cues;
+        self.next_cue = 0;
+        self.failed = false;
+        self.presses.clear();
+    }
+
+    /// Whether every cue has fired and everything they set moving has
+    /// arrived: no glide or ramp under way, nothing held.
+    pub fn done(&self) -> bool {
+        self.next_cue >= self.cues.len()
+            && self.ramps.is_empty()
+            && self.pointer_glide.is_none()
+            && self.pan_glide.is_none()
+            && self.zoom_left.is_none()
+            && self.camera_glide.is_none()
+            && !self.button_down
+            && self.hovering.is_none()
+            && self.modifiers.is_none()
+    }
+
+    /// Ends the cues on the spot, as they'd have left things: knobs and the
+    /// camera where they were going (camera moves cut), the transport and
+    /// MIDI as sent, and anything held let go. What would start something
+    /// (a note, a press, a key, typing, a pointer move) doesn't. The caller
+    /// then runs the runner's clock at infinity, so the ramps land.
+    pub fn finish(&mut self, raw: &mut egui::RawInput, locate: &mut dyn FnMut(&Part) -> Result<Pos2, String>) {
+        let held = self.button_down;
+        // Notes not yet played, whose ends aren't either
+        let mut unplayed = Vec::new();
+        let rest = self.cues.split_off(self.next_cue);
+        self.cues.extend(rest.into_iter().filter_map(|(at, cue)| {
+            let cue = match cue {
+                Cue::Note { channel, note, on: true, .. } => {
+                    unplayed.push((channel, note));
+                    return None;
+                }
+                Cue::Note { channel, note, on: false, .. } if unplayed.contains(&(channel, note)) => {
+                    unplayed.retain(|n| *n != (channel, note));
+                    return None;
+                }
+                Cue::KeyDown(..)
+                | Cue::Text(_)
+                | Cue::Move { .. }
+                | Cue::Button(true)
+                | Cue::SecondaryButton(_)
+                | Cue::Wheel { .. }
+                | Cue::Hover(Some(_))
+                | Cue::Drop => return None,
+                Cue::Button(false) if !held => return None,
+                Cue::Fit(_) => Cue::Fit(0.0),
+                Cue::Aim { at, zoom, .. } => Cue::Aim { at, zoom, dur: 0.0 },
+                Cue::Look { at, zoom, .. } => Cue::Look { at, zoom, dur: 0.0 },
+                cue => cue,
+            };
+            Some((at, cue))
+        }));
+        self.fire(f64::INFINITY, raw, locate, &mut |_, _| None);
+        if self.button_down {
+            self.button_down = false;
+            raw.events.push(egui::Event::PointerButton {
+                pos: self.pointer.unwrap_or_default(),
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::default(),
+            });
+        }
+        self.modifiers = egui::Modifiers::default();
+        if self.hovering.take().is_some() {
+            self.hover_into(raw);
         }
     }
 

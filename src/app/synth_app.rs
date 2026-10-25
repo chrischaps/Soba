@@ -89,6 +89,7 @@ mod mutating;
 mod out_of_sight;
 mod page_audio;
 mod plant;
+mod present;
 mod scenes;
 mod share;
 mod probe;
@@ -224,6 +225,8 @@ pub struct SynthApp {
     capture: Option<Capture>,
     /// The lesson being taken, from Help → Lessons (#305).
     lesson: Option<super::lesson::LessonRun>,
+    /// A presentation on show, a beat at a time (#488).
+    presenting: Option<present::Presenting>,
 
     // --- Recording ---
     /// The take being recorded, or being finished after Stop.
@@ -434,6 +437,7 @@ impl SynthApp {
             last_paste: None,
             capture: None,
             lesson: None,
+            presenting: None,
             recording: None,
             recordings_folder: None,
             record_toast: None,
@@ -530,28 +534,10 @@ impl SynthApp {
                     self.user_state.audio_input_channels = Some(channels);
                 }
                 CaptureAction::Layout(path) => self.write_layout(ctx, &path),
-                CaptureAction::Fit(seconds) => self.start_glide_over(ctx, framing::Target::All, seconds),
-                CaptureAction::Aim { at, zoom, seconds } => {
-                    self.start_glide_over(ctx, framing::Target::Point { at, zoom }, seconds);
-                }
-                CaptureAction::Look { at, zoom, seconds } => match self.look_target(&at, zoom) {
-                    Ok(target) => self.start_glide_over(ctx, target, seconds),
-                    Err(e) => eprintln!("capture: can't look at {at}: {e}"),
-                },
-                CaptureAction::Enter(name, aim) => {
-                    if let Err(e) = self.dive_into_named(ctx, &name, aim) {
-                        eprintln!("capture: can't enter {name}: {e}");
-                    }
-                }
-                CaptureAction::Leave => {
-                    if !self.dive_out(ctx) {
-                        eprintln!("capture: no group to leave");
-                    }
-                }
-                CaptureAction::SetParam { module, which, input, value } => {
-                    match find_input(&self.graph_state.graph, &self.user_state, &module, which, &input) {
-                        Ok(id) => self.graph_state.graph.inputs[id].value.set_actual_value(value),
-                        Err(e) => eprintln!("capture: param {e}"),
+                // The view and the knobs, as a presentation moves them too
+                other => {
+                    if let Err(e) = self.apply_cue(ctx, other) {
+                        eprintln!("capture: {e}");
                     }
                 }
             }
@@ -1990,6 +1976,13 @@ impl SynthApp {
     #[cfg(target_arch = "wasm32")]
     fn collect_upload(&mut self) {
         let Ok(upload) = self.uploads.1.try_recv() else { return };
+        if upload.presentation {
+            let name = upload.name.trim_end_matches(".txt");
+            if let Err(e) = upload.text.and_then(|text| self.present_text(name, &text)) {
+                self.status_error(format!("Couldn't present {}: {e}", upload.name));
+            }
+            return;
+        }
         let loaded = upload
             .text
             .and_then(|json| patch_from_json(&json).map_err(|e| e.to_string()))
@@ -2609,6 +2602,8 @@ impl SynthApp {
     fn before_drawing(&mut self, ctx: &egui::Context) {
         // A capture renders this frame's audio before anything is drawn
         self.step_capture(ctx);
+        // ...and a presentation's beat does its work
+        self.step_presentation(ctx);
 
         if std::mem::take(&mut self.release_tab_focus) {
             if let Some(focused) = ctx.memory(|m| m.focused()) {
@@ -2706,7 +2701,7 @@ impl SynthApp {
         let actions = if prompt_open {
             Vec::new()
         } else {
-            actions::pressed(ctx, typing, on_canvas, self.hosted.is_some())
+            actions::pressed(ctx, typing, on_canvas, self.presenting_keys(ctx, on_canvas), self.hosted.is_some())
         };
 
         // Editing shortcuts act on the graph, so they wait while a text field
@@ -2812,6 +2807,8 @@ impl SynthApp {
         self.show_hands_overlay(ctx);
         // A lesson's caption, glows and ghost, over the editor
         self.tend_lesson(ctx);
+        // A presentation's pointer, and the presenter's notes
+        self.tend_presentation(ctx);
 
         // "Save changes?" and crash recovery, over everything else
         self.show_prompts(ctx);
@@ -2946,6 +2943,8 @@ impl eframe::App for SynthApp {
             let state = &self.user_state;
             capture.prepare_input(ctx, raw_input, |part| super::capture_aim::locate(ctx, graph, state, zoom, part));
         }
+        // A presentation's beat, on the wall clock
+        self.prepare_presentation(ctx, raw_input);
         // The wheel over an Arranger's timeline zooms and pans it, not the canvas
         crate::graph::claim_arranger_wheel(ctx, raw_input);
         // Alt+wheel over a knob turns it

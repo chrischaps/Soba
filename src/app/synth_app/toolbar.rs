@@ -350,6 +350,14 @@ impl SynthApp {
                 if let Some(lesson) = self.lessons_menu(ui) {
                     actions.push(AppAction::OpenLesson(lesson));
                 }
+                ui.separator();
+                let present = ui.button("🎬 Present…").on_hover_text(
+                    "Play a presentation script over this patch a beat at a time: Page Down (or a clicker) for each, Escape to stop",
+                );
+                if present.clicked() {
+                    actions.push(AppAction::Present);
+                    ui.close();
+                }
             })
             .response
             .on_hover_text("Short lessons you do in the app, from a first sound to groups");

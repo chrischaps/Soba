@@ -14,6 +14,7 @@ use eframe::egui::{self, Key, Modifiers};
 use crate::engine::AudioSystem;
 use crate::persistence::Example;
 use super::super::lesson::LessonFile;
+use super::super::presentation::Command;
 use super::super::recording;
 use super::super::session::Discard;
 use super::super::shortcuts;
@@ -70,6 +71,11 @@ pub(super) enum AppAction {
     ToggleRig,
     /// Listen to a device's knobs to make its profile, or stop (#441).
     ListenToInstrument,
+    /// Choose a presentation script to present over the patch (#488).
+    Present,
+    /// The next beat, the beat again, or the beat finished now.
+    Presenting(Command),
+    StopPresenting,
     // The browser has no updater
     #[cfg(not(target_arch = "wasm32"))]
     CheckUpdates,
@@ -87,6 +93,9 @@ pub(super) enum Listens {
     /// Only while the canvas has the keys: not while typing, nor with the
     /// palette open.
     OnCanvas,
+    /// Only while presenting, on the canvas, with nothing else (a knob, a
+    /// step's piano) holding the keys.
+    Presenting,
 }
 
 /// The keys a shortcut is pressed with.
@@ -97,6 +106,9 @@ pub(super) enum Chord {
     Command(Modifiers, Key),
     /// Shift+Space: see [`shortcuts::consume_play`].
     Play,
+    /// A key with exactly these modifiers, no Command: Page Down for a
+    /// presentation's next beat.
+    Bare(Modifiers, Key),
 }
 
 impl Chord {
@@ -105,6 +117,7 @@ impl Chord {
         match self {
             Chord::Command(extra, key) => shortcuts::consume_command(i, extra, key),
             Chord::Play => shortcuts::consume_play(i),
+            Chord::Bare(modifiers, key) => i.modifiers.matches_exact(modifiers) && i.consume_key(modifiers, key),
         }
     }
 
@@ -125,6 +138,16 @@ impl Chord {
                 format!("`{}`", caps.join(" + "))
             }
             Chord::Play => "`Shift + Space`".to_string(),
+            Chord::Bare(modifiers, key) => {
+                let name = match key {
+                    Key::PageDown => "Page Down",
+                    Key::PageUp => "Page Up",
+                    Key::ArrowRight => "→",
+                    Key::ArrowLeft => "←",
+                    key => key.name(),
+                };
+                if modifiers.shift { format!("`Shift + {name}`") } else { format!("`{name}`") }
+            }
         }
     }
 }
@@ -151,6 +174,10 @@ const HANDS_SHEET: &str = "The controller's encoders and faders follow the selec
 const OVERLAY_SHEET: &str = "Show or hide the sketch of the controller, saying what each control does";
 /// What the Keyboard Shortcuts sheet says the Rig panel's key does.
 const RIG_SHEET: &str = "The Rig: every MIDI input and MIDI Out port, the device each plays, and the thru routes between them";
+/// What the Keyboard Shortcuts sheet says a presentation's keys do.
+const NEXT_BEAT_SHEET: &str = "Presenting: play the next beat";
+const FINISH_BEAT_SHEET: &str = "Presenting: finish the beat now, as it would have ended";
+const BEAT_AGAIN_SHEET: &str = "Presenting: play the beat again, or the one before if it's only just begun";
 
 /// The app's own shortcuts, taken in this order: where one chord holds
 /// another (Ctrl+Shift+S holds Ctrl+S), the longer comes first. Editing's
@@ -172,18 +199,29 @@ pub(super) const KEYS: &[Binding] = &[
     bind(Chord::Command(Modifiers::NONE, Key::H), Listens::OnCanvas, AppAction::ToggleHandsOverlay, OVERLAY_SHEET),
     // Before the palette's Space, which Shift+Space would match too
     bind(Chord::Play, Listens::OnCanvas, AppAction::TogglePlaying, "Play or stop the patch"),
+    // A clicker sends Page Down and Page Up. Shifted first, which the bare
+    // keys would match too
+    bind(Chord::Bare(Modifiers::SHIFT, Key::PageDown), Listens::Presenting, AppAction::Presenting(Command::Finish), FINISH_BEAT_SHEET),
+    bind(Chord::Bare(Modifiers::SHIFT, Key::ArrowRight), Listens::Presenting, AppAction::Presenting(Command::Finish), FINISH_BEAT_SHEET),
+    bind(Chord::Bare(Modifiers::NONE, Key::PageDown), Listens::Presenting, AppAction::Presenting(Command::Next), NEXT_BEAT_SHEET),
+    bind(Chord::Bare(Modifiers::NONE, Key::ArrowRight), Listens::Presenting, AppAction::Presenting(Command::Next), NEXT_BEAT_SHEET),
+    bind(Chord::Bare(Modifiers::NONE, Key::PageUp), Listens::Presenting, AppAction::Presenting(Command::Back), BEAT_AGAIN_SHEET),
+    bind(Chord::Bare(Modifiers::NONE, Key::ArrowLeft), Listens::Presenting, AppAction::Presenting(Command::Back), BEAT_AGAIN_SHEET),
+    bind(Chord::Bare(Modifiers::NONE, Key::Escape), Listens::Presenting, AppAction::StopPresenting, "Stop presenting"),
 ];
 
 /// The actions of the shortcuts pressed this frame, of those listening:
 /// `typing` while a text field has the keys, `on_canvas` while the canvas
-/// does. `hosted`, the DAW's transport plays the patch, so Shift+Space doesn't.
-pub(super) fn pressed(ctx: &egui::Context, typing: bool, on_canvas: bool, hosted: bool) -> Vec<AppAction> {
+/// does, `presenting` while a presentation's keys reach it. `hosted`, the
+/// DAW's transport plays the patch, so Shift+Space doesn't.
+pub(super) fn pressed(ctx: &egui::Context, typing: bool, on_canvas: bool, presenting: bool, hosted: bool) -> Vec<AppAction> {
     ctx.input_mut(|i| {
         KEYS.iter()
             .filter(|binding| match binding.listens {
                 Listens::Always => true,
                 Listens::UnlessTyping => !typing,
                 Listens::OnCanvas => on_canvas,
+                Listens::Presenting => presenting,
             })
             .filter(|binding| !(hosted && matches!(binding.action, AppAction::TogglePlaying)))
             .filter(|binding| binding.chord.consume(i))
@@ -256,6 +294,9 @@ impl SynthApp {
             AppAction::ToggleHandsOverlay => self.toggle_hands_overlay(),
             AppAction::ToggleRig => self.toggle_rig_panel(),
             AppAction::ListenToInstrument => self.toggle_instrument_listening(),
+            AppAction::Present => self.choose_presentation(ctx),
+            AppAction::Presenting(command) => self.present_command(ctx, command),
+            AppAction::StopPresenting => self.stop_presenting(),
             #[cfg(not(target_arch = "wasm32"))]
             AppAction::CheckUpdates => self.updater.check_now(ctx),
             #[cfg(not(target_arch = "wasm32"))]
@@ -287,6 +328,10 @@ mod tests {
 
     /// One frame with `chord` pressed, under the given listening.
     fn press(modifiers: Modifiers, key: Key, typing: bool, on_canvas: bool) -> Vec<String> {
+        press_presenting(modifiers, key, typing, on_canvas, false)
+    }
+
+    fn press_presenting(modifiers: Modifiers, key: Key, typing: bool, on_canvas: bool, presenting: bool) -> Vec<String> {
         let ctx = egui::Context::default();
         let raw = egui::RawInput {
             events: vec![
@@ -298,7 +343,7 @@ mod tests {
         let mut got = Vec::new();
         ctx.run_ui(raw, |ui| {
             let ctx = ui.ctx();
-            got = pressed(ctx, typing, on_canvas, false).iter().map(|a| format!("{a:?}")).collect();
+            got = pressed(ctx, typing, on_canvas, presenting, false).iter().map(|a| format!("{a:?}")).collect();
         }).textures_delta.clear();
         got
     }
@@ -316,5 +361,19 @@ mod tests {
         // Bypass waits for the canvas, and AltGr (Ctrl+Alt) types, not saves
         assert!(press(command, Key::B, false, false).is_empty());
         assert!(press(command | Modifiers::ALT, Key::S, false, true).is_empty());
+    }
+
+    #[test]
+    fn a_clicker_steps_a_presentation_and_only_a_presentation() {
+        let presenting = |modifiers, key| press_presenting(modifiers, key, false, true, true);
+        assert_eq!(presenting(Modifiers::NONE, Key::PageDown), ["Presenting(Next)"]);
+        assert_eq!(presenting(Modifiers::NONE, Key::ArrowRight), ["Presenting(Next)"]);
+        assert_eq!(presenting(Modifiers::SHIFT, Key::PageDown), ["Presenting(Finish)"]);
+        assert_eq!(presenting(Modifiers::NONE, Key::PageUp), ["Presenting(Back)"]);
+        assert_eq!(presenting(Modifiers::NONE, Key::Escape), ["StopPresenting"]);
+        // Ctrl+Page Down is the browser's, and the keys are no one's unpresenting
+        assert!(presenting(Modifiers::COMMAND, Key::PageDown).is_empty());
+        assert!(press(Modifiers::NONE, Key::PageDown, false, true).is_empty());
+        assert!(press(Modifiers::NONE, Key::Escape, false, true).is_empty());
     }
 }
