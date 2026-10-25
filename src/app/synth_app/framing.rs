@@ -12,7 +12,9 @@
 use eframe::egui::{self, emath::TSTransform, vec2, Pos2, Rect, Vec2};
 use egui_node_graph2::NodeId;
 
-use crate::graph::annotations::AnnotationId;
+use crate::app::capture_aim;
+use crate::app::cues::LookAt;
+use crate::graph::annotations::{Annotation, AnnotationId};
 use crate::graph::{groups, GroupId};
 use super::grouping::{FRAME_MARGIN, TRAIL_HEIGHT};
 use super::SynthApp;
@@ -323,6 +325,35 @@ impl SynthApp {
             .map(|r| Rect::from_min_max(self.screen_to_patch(r.min), self.screen_to_patch(r.max)));
         let bounds = modules.into_iter().chain(notes).reduce(|a, b| a.union(b))?;
         Some((bounds, measured))
+    }
+
+    /// Where a `look` cue takes the view: a module or frame on show, framed
+    /// as F frames it selected, or its middle at a zoom.
+    pub(super) fn look_target(&self, at: &LookAt, zoom: Option<f32>) -> Result<Target, String> {
+        let (nodes, annotations) = match at {
+            LookAt::Module(module, which) => {
+                let node = capture_aim::find_module(&self.graph_state.graph, &self.user_state, module, *which)?;
+                if !groups::level_nodes(&self.graph_state.graph, self.user_state.level).contains(&node) {
+                    return Err("it isn't on the level on show".into());
+                }
+                (vec![node], Vec::new())
+            }
+            LookAt::Frame(title) => {
+                let frame = self.user_state.annotations.iter().find_map(|(id, a)| match a {
+                    Annotation::Frame(frame) if frame.title.eq_ignore_ascii_case(title) => Some(id),
+                    _ => None,
+                });
+                match frame {
+                    // Frames are only on the top level
+                    Some(id) if self.user_state.level.is_none() => (Vec::new(), vec![id]),
+                    Some(_) => return Err("frames are on the top level".into()),
+                    None => return Err("the patch has no frame of that title".into()),
+                }
+            }
+        };
+        let Some(zoom) = zoom else { return Ok(Target::Selection { nodes, annotations }) };
+        let (bounds, _) = self.bounds_of(&nodes, &annotations).ok_or("it hasn't been drawn yet")?;
+        Ok(Target::Point { at: bounds.center(), zoom })
     }
 }
 

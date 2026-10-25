@@ -7,6 +7,8 @@ mod asio_badge;
 mod audio_devices;
 pub mod capture;
 mod capture_aim;
+mod cue_runner;
+mod cues;
 mod document;
 pub(crate) mod editing;
 pub mod hands;

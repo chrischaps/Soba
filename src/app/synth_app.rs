@@ -534,6 +534,10 @@ impl SynthApp {
                 CaptureAction::Aim { at, zoom, seconds } => {
                     self.start_glide_over(ctx, framing::Target::Point { at, zoom }, seconds);
                 }
+                CaptureAction::Look { at, zoom, seconds } => match self.look_target(&at, zoom) {
+                    Ok(target) => self.start_glide_over(ctx, target, seconds),
+                    Err(e) => eprintln!("capture: can't look at {at}: {e}"),
+                },
                 CaptureAction::Enter(name, aim) => {
                     if let Err(e) = self.dive_into_named(ctx, &name, aim) {
                         eprintln!("capture: can't enter {name}: {e}");

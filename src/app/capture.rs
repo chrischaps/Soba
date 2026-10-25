@@ -84,7 +84,11 @@
 //! 4.0  aim 1200 640 1.5 2.0         # glide to centre patch point (1200,
 //!                                   # 640) at zoom 1.5 over 2 s, on the
 //!                                   # level on show (a layout's patch space)
-//! 4.0  enter Bells                  # dive into a group through its
+//! 4.0  look filter.svf 1.2          # frame a module, as F frames it
+//!                                   # selected, over 1.2 s (cut, without)
+//! 4.0  look osc.sine#2 1.4 2.0      # ...or centre it at zoom 1.4, over 2 s
+//! 4.0  look frame:Drive and echo 1  # ...or a frame, by its title
+//! 4.0  enter Bells                 # dive into a group through its
 //!                                   # miniature, as a double-click does
 //! 4.0  enter Bells/FM Bell          # ...a path from the top, where several
 //!                                   # groups share a name
@@ -111,6 +115,10 @@
 //! 7.0  hover off                    # ...or give the drag up
 //! 9.0  end
 //! ```
+//!
+//! The cues are parsed in `cues` and played into the app by a
+//! `CueRunner`, which a presentation drives too; this is the recorder
+//! around them: the frame clock, the audio, the files.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -122,6 +130,9 @@ use eframe::egui;
 use egui::{Pos2, Rect, Vec2};
 
 use super::capture_aim::{self, Part, Spot, Which};
+pub use super::cue_runner::CaptureAction;
+use super::cue_runner::CueRunner;
+use super::cues::{parse_cues, Cue, Mode};
 use crate::dsp::InputAudio;
 use crate::engine::{read_input_at, ChannelBuffer, MidiEvent, BLOCK_SIZE};
 
@@ -204,152 +215,9 @@ impl CaptureConfig {
     }
 }
 
-/// A script's MIDI channel, 1-16, as the 0-15 a message carries.
-fn midi_channel(n: f64) -> Option<u8> {
-    (1.0..=16.0).contains(&n).then(|| n as u8 - 1)
-}
-
-/// A cue from the script.
-#[derive(Debug, Clone)]
-enum Cue {
-    Play(bool),
-    KeyDown(egui::Key, egui::Modifiers),
-    KeyUp(egui::Key, egui::Modifiers),
-    Text(String),
-    /// A note on `channel` (0-15).
-    Note { channel: u8, note: u8, velocity: u8, on: bool },
-    /// Any other MIDI message, such as a clock tick.
-    Midi(MidiEvent),
-    Param { module: String, which: Which, input: String, value: f32, dur: f64 },
-    Cursor(bool),
-    Move { to: Spot, dur: f64 },
-    /// The pointer leaves the window.
-    PointerOff,
-    Button(bool),
-    /// The secondary button, pressed or released.
-    SecondaryButton(bool),
-    /// A turn of the mouse wheel, in points, with Ctrl or Alt held or neither.
-    Wheel { delta: f32, modifiers: egui::Modifiers },
-    View { pan: Vec2, dur: f64 },
-    Zoom { factor: f32, dur: f64 },
-    Camera { offset: Vec2, scale: f32, dur: f64 },
-    /// Frame the whole level, over this many seconds.
-    Fit(f64),
-    /// Centre a patch point at a zoom, over this many seconds.
-    Aim { at: Pos2, zoom: f32, dur: f64 },
-    /// Dive into the group of this name (or path), landing on all of it or
-    /// aimed at a patch point inside at a zoom, or back out of one.
-    Enter(String, Option<(Pos2, f32)>),
-    Leave,
-    Still(String),
-    /// Save where the modules are drawn, under this name.
-    Layout(String),
-    /// Play a WAV file into Audio Input modules.
-    Input(PathBuf),
-    /// Drag a file over the window from the desktop, or give the drag up.
-    Hover(Option<PathBuf>),
-    /// Drop the file dragged over the window where the pointer is.
-    Drop,
-    End,
-}
-
-/// Something the app has to do for the script this frame, beyond input.
-#[derive(Debug, Clone)]
-pub enum CaptureAction {
-    Play(bool),
-    /// A MIDI event, `offset` samples into the audio the engine renders next.
-    Midi { event: MidiEvent, offset: u32 },
-    /// Set a module's input to a value in real units.
-    SetParam { module: String, which: Which, input: String, value: f32 },
-    /// Audio Input modules are now hearing this file, of this many channels.
-    InputFile(String, usize),
-    /// Write where each module is drawn, in patch space, to this file.
-    Layout(PathBuf),
-    /// Frame the whole level, over this many seconds (0 cuts).
-    Fit(f64),
-    /// Centre a patch point at a zoom, over this many seconds (0 cuts).
-    Aim { at: Pos2, zoom: f32, seconds: f64 },
-    /// Dive into the group of this name, or path from the top, landing on
-    /// all of it or aimed at a patch point inside at a zoom.
-    Enter(String, Option<(Pos2, f32)>),
-    /// Dive back out of the group on show.
-    Leave,
-}
-
-/// A value easing from one point to another over a span of time.
-#[derive(Debug, Clone, Copy)]
-struct Glide<T> {
-    from: T,
-    to: T,
-    start: f64,
-    dur: f64,
-}
-
-impl<T: Copy + std::ops::Add<Output = T> + std::ops::Sub<Output = T> + std::ops::Mul<f32, Output = T>> Glide<T> {
-    /// Where the glide is at `t`, eased in and out.
-    fn at(&self, t: f64) -> T {
-        self.from + (self.to - self.from) * ease(self.progress(t))
-    }
-
-    fn progress(&self, t: f64) -> f32 {
-        if self.dur <= 0.0 { 1.0 } else { ((t - self.start) / self.dur).clamp(0.0, 1.0) as f32 }
-    }
-
-    fn done(&self, t: f64) -> bool {
-        self.progress(t) >= 1.0
-    }
-}
-
-/// A camera move: scale eases in log space, so a zoom feels even, and the
-/// point at the centre of the view travels a straight line across the patch.
-#[derive(Debug, Clone, Copy)]
-struct CameraGlide {
-    from: (f32, Vec2),
-    to: (f32, Vec2),
-    start: f64,
-    dur: f64,
-}
-
-impl CameraGlide {
-    fn progress(&self, t: f64) -> f32 {
-        ((t - self.start) / self.dur).clamp(0.0, 1.0) as f32
-    }
-
-    fn at(&self, t: f64) -> (f32, Vec2) {
-        let p = ease(self.progress(t));
-        let scale = (self.from.0.ln() + (self.to.0.ln() - self.from.0.ln()) * p).exp();
-        // The offset scales with the zoom (see `animate`), so offset / scale
-        // is where the view's centre sits in the patch. Easing that, not the
-        // offset itself, keeps a deep pull-back from swinging out past the
-        // edge of the patch on its way to the wide shot
-        let (a, b) = (self.from.1 / self.from.0, self.to.1 / self.to.0);
-        (scale, (a + (b - a) * p) * scale)
-    }
-}
-
-/// Smoothstep, the motion of a hand that starts and stops gently.
-fn ease(x: f32) -> f32 {
-    x * x * (3.0 - 2.0 * x)
-}
-
-/// A parameter turning from one value to another.
-#[derive(Debug, Clone)]
-struct Ramp {
-    module: String,
-    which: Which,
-    input: String,
-    /// Filled in from the parameter's value when the ramp starts.
-    from: Option<f32>,
-    to: f32,
-    start: f64,
-    dur: f64,
-}
-
 /// The running capture.
 pub struct Capture {
     config: CaptureConfig,
-    cues: Vec<(f64, Cue)>,
-    next_cue: usize,
     /// The frame being drawn; negative while warming up.
     frame: i64,
     /// How many frames the warmup lasts.
@@ -363,7 +231,6 @@ pub struct Capture {
     awaiting_shot: bool,
     /// Where the screenshot's callback leaves it, after the frame is painted.
     shot: Arc<Mutex<Option<Arc<egui::ColorImage>>>>,
-    actions: Vec<CaptureAction>,
     ffmpeg: Option<Child>,
     wav: Option<hound::WavWriter<BufWriter<File>>>,
     /// The audio rendered this frame, interleaved stereo.
@@ -383,39 +250,14 @@ pub struct Capture {
     midi: Vec<(f64, MidiEvent)>,
     next_midi: usize,
     stills: Vec<String>,
-    cursor_visible: bool,
-    /// Where the pointer is; `None` until the script first moves it, so
-    /// nothing is hovered by accident.
-    pointer: Option<Pos2>,
-    pointer_glide: Option<Glide<Vec2>>,
-    /// The part the pointer is gliding to, followed as the view moves.
-    pointer_aim: Option<Part>,
-    button_down: bool,
-    /// Modifier keys held with the last key pressed.
-    modifiers: egui::Modifiers,
-    ramps: Vec<Ramp>,
-    pan_glide: Option<Glide<Vec2>>,
-    /// Zoom still to apply: (log of the factor left, frames left).
-    zoom_left: Option<(f32, f64, f64)>,
-    /// The virtual camera, relative to the view when it was first moved
-    /// or last fitted: the screen is scaled by `scale` about the editor's
-    /// centre, then shifted by `offset` points.
-    camera: (f32, Vec2),
-    camera_glide: Option<CameraGlide>,
-    /// Pan to add this frame, from the camera.
-    pending_pan_delta: Vec2,
-    pending_zoom: f32,
+    /// Plays the script's cues into the app.
+    runner: CueRunner,
 
     finished: bool,
     size_checked: bool,
     /// A WAV playing into Audio Input modules, with every channel it has,
     /// and the sample it started at.
     input: Option<(ChannelBuffer, i64)>,
-    /// A file dragged over the window, as from the desktop.
-    hovering: Option<PathBuf>,
-    /// Where this frame's presses and right-clicks landed, and their cue
-    /// times, to check against what egui found under them.
-    presses: Vec<(f64, &'static str, Pos2)>,
     /// The share of `input` the engine renders this frame, interleaved.
     input_frame: Vec<f32>,
     /// Whether the transport ran during any recorded frame. A capture
@@ -461,20 +303,12 @@ impl Capture {
 
     /// A capture playing `text`, with nowhere to write yet.
     fn from_script(config: CaptureConfig, text: &str) -> Result<Self, String> {
-        let cues = parse_script(text)?;
+        let cues = parse_cues(text, Mode::Film)?;
         let earliest = cues.first().map_or(0.0, |c| c.0).min(0.0);
         let warmup = WARMUP_FRAMES.max((-earliest * config.fps as f64).ceil() as i64 + 1);
         let grid = (warmup as f64 * config.sample_rate as f64 / config.fps as f64).round() as i64;
         let (midi, cues): (Vec<_>, Vec<_>) = cues.into_iter().partition(|(_, cue)| matches!(cue, Cue::Note { .. } | Cue::Midi(_)));
-        let midi = midi
-            .into_iter()
-            .map(|(at, cue)| match cue {
-                Cue::Note { channel, note, velocity, on: true } => (at, MidiEvent::NoteOn { channel, note, velocity }),
-                Cue::Note { channel, note, on: false, .. } => (at, MidiEvent::NoteOff { channel, note, velocity: 0 }),
-                Cue::Midi(event) => (at, event),
-                _ => unreachable!(),
-            })
-            .collect();
+        let midi = midi.into_iter().filter_map(|(at, cue)| Some((at, cue.midi_event()?))).collect();
         for (at, cue) in &cues {
             if let Cue::Move { to: Spot::Part(part), .. } = cue {
                 capture_aim::check(part).map_err(|e| format!("the move at {at:.2} s: {e}"))?;
@@ -482,16 +316,14 @@ impl Capture {
         }
 
         Ok(Self {
+            runner: CueRunner::new(cues, 1.0 / config.fps as f64),
             config,
-            cues,
-            next_cue: 0,
             frame: -warmup - 1,
             warmup,
             fresh: false,
             skipped: 0,
             awaiting_shot: false,
             shot: Arc::default(),
-            actions: Vec::new(),
             ffmpeg: None,
             wav: None,
             audio: Vec::new(),
@@ -503,26 +335,11 @@ impl Capture {
             midi,
             next_midi: 0,
             stills: Vec::new(),
-            cursor_visible: false,
-            pointer: None,
-            pointer_glide: None,
-            pointer_aim: None,
-            button_down: false,
-            modifiers: egui::Modifiers::default(),
-            ramps: Vec::new(),
-            pan_glide: None,
-            zoom_left: None,
-            camera: (1.0, Vec2::ZERO),
-            camera_glide: None,
-            pending_pan_delta: Vec2::ZERO,
-            pending_zoom: 1.0,
 
             finished: false,
             size_checked: false,
             input: None,
             input_frame: Vec::new(),
-            hovering: None,
-            presses: Vec::new(),
             played: false,
         })
     }
@@ -570,8 +387,8 @@ impl Capture {
         // A drag lasts across passes, as a real one does, and so does a held
         // key: a still is drawn in the pass after its cues, so without it Alt
         // held over a face never shows
-        self.hover_into(raw);
-        raw.events.push(egui::Event::ModifiersChanged(self.modifiers));
+        self.runner.hover_into(raw);
+        raw.events.push(egui::Event::ModifiersChanged(self.runner.modifiers()));
         raw.focused = true;
         raw.predicted_dt = self.dt() as f32;
 
@@ -615,15 +432,10 @@ impl Capture {
         }
 
         self.fire_cues(raw, &mut locate);
-        // A move's part is followed as the view glides, but not by a drag,
-        // which might be what moves it
-        if let (Some(part), Some(glide), false) = (&self.pointer_aim, self.pointer_glide.as_mut(), self.button_down) {
-            if let Ok(to) = locate(part) {
-                glide.to = to.to_vec2();
-            }
-        }
-        raw.events.push(egui::Event::ModifiersChanged(self.modifiers));
-        self.animate(raw);
+        // A move's part is followed as the view glides
+        self.runner.follow_aim(&mut locate);
+        raw.events.push(egui::Event::ModifiersChanged(self.runner.modifiers()));
+        self.runner.animate(self.time(), self.time() + self.dt(), raw);
     }
 
     /// egui's clock, which mustn't go below zero during warmup.
@@ -647,21 +459,7 @@ impl Capture {
             && self.frame + self.warmup + 1 >= WARMUP_FRAMES
             && end <= -FAST_FORWARD_MARGIN
             && (self.skipped as f64) < FAST_FORWARD_STRIDE * self.config.fps as f64;
-        let still = self.pointer_glide.is_none()
-            && self.pan_glide.is_none()
-            && self.zoom_left.is_none()
-            && self.camera_glide.is_none()
-            && self.pending_pan_delta == Vec2::ZERO
-            && self.pending_zoom == 1.0
-            && !self.button_down
-            && self.hovering.is_none()
-            && self.modifiers.is_none();
-        let heard_only = self.cues[self.next_cue..].iter().take_while(|(at, _)| *at < end - 1e-9).all(|(_, cue)| {
-            matches!(
-                cue,
-                Cue::Play(_) | Cue::Note { .. } | Cue::Midi(_) | Cue::Param { .. } | Cue::Cursor(_) | Cue::Still(_) | Cue::Input(_)
-            )
-        });
+        let (still, heard_only) = (self.runner.is_still(), self.runner.only_heard_before(end));
         if !(ready && still && heard_only) {
             return false;
         }
@@ -672,274 +470,65 @@ impl Capture {
         true
     }
 
-    /// Tells the pass which file is dragged over the window, if one is.
-    fn hover_into(&self, raw: &mut egui::RawInput) {
-        raw.hovered_files.clear();
-        if let Some(path) = &self.hovering {
-            raw.hovered_files.push(egui::HoveredFile { path: Some(path.clone()), ..Default::default() });
-        }
-    }
-
     /// Fires the cues that fall inside this frame, and the MIDI that falls
     /// inside the audio the engine renders for it.
     fn fire_cues(&mut self, raw: &mut egui::RawInput, locate: &mut dyn FnMut(&Part) -> Result<Pos2, String>) {
         self.fire_midi();
-        let t = self.time();
-        let end = t + self.dt();
-        while let Some((at, cue)) = self.cues.get(self.next_cue).cloned() {
-            if at >= end - 1e-9 {
-                break;
+        let end = self.time() + self.dt();
+        // What only a recording does, it does here
+        let (config, stills, input, rendered, finished) = (&self.config, &mut self.stills, &mut self.input, self.rendered, &mut self.finished);
+        self.runner.fire(end, raw, locate, &mut |_, cue| match cue {
+            Cue::Still(name) => {
+                stills.push(name);
+                None
             }
-            self.next_cue += 1;
-            match cue {
-                Cue::Play(on) => self.actions.push(CaptureAction::Play(on)),
-                Cue::KeyDown(key, modifiers) | Cue::KeyUp(key, modifiers) => {
-                    let pressed = matches!(cue, Cue::KeyDown(..));
-                    self.modifiers = if pressed { modifiers } else { egui::Modifiers::default() };
-                    raw.events.push(egui::Event::Key {
-                        key,
-                        physical_key: None,
-                        pressed,
-                        repeat: false,
-                        modifiers,
-                    });
-                }
-                Cue::Text(text) => raw.events.push(egui::Event::Text(text)),
-                // Kept apart, for `fire_midi`
-                Cue::Note { .. } | Cue::Midi(_) => {}
-                Cue::Param { module, which, input, value, dur } => self.ramps.push(Ramp {
-                    module,
-                    which,
-                    input,
-                    from: None,
-                    to: value,
-                    start: at,
-                    dur,
-                }),
-                Cue::Cursor(on) => self.cursor_visible = on,
-                Cue::Move { to: spot, dur } => {
-                    // Where a glide under way was headed, for a move by
-                    let heading = self.pointer_glide.map(|g| g.to.to_pos2()).or(self.pointer);
-                    let to = match &spot {
-                        Spot::Point(p) => Ok(*p),
-                        Spot::By(by) => heading.map(|p| p + *by).ok_or_else(|| "has no pointer to move from".to_string()),
-                        Spot::Part(part) => locate(part),
-                    };
-                    let to = match to {
-                        Ok(to) => to,
-                        Err(e) => {
-                            eprintln!("capture: the move at {at:.2} s {e}");
-                            self.finished = true;
-                            continue;
-                        }
-                    };
-                    // The first move comes in from below and to the right
-                    let from = self.pointer.unwrap_or(to + Vec2::new(150.0, 200.0));
-                    self.pointer = Some(from);
-                    self.pointer_glide = Some(Glide { from: from.to_vec2(), to: to.to_vec2(), start: at, dur });
-                    self.pointer_aim = match spot {
-                        Spot::Part(part) => Some(part),
-                        _ => None,
-                    };
-                }
-                Cue::PointerOff => {
-                    self.pointer = None;
-                    self.pointer_glide = None;
-                    self.pointer_aim = None;
-                }
-                Cue::Button(down) => {
-                    self.button_down = down;
-                    if let (true, Some(p)) = (down, self.pointer) {
-                        self.presses.push((at, "press", p));
+            Cue::Layout(name) => Some(CaptureAction::Layout(config.out_dir.join(format!("{name}.json")))),
+            Cue::Input(path) => match read_input_at(&path, config.sample_rate) {
+                Ok((audio, rate)) => {
+                    if rate != config.sample_rate {
+                        eprintln!("capture: {} is {} Hz, resampled to {} Hz", path.display(), rate, config.sample_rate);
                     }
-                    raw.events.push(egui::Event::PointerButton {
-                        pos: self.pointer.unwrap_or_default(),
-                        button: egui::PointerButton::Primary,
-                        pressed: down,
-                        modifiers: egui::Modifiers::default(),
-                    });
+                    let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
+                    let channels = audio.channels();
+                    // From the next sample the engine renders: a cue's offset isn't kept
+                    *input = Some((audio, rendered));
+                    Some(CaptureAction::InputFile(name, channels))
                 }
-                Cue::SecondaryButton(down) => {
-                    if let (true, Some(p)) = (down, self.pointer) {
-                        self.presses.push((at, "rclick", p));
-                    }
-                    raw.events.push(egui::Event::PointerButton {
-                        pos: self.pointer.unwrap_or_default(),
-                        button: egui::PointerButton::Secondary,
-                        pressed: down,
-                        modifiers: egui::Modifiers::default(),
-                    });
+                Err(e) => {
+                    eprintln!("capture: {}: {}", path.display(), e);
+                    None
                 }
-                Cue::Wheel { delta, modifiers } => {
-                    raw.events.push(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, delta), modifiers, phase: egui::TouchPhase::Move, source: egui::MouseWheelSource::Wheel });
-                }
-                Cue::View { pan, dur } => {
-                    // `from` is filled in by the app, which knows the pan
-                    self.pan_glide = Some(Glide { from: Vec2::NAN, to: pan, start: at, dur });
-                }
-                Cue::Camera { offset, scale, dur } => {
-                    self.camera_glide = Some(CameraGlide {
-                        from: self.camera,
-                        to: (scale, offset),
-                        start: at,
-                        dur: dur.max(self.dt()),
-                    });
-                }
-                Cue::Fit(dur) => {
-                    self.reset_camera();
-                    self.actions.push(CaptureAction::Fit(dur));
-                }
-                Cue::Aim { at, zoom, dur } => {
-                    self.reset_camera();
-                    self.actions.push(CaptureAction::Aim { at, zoom, seconds: dur });
-                }
-                Cue::Enter(name, aim) => {
-                    self.reset_camera();
-                    self.actions.push(CaptureAction::Enter(name, aim));
-                }
-                Cue::Leave => {
-                    self.reset_camera();
-                    self.actions.push(CaptureAction::Leave);
-                }
-                Cue::Zoom { factor, dur } => {
-                    self.zoom_left = Some((factor.ln(), at, dur.max(self.dt())));
-                }
-                Cue::Still(name) => self.stills.push(name),
-                Cue::Layout(name) => {
-                    self.actions.push(CaptureAction::Layout(self.config.out_dir.join(format!("{name}.json"))));
-                }
-                Cue::Input(path) => match read_input_at(&path, self.config.sample_rate) {
-                    Ok((audio, rate)) => {
-                        if rate != self.config.sample_rate {
-                            eprintln!("capture: {} is {} Hz, resampled to {} Hz", path.display(), rate, self.config.sample_rate);
-                        }
-                        let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
-                        self.actions.push(CaptureAction::InputFile(name, audio.channels()));
-                        // From the next sample the engine renders: a cue's offset isn't kept
-                        self.input = Some((audio, self.rendered));
-                    }
-                    Err(e) => eprintln!("capture: {}: {}", path.display(), e),
-                },
-                Cue::Hover(path) => {
-                    self.hovering = path;
-                    self.hover_into(raw);
-                }
-                Cue::Drop => {
-                    if let Some(path) = self.hovering.take() {
-                        raw.dropped_files.push(Arc::new(DroppedPath(path)));
-                    }
-                    self.hover_into(raw);
-                }
-                Cue::End => self.finished = true,
+            },
+            Cue::End => {
+                *finished = true;
+                None
             }
-        }
-    }
-
-    /// Camera moves from here on are from the view the app is about to
-    /// move to (a fit, an aim, a dive), and one under way stops.
-    fn reset_camera(&mut self) {
-        self.camera = (1.0, Vec2::ZERO);
-        self.camera_glide = None;
-        self.pending_pan_delta = Vec2::ZERO;
-        self.pending_zoom = 1.0;
-    }
-
-    /// Advances the pointer, pan and zoom glides for this frame.
-    fn animate(&mut self, raw: &mut egui::RawInput) {
-        let t = self.time() + self.dt();
-        if let Some(glide) = self.pointer_glide {
-            self.pointer = Some(glide.at(t).to_pos2());
-            if glide.done(t) {
-                self.pointer_glide = None;
-                self.pointer_aim = None;
-            }
-        }
-        // egui needs to know where the pointer is every frame
-        let pointer = match self.pointer {
-            Some(p) => egui::Event::PointerMoved(p),
-            None => egui::Event::PointerGone,
-        };
-        raw.events.insert(0, pointer);
-
-        if let Some((log_factor, start, dur)) = self.zoom_left {
-            // This frame's share of the zoom, eased
-            let p0 = ease(((self.time() - start) / dur).clamp(0.0, 1.0) as f32);
-            let p1 = ease(((t - start) / dur).clamp(0.0, 1.0) as f32);
-            let r = (log_factor * (p1 - p0)).exp();
-            self.pending_zoom *= r;
-            self.pending_pan_delta *= r;
-            if p1 >= 1.0 {
-                self.zoom_left = None;
-            }
-        }
-
-        if let Some(glide) = self.camera_glide {
-            // Zooming by r scales the screen, and so the camera's offset,
-            // about the centre; panning then makes up the rest
-            let (scale, offset) = glide.at(t);
-            let r = scale / self.camera.0;
-            self.pending_zoom *= r;
-            // Pan still waiting (the app holds the camera while a fit
-            // glides) is scaled by the zoom, as it would have been
-            self.pending_pan_delta = self.pending_pan_delta * r + offset - self.camera.1 * r;
-            self.camera = (scale, offset);
-            if glide.progress(t) >= 1.0 {
-                self.camera_glide = None;
-            }
+            _ => None,
+        });
+        if self.runner.failed() {
+            self.finished = true;
         }
     }
 
     /// The pan the graph should have this frame, given its current pan.
     pub fn take_pan(&mut self, current: Vec2) -> Option<Vec2> {
-        let t = self.time() + self.dt();
-        let delta = std::mem::take(&mut self.pending_pan_delta);
-        let Some(glide) = self.pan_glide.as_mut() else {
-            return (delta != Vec2::ZERO).then(|| current + delta);
-        };
-        if glide.from.x.is_nan() {
-            glide.from = current;
-        }
-        let pan = glide.at(t);
-        if glide.done(t) {
-            self.pan_glide = None;
-        }
-        Some(pan + delta)
+        self.runner.take_pan(self.time() + self.dt(), current)
     }
 
     /// The zoom factor to apply this frame (1.0 for none).
     pub fn take_zoom(&mut self) -> f32 {
-        std::mem::replace(&mut self.pending_zoom, 1.0)
+        self.runner.take_zoom()
     }
 
     /// The app's work for this frame.
     pub fn take_actions(&mut self) -> Vec<CaptureAction> {
-        std::mem::take(&mut self.actions)
+        self.runner.take_actions()
     }
 
     /// The parameter values the script sets this frame, given a way to read
     /// a parameter's current value.
-    pub fn param_values(&mut self, mut current: impl FnMut(&str, Which, &str) -> Option<f32>) -> Vec<CaptureAction> {
-        let t = self.time() + self.dt();
-        let mut out = Vec::new();
-        self.ramps.retain_mut(|ramp| {
-            let from = *ramp.from.get_or_insert_with(|| current(&ramp.module, ramp.which, &ramp.input).unwrap_or(ramp.to));
-            let p = if ramp.dur <= 0.0 { 1.0 } else { ease(((t - ramp.start) / ramp.dur).clamp(0.0, 1.0) as f32) };
-            // Wide ranges of positive values (frequencies, times) turn evenly
-            // in log space, as a knob with a log taper would
-            let value = if from > 0.0 && ramp.to > 0.0 && (ramp.to / from).max(from / ramp.to) > 4.0 {
-                (from.ln() + (ramp.to.ln() - from.ln()) * p).exp()
-            } else {
-                from + (ramp.to - from) * p
-            };
-            out.push(CaptureAction::SetParam {
-                module: ramp.module.clone(),
-                which: ramp.which,
-                input: ramp.input.clone(),
-                value,
-            });
-            p < 1.0
-        });
-        out
+    pub fn param_values(&mut self, current: impl FnMut(&str, Which, &str) -> Option<f32>) -> Vec<CaptureAction> {
+        self.runner.param_values(self.time() + self.dt(), current)
     }
 
     /// How many samples this frame covers. Warmup frames render at the
@@ -971,7 +560,7 @@ impl Capture {
             }
             self.next_midi += 1;
             let offset = (sample - self.rendered).max(0) as u32;
-            self.actions.push(CaptureAction::Midi { event, offset });
+            self.runner.push(CaptureAction::Midi { event, offset });
         }
     }
 
@@ -1019,14 +608,7 @@ impl Capture {
 
     /// Draws the pointer, which the screenshot wouldn't otherwise show.
     pub fn draw_cursor(&self, ctx: &egui::Context) {
-        let (true, Some(p)) = (self.cursor_visible, self.pointer) else {
-            return;
-        };
-        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("capture_cursor")));
-        draw_pointer(&painter, p, 1.0);
-        if self.button_down {
-            painter.circle_stroke(p, 9.0, egui::Stroke::new(1.5_f32, egui::Color32::from_white_alpha(120)));
-        }
+        self.runner.draw_cursor(ctx);
     }
 
     /// Asks for this frame's screenshot, after the app has drawn it.
@@ -1054,7 +636,7 @@ impl Capture {
     /// little with the scale as text rows snap to whole pixels. Otherwise the
     /// press quietly lands on the module or canvas behind.
     fn check_aim(&mut self, ctx: &egui::Context) {
-        for (at, cue, p) in std::mem::take(&mut self.presses) {
+        for (at, cue, p) in self.runner.take_presses() {
             let Some(layer) = ctx.layer_id_at(p) else { continue };
             let (hit, nearby): (Vec<Rect>, Vec<Rect>) = ctx.viewport(|v| {
                 let clickable = |w: &&egui::WidgetRect| w.enabled && (w.sense.senses_click() || w.sense.senses_drag());
@@ -1190,343 +772,9 @@ fn write_ppm(path: &Path, image: &egui::ColorImage) -> std::io::Result<()> {
     out.flush()
 }
 
-/// Parses a script into time-ordered cues, expanding cues with a length
-/// (key taps, notes, drags) into their start and end.
-fn parse_script(text: &str) -> Result<Vec<(f64, Cue)>, String> {
-    let mut cues = Vec::new();
-    for (line_no, line) in text.lines().enumerate() {
-        // `#` starts a comment at the start of a line or after a space;
-        // `module#2` is a module reference
-        let line = match line.find(" #") {
-            Some(at) => &line[..at],
-            None if line.trim_start().starts_with('#') => "",
-            None => line,
-        };
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let err = |msg: &str| format!("script line {}: {} ({})", line_no + 1, msg, line);
-        let words: Vec<&str> = line.split_whitespace().collect();
-        let num = |i: usize| -> Result<f64, String> {
-            words.get(i).ok_or_else(|| err("missing value"))?.parse::<f64>().map_err(|_| err("not a number"))
-        };
-        let opt = |i: usize| -> Result<f64, String> { if words.len() > i { num(i) } else { Ok(0.0) } };
-        let t = num(0)?;
-        let cue = *words.get(1).ok_or_else(|| err("missing cue"))?;
-        // A key, with any modifiers before it: `Z`, `Ctrl+Shift+F`
-        let key = |i: usize| -> Result<(egui::Key, egui::Modifiers), String> {
-            let name = words.get(i).ok_or_else(|| err("missing key"))?;
-            let mut parts: Vec<&str> = name.split('+').collect();
-            let key = egui::Key::from_name(parts.pop().unwrap_or_default()).ok_or_else(|| err("unknown key"))?;
-            let mut modifiers = egui::Modifiers::default();
-            for part in parts {
-                match part {
-                    "Ctrl" => modifiers |= egui::Modifiers::COMMAND,
-                    "Shift" => modifiers.shift = true,
-                    "Alt" => modifiers.alt = true,
-                    _ => return Err(err("unknown modifier")),
-                }
-            }
-            Ok((key, modifiers))
-        };
-        match cue {
-            "play" => cues.push((t, Cue::Play(true))),
-            "stop" => cues.push((t, Cue::Play(false))),
-            "key" => {
-                let (k, m) = key(2)?;
-                cues.push((t, Cue::KeyDown(k, m)));
-                cues.push((t + num(3)?, Cue::KeyUp(k, m)));
-            }
-            "keydown" => {
-                let (k, m) = key(2)?;
-                cues.push((t, Cue::KeyDown(k, m)));
-            }
-            "keyup" => {
-                let (k, m) = key(2)?;
-                cues.push((t, Cue::KeyUp(k, m)));
-            }
-            "type" => {
-                // Text typed a letter at a time, as a person would: a word, or
-                // a "quoted phrase" with spaces
-                let (text, gap) = match line.split_once('"') {
-                    Some((_, rest)) => {
-                        let (text, after) = rest.split_once('"').ok_or_else(|| err("unclosed quote"))?;
-                        let gap = after.trim();
-                        (text, if gap.is_empty() { 0.09 } else { gap.parse().map_err(|_| err("not a number"))? })
-                    }
-                    None => (*words.get(2).ok_or_else(|| err("missing text"))?, if words.len() > 3 { num(3)? } else { 0.09 }),
-                };
-                for (i, c) in text.chars().enumerate() {
-                    cues.push((t + i as f64 * gap, Cue::Text(c.to_string())));
-                }
-            }
-            "note" | "chord" => {
-                let notes: Vec<u8> = words.get(2).ok_or_else(|| err("missing note"))?
-                    .split(',')
-                    .map(|n| n.parse().map_err(|_| err("bad note")))
-                    .collect::<Result<_, _>>()?;
-                let velocity = num(3)? as u8;
-                let len = num(4)?;
-                let channel = if words.len() > 5 { midi_channel(num(5)?).ok_or_else(|| err("channel is 1-16"))? } else { 0 };
-                for note in notes {
-                    cues.push((t, Cue::Note { channel, note, velocity, on: true }));
-                    cues.push((t + len, Cue::Note { channel, note, velocity, on: false }));
-                }
-            }
-            "cc" => {
-                let channel = midi_channel(num(2)?).ok_or_else(|| err("channel is 1-16"))?;
-                let byte = |i| match num(i)? {
-                    n if (0.0..=127.0).contains(&n) => Ok(n as u8),
-                    _ => Err(err("a CC's number and value are 0-127")),
-                };
-                cues.push((t, Cue::Midi(MidiEvent::ControlChange { channel, controller: byte(3)?, value: byte(4)? })));
-            }
-            "bend" => {
-                let channel = midi_channel(num(2)?).ok_or_else(|| err("channel is 1-16"))?;
-                let value = match num(3)? {
-                    n if (-8192.0..=8191.0).contains(&n) => n as i16,
-                    _ => return Err(err("a bend is -8192 to 8191")),
-                };
-                cues.push((t, Cue::Midi(MidiEvent::PitchBend { channel, value })));
-            }
-            "pressure" => {
-                let channel = midi_channel(num(2)?).ok_or_else(|| err("channel is 1-16"))?;
-                let pressure = match num(3)? {
-                    n if (0.0..=127.0).contains(&n) => n as u8,
-                    _ => return Err(err("pressure is 0-127")),
-                };
-                cues.push((t, Cue::Midi(MidiEvent::ChannelPressure { channel, pressure })));
-            }
-            "midi" => {
-                let event = match words.get(2).copied() {
-                    Some("start") => MidiEvent::Start,
-                    Some("stop") => MidiEvent::Stop,
-                    Some("continue") => MidiEvent::Continue,
-                    _ => return Err(err("expected start, stop or continue")),
-                };
-                cues.push((t, Cue::Midi(event)));
-            }
-            "midiclock" => {
-                // A clock master's ticks, 24 to the beat
-                let bpm = num(2)?;
-                let len = num(3)?;
-                if bpm <= 0.0 {
-                    return Err(err("tempo must be positive"));
-                }
-                let spacing = 60.0 / (bpm * 24.0);
-                let ticks = (len / spacing).floor() as usize;
-                cues.extend((0..ticks).map(|n| (t + n as f64 * spacing, Cue::Midi(MidiEvent::Clock))));
-            }
-            "param" => {
-                let target = words.get(2).ok_or_else(|| err("missing module"))?;
-                let (module, which) = capture_aim::module_ref(target).map_err(err)?;
-                // Input names may contain spaces: everything up to the value
-                let value_at = (3..words.len()).find(|&i| words[i].parse::<f64>().is_ok()).ok_or_else(|| err("missing value"))?;
-                let input = words[3..value_at].join(" ");
-                cues.push((t, Cue::Param { module, which, input, value: num(value_at)? as f32, dur: opt(value_at + 1)? }));
-            }
-            "cursor" => cues.push((t, Cue::Cursor(words.get(2) != Some(&"off")))),
-            "move" if words.get(2) == Some(&"off") && words.len() == 3 => cues.push((t, Cue::PointerOff)),
-            "move" => {
-                let (to, rest) = capture_aim::parse_spot(&words[2..]).map_err(err)?;
-                if rest.len() > 1 {
-                    return Err(err("too many values"));
-                }
-                cues.push((t, Cue::Move { to, dur: rest.first().copied().unwrap_or(0.0) }));
-            }
-            "press" => cues.push((t, Cue::Button(true))),
-            "release" => cues.push((t, Cue::Button(false))),
-            "rclick" => {
-                cues.push((t, Cue::SecondaryButton(true)));
-                cues.push((t + 0.05, Cue::SecondaryButton(false)));
-            }
-            "drag" => {
-                let (to, rest) = capture_aim::parse_spot(&words[2..]).map_err(err)?;
-                let &[dur] = rest.as_slice() else { return Err(err("expected one length")) };
-                cues.push((t, Cue::Button(true)));
-                cues.push((t + 0.05, Cue::Move { to, dur }));
-                cues.push((t + 0.1 + dur, Cue::Button(false)));
-            }
-            "wheel" => {
-                let modifiers = match words.get(3) {
-                    Some(&"ctrl") => egui::Modifiers::CTRL,
-                    Some(&"alt") => egui::Modifiers::ALT,
-                    _ => egui::Modifiers::default(),
-                };
-                cues.push((t, Cue::Wheel { delta: num(2)? as f32, modifiers }))
-            }
-            "view" => cues.push((t, Cue::View { pan: Vec2::new(num(2)? as f32, num(3)? as f32), dur: opt(4)? })),
-            "zoom" => cues.push((t, Cue::Zoom { factor: num(2)? as f32, dur: opt(3)? })),
-            "camera" => cues.push((t, Cue::Camera {
-                offset: Vec2::new(num(2)? as f32, num(3)? as f32),
-                scale: num(4)? as f32,
-                dur: opt(5)?,
-            })),
-            "fit" => cues.push((t, Cue::Fit(opt(2)?))),
-            "aim" => cues.push((t, Cue::Aim { at: Pos2::new(num(2)? as f32, num(3)? as f32), zoom: num(4)? as f32, dur: opt(5)? })),
-            "enter" => {
-                // Names may have spaces: the rest of the line
-                let name = line.splitn(3, char::is_whitespace).nth(2).map(str::trim).unwrap_or_default();
-                // ...up to an aim on the end: `at x y zoom`
-                let (name, aim) = match name.split_whitespace().collect::<Vec<_>>()[..] {
-                    [ref group @ .., "at", x, y, zoom] if !group.is_empty() => {
-                        let n = |s: &str| s.parse::<f32>().map_err(|_| err("bad number in the aim"));
-                        (group.join(" "), Some((Pos2::new(n(x)?, n(y)?), n(zoom)?)))
-                    }
-                    _ => (name.to_string(), None),
-                };
-                if name.is_empty() {
-                    return Err(err("missing group"));
-                }
-                cues.push((t, Cue::Enter(name, aim)));
-            }
-            "leave" => cues.push((t, Cue::Leave)),
-            "still" => cues.push((t, Cue::Still(words.get(2).ok_or_else(|| err("missing name"))?.to_string()))),
-            "layout" => cues.push((t, Cue::Layout(words.get(2).ok_or_else(|| err("missing name"))?.to_string()))),
-            "input" => cues.push((t, Cue::Input(PathBuf::from(words.get(2).ok_or_else(|| err("missing file"))?)))),
-            "hover" => {
-                let file = words.get(2).ok_or_else(|| err("missing file"))?;
-                // Whole, as a drag from the desktop carries it
-                let path = (*file != "off").then(|| std::path::absolute(file).unwrap_or_else(|_| PathBuf::from(file)));
-                cues.push((t, Cue::Hover(path)));
-            }
-            "drop" => cues.push((t, Cue::Drop)),
-            "end" => cues.push((t, Cue::End)),
-            _ => return Err(err("unknown cue")),
-        }
-    }
-    // Stable: cues at the same time keep their script order
-    cues.sort_by(|a, b| a.0.total_cmp(&b.0));
-    if !cues.iter().any(|(_, c)| matches!(c, Cue::End)) {
-        return Err("script has no `end` cue".into());
-    }
-    Ok(cues)
-}
-
-/// A file a script drops, as one dropped from the desktop.
-#[derive(Debug)]
-struct DroppedPath(PathBuf);
-
-impl egui::DroppedFile for DroppedPath {
-    fn path(&self) -> &Path {
-        &self.0
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn bytes(&self) -> Result<Vec<u8>, String> {
-        std::fs::read(&self.0).map_err(|e| e.to_string())
-    }
-
-    // Captures film the desktop app: a page has no files to drop from
-    #[cfg(target_arch = "wasm32")]
-    fn bytes_async(&self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<u8>, String>> + '_>> {
-        Box::pin(std::future::ready(Err("a page can't read a script's files".to_string())))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn script_expands_lengths_and_sorts() {
-        let cues = parse_script("1.0 key Z 0.5\n0.5 chord 60,64 90 1\n0.0 play\n3 param filter.svf#2 Cut Off 800 1\n4 end").unwrap();
-        let times: Vec<f64> = cues.iter().map(|c| c.0).collect();
-        assert_eq!(times, vec![0.0, 0.5, 0.5, 1.0, 1.5, 1.5, 1.5, 3.0, 4.0]);
-        match &cues[7].1 {
-            Cue::Param { module, which, input, value, dur } => {
-                assert_eq!((module.as_str(), *which, input.as_str(), *value, *dur), ("filter.svf", Which::Nth(1), "Cut Off", 800.0, 1.0));
-            }
-            other => panic!("expected a param cue, got {:?}", other),
-        }
-    }
-
-    #[test]
-    fn script_plays_a_midi_clock() {
-        let cues = parse_script("0.5 midi start\n0.5 midiclock 120 1.0\n2 midi stop\n3 end").unwrap();
-        let ticks: Vec<f64> = cues.iter().filter(|c| matches!(c.1, Cue::Midi(MidiEvent::Clock))).map(|c| c.0).collect();
-        // Two beats of ticks, 1/48 s apart
-        assert_eq!(ticks.len(), 48);
-        assert!((ticks[1] - ticks[0] - 1.0 / 48.0).abs() < 1e-12);
-        assert!(matches!(cues[0].1, Cue::Midi(MidiEvent::Start)));
-        assert!(parse_script("0 midi pause\n1 end").is_err());
-    }
-
-    #[test]
-    fn script_hits_a_pad_on_its_channel_and_moves_a_cc() {
-        let cues = parse_script("0.5 note 36 110 0.1 10\n1 cc 1 74 127\n2 end").unwrap();
-        assert!(matches!(cues[0].1, Cue::Note { channel: 9, note: 36, velocity: 110, on: true }));
-        assert!(matches!(cues[1].1, Cue::Note { channel: 9, on: false, .. }));
-        assert!(matches!(cues[2].1, Cue::Midi(MidiEvent::ControlChange { channel: 0, controller: 74, value: 127 })));
-        assert!(parse_script("0 note 60 100 1\n1 end").is_ok_and(|cues| matches!(cues[0].1, Cue::Note { channel: 0, .. })));
-        assert!(parse_script("0 cc 17 1 1\n1 end").is_err());
-        assert!(parse_script("0 cc 1 1 128\n1 end").is_err());
-        let cues = parse_script("0 bend 2 -8192\n0 pressure 1 90\n1 end").unwrap();
-        assert!(matches!(cues[0].1, Cue::Midi(MidiEvent::PitchBend { channel: 1, value: -8192 })));
-        assert!(matches!(cues[1].1, Cue::Midi(MidiEvent::ChannelPressure { channel: 0, pressure: 90 })));
-        assert!(parse_script("0 bend 1 9000\n1 end").is_err());
-    }
-
-    #[test]
-    fn fit_cuts_unless_given_a_length() {
-        let cues = parse_script("0.0 fit\n1.0 fit 1.5\n2 end").unwrap();
-        assert!(matches!(cues[0].1, Cue::Fit(d) if d == 0.0));
-        assert!(matches!(cues[1].1, Cue::Fit(d) if d == 1.5));
-    }
-
-    #[test]
-    fn the_pointer_can_leave_the_window() {
-        let cues = parse_script("0 move 400 300 0.5
-1 move off
-2 end").unwrap();
-        assert!(matches!(cues[1].1, Cue::PointerOff));
-    }
-
-    #[test]
-    fn groups_are_entered_by_name_and_aimed_in_patch_space() {
-        let cues = parse_script("0 enter Bells
-1 enter Bells/FM Bell   # a path
-2 leave
-3 aim 1200 640.5 1.5 2
-4 aim 0 0 1
-5 end").unwrap();
-        assert!(matches!(&cues[0].1, Cue::Enter(name, None) if name == "Bells"));
-        assert!(matches!(&cues[1].1, Cue::Enter(name, None) if name == "Bells/FM Bell"));
-        assert!(matches!(cues[2].1, Cue::Leave));
-        assert!(matches!(cues[3].1, Cue::Aim { at, zoom, dur } if at == Pos2::new(1200.0, 640.5) && zoom == 1.5 && dur == 2.0));
-        assert!(matches!(cues[4].1, Cue::Aim { dur, .. } if dur == 0.0));
-        assert!(parse_script("0 enter
-1 end").is_err());
-        let cues = parse_script("0 enter Drums at 168 291.5 1.0
-1 enter Bells/FM Bell at -20 40 2   # aimed inside a path
-2 end").unwrap();
-        assert!(matches!(&cues[0].1, Cue::Enter(name, Some((at, zoom))) if name == "Drums" && *at == Pos2::new(168.0, 291.5) && *zoom == 1.0));
-        assert!(matches!(&cues[1].1, Cue::Enter(name, Some((at, _))) if name == "Bells/FM Bell" && *at == Pos2::new(-20.0, 40.0)));
-        assert!(parse_script("0 enter Drums at 168 x 1
-1 end").is_err());
-        assert!(parse_script("0 aim 10 10
-1 end").is_err());
-    }
-
-    #[test]
-    fn a_hovered_file_is_held_whole_until_dropped_or_given_up() {
-        let cues = parse_script("0 hover take.wav
-1 drop
-2 hover off
-3 end").unwrap();
-        assert!(matches!(&cues[0].1, Cue::Hover(Some(path)) if path.is_absolute() && path.ends_with("take.wav")));
-        assert!(matches!(cues[1].1, Cue::Drop));
-        assert!(matches!(cues[2].1, Cue::Hover(None)));
-        assert!(parse_script("0 hover
-1 end").is_err());
-    }
-
-    #[test]
-    fn script_needs_an_end() {
-        assert!(parse_script("0 play").is_err());
-        assert!(parse_script("0 bogus\n1 end").is_err());
-    }
 
     #[test]
     fn capture_is_lossless_unless_asked() {
@@ -1571,38 +819,6 @@ mod tests {
         }
         assert_eq!(c.samples_done as i64, c.grid + 31 * 1600);
         assert_eq!(notes, [(14, 24_000), (22, 36_000)]);
-    }
-
-    #[test]
-    fn glide_eases_to_its_target() {
-        let g = Glide { from: Vec2::ZERO, to: Vec2::new(10.0, 0.0), start: 1.0, dur: 2.0 };
-        assert_eq!(g.at(0.0), Vec2::ZERO);
-        assert_eq!(g.at(2.0), Vec2::new(5.0, 0.0));
-        assert_eq!(g.at(5.0), Vec2::new(10.0, 0.0));
-        assert!(g.done(3.0) && !g.done(2.9));
-    }
-
-    #[test]
-    fn camera_glide_carries_the_centre_straight() {
-        // From a close-up on a module at the patch's right edge (centre 5366
-        // at zoom 1.4) out to the whole patch (centre 2962 at 0.2), as the
-        // shots write them: offset = -(centre - c) * zoom
-        let c = 960.0;
-        let cam = |centre: f32, zoom: f32| (zoom, Vec2::new(-(centre - c) * zoom, 0.0));
-        let g = CameraGlide { from: cam(5366.0, 1.4), to: cam(2962.0, 0.2), start: 0.0, dur: 1.0 };
-        let centre = |t: f64| {
-            let (zoom, offset) = g.at(t);
-            c - offset.x / zoom
-        };
-        assert!((centre(0.0) - 5366.0).abs() < 0.01 && (centre(1.0) - 2962.0).abs() < 0.01);
-        // Never past either end, and always moving the same way
-        let mut last = centre(0.0);
-        for i in 1..=50 {
-            let x = centre(i as f64 / 50.0);
-            assert!(x <= last + 1e-3 && x >= 2962.0 - 0.01, "centre {x} at step {i}");
-            last = x;
-        }
-        assert!((g.at(0.5).0 - (1.4f32 * 0.2).sqrt()).abs() < 1e-4, "zoom eases in log space");
     }
 
     #[test]
