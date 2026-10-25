@@ -17,6 +17,11 @@
 //! which is how **Send all** works: on opening the patch, on choosing a
 //! profile, and from the face's menu. What each knob holds is kept on the
 //! node (see [`crate::hardware::instrument`]).
+//!
+//! It listens back, too (#444): the editor hears the device's own knobs
+//! turn (see [`crate::hardware::hearing`]) and moves the node's to match,
+//! after `EngineCommand::SlotHeard` tells the knob the device is there
+//! already, so the value isn't sent back to it.
 
 use crate::dsp::{
     context::ProcessContext,
@@ -81,6 +86,10 @@ pub struct Knobs {
     /// relative parameter, which sending would nudge, or (a Kit's) turned
     /// to another track, whose sound it would overwrite.
     settle: [bool; SLOTS],
+    /// A value the device has already, its own knob turned there (#444):
+    /// when the knob comes to send it, it counts as sent, so the device
+    /// isn't sent back a value its hand has moved on from.
+    held: [Option<u16>; SLOTS],
     /// Knob values sent so far, wrapping at [`WRAP`], for the face's lamp.
     sent: u32,
 }
@@ -93,7 +102,7 @@ impl Default for Knobs {
 
 impl Knobs {
     pub const fn new() -> Self {
-        Self { maps: [SlotMap::EMPTY; SLOTS], lanes: [ControlLane::new(); SLOTS], settle: [false; SLOTS], sent: 0 }
+        Self { maps: [SlotMap::EMPTY; SLOTS], lanes: [ControlLane::new(); SLOTS], settle: [false; SLOTS], held: [None; SLOTS], sent: 0 }
     }
 
     /// The knobs sent where they've moved: each from its jack (from
@@ -112,6 +121,7 @@ impl Knobs {
             let was = lane.sent();
             match connected_input(inputs, first_port + slot) {
                 Some(cable) => {
+                    self.held[slot] = None;
                     if std::mem::take(&mut self.settle[slot]) {
                         lane.assume(map.control(address, channel, map.value(cable.at(0))));
                     }
@@ -123,8 +133,16 @@ impl Knobs {
                     if std::mem::take(&mut self.settle[slot]) {
                         lane.assume(control);
                     }
+                    // Turned to where the device's own knob is: it's there already
+                    if let Some(held) = self.held[slot] {
+                        if control == map.control(address, channel, held) {
+                            lane.assume(control);
+                            self.held[slot] = None;
+                        }
+                    }
                     if lane.sent() != Some(control) {
                         lane.run(out, 0..frames, gap, |_| control);
+                        self.held[slot] = None;
                     }
                 }
             }
@@ -155,6 +173,7 @@ impl Knobs {
     /// settling).
     pub fn forget(&mut self) {
         self.lanes = [ControlLane::new(); SLOTS];
+        self.held = [None; SLOTS];
     }
 
     /// Gives knob `slot` what it sends, and has it send its value again,
@@ -164,6 +183,16 @@ impl Knobs {
         *place = map;
         self.lanes[slot].reset();
         self.settle[slot] = map.relative;
+        self.held[slot] = None;
+    }
+
+    /// The device's own knob `slot` has turned to send `value` (#444): the
+    /// node's knob follows it, and once there, sends nothing, as the
+    /// device has it already.
+    pub fn slot_heard(&mut self, slot: usize, value: u16) {
+        if let Some(held) = self.held.get_mut(slot) {
+            *held = Some(value);
+        }
     }
 
     /// What knob `slot` holds now.
@@ -342,6 +371,10 @@ impl DspModule for Instrument {
 
     fn map_slot(&mut self, slot: usize, map: SlotMap) {
         self.knobs.map_slot(slot, map);
+    }
+
+    fn slot_heard(&mut self, slot: usize, value: u16) {
+        self.knobs.slot_heard(slot, value);
     }
 
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
@@ -538,6 +571,30 @@ mod tests {
         params[Instrument::PARAM_CHANNEL] = 4.0;
         run(&mut module, &inputs, &params);
         assert!(messages(&mut ring).is_empty());
+    }
+
+    #[test]
+    fn a_knob_the_device_turned_isnt_sent_back() {
+        // #444: the MicroFreak's Cutoff turned to 100, heard, and the knob follows
+        let (mut module, mut ring) = module();
+        let mut params = defaults(&module);
+        let inputs = inputs(&module);
+        module.map_slot(0, cutoff());
+        run(&mut module, &inputs, &params);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 23, 64]]);
+        // Heard a block before the knob gets there: nothing goes either way
+        module.slot_heard(0, 100);
+        run(&mut module, &inputs, &params);
+        params[Instrument::PARAM_SLOT] = cutoff().travel(100);
+        run(&mut module, &inputs, &params);
+        assert!(messages(&mut ring).is_empty(), "the device has it already");
+        assert_eq!(module.readout(&params).unwrap().values[Instrument::READOUT_SENT], 100.0, "and it counts as sent");
+        // Turned from the face, it goes again, and back to 100 too
+        params[Instrument::PARAM_SLOT] = 0.0;
+        run(&mut module, &inputs, &params);
+        params[Instrument::PARAM_SLOT] = cutoff().travel(100);
+        run(&mut module, &inputs, &params);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 23, 0], vec![0xB0, 23, 100]]);
     }
 
     #[test]

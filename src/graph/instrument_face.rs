@@ -12,7 +12,9 @@
 //! - **Twelve knobs**, four to a row, each named for the parameter it
 //!   holds, coloured by its group (an oscillator's blue, a filter's teal),
 //!   and reading out what it sends as the device names it: "Saw", "+12",
-//!   "74". Right-click a knob to give it another parameter.
+//!   "74". Right-click a knob to give it another parameter. Turned on the
+//!   device, a knob follows (#444); under a cable, a faint tick on its rim
+//!   shows where the device's was turned to.
 //!
 //! A Kit (#443) wears the same face, with its lanes' pads between the
 //! header and the knobs (see [`super::kit_face`]), and lists only kits.
@@ -86,6 +88,76 @@ pub fn jack_name(data: &SynthNodeData, param_name: &str) -> Option<String> {
     }
     let slot = slot_of(param_name)?;
     instrument::held(&data.labels, slot, &hardware::known()).map(|held| held.parameter.name)
+}
+
+/// How long, in seconds, the ghost of the hardware's knob stays, and then
+/// takes to fade: the cable soon moves the device on from it.
+const GHOST_HOLD: f64 = 1.5;
+const GHOST_FADE: f64 = 1.5;
+
+/// Where the hardware's own knob was heard, for knob `param_index` of the
+/// engine's node `engine_node_id` under a cable (#444), as a knob's pickup
+/// tick shows it: its travel, and how strongly, faint, and fading once the
+/// hardware's been still a moment.
+pub fn ghost(ui: &egui::Ui, user_state: &SynthGraphState, engine_node_id: u64, param_index: usize) -> Option<(f32, f32)> {
+    let &(travel, heard) = user_state.hardware_ghosts.get(&(engine_node_id, param_index))?;
+    let since = ui.input(|i| i.time) - heard;
+    let fade = (1.0 - (since - GHOST_HOLD) / GHOST_FADE).clamp(0.0, 1.0) as f32;
+    if fade <= 0.0 {
+        return None;
+    }
+    crate::app::pace::animate(ui.ctx());
+    Some((travel, 0.55 * fade))
+}
+
+/// What an Instrument's or a Kit's knobs listen for, as its device sends
+/// its own knobs back (#444).
+pub struct InstrumentKnobs {
+    /// The port it plays, whose device it hears.
+    pub port: usize,
+    /// The channel, from 0, its knobs go out on, but for those with their
+    /// own: a Kit's on its Track's lane, where the knobs follow the track.
+    pub channel: u8,
+    /// What each knob sends.
+    pub maps: [SlotMap; SLOTS],
+    pub knobs: [Option<HeldKnob>; SLOTS],
+}
+
+/// One of an Instrument's knobs, as it stands.
+#[derive(Clone, Copy, Debug)]
+pub struct HeldKnob {
+    /// Its parameter's index, and its input on the node.
+    pub param_index: usize,
+    pub input: egui_node_graph2::InputId,
+    /// Its travel, 0 to 1.
+    pub travel: f32,
+    /// A cable turns it.
+    pub patched: bool,
+}
+
+/// What node `node_id`'s knobs listen for, if it plays a profile.
+pub fn knobs_of(graph: &SynthGraph, node_id: NodeId, profiles: &hardware::Profiles) -> Option<InstrumentKnobs> {
+    let node = graph.nodes.get(node_id)?;
+    let data = &node.user_data;
+    if !instrument::plays_a_profile(data.module_id) {
+        return None;
+    }
+    let value = |name: &str| display_frame::value_of(graph, node_id, name).unwrap_or(0.0).round().max(0.0);
+    let port = (value("Port") as usize).min(PORTS - 1);
+    let mut channel = value("Channel").min(15.0) as u8;
+    if data.module_id == kit::ID {
+        let track = instrument::lane_maps(&data.labels, profiles)[(value("Track") as usize).min(LANES - 1)];
+        if track.track {
+            channel = track.channel(channel);
+        }
+    }
+    let first_param = if data.module_id == kit::ID { Kit::PARAM_SLOT } else { Instrument::PARAM_SLOT };
+    let knobs = std::array::from_fn(|slot| {
+        let (_, input) = node.inputs.iter().find(|(name, _)| name == SLOT_NAMES[slot])?;
+        let super::SynthValueType::Number { value: travel, .. } = graph.get_input(*input).value else { return None };
+        Some(HeldKnob { param_index: first_param + slot, input: *input, travel, patched: super::patched::input(graph, *input) })
+    });
+    Some(InstrumentKnobs { port, channel, maps: instrument::maps(&data.labels, profiles), knobs })
 }
 
 /// Draws the face and the knobs under it, and returns what they asked for.
@@ -244,8 +316,8 @@ fn header(
         Some(PortStatus::NoDevice) | Some(PortStatus::Idle) if device.is_none() => format!("Port {} has no device yet: click its name to choose one", PORT_LABELS[port]),
         Some(PortStatus::Missing) => "The device isn't plugged in. Its knobs go out again once it is: Send all brings it back to the patch".to_string(),
         Some(PortStatus::Failed) => "The device wouldn't open. Another app may be using it: close that, and Soba tries again".to_string(),
-        _ if is_kit => format!("Playing port {} on channel {channel}: each lane strikes its part, and each knob is the device's own control", PORT_LABELS[port]),
-        _ => format!("Playing port {} on channel {channel}: notes from Gate and Pitch, and each knob as the device's own control", PORT_LABELS[port]),
+        _ if is_kit => format!("Playing port {} on channel {channel}: each lane strikes its part, and each knob is the device's own control. With the device's MIDI In open, turning its knobs turns these", PORT_LABELS[port]),
+        _ => format!("Playing port {} on channel {channel}: notes from Gate and Pitch, and each knob as the device's own control. With the device's MIDI In open, turning its knobs turns these", PORT_LABELS[port]),
     });
 }
 

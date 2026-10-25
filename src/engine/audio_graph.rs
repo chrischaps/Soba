@@ -632,6 +632,22 @@ impl AudioGraph {
         self.slots.get(&node_id)
     }
 
+    /// Tells an Instrument's knob `slot` where the device's own knob has
+    /// turned (#444), as [`map_slot`](Self::map_slot) hands over a map.
+    /// Nothing is kept: it's news for the running module alone.
+    ///
+    /// Returns false if there is no such module.
+    pub fn slot_heard(&mut self, node_id: NodeId, slot: usize, value: u16) -> bool {
+        let Some(spec) = self.nodes.get_mut(&node_id) else {
+            return false;
+        };
+        match spec.fresh.as_mut() {
+            Some(module) => module.slot_heard(slot, value),
+            None => self.take_handoffs.push(PlanMessage::SlotHeard { node_id, slot, value }),
+        }
+        true
+    }
+
     /// Gives a Kit's lane `lane` the part it plays (#443), as
     /// [`map_slot`](Self::map_slot) gives a knob its parameter.
     ///
@@ -864,6 +880,7 @@ impl AudioGraph {
             EngineCommand::SettleTake { node_id, take, sample } => self.settle_take(node_id, take, sample),
             EngineCommand::SetMarkers { node_id, markers } => self.set_markers(node_id, markers),
             EngineCommand::MapSlot { node_id, slot, map } => self.map_slot(node_id, slot, map),
+            EngineCommand::SlotHeard { node_id, slot, value } => self.slot_heard(node_id, slot, value),
             EngineCommand::MapLane { node_id, lane, map } => self.map_lane(node_id, lane, map),
             EngineCommand::SeedModule { node_id, seed } => self.seed_module(node_id, seed),
             EngineCommand::SetScenes { node_id, knobs } => self.set_scenes(node_id, knobs),

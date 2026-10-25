@@ -751,6 +751,7 @@ mod tests {
                         PlanMessage::LoadSample { .. } => "sample",
                         PlanMessage::SetMarkers { .. } => "markers",
                         PlanMessage::MapSlot { .. } => "slot",
+                        PlanMessage::SlotHeard { .. } => "heard",
                         PlanMessage::MapLane { .. } => "lane",
                         PlanMessage::GiveRoom { .. } => "room",
                         PlanMessage::SettleTake { .. } => "settle",

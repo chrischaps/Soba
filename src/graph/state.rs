@@ -256,6 +256,10 @@ pub struct SynthGraphState {
     /// for [`PICKUP_FADE`] seconds.
     pub midi_pickups: HashMap<(EngineNodeId, usize), (f32, Option<f64>)>,
 
+    /// Where the hardware's own knob was heard (#444), for an Instrument's
+    /// knob under a cable: its travel, and when, from which its ghost fades.
+    pub hardware_ghosts: HashMap<(EngineNodeId, usize), (f32, f64)>,
+
     /// Map Mode, where a click on a control maps it, and the control the
     /// Controller Map lights (#426).
     pub map_mode: super::map_mode::MapMode,
@@ -430,6 +434,7 @@ impl Default for SynthGraphState {
             midi_learn_target: None,
             midi_learn_scene: None,
             midi_pickups: HashMap::new(),
+            hardware_ghosts: HashMap::new(),
             map_mode: Default::default(),
             hands: Default::default(),
             widget_context_menu_open: false,
@@ -587,6 +592,7 @@ impl SynthGraphState {
         self.midi_learn_target = None;
         self.midi_learn_scene = None;
         self.midi_pickups.clear();
+        self.hardware_ghosts.clear();
         self.map_mode.highlight = None;
         self.scene_midi_mappings.clear();
         self.widget_context_menu_open = false;

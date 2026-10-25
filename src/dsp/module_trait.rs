@@ -492,6 +492,13 @@ pub trait DspModule: Send + 'static {
     /// REAL-TIME SAFE: the map comes by value.
     fn map_slot(&mut self, _slot: usize, _map: crate::hardware::SlotMap) {}
 
+    /// Tells an Instrument's knob `slot` the device's own knob has turned
+    /// to send `value` (#444), so the knob, following it there, sends
+    /// nothing back. Ignored by other modules.
+    ///
+    /// REAL-TIME SAFE.
+    fn slot_heard(&mut self, _slot: usize, _value: u16) {}
+
     /// Gives a Kit's lane `lane` the part it plays (#443). Ignored by
     /// other modules.
     ///

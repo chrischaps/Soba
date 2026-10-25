@@ -57,6 +57,8 @@ Turning the knobs to another track sends nothing. The track keeps its sound unti
 
 The SP-404MKII is different: its pads are notes, and its knobs are its effects. Its knobs stay on their own channels whichever pad you click.
 
+The Kit [listens to its device](./instrument.md#the-hardware-turns-it-too) as an Instrument does. Turn the Digitakt's filter on the track the knobs turn, and the Kit's knob follows. Turning another track's filter doesn't move it, because that track's CCs come on another channel.
+
 ## How it works
 
 **A strike.** A lane's gate rising sends a Note On: its part's note, on its part's channel, or on **Ch** if the part has none. A part with only a channel (a volca drum's, which any note plays) is struck with middle C (note 60). The gate falling sends the Note Off. Notes go out in time with the sound, stamped with their sample, as [MIDI Out's](../output/midi-out.md#how-it-works) do. A busy port's budget never holds back a note.

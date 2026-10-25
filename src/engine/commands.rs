@@ -170,6 +170,16 @@ pub enum EngineCommand {
         map: SlotMap,
     },
 
+    /// Tell an Instrument's knob `slot` the device's own knob has turned
+    /// to send `value` (#444): the knob's parameter, set to follow it, then
+    /// sends nothing back. Ignored by other modules.
+    SlotHeard {
+        /// Target node.
+        node_id: NodeId,
+        slot: usize,
+        value: u16,
+    },
+
     /// Give a Kit's lane `lane` the part it plays (#443). Ignored by other
     /// modules.
     MapLane {
@@ -277,6 +287,8 @@ pub enum PlanMessage {
     SetMarkers { node_id: NodeId, markers: Markers },
     /// Give a running Instrument's knob what it sends.
     MapSlot { node_id: NodeId, slot: usize, map: SlotMap },
+    /// Tell a running Instrument's knob where the device's own has turned.
+    SlotHeard { node_id: NodeId, slot: usize, value: u16 },
     /// Give a running Kit's lane the part it plays.
     MapLane { node_id: NodeId, lane: usize, map: LaneMap },
     /// Give a running module room to record a take into. Room it's done
@@ -298,6 +310,7 @@ impl PlanMessage {
             | Self::LoadSample { node_id, .. }
             | Self::SetMarkers { node_id, .. }
             | Self::MapSlot { node_id, .. }
+            | Self::SlotHeard { node_id, .. }
             | Self::MapLane { node_id, .. }
             | Self::GiveRoom { node_id, .. }
             | Self::SettleTake { node_id, .. } => node_id,

@@ -343,6 +343,10 @@ impl DspModule for Kit {
         self.knobs.map_slot(slot, map);
     }
 
+    fn slot_heard(&mut self, slot: usize, value: u16) {
+        self.knobs.slot_heard(slot, value);
+    }
+
     fn map_lane(&mut self, lane: usize, map: LaneMap) {
         if lane >= LANES {
             return;

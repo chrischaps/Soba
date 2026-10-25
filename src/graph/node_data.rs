@@ -725,6 +725,8 @@ impl SynthNodeData {
                         (super::scenes::travel(&input.value, input.value.actual_value()), fade)
                     }
                 });
+                // Under a cable, an Instrument's knob shows where the hardware's own is (#444)
+                let pickup = pickup.or_else(|| super::instrument_face::ghost(ui, user_state, engine_node_id?, current_param_index));
                 let midi_config = KnobMidiConfig {
                     has_midi_mapping: midi_mapping.is_some(),
                     mapping: midi_mapping.cloned(),

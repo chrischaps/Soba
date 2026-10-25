@@ -56,11 +56,23 @@ The device comes back to the patch whenever every knob is sent:
 
 - when you open the patch;
 - when you choose a profile;
-- when you click **Send all**. Do this after you've turned the device by hand, or switched it on after the patch.
+- when you click **Send all**. Do this after you've switched the device on after the patch, or turned it by hand while Soba wasn't listening to it (see below).
 
 Each knob sends its value as a CC (or a 14-bit pair, or an NRPN, as its profile says). The port's [budget](../output/midi-out.md#busy-ports) paces them on a DIN port, so twelve knobs at once don't swamp it.
 
 Knobs that **nudge** rather than set are left out. The FANTOM-06's Cutoff is one of these: its middle means no change, and every value sent moves the sound a little further. Turn one of these knobs and it sends as you turn it. Send all leaves it alone.
+
+## The hardware turns it too
+
+Most synths send their knobs as CCs as you turn them. The MicroFreak and the Digitakt both do. Open the device's MIDI input (**MIDI In** in the toolbar), and the Instrument listens to it. Turn the MicroFreak's real **Cutoff**, and the node's **Cutoff** turns with it. Save the patch, and the patch keeps the sound you made by hand.
+
+- **It hears its own device, and nothing else.** The Instrument listens to the MIDI input whose name matches its port's device, as [the Rig](../../getting-started/interface-overview.md#the-rig) matches them, on the channels its knobs send on. A keyboard sending the same CC on the same channel doesn't move it.
+- **Nothing goes back.** The device already has the value you turned it to, so the knob doesn't send it again.
+- **An echo doesn't fight you.** Some devices send back every value they're sent. A value Soba sent that knob in the last 0.15 seconds is taken as an echo and ignored, so the knob doesn't jump back while you drag it.
+- **A patched knob stays the cable's.** A faint purple tick on its rim shows where the hardware's knob was turned to. The tick fades after a moment, because the cable soon moves the device on from there.
+- **Undo takes back a turn of the hand.** The moves of one turn are one step, the same as a mouse drag. The step ends after a second of stillness. Undoing it sends the knob's old value to the device.
+
+A stepped knob goes to the step nearest the value it hears. Knobs that nudge (the FANTOM-06's) send no value of their own back, so they don't listen.
 
 ## How it works
 

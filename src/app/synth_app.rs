@@ -68,6 +68,7 @@ mod hands;
 mod hands_overlay;
 mod hosted;
 mod idle;
+mod instrument_ears;
 mod instrument_listening;
 mod instruments;
 mod launch;
@@ -202,6 +203,8 @@ pub struct SynthApp {
     midi: MidiSession,
     /// Footswitches pressed from MIDI, held down long enough to be seen.
     midi_presses: crate::app::midi_presses::Presses,
+    /// What each Instrument's knobs sent lately, as their devices send them back (#444).
+    instrument_ears: HashMap<u64, crate::hardware::hearing::Ear>,
 
     /// Undo and redo for edits to the patch.
     history: History,
@@ -421,6 +424,7 @@ impl SynthApp {
             toolbar_full_width: None,
             midi,
             midi_presses: Default::default(),
+            instrument_ears: HashMap::new(),
             history: History::default(),
             quick_add: None,
             editor_rect: egui::Rect::NOTHING,
@@ -747,8 +751,17 @@ impl SynthApp {
         self.user_state.note_claims = claims;
         let standings = self.midi_standings();
         let was_learning = self.is_midi_learning();
+        self.follow_instrument_knobs(now);
+        let mut ccs: Vec<instrument_ears::HeardCc> = Vec::new();
         let (user_state, overlay) = (&mut self.user_state, &mut self.hands_overlay);
-        let heard = self.midi.drain(|event, port, device| { user_state.push_midi_event(event, port, device, now); overlay.hear(event, now) }, |node, param| standings.get(&(node, param)).copied());
+        let heard = self.midi.drain(|event, port, device| {
+            user_state.push_midi_event(event, port, device, now);
+            overlay.hear(event, now);
+            if let crate::engine::MidiEvent::ControlChange { channel, controller, value } = event {
+                ccs.push((port, channel, controller, value));
+            }
+        }, |node, param| standings.get(&(node, param)).copied());
+        self.hear_instruments(&ccs, now);
         self.show_midi_pickups(now);
 
         if heard.learned {

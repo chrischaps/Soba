@@ -8,6 +8,7 @@
 //! listening to a device's knobs ([`listening`]). One of yours with a
 //! shipped profile's name takes its place.
 
+pub mod hearing;
 pub mod instrument;
 pub mod lane;
 pub mod listening;

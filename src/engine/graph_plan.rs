@@ -498,6 +498,12 @@ impl GraphPlan {
                 }
                 None
             }
+            PlanMessage::SlotHeard { node_id, slot, value } => {
+                if let Some(module) = self.nodes.iter_mut().find(|node| node.node_id == node_id).and_then(|node| node.module.as_mut()) {
+                    module.slot_heard(slot, value);
+                }
+                None
+            }
             PlanMessage::MapLane { node_id, lane, map } => {
                 if let Some(module) = self.nodes.iter_mut().find(|node| node.node_id == node_id).and_then(|node| node.module.as_mut()) {
                     module.map_lane(lane, map);
