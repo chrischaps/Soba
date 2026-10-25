@@ -857,7 +857,7 @@ impl SynthNodeData {
                         let config = KnobConfig {
                             size: knob_size,
                             range: spec.min..=spec.max,
-                            default: spec.default,
+                            default: dressed.as_ref().and_then(|dressed| dressed.default).unwrap_or(spec.default),
                             format: spec.format(),
                             logarithmic: spec.logarithmic,
                             stepped: spec.stepped,
@@ -956,7 +956,15 @@ impl SynthNodeData {
                     // Its value, to type, and the way back to its default
                     if let SynthValueType::Number { value, spec } = &input.value {
                         let id = super::knob_menu::value_field_id(node_id, &knob_param.param_name);
-                        if let Some(value) = super::knob_menu::value_items(ui, id, spec, *value, !should_disable, !place.is_face()) {
+                        // An Instrument's in the device's own numbers (#466)
+                        let held = crate::hardware::instrument::plays_a_profile(self.module_id)
+                            .then(|| super::instrument_face::held_parameter(self, &knob_param.param_name))
+                            .flatten();
+                        let typed = match &held {
+                            Some(parameter) => super::knob_menu::device_value_items(ui, id, parameter, *value, !should_disable, !place.is_face()),
+                            None => super::knob_menu::value_items(ui, id, spec, *value, !should_disable, !place.is_face()),
+                        };
+                        if let Some(value) = typed {
                             responses.push(NodeResponse::User(SynthResponse::ParameterChanged {
                                 node_id,
                                 param_name: knob_param.param_name.clone(),

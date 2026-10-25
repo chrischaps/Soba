@@ -205,4 +205,36 @@ mod tests {
         // Its "0" step is sent at 64, and a knob there sends it
         assert_eq!(SlotMap::of(transpose).value(start(transpose)), transpose.default.unwrap_or(transpose.steps()[0].1));
     }
+
+    /// What a knob holding `parameter` sends once `typed` is typed into its
+    /// Value field (#466).
+    fn typed(parameter: &Parameter, typed: &str) -> u16 {
+        let map = SlotMap::of(parameter);
+        map.value(map.travel(parameter.parse(typed).unwrap()))
+    }
+
+    #[test]
+    fn a_typed_value_is_exactly_what_the_knob_sends() {
+        let profiles = profiles();
+        let freak = &profiles.find("MicroFreak").unwrap().profile;
+        let cutoff = freak.parameter("Cutoff").unwrap();
+        assert_eq!(cutoff.address, super::super::Address::Cc(23));
+        assert_eq!(typed(cutoff, "100"), 100);
+        let fm = &profiles.find("volca fm").unwrap().profile;
+        assert_eq!(typed(fm.parameter("Arp Type").unwrap(), "Fall 2"), 65);
+        // Every built-in parameter takes back what its knob reads out
+        for known in profiles.all() {
+            for parameter in &known.profile.parameters {
+                let (lo, hi) = parameter.range;
+                let values: Vec<u16> = match parameter.steps() {
+                    steps if steps.is_empty() => vec![lo, lo + (hi - lo) / 3, parameter.centre(), hi],
+                    steps => steps.into_iter().take(super::super::slot::MAX_STEPS).map(|(_, value)| value).collect(),
+                };
+                for value in values {
+                    let text = parameter.text(value);
+                    assert_eq!(typed(parameter, &text), value, "{} {}: {text}", known.profile.name, parameter.name);
+                }
+            }
+        }
+    }
 }

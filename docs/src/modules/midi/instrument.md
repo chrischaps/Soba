@@ -50,6 +50,8 @@ Each knob's jack is named for the parameter the knob holds. An empty knob's jack
 
 **Right-click a knob** to change what it holds. **Holds** lists the profile's parameters by group. **Nothing** empties the knob. The menu's heading says where the knob sends: **Cutoff · CC 23**, or **Delay Time · CC 85 ch 9** for a parameter on a channel of its own.
 
+The menu's **Value** field is in the device's numbers too, so you can send an exact value: type **100** into Cutoff and CC 23 goes out at 100. For a parameter with named values, type the name (**Fall 2**, in any case, or just enough of its start to pick one out) or choose it from **Steps**. For one that nudges, type an offset: **+12** or **−5**. **Reset to** names the chart's default, and double-clicking the knob goes there too.
+
 ## Send all
 
 The device comes back to the patch whenever every knob is sent:

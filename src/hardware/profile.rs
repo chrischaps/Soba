@@ -263,6 +263,30 @@ impl Parameter {
         }
     }
 
+    /// What `typed` asks it to send, as [`text`](Self::text) writes it: a
+    /// step's label (any case, or the start of just one), a relative one's
+    /// offset ("+12", "-5", "−5"), or a number. A number past the range
+    /// sends the end it's past; text that's none of these is `None`.
+    pub fn parse(&self, typed: &str) -> Option<u16> {
+        let typed = typed.trim();
+        if self.stepped() {
+            let steps = self.steps();
+            let lower = typed.to_lowercase();
+            if let Some(&(_, value)) = steps.iter().find(|(label, _)| label.to_lowercase() == lower) {
+                return Some(value);
+            }
+            let starting: Vec<u16> = steps.iter().filter(|(label, _)| !lower.is_empty() && label.to_lowercase().starts_with(&lower)).map(|&(_, value)| value).collect();
+            return match starting[..] {
+                [value] => Some(value),
+                _ => typed.parse::<u16>().ok().filter(|value| steps.iter().any(|&(_, at)| at == *value)),
+            };
+        }
+        let (lo, hi) = self.range;
+        let number: i64 = typed.replace('−', "-").trim_start_matches('+').trim().parse().ok()?;
+        let value = if self.relative { self.centre() as i64 + number } else { number };
+        Some(value.clamp(lo as i64, hi as i64) as u16)
+    }
+
     /// What's wrong with it, if anything: each problem a line.
     fn problems(&self) -> Vec<String> {
         let mut problems = Vec::new();
@@ -735,6 +759,32 @@ mod tests {
         assert_eq!(wide.parameters[0].centre(), 8192);
         let stepped = r#"{ "name": "T", "parameters": [{ "name": "M", "cc": 1, "relative": true, "values": ["A", "B"] }] }"#;
         assert!(profile(stepped).unwrap_err().contains("relative"));
+    }
+
+    #[test]
+    fn typed_values_read_as_the_face_writes_them() {
+        let p = profile(
+            r#"{ "name": "T", "parameters": [
+                { "name": "Cutoff", "cc": 23 },
+                { "name": "Shift", "cc": 74, "relative": true },
+                { "name": "Arp", "cc": 49, "values": [{ "label": "Off", "value": 6 }, { "label": "Rise 1", "value": 19 }, { "label": "Fall 2", "value": 65 }] },
+                { "name": "Fine", "nrpn": 5, "range": [100, 9000] }
+            ] }"#,
+        )
+        .unwrap();
+        let [cutoff, shift, arp, fine] = &p.parameters[..] else { panic!("four parameters") };
+        assert_eq!([cutoff.parse("100"), cutoff.parse(" 7 "), cutoff.parse("200"), cutoff.parse("-3")], [Some(100), Some(7), Some(127), Some(0)]);
+        assert_eq!(cutoff.parse("loud"), None);
+        assert_eq!(fine.parse("50"), Some(100), "below the range is its bottom");
+        // An offset from the middle, however the minus is written
+        assert_eq!([shift.parse("+12"), shift.parse("12"), shift.parse("-5"), shift.parse("−5"), shift.parse("0")], [Some(76), Some(76), Some(59), Some(59), Some(64)]);
+        assert_eq!(shift.text(shift.parse("+12").unwrap()), "+12");
+        assert_eq!(shift.parse("+99"), Some(127));
+        // A step by name, in any case or by the start of only one
+        assert_eq!([arp.parse("Fall 2"), arp.parse("fall 2"), arp.parse("f"), arp.parse("o")], [Some(65), Some(65), Some(65), Some(6)]);
+        assert_eq!(arp.parse("ri"), Some(19), "only Rise 1 starts so");
+        assert_eq!(arp.parse("65"), Some(65), "a step's own value");
+        assert_eq!([arp.parse("64"), arp.parse("Rise 9"), arp.parse("")], [None, None, None]);
     }
 
     #[test]

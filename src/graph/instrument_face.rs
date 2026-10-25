@@ -56,6 +56,9 @@ pub struct Dress {
     pub text: String,
     /// Its group's colour.
     pub accent: Color32,
+    /// Where a double-click sets it: the chart's default, for one that
+    /// holds a parameter.
+    pub default: Option<f32>,
 }
 
 /// The knob `slot` a parameter name is, if it's one of an Instrument's.
@@ -63,15 +66,25 @@ fn slot_of(param_name: &str) -> Option<usize> {
     SLOT_NAMES.iter().position(|&name| name == param_name)
 }
 
+/// The parameter knob `param_name` of an Instrument holds, if it holds one.
+pub fn held_parameter(data: &SynthNodeData, param_name: &str) -> Option<Parameter> {
+    instrument::held(&data.labels, slot_of(param_name)?, &hardware::known()).map(|held| held.parameter)
+}
+
 /// How knob `param_name` of an Instrument at `travel` (0 to 1) is dressed.
 pub fn dress(data: &SynthNodeData, param_name: &str, travel: f32) -> Option<Dress> {
     let slot = slot_of(param_name)?;
     let Some(held) = instrument::held(&data.labels, slot, &hardware::known()) else {
-        return Some(Dress { label: "—".to_string(), text: String::new(), accent: theme::text::DISABLED });
+        return Some(Dress { label: "—".to_string(), text: String::new(), accent: theme::text::DISABLED, default: None });
     };
     let parameter = &held.parameter;
     let value = SlotMap::of(parameter).value(travel);
-    Some(Dress { label: parameter.name.clone(), text: parameter.text(value), accent: hardware::group_color(&parameter.group) })
+    Some(Dress {
+        label: parameter.name.clone(),
+        text: parameter.text(value),
+        accent: hardware::group_color(&parameter.group),
+        default: Some(instrument::start(parameter)),
+    })
 }
 
 /// What an Instrument's knob jack is called: the parameter its knob holds,
