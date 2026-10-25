@@ -1357,6 +1357,36 @@ mod tests {
     }
 
     #[test]
+    fn test_a_note_in_on_any_device_leaves_a_thru_only_input_to_its_routes() {
+        use crate::dsp::{ListenTo, SOBA_PORT};
+        let sr = 48000.0;
+        let patch = played_sine(Source::Midi);
+        let (mut r, compiled) = OfflineRenderer::from_patch(&patch, sr, 256).unwrap();
+        let note_in = compiled.node_ids[&1];
+        // Device B, in slot 1, is Thru only (#463): it plays the room alone
+        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::AllBut(0b10) });
+        let block = (0.25 * sr) as u64;
+        let on = |note| MidiMessage::NoteOn { note, velocity: 100 };
+        let off = |note| MidiMessage::NoteOff { note, velocity: 0 };
+        r.queue_midi_from(0, 1, 0, on(60));
+        assert!(rms(&r.render(block as usize).left) < 1e-4, "a Thru-only input's note sounded");
+        // Device A plays it as ever, and so does Soba's own
+        r.queue_midi_from(block, 0, 0, on(62));
+        let out = r.render(block as usize);
+        assert!(rms(&out.left[out.left.len() / 2..]) > 0.05, "device A didn't play it");
+        r.queue_midi_from(2 * block, 0, 0, off(62));
+        r.queue_midi_from(2 * block + 100, SOBA_PORT, 0, on(64));
+        let out = r.render(block as usize);
+        assert!(rms(&out.left[out.left.len() / 2..]) > 0.05, "Soba's own note didn't play");
+        // Named as its Device, the module hears the Thru-only input after all
+        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::Port(1) });
+        r.queue_midi_from(3 * block, SOBA_PORT, 0, off(64));
+        r.queue_midi_from(3 * block + 100, 1, 0, on(67));
+        let out = r.render(block as usize);
+        assert!(rms(&out.left[out.left.len() / 2..]) > 0.05, "set to device B, it didn't hear it");
+    }
+
+    #[test]
     fn test_an_auto_clock_follows_its_device_and_plays_on_when_it_goes() {
         use crate::dsp::ListenTo;
         // An Auto Clock at 120 BPM, listening to device A. Device B starts

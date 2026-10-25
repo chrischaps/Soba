@@ -170,6 +170,9 @@ pub struct MidiSession {
     /// The notes Pads modules claim (#428), which aren't held for the
     /// pianos, as an Omni Note In doesn't play them.
     pub claims: crate::dsp::NoteClaims,
+    /// The slots of the inputs open for their thru routes alone (#463), a
+    /// bit a slot: only what names one's device hears it.
+    pub thru_only: u8,
     /// Which CC, note or macro turns which control.
     pub mappings: MidiMappings,
     /// The mappings as last opened or saved. Undo history doesn't hold
@@ -427,10 +430,16 @@ impl MidiSession {
     /// What one event from input `port`, the device called `device`, does:
     /// a note is held or let go, and a CC or a note is learned, or turns
     /// the controls mapped to it.
+    ///
+    /// An input open for its thru routes alone (#463) is heard only by what
+    /// names its device: a mapping learned from it, the hands on it, or its
+    /// profile being heard. Nothing that hears any device holds its notes,
+    /// learns from it or is turned by it.
     pub fn hear_from(&mut self, port: u8, device: Option<&str>, event: MidiEvent, heard: &mut Heard, current: &impl Fn(u64, usize) -> Option<Standing>) {
+        let thru_only = port != SOBA_PORT && 1u8.checked_shl(port as u32).is_some_and(|bit| self.thru_only & bit != 0);
         let (source, number, channel, input) = match event {
             MidiEvent::NoteOn { channel, note, velocity } => {
-                if !self.held.iter().any(|&(n, _)| n == note) && !self.claims.claims(port, channel, note) {
+                if !thru_only && !self.held.iter().any(|&(n, _)| n == note) && !self.claims.claims(port, channel, note) {
                     self.held.push((note, velocity));
                     self.held_on.push(port);
                     heard.notes_changed = true;
@@ -447,7 +456,9 @@ impl MidiSession {
             }
             MidiEvent::ControlChange { channel, controller, value } => (MidiSource::Cc, controller, channel, MidiInput::Cc(value)),
             _ => {
-                self.learn_into(&event, heard);
+                if !thru_only {
+                    self.learn_into(&event, heard);
+                }
                 return;
             }
         };
@@ -461,17 +472,18 @@ impl MidiSession {
         }
         // The hands are one controller's: another device's CCs pass them by,
         // unless Soba is taught whichever moves first (#454)
-        let for_hands = self.hands.hears_device(device);
+        let taught_any = self.hands.teaching().is_some_and(|teaching| teaching.device().is_none());
+        let for_hands = self.hands.hears_device(device) && !(thru_only && taught_any);
         // While Soba is taught the controller, its CCs are for that alone (#429)
         if let (MidiInput::Cc(value), Some(_), true) = (input, self.hands.teaching(), for_hands) {
             self.hands.hear_from(device, number, channel, value, current, &mut heard.turns);
             return;
         }
-        if self.learn_into(&event, heard) {
+        if !thru_only && self.learn_into(&event, heard) {
             return;
         }
         // A note let go isn't one to learn: its press came first
-        if input != MidiInput::NoteOff && self.learning.as_ref().is_some_and(|target| target.into.is_none()) {
+        if !thru_only && input != MidiInput::NoteOff && self.learning.as_ref().is_some_and(|target| target.into.is_none()) {
             if let Some(target) = self.learning.take() {
                 // On the channel it came on, so the keys and the pads can
                 // share note numbers. It leaves whatever it turned before
@@ -505,7 +517,7 @@ impl MidiSession {
                 return;
             }
         }
-        if source == MidiSource::Cc && self.guess(number, channel, value_of(input), heard) {
+        if !thru_only && source == MidiSource::Cc && self.guess(number, channel, value_of(input), heard) {
             heard.learned = true;
             // The control holds still while it's told apart
             return;
@@ -519,7 +531,7 @@ impl MidiSession {
         }
         for index in 0..self.mappings.len() {
             let mapping = &self.mappings.as_slice()[index];
-            if !mapping.hears(source, number, channel) || !mapping.hears_device(device) {
+            if !mapping.hears(source, number, channel) || !mapping.hears_device(device) || (thru_only && mapping.device.is_none()) {
                 continue;
             }
             let (node_id, param_index, control) = (mapping.node_id, mapping.param_index, mapping.control);
@@ -960,6 +972,31 @@ mod tests {
         // The MiniLab's CC 74 turns the patch's mapping again
         session.hear_from(0, Some("MiniLab3 MIDI"), cc(0, 74, 127), &mut heard, &none);
         assert_eq!(heard.turns, [(8, 0, 1.0)]);
+    }
+
+    /// A Thru-only input (#463) is heard by what names it, and nothing that
+    /// hears any device: no held notes, no learning, no mapping from any.
+    #[test]
+    fn a_thru_only_input_is_heard_only_by_what_names_it() {
+        let mut session = MidiSession::default();
+        let fantom = MidiMapping { device: Some("Fantom-06".into()), ..MidiMapping::new(74, 0, 7, 0, "Cutoff", 0.0, 100.0) };
+        session.open(vec![fantom, MidiMapping { jump: true, ..MidiMapping::new(74, 0, 8, 0, "Res", 0.0, 1.0) }]);
+        session.thru_only = 0b10;
+        let none = |_: u64, _: usize| None;
+        let mut heard = Heard::default();
+        session.hear_from(1, Some("2- Fantom-06"), cc(0, 74, 127), &mut heard, &none);
+        assert_eq!(heard.turns, [(7, 0, 100.0)], "only the mapping that names it");
+        session.hear_from(1, Some("2- Fantom-06"), on(0, 60), &mut heard, &none);
+        assert!(session.held().is_empty() && !heard.notes_changed, "its notes play the room, not the pianos");
+        // MIDI Learn waits for another device
+        session.start_learn(target(1));
+        let mut heard = Heard::default();
+        session.hear_from(1, Some("2- Fantom-06"), cc(0, 10, 64), &mut heard, &none);
+        assert!(!heard.learned && session.learning().is_some());
+        // The MiniLab, in slot 0, plays as ever
+        let mut heard = Heard::default();
+        session.hear_from(0, Some("MiniLab3 MIDI"), cc(0, 10, 64), &mut heard, &none);
+        assert!(heard.learned);
     }
 
     #[test]

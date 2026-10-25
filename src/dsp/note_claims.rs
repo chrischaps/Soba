@@ -77,6 +77,13 @@ impl NoteClaims {
         };
         match listen {
             ListenTo::Any => self.ports.iter_mut().for_each(claim_on),
+            ListenTo::AllBut(skipped) => {
+                for (at, channels) in self.ports.iter_mut().enumerate() {
+                    if at >= MIDI_INPUTS || skipped & 1 << at == 0 {
+                        claim_on(channels);
+                    }
+                }
+            }
             ListenTo::Port(port) => {
                 if let Some(at) = slot(port).filter(|&at| at < MIDI_INPUTS) {
                     claim_on(&mut self.ports[at]);
@@ -148,5 +155,14 @@ mod tests {
         claims.clear();
         claims.claim(ListenTo::Port(42), Some(0), 1);
         assert!(claims.claims(SOBA_PORT, 0, 1) && !claims.claims(42, 0, 1));
+    }
+
+    #[test]
+    fn any_device_leaves_a_thru_only_input_s_notes_be() {
+        let mut claims = NoteClaims::EMPTY;
+        // A Pads on any device while the input in slot 1 is Thru only (#463)
+        claims.claim(ListenTo::AllBut(0b10), Some(9), 36);
+        assert!(claims.claims(0, 9, 36) && claims.claims(7, 9, 36) && claims.claims(SOBA_PORT, 9, 36));
+        assert!(!claims.claims(1, 9, 36), "it never hears them, so they play on");
     }
 }

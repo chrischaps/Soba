@@ -382,6 +382,10 @@ pub enum ListenTo {
     /// Every input, as before there were several.
     #[default]
     Any,
+    /// Every input but those whose slots are set in the mask, a bit a
+    /// slot: "any device" while some are Thru only (#463), open for their
+    /// routes alone.
+    AllBut(u8),
     /// The input open in this slot.
     Port(u8),
     /// A device that isn't open: no input's events.
@@ -395,6 +399,7 @@ impl ListenTo {
         port == SOBA_PORT
             || match self {
                 ListenTo::Any => true,
+                ListenTo::AllBut(skipped) => 1u8.checked_shl(port as u32).is_none_or(|bit| skipped & bit == 0),
                 ListenTo::Port(slot) => slot == port,
                 ListenTo::Unplugged => false,
             }
@@ -461,6 +466,10 @@ mod tests {
         assert!(ListenTo::Port(2).hears(SOBA_PORT), "the keys and a render's notes reach every module");
         assert!(!ListenTo::Unplugged.hears(0));
         assert!(ListenTo::Unplugged.hears(SOBA_PORT));
+        // Any device but the Thru-only ones (#463)
+        let but = ListenTo::AllBut(0b0000_0100);
+        assert!(but.hears(0) && but.hears(7) && but.hears(SOBA_PORT));
+        assert!(!but.hears(2), "a Thru-only input");
         let event = MidiEvent::note_on(5, 0, 60, 100);
         assert_eq!(event.port, SOBA_PORT, "made here, it's Soba's");
         assert_eq!(event.from_port(4).port, 4);

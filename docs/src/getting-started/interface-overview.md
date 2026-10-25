@@ -347,6 +347,8 @@ With a room of hardware plugged in, choose **The Rig…** at the foot of the **M
   - its slot (**In 1** to **In 8**);
   - the last message heard, as the [MIDI Monitor](../modules/midi/midi-monitor.md) writes it. It's bright when it arrives and fades to grey over a few seconds;
   - how many modules have their **Device** set to it alone. Hover to see their names.
+
+  An input a route comes from also has a **thru** chip by its name. Click it to make the input **Thru only**: it stays open and its routes pass as before, but the patch doesn't hear it. Modules set to any device, MIDI Learn, mappings learned from any device, the MIDI Monitor and the pianos all pass it by. A module whose **Device** names it still hears it, since naming it is asking for it. While it's Thru only, the chip is lit, the name steps back, and the row reads **routes only** where the modules would be. It's for a keyboard that's only there to play your hardware. Click the chip again to let the patch hear it.
 - **MIDI Out** has a row for each of the eight ports, **A** to **H**, that a [MIDI Out](../modules/output/midi-out.md) plays. Each row has:
   - the port's device, which you choose here or on a MIDI Out's face. Its menu can also **📤 Send a SysEx file…** to it: see [Sending SysEx](#sending-sysex);
   - its **Clock**: what it sends of the patch's Clock. **Clock + Transport** sends the tempo with Start and Stop, **Clock only** the tempo alone, and **Off** nothing. The port sends it whether or not a MIDI Out plays it. While its device leads the Clock (see [Leading or following](../modules/modulation/clock.md#leading-or-following-auto)), it reads **leads** in purple and sends nothing;
@@ -365,7 +367,7 @@ With a room of hardware plugged in, choose **The Rig…** at the foot of the **M
   - what it's doing: **Thru**, **Open input** (click to open it), **No input**, **No device**, **Unplugged** or **Loop**;
   - a ✕ to take it away. Notes it was holding are let go.
 
-  A route goes out the moment it comes in, ahead of anything else on the thread that sends MIDI, without waiting for the audio or for the port's **Offset**: it's for playing, and adds well under a millisecond. A route that would play the device it comes from is refused and says **Loop**, since a device that echoes what it hears would feed back forever; the **To** menu won't offer that port. The patch still hears an open input: a Note In set to any device plays along, so set its **Device** to another one to keep them apart. Up to sixteen routes.
+  A route goes out the moment it comes in, ahead of anything else on the thread that sends MIDI, without waiting for the audio or for the port's **Offset**: it's for playing, and adds well under a millisecond. A route that would play the device it comes from is refused and says **Loop**, since a device that echoes what it hears would feed back forever; the **To** menu won't offer that port. The patch still hears an open input: a Note In set to any device plays along. To keep them apart, make the input **Thru only** with the chip by its name under MIDI In. Up to sixteen routes.
 
 Ports, with their clocks, offsets and budgets, routes, and inputs are settings of this computer, not of the patch. **🔄 Refresh** looks for devices again at once. Otherwise Soba looks every couple of seconds.
 

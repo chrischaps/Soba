@@ -4,7 +4,8 @@
 //! - **MIDI In**, a row for each input found and each remembered one that
 //!   isn't plugged in: a lamp that flashes as it's heard, a tick to open
 //!   or close it, its slot, the last message heard, and the modules set to
-//!   hear it alone.
+//!   hear it alone. An input a route comes from has a "thru" chip, lit
+//!   while it's open for its routes alone (#463), its name stepping back.
 //! - **MIDI Out**, a row for each port, A to H: a lamp that flashes as it
 //!   sends, its device to choose, what it sends of the Clock (#437), its
 //!   offset, its budget (#439: a DIN cable carries about a thousand
@@ -78,6 +79,10 @@ struct InRow {
     traffic: crate::app::midi_session::InputTraffic,
     /// The modules set to hear this device alone.
     heard_by: Vec<String>,
+    /// Whether a thru route comes from it.
+    routed: bool,
+    /// Whether it's open for its routes alone (#463).
+    thru_only: bool,
 }
 
 /// A port's row.
@@ -104,6 +109,7 @@ struct OutRow {
 enum Edit {
     Toggle(usize),
     Forget(String),
+    ThruOnly(String, bool),
     Choose(usize, Option<String>),
     Clock(usize, ClockMode),
     Offset(usize, f32),
@@ -212,6 +218,7 @@ impl SynthApp {
             match edit {
                 Edit::Toggle(index) => self.toggle_midi_device(index),
                 Edit::Forget(name) => self.midi.remembered.retain(|n| *n != name),
+                Edit::ThruOnly(name, on) => crate::link::midi_thru::THRU.set_thru_only(&name, on),
                 Edit::Choose(port, device) => MIDI.choose(port, device.as_deref()),
                 Edit::Clock(port, mode) => MIDI.set_clock(port, mode),
                 Edit::Offset(port, ms) => MIDI.set_offset(port, ms),
@@ -236,13 +243,16 @@ impl SynthApp {
             .iter()
             .filter(|name| !self.midi.devices.iter().any(|d| d.name == **name))
             .map(|name| (name.clone(), None));
+        let routes = crate::link::midi_thru::THRU.routes();
         found
             .chain(unplugged)
             .map(|(name, index)| {
                 let slot = index.and_then(|_| self.midi.engine.as_ref()?.slot_of(&name));
                 let traffic = slot.and_then(|slot| self.midi.traffic.get(slot as usize).copied()).unwrap_or_default();
                 let heard_by = self.module_names(|data| crate::graph::midi_device::device(data).is_some_and(|device| device_names::same(device, &name)));
-                InRow { name, index, slot, traffic, heard_by }
+                let routed = routes.iter().any(|route| device_names::same(&route.from, &name));
+                let thru_only = crate::link::midi_thru::THRU.is_thru_only(&name);
+                InRow { name, index, slot, traffic, heard_by, routed, thru_only }
             })
             .collect()
     }
@@ -387,7 +397,12 @@ fn in_row(ui: &mut egui::Ui, row: &InRow, now: f64, edits: &mut Vec<Edit>) {
         cell(ui, tick_w, |ui| match row.index {
             Some(index) => {
                 let mut on = row.slot.is_some();
-                let tip = if on { "Close it: Soba stops listening" } else { "Open it: Note Ins, Pads, Controls, the Clock and MIDI Learn hear it" };
+                let tip = match (on, row.thru_only) {
+                    (true, false) => "Close it: Soba stops listening",
+                    (true, true) => "Close it: its routes stop passing",
+                    (false, false) => "Open it: Note Ins, Pads, Controls, the Clock and MIDI Learn hear it",
+                    (false, true) => "Open it: its routes pass, and only modules that name it hear it",
+                };
                 if ui.checkbox(&mut on, "").on_hover_text(tip).clicked() {
                     edits.push(Edit::Toggle(index));
                 }
@@ -399,15 +414,49 @@ fn in_row(ui: &mut egui::Ui, row: &InRow, now: f64, edits: &mut Vec<Edit>) {
             }
         });
         cell(ui, device_w, |ui| {
-            let ink = if row.slot.is_some() { theme::text::PRIMARY } else { theme::text::SECONDARY };
-            ui.add(egui::Label::new(RichText::new(&row.name).color(ink)).truncate());
+            // Open for its routes alone, it steps back: the patch doesn't hear it
+            let ink = match (row.slot.is_some(), row.thru_only) {
+                (true, false) => theme::text::PRIMARY,
+                (true, true) => theme::text::QUIET,
+                (false, false) => theme::text::SECONDARY,
+                (false, true) => theme::text::DISABLED,
+            };
+            let chip = row.routed || row.thru_only;
+            let name_w = if chip { device_w - THRU_CHIP - GAP } else { device_w };
+            cell(ui, name_w, |ui| {
+                ui.add(egui::Label::new(RichText::new(&row.name).color(ink)).truncate());
+            });
+            if chip && thru_chip(ui, row) {
+                edits.push(Edit::ThruOnly(row.name.clone(), !row.thru_only));
+            }
         });
         cell(ui, state_w, |ui| {
             ui.label(RichText::new(state).small().color(state_color));
         });
         cell(ui, last_w, |ui| last(ui, row.traffic.last, since));
-        cell(ui, who_w, |ui| who(ui, &row.heard_by, "module", "modules", "set to hear this device alone"));
+        cell(ui, who_w, |ui| {
+            if row.thru_only && row.heard_by.is_empty() {
+                let tip = "Open for its thru routes alone: nothing in the patch hears it. Set a module's Device to it to hear it there";
+                ui.label(RichText::new("routes only").small().color(theme::text::QUIET)).on_hover_text(tip);
+            } else {
+                who(ui, &row.heard_by, "module", "modules", "set to hear this device alone");
+            }
+        });
     });
+}
+
+/// How wide an input's "thru" chip is.
+const THRU_CHIP: f32 = 30.0;
+
+/// An input's "thru" chip: lit while it's open for its routes alone. True
+/// when it's clicked.
+fn thru_chip(ui: &mut egui::Ui, row: &InRow) -> bool {
+    let tip = if row.thru_only {
+        "Thru only: it plays the room through its routes, and the patch doesn't hear it. Modules set to any device, MIDI Learn and the MIDI Monitor pass it by; a module set to this device still hears it. Click to let the patch hear it again"
+    } else {
+        "Make it Thru only: its routes pass as now, but modules set to any device, MIDI Learn and the MIDI Monitor stop hearing it. For a keyboard that's only here to play your hardware"
+    };
+    thru::chip(ui, "thru", THRU_CHIP, row.thru_only).on_hover_text(tip).clicked()
 }
 
 /// A port's row, its edits joining `edits`.

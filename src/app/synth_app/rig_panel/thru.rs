@@ -101,7 +101,11 @@ fn route_row(ui: &mut egui::Ui, index: usize, route: &mut ThruRoute, state: Rout
             theme::accent::WARNING,
             "Open input".to_string(),
             theme::accent::WARNING,
-            "Its input is closed, so Soba hears nothing to pass. Click to open it (modules set to any device hear it too)".to_string(),
+            if ins.iter().any(|row| row.name == route.from && row.thru_only) {
+                "Its input is closed, so Soba hears nothing to pass. Click to open it: it's Thru only, so the patch won't hear it".to_string()
+            } else {
+                "Its input is closed, so Soba hears nothing to pass. Click to open it (modules set to any device hear it too, unless you make it Thru only under MIDI In)".to_string()
+            },
         ),
         RouteState::Loop => (
             theme::accent::ERROR,
@@ -261,7 +265,7 @@ fn kind_chips(ui: &mut egui::Ui, kinds: &mut Kinds) {
 
 /// A small rounded plate with `text` in it, lit while `on`: the port's
 /// badge, as a toggle.
-fn chip(ui: &mut egui::Ui, text: &str, width: f32, on: bool) -> egui::Response {
+pub(super) fn chip(ui: &mut egui::Ui, text: &str, width: f32, on: bool) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 16.0), egui::Sense::click());
     let purple = theme::signal::MIDI;
     let (fill, ink) = if on { (purple.gamma_multiply(0.28), purple.lerp_to_gamma(theme::text::PRIMARY, 0.6)) } else { (theme::background::WIDGET, theme::text::DISABLED) };

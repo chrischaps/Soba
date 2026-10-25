@@ -5,11 +5,16 @@
 //!
 //! The bus hears which MIDI Out ports play each input's device here too, so
 //! a device the Clock follows isn't sent the clock back (#438).
+//!
+//! An input open for its thru routes alone (#463) is left out of "any
+//! device" here: the engine's modules, the log, the ears and MIDI Learn are
+//! all told which slots those are.
 
 use super::*;
 use crate::engine::device_names::in_and_out;
 use crate::graph::midi_device::{device, listen_to, listens_to_devices};
 use crate::link::midi::MIDI;
+use crate::link::midi_thru::THRU;
 
 impl SynthApp {
     /// Has every module set to a device hear its input, and the menus and
@@ -32,6 +37,9 @@ impl SynthApp {
                 .fold(0u8, |ports, (port, _)| ports | 1 << port);
             MIDI.set_same_device(input, ports);
         }
+        let thru_only = THRU.thru_only_slots(slots.iter().map(|(slot, name)| (*slot, name.as_str())));
+        self.midi.thru_only = thru_only;
+        self.user_state.midi_thru_only = thru_only;
         if self.user_state.midi_input_slots != slots {
             self.user_state.midi_input_slots = slots;
         }
@@ -43,7 +51,7 @@ impl SynthApp {
                 continue;
             }
             let Some(engine_id) = self.user_state.get_engine_node_id(node_id) else { continue };
-            let listen = listen_to(device(&node.user_data), |name| self.midi.slot_of(name));
+            let listen = listen_to(device(&node.user_data), |name| self.midi.slot_of(name), thru_only);
             if graph.listen(engine_id).is_some_and(|now| now != listen) {
                 commands.push(EngineCommand::Listen { node_id: engine_id, listen });
             }

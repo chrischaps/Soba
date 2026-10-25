@@ -62,7 +62,7 @@ Then open the patch again, or press **Send all** on each Instrument. The MicroFr
 - **Your own patterns.** Click a row in the Setlist to choose another pattern for a section, or **+** to add a row for another device: the FANTOM-06's scenes, the ZOIA's patches, the SP-404MKII's banks.
 - **Another sound for the MicroFreak.** Select its Instrument and press `Ctrl + M` to [mutate](../getting-started/interface-overview.md#mutate) its knobs a step. Turn its real knobs and the node's knobs follow, so saving the patch keeps the sound you made by hand.
 - **Another voice for the volca.** Press **Mutate** on the FM Voice and the volca plays the child at once. The garden keeps every voice you bred.
-- **Your keyboard in the room.** In the Rig's **Thru**, add a route from your keyboard to port B and play the MicroFreak over the song, past the patch.
+- **Your keyboard in the room.** In the Rig's **Thru**, add a route from your keyboard to port B and play the MicroFreak over the song, past the patch. Click the **thru** chip by the keyboard's name under MIDI In so the patch's own modules don't play along.
 - **Another device.** Choose another profile on either Instrument, or point a Setlist row at another port.
 
 ## Mix and space

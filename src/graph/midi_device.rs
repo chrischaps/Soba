@@ -29,9 +29,12 @@ pub fn device(data: &SynthNodeData) -> Option<&str> {
     data.labels.get(DEVICE_LABEL).map(String::as_str)
 }
 
-/// What a module set to `device` hears, given the slot of each input open.
-pub fn listen_to(device: Option<&str>, slot_of: impl Fn(&str) -> Option<u8>) -> ListenTo {
+/// What a module set to `device` hears, given the slot of each input open
+/// and those open for their thru routes alone (`thru_only`, a bit a slot):
+/// any device leaves them out (#463), but naming one hears it.
+pub fn listen_to(device: Option<&str>, slot_of: impl Fn(&str) -> Option<u8>, thru_only: u8) -> ListenTo {
     match device {
+        None if thru_only != 0 => ListenTo::AllBut(thru_only),
         None => ListenTo::Any,
         Some(name) => slot_of(name).map_or(ListenTo::Unplugged, ListenTo::Port),
     }
@@ -97,8 +100,15 @@ mod tests {
     #[test]
     fn a_device_is_heard_while_open_and_nothing_is_while_it_isnt() {
         let slots = |name: &str| (name == "Fantom-06").then_some(3);
-        assert_eq!(listen_to(None, slots), ListenTo::Any);
-        assert_eq!(listen_to(Some("Fantom-06"), slots), ListenTo::Port(3));
-        assert_eq!(listen_to(Some("MiniLab3 MIDI"), slots), ListenTo::Unplugged);
+        assert_eq!(listen_to(None, slots, 0), ListenTo::Any);
+        assert_eq!(listen_to(Some("Fantom-06"), slots, 0), ListenTo::Port(3));
+        assert_eq!(listen_to(Some("MiniLab3 MIDI"), slots, 0), ListenTo::Unplugged);
+    }
+
+    #[test]
+    fn any_device_leaves_out_a_thru_only_input_but_naming_it_hears_it() {
+        let slots = |name: &str| (name == "Fantom-06").then_some(3);
+        assert_eq!(listen_to(None, slots, 1 << 3), ListenTo::AllBut(1 << 3));
+        assert_eq!(listen_to(Some("Fantom-06"), slots, 1 << 3), ListenTo::Port(3));
     }
 }

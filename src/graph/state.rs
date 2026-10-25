@@ -64,6 +64,9 @@ pub struct DisplayMidiEvent {
     pub timestamp: f32,
     /// The device it came from, by name (#435), or `None` for Soba's own.
     pub device: Option<String>,
+    /// Whether that device is open for its thru routes alone (#463): a log
+    /// that hears any device leaves it out.
+    pub thru_only: bool,
 }
 
 /// Oscilloscope waveform data for display.
@@ -231,6 +234,9 @@ pub struct SynthGraphState {
     /// The same inputs, each beside its slot (see
     /// [`crate::dsp::MidiEvent::port`]): who leads a Clock (#438).
     pub midi_input_slots: Vec<(u8, String)>,
+    /// The slots of the inputs open for their thru routes alone (#463), a
+    /// bit a slot: the log and the ears leave them out.
+    pub midi_thru_only: u8,
 
     /// The badges of the knobs a MIDI CC or host macro turns, keyed by
     /// (engine_node_id, param_index). The app works them out afresh from
@@ -428,6 +434,7 @@ impl Default for SynthGraphState {
             note_claims: crate::dsp::NoteClaims::EMPTY,
             midi_inputs: Vec::new(),
             midi_input_slots: Vec::new(),
+            midi_thru_only: 0,
             midi_mappings: HashMap::new(),
             scene_midi_mappings: HashMap::new(),
             midi_learn_active: false,
@@ -724,9 +731,11 @@ impl SynthGraphState {
         let first = *self.midi_first_event_time.get_or_insert(now);
         let timestamp = (now - first) as f32;
 
-        self.midi_events.push_back(DisplayMidiEvent { event, timestamp, device: device.map(str::to_string) });
-        // A pad's notes aren't for the ears
+        let thru_only = port != crate::dsp::SOBA_PORT && 1u8.checked_shl(port as u32).is_some_and(|bit| self.midi_thru_only & bit != 0);
+        self.midi_events.push_back(DisplayMidiEvent { event, timestamp, device: device.map(str::to_string), thru_only });
+        // A pad's notes aren't for the ears, nor a Thru-only input's
         match event {
+            _ if thru_only => {}
             MidiEvent::NoteOn { channel, note, .. } | MidiEvent::NoteOff { channel, note, .. } if self.note_claims.claims(port, channel, note) => {}
             MidiEvent::NoteOn { note, velocity, .. } => self.push_midi_note(note, velocity),
             MidiEvent::NoteOff { note, .. } => self.push_midi_note(note, 0),

@@ -750,7 +750,7 @@ impl SynthApp {
         self.follow_thru_routes();
         self.follow_hands(now);
         // The pads' notes, which the pianos and their ears leave be (#428)
-        let claims = crate::graph::pads_claims(&self.graph_state.graph, |name| self.midi.slot_of(name));
+        let claims = crate::graph::pads_claims(&self.graph_state.graph, |name| self.midi.slot_of(name), self.midi.thru_only);
         self.midi.claims = claims;
         self.user_state.note_claims = claims;
         let standings = self.midi_standings();

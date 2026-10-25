@@ -24,8 +24,16 @@
 //! would play itself, and with a device that echoes what it hears, feed
 //! back forever. Such a route passes nothing (see [`is_loop`]).
 //!
+//! **Thru only** (#463). An input can be open for its routes alone: a
+//! keyboard that's only there to play a piece of hardware. Modules set to
+//! any device, MIDI Learn, the mappings from any device and the hands
+//! taught by whichever moves first all pass it by; one that names its
+//! device still hears it, since naming it is asking for it. The mark is
+//! the UI's: the input callback passes everything on as before, and what
+//! listens leaves it be (see [`ThruBus::thru_only_slots`]).
+//!
 //! Routes are this computer's, like the ports: the settings keep them a
-//! line each ([`ThruBus::setting`]).
+//! line each, and each Thru-only input a line too ([`ThruBus::setting`]).
 
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering::Relaxed};
 use std::sync::Mutex;
@@ -37,6 +45,9 @@ use crate::engine::device_names;
 
 /// Routes there can be at once: more than a room of gear needs.
 pub const ROUTES: usize = 16;
+/// What begins a Thru-only input's line in the settings. A route's begins
+/// "on" or "off", so a Soba from before #463 leaves it out.
+const ONLY: &str = "only";
 /// Messages the ring to the sender holds: the sender empties it as soon as
 /// it's woken, so a full ring is a stalled sender, not a busy player.
 const RING: usize = 512;
@@ -299,6 +310,8 @@ pub struct ThruBus {
     draining: AtomicBool,
     /// The routes as the Rig edits them.
     routes: Mutex<Vec<ThruRoute>>,
+    /// The inputs open for their routes alone (#463), by name.
+    only: Mutex<Vec<String>>,
     /// Each route as the callbacks read it: a [`Route`] packed, or 0.
     packed: [AtomicU64; ROUTES],
     /// How many messages each route has passed, for the Rig's lamps.
@@ -315,6 +328,7 @@ impl ThruBus {
         Self {
             draining: AtomicBool::new(false),
             routes: Mutex::new(Vec::new()),
+            only: Mutex::new(Vec::new()),
             packed: [const { AtomicU64::new(0) }; ROUTES],
             forwarded: [const { AtomicU32::new(0) }; ROUTES],
             new_ring: Mutex::new(None),
@@ -384,16 +398,51 @@ impl ThruBus {
         self.forwarded.get(index).map_or(0, |f| f.load(Relaxed))
     }
 
-    /// The routes as the settings keep them: a line each.
-    pub fn setting(&self) -> String {
-        self.routes().iter().map(ThruRoute::line).collect::<Vec<_>>().join("\n")
+    /// Is the input called `name` open for its routes alone? Found again
+    /// under a new number, like a route's input.
+    pub fn is_thru_only(&self, name: &str) -> bool {
+        self.only.lock().is_ok_and(|only| only.iter().any(|kept| device_names::same(kept, name)))
     }
 
-    /// Takes up the routes [`setting`](Self::setting) kept, leaving out a
-    /// line it can't read.
+    /// Marks the input called `name` Thru only, or not.
+    pub fn set_thru_only(&self, name: &str, on: bool) {
+        if let Ok(mut only) = self.only.lock() {
+            only.retain(|kept| !device_names::same(kept, name));
+            if on {
+                only.push(name.to_string());
+            }
+        }
+    }
+
+    /// The slots of the inputs `open` (each slot and name) that are Thru
+    /// only, a bit a slot: what "any device" leaves out.
+    pub fn thru_only_slots<'a>(&self, open: impl IntoIterator<Item = (u8, &'a str)>) -> u8 {
+        let Ok(only) = self.only.lock() else { return 0 };
+        if only.is_empty() {
+            return 0;
+        }
+        open.into_iter()
+            .filter(|(_, name)| only.iter().any(|kept| device_names::same(kept, name)))
+            .fold(0, |slots, (slot, _)| slots | 1u8.checked_shl(slot as u32).unwrap_or(0))
+    }
+
+    /// The routes as the settings keep them, a line each, then a line for
+    /// each Thru-only input: "only" and its name.
+    pub fn setting(&self) -> String {
+        let only = self.only.lock().map(|only| only.clone()).unwrap_or_default();
+        let routes = self.routes().iter().map(ThruRoute::line).collect::<Vec<_>>();
+        routes.into_iter().chain(only.iter().map(|name| format!("{ONLY}\t{name}"))).collect::<Vec<_>>().join("\n")
+    }
+
+    /// Takes up the routes and Thru-only inputs [`setting`](Self::setting)
+    /// kept, leaving out a line it can't read.
     pub fn restore(&self, setting: &str) {
         let routes: Vec<ThruRoute> = setting.lines().filter_map(ThruRoute::from_line).collect();
         self.edit(|kept| *kept = routes);
+        let only = setting.lines().filter_map(|line| line.strip_prefix(ONLY)?.strip_prefix('\t')).filter(|name| !name.is_empty());
+        if let Ok(mut kept) = self.only.lock() {
+            *kept = only.map(str::to_string).collect();
+        }
     }
 
     // --- For the sender ---
@@ -606,6 +655,31 @@ mod tests {
         let back = ThruBus::new();
         back.restore(&format!("{setting}\nnot a route\non\t\tA\tall\tsame\tnotes"));
         assert_eq!(back.routes(), [moved, off, ThruRoute::new("Digitakt", 0)], "and lines it can't read are left out");
+    }
+
+    #[test]
+    fn thru_only_inputs_are_found_again_and_kept() {
+        let bus = ThruBus::new();
+        bus.edit(|routes| routes.push(ThruRoute::new("2- Fantom-06", 1)));
+        assert!(!bus.is_thru_only("2- Fantom-06"));
+        assert_eq!(bus.thru_only_slots([(0, "MiniLab3"), (3, "2- Fantom-06")]), 0);
+        bus.set_thru_only("2- Fantom-06", true);
+        assert!(bus.is_thru_only("3- Fantom-06"), "renumbered after a reboot");
+        assert!(!bus.is_thru_only("MiniLab3"));
+        assert_eq!(bus.thru_only_slots([(0, "MiniLab3"), (3, "3- Fantom-06")]), 0b1000, "any device leaves slot 3 out");
+        assert_eq!(bus.thru_only_slots([(0, "MiniLab3")]), 0, "not open, nothing to leave out");
+        // Kept a line of its own, after the routes
+        let setting = bus.setting();
+        assert_eq!(setting, "on\t2- Fantom-06\tB\tall\tsame\tnotes,cc,bend,program\nonly\t2- Fantom-06");
+        let back = ThruBus::new();
+        back.restore(&setting);
+        assert!(back.is_thru_only("2- Fantom-06"));
+        assert_eq!(back.routes(), bus.routes(), "the line isn't read as a route");
+        // Marked again, it isn't kept twice; unmarked, it's gone
+        bus.set_thru_only("3- Fantom-06", true);
+        assert_eq!(bus.setting().matches("only").count(), 1);
+        bus.set_thru_only("2- Fantom-06", false);
+        assert!(!bus.is_thru_only("2- Fantom-06") && !bus.setting().contains("only"));
     }
 
     fn ports(chosen: &[(usize, &str)]) -> ([String; PORTS], [Option<String>; PORTS]) {

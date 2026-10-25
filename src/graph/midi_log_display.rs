@@ -149,6 +149,8 @@ pub fn midi_log_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
         .rev()
         .filter(|event| match (device, event.device.as_deref()) {
             (Some(device), Some(from)) => crate::engine::device_names::same(device, from),
+            // A Thru-only input plays the room, not the patch (#463)
+            (None, _) => !event.thru_only,
             _ => true,
         })
         .filter(|event| {
