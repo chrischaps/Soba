@@ -45,7 +45,7 @@ pub type SceneBank = BTreeMap<String, Scene>;
 
 /// Switches that start, stop or record, or say where sound comes from or goes,
 /// rather than shape it: a scene leaves them be.
-const NOT_SOUND: &[&str] = &["Channel", "Port", "Source", "Run", "Latency", "Take", "Bars", "Rec", "Play"];
+const NOT_SOUND: &[&str] = &["Channel", "Port", "Source", "Run", "Latency", "Take", "Bars", "Rec", "Play", "Format"];
 
 /// A slot's letter.
 pub fn letter(slot: usize) -> &'static str {

@@ -34,6 +34,7 @@
   - [Instrument](./modules/midi/instrument.md)
   - [Kit](./modules/midi/kit.md)
   - [Setlist](./modules/midi/setlist.md)
+  - [FM Voice](./modules/midi/fm-voice.md)
   - [SVF Filter](./modules/filters/svf-filter.md)
   - [Ladder Filter](./modules/filters/ladder-filter.md)
   - [ADSR Envelope](./modules/modulation/adsr.md)

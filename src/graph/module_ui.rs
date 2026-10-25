@@ -660,6 +660,14 @@ static MODULE_UI: &[ModuleUi] = &[
         display: NodeDisplay::SetlistFace,
         ..ModuleUi::DEFAULT
     },
+    ModuleUi {
+        module_id: crate::modules::fm_voice::ID,
+        // The voice, its operators and its garden (#448), over Amount
+        knobs: &[knob("Amount")],
+        labels: &[("Channel", "Ch")],
+        display: NodeDisplay::FmVoiceFace,
+        ..ModuleUi::DEFAULT
+    },
 ];
 
 /// Every entry in the table.

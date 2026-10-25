@@ -96,6 +96,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Instrument](./midi/instrument.md) | `source.instrument` | A piece of hardware as a node: a synth's or drum machine's own knobs, by name, to turn and patch, and its notes over MIDI |
 | [Kit](./midi/kit.md) | `source.kit` | A hardware drum machine, sampler or groovebox as a node: its tracks, pads or parts as eight lanes to strike from a Trigger Sequencer, and its knobs by name, over MIDI |
 | [Setlist](./midi/setlist.md) | `output.setlist` | Each Arranger section changes the room: a device's pattern, scene, patch or memory, sent as Bank Select and Program Change ahead of the bar |
+| [FM Voice](./midi/fm-voice.md) | `output.fm_voice` | A DX7 voice for a volca fm, sent by SysEx as it changes: mutate it, cross two, and keep a garden of the voices bred by ear |
 
 Header colors describe what a module *is*. The colors of its jacks and cables describe the *signals* it handles, which is a separate palette: see [Signal Types](../concepts/signal-types.md).
 
@@ -174,3 +175,4 @@ Drive a voice from a sequence instead of a keyboard:
 | Turn and patch a hardware synth's own knobs, and keep its sound in the patch | [Instrument](./midi/instrument.md) |
 | Play a hardware drum machine's tracks or pads from a Trigger Sequencer | [Kit](./midi/kit.md) |
 | Change the hardware's patterns, scenes or memories with each section of a song | [Setlist](./midi/setlist.md), from an [Arranger](./utilities/arranger.md) |
+| Breed new sounds for a volca fm (or a DX7) by ear | [FM Voice](./midi/fm-voice.md) |

@@ -23,6 +23,7 @@ pub mod eq;
 pub mod instrument;
 pub mod kit;
 pub mod filter;
+pub mod fm_voice;
 pub mod ladder;
 pub mod lfo;
 pub mod link_out;
@@ -127,6 +128,7 @@ builtin_modules! {
     Instrument,
     Kit,
     Setlist,
+    FmVoice,
 }
 
 // Re-export commonly used types
@@ -173,6 +175,7 @@ pub use sample_hold::SampleHold;
 pub use scenes::Scenes;
 pub use sequencer::StepSequencer;
 pub use setlist::Setlist;
+pub use fm_voice::FmVoice;
 pub use slicer::Slicer;
 pub use slope::Slope;
 pub use tape::Tape;

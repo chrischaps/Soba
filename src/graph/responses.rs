@@ -151,6 +151,11 @@ pub enum SynthResponse {
     },
     /// Save a group to My Modules.
     SaveGroup(egui_node_graph2::NodeId),
+    /// An FM Voice's file to open or save, or its garden sent as a bank (#448).
+    FmVoiceFile {
+        node_id: egui_node_graph2::NodeId,
+        action: super::fm_voice_face::VoiceFile,
+    },
     /// Ask for a file for a Sampler to play.
     OpenSample(egui_node_graph2::NodeId),
     /// Place a new Sampler beside a node, patched from `source`, and record:

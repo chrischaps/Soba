@@ -21,6 +21,7 @@ pub mod input_channel_menu;
 mod instrument_face;
 mod kit_face;
 mod setlist_face;
+pub mod fm_voice_face;
 pub mod input_display;
 mod dancer_display;
 mod dancer_moves;

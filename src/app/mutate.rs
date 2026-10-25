@@ -48,8 +48,9 @@ pub const KEPT: usize = 8;
 /// Words in a parameter's name that make it set how loud something is.
 const LOUDNESS: &[&str] = &["Level", "Volume", "Master", "Gain", "Output", "Makeup", "Feedback", "Drive", "Velocity"];
 /// Switches that would stop the patch hearing or keeping time, or start
-/// recording, or send it to another device, rather than change how it sounds.
-const NOT_SOUND: &[&str] = &["Channel", "Port", "Source", "Run", "Latency", "Take", "Bars"];
+/// recording, or send it to another device or in another's format,
+/// rather than change how it sounds.
+const NOT_SOUND: &[&str] = &["Channel", "Port", "Source", "Run", "Latency", "Take", "Bars", "Format"];
 
 /// How far a variation goes after the key has been held this long.
 pub fn amount(held_seconds: f32) -> f32 {

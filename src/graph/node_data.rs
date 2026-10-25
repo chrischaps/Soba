@@ -273,6 +273,9 @@ pub enum NodeDisplay {
     /// Setlist: the song's sections, each with the rows that change the
     /// room as it starts (#445).
     SetlistFace,
+    /// FM Voice: the DX7 voice playing, its algorithm and operators, and
+    /// the garden of voices bred (#448).
+    FmVoiceFace,
 }
 
 impl NodeDisplay {
@@ -1550,6 +1553,9 @@ impl NodeDataTrait for SynthNodeData {
             }
             NodeDisplay::SetlistFace => {
                 responses.extend(super::setlist_face::setlist_face(self, ui, node_id, graph, user_state, zoom));
+            }
+            NodeDisplay::FmVoiceFace => {
+                responses.extend(super::fm_voice_face::fm_voice_face(self, ui, node_id, graph, zoom));
             }
             NodeDisplay::ControlFaders => {
                 let asked = super::controls_face::controls_face(ui, node_id, graph, user_state, zoom);

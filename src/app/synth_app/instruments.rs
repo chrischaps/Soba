@@ -56,6 +56,8 @@ impl SynthApp {
     /// Hands the engine every knob of the Instrument `node_id` again, so
     /// each sends its value: the hardware comes back to what the patch says.
     pub(super) fn send_all(&mut self, node_id: NodeId) {
+        // An FM Voice sends its voice again (#448)
+        self.fm_sends.again(node_id);
         let sends = self.instrument_sends(Some(node_id));
         for command in sends {
             self.send_command(command);

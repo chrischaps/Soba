@@ -286,6 +286,9 @@ impl SynthApp {
             crate::graph::SynthResponse::SendAll(response_node_id) => {
                 self.send_all(response_node_id);
             }
+            crate::graph::SynthResponse::FmVoiceFile { node_id: response_node_id, action } => {
+                self.fm_sends.ask(response_node_id, action);
+            }
             crate::graph::SynthResponse::Scene { node_id: response_node_id, slot, action } => {
                 self.scene_pad(response_node_id, slot, action);
             }

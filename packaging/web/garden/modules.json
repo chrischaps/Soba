@@ -646,6 +646,14 @@
       "name": "Audio Output",
       "outputs": []
     },
+    "output.fm_voice": {
+      "category": "Output",
+      "color": "#7e57c2",
+      "height": 326.0,
+      "inputs": [],
+      "name": "FM Voice",
+      "outputs": []
+    },
     "output.link": {
       "category": "Output",
       "color": "#7e57c2",

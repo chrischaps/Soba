@@ -62,6 +62,7 @@ mod rig_panel;
 mod cue;
 mod dive;
 mod file_hover;
+mod fm_voices;
 mod framing;
 mod grouping;
 mod hands;
@@ -325,6 +326,8 @@ pub struct SynthApp {
     controller_map: controller_map::ControllerMap,
     /// The Rig panel: every MIDI input and MIDI Out port (#436).
     rig_panel: rig_panel::RigPanel,
+    /// What each FM Voice last sent (#448).
+    fm_sends: fm_voices::FmSends,
     /// The sketch of the controller along the canvas's foot (#431).
     hands_overlay: hands_overlay::HandsOverlay,
     /// Patch files the visitor picked, which the browser hands over later.
@@ -472,6 +475,7 @@ impl SynthApp {
             gliding: Default::default(),
             controller_map: Default::default(),
             rig_panel: Default::default(),
+            fm_sends: Default::default(),
             hands_overlay: Default::default(),
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
@@ -2770,6 +2774,8 @@ impl SynthApp {
         self.sync_parameters();
         // ...and what Instruments' knobs send, from their profiles
         self.sync_instruments();
+        // ...and FM Voices' voices, by SysEx
+        self.sync_fm_voices(ctx);
 
         // What the toolbar and the shortcuts asked for, now the graph is drawn
         self.dispatch(ctx, actions);

@@ -8,6 +8,9 @@
 //! listening to a device's knobs ([`listening`]). One of yours with a
 //! shipped profile's name takes its place.
 
+pub mod breeding;
+pub mod dx7;
+pub mod garden;
 pub mod hearing;
 pub mod instrument;
 pub mod lane;
