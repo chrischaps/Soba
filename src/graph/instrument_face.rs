@@ -392,7 +392,7 @@ fn profile_menu(
 /// profile's channel, and the port whose device it is, if one is. A Kit's
 /// lanes take its first eight parts, and the knobs the first's track. Then
 /// every knob is sent.
-fn choose(node_id: NodeId, graph: &SynthGraph, profile: &Profile) -> Vec<SynthResponse> {
+pub fn choose(node_id: NodeId, graph: &SynthGraph, profile: &Profile) -> Vec<SynthResponse> {
     let is_kit = graph[node_id].user_data.module_id == kit::ID;
     let labels = if is_kit { instrument::choose_kit(profile) } else { instrument::choose(profile) };
     let mut asked = vec![SynthResponse::SetLabels { node_id, label: format!("Play {}", profile.name), labels }];

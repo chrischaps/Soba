@@ -1,7 +1,9 @@
 //! The quick-add palette: press Space or Tab over the graph, type a few
 //! letters of a module's name or category, press Enter, and the module
 //! appears where the cursor was. Groups saved to My Modules are there too,
-//! first, in their rose, and the Library's ready-made groups, last.
+//! first, in their rose, and the Library's ready-made groups, last. Each
+//! instrument profile is there too, once something's typed: "freak" finds
+//! Instrument · MicroFreak, which adds the node already playing it.
 //!
 //! Matching is fuzzy: the letters typed have to appear in order, not
 //! together, so "lfo", "svf" and "dly" all find what they should. Letters at
@@ -10,6 +12,8 @@
 use eframe::egui::{self, text::LayoutJob, Align2, Color32, FontId, Key, Modifiers, Pos2, Rect, Sense, TextFormat, Vec2};
 
 use crate::graph::{AllNodeTemplates, SynthNodeTemplate};
+use crate::hardware::{instrument, Profiles};
+use crate::modules;
 use super::library::SavedModule;
 use super::theme;
 
@@ -81,11 +85,45 @@ const MY_MODULES: &str = "My Modules";
 /// The heading the Library's groups go under.
 const LIBRARY: &str = "Library";
 
-/// Something the palette can add: a module, or a group from My Modules.
+/// A node already playing a profile: an Instrument, or a Kit for a kit.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Played {
+    pub template: SynthNodeTemplate,
+    /// The profile's name, as the face's menu chooses it.
+    pub profile: String,
+    /// "Instrument · MicroFreak".
+    name: String,
+    maker: String,
+    about: String,
+}
+
+/// An entry for each profile: a Kit and an Instrument for a kit (a Kit
+/// first, as it plays one best), an Instrument for anything else.
+pub fn played(profiles: &Profiles) -> Vec<Played> {
+    let template = |id| SynthNodeTemplate::from_module_id(id).expect("the module is registered");
+    let (instrument_node, kit_node) = (template(modules::instrument::ID), template(modules::kit::ID));
+    let mut played = Vec::new();
+    for known in profiles.all() {
+        let profile = &known.profile;
+        let nodes = if instrument::is_kit(profile) { vec![kit_node, instrument_node] } else { vec![instrument_node] };
+        played.extend(nodes.into_iter().map(|template| Played {
+            template,
+            profile: profile.name.clone(),
+            name: format!("{} · {}", template.name(), profile.name),
+            maker: profile.maker.clone(),
+            about: profile.about.clone(),
+        }));
+    }
+    played
+}
+
+/// Something the palette can add: a module, a group from My Modules, or a
+/// module playing a profile.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Entry {
     Module(SynthNodeTemplate),
     Saved(SavedModule),
+    Played(Played),
 }
 
 impl Entry {
@@ -93,6 +131,7 @@ impl Entry {
         match self {
             Self::Module(template) => template.name(),
             Self::Saved(saved) => &saved.name,
+            Self::Played(played) => &played.name,
         }
     }
 
@@ -101,6 +140,23 @@ impl Entry {
             Self::Module(template) => template.category().name(),
             Self::Saved(saved) if saved.in_library() => LIBRARY,
             Self::Saved(_) => MY_MODULES,
+            Self::Played(played) => played.template.category().name(),
+        }
+    }
+
+    /// What its row says on the right: its category, or a profile's maker.
+    fn aside(&self) -> &str {
+        match self {
+            Self::Played(played) if !played.maker.is_empty() => &played.maker,
+            _ => self.category(),
+        }
+    }
+
+    /// Text matched only as typed: a profile's maker.
+    fn maker(&self) -> &str {
+        match self {
+            Self::Played(played) => &played.maker,
+            _ => "",
         }
     }
 
@@ -108,6 +164,7 @@ impl Entry {
         match self {
             Self::Module(template) => template.category().color(),
             Self::Saved(_) => theme::module::GROUP,
+            Self::Played(played) => played.template.category().color(),
         }
     }
 
@@ -115,6 +172,7 @@ impl Entry {
         match self {
             Self::Module(template) => template.description(),
             Self::Saved(saved) => &saved.summary,
+            Self::Played(played) => &played.about,
         }
     }
 
@@ -122,7 +180,7 @@ impl Entry {
     fn id(&self) -> &str {
         match self {
             Self::Module(template) => template.module_id(),
-            Self::Saved(_) => "",
+            Self::Saved(_) | Self::Played(_) => "",
         }
     }
 }
@@ -136,23 +194,24 @@ struct Found {
 }
 
 /// How well one word of the query matches an entry. Names match fuzzily.
-/// Categories ("eff", "my"), module IDs ("fx.") and descriptions only match
-/// the word as typed: spread over a long ID, three letters match almost anything.
+/// Categories ("eff", "my"), makers ("korg"), module IDs ("fx.") and
+/// descriptions only match the word as typed: spread over a long ID, three letters match almost anything.
 fn match_word(word: &str, entry: &Entry) -> Option<(i32, Vec<usize>)> {
     let word_lower = word.to_lowercase();
     let contains = |text: &str| text.to_lowercase().contains(&word_lower);
     // Letters scattered far apart score at or below zero: not a match
     let by_name = subsequence(word, entry.name()).filter(|(s, _)| *s > 0).map(|(s, m)| (s * 3, m));
     let by_category = entry.category().to_lowercase().starts_with(&word_lower).then_some((12, Vec::new()));
+    let by_maker = (!entry.maker().is_empty() && contains(entry.maker())).then_some((12, Vec::new()));
     let by_id = (!entry.id().is_empty() && contains(entry.id())).then_some((6, Vec::new()));
     let by_description = (word.len() >= 3 && contains(entry.description())).then_some((2, Vec::new()));
-    [by_name, by_category, by_id, by_description].into_iter().flatten().max_by_key(|(s, _)| *s)
+    [by_name, by_category, by_maker, by_id, by_description].into_iter().flatten().max_by_key(|(s, _)| *s)
 }
 
 /// Everything matching all the words of `query`, best first. An empty
 /// query finds everything in menu order: My Modules, every module, then
-/// the Library.
-fn search(query: &str, saved: &[SavedModule]) -> Vec<Found> {
+/// the Library. The profiles wait for a word: the menu has none of them.
+fn search(query: &str, saved: &[SavedModule], played: &[Played]) -> Vec<Found> {
     let (library, mine): (Vec<_>, Vec<_>) = saved.iter().cloned().partition(SavedModule::in_library);
     let menu_order: Vec<Entry> = mine
         .into_iter()
@@ -161,9 +220,11 @@ fn search(query: &str, saved: &[SavedModule]) -> Vec<Found> {
         .chain(library.into_iter().map(Entry::Saved))
         .collect();
     let words: Vec<&str> = query.split_whitespace().collect();
+    let played = played.iter().filter(|_| !words.is_empty()).cloned().map(Entry::Played);
 
     let mut found: Vec<(usize, Found)> = menu_order
         .into_iter()
+        .chain(played)
         .enumerate()
         .filter_map(|(order, entry)| {
             let mut score = 0;
@@ -192,6 +253,8 @@ pub enum PaletteAction {
     Add(SynthNodeTemplate),
     /// Chose a group from My Modules or the Library.
     AddSaved(SavedModule),
+    /// Chose a module to add playing a profile.
+    AddPlayed(Played),
 }
 
 impl PaletteAction {
@@ -199,6 +262,7 @@ impl PaletteAction {
         match entry {
             Entry::Module(template) => Self::Add(*template),
             Entry::Saved(saved) => Self::AddSaved(saved.clone()),
+            Entry::Played(played) => Self::AddPlayed(played.clone()),
         }
     }
 }
@@ -215,11 +279,13 @@ pub struct QuickAdd {
     scroll_to_highlight: bool,
     /// The groups in My Modules and the Library.
     saved: Vec<SavedModule>,
+    /// A node for each instrument profile.
+    played: Vec<Played>,
 }
 
 impl QuickAdd {
-    pub fn new(anchor: Pos2, saved: Vec<SavedModule>) -> Self {
-        Self { anchor, query: String::new(), highlighted: 0, scroll_to_highlight: false, saved }
+    pub fn new(anchor: Pos2, saved: Vec<SavedModule>, played: Vec<Played>) -> Self {
+        Self { anchor, query: String::new(), highlighted: 0, scroll_to_highlight: false, saved, played }
     }
 
     /// Where the palette was opened, in screen points.
@@ -241,7 +307,7 @@ impl QuickAdd {
             return PaletteAction::Close;
         }
 
-        let results = search(&self.query, &self.saved);
+        let results = search(&self.query, &self.saved, &self.played);
         if results.is_empty() {
             self.highlighted = 0;
         } else {
@@ -406,7 +472,7 @@ fn result_row(ui: &mut egui::Ui, found: &Found, highlighted: bool, show_category
         painter.text(
             Pos2::new(rect.right() - 8.0, rect.center().y),
             Align2::RIGHT_CENTER,
-            found.entry.category(),
+            found.entry.aside(),
             FontId::proportional(11.0),
             if highlighted { color } else { theme::text::QUIET },
         );
@@ -432,7 +498,7 @@ mod tests {
     use egui_node_graph2::NodeTemplateIter;
 
     fn top(query: &str) -> &'static str {
-        match search(query, &[]).first().map(|f| &f.entry) {
+        match search(query, &[], &[]).first().map(|f| &f.entry) {
             Some(Entry::Module(template)) => template.module_id(),
             _ => "none",
         }
@@ -441,7 +507,7 @@ mod tests {
     fn template(entry: &Entry) -> SynthNodeTemplate {
         match entry {
             Entry::Module(template) => *template,
-            Entry::Saved(saved) => panic!("expected a module, found {}", saved.name),
+            Entry::Saved(_) | Entry::Played(_) => panic!("expected a module, found {}", entry.name()),
         }
     }
 
@@ -475,23 +541,23 @@ mod tests {
         assert_eq!(top("s&h"), "util.sample_hold");
         // Note In, by its name or the modules it took the place of
         assert_eq!(top("note"), "input.poly_midi");
-        assert!(search("keyboard", &[]).iter().any(|f| template(&f.entry).module_id() == "input.poly_midi"));
+        assert!(search("keyboard", &[], &[]).iter().any(|f| template(&f.entry).module_id() == "input.poly_midi"));
         // A category's modules come before stray matches in names and descriptions
         let modulation = AllNodeTemplates.all_kinds().into_iter().filter(|t| t.category().name() == "Modulation").count();
-        assert!(search("mod", &[]).iter().take(modulation).all(|f| template(&f.entry).category().name() == "Modulation"));
+        assert!(search("mod", &[], &[]).iter().take(modulation).all(|f| template(&f.entry).category().name() == "Modulation"));
         // Letters scattered across a name don't count ("Sample & Hold")
-        assert!(search("mod", &[]).iter().all(|f| f.entry.name() != "Sample & Hold"));
+        assert!(search("mod", &[], &[]).iter().all(|f| f.entry.name() != "Sample & Hold"));
         // Every word has to match: a category narrows the list
-        assert!(search("effect", &[]).iter().all(|f| template(&f.entry).category().name() == "Effect"));
-        assert!(search("zzzz", &[]).is_empty());
+        assert!(search("effect", &[], &[]).iter().all(|f| template(&f.entry).category().name() == "Effect"));
+        assert!(search("zzzz", &[], &[]).is_empty());
         // An ID's letters spread far apart aren't a match ("util.sample_hold")
-        assert!(search("lad", &[]).iter().all(|f| template(&f.entry).module_id() == "filter.ladder"));
+        assert!(search("lad", &[], &[]).iter().all(|f| template(&f.entry).module_id() == "filter.ladder"));
         assert_eq!(top("fx.del"), "fx.delay");
     }
 
     #[test]
     fn empty_query_lists_everything_in_menu_order() {
-        let all: Vec<_> = search("", &[]).into_iter().map(|f| template(&f.entry).module_id()).collect();
+        let all: Vec<_> = search("", &[], &[]).into_iter().map(|f| template(&f.entry).module_id()).collect();
         let menu: Vec<_> = AllNodeTemplates::by_category()
             .into_iter()
             .flat_map(|(_, t)| t)
@@ -508,11 +574,11 @@ mod tests {
             source: Source::File("Acid Voice.json".into()),
             summary: "Gate, Pitch → Out · 4 modules".into(),
         }];
-        let all = search("", &saved);
+        let all = search("", &saved, &[]);
         assert_eq!(all[0].entry, Entry::Saved(saved[0].clone()));
         assert_eq!(all.len(), AllNodeTemplates.all_kinds().len() + 1);
-        assert!(matches!(&search("acid", &saved)[0].entry, Entry::Saved(s) if s.name == "Acid Voice"));
-        assert!(search("my", &saved).iter().any(|f| matches!(f.entry, Entry::Saved(_))));
+        assert!(matches!(&search("acid", &saved, &[])[0].entry, Entry::Saved(s) if s.name == "Acid Voice"));
+        assert!(search("my", &saved, &[]).iter().any(|f| matches!(f.entry, Entry::Saved(_))));
         assert!(matches!(PaletteAction::add(&all[0].entry), PaletteAction::AddSaved(_)));
     }
 
@@ -520,15 +586,40 @@ mod tests {
     fn the_library_comes_last_and_matches_by_name_or_heading() {
         let mut saved = library::library();
         saved.insert(0, SavedModule { name: "Mine".into(), source: Source::File("Mine.json".into()), summary: String::new() });
-        let all = search("", &saved);
+        let all = search("", &saved, &[]);
         assert_eq!(all.len(), AllNodeTemplates.all_kinds().len() + saved.len());
         assert!(matches!(&all[0].entry, Entry::Saved(s) if s.name == "Mine"));
         assert!(all.iter().rev().take(saved.len() - 1).all(|f| f.entry.category() == "Library"));
-        assert!(matches!(&search("supersaw", &saved)[0].entry, Entry::Saved(s) if s.name == "Supersaw Pad"));
-        assert!(matches!(&search("fm bell", &saved)[0].entry, Entry::Saved(s) if s.name == "FM Bell"));
-        let headed = search("lib", &saved);
+        assert!(matches!(&search("supersaw", &saved, &[])[0].entry, Entry::Saved(s) if s.name == "Supersaw Pad"));
+        assert!(matches!(&search("fm bell", &saved, &[])[0].entry, Entry::Saved(s) if s.name == "FM Bell"));
+        let headed = search("lib", &saved, &[]);
         assert!(headed.iter().take(saved.len() - 1).all(|f| f.entry.category() == "Library"));
         // A module still wins its own name
         assert_eq!(top("ladder"), "filter.ladder");
+    }
+
+    #[test]
+    fn profiles_are_found_by_name_and_maker_once_something_is_typed() {
+        let played = played(&Profiles::load_from(std::path::Path::new("no such folder")));
+        let first = |query: &str| match &search(query, &[], &played).first()?.entry {
+            Entry::Played(played) => Some((played.name.clone(), played.template.module_id())),
+            _ => None,
+        };
+        assert_eq!(first("freak"), Some(("Instrument · MicroFreak".into(), modules::instrument::ID)));
+        assert_eq!(first("arturia"), Some(("Instrument · MicroFreak".into(), modules::instrument::ID)));
+        assert_eq!(first("volca fm"), Some(("Instrument · volca fm".into(), modules::instrument::ID)));
+        // A kit is offered as a Kit first, and as an Instrument besides
+        assert_eq!(first("digitakt"), Some(("Kit · Digitakt".into(), modules::kit::ID)));
+        assert!(search("digitakt", &[], &played).iter().any(|f| f.entry.name() == "Instrument · Digitakt"));
+        // A maker finds each of its devices
+        let korg: Vec<_> = search("korg", &[], &played).into_iter().filter(|f| f.entry.maker() == "Korg").map(|f| f.entry.name().to_string()).collect();
+        assert!(korg.iter().any(|n| n.ends_with("volca fm")) && korg.iter().any(|n| n.ends_with("volca drum")));
+        // The modules still win their own names, and the empty list is the menu's
+        assert!(matches!(&search("instrument", &[], &played)[0].entry, Entry::Module(t) if t.module_id() == modules::instrument::ID));
+        assert!(search("", &[], &played).iter().all(|f| !matches!(f.entry, Entry::Played(_))));
+        // Its row names the maker, and choosing it asks for the profile
+        let found = search("freak", &[], &played);
+        assert_eq!(found[0].entry.aside(), "Arturia");
+        assert!(matches!(PaletteAction::add(&found[0].entry), PaletteAction::AddPlayed(p) if p.profile == "MicroFreak"));
     }
 }

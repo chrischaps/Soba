@@ -425,8 +425,29 @@ impl SynthApp {
                     self.quick_add = None;
                     self.add_saved_module(&saved, anchor);
                 }
+                PaletteAction::AddPlayed(played) => {
+                    let anchor = palette.anchor();
+                    self.quick_add = None;
+                    self.add_played(&played, anchor);
+                }
             }
         }
+    }
+
+    /// Adds an Instrument or Kit already playing a profile, as though it had
+    /// been chosen on the face: one undo step, named for both.
+    fn add_played(&mut self, played: &crate::app::palette::Played, screen: egui::Pos2) {
+        let profiles = crate::hardware::known();
+        let Some(known) = profiles.find(&played.profile) else {
+            self.status_error(format!("Couldn't find the {} profile", played.profile));
+            return;
+        };
+        self.add_module_at(played.template, screen);
+        let Some(&node_id) = self.graph_state.selected_nodes.first() else { return };
+        for response in crate::graph::choose_profile(node_id, &self.graph_state.graph, &known.profile) {
+            self.take_user_response(response);
+        }
+        self.history.name_next(format!("Add {} {}", known.profile.name, played.template.name()));
     }
 
     fn handle_node_menu(&mut self, ctx: &egui::Context, action: NodeMenuAction) {
@@ -478,4 +499,35 @@ fn node_menu_action(response: crate::graph::SynthResponse) -> Result<NodeMenuAct
         SynthResponse::RecordInto { node_id, source, bars } => NodeMenuAction::RecordInto(node_id, source, bars),
         other => return Err(other),
     })
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+    use crate::hardware::{self, instrument};
+    use web_time::Instant;
+
+    #[test]
+    fn quick_add_plays_a_profile_and_undoes_in_one_step() {
+        let mut app = SynthApp::with_devices(Err(crate::engine::AudioError::NoOutputDevice), None);
+        app.history.reset(&app.graph_state, &app.user_state);
+        let before = app.graph_state.graph.nodes.len();
+        let played = crate::app::palette::played(&hardware::known());
+        let freak = played.iter().find(|p| p.profile == "MicroFreak").unwrap();
+        app.add_played(freak, egui::pos2(200.0, 200.0));
+        app.history.record(&app.graph_state, &app.user_state, false, Instant::now());
+
+        let &node_id = app.graph_state.selected_nodes.first().unwrap();
+        let labels = &app.graph_state.graph[node_id].user_data.labels;
+        assert_eq!(app.graph_state.graph[node_id].user_data.module_id, crate::modules::instrument::ID);
+        assert_eq!(instrument::profile_name(labels), Some("MicroFreak"));
+        let profiles = hardware::known();
+        let held = |slot| instrument::held(labels, slot, &profiles).map(|held| held.parameter.name);
+        assert_eq!((held(0).as_deref(), held(1).as_deref()), (Some("Cutoff"), Some("Resonance")));
+        assert_eq!(app.history.undo_label(), Some("Add MicroFreak Instrument"));
+
+        assert!(app.history.undo(&mut app.graph_state, &mut app.user_state).is_some());
+        assert_eq!(app.graph_state.graph.nodes.len(), before);
+        assert!(app.history.undo(&mut app.graph_state, &mut app.user_state).is_none());
+    }
 }

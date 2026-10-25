@@ -1450,7 +1450,10 @@ impl SynthApp {
         self.user_state.context_menu_pos = None;
         self.my_modules = library::list();
         let groups = self.my_modules.iter().chain(&self.library_modules).cloned().collect();
-        self.quick_add = Some(QuickAdd::new(anchor, groups));
+        // A profile saved since, with Listen or by hand, shows up at once
+        crate::hardware::reload();
+        let played = super::palette::played(&crate::hardware::known());
+        self.quick_add = Some(QuickAdd::new(anchor, groups, played));
     }
 
     /// The patch position of a point on screen.

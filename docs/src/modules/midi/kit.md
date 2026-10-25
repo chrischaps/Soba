@@ -10,7 +10,7 @@ The Kit has twelve knobs, as an Instrument does: the device's own controls, by n
 
 ## Choosing what it plays
 
-Click **Choose a kit** on the face for the list of kit [profiles](../../hardware/instruments.md): the Digitakt, the SP-404MKII, the volca drum, and any kits of your own. Choosing one:
+Click **Choose a kit** on the face for the list of kit [profiles](../../hardware/instruments.md): the Digitakt, the SP-404MKII, the volca drum, and any kits of your own. (Or type `digitakt` in [Quick add](../../getting-started/interface-overview.md#quick-add) and choose **Kit · Digitakt**.) Choosing one:
 
 - gives each lane one of the device's parts, its first eight in order;
 - gives each knob one of its parameters, as an Instrument's does;

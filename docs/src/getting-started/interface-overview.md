@@ -62,7 +62,7 @@ Press `Space` or `Tab` with the mouse over the canvas. A search box opens at the
 ![The quick-add palette](../images/interface-quick-add.png)
 *Type a few letters of a module's name or category, then press Enter.*
 
-The search is forgiving. Letters only need to appear in order, so `lfo`, `svf`, `dly` and `s&h` all find what you'd expect. Typing a category name (`effect`, `mod`) lists that category. Move through the list with the arrow keys or `Tab`, add the highlighted module with `Enter`, or close the box with `Escape`.
+The search is forgiving. Letters only need to appear in order, so `lfo`, `svf`, `dly` and `s&h` all find what you'd expect. Typing a category name (`effect`, `mod`) lists that category. Typing a device's name or maker (`freak`, `volca`, `elektron`) offers an [Instrument](../modules/midi/instrument.md) already playing it, **Instrument · MicroFreak**, or a [Kit](../modules/midi/kit.md) for a drum machine, with the profiles you've saved among them. Move through the list with the arrow keys or `Tab`, add the highlighted module with `Enter`, or close the box with `Escape`.
 
 ## Anatomy of a module
 

@@ -20,6 +20,8 @@ Click **Choose an instrument** on the face (or the name that's there) for the li
 
 It's one step to undo. **None**, at the bottom of the list, empties the knobs.
 
+Or skip the face: in [Quick add](../../getting-started/interface-overview.md#quick-add), type a device's name or its maker (`freak`, `korg`) and choose **Instrument · MicroFreak**. The node arrives already playing it, chosen just as above, and one undo takes it away again.
+
 ## Inputs
 
 | Port | Signal Type | Description |
