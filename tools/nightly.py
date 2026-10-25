@@ -322,8 +322,11 @@ def run_steps(steps, worktree, logs, push, perf_baseline=None, rebaseline=False)
     results = {}
     toolchain = pinned_toolchain(worktree)
     if toolchain:
-        # A no-op when it's there already; when it can't be had, the steps fail saying why
-        step_run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal"],
+        # A no-op when it's there already; when it can't be had, the steps fail saying why.
+        # No self-update: on Windows rustup swaps its own binaries after it exits, and the
+        # first cargo that starts meanwhile can't remove rustup-init.exe (#455-#461)
+        step_run(["rustup", "toolchain", "install", toolchain, "--profile", "minimal",
+                  "--no-self-update"],
                  logs / "toolchain.log", worktree, dict(os.environ))
     env = quiet_env(toolchain=toolchain)
     python = sys.executable
