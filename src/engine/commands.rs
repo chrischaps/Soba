@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use crate::dsp::primitives::Markers;
-use crate::hardware::{LaneMap, SlotMap};
+use crate::hardware::{LaneMap, RowMap, SlotMap};
 use crate::dsp::{Audition, ListenTo, MeterLevels, OutputLevels, Readout, SampleData, SignalBuffer, Snapshot, MAX_CHANNELS};
 use crate::modules::oscilloscope::SCOPE_BUFFER_SIZE;
 use crate::modules::scenes::SceneKnob;
@@ -189,6 +189,16 @@ pub enum EngineCommand {
         map: LaneMap,
     },
 
+    /// Give a Setlist's row `row` of section `section` what it sends, or
+    /// take it away (#445). Ignored by other modules.
+    MapRow {
+        /// Target node.
+        node_id: NodeId,
+        section: usize,
+        row: usize,
+        map: Option<RowMap>,
+    },
+
     /// Give a module room to record a take into (a Sampler's Rec): an
     /// empty recording with room set aside, at the engine's sample rate,
     /// that nothing else holds. Ignored by modules that don't record.
@@ -291,6 +301,8 @@ pub enum PlanMessage {
     SlotHeard { node_id: NodeId, slot: usize, value: u16 },
     /// Give a running Kit's lane the part it plays.
     MapLane { node_id: NodeId, lane: usize, map: LaneMap },
+    /// Give a running Setlist's row what it sends.
+    MapRow { node_id: NodeId, section: usize, row: usize, map: Option<RowMap> },
     /// Give a running module room to record a take into. Room it's done
     /// with goes back to the UI to be dropped.
     GiveRoom { node_id: NodeId, room: Arc<SampleData> },
@@ -312,6 +324,7 @@ impl PlanMessage {
             | Self::MapSlot { node_id, .. }
             | Self::SlotHeard { node_id, .. }
             | Self::MapLane { node_id, .. }
+            | Self::MapRow { node_id, .. }
             | Self::GiveRoom { node_id, .. }
             | Self::SettleTake { node_id, .. } => node_id,
         }

@@ -753,6 +753,7 @@ mod tests {
                         PlanMessage::MapSlot { .. } => "slot",
                         PlanMessage::SlotHeard { .. } => "heard",
                         PlanMessage::MapLane { .. } => "lane",
+                        PlanMessage::MapRow { .. } => "row",
                         PlanMessage::GiveRoom { .. } => "room",
                         PlanMessage::SettleTake { .. } => "settle",
                     });

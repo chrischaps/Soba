@@ -54,7 +54,16 @@ impl MidiWriter {
     /// no sender drains it (the offline renderer). On the UI thread, as
     /// the module is made: the ring is allocated here.
     pub fn on_bus(bus: &MidiBus) -> Self {
-        let ring = bus.open_stream();
+        Self::of(bus, bus.open_stream())
+    }
+
+    /// A writer as [`on_bus`](Self::on_bus) makes, to a ring with room for
+    /// `capacity` events.
+    pub fn on_bus_with(bus: &MidiBus, capacity: usize) -> Self {
+        Self::of(bus, bus.open_stream_with(capacity))
+    }
+
+    fn of(bus: &MidiBus, ring: Option<Producer<Outgoing>>) -> Self {
         let pool = ring.as_ref().and_then(|_| bus.sysex_pool());
         Self { ring, sample: 0, dropped: 0, pool }
     }

@@ -752,10 +752,35 @@
       "name": "MIDI Out",
       "outputs": []
     },
+    "output.setlist": {
+      "category": "Output",
+      "color": "#7e57c2",
+      "height": 312.0,
+      "inputs": [
+        {
+          "name": "Section",
+          "type": "Control"
+        },
+        {
+          "name": "Next",
+          "type": "Control"
+        },
+        {
+          "name": "Bar",
+          "type": "Gate"
+        },
+        {
+          "name": "Send",
+          "type": "Gate"
+        }
+      ],
+      "name": "Setlist",
+      "outputs": []
+    },
     "seq.arranger": {
       "category": "Utility",
       "color": "#9e9e9e",
-      "height": 650.0,
+      "height": 668.0,
       "inputs": [
         {
           "name": "Clock",
@@ -799,6 +824,10 @@
         {
           "name": "End",
           "type": "Gate"
+        },
+        {
+          "name": "Next",
+          "type": "Control"
         },
         {
           "name": "Lane 1",

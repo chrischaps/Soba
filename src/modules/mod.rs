@@ -45,6 +45,7 @@ pub mod sample_hold;
 pub mod scenes;
 pub mod sampler;
 pub mod sequencer;
+pub mod setlist;
 pub mod slicer;
 pub mod slope;
 pub mod tape;
@@ -125,6 +126,7 @@ builtin_modules! {
     MidiOut,
     Instrument,
     Kit,
+    Setlist,
 }
 
 // Re-export commonly used types
@@ -170,6 +172,7 @@ pub use reverb::Reverb;
 pub use sample_hold::SampleHold;
 pub use scenes::Scenes;
 pub use sequencer::StepSequencer;
+pub use setlist::Setlist;
 pub use slicer::Slicer;
 pub use slope::Slope;
 pub use tape::Tape;

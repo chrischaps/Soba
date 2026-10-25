@@ -15,6 +15,7 @@ pub mod listening;
 #[cfg(test)]
 mod pages;
 pub mod profile;
+pub mod setlist;
 pub mod slot;
 
 use std::path::{Path, PathBuf};
@@ -22,6 +23,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 pub use profile::{Address, Button, ButtonMode, Clock, Curve, Kind, Naming, Parameter, Part, Profile, Programs, Step, Voices};
 pub use lane::LaneMap;
+pub use setlist::RowMap;
 pub use slot::SlotMap;
 
 /// A profile that ships with the app.

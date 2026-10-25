@@ -400,7 +400,7 @@ fn choose(node_id: NodeId, graph: &SynthGraph, profile: &Profile) -> Vec<SynthRe
 }
 
 /// The port whose device `profile` looks to be, if the Rig gives one.
-fn port_of(profile: &Profile) -> Option<usize> {
+pub(super) fn port_of(profile: &Profile) -> Option<usize> {
     let hint = profile.port.to_lowercase();
     if hint.is_empty() {
         return None;

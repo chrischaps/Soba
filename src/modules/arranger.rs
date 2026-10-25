@@ -57,6 +57,10 @@
 //! An Arranger with another's Section in **Follow** throws no dice: on each
 //! bar line it goes where its leader is, so the two stay in step however the
 //! leader wanders or jumps.
+//!
+//! The **Next** output says where the next bar line goes, as soon as that's
+//! known: the section playing, until its last bar throws its dice or a Jump
+//! is asked for. A Setlist reads it to tell the room ahead of the bar (#445).
 
 use std::f32::consts::PI;
 use std::sync::LazyLock;
@@ -515,7 +519,8 @@ pub const ID: &str = "seq.arranger";
 /// **Outputs:** Section (the section playing, its index ÷ 32), Section Trig
 /// (on each section's downbeat, every pass), Bar (on every downbeat), Last
 /// Bar (high through each pass's final bar, for fills), End (when the last
-/// section finishes), then a CV and a Gate for each lane.
+/// section finishes), Next (the section the next bar line goes to, as soon
+/// as that's known), then a CV and a Gate for each lane.
 ///
 /// # Timing
 ///
@@ -572,9 +577,10 @@ impl Arranger {
     pub const OUT_BAR: usize = 2;
     pub const OUT_LAST_BAR: usize = 3;
     pub const OUT_END: usize = 4;
+    pub const OUT_NEXT: usize = 5;
     /// Output index of lane 0's CV. Lane `l`'s CV is `OUT_LANES + 2l`, its
     /// Gate the one after.
-    pub const OUT_LANES: usize = 5;
+    pub const OUT_LANES: usize = 6;
     pub const OUT_COUNT: usize = Self::OUT_LANES + 2 * LANES;
 
     pub const PARAM_STEPS: usize = 0;
@@ -642,6 +648,8 @@ impl Arranger {
                 .describe("High through each section's final bar, on every pass: for fills"),
             PortDefinition::output("end", "End", SignalType::Gate)
                 .describe("A trigger when the last section finishes, whether the song loops or stops"),
+            PortDefinition::output("next", "Next", SignalType::Control)
+                .describe("The section the next bar line goes to, as its index ÷ 32: the one playing until its last bar throws its Next or a Jump is asked for. Patch it to a Setlist, which tells the hardware ahead of the bar"),
         ];
         for lane in 0..LANES {
             ports.push(
@@ -824,22 +832,57 @@ impl Arranger {
         }
     }
 
-    /// The end of a section's last pass: on as written, or where its Next
-    /// sent it, or where the leader went.
-    fn finish_section(&mut self, params: &[f32], pulse: usize, leader: Option<usize>) {
-        let sections = Self::sections(params);
-        let last = self.section + 1 >= sections;
-        let written = if last { Self::loop_to(params) } else { Some(self.section + 1) };
-        let next = self.next.take();
-        let go = match leader {
+    /// Where the song goes as written after this section: the next, or
+    /// after the last, back to Loop's (None with Loop off).
+    fn written(&self, params: &[f32]) -> Option<usize> {
+        if self.section + 1 >= Self::sections(params) { Self::loop_to(params) } else { Some(self.section + 1) }
+    }
+
+    /// Where the end of this section's last pass goes: on as written, or
+    /// where its Next sent it, or where the leader went. None to stop.
+    fn going(&self, params: &[f32], leader: Option<usize>) -> Option<usize> {
+        let written = self.written(params);
+        match leader {
             // A leader still in this section went back to it by its Next,
             // or is on as written to it (a song of one section), or stopped.
             // The Section can't tell the last two apart for a last section
             // with Loop off that may go back to itself: the follower plays on
             Some(section) if section == self.section && written != Some(section) && !Self::next(params, section).may_go_to(section) => written,
             Some(section) => Some(section),
-            None => next.or(written),
-        };
+            None => self.next.or(written),
+        }
+    }
+
+    /// The section the next bar line goes to, as far as it's known: the
+    /// one playing, but before the first clock, after a Jump, and in a
+    /// section's last bar, once its Next has thrown.
+    fn coming(&self, params: &[f32], leader: Option<usize>) -> usize {
+        let sections = Self::sections(params);
+        if self.pending {
+            return self.queued.or(leader).unwrap_or(0).min(sections - 1);
+        }
+        if let Some(section) = self.queued {
+            return section.min(sections - 1);
+        }
+        if self.ended {
+            return self.section;
+        }
+        let finishing = self.bar + 1 >= Self::length(params, self.section) && self.pass + 1 >= Self::repeats(params, self.section);
+        match leader {
+            Some(section) if section != self.section && !finishing => section,
+            _ if finishing => self.going(params, leader).map_or(self.section, |section| section.min(sections - 1)),
+            _ => self.section,
+        }
+    }
+
+    /// The end of a section's last pass: on as written, or where its Next
+    /// sent it, or where the leader went.
+    fn finish_section(&mut self, params: &[f32], pulse: usize, leader: Option<usize>) {
+        let sections = Self::sections(params);
+        let last = self.section + 1 >= sections;
+        let written = self.written(params);
+        let go = self.going(params, leader);
+        self.next = None;
         // The song as written ends here, wherever it goes next
         if last && go == written {
             self.end_trig.fire(pulse);
@@ -1054,6 +1097,8 @@ impl DspModule for Arranger {
             outputs[Self::OUT_BAR].samples[i] = gate(self.bar_trig.high());
             outputs[Self::OUT_LAST_BAR].samples[i] = gate(self.last_bar && !self.last_bar_dip);
             outputs[Self::OUT_END].samples[i] = gate(self.end_trig.high());
+            let leader = follow.map(|buf| Self::section_for_cv(buf.at(i), Self::sections(params)));
+            outputs[Self::OUT_NEXT].samples[i] = self.coming(params, leader) as f32 / SECTIONS as f32;
             self.section_trig.tick();
             self.bar_trig.tick();
             self.end_trig.tick();
@@ -1389,6 +1434,7 @@ mod tests {
         let outputs: Vec<&str> = arranger.ports().iter().filter(|p| p.is_output()).map(|p| p.name).collect();
         assert_eq!(outputs.len(), Arranger::OUT_COUNT);
         assert_eq!(outputs[Arranger::OUT_END], "End");
+        assert_eq!(outputs[Arranger::OUT_NEXT], "Next");
         assert_eq!(outputs[Arranger::OUT_LANES + 2 * 3], "Lane 4");
         assert_eq!(outputs[Arranger::OUT_LANES + 2 * 3 + 1], "Gate 4");
     }
@@ -1643,7 +1689,8 @@ mod tests {
             let a = run_with(&repeated, 700, &clocks, &[], &[]);
             let b = run_with(&copied, 700, &clocks, &[], &[]);
             for output in 0..Arranger::OUT_COUNT {
-                if output == Arranger::OUT_SECTION {
+                // These count sections, which a repeat is one of
+                if output == Arranger::OUT_SECTION || output == Arranger::OUT_NEXT {
                     continue;
                 }
                 assert_eq!(a[output], b[output], "output {output} differs");
@@ -1845,6 +1892,54 @@ mod tests {
         }
         // Clocks 1-2 are bar 1, 3-4 bar 2 (thrown), 5 is section 3
         assert_eq!(nexts, [(0, None), (0, None), (0, Some(2)), (0, Some(2)), (2, None)]);
+    }
+
+    /// The section Next names at `t`.
+    fn next_at(out: &[Vec<f32>], t: usize) -> usize {
+        (out[Arranger::OUT_NEXT][t] * SECTIONS as f32).round() as usize
+    }
+
+    #[test]
+    fn next_names_where_the_bar_line_goes_once_its_known() {
+        // Two bars of four 10 ms clocks, then one bar, then one, looping
+        let params = song(4, &[2, 1, 1]);
+        let out = run(&params, 400, 10);
+        // Before the first clock it names the section that clock starts
+        assert_eq!(next_at(&out, 0), 0);
+        // Section 1's first bar goes on into its second, which goes to 2
+        assert_eq!(next_at(&out, 35), 0);
+        assert_eq!(next_at(&out, 40), 1, "from the last bar's downbeat");
+        assert_eq!(next_at(&out, 79), 1);
+        // A section a bar long names the next all through it
+        assert_eq!(next_at(&out, 80), 2);
+        assert_eq!(next_at(&out, 120), 0, "the last loops back");
+        // And Section only changes on the bar line Next foretold
+        assert!((out[Arranger::OUT_SECTION][79] * SECTIONS as f32).round() == 0.0);
+        assert!((out[Arranger::OUT_SECTION][80] * SECTIONS as f32 - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn next_follows_a_jump_and_the_dice_and_holds_at_the_end() {
+        // A Jump asked for mid-bar shows at once, for the next bar line
+        let params = song(4, &[4, 4, 4]);
+        let clocks: Vec<usize> = (0..200).step_by(10).collect();
+        let out = run_with(&params, 200, &clocks, &[], &[(15, 2)]);
+        assert_eq!((next_at(&out, 14), next_at(&out, 15)), (0, 2));
+        assert_eq!(next_at(&out, 45), 2, "then the jumped-to section goes on");
+        // Asked for before the first clock, it's where the song starts
+        let out = run_with(&params, 50, &[10, 20], &[], &[(0, 1)]);
+        assert_eq!(next_at(&out, 5), 1);
+        // The dice: section 1 always goes to 3, which Next says on its last bar
+        let mut params = song(4, &[2, 1, 1]);
+        params[Arranger::PARAM_NEXT] = Next { on: 0, ways: [way(2, 1), Way::NONE] }.encode();
+        let out = run_seeded(&params, 120, 10, 3, None);
+        assert_eq!((next_at(&out, 39), next_at(&out, 40)), (0, 2));
+        // With Loop off the end goes nowhere: Next holds the last section
+        let mut params = song(4, &[1, 1]);
+        params[Arranger::PARAM_LOOP] = 0.0;
+        let out = run(&params, 120, 10);
+        assert_eq!(next_at(&out, 45), 1);
+        assert_eq!(next_at(&out, 100), 1);
     }
 
     #[test]

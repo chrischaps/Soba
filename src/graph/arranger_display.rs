@@ -3,8 +3,8 @@
 //! The song runs left to right, each section as wide as its share of the
 //! bars (with a little room kept for short ones), and a playhead sweeps it.
 //!
-//! - The **sections** sit on the five rows of the song's own jacks (Section,
-//!   Section Trig, Bar, Last Bar, End) as named blocks, the playing one lit
+//! - The **sections** sit on the six rows of the song's own jacks (Section,
+//!   Section Trig, Bar, Last Bar, End, Next) as named blocks, the playing one lit
 //!   green and its final bar shaded, where fills go.
 //! - Each **lane** sits on its two rows, CV and Gate, so it reads straight
 //!   across into its cables: its level as an orange line over the song, and
@@ -72,7 +72,7 @@ const PAGE_MARGIN: f32 = 0.1;
 /// The fewest bars the view zooms in to.
 const FEWEST_BARS: f32 = 2.0;
 /// The song's own outputs, top to bottom, with the short labels they wear.
-const SONG_OUTPUTS: [(&str, &str); 5] = [("Section", "Section"), ("Section Trig", "Trig"), ("Bar", "Bar"), ("Last Bar", "Last"), ("End", "End")];
+const SONG_OUTPUTS: [(&str, &str); 6] = [("Section", "Section"), ("Section Trig", "Trig"), ("Bar", "Bar"), ("Last Bar", "Last"), ("End", "End"), ("Next", "Next")];
 
 /// The key a section's name is saved under, 0-based.
 pub fn section_key(section: usize) -> String {
@@ -2324,8 +2324,8 @@ mod tests {
         (Song::of(values), labels)
     }
 
-    /// Every output but Section, which counts sections, over 2.5 times
-    /// round the song.
+    /// Every output but Section and Next, which count sections, over 2.5
+    /// times round the song.
     fn render(song: &Song) -> Vec<Vec<f32>> {
         let ms = 10 * song.steps * song.bars * 5 / 2;
         let mut clock = crate::dsp::SignalBuffer::gate(ms);
@@ -2337,7 +2337,7 @@ mod tests {
         let mut outputs: Vec<_> = (0..Arr::OUT_COUNT).map(|_| crate::dsp::SignalBuffer::control(ms)).collect();
         let context = crate::dsp::context::ProcessContext::new(1000.0, ms);
         arranger.process(&[&clock], &mut outputs, &song.values, &context);
-        outputs.into_iter().enumerate().filter(|&(index, _)| index != Arr::OUT_SECTION).map(|(_, b)| b.samples).collect()
+        outputs.into_iter().enumerate().filter(|&(index, _)| index != Arr::OUT_SECTION && index != Arr::OUT_NEXT).map(|(_, b)| b.samples).collect()
     }
 
     /// Intro, Groove ×3, Outro, looping back to the Groove.

@@ -33,6 +33,7 @@
   - [Pads](./modules/midi/pads.md)
   - [Instrument](./modules/midi/instrument.md)
   - [Kit](./modules/midi/kit.md)
+  - [Setlist](./modules/midi/setlist.md)
   - [SVF Filter](./modules/filters/svf-filter.md)
   - [Ladder Filter](./modules/filters/ladder-filter.md)
   - [ADSR Envelope](./modules/modulation/adsr.md)

@@ -666,10 +666,17 @@ impl MidiBus {
     /// A ring for a new MIDI Out to write to, or `None` while no sender
     /// drains the bus.
     pub fn open_stream(&self) -> Option<Producer<Outgoing>> {
+        self.open_stream_with(RING)
+    }
+
+    /// A ring as [`open_stream`](Self::open_stream) makes, with room for
+    /// `capacity` events: a module that sends little and has a ring for
+    /// each port (the Setlist) takes a small one.
+    pub fn open_stream_with(&self, capacity: usize) -> Option<Producer<Outgoing>> {
         if !self.draining.load(Relaxed) {
             return None;
         }
-        let (producer, consumer) = RingBuffer::new(RING);
+        let (producer, consumer) = RingBuffer::new(capacity);
         self.new_streams.lock().ok()?.push(consumer);
         Some(producer)
     }

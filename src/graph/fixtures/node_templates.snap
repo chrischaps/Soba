@@ -2933,6 +2933,7 @@ out  Section Trig       Gate
 out  Bar                Gate
 out  Last Bar           Gate
 out  End                Gate
+out  Next               Control
 out  Lane 1             Control
 out  Gate 1             Gate
 out  Lane 2             Control
@@ -2950,7 +2951,7 @@ out  Gate 7             Gate
 out  Lane 8             Control
 out  Gate 8             Gate
 knob Steps              "Steps" KnobOnly
-monitor [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+monitor [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
 display Timeline
 
 == util.scenes "Scenes" finder="Scenes" Utility
@@ -3330,3 +3331,10 @@ knob Slot 10            "Slot 10" Exposed
 knob Slot 11            "Slot 11" Exposed
 knob Slot 12            "Slot 12" Exposed
 display InstrumentFace
+
+== output.setlist "Setlist" finder="Setlist" Output
+in   Section            Control  ConnectionOnly       inline=true  port
+in   Next               Control  ConnectionOnly       inline=true  port
+in   Bar                Gate     ConnectionOnly       inline=true  port
+in   Send               Gate     ConnectionOnly       inline=true  port
+display SetlistFace

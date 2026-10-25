@@ -654,6 +654,12 @@ static MODULE_UI: &[ModuleUi] = &[
         knobs_per_row: 4,
         ..ModuleUi::DEFAULT
     },
+    ModuleUi {
+        module_id: crate::modules::setlist::ID,
+        // Each section's rows, under its name (#445)
+        display: NodeDisplay::SetlistFace,
+        ..ModuleUi::DEFAULT
+    },
 ];
 
 /// Every entry in the table.

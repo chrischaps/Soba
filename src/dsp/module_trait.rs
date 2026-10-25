@@ -505,6 +505,12 @@ pub trait DspModule: Send + 'static {
     /// REAL-TIME SAFE: the map comes by value.
     fn map_lane(&mut self, _lane: usize, _map: crate::hardware::LaneMap) {}
 
+    /// Gives a Setlist's row `row` of section `section` what it sends
+    /// (#445), or takes it away. Ignored by other modules.
+    ///
+    /// REAL-TIME SAFE: the map comes by value.
+    fn map_row(&mut self, _section: usize, _row: usize, _map: Option<crate::hardware::RowMap>) {}
+
     /// Starts the module's random numbers from `seed`, so a patch plays the
     /// same noise wherever it runs: in the editor, in a capture or in the
     /// render tool. The graph seeds each module as it's added, before it

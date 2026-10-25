@@ -28,6 +28,7 @@ It counts bars from a [Clock](../modulation/clock.md), like the sequencers, so t
 | **Bar** | Gate (Green) | A trigger on every bar's downbeat |
 | **Last Bar** | Gate (Green) | High through each section's final bar, for a fill. A repeated section has one on every pass |
 | **End** | Gate (Green) | A trigger when the last section finishes, whether the song loops or stops |
+| **Next** | Control (Orange) | The section the next bar line goes to, as its index ÷ 32. It reads the same as **Section** until the section's last bar throws its [Next](#wandering-where-a-section-goes-next), or a Jump is asked for. Before the first clock, it names the section the song starts on. Patch it into a [Setlist](../midi/setlist.md), which tells the hardware ahead of the bar |
 | **Lane 1** – **Lane 8** | Control (Orange) | Each lane's level, 0 to 1. A ramp is smooth enough to drive a [Mixer](./mixer.md)'s **Level** directly |
 | **Gate 1** – **Gate 8** | Gate (Green) | High while the lane is above zero, and for a moment on each Hit |
 
@@ -45,7 +46,7 @@ The sections, their names, lengths and repeats, the lanes' names and glides, and
 
 ## Writing a song
 
-The song runs left to right across the node. Each section is a block as wide as its share of the bars, though a short one keeps enough room to click. The blocks sit beside the song's own jacks: Section, Trig, Bar, Last and End. Each lane is drawn on the two rows its **CV** and **Gate** jacks hang from, so a lane reads straight across into its cables.
+The song runs left to right across the node. Each section is a block as wide as its share of the bars, though a short one keeps enough room to click. The blocks sit beside the song's own jacks: Section, Trig, Bar, Last, End and Next. Each lane is drawn on the two rows its **CV** and **Gate** jacks hang from, so a lane reads straight across into its cables.
 
 A lane is named for what its cable drives (a Mixer's **Level 2**, say) until you give it a name. The bar count at the top left shows where the song is, and the section playing is lit green, with its name in the header too.
 
@@ -208,6 +209,7 @@ The sections' lengths are `Length 01` to `Length 32`, their repeats `Repeat 01` 
 6. **A shorter song.** Set **Loop to** a later section, and the intro plays only once.
 7. **An endless song.** Give each section a chance of going somewhere else, and set **Loop to** back near the start: the song never quite repeats. Weight its way home a little higher, so it keeps coming back to its centre.
 8. **Ride the room.** Patch a lane into a [Mixer](./mixer.md)'s **Return** with its knob at 0, and the lane is the reverb's fader: dry and close for the opening, the hall for the second verse. A lane into one channel's **Send** steps just that part into the room. [Canopy](../../songs/canopy.md#the-room) does the first.
+9. **Tell the hardware.** Patch **Section**, **Next** and **Bar** into a [Setlist](../midi/setlist.md), and each section moves the Digitakt to its pattern and the FANTOM to its scene, ahead of the bar.
 
 ## Related
 

@@ -115,6 +115,16 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
             }
         }
 
+        // A Setlist's rows
+        if node.template.module_id() == crate::modules::setlist::ID {
+            let maps = crate::hardware::setlist::maps(&graph[node.graph_id].user_data.labels, &crate::hardware::known());
+            for (section, rows) in maps.iter().enumerate() {
+                for (row, &map) in rows.iter().enumerate().filter(|(_, map)| map.is_some()) {
+                    compiled.commands.push(EngineCommand::MapRow { node_id: engine_node_id, section, row, map });
+                }
+            }
+        }
+
         if let Some(file) = &graph[node.graph_id].user_data.file {
             compiled.files.push((engine_node_id, file.clone()));
         }

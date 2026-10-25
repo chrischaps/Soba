@@ -23,7 +23,8 @@ use crate::engine::graph_plan::{
     MAX_INPUTS,
 };
 use crate::engine::spectrum_tap::SpectrumTap;
-use crate::hardware::{LaneMap, SlotMap};
+use crate::hardware::setlist::{ROWS, SECTIONS};
+use crate::hardware::{LaneMap, RowMap, SlotMap};
 use crate::modules::instrument::SLOTS;
 use crate::modules::kit::LANES;
 use crate::modules::scenes::SceneKnob;
@@ -182,6 +183,8 @@ pub struct AudioGraph {
     slots: HashMap<NodeId, [SlotMap; SLOTS]>,
     /// What each Kit's lanes were last given to play (#443).
     lanes: HashMap<NodeId, [LaneMap; LANES]>,
+    /// What each Setlist's rows were last given to send (#445).
+    rows: HashMap<NodeId, Box<[[Option<RowMap>; ROWS]; SECTIONS]>>,
 }
 
 impl AudioGraph {
@@ -203,6 +206,7 @@ impl AudioGraph {
             scenes: HashMap::new(),
             slots: HashMap::new(),
             lanes: HashMap::new(),
+            rows: HashMap::new(),
         }
     }
 
@@ -349,6 +353,7 @@ impl AudioGraph {
         self.scenes.remove(&node_id);
         self.slots.remove(&node_id);
         self.lanes.remove(&node_id);
+        self.rows.remove(&node_id);
 
         // Remove all connections involving this node
         self.connections.retain(|conn| {
@@ -671,6 +676,30 @@ impl AudioGraph {
         self.lanes.get(&node_id)
     }
 
+    /// Gives a Setlist's row `row` of section `section` what it sends
+    /// (#445), or takes it away, as [`map_slot`](Self::map_slot) gives a
+    /// knob its parameter.
+    ///
+    /// Returns false if there is no such module.
+    pub fn map_row(&mut self, node_id: NodeId, section: usize, row: usize, map: Option<RowMap>) -> bool {
+        let Some(spec) = self.nodes.get_mut(&node_id) else {
+            return false;
+        };
+        if let Some(place) = self.rows.entry(node_id).or_insert_with(|| Box::new([[None; ROWS]; SECTIONS])).get_mut(section).and_then(|rows| rows.get_mut(row)) {
+            *place = map;
+        }
+        match spec.fresh.as_mut() {
+            Some(module) => module.map_row(section, row, map),
+            None => self.take_handoffs.push(PlanMessage::MapRow { node_id, section, row, map }),
+        }
+        true
+    }
+
+    /// What a Setlist's rows were last given to send.
+    pub fn row_maps(&self, node_id: NodeId) -> Option<&[[Option<RowMap>; ROWS]; SECTIONS]> {
+        self.rows.get(&node_id).map(|rows| &**rows)
+    }
+
     /// Gives a module room to record a take into. A module not yet handed
     /// to a plan gets it at once; one already on the audio thread gets it
     /// through [`take_take_handoffs`](Self::take_take_handoffs).
@@ -882,6 +911,7 @@ impl AudioGraph {
             EngineCommand::MapSlot { node_id, slot, map } => self.map_slot(node_id, slot, map),
             EngineCommand::SlotHeard { node_id, slot, value } => self.slot_heard(node_id, slot, value),
             EngineCommand::MapLane { node_id, lane, map } => self.map_lane(node_id, lane, map),
+            EngineCommand::MapRow { node_id, section, row, map } => self.map_row(node_id, section, row, map),
             EngineCommand::SeedModule { node_id, seed } => self.seed_module(node_id, seed),
             EngineCommand::SetScenes { node_id, knobs } => self.set_scenes(node_id, knobs),
             // Played on the running module, not kept in the graph
