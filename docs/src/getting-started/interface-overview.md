@@ -558,3 +558,7 @@ While a presentation script plays (Help → Lessons → Present…), a beat at a
 | `Page Up` or `←` | Presenting: play the beat again, or the one before if it's only just begun |
 | `Escape` | Stop presenting |
 
+A MIDI footswitch steps the beats too, once the script names its CC before the first beat: `advance cc 64`, `back cc 65` or `finish cc 66`, with a channel after the number if it's on only one. Set the pedal to momentary: each press counts once. While you present, nothing else hears that CC. No module, mapping, MIDI Learn or thru route gets it, so a sustain pedal on CC 64 doesn't hold any notes.
+
+Each run is kept as a take, a capture script with every beat's cues at the moment it played. **Save take…** in the notes window writes it, and so does stopping, if Soba was started with `--present script.txt --take take.txt`. Then `soba patch.json --capture take.txt` films the same run frame by frame, in time with the narration you recorded live. A beat you played again keeps only its last go, so the film holds still where you went back. Knobs you turn and the view you move by hand aren't in the take.
+

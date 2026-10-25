@@ -261,6 +261,14 @@ impl SynthApp {
         View { zoom, looking_at: at + (middle(view) - centre(&target, view)) / zoom }
     }
 
+    /// The patch point and zoom an `aim` takes to end on `view`: what a
+    /// take writes of where the view was (#489).
+    pub(super) fn aim_of(&self, view: View) -> (Pos2, f32) {
+        let size = self.editor_rect.size();
+        let target = Target::Point { at: view.looking_at, zoom: view.zoom };
+        (view.looking_at - (middle(size) - centre(&target, size)) / view.zoom, view.zoom)
+    }
+
     /// The patch-space rectangle around everything on a level, its frames
     /// and notes included, and whether every module, frame and note in it
     /// has been measured.

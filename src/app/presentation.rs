@@ -5,7 +5,9 @@
 //! the presenter talks over them.
 //!
 //! ```text
-//! title  How Synth Filters Work
+//! title    How Synth Filters Work
+//! advance  cc 64                    # a footswitch on CC 64 plays the next beat
+//! back     cc 65 1                  # ...and one on CC 65, channel 1 only, goes back
 //!
 //! beat Resonance
 //! say   Now turn up resonance until the filter starts to sing.
@@ -21,6 +23,15 @@
 //! cues are anything a capture script can do but record (`still`, `layout`,
 //! `input`, `end`).
 //!
+//! A footswitch (#489) is a CC named before the first beat, for `advance`,
+//! `back` or `finish`: any USB pedal or controller then steps the beats.
+//! While presenting, the MIDI engine keeps it from everything else, so
+//! nothing in the patch hears it (CC 64 is the sustain pedal), nor any
+//! thru route or mapping.
+//!
+//! Each run is kept as a take (see `presentation_take`), a capture script
+//! that films it again exactly.
+//!
 //! This is the script and its stepping; `synth_app/present.rs` plays the
 //! cues into the app and draws the notes.
 
@@ -32,6 +43,7 @@ use egui::Pos2;
 use super::capture_aim::{self, Part, Spot};
 use super::cue_runner::{CaptureAction, CueRunner};
 use super::cues::{parse_cues, Cue, Mode};
+use super::presentation_take::Take;
 
 /// Within this long of a beat's start, going back goes to the beat before,
 /// as a music player's back button does; after it, the beat starts again.
@@ -44,7 +56,32 @@ const STEP: f64 = 1.0 / 60.0;
 #[derive(Debug, Clone)]
 pub struct Script {
     pub title: Option<String>,
+    /// The footswitches that step it.
+    pub pedals: Vec<Pedal>,
     pub beats: Vec<Beat>,
+}
+
+/// A MIDI footswitch the presenter steps the beats with: a CC, on one
+/// channel or any.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Pedal {
+    pub command: Command,
+    pub controller: u8,
+    /// 0-15, or `None` for any.
+    pub channel: Option<u8>,
+}
+
+impl Pedal {
+    /// Whether a CC on `channel` (0-15) is this pedal's.
+    pub fn hears(&self, channel: u8, controller: u8) -> bool {
+        controller == self.controller && self.channel.is_none_or(|c| c == channel)
+    }
+
+    /// The pedal's CC, and its channel if only one.
+    pub fn name(&self) -> String {
+        let channel = self.channel.map(|c| format!(" on channel {}", c + 1)).unwrap_or_default();
+        format!("CC {}{channel}", self.controller)
+    }
 }
 
 /// One beat: its cues, and what's said over them.
@@ -82,6 +119,7 @@ impl Beat {
 /// Reads a presentation script. Errors name the line.
 pub fn parse(text: &str) -> Result<Script, String> {
     let mut title = None;
+    let mut pedals: Vec<Pedal> = Vec::new();
     // Each beat, and the lines of its cues
     let mut beats: Vec<(Beat, Vec<usize>)> = Vec::new();
     for (line_no, raw) in text.lines().enumerate() {
@@ -109,6 +147,24 @@ pub fn parse(text: &str) -> Result<Script, String> {
             title = Some(rest.to_string()).filter(|t| !t.is_empty());
             continue;
         }
+        let command = match word {
+            "advance" => Some(Command::Next),
+            "back" => Some(Command::Back),
+            "finish" => Some(Command::Finish),
+            _ => None,
+        };
+        if let Some(command) = command {
+            if !beats.is_empty() {
+                return Err(err("footswitches are named before the first beat"));
+            }
+            let pedal = parse_pedal(command, rest).map_err(err)?;
+            let shared = |p: &&Pedal| p.controller == pedal.controller && (p.channel.is_none() || pedal.channel.is_none() || p.channel == pedal.channel);
+            if let Some(other) = pedals.iter().find(shared) {
+                return Err(err(&format!("{} steps the beats already", other.name())));
+            }
+            pedals.push(pedal);
+            continue;
+        }
         let Some((beat, lines)) = beats.last_mut() else {
             return Err(err("everything but the title belongs to a beat: start one with `beat <name>`"));
         };
@@ -121,7 +177,7 @@ pub fn parse(text: &str) -> Result<Script, String> {
                 }
             }
             _ if word.parse::<f64>().is_ok() => lines.push(line_no),
-            _ => return Err(err("expected title, beat, say, auto or a cue")),
+            _ => return Err(err("expected title, advance, back, finish, beat, say, auto or a cue")),
         }
     }
     if beats.is_empty() {
@@ -143,7 +199,24 @@ pub fn parse(text: &str) -> Result<Script, String> {
             Ok(beat)
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(Script { title, beats })
+    Ok(Script { title, pedals, beats })
+}
+
+/// A footswitch's line after its command: `cc <number> [channel]`.
+fn parse_pedal(command: Command, rest: &str) -> Result<Pedal, &'static str> {
+    let words: Vec<&str> = rest.split_whitespace().collect();
+    let [kind, number, channel @ ..] = words.as_slice() else { return Err("a footswitch is `cc <number>`, and a channel if only one") };
+    if *kind != "cc" {
+        return Err("a footswitch is a CC: `cc <number>`");
+    }
+    // 120-127 are the channel mode messages, All Notes Off among them
+    let controller = number.parse::<u8>().ok().filter(|n| *n < 120).ok_or("a footswitch's CC is 0-119")?;
+    let channel = match channel {
+        [] => None,
+        [n] => Some(n.parse::<u8>().ok().filter(|n| (1..=16).contains(n)).ok_or("the channel is 1-16")? - 1),
+        _ => return Err("too many values: `cc <number> [channel]`"),
+    };
+    Ok(Pedal { command, controller, channel })
 }
 
 /// What the presenter asks for.
@@ -170,9 +243,6 @@ pub struct Presentation {
     now: f64,
     /// The runner's clock as of the last pass.
     last: f64,
-    /// The beat was finished early: its cues have all fired and its moves
-    /// land.
-    landed: bool,
     /// Its `auto` has asked for the next beat.
     auto_done: bool,
     /// The beat has the pointer and keys.
@@ -189,19 +259,22 @@ pub struct Presentation {
     /// The beat waits a pass before its cues fire: things put back have
     /// to be drawn before a camera move can set out from them.
     hold: bool,
+    /// The run so far, as a capture script would film it.
+    take: Take,
 }
 
 impl Presentation {
     pub fn new(script: Script) -> Self {
         let beats = script.beats.len();
+        let mut runner = CueRunner::new(Vec::new(), STEP);
+        runner.keep_log();
         Self {
             script,
-            runner: CueRunner::new(Vec::new(), STEP),
+            runner,
             beat: None,
             started: 0.0,
             now: 0.0,
             last: 0.0,
-            landed: false,
             auto_done: false,
             taken_over: false,
             commands: VecDeque::new(),
@@ -210,6 +283,7 @@ impl Presentation {
             began: None,
             restore: None,
             hold: false,
+            take: Take::default(),
         }
     }
 
@@ -246,10 +320,9 @@ impl Presentation {
         self.commands.push_back(command);
     }
 
-    /// The runner's clock: the beat's time, or past every cue once it has
-    /// landed.
+    /// The runner's clock: the beat's time.
     fn clock(&self) -> f64 {
-        if self.landed { f64::INFINITY } else { self.now - self.started }
+        self.now - self.started
     }
 
     /// Obeys what was asked, then fires the beat's cues due by now. Called
@@ -257,6 +330,15 @@ impl Presentation {
     /// over has its cues' input in place of the real pointer's; any other
     /// leaves the input alone. `locate` finds a module's part on screen.
     pub fn prepare_input(&mut self, now: f64, raw: &mut egui::RawInput, locate: &mut dyn FnMut(&Part) -> Result<Pos2, String>) {
+        self.step(now, raw, locate);
+        // What fired, into the take
+        let fired = self.runner.take_log();
+        if !fired.is_empty() {
+            self.take.keep(self.started, fired);
+        }
+    }
+
+    fn step(&mut self, now: f64, raw: &mut egui::RawInput, locate: &mut dyn FnMut(&Part) -> Result<Pos2, String>) {
         self.now = now;
         if let Some((left, _)) = self.auto_left(now) {
             if left <= 0.0 && self.commands.is_empty() && self.start_next.is_none() {
@@ -277,6 +359,9 @@ impl Presentation {
         }
         if std::mem::take(&mut self.hold) {
             self.started = now;
+            if let Some(k) = self.beat {
+                self.take.again(k, now);
+            }
             return;
         }
 
@@ -348,15 +433,14 @@ impl Presentation {
     fn land(&mut self, raw: &mut egui::RawInput, locate: &mut dyn FnMut(&Part) -> Result<Pos2, String>) {
         let mut scratch = egui::RawInput::default();
         let input = if self.taken_over { &mut *raw } else { &mut scratch };
-        self.runner.finish(input, locate);
-        self.landed = true;
+        self.runner.finish(self.clock(), input, locate);
     }
 
     /// Lets go of whatever the beat on show holds, before it's dropped.
     fn let_go(&mut self, raw: &mut egui::RawInput) {
         if self.taken_over {
             let mut finished = self.runner.clone();
-            finished.finish(raw, &mut |_| Err(String::new()));
+            finished.finish(self.clock(), raw, &mut |_| Err(String::new()));
             raw.events.push(egui::Event::PointerGone);
         }
     }
@@ -370,6 +454,7 @@ impl Presentation {
         } else {
             self.began_with[k] = Some(self.runner.clone());
             self.began = Some(k);
+            self.take.begin(k, self.now);
         }
         let beat = &self.script.beats[k];
         self.runner.load(beat.cues.clone());
@@ -377,9 +462,29 @@ impl Presentation {
         self.beat = Some(k);
         self.started = self.now;
         self.last = 0.0;
-        self.landed = false;
         self.auto_done = false;
         self.start_next = None;
+    }
+
+    /// The run so far as a capture script, ending now; `None` before the
+    /// first press. `patch` is the patch's file.
+    pub fn take_script(&self, patch: Option<&str>) -> Option<String> {
+        self.take.script(&self.script, patch, self.now)
+    }
+
+    /// How long the take has run at `now`, once the first beat has begun.
+    pub fn take_length(&self, now: f64) -> Option<f64> {
+        self.take.length(now)
+    }
+
+    /// Whether the take waits for how things stood at the first press.
+    pub fn take_wants_opening(&self) -> bool {
+        self.take.started() && !self.take.opened()
+    }
+
+    /// How things stood at the first press, as cues.
+    pub fn open_take(&mut self, cues: Vec<String>) {
+        self.take.open(cues);
     }
 
     /// A beat that began this pass, for the app to note how things stand.
@@ -579,5 +684,61 @@ beat   # named for its place
         assert_eq!(pass(&mut p, 3.0), ["play false"]);
         assert_eq!(p.beat(), Some(1));
         assert_eq!(p.auto_left(3.0), None, "the last beat has nowhere to go");
+    }
+
+    #[test]
+    fn footswitches_are_named_before_the_beats() {
+        let script = parse("advance cc 64\nback  cc 65 2\nbeat A\n0 play").unwrap();
+        assert_eq!(
+            script.pedals,
+            [
+                Pedal { command: Command::Next, controller: 64, channel: None },
+                Pedal { command: Command::Back, controller: 65, channel: Some(1) },
+            ]
+        );
+        assert!(script.pedals[1].hears(1, 65) && !script.pedals[1].hears(0, 65) && script.pedals[0].hears(9, 64));
+        let err = |text: &str| parse(text).unwrap_err();
+        assert!(err("beat A\nadvance cc 64").contains("before the first beat"));
+        assert!(err("advance note 64\nbeat A").contains("a CC"));
+        assert!(err("advance cc 64\nback cc 64 1\nbeat A").contains("CC 64 steps the beats already"));
+        assert!(err("advance cc 123\nbeat A").contains("0-119"));
+        assert!(err("finish cc 66 17\nbeat A").contains("1-16"));
+        assert!(err("advance cc\nbeat A").starts_with("script line 1:"));
+    }
+
+    #[test]
+    fn the_take_is_the_run_as_it_went() {
+        let mut p = Presentation::new(parse("beat A\n0 play\n1 param filter.svf Cutoff 800 4\n3 look filter.svf 1.4 2\nbeat B\n0 note 60 100 1").unwrap());
+        assert_eq!(p.take_script(None), None, "nothing before the first press");
+        p.command(Command::Next);
+        pass(&mut p, 10.0);
+        pass(&mut p, 11.5);
+        // On to B 2 s into A: what A had left lands, as a film of it will
+        p.command(Command::Next);
+        pass(&mut p, 12.0);
+        pass(&mut p, 12.02);
+        assert_eq!(p.beat(), Some(1));
+        // B again: its first go isn't kept
+        p.command(Command::Back);
+        pass(&mut p, 14.0);
+        pass(&mut p, 14.5);
+        pass(&mut p, 15.2);
+        assert!(p.take_length(15.2).is_some_and(|s| (s - 5.2).abs() < 1e-9));
+        let text = p.take_script(Some("patches/filters.json")).unwrap();
+        let film = parse_cues(&text, Mode::Film).unwrap_or_else(|e| panic!("{e}\n{text}"));
+        let fired: Vec<String> = film.iter().map(|(at, cue)| format!("{at} {}", cue.script().unwrap_or_else(|| format!("{cue:?}")))).collect();
+        assert_eq!(
+            fired,
+            [
+                "0 play",
+                "1 param filter.svf#1 Cutoff 800 4",
+                "2 look filter.svf#1 1.4 0",
+                "2 land",
+                "4 Note { channel: 0, note: 60, velocity: 100, on: true }",
+                "5 Note { channel: 0, note: 60, velocity: 100, on: false }",
+                "5.7 end",
+            ],
+            "{text}"
+        );
     }
 }

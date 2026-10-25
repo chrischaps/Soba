@@ -7,17 +7,26 @@
 //! Real input stays live: the script's pointer is drawn over the patch, as
 //! a lesson's ghost is, and only a beat with presses, drags, keys or typing
 //! takes the mouse, for as long as it plays.
+//!
+//! The script's footswitches step it from MIDI, held back from everything
+//! else while it's on show; and the run is kept as a take, which `--take`
+//! or the notes' Save take writes as a capture script that films it again
+//! (#489).
 
-use eframe::egui::{self, vec2, Color32, FontFamily, FontId, RichText, Stroke};
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use eframe::egui::{self, vec2, Color32, FontFamily, FontId, Pos2, RichText, Stroke};
 use egui::text::{LayoutJob, TextFormat};
-use egui_node_graph2::InputId;
+use egui_node_graph2::{InputId, InputParamKind};
 
 use crate::app::capture::CaptureAction;
 use crate::app::presentation::{self, Command, Presentation};
 use crate::app::{theme, WEB};
 use crate::engine::MidiEvent;
 use crate::graph::annotations::emphasis_runs;
-use crate::graph::GroupId;
+use crate::graph::groups::{self, GroupIndex};
+use crate::graph::{GroupId, SynthGraph};
 use super::framing::{self, View};
 use super::{find_input, SynthApp};
 
@@ -44,6 +53,13 @@ pub(super) struct Presenting {
     keys_elsewhere: bool,
     /// The beat on show had a cue that missed, and the status bar said so.
     missed: bool,
+    /// How things stood as the presentation began, to tell what changed
+    /// by hand before the first press.
+    opening: Scene,
+    /// Where the take is written as the presentation stops (`--take`).
+    take_to: Option<PathBuf>,
+    /// Which of the script's footswitches are down.
+    pedals_down: Vec<bool>,
 }
 
 /// How things stood as a beat began: every knob, the view and the level,
@@ -59,6 +75,7 @@ struct Scene {
 /// What the notes window asked for.
 enum NotesAction {
     Command(Command),
+    SaveTake,
     Stop,
 }
 
@@ -83,7 +100,11 @@ impl SynthApp {
         self.stop_presenting();
         // Faces note where their parts are drawn, for a move to find
         crate::graph::marks::start();
+        // The footswitches are the presentation's alone while it's on show
+        self.midi.set_pedals(script.pedals.iter().map(|p| (p.controller, p.channel)).collect());
+        let keys = next_keys(&script);
         self.presenting = Some(Presenting {
+            pedals_down: vec![false; script.pedals.len()],
             run: Presentation::new(script),
             title: title.clone(),
             scenes: vec![None; beats],
@@ -91,9 +112,19 @@ impl SynthApp {
             notes_open: true,
             keys_elsewhere: false,
             missed: false,
+            opening: self.scene(),
+            take_to: None,
         });
-        self.status_message = Some(format!("Presenting {title}: Page Down plays the first of {beats} beats"));
+        self.status_message = Some(format!("Presenting {title}: {keys} plays the first of {beats} beats"));
         Ok(())
+    }
+
+    /// Writes the take to `path` as the presentation stops:
+    /// `soba patch.json --present script.txt --take take.txt`.
+    pub fn take_to(&mut self, path: PathBuf) {
+        if let Some(presenting) = self.presenting.as_mut() {
+            presenting.take_to = Some(path);
+        }
     }
 
     /// Help → Lessons → Present…: a script to present over the patch.
@@ -112,11 +143,72 @@ impl SynthApp {
     }
 
     /// Escape: the presentation ends, and the patch stays as the beats
-    /// left it.
+    /// left it. With `--take`, the take is written.
     pub(super) fn stop_presenting(&mut self) {
+        let written = self.write_take();
         let Some(presenting) = self.presenting.take() else { return };
         self.let_notes_go(&presenting.sounding);
-        self.status_message = Some(format!("Stopped presenting {}", presenting.title));
+        self.midi.set_pedals(Vec::new());
+        if !matches!(written, Some(Err(_))) {
+            let take = written.and_then(Result::ok).map(|path| format!(": the take is in {}", path.display())).unwrap_or_default();
+            self.status_message = Some(format!("Stopped presenting {}{take}", presenting.title));
+        }
+    }
+
+    /// The take so far as a capture script, once the first beat has begun.
+    fn take_text(&self) -> Option<String> {
+        let patch = self.document.path.as_ref().map(|p| p.display().to_string());
+        self.presenting.as_ref()?.run.take_script(patch.as_deref())
+    }
+
+    /// Writes the take where `--take` asked, if it did and there's one to
+    /// write; says where, or what went wrong.
+    fn write_take(&mut self) -> Option<Result<PathBuf, ()>> {
+        let path = self.presenting.as_ref()?.take_to.clone()?;
+        let text = self.take_text()?;
+        Some(match std::fs::write(&path, text) {
+            Ok(()) => Ok(path),
+            Err(e) => {
+                self.status_error(format!("Couldn't write the take to {}: {e}", path.display()));
+                Err(())
+            }
+        })
+    }
+
+    /// The notes' Save take: the take so far, to a file of the presenter's
+    /// choosing (in the browser, a download).
+    fn save_take(&mut self) {
+        let Some(text) = self.take_text() else { return };
+        let title = self.presenting.as_ref().map_or_else(String::new, |p| p.title.clone());
+        let name = format!("{} take.txt", title.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], " ").trim());
+        #[cfg(target_arch = "wasm32")]
+        if let Err(e) = crate::app::web::download(&name, &text) {
+            self.status_error(format!("Couldn't save the take: {e}"));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let Some(path) = rfd::FileDialog::new().add_filter("Capture script", &["txt"]).set_file_name(&name).save_file() else { return };
+            match std::fs::write(&path, text) {
+                Ok(()) => self.status_message = Some(format!("Take saved: soba {} --capture {}", self.document.path.as_ref().map_or_else(|| "patch.json".into(), |p| p.display().to_string()), path.display())),
+                Err(e) => self.status_error(format!("Couldn't save the take to {}: {e}", path.display())),
+            }
+        }
+    }
+
+    /// A presenter's footswitches, which nothing else heard: channel, CC
+    /// and value. Each steps the beats as it goes down.
+    pub(super) fn press_pedals(&mut self, heard: &[(u8, u8, u8)]) {
+        let Some(presenting) = self.presenting.as_mut() else { return };
+        for &(channel, controller, value) in heard {
+            let pedals = &presenting.run.script.pedals;
+            let Some(i) = pedals.iter().position(|p| p.hears(channel, controller)) else { continue };
+            let (command, down) = (pedals[i].command, value >= 64);
+            // Once a press: a pedal says when it's let go too
+            if down && !presenting.pedals_down[i] {
+                presenting.run.command(command);
+            }
+            presenting.pedals_down[i] = down;
+        }
     }
 
     /// A key or the notes window asks the presentation for something.
@@ -156,6 +248,11 @@ impl SynthApp {
         if let Some(k) = presenting.run.take_began() {
             presenting.scenes[k] = Some(self.scene());
             presenting.missed = false;
+        }
+        // The take opens on things as they stood at the first press
+        if presenting.run.take_wants_opening() {
+            let opening = self.take_opening(&presenting.opening);
+            presenting.run.open_take(opening);
         }
 
         let mut actions = presenting.run.take_actions();
@@ -264,6 +361,60 @@ impl SynthApp {
         }
     }
 
+    /// Cues that set things as they stand now: the view, and the level
+    /// it's on, the transport, and any knob turned since `opening`.
+    fn take_opening(&self, opening: &Scene) -> Vec<String> {
+        let mut cues = Vec::new();
+        let (at, zoom) = self.aim_of(self.view());
+        match self.user_state.level.and_then(|level| self.group_path(level)) {
+            Some(path) => cues.push(format!("enter {path} at {} {} {zoom}", at.x, at.y)),
+            None => cues.push(format!("aim {} {} {zoom} 0", at.x, at.y)),
+        }
+        if self.is_playing {
+            cues.push("play".into());
+        }
+        let before: HashMap<InputId, f32> = opening.params.iter().copied().collect();
+        let graph = &self.graph_state.graph;
+        for (id, input) in graph.inputs.iter() {
+            let value = input.value.actual_value();
+            if before.get(&id).is_some_and(|was| *was != value) {
+                if let Some(knob) = knob_name(graph, id) {
+                    cues.push(format!("param {knob} {value} 0"));
+                }
+            }
+        }
+        cues
+    }
+
+    /// How an `enter` cue names a group, from the top: `Bells/FM Bell`,
+    /// `Strings/Pump#2`. `None` if the name wouldn't find it again.
+    fn group_path(&self, id: GroupId) -> Option<String> {
+        let graph = &self.graph_state.graph;
+        let index = GroupIndex::of(graph);
+        let position = |n| self.graph_state.node_positions.get(n).copied();
+        let mut parts = Vec::new();
+        let mut at = Some(id);
+        while let Some(group) = at {
+            let parent = index.parent_of(graph, group);
+            let name = groups::name(graph, index.node(group)?);
+            // Several of its name side by side: which, counted as a page reads
+            let mut twins: Vec<(GroupId, Pos2)> = index
+                .ids()
+                .filter(|&g| index.parent_of(graph, g) == parent)
+                .filter_map(|g| index.node(g).filter(|&n| groups::name(graph, n) == name).map(|n| (g, position(n).unwrap_or_default())))
+                .collect();
+            twins.sort_by(|a, b| a.1.y.total_cmp(&b.1.y).then(a.1.x.total_cmp(&b.1.x)));
+            parts.push(match twins.len() {
+                1 => name.to_string(),
+                _ => format!("{name}#{}", twins.iter().position(|t| t.0 == group)? + 1),
+            });
+            at = parent;
+        }
+        parts.reverse();
+        let path = parts.join("/");
+        (groups::find_group(graph, position, None, &path).ok() == Some(id)).then_some(path)
+    }
+
     /// Lets go of notes the beats started.
     fn let_notes_go(&mut self, sounding: &[(u8, u8)]) {
         for &(channel, note) in sounding {
@@ -273,6 +424,10 @@ impl SynthApp {
 
     /// After the patch is drawn: the script's pointer, and the notes.
     pub(super) fn tend_presentation(&mut self, ctx: &egui::Context) {
+        // Closing the window keeps the take
+        if ctx.input(|i| i.viewport().close_requested()) {
+            self.write_take();
+        }
         let Some(presenting) = self.presenting.as_mut() else { return };
         presenting.run.draw_cursor(ctx);
         let typing = crate::widgets::typing(ctx) || self.quick_add.is_some();
@@ -310,6 +465,7 @@ impl SynthApp {
         for action in asked {
             match action {
                 NotesAction::Command(command) => self.present_command(ctx, command),
+                NotesAction::SaveTake => self.save_take(),
                 NotesAction::Stop => self.stop_presenting(),
             }
         }
@@ -346,14 +502,47 @@ impl SynthApp {
         let on = presenting.run.beat().map_or(0, |k| k + 1);
         let (dot, color) = if presenting.run.playing() { ("●", TALLY) } else { ("○", theme::text::SECONDARY) };
         let text = RichText::new(format!("{dot} Beat {on}/{beats}")).color(color).small();
+        let keys = next_keys(&presenting.run.script);
         let chip = ui
             .add(egui::Button::new(text).fill(theme::background::WIDGET).corner_radius(8.0).small())
-            .on_hover_text(format!("Presenting {}: Page Down plays the next beat, Escape stops. Click for the notes", presenting.title));
+            .on_hover_text(format!("Presenting {}: {keys} plays the next beat, Escape stops. Click for the notes", presenting.title));
         if chip.clicked() {
             presenting.notes_open = true;
         }
         ui.add_space(6.0);
     }
+}
+
+/// How a script names an input's knob: `filter.svf#2 Cutoff`. `None` for
+/// what isn't a knob, or a name a script can't write (with a number in it,
+/// which would read as the value).
+fn knob_name(graph: &SynthGraph, id: InputId) -> Option<String> {
+    let input = graph.inputs.get(id)?;
+    if !matches!(input.kind, InputParamKind::ConstantOnly | InputParamKind::ConnectionOrConstant) {
+        return None;
+    }
+    let node = graph.nodes.get(input.node)?;
+    let kind = node.user_data.module_id;
+    let nth = graph.nodes.iter().filter(|(_, n)| n.user_data.module_id == kind).position(|(n, _)| n == input.node)?;
+    let (name, _) = node.inputs.iter().find(|(_, i)| *i == id)?;
+    if name.split_whitespace().any(|w| w.parse::<f64>().is_ok()) {
+        return None;
+    }
+    Some(format!("{kind}#{} {name}", nth + 1))
+}
+
+/// What plays the next beat: Page Down, and the script's footswitch.
+fn next_keys(script: &presentation::Script) -> String {
+    match script.pedals.iter().find(|p| p.command == Command::Next) {
+        Some(pedal) => format!("Page Down or {}", pedal.name()),
+        None => "Page Down".into(),
+    }
+}
+
+/// Seconds as m:ss.
+fn clock(seconds: f64) -> String {
+    let whole = seconds.max(0.0) as u64;
+    format!("{}:{:02}", whole / 60, whole % 60)
 }
 
 /// The presenter's keys while the notes window has them, as on the canvas.
@@ -414,7 +603,7 @@ fn draw_notes(ui: &mut egui::Ui, presenting: &Presenting, now: f64) -> Vec<Notes
     beat_dots(ui, on_show, beats.len());
     ui.add_space(12.0);
 
-    egui::ScrollArea::vertical().max_height(ui.available_height() - 96.0).auto_shrink([false, true]).show(ui, |ui| {
+    egui::ScrollArea::vertical().max_height(ui.available_height() - 120.0).auto_shrink([false, true]).show(ui, |ui| {
         let ink = if on_show.is_some() { theme::text::PRIMARY } else { theme::text::SECONDARY };
         if beat.say.is_empty() {
             ui.label(RichText::new("Nothing to say: let it play.").italics().color(theme::text::QUIET).size(say_size * 0.7));
@@ -436,7 +625,7 @@ fn draw_notes(ui: &mut egui::Ui, presenting: &Presenting, now: f64) -> Vec<Notes
 
     ui.add_space(8.0);
     let line = match on_show {
-        None => "Page Down plays it".to_string(),
+        None => format!("{} plays it", next_keys(&run.script)),
         Some(k) if k + 1 < beats.len() => {
             let next = &beats[k + 1];
             let first = next.say.first().map(|s| format!(" · {}", s.replace("**", ""))).unwrap_or_default();
@@ -466,6 +655,28 @@ fn draw_notes(ui: &mut egui::Ui, presenting: &Presenting, now: f64) -> Vec<Notes
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui.button("Stop").on_hover_text("Escape: stop presenting, leaving the patch as it is").clicked() {
                 asked.push(NotesAction::Stop);
+            }
+        });
+    });
+
+    // The take: how long it's run, and what isn't in it
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        match run.take_length(now) {
+            Some(length) => {
+                ui.label(RichText::new(format!("● Take {}", clock(length))).color(TALLY.gamma_multiply(0.85)).small());
+                ui.label(RichText::new("· hand moves aren't in it").color(theme::text::QUIET).small());
+            }
+            None => {
+                ui.label(RichText::new("The take starts with the first beat").color(theme::text::QUIET).small());
+            }
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let save = egui::Button::new(RichText::new("Save take…").small()).small();
+            let hover = "The run so far as a capture script: `soba patch.json --capture take.txt` films it again, \
+                in time with what you said. Knobs turned and the view moved by hand aren't in it";
+            if ui.add_enabled(on_show.is_some(), save).on_hover_text(hover).clicked() {
+                asked.push(NotesAction::SaveTake);
             }
         });
     });

@@ -28,6 +28,7 @@ mod notice;
 mod palette;
 pub mod pace;
 pub(crate) mod presentation;
+mod presentation_take;
 pub(crate) mod qwerty_keys;
 mod recording;
 mod session;

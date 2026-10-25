@@ -148,6 +148,10 @@ pub(crate) struct CueRunner {
     /// Where this frame's presses and right-clicks landed, and their cue
     /// times, to check against what egui found under them.
     presses: Vec<(f64, &'static str, Pos2)>,
+    /// Everything moving gets where it's going on the next `animate`.
+    landing: bool,
+    /// Every cue fired, as it fired, while a take is kept (#489).
+    log: Option<Vec<(f64, Cue)>>,
 }
 
 impl CueRunner {
@@ -175,7 +179,19 @@ impl CueRunner {
             pending_zoom: 1.0,
             hovering: None,
             presses: Vec::new(),
+            landing: false,
+            log: None,
         }
+    }
+
+    /// Keeps every cue as it fires from now on, for [`take_log`](Self::take_log).
+    pub fn keep_log(&mut self) {
+        self.log.get_or_insert_with(Vec::new);
+    }
+
+    /// The cues fired since this was last asked, and when.
+    pub fn take_log(&mut self) -> Vec<(f64, Cue)> {
+        self.log.as_mut().map(std::mem::take).unwrap_or_default()
     }
 
     /// Plays `cues` from here, a presentation's next beat, timed from 0
@@ -201,17 +217,19 @@ impl CueRunner {
             && self.modifiers.is_none()
     }
 
-    /// Ends the cues on the spot, as they'd have left things: knobs and the
-    /// camera where they were going (camera moves cut), the transport and
-    /// MIDI as sent, and anything held let go. What would start something
-    /// (a note, a press, a key, typing, a pointer move) doesn't. The caller
-    /// then runs the runner's clock at infinity, so the ramps land.
-    pub fn finish(&mut self, raw: &mut egui::RawInput, locate: &mut dyn FnMut(&Part) -> Result<Pos2, String>) {
+    /// Ends the cues on the spot at `now`, as they'd have left things:
+    /// knobs and the camera where they were going (camera moves cut), the
+    /// transport and MIDI as sent, and anything held let go. What would
+    /// start something (a note, a press, a key, typing, a pointer move)
+    /// doesn't. What's left fires now, then a `land`, so a take writes
+    /// the same and a film of it ends the beat the same way.
+    pub fn finish(&mut self, now: f64, raw: &mut egui::RawInput, locate: &mut dyn FnMut(&Part) -> Result<Pos2, String>) {
         let held = self.button_down;
         // Notes not yet played, whose ends aren't either
         let mut unplayed = Vec::new();
         let rest = self.cues.split_off(self.next_cue);
-        self.cues.extend(rest.into_iter().filter_map(|(at, cue)| {
+        let mut released = !held;
+        self.cues.extend(rest.into_iter().filter_map(|(_, cue)| {
             let cue = match cue {
                 Cue::Note { channel, note, on: true, .. } => {
                     unplayed.push((channel, note));
@@ -229,28 +247,40 @@ impl CueRunner {
                 | Cue::Wheel { .. }
                 | Cue::Hover(Some(_))
                 | Cue::Drop => return None,
-                Cue::Button(false) if !held => return None,
+                Cue::Button(false) if released => return None,
+                Cue::Button(false) => {
+                    released = true;
+                    cue
+                }
                 Cue::Fit(_) => Cue::Fit(0.0),
                 Cue::Aim { at, zoom, .. } => Cue::Aim { at, zoom, dur: 0.0 },
                 Cue::Look { at, zoom, .. } => Cue::Look { at, zoom, dur: 0.0 },
                 cue => cue,
             };
-            Some((at, cue))
+            Some((now, cue))
         }));
+        // Anything still held is let go
+        if !released {
+            self.cues.push((now, Cue::Button(false)));
+        }
+        if self.hovering.is_some() && !self.cues[self.next_cue..].iter().any(|(_, cue)| matches!(cue, Cue::Hover(None) | Cue::Drop)) {
+            self.cues.push((now, Cue::Hover(None)));
+        }
+        self.cues.push((now, Cue::Land));
         self.fire(f64::INFINITY, raw, locate, &mut |_, _| None);
-        if self.button_down {
-            self.button_down = false;
-            raw.events.push(egui::Event::PointerButton {
-                pos: self.pointer.unwrap_or_default(),
-                button: egui::PointerButton::Primary,
-                pressed: false,
-                modifiers: egui::Modifiers::default(),
-            });
-        }
         self.modifiers = egui::Modifiers::default();
-        if self.hovering.take().is_some() {
-            self.hover_into(raw);
+    }
+
+    /// Whatever is moving gets where it's going: the knobs this pass, the
+    /// pointer and camera on the next `animate`.
+    fn land(&mut self) {
+        for ramp in &mut self.ramps {
+            ramp.dur = 0.0;
         }
+        if let Some(glide) = self.pan_glide.as_mut() {
+            glide.dur = 0.0;
+        }
+        self.landing = true;
     }
 
     /// Adds to the app's work, in order with what the cues ask for.
@@ -316,6 +346,9 @@ impl CueRunner {
                 break;
             }
             self.next_cue += 1;
+            if let Some(log) = self.log.as_mut() {
+                log.push((at, cue.clone()));
+            }
             match cue {
                 Cue::Play(on) => self.actions.push(CaptureAction::Play(on)),
                 Cue::KeyDown(key, modifiers) | Cue::KeyUp(key, modifiers) => {
@@ -448,6 +481,7 @@ impl CueRunner {
                     }
                     self.hover_into(raw);
                 }
+                Cue::Land => self.land(),
                 Cue::Still(_) | Cue::Layout(_) | Cue::Input(_) | Cue::End => {
                     if let Some(action) = recorder(at, cue) {
                         self.actions.push(action);
@@ -476,8 +510,10 @@ impl CueRunner {
         self.pending_zoom = 1.0;
     }
 
-    /// Advances the pointer, pan and zoom glides from `from` to `t`.
+    /// Advances the pointer, pan and zoom glides from `from` to `t`, or
+    /// to their ends when the cues have landed.
     pub fn animate(&mut self, from: f64, t: f64, raw: &mut egui::RawInput) {
+        let t = if std::mem::take(&mut self.landing) { f64::INFINITY } else { t };
         if let Some(glide) = self.pointer_glide {
             self.pointer = Some(glide.at(t).to_pos2());
             if glide.done(t) {

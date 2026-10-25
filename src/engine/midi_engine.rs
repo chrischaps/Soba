@@ -19,6 +19,9 @@
 //! Each message also runs down the thru routes from its device (#446, see
 //! [`crate::link::midi_thru`]) before anything else, straight to the MIDI
 //! Out sender: what passes skips the audio thread and its block.
+//!
+//! A presenter's footswitch (#489, see [`MidiEngine::set_pedals`]) is held
+//! back from both, and from the audio thread: only the UI hears it.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -343,6 +346,8 @@ struct MidiSenders {
     waker: Option<eframe::egui::Context>,
     /// The thru routes' way to the MIDI Out sender, while one runs (#446).
     thru: Option<ThruInput>,
+    /// A presenter's footswitches: CCs, each on one channel (0-15) or any.
+    pedals: Vec<(u8, Option<u8>)>,
 }
 
 impl MidiSenders {
@@ -359,6 +364,16 @@ impl MidiSenders {
             if let Some(waker) = &self.waker {
                 waker.request_repaint();
             }
+        }
+    }
+
+    /// Whether `event` is a presenter's footswitch.
+    fn is_pedal(&self, event: &MidiEvent) -> bool {
+        match *event {
+            MidiEvent::ControlChange { channel, controller, .. } => {
+                self.pedals.iter().any(|&(cc, on)| cc == controller && on.is_none_or(|on| on == channel))
+            }
+            _ => false,
         }
     }
 }
@@ -476,7 +491,13 @@ impl MidiEngine {
         let engine = Self {
             devices,
             inputs: Default::default(),
-            senders: Arc::new(Mutex::new(MidiSenders { audio: audio_producer, ui: ui_producer, waker: None, thru: THRU.open_input() })),
+            senders: Arc::new(Mutex::new(MidiSenders {
+                audio: audio_producer,
+                ui: ui_producer,
+                waker: None,
+                thru: THRU.open_input(),
+                pedals: Vec::new(),
+            })),
             state,
             scan_running,
             scan_thread,
@@ -551,6 +572,16 @@ impl MidiEngine {
             // the audio callback reads this same clock
             let stamped = MidiEvent::from_bytes(data).map(|event| TimestampedMidiEvent::heard(port, event));
             if let Ok(mut senders) = senders.lock() {
+                // A presenter's footswitch is theirs alone: nothing in the
+                // patch hears it (CC 64 would hold notes), and no route
+                // passes it on
+                if let Some(stamped) = stamped.filter(|s| senders.is_pedal(&s.event)) {
+                    let _ = senders.ui.push(stamped);
+                    if let Some(waker) = &senders.waker {
+                        waker.request_repaint();
+                    }
+                    return;
+                }
                 // Thru first: it's for playing, and waits for nothing
                 if let Some(thru) = &mut senders.thru {
                     thru.forward(port, data);
@@ -645,6 +676,15 @@ impl MidiEngine {
     pub fn send(&self, event: MidiEvent) {
         if let Ok(mut senders) = self.senders.lock() {
             senders.send(TimestampedMidiEvent::now(event));
+        }
+    }
+
+    /// Holds back these CCs (each on one channel, 0-15, or any) from the
+    /// audio thread and the thru routes, for the UI alone: a presenter's
+    /// footswitches (#489). Empty lets them all through again.
+    pub fn set_pedals(&self, pedals: Vec<(u8, Option<u8>)>) {
+        if let Ok(mut senders) = self.senders.lock() {
+            senders.pedals = pedals;
         }
     }
 
@@ -875,5 +915,17 @@ mod tests {
         fn assert_copy<T: Copy>() {}
         assert_copy::<MidiEvent>();
         assert_copy::<TimestampedMidiEvent>();
+    }
+
+    #[test]
+    fn a_presenters_pedal_is_a_cc_on_its_channel() {
+        let (audio, _) = RingBuffer::new(1);
+        let (ui, _) = RingBuffer::new(1);
+        let senders = MidiSenders { audio, ui, waker: None, thru: None, pedals: vec![(64, None), (65, Some(2))] };
+        let cc = |channel, controller| MidiEvent::ControlChange { channel, controller, value: 127 };
+        assert!(senders.is_pedal(&cc(0, 64)) && senders.is_pedal(&cc(15, 64)));
+        assert!(senders.is_pedal(&cc(2, 65)) && !senders.is_pedal(&cc(0, 65)));
+        assert!(!senders.is_pedal(&cc(0, 1)));
+        assert!(!senders.is_pedal(&MidiEvent::NoteOn { channel: 0, note: 64, velocity: 100 }));
     }
 }

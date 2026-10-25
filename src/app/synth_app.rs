@@ -757,6 +757,8 @@ impl SynthApp {
         }, |node, param| standings.get(&(node, param)).copied());
         self.hear_instruments(&ccs, now);
         self.show_midi_pickups(now);
+        // A presenter's footswitches step the beats (#489)
+        self.press_pedals(&heard.pedals);
 
         if heard.learned {
             self.note_map_mode_learned(was_learning);

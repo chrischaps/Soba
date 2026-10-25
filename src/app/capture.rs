@@ -54,7 +54,8 @@
 //! 1.0  cc 1 74 127                  # a MIDI CC: channel, number, value
 //! 1.0  bend 1 -8192                 # pitch bend: channel, -8192 to 8191
 //! 1.0  pressure 1 90                # channel pressure: channel, 0-127
-//! 1.0  midi start                   # MIDI Start, Stop or Continue
+//! 1.0  midi start                   # MIDI Start, Stop or Continue, or one
+//!                                   # clock tick (`midi clock`)
 //! 1.0  midiclock 120 8.0            # MIDI clock ticks at 120 BPM for 8 s
 //! 2.0  param osc.sine Detune 12 1.5 # module (#n for the nth, @id for its id
 //!                                   # in the file), input, value, ramp
@@ -113,6 +114,10 @@
 //! 6.0  hover take.wav               # drag a file over the window, from
 //! 7.0  drop                         # the desktop, and drop it at the pointer
 //! 7.0  hover off                    # ...or give the drag up
+//! 8.0  land                         # whatever's moving (knobs, the camera,
+//!                                   # the pointer) gets there now: a
+//!                                   # presentation's take writes it where
+//!                                   # a beat was finished early
 //! 9.0  end
 //! ```
 //!

@@ -128,6 +128,9 @@ pub struct Heard {
     /// Parameters a learn into a module wrote: engine node, parameter
     /// index and value. Unlike `turns`, they're edits, which undo takes back.
     pub learned_into: Vec<(u64, usize, f32)>,
+    /// A presenter's footswitches (#489), which nothing else heard:
+    /// channel (0-15), CC and value.
+    pub pedals: Vec<(u8, u8, u8)>,
 }
 
 /// A CC just learned, listened to a moment longer.
@@ -194,6 +197,9 @@ pub struct MidiSession {
     pub traffic: [InputTraffic; MIDI_INPUTS],
     /// A device's knobs being heard, to make its profile (#441).
     pub listening: Option<Listening>,
+    /// A presenter's footswitches, held back for the presentation alone
+    /// (#489): CCs, each on one channel (0-15) or any.
+    pedals: Vec<(u8, Option<u8>)>,
 }
 
 impl MidiSession {
@@ -392,6 +398,28 @@ impl MidiSession {
         }
     }
 
+    /// Keeps these CCs from everything but a presentation, which hears
+    /// them in [`Heard::pedals`]: no module, route, mapping or learn does
+    /// (#489). Empty lets them through again.
+    pub fn set_pedals(&mut self, pedals: Vec<(u8, Option<u8>)>) {
+        if let Some(engine) = &self.engine {
+            engine.set_pedals(pedals.clone());
+        }
+        self.pedals = pedals;
+    }
+
+    /// Whether a device's `event` is a presenter's footswitch.
+    fn pedal(&self, event: &MidiEvent) -> Option<(u8, u8, u8)> {
+        match *event {
+            MidiEvent::ControlChange { channel, controller, value }
+                if self.pedals.iter().any(|&(cc, on)| cc == controller && on.is_none_or(|on| on == channel)) =>
+            {
+                Some((channel, controller, value))
+            }
+            _ => None,
+        }
+    }
+
     /// Takes every event waiting, and the notes the UI played, handing
     /// each to `each` (the MIDI Monitor's log) as it's heard, with the
     /// input it came in on and the name of its device (`SOBA_PORT` and
@@ -409,6 +437,11 @@ impl MidiSession {
                 if let Some(traffic) = self.traffic.get_mut(timestamped.port as usize) {
                     traffic.count = traffic.count.wrapping_add(1);
                     traffic.last = Some(timestamped.event);
+                }
+                // The presenter's alone: not even the MIDI Monitor logs it
+                if let Some(pedal) = self.pedal(&timestamped.event) {
+                    heard.pedals.push(pedal);
+                    continue;
                 }
                 each(timestamped.event, timestamped.port, device);
                 self.hear_from(timestamped.port, device, timestamped.event, &mut heard, &current);
@@ -1040,6 +1073,28 @@ mod tests {
         assert_eq!(logged.len(), 2);
         assert!(heard.notes_changed);
         assert!(session.events.is_some());
+    }
+
+    #[test]
+    fn a_presenters_footswitch_is_heard_by_the_presentation_alone() {
+        let (mut producer, consumer) = rtrb::RingBuffer::new(8);
+        let mut session = MidiSession::new(None, Some(consumer), None);
+        session.set_pedals(vec![(64, None), (65, Some(1))]);
+        session.start_learn(target(7));
+        // CC 64 on any channel, CC 65 on channel 2 only
+        for event in [cc(0, 64, 127), cc(3, 64, 0), cc(0, 65, 127), cc(1, 65, 127)] {
+            producer.push(TimestampedMidiEvent::heard(0, event)).unwrap();
+        }
+        let mut logged = Vec::new();
+        let heard = session.drain(|event, _, _| logged.push(event), |_, _| None);
+        assert_eq!(heard.pedals, [(0, 64, 127), (3, 64, 0), (1, 65, 127)]);
+        // CC 65 on channel 1 is anyone's: the monitor logs it and the learn takes it
+        assert_eq!(logged.len(), 1);
+        assert!(heard.learned);
+        assert_eq!(session.traffic[0].count, 4, "the input's light still shows the pedal");
+        session.set_pedals(Vec::new());
+        producer.push(TimestampedMidiEvent::heard(0, cc(0, 64, 127))).unwrap();
+        assert!(session.drain(|_, _, _| {}, |_, _| None).pedals.is_empty());
     }
 }
 

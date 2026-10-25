@@ -42,6 +42,21 @@ fn main() -> eframe::Result<()> {
         Some(Some(script)) => Some(script),
         None => None,
     };
+    // ...and where to write the run as a capture script that films it again:
+    // `--take take.txt`
+    let take = args.iter().position(|a| a == "--take").map(|i| args.get(i + 1).map(PathBuf::from));
+    let take = match take {
+        Some(None) => {
+            eprintln!("--take needs a file to write");
+            std::process::exit(2);
+        }
+        Some(Some(_)) if present.is_none() => {
+            eprintln!("--take keeps a presentation's run: give --present a script too");
+            std::process::exit(2);
+        }
+        Some(take) => take,
+        None => None,
+    };
     // A patch file to open, e.g. `soba patches/lush-pad.json`
     // (skipping the values that follow options)
     let patch_path = args
@@ -55,6 +70,7 @@ fn main() -> eframe::Result<()> {
                 && after != resume::OPTION
                 && after != "--lesson"
                 && after != "--present"
+                && after != "--take"
         })
         .map(|(_, arg)| PathBuf::from(arg));
     // Restarted after an update: the session the copy before handed over.
@@ -126,6 +142,9 @@ fn main() -> eframe::Result<()> {
                 if let Err(e) = app.start_presentation(script) {
                     eprintln!("present: {e}");
                     std::process::exit(2);
+                }
+                if let Some(take) = take {
+                    app.take_to(take);
                 }
             }
             Ok(Box::new(app))

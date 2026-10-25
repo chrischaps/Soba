@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use eframe::egui;
 use egui::{Pos2, Vec2};
 
-use super::capture_aim::{self, Spot, Which};
+use super::capture_aim::{self, PartAt, Spot, Which};
 use crate::engine::MidiEvent;
 
 /// How a script is read.
@@ -67,6 +67,9 @@ pub(crate) enum Cue {
     Hover(Option<PathBuf>),
     /// Drop the file dragged over the window where the pointer is.
     Drop,
+    /// Whatever is moving (a knob, the camera, the pointer) gets where it's
+    /// going, now: a presenter finished the beat early (#489).
+    Land,
     End,
 }
 
@@ -79,6 +82,84 @@ impl Cue {
             Cue::Midi(event) => Some(event),
             _ => None,
         }
+    }
+
+    /// The cue as a script writes it, after its time: what a take (#489)
+    /// writes of each cue a beat fired, to be read back the same. `None`
+    /// for what isn't a line of its own: a note, whose length is its end's
+    /// time (a take pairs the two up), a right-click's release (`rclick`
+    /// lets go by itself), and a typed `"`, which a script can't quote.
+    pub fn script(&self) -> Option<String> {
+        let keys = |key: egui::Key, m: egui::Modifiers| {
+            let held = [(m.command || m.ctrl, "Ctrl+"), (m.shift, "Shift+"), (m.alt, "Alt+")];
+            held.iter().filter(|(on, _)| *on).map(|(_, name)| *name).collect::<String>() + key.name()
+        };
+        let spot = |spot: &Spot| match spot {
+            Spot::Point(p) => format!("{} {}", p.x, p.y),
+            Spot::By(v) => format!("by {} {}", v.x, v.y),
+            Spot::Part(part) => {
+                let module = match part.frame() {
+                    Some(_) => part.module.clone(),
+                    None => format!("{}{}", part.module, part.which),
+                };
+                match &part.at {
+                    PartAt::Named(name) if part.frame().is_some() && name == "title" => module,
+                    PartAt::Named(name) => format!("{module} {name}"),
+                    PartAt::Offset(v) => format!("{module} {} {}", v.x, v.y),
+                }
+            }
+        };
+        Some(match self {
+            Cue::Play(true) => "play".into(),
+            Cue::Play(false) => "stop".into(),
+            Cue::KeyDown(key, m) => format!("keydown {}", keys(*key, *m)),
+            Cue::KeyUp(key, m) => format!("keyup {}", keys(*key, *m)),
+            Cue::Text(text) if text.contains('"') => return None,
+            Cue::Text(text) => format!("type \"{text}\""),
+            Cue::Note { .. } => return None,
+            Cue::Midi(event) => match *event {
+                MidiEvent::ControlChange { channel, controller, value } => format!("cc {} {controller} {value}", channel + 1),
+                MidiEvent::PitchBend { channel, value } => format!("bend {} {value}", channel + 1),
+                MidiEvent::ChannelPressure { channel, pressure } => format!("pressure {} {pressure}", channel + 1),
+                MidiEvent::Start => "midi start".into(),
+                MidiEvent::Stop => "midi stop".into(),
+                MidiEvent::Continue => "midi continue".into(),
+                MidiEvent::Clock => "midi clock".into(),
+                // Nothing a script says sends anything else
+                _ => return None,
+            },
+            Cue::Param { module, which, input, value, dur } => format!("param {module}{which} {input} {value} {dur}"),
+            Cue::Cursor(on) => format!("cursor {}", if *on { "on" } else { "off" }),
+            Cue::Move { to, dur } => format!("move {} {dur}", spot(to)),
+            Cue::PointerOff => "move off".into(),
+            Cue::Button(true) => "press".into(),
+            Cue::Button(false) => "release".into(),
+            Cue::SecondaryButton(true) => "rclick".into(),
+            Cue::SecondaryButton(false) => return None,
+            Cue::Wheel { delta, modifiers } => match (modifiers.ctrl || modifiers.command, modifiers.alt) {
+                (true, _) => format!("wheel {delta} ctrl"),
+                (false, true) => format!("wheel {delta} alt"),
+                _ => format!("wheel {delta}"),
+            },
+            Cue::View { pan, dur } => format!("view {} {} {dur}", pan.x, pan.y),
+            Cue::Zoom { factor, dur } => format!("zoom {factor} {dur}"),
+            Cue::Camera { offset, scale, dur } => format!("camera {} {} {scale} {dur}", offset.x, offset.y),
+            Cue::Fit(dur) => format!("fit {dur}"),
+            Cue::Aim { at, zoom, dur } => format!("aim {} {} {zoom} {dur}", at.x, at.y),
+            Cue::Look { at, zoom: Some(zoom), dur } => format!("look {at} {zoom} {dur}"),
+            Cue::Look { at, zoom: None, dur } => format!("look {at} {dur}"),
+            Cue::Enter(name, None) => format!("enter {name}"),
+            Cue::Enter(name, Some((at, zoom))) => format!("enter {name} at {} {} {zoom}", at.x, at.y),
+            Cue::Leave => "leave".into(),
+            Cue::Still(name) => format!("still {name}"),
+            Cue::Layout(name) => format!("layout {name}"),
+            Cue::Input(path) => format!("input {}", path.display()),
+            Cue::Hover(Some(path)) => format!("hover {}", path.display()),
+            Cue::Hover(None) => "hover off".into(),
+            Cue::Drop => "drop".into(),
+            Cue::Land => "land".into(),
+            Cue::End => "end".into(),
+        })
     }
 }
 
@@ -226,7 +307,9 @@ pub(crate) fn parse_cues(text: &str, mode: Mode) -> Result<Vec<(f64, Cue)>, Stri
                     Some("start") => MidiEvent::Start,
                     Some("stop") => MidiEvent::Stop,
                     Some("continue") => MidiEvent::Continue,
-                    _ => return Err(err("expected start, stop or continue")),
+                    // One tick, as a take writes a clock it heard
+                    Some("clock") => MidiEvent::Clock,
+                    _ => return Err(err("expected start, stop, continue or clock")),
                 };
                 cues.push((t, Cue::Midi(event)));
             }
@@ -326,6 +409,7 @@ pub(crate) fn parse_cues(text: &str, mode: Mode) -> Result<Vec<(f64, Cue)>, Stri
                 cues.push((t, Cue::Hover(path)));
             }
             "drop" => cues.push((t, Cue::Drop)),
+            "land" => cues.push((t, Cue::Land)),
             "end" => cues.push((t, Cue::End)),
             _ => return Err(err("unknown cue")),
         }
@@ -506,5 +590,58 @@ mod tests {
         }
         assert!(parse_cues("-0.5 play", Mode::Beat).is_err(), "a beat starts at its start");
         assert!(parse_cues("", Mode::Beat).is_ok_and(|cues| cues.is_empty()));
+    }
+
+    #[test]
+    fn a_cue_written_out_reads_back_the_same() {
+        // Every cue a beat can fire, as a take writes them (#489)
+        let script = "0 play
+0 stop
+0 keydown Ctrl+Shift+F
+0 keyup Z
+0 type \"a b\"
+0 cc 2 64 127
+0 bend 1 -8192
+0 pressure 3 90
+0 midi start
+0 midi clock
+0 param filter.svf#2 Cut Off 800.5 1.5
+0 param seq.step@104 Rate 0.25 0
+0 cursor off
+0 move 400 300 0.6
+0 move by 0 -60 2
+0 move osc.sine#2 knob:Detune 0.3
+0 move fx.eq 234 135 0
+0 move frame:Drive and echo 0.3
+0 move frame:Shape 10 20 0
+0 move off
+0 press
+0 release
+0 rclick
+0 wheel -120
+0 wheel 240 ctrl
+0 wheel 120 alt
+0 view 120 -40 2
+0 zoom 1.4 2
+0 camera -300 0 0.5 3
+0 fit 1.5
+0 aim 1200 640 1.5 2
+0 look filter.svf 1.2
+0 look osc.sine#2 1.4 2
+0 look frame:Drive and echo 1
+0 enter Bells/FM Bell
+0 enter Drums at 168 291 1
+0 leave
+0 hover off
+0 drop
+0 land
+1 end";
+        let cues = film(script).unwrap();
+        let written: String = cues.iter().filter_map(|(at, cue)| Some(format!("{at} {}
+", cue.script()?))).collect();
+        let again = film(&written).unwrap();
+        let debug = |cues: &[(f64, Cue)]| cues.iter().filter(|(_, c)| !matches!(c, Cue::SecondaryButton(false))).map(|c| format!("{c:?}")).collect::<Vec<_>>();
+        assert_eq!(debug(&again), debug(&cues), "{written}");
+        assert_eq!(Cue::Text("\"".into()).script(), None, "a quote can't be typed in a script");
     }
 }
