@@ -241,7 +241,7 @@
           "module_id": "util.vca",
           "position": [
             320.0,
-            620.0
+            720.0
           ],
           "parameters": [
             {
@@ -261,7 +261,7 @@
           "module_id": "mod.adsr",
           "position": [
             320.0,
-            860.0
+            960.0
           ],
           "parameters": [
             {

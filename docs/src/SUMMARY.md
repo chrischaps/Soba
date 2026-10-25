@@ -73,6 +73,7 @@
 
 # Playing Hardware
 
+- [Hardware Overview](./hardware/index.md)
 - [Instrument Profiles](./hardware/instruments.md)
   - [Digitakt](./hardware/digitakt.md)
   - [SP-404MKII](./hardware/sp-404mkii.md)
@@ -100,6 +101,7 @@
 - [Roll Call](./recipes/roll-call.md)
 - [Pad Kit](./recipes/pad-kit.md)
 - [Hands On](./recipes/hands-on.md)
+- [The Rig](./recipes/the-rig.md)
 - [Pinwheel](./recipes/pinwheel.md)
 - [Afterglow](./recipes/afterglow.md)
 - [Front Porch](./recipes/front-porch.md)

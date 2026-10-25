@@ -195,6 +195,13 @@ pub const EXAMPLES: &[Example] = &[
         json: include_str!("../../patches/hands-on.json"),
     },
     Example {
+        name: "The Rig",
+        shelf: Shelf::Recipe,
+        file_name: "the-rig.json",
+        description: "Conducts a room of hardware: a Setlist moves a Digitakt's patterns, an LFO sweeps a MicroFreak's filter, an FM Voice gives a volca fm its sound and the Arranger loops an RC-505. With no hardware, Soba's stand-ins play every part",
+        json: include_str!("../../patches/the-rig.json"),
+    },
+    Example {
         name: "Pinwheel",
         shelf: Shelf::Recipe,
         file_name: "pinwheel.json",
