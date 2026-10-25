@@ -64,7 +64,7 @@ pub fn page(profile: &Profile) -> String {
             if let Some(default) = p.default.filter(|&d| !(p.relative && d == p.centre())) {
                 values = [values, format!("starts at {default}")].into_iter().filter(|v| !v.is_empty()).collect::<Vec<_>>().join("; ");
             }
-            if !p.mutate {
+            if !crate::app::mutate::moves(p) {
                 values = [values, "Mutate leaves it".to_string()].into_iter().filter(|v| !v.is_empty()).collect::<Vec<_>>().join("; ");
             }
             let mut message = match p.address {

@@ -74,6 +74,14 @@ Most synths send their knobs as CCs as you turn them. The MicroFreak and the Dig
 
 A stepped knob goes to the step nearest the value it hears. Knobs that nudge (the FANTOM-06's) send no value of their own back, so they don't listen.
 
+## Exploring its sounds
+
+[Mutate](../../getting-started/interface-overview.md#mutate) works on hardware too. Select the Instrument and press `Ctrl + M`: its knobs move a small random step, and the device follows. Press it again to wander further, or hold it to go a long way. Each press is one undo step, so `Ctrl + Z` walks back to the sound you liked, sending the old values as it goes. Think of the MicroFreak as a partner suggesting the sound next door, not a menu to dig through.
+
+- **What stays put:** a knob a cable drives, an empty knob, any parameter the profile marks `"mutate": false` (a volume, a tuning, a MIDI setting) or whose name says it's loud (a level, drive or feedback), and knobs that nudge, since undo couldn't take a nudge back.
+- **Named values** (an arpeggio type, a clock division) move only with `Ctrl + Alt + M`, and then by whole steps, so the device always lands on one of its own values.
+- **Keeping one:** `Ctrl + Shift + M` keeps the knobs in a [Scenes](../utilities/scenes.md) module. Scenes morph an Instrument's knobs as they do any other knobs. A knob of named values holds until halfway, then switches once, rather than stepping through every value in between. Knobs that nudge aren't kept.
+
 ## How it works
 
 **Knobs.** A knob sends when you turn it. A patched knob sends wherever its cable moves within a block, up to a thousand times a second, so an LFO sweeps a filter as smoothly as the device can follow. A stepped knob (an oscillator type, an arpeggio mode) shares its travel evenly among its steps, and sends each step's own value from the maker's chart, so it lands on the right step whatever numbers the device uses.

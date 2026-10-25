@@ -11,9 +11,16 @@
 //! end folds back.
 //!
 //! Some knobs never move: one a cable drives, the Audio Output's, and any
-//! that sets how loud something is (a level, gain, makeup or feedback), so
-//! no variation is louder than the patch was. Whole-number knobs, switches
-//! and dropdowns move only when Alt+Ctrl+M asks for them.
+//! that sets how loud something is (a level, gain, makeup, feedback or how
+//! hard a note is struck), so no variation is louder than the patch was.
+//! Whole-number knobs, switches and dropdowns move only when Alt+Ctrl+M
+//! asks for them.
+//!
+//! An Instrument's or a Kit's knobs move the hardware (#447), each as the
+//! parameter it holds allows: never one its profile marks `mutate: false`
+//! (a volume, a tuning, a MIDI setting), nor one that nudges the device
+//! rather than setting it, which undo couldn't walk back. One holding named
+//! values is a whole-number knob: Alt+Ctrl+M moves it by whole steps.
 //!
 //! This holds what's mutated and how. The app's side (the key, the strip of
 //! variations, undo) is in `synth_app/mutating.rs`.
@@ -25,6 +32,7 @@ use egui_node_graph2::{InputId, InputParamKind, NodeId};
 use crate::engine::NodeId as EngineNodeId;
 use crate::graph::groups::{self, GroupIndex, NodeKind};
 use crate::graph::{SynthGraph, SynthGraphState, SynthValueType};
+use crate::hardware::{self, instrument, Parameter};
 use crate::modules::noise::Pcg32;
 use crate::widgets::knob::KnobConfig;
 
@@ -38,10 +46,10 @@ pub const RAMP_SECONDS: f32 = 2.5;
 pub const KEPT: usize = 8;
 
 /// Words in a parameter's name that make it set how loud something is.
-const LOUDNESS: &[&str] = &["Level", "Volume", "Master", "Gain", "Output", "Makeup", "Feedback", "Drive"];
+const LOUDNESS: &[&str] = &["Level", "Volume", "Master", "Gain", "Output", "Makeup", "Feedback", "Drive", "Velocity"];
 /// Switches that would stop the patch hearing or keeping time, or start
-/// recording, rather than change how it sounds.
-const NOT_SOUND: &[&str] = &["Channel", "Source", "Run", "Latency", "Take", "Bars"];
+/// recording, or send it to another device, rather than change how it sounds.
+const NOT_SOUND: &[&str] = &["Channel", "Port", "Source", "Run", "Latency", "Take", "Bars"];
 
 /// How far a variation goes after the key has been held this long.
 pub fn amount(held_seconds: f32) -> f32 {
@@ -75,6 +83,10 @@ impl KnobKey {
 pub struct Knob {
     pub key: KnobKey,
     pub from: SynthValueType,
+    /// For an Instrument's knob holding a stepped parameter (#447), how
+    /// many steps share its travel: it moves by whole ones, as a
+    /// whole-number knob does, landing in the middle of one.
+    pub steps: Option<usize>,
 }
 
 impl Knob {
@@ -84,6 +96,14 @@ impl Knob {
         let mut rng = self.key.rng(seed);
         let step = rng.bipolar();
         match &self.from {
+            SynthValueType::Number { value, spec } if self.steps.is_some_and(|count| count > 1) => {
+                let count = self.steps.unwrap_or(1) as f32;
+                let span = (spec.max - spec.min).max(f32::EPSILON);
+                let last = count - 1.0;
+                let at = (((value - spec.min) / span).clamp(0.0, 1.0) * count).floor().min(last);
+                let to = (fold(at / last + step * amount) * last).round();
+                if to == at { *value } else { spec.min + span * (to + 0.5) / count }
+            }
             SynthValueType::Number { value, spec } => {
                 let config = KnobConfig { range: spec.min..=spec.max, logarithmic: spec.logarithmic, ..Default::default() };
                 let travel = fold(config.travel(*value) + step * amount);
@@ -121,6 +141,15 @@ fn loudness(param: &str, value: &SynthValueType) -> bool {
     decibels || LOUDNESS.iter().any(|word| param.contains(word))
 }
 
+/// Whether Mutate moves an Instrument's knob holding `parameter` (#447):
+/// not one its profile keeps from it, nor one that nudges the device,
+/// which undo couldn't walk back, nor a loud one (in any case, as makers
+/// write them: an "Overdrive").
+pub fn moves(parameter: &Parameter) -> bool {
+    let name = parameter.name.to_lowercase();
+    parameter.mutate && !parameter.relative && !LOUDNESS.iter().any(|word| name.contains(&word.to_lowercase()))
+}
+
 /// The modules a selection reaches: those selected, and every module inside
 /// a selected group, however deep. In patch order, each once.
 pub fn modules(graph: &SynthGraph, selection: &[NodeId]) -> Vec<NodeId> {
@@ -144,6 +173,7 @@ pub fn modules(graph: &SynthGraph, selection: &[NodeId]) -> Vec<NodeId> {
 /// adds whole-number knobs, switches and dropdowns.
 pub fn knobs(graph: &SynthGraph, user_state: &SynthGraphState, selection: &[NodeId], switches: bool) -> Vec<Knob> {
     let patched = |input: InputId| graph.connection(input).is_some();
+    let mut profiles = None;
     let mut knobs = Vec::new();
     for node_id in modules(graph, selection) {
         let node = &graph[node_id];
@@ -152,17 +182,32 @@ pub fn knobs(graph: &SynthGraph, user_state: &SynthGraphState, selection: &[Node
         if data.module_id.starts_with("output.") {
             continue;
         }
-        let mut add = |param: &str, input: InputId| {
+        let mut add = |param: &str, input: InputId, steps: Option<usize>| {
             let value = &graph.get_input(input).value;
             if patched(input) || loudness(param, value) {
                 return;
             }
-            knobs.push(Knob { key: KnobKey { module, param: param.to_string() }, from: value.clone() });
+            knobs.push(Knob { key: KnobKey { module, param: param.to_string() }, from: value.clone(), steps });
         };
+        let plays = instrument::plays_a_profile(data.module_id);
         for knob in &data.knob_params {
             let Ok(input) = node.get_input(&knob.param_name) else { continue };
+            // An Instrument's knob moves as the parameter it holds may (#447)
+            if let Some(slot) = instrument::slot_named(&knob.param_name).filter(|_| plays) {
+                let profiles = profiles.get_or_insert_with(hardware::known);
+                let Some(held) = instrument::held(&data.labels, slot, profiles) else { continue };
+                let parameter = &held.parameter;
+                if !moves(parameter) {
+                    continue;
+                }
+                let steps = instrument::steps_of(parameter);
+                if steps.is_none_or(|count| switches && count > 1) {
+                    add(&knob.param_name, input, steps);
+                }
+                continue;
+            }
             match &graph.get_input(input).value {
-                SynthValueType::Number { spec, .. } if switches || !spec.stepped => add(&knob.param_name, input),
+                SynthValueType::Number { spec, .. } if switches || !spec.stepped => add(&knob.param_name, input, None),
                 _ => {}
             }
         }
@@ -173,7 +218,7 @@ pub fn knobs(graph: &SynthGraph, user_state: &SynthGraphState, selection: &[Node
                 let input_param = graph.get_input(*input);
                 let switch = matches!(input_param.value, SynthValueType::Toggle { .. } | SynthValueType::Select { .. });
                 if switch && input_param.shown_inline && !matches!(input_param.kind, InputParamKind::ConnectionOnly) && !NOT_SOUND.contains(&param.as_str()) {
-                    add(param, *input);
+                    add(param, *input, None);
                 }
             }
         }
@@ -473,6 +518,105 @@ mod tests {
         history.undo(&mut rig.editor, &mut rig.user_state).expect("a step");
         assert_eq!(rig.param(filter, "Cutoff"), cutoff);
         assert_eq!(history.undo_label(), None);
+    }
+
+    /// An Instrument playing `profile`, each knob holding one of its first
+    /// twelve parameters, as choosing it on the face does.
+    fn instrument(rig: &mut Rig, profile: &str) -> (NodeId, Vec<hardware::Parameter>) {
+        let node = rig.add(crate::modules::instrument::ID);
+        let profile = hardware::known().find(profile).expect("ships").profile.clone();
+        for (key, text) in instrument::choose(&profile) {
+            if !text.is_empty() {
+                rig.editor.graph[node].user_data.labels.insert(key, text);
+            }
+        }
+        (node, profile.parameters)
+    }
+
+    /// The parameters a mutation of `node` moves, by the names they go by.
+    fn held_names(rig: &Rig, node: NodeId, parameters: &[hardware::Parameter], switches: bool) -> Vec<String> {
+        rig.names(&[node], switches)
+            .iter()
+            .map(|slot| match instrument::slot_named(slot) {
+                Some(slot) => parameters[slot].name.clone(),
+                None => slot.clone(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn an_instrument_mutates_only_what_its_profile_lets_it() {
+        // The volca fm: Transpose and Velocity are marked to stay, the arp's
+        // type and division are named steps, and the twelfth knob is empty
+        let mut rig = Rig::new();
+        let (fm, parameters) = instrument(&mut rig, "volca fm");
+        assert!(parameters.len() < crate::modules::instrument::SLOTS);
+        let knobs = held_names(&rig, fm, &parameters, false);
+        assert!(knobs.contains(&"Mod Attack".to_string()) && knobs.contains(&"LFO Rate".to_string()), "{knobs:?}");
+        for kept in ["Transpose", "Velocity", "Arp Type", "Arp Div"] {
+            assert!(!knobs.contains(&kept.to_string()), "{kept} moved: {knobs:?}");
+        }
+        let all = held_names(&rig, fm, &parameters, true);
+        assert!(all.contains(&"Arp Type".to_string()) && all.contains(&"Arp Div".to_string()), "{all:?}");
+        assert!(!all.contains(&"Transpose".to_string()) && !all.contains(&"Velocity".to_string()), "{all:?}");
+        // Its Port and Channel say where it plays, not how it sounds
+        assert!(!all.contains(&"Port".to_string()) && !all.contains(&"Channel".to_string()), "{all:?}");
+        // ...and no empty knob, or one past the profile's
+        assert_eq!(all.len(), parameters.iter().filter(|p| p.mutate).count(), "{all:?}");
+    }
+
+    #[test]
+    fn a_stepped_instrument_knob_moves_by_whole_steps() {
+        let mut rig = Rig::new();
+        let (fm, parameters) = instrument(&mut rig, "volca fm");
+        let slot = parameters.iter().position(|p| p.name == "Arp Type").unwrap();
+        let count = instrument::steps_of(&parameters[slot]).unwrap() as f32;
+        let knob = rig.knobs(&[fm], true).into_iter().find(|k| instrument::slot_named(&k.key.param) == Some(slot)).unwrap();
+        let from = knob.from.actual_value();
+        let mut moved = 0;
+        for seed in 0..40 {
+            let to = knob.mutated(seed, JUMP);
+            if to != from {
+                moved += 1;
+                // The middle of a step, so the device lands on a value of its own
+                let step = to * count - 0.5;
+                assert!((step - step.round()).abs() < 1e-4, "{to} isn't a step's middle");
+            }
+        }
+        assert!(moved > 0, "a jump moves it");
+        // A nudge moves it a step at the most, if at all
+        let at = (from * count).floor();
+        for seed in 0..40 {
+            assert!(((knob.mutated(seed, NUDGE) * count).floor() - at).abs() <= 1.0);
+        }
+    }
+
+    #[test]
+    fn a_knob_that_nudges_the_device_stays_put() {
+        // The FANTOM's Cutoff moves its sound by an offset: undo couldn't
+        // walk it back
+        let mut rig = Rig::new();
+        let (fantom, parameters) = instrument(&mut rig, "FANTOM-06");
+        let moved = held_names(&rig, fantom, &parameters, true);
+        assert!(!moved.is_empty());
+        for p in parameters.iter().take(12).filter(|p| p.relative || !p.mutate) {
+            assert!(!moved.contains(&p.name), "{} moved: {moved:?}", p.name);
+        }
+    }
+
+    #[test]
+    fn a_kit_mutates_its_knobs_but_not_which_track_they_turn() {
+        let mut rig = Rig::new();
+        let kit = rig.add(crate::modules::kit::ID);
+        let profile = hardware::known().find("Digitakt").expect("ships").profile.clone();
+        for (key, text) in instrument::choose_kit(&profile) {
+            if !text.is_empty() {
+                rig.editor.graph[kit].user_data.labels.insert(key, text);
+            }
+        }
+        let all = rig.names(&[kit], true);
+        assert!(all.iter().any(|name| instrument::slot_named(name).is_some()), "{all:?}");
+        assert!(all.iter().all(|name| instrument::slot_named(name).is_some()), "only its knobs: {all:?}");
     }
 
     #[test]

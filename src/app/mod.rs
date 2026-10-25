@@ -21,7 +21,7 @@ pub mod midi_mappings;
 mod midi_presses;
 mod midi_session;
 pub mod module_learn;
-mod mutate;
+pub(crate) mod mutate;
 mod notice;
 mod palette;
 pub mod pace;

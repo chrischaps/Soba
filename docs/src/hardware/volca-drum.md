@@ -39,8 +39,8 @@ The first 12 are an Instrument's knobs when it's first made. Each part takes the
 |  | EG Rel 1+2 | CC 25 | Envelope |  |
 |  | Bit Reduction | CC 49 | FX |  |
 |  | Fold | CC 50 | FX |  |
-|  | Drive | CC 51 | FX |  |
-|  | Dry Gain | CC 52 | Mix |  |
+|  | Drive | CC 51 | FX | Mutate leaves it |
+|  | Dry Gain | CC 52 | Mix | Mutate leaves it |
 |  | Pan | CC 10 | Mix | Mutate leaves it |
 |  | Send | CC 103 | FX |  |
 |  | WG Model | CC 116 | FX |  |

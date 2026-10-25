@@ -10,7 +10,9 @@ The scenes live on the module, so you can see them in the patch, and they're sav
 
 A Scenes module at the top of the patch holds every knob and switch in the patch. Put one **inside a group**, and it holds only that group's knobs (and those of the groups inside it), so a voice can have scenes of its own without touching the drums.
 
-A scene leaves out the Audio Output, other Scenes modules, and switches that start, stop or record rather than shape the sound (a Clock's **Run**, a Sampler's **Rec**, an Audio Input's **Channel**).
+A scene leaves out the Audio Output, other Scenes modules, and switches that start, stop or record rather than shape the sound (a Clock's **Run**, a Sampler's **Rec**, an Audio Input's **Channel**), or say which device a module plays (a **Port**).
+
+An [Instrument](../midi/instrument.md#exploring-its-sounds)'s knobs are kept like any others, so a scene can hold a sound on the hardware. A knob of named values (an arpeggio type) flips at halfway, as a dropdown does. A knob that nudges the device rather than setting it (the FANTOM-06's Cutoff) isn't kept, because it has no place to come back to.
 
 ## Inputs
 

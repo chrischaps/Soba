@@ -19,7 +19,7 @@ The first 12 are an Instrument's knobs when it's first made.
 | ● | Cutoff | CC 1 | Filter |  |
 | ● | Resonance | CC 11 | Filter |  |
 | ● | Filter Type | CC 9 | Filter |  |
-| ● | Overdrive | CC 12 | FX |  |
+| ● | Overdrive | CC 12 | FX | Mutate leaves it |
 | ● | Bit Depth | CC 13 | FX |  |
 | ● | Tune | CC 5 | Oscillator | Mutate leaves it |
 | ● | Finetune | CC 3 | Oscillator | Mutate leaves it |

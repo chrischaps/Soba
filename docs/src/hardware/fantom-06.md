@@ -16,15 +16,15 @@ The first 12 are an Instrument's knobs when it's first made. Each part takes the
 
 | | Parameter | Message | Group | Values |
 |---|---|---|---|---|
-| ● | Cutoff | CC 74 | Filter | an offset: 64 is no change |
-| ● | Resonance | CC 71 | Filter | an offset: 64 is no change |
-| ● | Attack | CC 73 | Envelope | an offset: 64 is no change |
-| ● | Decay | CC 75 | Envelope | an offset: 64 is no change |
-| ● | Release | CC 72 | Envelope | an offset: 64 is no change |
+| ● | Cutoff | CC 74 | Filter | an offset: 64 is no change; Mutate leaves it |
+| ● | Resonance | CC 71 | Filter | an offset: 64 is no change; Mutate leaves it |
+| ● | Attack | CC 73 | Envelope | an offset: 64 is no change; Mutate leaves it |
+| ● | Decay | CC 75 | Envelope | an offset: 64 is no change; Mutate leaves it |
+| ● | Release | CC 72 | Envelope | an offset: 64 is no change; Mutate leaves it |
 | ● | Modulation | CC 1 | Voice |  |
-| ● | Vibrato Rate | CC 76 | LFO | an offset: 64 is no change |
-| ● | Vibrato Depth | CC 77 | LFO | an offset: 64 is no change |
-| ● | Vibrato Delay | CC 78 | LFO | an offset: 64 is no change |
+| ● | Vibrato Rate | CC 76 | LFO | an offset: 64 is no change; Mutate leaves it |
+| ● | Vibrato Depth | CC 77 | LFO | an offset: 64 is no change; Mutate leaves it |
+| ● | Vibrato Delay | CC 78 | LFO | an offset: 64 is no change; Mutate leaves it |
 | ● | Reverb Send | CC 91 | FX |  |
 | ● | Chorus Send | CC 93 | FX |  |
 | ● | Portamento | CC 5 | Voice |  |

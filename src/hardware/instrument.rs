@@ -19,7 +19,7 @@
 use std::collections::BTreeMap;
 
 use super::{Kind, LaneMap, Parameter, Part, Profile, Profiles, SlotMap};
-use crate::modules::instrument::SLOTS;
+use crate::modules::instrument::{SLOTS, SLOT_NAMES};
 use crate::modules::kit::LANES;
 
 /// Whether a module plays hardware from a profile: an Instrument or a Kit.
@@ -33,6 +33,12 @@ pub const PROFILE: &str = "profile";
 /// The label that holds knob `slot`'s parameter (from 0): "slot 1".
 pub fn slot_key(slot: usize) -> String {
     format!("slot {}", slot + 1)
+}
+
+/// The knob (from 0) a node's control `param_name` is: "Slot 3" is 2. Its
+/// other controls (Port, Channel, a Kit's Track) are none.
+pub fn slot_named(param_name: &str) -> Option<usize> {
+    SLOT_NAMES.iter().position(|&name| name == param_name)
 }
 
 /// The profile a node plays, by name.
@@ -57,6 +63,14 @@ pub fn held(labels: &BTreeMap<String, String>, slot: usize, profiles: &Profiles)
         Some(parameter) => Some(Held { parameter: parameter.clone(), known: true }),
         None => Some(Held { parameter: written, known: false }),
     }
+}
+
+/// How many steps share a knob's travel when it holds a stepped
+/// parameter: Mutate moves it by whole ones, and a morph flips it once
+/// (#447). None for one that sweeps.
+pub fn steps_of(parameter: &Parameter) -> Option<usize> {
+    let count = SlotMap::of(parameter).steps().len();
+    (count > 0).then_some(count)
 }
 
 /// What every knob sends.

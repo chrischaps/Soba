@@ -10,8 +10,10 @@
 //! Morphing from one scene to another moves each knob round its own travel,
 //! as a hand would turn it, so a frequency glides by octaves rather than
 //! rushing through the top of its range. Whole-number knobs, switches and
-//! dropdowns hold until halfway, then flip. A knob a cable drives is left to
-//! the cable, and a knob only one of the two scenes knows stays put.
+//! dropdowns hold until halfway, then flip, as does an Instrument's knob
+//! holding named values (#447). A knob a cable drives is left to the cable,
+//! and a knob only one of the two scenes knows stays put. An Instrument's
+//! knob that nudges its device, rather than setting it, isn't kept at all.
 //!
 //! The engine turns the knobs as Morph moves, from the table
 //! [`engine_knobs`] makes, so a morph is heard with no editor drawing it.
@@ -24,6 +26,7 @@ use std::collections::{BTreeMap, HashMap};
 use egui_node_graph2::{InputId, InputParamKind, NodeId};
 
 use crate::engine::NodeId as EngineNodeId;
+use crate::hardware::{self, instrument};
 use crate::modules::scenes::{self, Glide, SceneKnob, SLOT_LABELS};
 use crate::widgets::knob::KnobConfig;
 
@@ -40,9 +43,9 @@ pub type Scene = BTreeMap<EngineNodeId, BTreeMap<String, f32>>;
 /// aren't kept.
 pub type SceneBank = BTreeMap<String, Scene>;
 
-/// Switches that start, stop or record, or say where sound comes from,
+/// Switches that start, stop or record, or say where sound comes from or goes,
 /// rather than shape it: a scene leaves them be.
-const NOT_SOUND: &[&str] = &["Channel", "Source", "Run", "Latency", "Take", "Bars", "Rec", "Play"];
+const NOT_SOUND: &[&str] = &["Channel", "Port", "Source", "Run", "Latency", "Take", "Bars", "Rec", "Play"];
 
 /// A slot's letter.
 pub fn letter(slot: usize) -> &'static str {
@@ -89,7 +92,10 @@ pub fn controls(graph: &SynthGraph, user_state: &SynthGraphState, scenes: NodeId
                 continue;
             }
             let held = match &value.value {
-                SynthValueType::Number { .. } => node.user_data.knob_params.iter().any(|knob| &knob.param_name == param),
+                SynthValueType::Number { .. } => {
+                    node.user_data.knob_params.iter().any(|knob| &knob.param_name == param)
+                        && glide_of(graph, node_id, param, &value.value).is_some()
+                }
                 SynthValueType::Toggle { .. } | SynthValueType::Select { .. } => {
                     value.shown_inline && !NOT_SOUND.contains(&param.as_str())
                 }
@@ -144,11 +150,30 @@ pub fn blend(value: &SynthValueType, from: f32, to: f32, morph: f32) -> f32 {
     scenes::blend(glide(value), from, to, morph)
 }
 
+/// How a scene glides control `param` of module `node_id`, or `None` where
+/// it leaves it be. An Instrument's or a Kit's knob (#447) glides as the
+/// parameter it holds: one of named values flips once, at halfway, rather
+/// than passing through every value between. One that holds nothing, or
+/// nudges the device rather than setting it, has no place to come back
+/// to, and a scene leaves it out.
+fn glide_of(graph: &SynthGraph, node_id: NodeId, param: &str, value: &SynthValueType) -> Option<Glide> {
+    let data = &graph[node_id].user_data;
+    let Some(slot) = instrument::slot_named(param).filter(|_| instrument::plays_a_profile(data.module_id)) else {
+        return Some(glide(value));
+    };
+    let held = instrument::held(&data.labels, slot, &hardware::known())?;
+    match instrument::steps_of(&held.parameter) {
+        _ if held.parameter.relative => None,
+        Some(_) => Some(Glide::Flip),
+        None => Some(glide(value)),
+    }
+}
+
 /// The scene's controls that are still in scope, with where they stand
-/// and their place in it, each found once.
+/// and their place in it, each found once, and how each glides.
 struct Found<'a> {
     graph: &'a SynthGraph,
-    inputs: HashMap<(EngineNodeId, &'a str), InputId>,
+    inputs: HashMap<(EngineNodeId, &'a str), (InputId, Glide)>,
 }
 
 impl<'a> Found<'a> {
@@ -161,14 +186,20 @@ impl<'a> Found<'a> {
                 continue;
             }
             for (param, input) in &graph[node_id].inputs {
-                inputs.insert((module, param.as_str()), *input);
+                if let Some(glide) = glide_of(graph, node_id, param, &graph.get_input(*input).value) {
+                    inputs.insert((module, param.as_str()), (*input, glide));
+                }
             }
         }
         Self { graph, inputs }
     }
 
     fn input(&self, module: EngineNodeId, param: &str) -> Option<InputId> {
-        self.inputs.get(&(module, param)).copied()
+        self.inputs.get(&(module, param)).map(|&(input, _)| input)
+    }
+
+    fn glide(&self, module: EngineNodeId, param: &str) -> Option<Glide> {
+        self.inputs.get(&(module, param)).map(|&(_, glide)| glide)
     }
 
     fn patched(&self, input: InputId) -> bool {
@@ -204,11 +235,11 @@ pub fn morph(graph: &SynthGraph, user_state: &SynthGraphState, scenes: NodeId, f
         let Some(arrive) = to.get(&module) else { continue };
         for (param, &a) in params {
             let Some(&b) = arrive.get(param) else { continue };
-            let Some(input) = found.input(module, param) else { continue };
+            let (Some(input), Some(glide)) = (found.input(module, param), found.glide(module, param)) else { continue };
             if found.patched(input) {
                 continue;
             }
-            settings.push((input, blend(&graph.get_input(input).value, a, b, morph)));
+            settings.push((input, scenes::blend(glide, a, b, morph)));
         }
     }
     settings
@@ -241,12 +272,8 @@ pub fn engine_knobs(
                     continue;
                 }
                 let Some(param) = inputs.iter().position(|&i| i == input) else { continue };
-                let knob = knobs.entry((engine, param)).or_insert_with(|| SceneKnob {
-                    node: engine,
-                    param,
-                    glide: glide(&graph.get_input(input).value),
-                    values: [f32::NAN; SLOTS],
-                });
+                let Some(glide) = glide_of(graph, target, name, &graph.get_input(input).value) else { continue };
+                let knob = knobs.entry((engine, param)).or_insert_with(|| SceneKnob { node: engine, param, glide, values: [f32::NAN; SLOTS] });
                 knob.values[slot] = value;
             }
         }
@@ -535,6 +562,75 @@ mod tests {
         assert_eq!(bank.keys().collect::<Vec<_>>(), ["A"]);
         assert!(bank["A"].contains_key(&103) && bank["A"].contains_key(&104));
         assert_eq!(free_slot(&bank), Some(1));
+    }
+
+    /// An Instrument playing `profile`, as choosing it on the face does.
+    fn instrument(rig: &mut Rig, profile: &str) -> (NodeId, Vec<hardware::Parameter>) {
+        let node = rig.add(crate::modules::instrument::ID);
+        let profile = hardware::known().find(profile).expect("ships").profile.clone();
+        for (key, text) in instrument::choose(&profile) {
+            if !text.is_empty() {
+                rig.editor.graph[node].user_data.labels.insert(key, text);
+            }
+        }
+        (node, profile.parameters)
+    }
+
+    #[test]
+    fn an_instruments_named_values_switch_once_and_its_sweeps_glide() {
+        // The volca fm's Arp Type, ten named values, and its LFO Rate
+        let mut rig = Rig::new();
+        let (fm, parameters) = instrument(&mut rig, "volca fm");
+        let scenes = rig.add(scenes::ID);
+        let slot = |name: &str| crate::modules::instrument::SLOT_NAMES[parameters.iter().position(|p| p.name == name).unwrap()];
+        let (arp, rate) = (slot("Arp Type"), slot("LFO Rate"));
+        let count = instrument::steps_of(&parameters[instrument::slot_named(arp).unwrap()]).unwrap() as f32;
+        let step = |n: f32| (n + 0.5) / count;
+        rig.set(fm, arp, step(1.0));
+        rig.set(fm, rate, 0.2);
+        let a = capture(&rig.editor.graph, &rig.user_state, scenes);
+        rig.set(fm, arp, step(8.0));
+        rig.set(fm, rate, 0.8);
+        let b = capture(&rig.editor.graph, &rig.user_state, scenes);
+
+        // Not through Rise 2, Fall 1...: it holds, then switches once
+        for m in [0.1, 0.3, 0.49] {
+            rig.morph(scenes, &a, &b, m);
+            assert_eq!(rig.param(fm, arp), step(1.0), "at {m}");
+        }
+        rig.morph(scenes, &a, &b, 0.5);
+        assert_eq!(rig.param(fm, arp), step(8.0));
+        assert!((rig.param(fm, rate) - 0.5).abs() < 1e-4, "the sweep glides: {}", rig.param(fm, rate));
+
+        // The engine turns them the same way
+        let id = rig.user_state.get_engine_node_id(fm).unwrap();
+        rig.editor.graph[scenes].user_data.scenes.insert("A".into(), a);
+        rig.editor.graph[scenes].user_data.scenes.insert("B".into(), b);
+        let map = &rig.user_state.node_id_map;
+        let knobs = engine_knobs(&rig.editor.graph, scenes, |m| map.iter().find(|(_, &e)| e == m).map(|(&n, _)| n), |n| map.get(&n).copied());
+        let glide_of = |name: &str| {
+            let param = crate::modules::instrument::Instrument::PARAM_SLOT + instrument::slot_named(name).unwrap();
+            knobs.iter().find(|k| k.node == id && k.param == param).map(|k| k.glide)
+        };
+        assert_eq!(glide_of(arp), Some(Glide::Flip));
+        assert!(matches!(glide_of(rate), Some(Glide::Turn { .. })));
+    }
+
+    #[test]
+    fn a_scene_leaves_out_knobs_that_nudge_or_hold_nothing() {
+        let mut rig = Rig::new();
+        let (fantom, parameters) = instrument(&mut rig, "FANTOM-06");
+        let (fm, fm_parameters) = instrument(&mut rig, "volca fm");
+        let scenes = rig.add(scenes::ID);
+        let scene = capture(&rig.editor.graph, &rig.user_state, scenes);
+        let id = |n| rig.user_state.get_engine_node_id(n).unwrap();
+        let held = |node, slot: usize| scene.get(&id(node)).is_some_and(|knobs| knobs.contains_key(crate::modules::instrument::SLOT_NAMES[slot]));
+        for (slot, p) in parameters.iter().take(crate::modules::instrument::SLOTS).enumerate() {
+            assert_eq!(held(fantom, slot), !p.relative, "{}", p.name);
+        }
+        assert!(held(fm, 0) && !held(fm, fm_parameters.len()), "the volca's empty twelfth knob is left out");
+        // Nor do they keep where an Instrument is plugged in
+        assert!(!scene[&id(fm)].contains_key("Port") && !scene[&id(fm)].contains_key("Channel"));
     }
 
     #[test]

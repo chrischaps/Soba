@@ -21,7 +21,7 @@ The first 12 are an Instrument's knobs when it's first made. Each part takes the
 | ● | Tune | CC 16 | Sample | Mutate leaves it |
 | ● | Sample Select | CC 19 | Sample |  |
 | ● | Bit Reduction | CC 18 | Sample |  |
-| ● | Overdrive | CC 81 | Amp |  |
+| ● | Overdrive | CC 81 | Amp | Mutate leaves it |
 | ● | Delay Send | CC 82 | FX |  |
 | ● | Reverb Send | CC 83 | FX |  |
 | ● | Decay | CC 80 | Amp |  |
@@ -71,7 +71,7 @@ The first 12 are an Instrument's knobs when it's first made. Each part takes the
 |  | Delay Time | CC 85 (ch 9) | FX |  |
 |  | Delay Pingpong | CC 86 (ch 9) | FX |  |
 |  | Delay Width | CC 87 (ch 9) | FX |  |
-|  | Delay Feedback | CC 88 (ch 9) | FX |  |
+|  | Delay Feedback | CC 88 (ch 9) | FX | Mutate leaves it |
 |  | Delay Highpass | CC 89 (ch 9) | FX |  |
 |  | Delay Lowpass | CC 90 (ch 9) | FX |  |
 |  | Delay to Reverb | CC 91 (ch 9) | FX |  |
