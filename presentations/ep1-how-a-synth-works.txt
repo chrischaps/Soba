@@ -35,71 +35,78 @@ say   And you can build it **with me**. Soba runs in your browser at soba.chaps.
 
 # --- Step 1: A buzz ---------------------------------------------------------
 
-beat An oscillator
+beat A source
 say   Every sound starts at a **source**. Press Space and type "osc", or right-click the canvas and choose Source, Oscillator.
-say   An oscillator makes a tone by repeating one wave shape, over and over, hundreds of times a second.
 0     cursor on
 0     move 420 300 0.8
-1.2   key Space 0.05
-1.5   type osc 0.12
-2.4   key Enter 0.05
-2.8   look osc.sine 1.4
 
-beat A way out
+beat An oscillator
+say   An oscillator makes a tone by repeating one wave shape, over and over, hundreds of times a second.
 say   To hear it, it needs a way out to your speakers. Add an **Audio Output**, and turn your volume down a little first.
-say   Now the first cable: from the oscillator's Out, on its right side, to the output's Mono. Signals always come out of a module's right side, and go into another's left.
+0     key Space 0.05
+0.3   type osc 0.12
+1.2   key Enter 0.05
+1.6   look osc.sine 1.4
+
+beat An output
+say   Now the first cable: from the oscillator's Out, on its right side, to the output's Mono.
 0     aim 230 150 0.62 1.4
 1.6   move osc.sine 898 0 0.8
 2.6   key Space 0.05
 2.9   type output 0.12
 3.8   key Enter 0.05
-4.0   param output.audio Volume 0.3   # a raw saw is loud: the drone stays gentle
-4.6   move osc.sine out:Out 0.8
-5.6   drag output.audio in:Mono 1.2
+4     param output.audio Volume 0.3   # a raw saw is loud: the drone stays gentle
 
-beat A way out · listen
+beat The first cable
+say   Signals always come out of a module's right side, and go into another's left.
 say   [LISTEN]
 say   That's a sine wave, the purest tone there is. And look at the cable. It's **blue**, because it carries sound. Blue cables are audio.
-0     move off
-
-beat The buzz
 say   Now the buzz. Set Wave to **Saw**.
+0     move osc.sine out:Out 0.8
+1     drag output.audio in:Mono 1.2
+2.4   move off
+
+beat Saw
+say   [LISTEN]
+say   Brighter, and buzzier. A saw is packed with extra frequencies stacked above the note, called **harmonics**. They're what the filter will carve, later on, and Episode 2 is all about them.
+say   But listen to what this really is: one note. It doesn't start, it doesn't stop, and it never changes. An oscillator knows nothing about music. Everything from here is about telling it what to do.
+say   To play notes, we need something to choose them. Add a **Note In**, from the Source list.
 0     look osc.sine 1.0
 0.6   move osc.sine knob:Waveform 0.7
 1.6   param osc.sine Waveform 1
 2.6   move off
-3.0   aim 230 150 0.62 2.0
-
-beat The buzz · listen
-say   [LISTEN]
-say   Brighter, and buzzier. A saw is packed with extra frequencies stacked above the note, called **harmonics**. They're what the filter will carve, later on, and Episode 2 is all about them.
-say   But listen to what this really is: one note. It doesn't start, it doesn't stop, and it never changes. An oscillator knows nothing about music. Everything from here is about telling it what to do.
+3     aim 230 150 0.62 2.0
 
 # --- Step 2: Notes ----------------------------------------------------------
 
 beat Note In
-say   To play notes, we need something to choose them. Add a **Note In**, from the Source list. It plays from a MIDI keyboard, from the piano on its face, or from your computer's keyboard.
+say   It plays from a MIDI keyboard, from the piano on its face, or from your computer's keyboard.
 say   Note In can play chords, but the synth we're building plays **one note at a time**, like the classic ones. So turn its Voices knob down to one.
 0     move osc.sine -232 20 0.8
-1.0   key Space 0.05
+1     key Space 0.05
 1.3   type note 0.12
 2.2   key Enter 0.05
 2.6   aim -247 200 0.95 1.4
-4.2   move input.poly_midi knob:Voices 0.7
-5.2   param input.poly_midi Voices 1 0.8   # 8 voices on one oscillator stack up 6 dB louder
-6.4   move off
+
+beat One voice
+say   Its **Pitch** output goes into the oscillator's first input, V/Oct, short for **volts per octave**.
+0     move input.poly_midi knob:Voices 0.7
+1     param input.poly_midi Voices 1 0.8   # 8 voices on one oscillator stack up 6 dB louder
+2.2   move off
 
 beat Pitch
-say   Its **Pitch** output goes into the oscillator's first input, V/Oct, short for **volts per octave**. Old synths set pitch with a voltage: one volt up, one octave up. Episode 3 is all about it. For now, V/Oct just means pitch.
+say   Old synths set pitch with a voltage: one volt up, one octave up. Episode 3 is all about it. For now, V/Oct just means pitch.
 say   This cable is **orange**. Orange cables are control: they don't make sound, they move something, like an invisible hand on a knob. Play the bottom row of your keyboard. Z is C, X is D, and on up the scale.
 0     move input.poly_midi out:Pitch 0.8
-1.0   drag osc.sine in:V/Oct 1.2
+1     drag osc.sine in:V/Oct 1.2
 2.4   move off
 
 beat Pitch · play
 say   [LISTEN]
 say   It follows along. But let go, and the sound keeps going: the oscillator never stops. We can choose the note now, but not when it starts or ends.
-0.0   note 60 80 0.3
+say   For that, we need two things: a signal that says when a key is down, and something that can turn the sound up and down.
+say   The second is a **VCA**, a voltage-controlled amplifier. In plain words, it's a volume knob that a cable can turn. It goes between the oscillator and the output.
+0     note 60 80 0.3
 0.35  note 62 80 0.3
 0.7   note 64 80 0.3
 1.05  note 65 80 0.3
@@ -111,7 +118,7 @@ say   It follows along. But let go, and the sound keeps going: the oscillator ne
 3.95  note 64 80 0.3
 4.3   note 65 80 0.3
 4.65  note 67 80 0.3
-5.0   note 67 80 0.3
+5     note 67 80 0.3
 5.35  note 65 80 0.3
 5.7   note 64 80 0.3
 6.05  note 62 80 0.3
@@ -124,8 +131,7 @@ say   It follows along. But let go, and the sound keeps going: the oscillator ne
 8.5   note 62 80 0.8
 
 beat A VCA
-say   For that, we need two things: a signal that says when a key is down, and something that can turn the sound up and down.
-say   The second is a **VCA**, a voltage-controlled amplifier. In plain words, it's a volume knob that a cable can turn. It goes between the oscillator and the output. An input takes only one cable, so the new one replaces the old.
+say   An input takes only one cable, so the new one replaces the old.
 0     aim 230 150 0.62 1.4
 1.6   move osc.sine 594 20 0.8
 2.6   key Space 0.05
@@ -133,92 +139,96 @@ say   The second is a **VCA**, a voltage-controlled amplifier. In plain words, i
 3.8   key Enter 0.05
 4.4   move osc.sine out:Out 0.8
 5.4   drag util.vca in:In 1.2
-7.0   move util.vca out:Out 0.8
-8.0   drag output.audio in:Mono 1.2
+7     move util.vca out:Out 0.8
+8     drag output.audio in:Mono 1.2
 9.4   move off
 
 beat A VCA · listen
 say   [LISTEN]
 say   Nothing changed. With nothing in its CV input, a VCA lets everything through at full volume.
+say   Now Note In's **Gate**. It's **green**: green cables are gates, on while a key is held, and off when you let go.
 0     note 60 80 1.5
 
 beat The gate
-say   Now Note In's **Gate**. It's **green**: green cables are gates, on while a key is held, and off when you let go.
 say   The VCA's CV input is orange, and Soba lets the gate in anyway. A gate is just a number, zero or one, and a volume knob understands those perfectly: silent, and full.
 0     move input.poly_midi out:Gate 0.8
-1.0   drag util.vca in:CV 1.6
+1     drag util.vca in:CV 1.6
 2.8   move off
-3.0   look close util.vca 1.6
+3     look close util.vca 1.6
 
 beat The gate · play
 say   [LISTEN]
 say   Notes! Each one starts when you press, and stops when you let go. But listen to how: each note slams on and off, like a light switch. Real instruments don't. A plucked string rings and fades; a voice can swell. We need **breath**.
+say   Breath is the job of an **envelope**. Add an ADSR Envelope, from the Modulation list.
 0     aim 230 150 0.62 1.2
 0.6   note 60 80 0.2
-1.0   note 64 80 0.2
+1     note 64 80 0.2
 1.4   note 67 80 1.2
-3.0   note 65 80 0.2
+3     note 65 80 0.2
 3.4   note 64 80 0.2
 3.8   note 62 80 1.4
 5.6   note 60 80 0.2
-6.0   note 60 80 1.6
+6     note 60 80 1.6
 
 # --- Step 3: Breath ---------------------------------------------------------
 
 beat An envelope
-say   Breath is the job of an **envelope**. Add an ADSR Envelope, from the Modulation list.
+say   Its first input is a green Gate. Just to see, let's try the Pitch output there.
 0     param output.audio Volume 0.5 1.0   # up while the VCA is shut: notes from here on come and go
 0     move osc.sine 594 300 0.8
-1.0   key Space 0.05
+1     key Space 0.05
 1.3   type env 0.12
 2.2   key Enter 0.05
 2.6   aim 0 220 0.72 1.4
 
 beat A guard rail
-say   Its first input is a green Gate. Just to see, let's try the Pitch output there.
 say   It won't stay. A gate input needs a clean on or off, and pitch could be any number at all, so Soba won't let it in. Most crossings are fair game; this is one of the few **guard rails**.
+say   So the Gate goes in instead. One output can feed as many inputs as you like.
 0     move input.poly_midi out:Pitch 0.8
-1.0   drag mod.adsr in:Gate 1.6
+1     drag mod.adsr in:Gate 1.6
 3.2   move off
 
 beat The shape
-say   So the Gate goes in instead. One output can feed as many inputs as you like. Then the envelope's Out goes into the VCA's CV, in place of the gate.
+say   Then the envelope's Out goes into the VCA's CV, in place of the gate.
 0     move input.poly_midi out:Gate 0.8
-1.0   drag mod.adsr in:Gate 1.6
-3.0   move mod.adsr out:Out 0.8
-4.0   drag util.vca in:CV 1.2
+1     drag mod.adsr in:Gate 1.6
+3     move mod.adsr out:Out 0.8
+4     drag util.vca in:CV 1.2
 5.4   move off
 5.6   aim 489 270 0.8 1.6
 
 beat The shape · play
 say   [LISTEN]
 say   Now when a key goes down, the envelope draws a **shape**, and that shape turns the volume for us. Its four stages are its name. **Attack** is how long it takes to rise. **Decay** is how long it then takes to fall. **Sustain** is the level it holds while you keep the key down: a level, not a time. And **Release** is how long it fades after you let go.
-0.0   note 60 76 1.0
-2.0   note 64 76 1.0
-4.0   note 67 76 1.0
-6.0   note 72 76 1.6
-9.0   note 60 72 1.0
-11.0  note 64 72 1.0
-13.0  note 67 72 1.0
-15.0  note 60 72 2.0
+say   Sustain all the way down, and a short decay.
+0     note 60 76 1.0
+2     note 64 76 1.0
+4     note 67 76 1.0
+6     note 72 76 1.6
+9     note 60 72 1.0
+11    note 64 72 1.0
+13    note 67 72 1.0
+15    note 60 72 2.0
 
 beat A pluck
-say   Sustain all the way down, and a short decay. Every note dies away by itself, even while you hold the key: a **pluck**, like a guitar string.
+say   Every note dies away by itself, even while you hold the key: a **pluck**, like a guitar string.
+say   Now a long attack and a long release.
 0     move mod.adsr knob:Sustain 0.6
 0.8   param mod.adsr Sustain 0 0.8
 1.8   move mod.adsr knob:Decay 0.6
 2.6   param mod.adsr Decay 0.3 0.8
 3.6   move off
-4.0   note 60 70 0.8
+4     note 60 70 0.8
 4.6   note 64 70 0.8
 5.2   note 67 70 0.8
 5.8   note 72 70 1.2
 7.4   note 67 66 0.8
-8.0   note 64 66 0.8
+8     note 64 66 0.8
 8.6   note 60 66 1.4
 
 beat A swell
-say   Now a long attack and a long release: a **swell**, like a string section breathing in.
+say   A **swell**, like a string section breathing in.
+say   Let's settle in between.
 0     move mod.adsr knob:Attack 0.6
 0.8   param mod.adsr Attack 1.0 0.8
 1.8   move mod.adsr knob:Sustain 0.6
@@ -231,7 +241,8 @@ say   Now a long attack and a long release: a **swell**, like a string section b
 11.2  note 67 72 3.0
 
 beat When into how
-say   Let's settle in between. And look at what the envelope did with the colours: a green gate went in, and an orange shape came out. An envelope turns **when** into **how**. Episode 5 is all about it.
+say   And look at what the envelope did with the colours: a green gate went in, and an orange shape came out. An envelope turns **when** into **how**. Episode 5 is all about it.
+say   The last job is the mouth: shaping the buzz. That's a **filter**. Add an SVF Filter, from the Filter list, between the oscillator and the VCA.
 0     param mod.adsr Attack 0.005 1.2
 0     param mod.adsr Decay 0.2 1.2
 0     param mod.adsr Sustain 0.7 1.2
@@ -241,13 +252,13 @@ say   Let's settle in between. And look at what the envelope did with the colour
 # --- Step 4: A mouth --------------------------------------------------------
 
 beat A filter
-say   The last job is the mouth: shaping the buzz. That's a **filter**. Add an SVF Filter, from the Filter list, between the oscillator and the VCA. The oscillator goes into its In, and its LowPass output into the VCA.
+say   The oscillator goes into its In, and its LowPass output into the VCA.
 0     aim 230 150 0.62 1.4
 1.6   move osc.sine 292 0 0.8
 2.6   key Space 0.05
 2.9   type svf 0.12
 3.8   key Enter 0.05
-4.0   param filter.svf Resonance 0.3
+4     param filter.svf Resonance 0.3
 4.6   move osc.sine out:Out 0.8
 5.6   drag filter.svf in:In 1.2
 7.2   move filter.svf out:LowPass 0.8
@@ -262,92 +273,90 @@ say   A low-pass filter lets the low frequencies through and takes the high ones
 beat Cutoff · listen
 say   [LISTEN]
 say   Down, and the buzz goes dark and muffled. Up, and the brightness comes back. The display shows you which harmonics are getting through.
-0.0   note 48 76 10.4
+say   The next knob, **Resonance**, boosts the frequencies right at the cutoff. Turn it up, and sweep again.
+0     note 48 76 10.4
 0.6   param filter.svf Cutoff 150 3.0
 4.2   param filter.svf Cutoff 8000 3.6
 8.4   param filter.svf Cutoff 1000 1.6
 10.6  move off
 
 beat Resonance
-say   The next knob, **Resonance**, boosts the frequencies right at the cutoff. Turn it up, and sweep again.
-0     param filter.svf Cutoff 150 0.6     # closed first, so the note starts soft
-0     move filter.svf knob:Resonance 0.7
-1.0   param filter.svf Resonance 0.8 1.2
-
-beat Resonance · listen
 say   [LISTEN]
 say   That vocal, almost talking sound is the filter starting to **sing**. Episode 4 is all about it. Let's bring it back down.
-0.0   note 48 68 9.0
-0.3   move filter.svf knob:Cutoff 0.6
-0.6   param filter.svf Cutoff 2400 4.4
-5.2   param filter.svf Cutoff 300 3.4
-9.2   param filter.svf Resonance 0.3 1.0
-9.2   param filter.svf Cutoff 1000 1.0
-10.4  move off
+say   Here's the move that brings it to life. Voices and instruments are brightest at the start of a note, and mellow as it rings. So give the envelope a second job. Its Out goes into the filter's **Cutoff** input as well.
+0     param filter.svf Cutoff 150 0.6     # closed first, so the note starts soft
+0     move filter.svf knob:Resonance 0.7
+1     param filter.svf Resonance 0.8 1.2
+2.6   note 48 68 9.0
+2.9   move filter.svf knob:Cutoff 0.6
+3.2   param filter.svf Cutoff 2400 4.4
+7.8   param filter.svf Cutoff 300 3.4
+11.8  param filter.svf Resonance 0.3 1.0
+11.8  param filter.svf Cutoff 1000 1.0
+13    move off
 
 beat Two jobs
-say   Here's the move that brings it to life. Voices and instruments are brightest at the start of a note, and mellow as it rings. So give the envelope a second job. Its Out goes into the filter's **Cutoff** input as well.
 say   The knob still sets where the filter starts, and the envelope opens it from there. Turn Cutoff down to about four hundred hertz, and play.
 0     aim 338 285 0.8 1.4
 1.6   move mod.adsr out:Out 0.8
 2.6   drag filter.svf in:Cutoff 1.4
-4.2   move filter.svf knob:Cutoff 0.6
-5.0   param filter.svf Cutoff 400 1.2
-6.6   move off
+4.2   move off
 
 beat Two jobs · listen
 say   [LISTEN]
 say   Every note opens bright and settles dark, the way your mouth opens on a word like **wow**.
-0.0   note 48 76 0.9
-1.2   note 51 76 0.9
-2.4   note 55 76 0.9
-3.6   note 53 76 1.6
-6.0   note 48 72 0.9
-7.2   note 46 72 0.9
-8.4   note 48 72 1.8
+say   Drop the oscillator an octave, and tighten the envelope: no attack, a short decay and a low sustain.
+0     move filter.svf knob:Cutoff 0.6
+0.8   param filter.svf Cutoff 400 1.2
+2.2   move off
+2.6   note 48 76 0.9
+3.8   note 51 76 0.9
+5     note 55 76 0.9
+6.2   note 53 76 1.6
+8.6   note 48 72 0.9
+9.8   note 46 72 0.9
+11    note 48 72 1.8
 
 beat A bass
-say   Drop the oscillator an octave, and tighten the envelope: no attack, a short decay and a low sustain. That's a classic synth **bass**.
+say   That's a classic synth **bass**.
+say   [LISTEN]
 0     aim 230 200 0.62 1.2
 0     param output.audio Volume 0.8 1.0   # the bass is the showcase, and the quietest sound so far
 1.2   move osc.sine knob:Octave 0.6
-2.0   param osc.sine Octave -1
+2     param osc.sine Octave -1
 2.8   move mod.adsr knob:Attack 0.8
 3.8   param mod.adsr Attack 0.001 0.6
 4.4   param mod.adsr Decay 0.2 0.6
 4.4   param mod.adsr Sustain 0.2 0.6
 5.4   move off
-
-beat A bass · listen
-say   [LISTEN]
-0.00  note 48 76 0.22
-0.30  note 48 64 0.22
-0.60  note 51 76 0.22
-0.90  note 48 64 0.22
-1.20  note 43 76 0.22
-1.50  note 46 64 0.22
-1.80  note 48 76 0.5
-2.40  note 48 76 0.22
-2.70  note 48 64 0.22
-3.00  note 51 76 0.22
-3.30  note 48 64 0.22
-3.60  note 43 76 0.22
-3.90  note 46 64 0.22
-4.20  note 48 76 0.5
-4.80  note 53 76 0.22
-5.10  note 53 64 0.22
-5.40  note 56 76 0.22
-5.70  note 53 64 0.22
-6.00  note 48 76 0.22
-6.30  note 51 64 0.22
-6.60  note 53 76 0.5
-7.20  note 48 76 0.22
-7.50  note 48 64 0.22
-7.80  note 51 76 0.22
-8.10  note 48 64 0.22
-8.40  note 43 76 0.22
-8.70  note 46 64 0.22
-9.00  note 48 76 0.5
+6.4   note 48 76 0.22
+6.7   note 48 64 0.22
+7     note 51 76 0.22
+7.3   note 48 64 0.22
+7.6   note 43 76 0.22
+7.9   note 46 64 0.22
+8.2   note 48 76 0.5
+8.8   note 48 76 0.22
+9.1   note 48 64 0.22
+9.4   note 51 76 0.22
+9.7   note 48 64 0.22
+10    note 43 76 0.22
+10.3  note 46 64 0.22
+10.6  note 48 76 0.5
+11.2  note 53 76 0.22
+11.5  note 53 64 0.22
+11.8  note 56 76 0.22
+12.1  note 53 64 0.22
+12.4  note 48 76 0.22
+12.7  note 51 64 0.22
+13    note 53 76 0.5
+13.6  note 48 76 0.22
+13.9  note 48 64 0.22
+14.2  note 51 76 0.22
+14.5  note 48 64 0.22
+14.8  note 43 76 0.22
+15.1  note 46 64 0.22
+15.4  note 48 76 0.5
 
 # --- Play it ----------------------------------------------------------------
 # Filmed once and used three times: here, under the cold open, and the tour
