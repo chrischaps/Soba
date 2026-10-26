@@ -71,35 +71,36 @@ say   [LISTEN]
 say   Brighter, and buzzier. A saw is packed with extra frequencies stacked above the note, called **harmonics**. They're what the filter will carve, later on, and Episode 2 is all about them.
 say   But listen to what this really is: one note. It doesn't start, it doesn't stop, and it never changes. An oscillator knows nothing about music. Everything from here is about telling it what to do.
 say   To play notes, we need something to choose them. Add a **Note In**, from the Source list.
-0     look osc.sine 1.0
+0     aim -131 72 1.66 1.2   # close on the Wave menu and the waveform
 0.6   move osc.sine knob:Waveform 0.7
 1.6   param osc.sine Waveform 1
 2.6   move off
-3     aim 230 150 0.62 2.0
 
 # --- Step 2: Notes ----------------------------------------------------------
 
 beat Note In
 say   It plays from a MIDI keyboard, from the piano on its face, or from your computer's keyboard.
 say   Note In can play chords, but the synth we're building plays **one note at a time**, like the classic ones. So turn its Voices knob down to one.
-0     move osc.sine -232 20 0.8
-1     key Space 0.05
-1.3   type note 0.12
-2.2   key Enter 0.05
-2.6   aim -247 200 0.95 1.4
+0     aim -247 200 0.95 0.8
+0.8   move osc.sine -232 20 0.8
+1.8   key Space 0.05
+2.1   type note 0.12
+3     key Enter 0.05
 
 beat One voice
 say   Its **Pitch** output goes into the oscillator's first input, V/Oct, short for **volts per octave**.
-0     move input.poly_midi knob:Voices 0.7
-1     param input.poly_midi Voices 1 0.8   # 8 voices on one oscillator stack up 6 dB louder
-2.2   move off
+0     aim -360 335 2.2 1.0   # close on its piano and knobs
+1     move input.poly_midi knob:Voices 0.7
+2     param input.poly_midi Voices 1 0.8   # 8 voices on one oscillator stack up 6 dB louder
+3.2   move off
 
 beat Pitch
 say   Old synths set pitch with a voltage: one volt up, one octave up. Episode 3 is all about it. For now, V/Oct just means pitch.
 say   This cable is **orange**. Orange cables are control: they don't make sound, they move something, like an invisible hand on a knob. Play the bottom row of your keyboard. Z is C, X is D, and on up the scale.
-0     move input.poly_midi out:Pitch 0.8
-1     drag osc.sine in:V/Oct 1.2
-2.4   move off
+0     aim -247 200 0.95 1.0   # back out: both ends of the cable
+1     move input.poly_midi out:Pitch 0.8
+2     drag osc.sine in:V/Oct 1.2
+3.4   move off
 
 beat Pitch · play
 say   [LISTEN]
@@ -201,6 +202,7 @@ beat The shape · play
 say   [LISTEN]
 say   Now when a key goes down, the envelope draws a **shape**, and that shape turns the volume for us. Its four stages are its name. **Attack** is how long it takes to rise. **Decay** is how long it then takes to fall. **Sustain** is the level it holds while you keep the key down: a level, not a time. And **Release** is how long it fades after you let go.
 say   Sustain all the way down, and a short decay.
+0     aim 489 517 2.4 1.2   # close on the shape and its knobs, for the pluck and swell too
 0     note 60 76 1.0
 2     note 64 76 1.0
 4     note 67 76 1.0
@@ -267,7 +269,7 @@ say   The oscillator goes into its In, and its LowPass output into the VCA.
 
 beat Cutoff
 say   A low-pass filter lets the low frequencies through and takes the high ones away, like a hand over your mouth. **Cutoff** is where it starts cutting. Hold a note, and bring it down.
-0     look filter.svf 1.2
+0     aim 187 172 2.6 1.2   # close on the curve and its knobs, through Resonance
 0.6   move filter.svf knob:Cutoff 0.7
 
 beat Cutoff · listen
@@ -306,16 +308,17 @@ beat Two jobs · listen
 say   [LISTEN]
 say   Every note opens bright and settles dark, the way your mouth opens on a word like **wow**.
 say   Drop the oscillator an octave, and tighten the envelope: no attack, a short decay and a low sustain.
-0     move filter.svf knob:Cutoff 0.6
-0.8   param filter.svf Cutoff 400 1.2
-2.2   move off
-2.6   note 48 76 0.9
-3.8   note 51 76 0.9
-5     note 55 76 0.9
-6.2   note 53 76 1.6
-8.6   note 48 72 0.9
-9.8   note 46 72 0.9
-11    note 48 72 1.8
+0     aim 187 172 2.6 1.0
+1     move filter.svf knob:Cutoff 0.6
+1.8   param filter.svf Cutoff 400 1.2
+3.2   move off
+3.6   note 48 76 0.9
+4.8   note 51 76 0.9
+6     note 55 76 0.9
+7.2   note 53 76 1.6
+9.6   note 48 72 0.9
+10.8  note 46 72 0.9
+12    note 48 72 1.8
 
 beat A bass
 say   That's a classic synth **bass**.
