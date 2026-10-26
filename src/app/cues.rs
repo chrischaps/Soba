@@ -51,9 +51,9 @@ pub(crate) enum Cue {
     Fit(f64),
     /// Centre a patch point at a zoom, over this many seconds.
     Aim { at: Pos2, zoom: f32, dur: f64 },
-    /// Bring a module or frame into view, framed as F frames a selection or
-    /// centred at a zoom, over this many seconds.
-    Look { at: LookAt, zoom: Option<f32>, dur: f64 },
+    /// Bring a module or frame into view, framed as F frames a selection,
+    /// as close as it fits, or centred at a zoom, over this many seconds.
+    Look { at: LookAt, zoom: LookZoom, dur: f64 },
     /// Dive into the group of this name (or path), landing on all of it or
     /// aimed at a patch point inside at a zoom, or back out of one.
     Enter(String, Option<(Pos2, f32)>),
@@ -146,8 +146,9 @@ impl Cue {
             Cue::Camera { offset, scale, dur } => format!("camera {} {} {scale} {dur}", offset.x, offset.y),
             Cue::Fit(dur) => format!("fit {dur}"),
             Cue::Aim { at, zoom, dur } => format!("aim {} {} {zoom} {dur}", at.x, at.y),
-            Cue::Look { at, zoom: Some(zoom), dur } => format!("look {at} {zoom} {dur}"),
-            Cue::Look { at, zoom: None, dur } => format!("look {at} {dur}"),
+            Cue::Look { at, zoom: LookZoom::Fit, dur } => format!("look {at} {dur}"),
+            Cue::Look { at, zoom: LookZoom::Close, dur } => format!("look close {at} {dur}"),
+            Cue::Look { at, zoom: LookZoom::At(zoom), dur } => format!("look {at} {zoom} {dur}"),
             Cue::Enter(name, None) => format!("enter {name}"),
             Cue::Enter(name, Some((at, zoom))) => format!("enter {name} at {} {} {zoom}", at.x, at.y),
             Cue::Leave => "leave".into(),
@@ -179,6 +180,18 @@ impl std::fmt::Display for LookAt {
             LookAt::Frame(title) => write!(f, "frame:{title}"),
         }
     }
+}
+
+/// How close a `look` cue brings what it looks at.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LookZoom {
+    /// Framed as F frames it selected: no closer than a little past life size.
+    Fit,
+    /// Framed as close as it fits on screen (`look close`): one module's
+    /// knobs and displays filling the stage.
+    Close,
+    /// Its middle centred at this zoom.
+    At(f32),
 }
 
 /// A script's MIDI channel, 1-16, as the 0-15 a message carries.
@@ -372,14 +385,18 @@ pub(crate) fn parse_cues(text: &str, mode: Mode) -> Result<Vec<(f64, Cue)>, Stri
             "fit" => cues.push((t, Cue::Fit(opt(2)?))),
             "aim" => cues.push((t, Cue::Aim { at: Pos2::new(num(2)? as f32, num(3)? as f32), zoom: num(4)? as f32, dur: opt(5)? })),
             "look" => {
-                let (at, numbers) = parse_look(&words[2..]).map_err(err)?;
+                // `look close osc.sine 0.8`: as close as it fits
+                let close = words.get(2) == Some(&"close");
+                let (at, numbers) = parse_look(&words[2 + close as usize..]).map_err(err)?;
                 let (zoom, dur) = match numbers[..] {
-                    [] => (None, 0.0),
-                    [dur] => (None, dur),
-                    [zoom, dur] if zoom > 0.0 => (Some(zoom as f32), dur),
+                    [] => (LookZoom::Fit, 0.0),
+                    [dur] => (LookZoom::Fit, dur),
+                    [_, _] if close => return Err(err("a close look takes only a length: it finds its own zoom")),
+                    [zoom, dur] if zoom > 0.0 => (LookZoom::At(zoom as f32), dur),
                     [_, _] => return Err(err("a zoom is more than 0")),
                     _ => return Err(err("too many values: a look takes a length, or a zoom and a length")),
                 };
+                let zoom = if close { LookZoom::Close } else { zoom };
                 cues.push((t, Cue::Look { at, zoom, dur }));
             }
             "enter" => {
@@ -545,15 +562,24 @@ mod tests {
 1 look osc.sine#2 1.2
 2 look seq.step@104 1.4 2
 3 look frame:Drive and echo 0.8
-4 end").unwrap();
+4 look close osc.sine 0.8
+5 look close frame:Tone
+6 end").unwrap();
         let look = |i: usize| match &cues[i].1 {
             Cue::Look { at, zoom, dur } => (at.clone(), *zoom, *dur),
             other => panic!("expected a look, got {other:?}"),
         };
-        assert_eq!(look(0), (LookAt::Module("filter.svf".into(), Which::Nth(0)), None, 0.0));
-        assert_eq!(look(1), (LookAt::Module("osc.sine".into(), Which::Nth(1)), None, 1.2));
-        assert_eq!(look(2), (LookAt::Module("seq.step".into(), Which::Id(104)), Some(1.4), 2.0));
-        assert_eq!(look(3), (LookAt::Frame("Drive and echo".into()), None, 0.8));
+        assert_eq!(look(0), (LookAt::Module("filter.svf".into(), Which::Nth(0)), LookZoom::Fit, 0.0));
+        assert_eq!(look(1), (LookAt::Module("osc.sine".into(), Which::Nth(1)), LookZoom::Fit, 1.2));
+        assert_eq!(look(2), (LookAt::Module("seq.step".into(), Which::Id(104)), LookZoom::At(1.4), 2.0));
+        assert_eq!(look(3), (LookAt::Frame("Drive and echo".into()), LookZoom::Fit, 0.8));
+        assert_eq!(look(4), (LookAt::Module("osc.sine".into(), Which::Nth(0)), LookZoom::Close, 0.8));
+        assert_eq!(look(5), (LookAt::Frame("Tone".into()), LookZoom::Close, 0.0));
+        assert_eq!(cues[4].1.script().as_deref(), Some("look close osc.sine#1 0.8"), "a take writes it back as it reads");
+        assert!(film("0 look close
+1 end").is_err());
+        assert!(film("0 look close osc.sine 2 1
+1 end").is_err(), "a close look finds its own zoom");
         assert!(film("0 look\n1 end").is_err());
         assert!(film("0 look osc.nope 1\n1 end").is_err(), "a module kind that doesn't exist fails as the script loads");
         assert!(film("0 look osc.sine 1 2 3\n1 end").is_err());

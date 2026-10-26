@@ -88,6 +88,8 @@
 //! 4.0  look filter.svf 1.2          # frame a module, as F frames it
 //!                                   # selected, over 1.2 s (cut, without)
 //! 4.0  look osc.sine#2 1.4 2.0      # ...or centre it at zoom 1.4, over 2 s
+//! 4.0  look close util.vca 1.2      # ...or frame it as close as it fits
+//!                                   # (up to 5x): its knobs fill the shot
 //! 4.0  look frame:Drive and echo 1  # ...or a frame, by its title
 //! 4.0  enter Bells                 # dive into a group through its
 //!                                   # miniature, as a double-click does

@@ -69,7 +69,8 @@ The cues are the ones a capture script uses, so anything Soba can be filmed doin
 | Cue | What it does |
 |---|---|
 | `look filter.svf 0.8` | Glides the camera to frame a module, as `F` frames a selection, over 0.8 s. |
-| `look osc.sine 1.4 2.0` | Centres a module at zoom 1.4, over 2 s. |
+| `look osc.sine 1.4 2.0` | Centres a module at zoom 1.4, over 2 s. The canvas zooms in as far as 5×. |
+| `look close util.vca 0.8` | Frames a module as close as it fits, so its knobs and displays fill the screen. Use it to show one control up close. A frame works too: `look close frame:Tone`. |
 | `look frame:Tone 0.8` | Frames a frame, by its title. |
 | `param filter.svf Cutoff 260 3.6` | Turns a knob to a value over 3.6 s. Frequencies and times glide evenly in octaves. |
 | `note 36 80 5.0` | Plays a MIDI note into Note In: note number, velocity, length in seconds. |

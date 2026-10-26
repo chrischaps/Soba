@@ -13,7 +13,7 @@ use eframe::egui::{self, emath::TSTransform, vec2, Pos2, Rect, Vec2};
 use egui_node_graph2::NodeId;
 
 use crate::app::capture_aim;
-use crate::app::cues::LookAt;
+use crate::app::cues::{LookAt, LookZoom};
 use crate::graph::annotations::{Annotation, AnnotationId};
 use crate::graph::{groups, GroupId};
 use super::grouping::{FRAME_MARGIN, TRAIL_HEIGHT};
@@ -26,8 +26,10 @@ const GLIDE_SECONDS: f64 = 0.2;
 const SELECTION_ZOOM: f32 = 1.25;
 /// The closest framing everything comes: life size, as a patch opens.
 const ALL_ZOOM: f32 = 1.0;
-/// The furthest the editor zooms out (egui_node_graph2's own limit).
-const FURTHEST_ZOOM: f32 = 0.2;
+/// The furthest the editor zooms out, and the closest it comes in: a
+/// `look close` frames as close as this (egui_node_graph2's own limits).
+const FURTHEST_ZOOM: f32 = egui_node_graph2::MIN_ZOOM;
+const CLOSEST_ZOOM: f32 = egui_node_graph2::MAX_ZOOM;
 /// Frames past the end of the glide spent waiting for modules still taken
 /// at a nominal size to be measured.
 const SETTLE_FRAMES: u8 = 6;
@@ -38,6 +40,8 @@ pub(super) enum Target {
     /// Everything on the current level, its frames and notes included.
     All,
     Selection { nodes: Vec<NodeId>, annotations: Vec<AnnotationId> },
+    /// A module or frame, as close as it fits: a `look close` cue.
+    Close { nodes: Vec<NodeId>, annotations: Vec<AnnotationId> },
     /// A patch point, in the middle of the editor at a zoom: a capture's
     /// `aim` cue, which moves as a camera does, easing in and out.
     Point { at: Pos2, zoom: f32 },
@@ -292,7 +296,11 @@ impl SynthApp {
             return Some((zoom.max(FURTHEST_ZOOM), at, true));
         }
         let (bounds, measured) = self.target_bounds(target)?;
-        let closest = if *target == Target::All { ALL_ZOOM } else { SELECTION_ZOOM };
+        let closest = match target {
+            Target::All => ALL_ZOOM,
+            Target::Close { .. } => CLOSEST_ZOOM,
+            _ => SELECTION_ZOOM,
+        };
         let zoom = zoom_to_fit(bounds.size(), room(view), closest);
         Some((zoom, aim(bounds, zoom, view), measured))
     }
@@ -302,7 +310,7 @@ impl SynthApp {
     fn target_bounds(&self, target: &Target) -> Option<(Rect, bool)> {
         match target {
             Target::All => self.level_bounds(self.user_state.level),
-            Target::Selection { nodes, annotations } => {
+            Target::Selection { nodes, annotations } | Target::Close { nodes, annotations } => {
                 let level = groups::level_nodes(&self.graph_state.graph, self.user_state.level);
                 let nodes: Vec<NodeId> = nodes.iter().copied().filter(|n| level.contains(n)).collect();
                 self.bounds_of(&nodes, annotations)
@@ -336,8 +344,8 @@ impl SynthApp {
     }
 
     /// Where a `look` cue takes the view: a module or frame on show, framed
-    /// as F frames it selected, or its middle at a zoom.
-    pub(super) fn look_target(&self, at: &LookAt, zoom: Option<f32>) -> Result<Target, String> {
+    /// as F frames it selected or as close as it fits, or its middle at a zoom.
+    pub(super) fn look_target(&self, at: &LookAt, zoom: LookZoom) -> Result<Target, String> {
         let (nodes, annotations) = match at {
             LookAt::Module(module, which) => {
                 let node = capture_aim::find_module(&self.graph_state.graph, &self.user_state, module, *which)?;
@@ -359,7 +367,11 @@ impl SynthApp {
                 }
             }
         };
-        let Some(zoom) = zoom else { return Ok(Target::Selection { nodes, annotations }) };
+        let zoom = match zoom {
+            LookZoom::Fit => return Ok(Target::Selection { nodes, annotations }),
+            LookZoom::Close => return Ok(Target::Close { nodes, annotations }),
+            LookZoom::At(zoom) => zoom,
+        };
         let (bounds, _) = self.bounds_of(&nodes, &annotations).ok_or("it hasn't been drawn yet")?;
         Ok(Target::Point { at: bounds.center(), zoom })
     }

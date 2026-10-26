@@ -12,7 +12,7 @@ use egui::{Pos2, Vec2};
 
 use super::capture::draw_pointer;
 use super::capture_aim::{Part, Spot, Which};
-use super::cues::{Cue, LookAt};
+use super::cues::{Cue, LookAt, LookZoom};
 use crate::engine::MidiEvent;
 
 /// Something the app has to do for the script this frame, beyond input.
@@ -33,7 +33,7 @@ pub enum CaptureAction {
     Aim { at: Pos2, zoom: f32, seconds: f64 },
     /// Bring a module or frame into view, framed or centred at a zoom, over
     /// this many seconds (0 cuts).
-    Look { at: LookAt, zoom: Option<f32>, seconds: f64 },
+    Look { at: LookAt, zoom: LookZoom, seconds: f64 },
     /// Dive into the group of this name, or path from the top, landing on
     /// all of it or aimed at a patch point inside at a zoom.
     Enter(String, Option<(Pos2, f32)>),
@@ -698,7 +698,7 @@ mod tests {
                 CaptureAction::Play(_) => "play".to_string(),
                 CaptureAction::Midi { event: MidiEvent::NoteOn { .. }, offset: 0 } => "on".into(),
                 CaptureAction::Midi { event: MidiEvent::NoteOff { .. }, offset: 0 } => "off".into(),
-                CaptureAction::Look { zoom: Some(z), seconds, .. } => format!("look {z} {seconds}"),
+                CaptureAction::Look { zoom: LookZoom::At(z), seconds, .. } => format!("look {z} {seconds}"),
                 other => panic!("{other:?}"),
             }));
         }

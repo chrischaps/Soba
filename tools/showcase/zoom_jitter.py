@@ -1,6 +1,6 @@
 """Does everything on a patch scale smoothly as the view zooms?
 
-    python tools/showcase/zoom_jitter.py patch.json [--ppp 1.25] [--steps 80] [--zoom 0.3 2.0] [--max N]
+    python tools/showcase/zoom_jitter.py patch.json [--ppp 1.25] [--steps 80] [--zoom 0.3 5.0] [--max N]
 
 Zooms slowly over each of the patch's frames (or the whole top level, if it
 has none) in a capture, dumping `layout` at every step, then reports how
@@ -63,7 +63,7 @@ def names_of(patch):
     return names
 
 
-def sweep(path, ppp=1.25, steps=80, zoom=(0.3, 2.0)):
+def sweep(path, ppp=1.25, steps=80, zoom=(0.3, 5.0)):
     """Films the zoom sweep over one patch and returns its rows, worst first:
     (width change, height change, zooms seen, name, width, height). Each
     patch films into its own folder, so several can sweep at once (#276)."""
@@ -152,7 +152,7 @@ def main():
     ap.add_argument("patch")
     ap.add_argument("--ppp", type=float, default=1.25)
     ap.add_argument("--steps", type=int, default=80)
-    ap.add_argument("--zoom", type=float, nargs=2, default=(0.3, 2.0))
+    ap.add_argument("--zoom", type=float, nargs=2, default=(0.3, 5.0))
     ap.add_argument("--max", type=float)
     a = ap.parse_args()
     require_fresh_build()
