@@ -23,6 +23,9 @@ struct Began {
     at: f64,
     /// Its first cue in `cues`.
     from: usize,
+    /// Played again: where the first try began, which the film holds still
+    /// from until this one
+    again_from: Option<f64>,
 }
 
 /// A presentation's take, kept as it plays.
@@ -41,17 +44,23 @@ impl Take {
     /// Beat `beat` began at `now`, on the app's clock.
     pub fn begin(&mut self, beat: usize, now: f64) {
         let origin = *self.origin.get_or_insert(now);
-        self.began.push(Began { beat, at: now - origin, from: self.cues.len() });
+        self.began.push(Began { beat, at: now - origin, from: self.cues.len(), again_from: None });
     }
 
     /// Beat `beat` began again at `now`: what was kept since it last began
     /// is dropped.
     pub fn again(&mut self, beat: usize, now: f64) {
+        let mut again_from = None;
         if let Some(at) = self.began.iter().rposition(|b| b.beat == beat) {
+            // A second retake holds from the first try, not the second
+            again_from = Some(self.began[at].again_from.unwrap_or(self.began[at].at));
             self.cues.truncate(self.began[at].from);
             self.began.truncate(at);
         }
         self.begin(beat, now);
+        if let Some(began) = self.began.last_mut() {
+            began.again_from = again_from;
+        }
     }
 
     /// Keeps cues a beat fired, timed from its start at `started` on the
@@ -100,6 +109,10 @@ impl Take {
         for (i, began) in self.began.iter().enumerate() {
             let beat = &script.beats[began.beat];
             out += &format!("\n# Beat {} · {}, at {}\n", began.beat + 1, beat.name, clock(began.at));
+            if let Some(from) = began.again_from {
+                // For the editor (and take_markers.py): where the retake's cut goes
+                out += &format!("# Played again: the film holds still from {}, where the first try began\n", clock(from));
+            }
             for say in &beat.say {
                 out += &format!("#   {say}\n");
             }
@@ -181,6 +194,21 @@ mod tests {
         let fired: Vec<String> = film.iter().map(|(at, cue)| format!("{at} {}", cue.script().unwrap_or_else(|| "note".into()))).collect();
         assert_eq!(fired, ["0 play", "6 stop", "8.5 end"], "{text}");
         assert_eq!(text.matches("# Beat 2").count(), 1);
+        // ...and says where the editor cuts the first try
+        assert!(text.contains("# Beat 2 · B, at 0:06.0\n# Played again: the film holds still from 0:02.0,"), "{text}");
+        assert!(!text.contains("# Beat 1 · A, at 0:00.0\n# Played again"), "{text}");
+    }
+
+    #[test]
+    fn a_second_retake_holds_from_the_first_try() {
+        let script = presentation::parse("beat A\n0 play\nbeat B\n0 stop").unwrap();
+        let mut take = Take::default();
+        take.begin(0, 0.0);
+        take.begin(1, 2.0);
+        take.again(1, 5.0);
+        take.again(1, 9.0);
+        let text = take.script(&script, None, 10.0).unwrap();
+        assert!(text.contains("# Beat 2 · B, at 0:09.0\n# Played again: the film holds still from 0:02.0,"), "{text}");
     }
 
     #[test]

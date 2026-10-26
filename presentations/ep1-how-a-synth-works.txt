@@ -21,11 +21,15 @@ title    How a Synthesizer Works
 advance  cc 64                    # a sustain pedal plays the next beat
 back     cc 65                    # ...and a second one, if there is one, goes back
 
+# --- What we're building ------------------------------------------------
+
 beat Cold open
 say   Every sound you just heard started as **one plain tone** that never stops.
 say   In the next twelve minutes, we'll build this synthesizer from nothing, and you'll know what every one of these cables is doing.
 0     play                       # Soba opens stopped
 0     aim 0 0 1.0                # a known view, so the first module lands where the take expects
+
+# --- A synth is like your voice -----------------------------------------
 
 beat The idea
 say   Think about your own voice. Your vocal cords **buzz**. On their own, they'd sound like a kazoo. Your **mouth** shapes that buzz, darker or brighter, into vowels. Your **breath** decides when a sound starts, how it swells, and how it fades. And you choose which **notes** to sing.
@@ -33,7 +37,7 @@ say   A synthesizer does the same four jobs. An oscillator buzzes. A filter is t
 say   On most synths, that wiring is hidden inside the box. Soba is a **modular** synth: every job is a separate module, and you join them with cables, so you can watch each one work. Let's build one, a job at a time.
 say   And you can build it **with me**. Soba runs in your browser at soba.chaps.dev, with nothing to install. Open it, press New in the toolbar for an empty canvas, and pause the video whenever you want to catch up.
 
-# --- Step 1: A buzz ---------------------------------------------------------
+# --- Step 1: A buzz (the oscillator) ------------------------------------
 
 beat A source
 say   Every sound starts at a **source**. Press Space and type "osc", or right-click the canvas and choose Source, Oscillator.
@@ -76,7 +80,7 @@ say   To play notes, we need something to choose them. Add a **Note In**, from t
 1.6   param osc.sine Waveform 1
 2.6   move off
 
-# --- Step 2: Notes ----------------------------------------------------------
+# --- Step 2: Notes (pitch and gate) -------------------------------------
 
 beat Note In
 say   It plays from a MIDI keyboard, from the piano on its face, or from your computer's keyboard.
@@ -171,7 +175,7 @@ say   Breath is the job of an **envelope**. Add an ADSR Envelope, from the Modul
 5.6   note 60 80 0.2
 6     note 60 80 1.6
 
-# --- Step 3: Breath ---------------------------------------------------------
+# --- Step 3: Breath (the ADSR envelope) ---------------------------------
 
 beat An envelope
 say   Its first input is a green Gate. Just to see, let's try the Pitch output there.
@@ -251,7 +255,7 @@ say   The last job is the mouth: shaping the buzz. That's a **filter**. Add an S
 0     param mod.adsr Release 0.3 1.2
 1.4   aim 0 220 0.72 1.6
 
-# --- Step 4: A mouth --------------------------------------------------------
+# --- Step 4: A mouth (the filter) ---------------------------------------
 
 beat A filter
 say   The oscillator goes into its In, and its LowPass output into the VCA.
