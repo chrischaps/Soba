@@ -1,0 +1,72 @@
+# Synthesis from One Sine, episode 4's pilot Short: the filter that sings (#477).
+# Presented over the Basic Subtractive example, and kept as a take to film:
+#
+#   soba patches/basic-subtractive.json --present presentations/ep4-filters.txt --take ep4-take.txt
+#   soba patches/basic-subtractive.json --capture ep4-take.txt --out target/showcase/ep4 --size 1080x1920 --fps 30
+#
+# Rehearse in a window the shape of the film (tall, for a Short): the
+# camera frames modules to fit the window, and the take keeps that view.
+# The manual's Presenting page walks through it.
+
+title    The Filter That Sings
+advance  cc 64                    # a sustain pedal plays the next beat
+back     cc 65                    # ...and a second one, if there is one, goes back
+
+# The cold open: the sound first, with nothing said over it
+beat The sound first
+0     play                       # Soba opens stopped
+0     param input.poly_midi Source 0   # Both: the example listens to keys alone, and the notes here are MIDI
+0     look frame:Tone 0.6
+0     param filter.svf Resonance 0.88 0
+0     param filter.svf Cutoff 110 0
+0.3   note 36 70 6.4
+0.5   param filter.svf Cutoff 2200 4.6
+5.2   param filter.svf Cutoff 140 1.4
+auto  7.2
+
+beat Every harmonic
+say   A saw wave is every harmonic at once, stacked up. That's why it buzzes.
+say   Open the filter all the way, and you hear **all** of them.
+0     look osc.sine 0.8
+0     param filter.svf Resonance 0.3 0.4
+0     param filter.svf Cutoff 12000 0.4
+0.6   note 36 80 2.6
+
+beat Cutoff
+say   A lowpass filter keeps the lows and takes the highs away.
+say   **Cutoff** is where it starts cutting. Bring it down, and the buzz goes dark.
+0     look frame:Tone 0.8
+0     cursor on
+0     move filter.svf knob:Cutoff 0.6
+0.6   note 36 80 5.0
+1.0   param filter.svf Cutoff 260 3.6
+5.8   move off
+
+beat Resonance
+say   Now **resonance**. It pushes back right at the cutoff, so that one spot rings.
+0     param filter.svf Cutoff 520 0.4
+0     move filter.svf knob:Resonance 0.6
+0.6   note 36 80 5.0
+1.0   param filter.svf Resonance 0.85 3.4
+5.8   move off
+
+beat It sings
+say   Sweep the cutoff now. The ring walks up the saw, one harmonic at a time.
+say   The filter is **singing** them.
+0     move filter.svf knob:Cutoff 0.6
+0     param filter.svf Cutoff 110 0.5     # down first, so the note starts soft
+0.6   note 36 70 8.4
+1.4   param filter.svf Cutoff 2200 5.6
+7.2   param filter.svf Cutoff 520 1.8
+9.2   move off
+
+beat Play it
+say   Play it, and each note's envelope opens the filter, then lets it settle.
+say   **Cutoff** chooses where. **Resonance** chooses how much it sings.
+0     look frame:Tone 0.8
+0     param filter.svf Resonance 0.7 0.6
+0.6   note 36 64 0.5
+1.2   note 43 58 0.5
+1.8   note 48 64 0.9
+3.0   note 46 58 0.5
+3.6   note 43 58 1.4

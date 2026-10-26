@@ -8,6 +8,7 @@
 - [Interface Overview](./getting-started/interface-overview.md)
 - [Your First Patch](./getting-started/your-first-patch.md)
 - [Lessons](./getting-started/lessons.md)
+- [Presenting](./getting-started/presenting.md)
 
 # Core Concepts
 

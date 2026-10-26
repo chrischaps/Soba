@@ -566,6 +566,21 @@ beat   # named for its place
     }
 
     #[test]
+    fn the_shipped_presentations_read() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("presentations");
+        let mut read = 0;
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().is_some_and(|e| e == "txt") {
+                let text = std::fs::read_to_string(&path).unwrap();
+                parse(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+                read += 1;
+            }
+        }
+        assert!(read > 0, "no scripts in {}", dir.display());
+    }
+
+    #[test]
     fn a_bad_line_says_where_it_is() {
         let err = |text: &str| parse(text).unwrap_err();
         assert!(err("beat A\n0 play\n\n1 bogus").starts_with("script line 4:"), "{}", err("beat A\n0 play\n\n1 bogus"));

@@ -7,6 +7,8 @@ Lessons are short tutorials that run inside Soba, and you learn by doing each st
 
 Open them from **❓ Help › 🎓 Lessons**. Each lesson starts from its own patch, or from an empty canvas, so if the patch you have open has unsaved changes, Soba first asks whether to save them.
 
+The same menu's **🎬 Present…** is for the other side of the desk: it plays a script over a patch one beat at a time, while you talk an audience through it. See [Presenting](./presenting.md).
+
 ## The lessons
 
 Take them in order. Each one builds on the one before, and the five together cover what [Your First Patch](./your-first-patch.md) explains on paper.
