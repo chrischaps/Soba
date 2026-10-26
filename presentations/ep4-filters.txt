@@ -1,4 +1,4 @@
-# Synthesis from One Sine, episode 4's pilot Short: the filter that sings (#477).
+# Synthesizer 101 with Soba, episode 4's pilot Short: the filter that sings (#477).
 # Presented over the Basic Subtractive example, and kept as a take to film:
 #
 #   soba patches/basic-subtractive.json --present presentations/ep4-filters.txt --take ep4-take.txt

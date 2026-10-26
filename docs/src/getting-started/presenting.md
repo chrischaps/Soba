@@ -130,7 +130,7 @@ A take plays its cues against the patch as it stands, so if you change the patch
 
 ## A worked example
 
-`presentations/ep4-filters.txt` in the source is the pilot for *Synthesis from One Sine*, a video series that teaches synthesis with Soba. It's a Short about the filter, presented over the **Basic Subtractive** example in six beats:
+`presentations/ep4-filters.txt` in the source is the pilot for *Synthesizer 101 with Soba*, a video series that teaches how synthesizers make sound. It's a Short about the filter, presented over the **Basic Subtractive** example in six beats:
 
 1. **The sound first.** With nothing said, the camera frames the filter and its envelope, and a resonant filter sweeps through one low note. It moves on by itself.
 2. **Every harmonic.** The filter opens wide on the oscillator's saw wave, which has every harmonic in it.
