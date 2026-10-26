@@ -38,6 +38,8 @@ pub struct Take {
     /// Every cue the beats fired, in seconds from the first press.
     cues: Vec<(f64, Cue)>,
     began: Vec<Began>,
+    /// The main window's size at the first press, in points.
+    window: Option<[f32; 2]>,
 }
 
 impl Take {
@@ -86,6 +88,11 @@ impl Take {
         self.opening = Some(cues);
     }
 
+    /// The main window's size at the first press, in points.
+    pub fn window(&mut self, size: [f32; 2]) {
+        self.window = Some(size);
+    }
+
     /// How long the take has run at `now`.
     pub fn length(&self, now: f64) -> Option<f64> {
         self.origin.map(|origin| (now - origin).max(0.0))
@@ -98,7 +105,21 @@ impl Take {
         let end = stopped.max(self.cues.last().map_or(0.0, |(at, _)| *at)) + 0.5;
         let title = script.title.as_deref().unwrap_or("a presentation");
         let mut out = format!("# A take of {title}: {} beats in {}, as presented\n", self.began.len(), clock(end));
-        out += &format!("# Film it as it played:  soba {} --capture take.txt --out take\n", patch.unwrap_or("patch.json"));
+        let patch = patch.unwrap_or("patch.json");
+        match self.window {
+            // A film places things where they were only in a window as many
+            // points across: 1.5 pixels a point makes 1280x720 a 1080p film
+            Some([w, h]) => {
+                let (w, h) = (w.round(), h.round());
+                out += &format!("# Presented in a window {w}x{h} points\n");
+                out += &format!(
+                    "# Film it as it played:  soba {patch} --capture take.txt --out take --size {}x{} --ppp 1.5\n",
+                    (w * 1.5).round(),
+                    (h * 1.5).round()
+                );
+            }
+            None => out += &format!("# Film it as it played:  soba {patch} --capture take.txt --out take\n"),
+        }
         out += "# Only the beats' cues are in it: knobs turned and the view moved by hand aren't\n";
         if let Some(opening) = self.opening.as_ref().filter(|cues| !cues.is_empty()) {
             out += "\n# As things stood at the first press\n";
@@ -197,6 +218,17 @@ mod tests {
         // ...and says where the editor cuts the first try
         assert!(text.contains("# Beat 2 · B, at 0:06.0\n# Played again: the film holds still from 0:02.0,"), "{text}");
         assert!(!text.contains("# Beat 1 · A, at 0:00.0\n# Played again"), "{text}");
+    }
+
+    #[test]
+    fn a_take_says_how_big_to_film_it() {
+        let script = presentation::parse("window 1280x720\nbeat A\n0 play").unwrap();
+        let mut take = Take::default();
+        take.begin(0, 0.0);
+        take.window([1280.0, 720.0]);
+        let text = take.script(&script, Some("presentations/empty.json"), 2.0).unwrap();
+        assert!(text.contains("# Presented in a window 1280x720 points\n"), "{text}");
+        assert!(text.contains("soba presentations/empty.json --capture take.txt --out take --size 1920x1080 --ppp 1.5\n"), "{text}");
     }
 
     #[test]

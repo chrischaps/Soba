@@ -59,6 +59,7 @@ auto  6
 ```
 
 - **`title`** names the presentation in the notes and the status bar.
+- **`window <width>x<height>`** sizes Soba's window as presenting starts, in points, so what you see live is what the film shows. A film at `--size 1920x1080 --ppp 1.5` is `window 1280x720`. If the window can't be that size, the status bar says so at the first press, and the take notes the size it was and how to film it.
 - **`beat <name>`** starts a beat. A beat with no name is called by its number.
 - **`say`** is a paragraph for the notes. Use one `say` line per paragraph. A beat with nothing to say is fine: the notes then tell you to let it play.
 - **`auto <seconds>`** moves on to the next beat by itself that long after this one starts, without a press. Use it for a cold open that runs straight into the first explanation.
@@ -117,7 +118,7 @@ A take is text: it records no sound or picture. The picture and the patch's soun
 This is how a video gets made with it:
 
 1. **Write the script** against the patch, one beat per idea, each ending on something to listen to.
-2. **Rehearse live.** Size Soba's window to the shape of the film (tall for a Short, wide for a video), because the camera frames modules to fit the window and the take keeps that view. Play the beats, rewrite them and go again until the pacing feels right. Fix the script between runs and present it again: there's no need to restart Soba.
+2. **Rehearse live.** Give the script a `window` line the shape of the film (tall for a Short, wide for a video), because the camera frames modules to fit the window and the take keeps that view. Play the beats, rewrite them and go again until the pacing feels right. Fix the script between runs and present it again: there's no need to restart Soba.
 3. **Record the take.** Present with `--take`, and record two tracks as you go: your mic, and Soba's own sound (desktop or loopback audio). OBS in audio-only mode does it, as do Reaper and Audacity. Wear headphones, so the mic doesn't hear the patch. Play a beat again if you fluff a line.
 4. **Film the take.** A capture films it with the patch's sound, frame by frame, so nothing stutters however busy the patch is:
 

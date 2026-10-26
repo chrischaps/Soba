@@ -6,6 +6,7 @@
 //!
 //! ```text
 //! title    How Synth Filters Work
+//! window   1280x720                 # the window's size in points, set as it starts
 //! advance  cc 64                    # a footswitch on CC 64 plays the next beat
 //! back     cc 65 1                  # ...and one on CC 65, channel 1 only, goes back
 //!
@@ -22,6 +23,10 @@
 //! paragraph a line, with `**bold**` for the words to lean on. A beat's
 //! cues are anything a capture script can do but record (`still`, `layout`,
 //! `input`, `end`).
+//!
+//! `window` sizes the main window as presenting starts, in points, so a
+//! take places things where its film will: a capture at `--size 1920x1080
+//! --ppp 1.5` is 1280x720 points.
 //!
 //! A footswitch (#489) is a CC named before the first beat, for `advance`,
 //! `back` or `finish`: any USB pedal or controller then steps the beats.
@@ -56,6 +61,8 @@ const STEP: f64 = 1.0 / 60.0;
 #[derive(Debug, Clone)]
 pub struct Script {
     pub title: Option<String>,
+    /// The main window's size to present in, in points.
+    pub window: Option<[f32; 2]>,
     /// The footswitches that step it.
     pub pedals: Vec<Pedal>,
     pub beats: Vec<Beat>,
@@ -119,6 +126,7 @@ impl Beat {
 /// Reads a presentation script. Errors name the line.
 pub fn parse(text: &str) -> Result<Script, String> {
     let mut title = None;
+    let mut window = None;
     let mut pedals: Vec<Pedal> = Vec::new();
     // Each beat, and the lines of its cues
     let mut beats: Vec<(Beat, Vec<usize>)> = Vec::new();
@@ -145,6 +153,13 @@ pub fn parse(text: &str) -> Result<Script, String> {
                 return Err(err("the title comes before the first beat"));
             }
             title = Some(rest.to_string()).filter(|t| !t.is_empty());
+            continue;
+        }
+        if word == "window" {
+            if !beats.is_empty() {
+                return Err(err("the window comes before the first beat"));
+            }
+            window = Some(parse_window(rest).map_err(err)?);
             continue;
         }
         let command = match word {
@@ -177,7 +192,7 @@ pub fn parse(text: &str) -> Result<Script, String> {
                 }
             }
             _ if word.parse::<f64>().is_ok() => lines.push(line_no),
-            _ => return Err(err("expected title, advance, back, finish, beat, say, auto or a cue")),
+            _ => return Err(err("expected title, window, advance, back, finish, beat, say, auto or a cue")),
         }
     }
     if beats.is_empty() {
@@ -199,7 +214,17 @@ pub fn parse(text: &str) -> Result<Script, String> {
             Ok(beat)
         })
         .collect::<Result<Vec<_>, String>>()?;
-    Ok(Script { title, pedals, beats })
+    Ok(Script { title, window, pedals, beats })
+}
+
+/// A window's size in points: `1280x720`.
+fn parse_window(rest: &str) -> Result<[f32; 2], &'static str> {
+    let (w, h) = rest.split_once('x').ok_or("a window is `<width>x<height>`, in points: 1280x720")?;
+    let side = |s: &str| s.trim().parse::<f32>().ok().filter(|v| (320.0..=8000.0).contains(v));
+    match (side(w), side(h)) {
+        (Some(w), Some(h)) => Ok([w, h]),
+        _ => Err("a window's sides are 320 to 8000 points"),
+    }
 }
 
 /// A footswitch's line after its command: `cc <number> [channel]`.
@@ -487,6 +512,17 @@ impl Presentation {
         self.take.open(cues);
     }
 
+    /// The main window's size at the first press, in points, for the take
+    /// to say how to film it.
+    pub fn take_window(&mut self, size: [f32; 2]) {
+        self.take.window(size);
+    }
+
+    /// The window size the script asks for, in points.
+    pub fn window(&self) -> Option<[f32; 2]> {
+        self.script.window
+    }
+
     /// A beat that began this pass, for the app to note how things stand.
     pub fn take_began(&mut self) -> Option<usize> {
         self.began.take()
@@ -699,6 +735,16 @@ beat   # named for its place
         assert_eq!(pass(&mut p, 3.0), ["play false"]);
         assert_eq!(p.beat(), Some(1));
         assert_eq!(p.auto_left(3.0), None, "the last beat has nowhere to go");
+    }
+
+    #[test]
+    fn a_window_is_sized_before_the_beats() {
+        assert_eq!(parse("window 1280x720\nbeat A\n0 play").unwrap().window, Some([1280.0, 720.0]));
+        assert_eq!(parse("beat A\n0 play").unwrap().window, None);
+        let err = |text: &str| parse(text).unwrap_err();
+        assert!(err("beat A\nwindow 1280x720").contains("before the first beat"));
+        assert!(err("window 1280\nbeat A").contains("<width>x<height>"));
+        assert!(err("window 100x720\nbeat A").contains("320 to 8000"));
     }
 
     #[test]

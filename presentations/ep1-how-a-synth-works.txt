@@ -6,18 +6,21 @@
 #   soba presentations/empty.json --present presentations/ep1-how-a-synth-works.txt --take ep1-take.txt
 #   soba presentations/empty.json --capture ep1-take.txt --out target/showcase/ep1 --size 1920x1080 --ppp 1.5 --fps 30 --crf 12 --preset fast
 #
-# Present in a window 1280x720 points (1920x1080 at 150% scaling): the
-# first module is placed at a point in the window, and the take keeps it
-# there. Every later module is placed from the Oscillator's corner, in patch
-# points, so the layout holds whatever the zoom. Where it ends up:
+# `window` sizes Soba to 1280x720 points as presenting starts, the size a
+# 1920x1080 film at --ppp 1.5 is: the first module is placed at a point in
+# the window, and the film has to find it there. Every later module is placed
+# from the Oscillator's corner, in patch points, so the layout holds whatever
+# the zoom. Where it ends up:
 #
 #   Note In  Oscillator  SVF Filter  VCA          Audio Output
 #                                    ADSR Envelope
 #
-# A beat that ends where the narration says [LISTEN] is split in two, so
-# the sound waits for your press.
+# Each beat's lines end on an instruction, and the next press carries it
+# out while you explain it; a [LISTEN] that plays notes is a press of its
+# own, so the sound waits for you.
 
 title    How a Synthesizer Works
+window   1280x720                 # points: a 1920x1080 film at --ppp 1.5
 advance  cc 64                    # a sustain pedal plays the next beat
 back     cc 65                    # ...and a second one, if there is one, goes back
 

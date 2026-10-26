@@ -60,6 +60,8 @@ pub(super) struct Presenting {
     take_to: Option<PathBuf>,
     /// Which of the script's footswitches are down.
     pedals_down: Vec<bool>,
+    /// The script's window size, in points, until the window is asked for it.
+    resize: Option<egui::Vec2>,
 }
 
 /// How things stood as a beat began: every knob, the view and the level,
@@ -103,7 +105,10 @@ impl SynthApp {
         // The footswitches are the presentation's alone while it's on show
         self.midi.set_pedals(script.pedals.iter().map(|p| (p.controller, p.channel)).collect());
         let keys = next_keys(&script);
+        // The browser's canvas is the page's to size
+        let resize = script.window.filter(|_| !WEB).map(|[w, h]| vec2(w, h));
         self.presenting = Some(Presenting {
+            resize,
             pedals_down: vec![false; script.pedals.len()],
             run: Presentation::new(script),
             title: title.clone(),
@@ -238,6 +243,11 @@ impl SynthApp {
     /// notes how they stand as one begins, then does the beat's work.
     pub(super) fn step_presentation(&mut self, ctx: &egui::Context) {
         let Some(mut presenting) = self.presenting.take() else { return };
+        if let Some(size) = presenting.resize.take() {
+            // Out of maximized first, or the window keeps the screen's size
+            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+        }
         if let Some(k) = presenting.run.take_restore() {
             self.let_notes_go(&std::mem::take(&mut presenting.sounding));
             if let Some(scene) = presenting.scenes[k].clone() {
@@ -253,6 +263,18 @@ impl SynthApp {
         if presenting.run.take_wants_opening() {
             let opening = self.take_opening(&presenting.opening);
             presenting.run.open_take(opening);
+            // ...in a window the size its film will be
+            if let Some(size) = ctx.input(|i| i.viewport().inner_rect).map(|r| r.size()).filter(|_| !WEB) {
+                presenting.run.take_window([size.x, size.y]);
+                if let Some([w, h]) = presenting.run.window() {
+                    if (size.x - w).abs() > 1.5 || (size.y - h).abs() > 1.5 {
+                        self.status_error(format!(
+                            "The window is {:.0}x{:.0} points, not the {w:.0}x{h:.0} the script asks for: the film won't place things as you see them",
+                            size.x, size.y
+                        ));
+                    }
+                }
+            }
         }
 
         let mut actions = presenting.run.take_actions();
