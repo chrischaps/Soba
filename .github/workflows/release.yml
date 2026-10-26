@@ -57,7 +57,8 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     env:
-      RELEASE_DIR: target/${{ matrix.target }}/release
+      # The dist profile (Cargo.toml) builds into target/<target>/dist
+      RELEASE_DIR: target/${{ matrix.target }}/dist
       # SignPath signing runs once the project is set up there and these
       # are set in the repository (see packaging/SIGNING.md)
       SIGN: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' && startsWith(matrix.os, 'windows') }}
@@ -83,7 +84,7 @@ jobs:
 
       - name: Build
         if: matrix.features == ''
-        run: cargo build --locked --release --target ${{ matrix.target }}
+        run: cargo build --locked --profile dist --target ${{ matrix.target }}
 
       - name: Fetch the pinned ASIO SDK
         if: matrix.features == 'asio'
@@ -102,7 +103,7 @@ jobs:
         shell: bash
         env:
           LIBCLANG_PATH: C:\Program Files\LLVM\bin
-        run: env -u PSModulePath cargo build --locked --release --target ${{ matrix.target }} --features asio
+        run: env -u PSModulePath cargo build --locked --profile dist --target ${{ matrix.target }} --features asio
 
       - name: Add the licence
         shell: bash
