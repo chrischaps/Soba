@@ -22,16 +22,22 @@
 //! turn (see [`crate::hardware::hearing`]) and moves the node's to match,
 //! after `EngineCommand::SlotHeard` tells the knob the device is there
 //! already, so the value isn't sent back to it.
+//!
+//! And it presses the device's buttons (#474): a looper's Rec/Play, a
+//! synth's Hold. Each of its eight is a CC from the profile, handed over as
+//! a [`ButtonMap`] with `EngineCommand::MapButton`, pressed from a Gate
+//! jack or by hand on the face.
 
 use crate::dsp::{
     context::ProcessContext,
+    gate::Edge,
     module_trait::{DspModule, ModuleCategory, ModuleInfo, Readout},
     parameter::{ParameterDefinition, ParameterDisplay},
     port::PortDefinition,
     signal::{connected_input, SignalBuffer},
     SignalType,
 };
-use crate::hardware::SlotMap;
+use crate::hardware::{ButtonMap, SlotMap};
 use crate::link::midi::{MidiBus, MIDI, PORTS, PORT_LABELS};
 use crate::link::midi_player::Player;
 use crate::link::midi_writer::{lane_gap, ControlLane, MidiWriter, WRAP};
@@ -46,6 +52,15 @@ pub const SLOTS: usize = 12;
 /// Each knob's name, as its parameter and its jack share it.
 pub const SLOT_NAMES: [&str; SLOTS] = ["Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5", "Slot 6", "Slot 7", "Slot 8", "Slot 9", "Slot 10", "Slot 11", "Slot 12"];
 
+/// How many buttons it has.
+pub const BUTTONS: usize = 8;
+
+/// Each button's jack.
+pub const BUTTON_NAMES: [&str; BUTTONS] = ["Button 1", "Button 2", "Button 3", "Button 4", "Button 5", "Button 6", "Button 7", "Button 8"];
+
+/// Each button's press by hand, from the face: hidden controls.
+pub const PRESS_NAMES: [&str; BUTTONS] = ["Press 1", "Press 2", "Press 3", "Press 4", "Press 5", "Press 6", "Press 7", "Press 8"];
+
 /// A hardware synth, drum machine or sampler, played and turned from the
 /// patch.
 ///
@@ -58,6 +73,8 @@ pub const SLOT_NAMES: [&str; SLOTS] = ["Slot 1", "Slot 2", "Slot 3", "Slot 4", "
 /// - **Pressure** (Control, poly): 0 to 1, as Channel or Poly Pressure.
 /// - **Slot 1** … **Slot 12** (Control): 0 to 1, each across its knob's
 ///   travel, in place of the knob while patched.
+/// - **Button 1** … **Button 8** (Gate): each presses its button while
+///   high, or flips a toggle as it rises.
 ///
 /// # Parameters
 ///
@@ -66,12 +83,14 @@ pub const SLOT_NAMES: [&str; SLOTS] = ["Slot 1", "Slot 2", "Slot 3", "Slot 4", "
 ///   channel of their own go out on.
 /// - **Slot 1** … **Slot 12**: each knob's travel, 0 to 1, across what
 ///   the parameter it holds sends.
+/// - **Press 1** … **Press 8**: a button held down on the face (hidden).
 pub struct Instrument {
     out: MidiWriter,
     /// The port it played last block.
     port: usize,
     player: Player,
     knobs: Knobs,
+    buttons: Buttons,
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
 }
@@ -217,6 +236,153 @@ impl Knobs {
     }
 }
 
+/// An Instrument's eight buttons, as the audio thread presses them (#474).
+/// A momentary one is on while its jack's gate (or a hand on the face) is
+/// down; a toggle flips each time it goes down. Each sends only as it
+/// changes, and lets go when the Clock stops or its jack is unplugged.
+pub struct Buttons {
+    maps: [ButtonMap; BUTTONS],
+    /// Each jack's gate.
+    jacks: [Edge; BUTTONS],
+    /// Whether each jack was patched last block.
+    patched: [bool; BUTTONS],
+    /// Each button is down: its gate or a hand on it.
+    down: [bool; BUTTONS],
+    /// Each button is on, as last sent to the device.
+    on: [bool; BUTTONS],
+    /// A map just replaced while its button was on: it's let go first.
+    let_go: [Option<ButtonMap>; BUTTONS],
+    /// Presses sent so far, on and off, wrapping at [`WRAP`].
+    sent: u32,
+}
+
+impl Default for Buttons {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Buttons {
+    pub const fn new() -> Self {
+        Self {
+            maps: [ButtonMap::EMPTY; BUTTONS],
+            jacks: [Edge::LOW; BUTTONS],
+            patched: [false; BUTTONS],
+            down: [false; BUTTONS],
+            on: [false; BUTTONS],
+            let_go: [None; BUTTONS],
+            sent: 0,
+        }
+    }
+
+    /// Presses the buttons: each from its jack (from `first_port`) and its
+    /// hand on the face (from `first_param`), on `channel` (from 0) but for
+    /// those with their own. REAL-TIME SAFE.
+    #[allow(clippy::too_many_arguments)]
+    pub fn run(&mut self, out: &mut MidiWriter, inputs: &[&SignalBuffer], first_port: usize, params: &[f32], first_param: usize, channel: u8, frames: usize) {
+        for button in 0..BUTTONS {
+            if let Some(old) = self.let_go[button].take() {
+                self.send(out, &old, channel, false, 0);
+            }
+            let hand = params.get(first_param + button).is_some_and(|&press| press > 0.5);
+            match connected_input(inputs, first_port + button) {
+                Some(cable) => {
+                    self.patched[button] = true;
+                    self.press(out, button, self.jacks[button].is_high() || hand, channel, 0);
+                    for offset in 0..frames {
+                        if self.jacks[button].tick(cable.at(offset)).is_some() {
+                            self.press(out, button, self.jacks[button].is_high() || hand, channel, offset);
+                        }
+                    }
+                }
+                None => {
+                    // Unplugged with the button on: it lets go
+                    if std::mem::take(&mut self.patched[button]) {
+                        self.jacks[button].reset();
+                        self.down[button] = false;
+                        self.release(out, button, channel);
+                    }
+                    self.press(out, button, hand, channel, 0);
+                }
+            }
+        }
+    }
+
+    /// Button `button` is `down` (or not) from `offset`: a momentary one
+    /// follows it, and a toggle flips as it goes down.
+    fn press(&mut self, out: &mut MidiWriter, button: usize, down: bool, channel: u8, offset: usize) {
+        let was = std::mem::replace(&mut self.down[button], down);
+        let map = self.maps[button];
+        let on = match (was, down) {
+            (false, true) if map.toggle => !self.on[button],
+            (false, true) => true,
+            (true, false) if !map.toggle => false,
+            _ => return,
+        };
+        self.turn(out, button, on, channel, offset);
+    }
+
+    /// Turns button `button` on or off, and sends it where that's news.
+    fn turn(&mut self, out: &mut MidiWriter, button: usize, on: bool, channel: u8, offset: usize) {
+        if std::mem::replace(&mut self.on[button], on) != on {
+            let map = self.maps[button];
+            self.send(out, &map, channel, on, offset);
+        }
+    }
+
+    fn send(&mut self, out: &mut MidiWriter, map: &ButtonMap, channel: u8, on: bool, offset: usize) {
+        if let Some(message) = map.message(channel, on) {
+            out.message(offset, message);
+            self.sent = (self.sent + 1) % WRAP;
+        }
+    }
+
+    /// Lets go of button `button`, if it's on: a toggle too.
+    fn release(&mut self, out: &mut MidiWriter, button: usize, channel: u8) {
+        self.turn(out, button, false, channel, 0);
+    }
+
+    /// Lets go of every button that's on, as the Clock stops (on `channel`,
+    /// from 0). One still held down stays let go until it's pressed again.
+    pub fn release_all(&mut self, out: &mut MidiWriter, channel: u8) {
+        for button in 0..BUTTONS {
+            self.release(out, button, channel);
+        }
+    }
+
+    /// Forgets which buttons are on, for another device: it hears each
+    /// afresh as it's next pressed.
+    pub fn forget(&mut self) {
+        self.on = [false; BUTTONS];
+        self.let_go = [None; BUTTONS];
+    }
+
+    /// Gives button `button` the CC it presses. One that was on lets go of
+    /// the old CC first.
+    pub fn map_button(&mut self, button: usize, map: ButtonMap) {
+        let Some(place) = self.maps.get_mut(button) else { return };
+        let old = std::mem::replace(place, map);
+        if old != map && std::mem::take(&mut self.on[button]) {
+            self.let_go[button] = Some(old);
+        }
+    }
+
+    /// What button `button` presses now.
+    pub fn map(&self, button: usize) -> ButtonMap {
+        self.maps.get(button).copied().unwrap_or_default()
+    }
+
+    /// The buttons that are on, a bit each from the first.
+    pub fn lit(&self) -> u32 {
+        self.on.iter().enumerate().filter(|(_, &on)| on).map(|(button, _)| 1 << button).sum()
+    }
+
+    /// Presses sent so far, wrapping at [`WRAP`].
+    pub fn sent(&self) -> u32 {
+        self.sent
+    }
+}
+
 impl Instrument {
     /// An Instrument sending through the app's bus.
     pub fn new() -> Self {
@@ -240,6 +406,11 @@ impl Instrument {
             PortDefinition::input_with_default(id, name, SignalType::Control, 0.0)
                 .describe("0 to 1 across the knob's travel, sent to the hardware wherever it moves: an LFO here sweeps the real thing")
         }));
+        const BUTTON_IDS: [&str; BUTTONS] = ["button1", "button2", "button3", "button4", "button5", "button6", "button7", "button8"];
+        ports.extend(BUTTON_IDS.iter().zip(BUTTON_NAMES).map(|(&id, name)| {
+            PortDefinition::input_with_default(id, name, SignalType::Gate, 0.0)
+                .describe("Presses the hardware's button while the gate is high, or flips a toggle each time it rises")
+        }));
         let mut parameters = vec![
             ParameterDefinition::choice("port", "Port", PORT_LABELS, 0)
                 .describe("Which device it plays: click the device on the face, or open the Rig (Ctrl+Shift+H) to give each port one"),
@@ -249,11 +420,16 @@ impl Instrument {
             ParameterDefinition::new(id, name, 0.0, 1.0, 0.5, ParameterDisplay::linear(""))
                 .describe("One of the hardware's own controls: right-click to choose which. Sent as it turns, and again with Send all")
         }));
+        const PRESS_IDS: [&str; BUTTONS] = ["press1", "press2", "press3", "press4", "press5", "press6", "press7", "press8"];
+        parameters.extend(PRESS_IDS.iter().zip(PRESS_NAMES).map(|(&id, name)| {
+            ParameterDefinition::toggle(id, name, false).describe("A button held down on the face")
+        }));
         Self {
             out: MidiWriter::on_bus(bus),
             port: 0,
             player: Player::new(),
             knobs: Knobs::new(),
+            buttons: Buttons::new(),
             ports,
             parameters,
         }
@@ -266,11 +442,15 @@ impl Instrument {
     pub const PORT_PRESSURE: usize = 4;
     /// The first knob's jack.
     pub const PORT_SLOT: usize = 5;
+    /// The first button's jack.
+    pub const PORT_BUTTON: usize = Self::PORT_SLOT + SLOTS;
 
     pub const PARAM_PORT: usize = 0;
     pub const PARAM_CHANNEL: usize = 1;
     /// The first knob.
     pub const PARAM_SLOT: usize = 2;
+    /// The first button's press by hand.
+    pub const PARAM_PRESS: usize = Self::PARAM_SLOT + SLOTS;
 
     // Readout slots
 
@@ -288,6 +468,10 @@ impl Instrument {
     pub const READOUT_KNOBS_SENT: usize = Self::READOUT_NOTES_SENT + 1;
     /// Messages the ring had no room for, wrapping at [`WRAP`].
     pub const READOUT_DROPPED: usize = Self::READOUT_KNOBS_SENT + 1;
+    /// The buttons that are on, a bit each from the first.
+    pub const READOUT_BUTTONS: usize = Self::READOUT_DROPPED + 1;
+    /// Presses sent so far, wrapping at [`WRAP`].
+    pub const READOUT_BUTTONS_SENT: usize = Self::READOUT_BUTTONS + 1;
 
     /// Whether note `note` is lit in a readout.
     pub fn note_in(readout: &Readout, note: u8) -> bool {
@@ -298,6 +482,11 @@ impl Instrument {
     /// What knob `slot` holds now.
     pub fn map(&self, slot: usize) -> SlotMap {
         self.knobs.map(slot)
+    }
+
+    /// What button `button` presses now.
+    pub fn button_map(&self, button: usize) -> ButtonMap {
+        self.buttons.map(button)
     }
 }
 
@@ -340,6 +529,12 @@ impl DspModule for Instrument {
         let channel = param(Self::PARAM_CHANNEL).round().clamp(0.0, 15.0) as u8;
         // REAL-TIME SAFE: reading the clock and pushing to a ring
         self.out.begin(context, port);
+        let transport = &context.transport;
+        let playing = transport.beat_position.is_some() && transport.playing;
+        // Buttons let go as the Clock stops, or on the channel they're left
+        if (self.player.playing() && !playing) || channel != self.player.channel() {
+            self.buttons.release_all(&mut self.out, self.player.channel());
+        }
         if port != self.port || channel != self.player.channel() {
             // The new device (or channel) hears every knob afresh, but for
             // those that nudge, which would move its sound
@@ -347,11 +542,11 @@ impl DspModule for Instrument {
         }
         if port != self.port {
             self.knobs.forget();
+            self.buttons.forget();
             self.player.moved();
             self.port = port;
         }
-        let transport = &context.transport;
-        self.player.begin(&mut self.out, channel, transport.beat_position.is_some() && transport.playing);
+        self.player.begin(&mut self.out, channel, playing);
 
         let input = |port: usize| connected_input(inputs, port);
         self.player.notes(&mut self.out, input(Self::PORT_GATE), input(Self::PORT_PITCH), input(Self::PORT_VELOCITY), frames);
@@ -360,12 +555,15 @@ impl DspModule for Instrument {
 
         // The knobs: a cable where one's patched, wherever it moves
         self.knobs.run(&mut self.out, inputs, Self::PORT_SLOT, params, Self::PARAM_SLOT, channel, frames, gap);
+        // The buttons: a gate, or a hand on the face
+        self.buttons.run(&mut self.out, inputs, Self::PORT_BUTTON, params, Self::PARAM_PRESS, channel, frames);
 
         self.out.end(frames);
     }
 
     fn reset(&mut self) {
         self.player.reset(&mut self.out);
+        self.buttons.release_all(&mut self.out, self.player.channel());
         self.knobs.forget();
     }
 
@@ -377,6 +575,10 @@ impl DspModule for Instrument {
         self.knobs.slot_heard(slot, value);
     }
 
+    fn map_button(&mut self, button: usize, map: ButtonMap) {
+        self.buttons.map_button(button, map);
+    }
+
     fn readout(&self, _params: &[f32]) -> Option<Readout> {
         let mut readout = Readout::default();
         let values = &mut readout.values;
@@ -386,6 +588,8 @@ impl DspModule for Instrument {
         values[Self::READOUT_NOTES_SENT] = self.player.notes_sent() as f32;
         values[Self::READOUT_KNOBS_SENT] = self.knobs.sent() as f32;
         values[Self::READOUT_DROPPED] = self.out.dropped() as f32;
+        values[Self::READOUT_BUTTONS] = self.buttons.lit() as f32;
+        values[Self::READOUT_BUTTONS_SENT] = self.buttons.sent() as f32;
         Some(readout)
     }
 }
@@ -459,7 +663,7 @@ mod tests {
         assert_eq!(module.info().category, ModuleCategory::Output);
         assert_eq!(module.ports()[Instrument::PORT_SLOT + 11].name, "Slot 12");
         assert_eq!(module.parameters()[Instrument::PARAM_SLOT + 11].name, "Slot 12");
-        assert_eq!(module.parameters().len(), Instrument::PARAM_SLOT + SLOTS);
+        assert_eq!(module.parameters().len(), Instrument::PARAM_PRESS + BUTTONS);
         const { assert!(Instrument::READOUT_DROPPED < crate::dsp::module_trait::MAX_READOUT) };
         for word in ["hardware", "synth", "drum machine", "MIDI"] {
             assert!(module.info().description.contains(word), "Quick Add finds it under '{word}'");
@@ -627,6 +831,109 @@ mod tests {
         context.transport = TransportState { playing: false, beat_position: Some(0.1), ..TransportState::playing_at(120.0) };
         module.process(&refs, &mut [], &params, &context);
         assert_eq!(bytes(&mut ring), [vec![0x90, 60, 102], vec![0x80, 60, 0]]);
+    }
+
+    fn rec_play() -> ButtonMap {
+        ButtonMap::of(&crate::hardware::Button { name: "Target Trk Rec/Play".into(), cc: 14, mode: crate::hardware::ButtonMode::Momentary, on: 127, off: 0, channel: None })
+    }
+
+    fn hold() -> ButtonMap {
+        ButtonMap::of(&crate::hardware::Button { name: "Portamento".into(), cc: 65, mode: crate::hardware::ButtonMode::Toggle, on: 127, off: 0, channel: None })
+    }
+
+    #[test]
+    fn a_gate_presses_a_momentary_button_on_its_edges() {
+        // The RC-505's Rec/Play: CC 14 127 as the gate rises, 0 as it falls
+        let (mut module, mut ring) = module();
+        let params = defaults(&module);
+        let mut inputs = inputs(&module);
+        assert_eq!(module.ports()[Instrument::PORT_BUTTON].name, "Button 1");
+        assert_eq!(module.ports()[Instrument::PORT_BUTTON].signal_type, SignalType::Gate);
+        assert_eq!(module.parameters()[Instrument::PARAM_PRESS + BUTTONS - 1].name, "Press 8");
+        module.map_button(0, rec_play());
+        inputs[Instrument::PORT_BUTTON] = cable(SignalType::Gate, |i| if (10..40).contains(&i) { 1.0 } else { 0.0 });
+        run(&mut module, &inputs, &params);
+        assert_eq!(messages(&mut ring), [(10, vec![0xB0, 14, 127]), (40, vec![0xB0, 14, 0])]);
+        // Held across blocks: on once, off once
+        inputs[Instrument::PORT_BUTTON] = cable(SignalType::Gate, |i| if i >= 5 { 1.0 } else { 0.0 });
+        run(&mut module, &inputs, &params);
+        inputs[Instrument::PORT_BUTTON] = cable(SignalType::Gate, |_| 1.0);
+        run(&mut module, &inputs, &params);
+        assert_eq!(module.readout(&params).unwrap().values[Instrument::READOUT_BUTTONS], 1.0, "lit");
+        inputs[Instrument::PORT_BUTTON] = cable(SignalType::Gate, |_| 0.0);
+        run(&mut module, &inputs, &params);
+        assert_eq!(messages(&mut ring), [(BLOCK as u64 + 5, vec![0xB0, 14, 127]), (3 * BLOCK as u64, vec![0xB0, 14, 0])], "stamped at the sample, from the top");
+        assert_eq!(module.readout(&params).unwrap().values[Instrument::READOUT_BUTTONS_SENT], 4.0);
+    }
+
+    #[test]
+    fn a_toggle_flips_once_each_rise() {
+        let (mut module, mut ring) = module();
+        let mut params = defaults(&module);
+        let mut inputs = inputs(&module);
+        params[Instrument::PARAM_CHANNEL] = 2.0;
+        module.map_button(1, hold());
+        inputs[Instrument::PORT_BUTTON + 1] = cable(SignalType::Gate, |i| if (10..20).contains(&i) || (30..40).contains(&i) || i >= 50 { 1.0 } else { 0.0 });
+        run(&mut module, &inputs, &params);
+        assert_eq!(messages(&mut ring), [(10, vec![0xB2, 65, 127]), (30, vec![0xB2, 65, 0]), (50, vec![0xB2, 65, 127])]);
+        // Still high: nothing more
+        inputs[Instrument::PORT_BUTTON + 1] = cable(SignalType::Gate, |_| 1.0);
+        run(&mut module, &inputs, &params);
+        assert!(messages(&mut ring).is_empty());
+    }
+
+    #[test]
+    fn a_button_lets_go_when_the_clock_stops_or_its_jack_is_unplugged() {
+        let (mut module, mut ring) = module();
+        let params = defaults(&module);
+        let mut inputs = inputs(&module);
+        module.map_button(0, rec_play());
+        module.map_button(1, hold());
+        inputs[Instrument::PORT_BUTTON] = cable(SignalType::Gate, |_| 1.0);
+        inputs[Instrument::PORT_BUTTON + 1] = cable(SignalType::Gate, |_| 1.0);
+        let mut context = ProcessContext::new(RATE, BLOCK);
+        context.transport = TransportState { beat_position: Some(0.0), ..TransportState::playing_at(120.0) };
+        let refs: Vec<&SignalBuffer> = inputs.iter().collect();
+        module.process(&refs, &mut [], &params, &context);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 14, 127], vec![0xB0, 65, 127]]);
+        // The Clock stops with both on: both let go, and stay let go while held
+        context.transport = TransportState { playing: false, beat_position: Some(0.1), ..TransportState::playing_at(120.0) };
+        module.process(&refs, &mut [], &params, &context);
+        module.process(&refs, &mut [], &params, &context);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 14, 0], vec![0xB0, 65, 0]]);
+        // Pressed again, then unplugged: it lets go, a toggle too
+        inputs[Instrument::PORT_BUTTON] = cable(SignalType::Gate, |i| if i >= 8 { 1.0 } else { 0.0 });
+        inputs[Instrument::PORT_BUTTON + 1] = cable(SignalType::Gate, |i| if i >= 8 { 1.0 } else { 0.0 });
+        run(&mut module, &inputs, &params);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 14, 127], vec![0xB0, 65, 127]]);
+        inputs[Instrument::PORT_BUTTON] = SignalBuffer::unconnected(BLOCK, SignalType::Gate);
+        inputs[Instrument::PORT_BUTTON + 1] = SignalBuffer::unconnected(BLOCK, SignalType::Gate);
+        run(&mut module, &inputs, &params);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 14, 0], vec![0xB0, 65, 0]]);
+        assert_eq!(module.readout(&params).unwrap().values[Instrument::READOUT_BUTTONS], 0.0);
+    }
+
+    #[test]
+    fn a_hand_presses_a_button_and_a_new_cc_lets_go_of_the_old() {
+        let (mut module, mut ring) = module();
+        let mut params = defaults(&module);
+        let inputs = inputs(&module);
+        module.map_button(2, rec_play());
+        params[Instrument::PARAM_PRESS + 2] = 1.0;
+        run(&mut module, &inputs, &params);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 14, 127]]);
+        // Given Stop while down: Rec/Play lets go first
+        let mut stop = rec_play();
+        stop.cc = Some(15);
+        module.map_button(2, stop);
+        run(&mut module, &inputs, &params);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 14, 0]], "the old one let go, the new one waits for a press");
+        params[Instrument::PARAM_PRESS + 2] = 0.0;
+        run(&mut module, &inputs, &params);
+        params[Instrument::PARAM_PRESS + 2] = 1.0;
+        run(&mut module, &inputs, &params);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 15, 127]]);
+        assert_eq!(module.button_map(2).cc, Some(15));
     }
 
     #[test]

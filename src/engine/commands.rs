@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::dsp::primitives::Markers;
 use crate::hardware::dx7::Voice;
-use crate::hardware::{LaneMap, RowMap, SlotMap};
+use crate::hardware::{ButtonMap, LaneMap, RowMap, SlotMap};
 use crate::dsp::{Audition, ListenTo, MeterLevels, OutputLevels, Readout, SampleData, SignalBuffer, Snapshot, MAX_CHANNELS};
 use crate::modules::oscilloscope::SCOPE_BUFFER_SIZE;
 use crate::modules::scenes::SceneKnob;
@@ -185,6 +185,15 @@ pub enum EngineCommand {
         value: u16,
     },
 
+    /// Give an Instrument's button `button` the CC it presses (#474).
+    /// Ignored by other modules.
+    MapButton {
+        /// Target node.
+        node_id: NodeId,
+        button: usize,
+        map: ButtonMap,
+    },
+
     /// Give a Kit's lane `lane` the part it plays (#443). Ignored by other
     /// modules.
     MapLane {
@@ -313,6 +322,8 @@ pub enum PlanMessage {
     MapSlot { node_id: NodeId, slot: usize, map: SlotMap },
     /// Tell a running Instrument's knob where the device's own has turned.
     SlotHeard { node_id: NodeId, slot: usize, value: u16 },
+    /// Give a running Instrument's button the CC it presses.
+    MapButton { node_id: NodeId, button: usize, map: ButtonMap },
     /// Give a running Kit's lane the part it plays.
     MapLane { node_id: NodeId, lane: usize, map: LaneMap },
     /// Give a running Setlist's row what it sends.
@@ -339,6 +350,7 @@ impl PlanMessage {
             | Self::SetMarkers { node_id, .. }
             | Self::MapSlot { node_id, .. }
             | Self::SlotHeard { node_id, .. }
+            | Self::MapButton { node_id, .. }
             | Self::MapLane { node_id, .. }
             | Self::MapRow { node_id, .. }
             | Self::SetFmVoice { node_id, .. }

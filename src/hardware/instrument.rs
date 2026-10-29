@@ -13,16 +13,19 @@
 //! - A Kit's `"slot 1 track"` … (#468): the part a knob turns whatever the
 //!   Track says, likewise (`{"name":"Track 3","note":2,"channel":3}`). A
 //!   knob without one turns the Track's.
+//! - An Instrument's `"button 1"` … `"button 8"` (#474): the button its
+//!   jack presses, likewise (`{"name":"Target Trk Rec/Play","cc":14}`).
 //!
-//! A knob plays its profile's parameter of that name, and a lane its part,
-//! so a CC or a note corrected in the profile reaches every patch. One
+//! A knob plays its profile's parameter of that name, a lane its part and
+//! a button its button, so a CC or a note corrected in the profile reaches
+//! every patch. One
 //! whose profile this computer doesn't know plays what the patch wrote
 //! down: the patch carries enough to play the hardware on its own.
 
 use std::collections::BTreeMap;
 
-use super::{Kind, LaneMap, Parameter, Part, Profile, Profiles, SlotMap};
-use crate::modules::instrument::{SLOTS, SLOT_NAMES};
+use super::{Button, ButtonMap, Kind, LaneMap, Parameter, Part, Profile, Profiles, SlotMap};
+use crate::modules::instrument::{BUTTONS, SLOTS, SLOT_NAMES};
 use crate::modules::kit::LANES;
 
 /// Whether a module plays hardware from a profile: an Instrument or a Kit.
@@ -95,14 +98,46 @@ pub fn written(parameter: &Parameter) -> String {
     serde_json::to_string(parameter).expect("a parameter serializes")
 }
 
-/// The labels that have a node play `profile`, each knob holding one of
-/// its first twelve parameters (an empty text takes a label away).
+/// The labels that have an Instrument play `profile`, each knob holding
+/// one of its first twelve parameters and each button one of its first
+/// eight buttons (an empty text takes a label away).
 pub fn choose(profile: &Profile) -> Vec<(String, String)> {
+    let mut labels = choose_knobs(profile);
+    labels.extend((0..BUTTONS).map(|button| (button_key(button), profile.buttons.get(button).map(written_button).unwrap_or_default())));
+    labels
+}
+
+/// The labels that have a node play `profile`'s knobs.
+fn choose_knobs(profile: &Profile) -> Vec<(String, String)> {
     let mut labels = vec![(PROFILE.to_string(), profile.name.clone())];
     labels.extend((0..SLOTS).map(|slot| (slot_key(slot), profile.parameters.get(slot).map(written).unwrap_or_default())));
     // Every knob turns the Track's, to start with
     labels.extend((0..SLOTS).map(|slot| (slot_track_key(slot), String::new())));
     labels
+}
+
+/// The label that holds button `button`'s button (from 0): "button 1".
+pub fn button_key(button: usize) -> String {
+    format!("button {}", button + 1)
+}
+
+/// The button an Instrument's button `button` presses, if it holds one:
+/// its profile's, where the profile is known and has it, or else as the
+/// patch wrote it.
+pub fn button(labels: &BTreeMap<String, String>, button: usize, profiles: &Profiles) -> Option<Button> {
+    let written: Button = serde_json::from_str(labels.get(&button_key(button))?).ok()?;
+    let profile = profile_name(labels).and_then(|name| profiles.find(name));
+    Some(profile.and_then(|known| known.profile.buttons.iter().find(|b| b.name == written.name)).cloned().unwrap_or(written))
+}
+
+/// What every button presses.
+pub fn button_maps(labels: &BTreeMap<String, String>, profiles: &Profiles) -> [ButtonMap; BUTTONS] {
+    std::array::from_fn(|index| button(labels, index, profiles).map_or(ButtonMap::EMPTY, |b| ButtonMap::of(&b)))
+}
+
+/// The label that has a button press `button`.
+pub fn written_button(button: &Button) -> String {
+    serde_json::to_string(button).expect("a button serializes")
 }
 
 /// The label that holds lane `lane`'s part (from 0): "lane 1".
@@ -171,7 +206,7 @@ pub fn written_part(part: &Part) -> String {
 /// The labels that have a Kit play `profile`: as [`choose`], and each lane
 /// playing one of its first eight parts.
 pub fn choose_kit(profile: &Profile) -> Vec<(String, String)> {
-    let mut labels = choose(profile);
+    let mut labels = choose_knobs(profile);
     labels.extend((0..LANES).map(|lane| (lane_key(lane), profile.parts.get(lane).map(written_part).unwrap_or_default())));
     labels
 }
@@ -312,6 +347,28 @@ mod tests {
         assert!(own_track(&chosen, 0, &profiles).is_none());
         let held = held(&chosen, 0, &profiles).unwrap().parameter;
         assert_eq!(maps_of(&chosen, &profiles, 0), SlotMap::of(&held), "as it was");
+    }
+
+    #[test]
+    fn an_instrument_presses_its_profiles_buttons_by_name() {
+        let profiles = profiles();
+        let rc = &profiles.find("RC-505").unwrap().profile;
+        let chosen = labels(choose(rc));
+        let rec = button(&chosen, 0, &profiles).unwrap();
+        assert_eq!((rec.name.as_str(), rec.cc), ("Target Trk Rec/Play", 14));
+        assert_eq!(button_maps(&chosen, &profiles)[0].cc, Some(14));
+        assert!((rc.buttons.len()..BUTTONS).all(|b| button(&chosen, b, &profiles).is_none()));
+        // The patch wrote Rec/Play down on another CC than the profile's now
+        let mut stale = rec.clone();
+        stale.cc = 1;
+        let mut patch = BTreeMap::from([(PROFILE.to_string(), "rc-505".to_string()), (button_key(0), written_button(&stale))]);
+        assert_eq!(button(&patch, 0, &profiles).unwrap().cc, 14, "the profile's, corrected");
+        // A profile this computer doesn't know: the patch's own
+        patch.insert(PROFILE.to_string(), "Someone's Looper".to_string());
+        assert_eq!(button(&patch, 0, &profiles).unwrap(), stale);
+        // A Kit has no buttons
+        let digitakt = &profiles.find("Digitakt").unwrap().profile;
+        assert!(choose_kit(digitakt).iter().all(|(key, _)| !key.starts_with("button")));
     }
 
     #[test]

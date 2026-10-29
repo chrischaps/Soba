@@ -5102,7 +5102,7 @@
   },
   {
    "id": 40,
-   "module_id": "output.midi",
+   "module_id": "source.instrument",
    "position": [
     3291.0,
     1248.0
@@ -5117,19 +5117,25 @@
      "name": "Channel",
      "type": "Select",
      "value": 0
-    },
-    {
-     "name": "CC 1 #",
-     "type": "Number",
-     "value": 14.0
     }
-   ]
+   ],
+   "labels": {
+    "profile": "RC-505",
+    "button 1": "{\"name\":\"Target Trk Rec/Play\",\"cc\":14,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+    "button 2": "{\"name\":\"Target Trk Stop\",\"cc\":15,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+    "button 3": "{\"name\":\"Target Trk Clear\",\"cc\":16,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+    "button 4": "{\"name\":\"Target Trk Undo/Redo\",\"cc\":17,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+    "button 5": "{\"name\":\"All Start/Stop\",\"cc\":18,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+    "button 6": "{\"name\":\"Tap Tempo\",\"cc\":19,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+    "button 7": "{\"name\":\"Input FX On/Off\",\"cc\":20,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+    "button 8": "{\"name\":\"Track FX On/Off\",\"cc\":21,\"mode\":\"momentary\",\"on\":127,\"off\":0}"
+   }
   },
   {
    "id": 41,
    "module_id": "util.looper",
    "position": [
-    3561.0,
+    3621.0,
     1248.0
    ],
    "parameters": [
@@ -6459,7 +6465,7 @@
    "from_node": 5,
    "from_port": "Gate 5",
    "to_node": 40,
-   "to_port": "CC 1"
+   "to_port": "Button 1"
   },
   {
    "from_node": 1200,
@@ -6753,7 +6759,7 @@
     1208
    ],
    "size": [
-    548,
+    608,
     732
    ],
    "color": "rose"
@@ -6777,7 +6783,7 @@
    "width": 640
   },
   {
-   "text": "**Before you play the room:** in the Rig, set ports A and D to **Clock + Transport**. On the RC-505, assign **CC 14** to Target Track Rec/Play: the Arranger presses it on the Take's downbeat and the Verse's, four bars recorded, then played. Opening the patch sends the MicroFreak its knobs and the volca fm its voice.",
+   "text": "**Before you play the room:** in the Rig, set ports A and D to **Clock + Transport**. On the RC-505, assign **CC 14** to **TGT TR REC/PLAY**: the Arranger presses the Instrument's **Target Trk Rec/Play** on the Take's downbeat and the Verse's, four bars recorded, then played. Opening the patch sends the MicroFreak its knobs and the volca fm its voice.",
    "position": [
     16,
     1892

@@ -500,6 +500,12 @@ pub trait DspModule: Send + 'static {
     /// REAL-TIME SAFE.
     fn slot_heard(&mut self, _slot: usize, _value: u16) {}
 
+    /// Gives an Instrument's button `button` the CC it presses (#474).
+    /// Ignored by other modules.
+    ///
+    /// REAL-TIME SAFE: the map comes by value.
+    fn map_button(&mut self, _button: usize, _map: crate::hardware::ButtonMap) {}
+
     /// Gives a Kit's lane `lane` the part it plays (#443). Ignored by
     /// other modules.
     ///

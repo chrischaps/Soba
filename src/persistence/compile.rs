@@ -99,13 +99,19 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
             });
         }
 
-        // An Instrument's knobs, from its profile or as the patch wrote them,
-        // and a Kit's knobs and lanes
+        // An Instrument's knobs and buttons, from its profile or as the patch
+        // wrote them, and a Kit's knobs and lanes
         if crate::hardware::instrument::plays_a_profile(node.template.module_id()) {
             let labels = &graph[node.graph_id].user_data.labels;
             let maps = crate::hardware::instrument::maps(labels, &crate::hardware::known());
             for (slot, map) in maps.into_iter().enumerate().filter(|(_, map)| !map.is_empty()) {
                 compiled.commands.push(EngineCommand::MapSlot { node_id: engine_node_id, slot, map });
+            }
+            if node.template.module_id() == crate::modules::instrument::ID {
+                let buttons = crate::hardware::instrument::button_maps(labels, &crate::hardware::known());
+                for (button, map) in buttons.into_iter().enumerate().filter(|(_, map)| !map.is_empty()) {
+                    compiled.commands.push(EngineCommand::MapButton { node_id: engine_node_id, button, map });
+                }
             }
             if node.template.module_id() == crate::modules::kit::ID {
                 let lanes = crate::hardware::instrument::lane_maps(labels, &crate::hardware::known());
@@ -272,6 +278,40 @@ mod tests {
         assert_eq!((lanes[1].0, lanes[1].1.note(), lanes[1].1.channel(0)), (1, 4, 4));
         assert!(lanes[1].1.track, "the Digitakt's knobs follow its tracks");
         assert!(compiled.commands.iter().any(|command| matches!(command, EngineCommand::MapSlot { slot: 0, .. })));
+    }
+
+    #[test]
+    fn test_an_instrument_hands_over_its_buttons_as_it_loads() {
+        // The Rig's RC-505 (#474): Rec/Play, by name
+        let mut patch = Patch::new("rig");
+        let mut rc = NodeData::new(1, crate::modules::instrument::ID, (0.0, 0.0));
+        rc.labels.insert("profile".into(), "RC-505".into());
+        rc.labels.insert("button 1".into(), r#"{"name":"Target Trk Rec/Play","cc":14}"#.into());
+        patch.nodes.push(rc);
+        let compiled = compile_patch(&patch).unwrap();
+        let buttons: Vec<(usize, Option<u8>)> = compiled
+            .commands
+            .iter()
+            .filter_map(|command| match command {
+                EngineCommand::MapButton { button, map, .. } => Some((*button, map.cc)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(buttons, [(0, Some(14))]);
+    }
+
+    #[test]
+    fn test_the_rig_presses_the_rc505_by_name() {
+        // The Arranger's fifth lane presses Rec/Play, CC 14, on port D
+        let patch = crate::persistence::patch::patch_from_json(include_str!("../../patches/the-rig.json")).unwrap();
+        let rc = patch.nodes.iter().find(|node| node.labels.get("profile").is_some_and(|name| name == "RC-505")).unwrap();
+        assert_eq!(rc.module_id, crate::modules::instrument::ID);
+        let pressed = patch.connections.iter().find(|c| c.to_node == rc.id).unwrap();
+        assert_eq!((pressed.from_port.as_str(), pressed.to_port.as_str()), ("Gate 5", "Button 1"));
+        let button = crate::hardware::instrument::button(&rc.labels, 0, &crate::hardware::known()).unwrap();
+        assert_eq!((button.name.as_str(), button.cc), ("Target Trk Rec/Play", 14));
+        let compiled = compile_patch(&patch).unwrap();
+        assert!(compiled.commands.iter().any(|command| matches!(command, EngineCommand::MapButton { button: 0, map, .. } if map.cc == Some(14))));
     }
 
     #[test]

@@ -20,6 +20,7 @@ mod compressor_display;
 mod data_types;
 pub mod hints;
 pub mod input_channel_menu;
+mod instrument_buttons;
 mod instrument_face;
 mod kit_face;
 mod setlist_face;

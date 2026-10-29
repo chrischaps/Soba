@@ -91,6 +91,19 @@ impl SynthApp {
                     }
                 }
             }
+            // An Instrument's buttons
+            if node.user_data.module_id == crate::modules::instrument::ID {
+                let had = handle.graph().button_maps(engine_id);
+                for (button, map) in instrument::button_maps(&node.user_data.labels, &profiles).into_iter().enumerate() {
+                    let fresh = match had {
+                        Some(had) => had[button] != map,
+                        None => !map.is_empty(),
+                    };
+                    if fresh {
+                        sends.push(EngineCommand::MapButton { node_id: engine_id, button, map });
+                    }
+                }
+            }
             let had = handle.graph().slot_maps(engine_id);
             let maps = instrument::maps(&node.user_data.labels, &profiles);
             for (slot, map) in maps.into_iter().enumerate().take(SLOTS) {

@@ -524,6 +524,12 @@ impl GraphPlan {
                 }
                 None
             }
+            PlanMessage::MapButton { node_id, button, map } => {
+                if let Some(module) = self.nodes.iter_mut().find(|node| node.node_id == node_id).and_then(|node| node.module.as_mut()) {
+                    module.map_button(button, map);
+                }
+                None
+            }
             PlanMessage::MapLane { node_id, lane, map } => {
                 if let Some(module) = self.nodes.iter_mut().find(|node| node.node_id == node_id).and_then(|node| node.module.as_mut()) {
                     module.map_lane(lane, map);

@@ -1796,15 +1796,16 @@ impl NodeDataTrait for SynthNodeData {
         crate::app::theme::title_text_style()
     }
 
-    /// The Mixer lays its jacks out beside its channel rows, and a module
-    /// that hears MIDI its MIDI jack on its title bar (#479).
+    /// The Mixer lays its jacks out beside its channel rows, a module that
+    /// hears MIDI its MIDI jack on its title bar (#479), and an Instrument
+    /// its button jacks beside its buttons (#474).
     fn places_port(
         &self,
         node_id: egui_node_graph2::NodeId,
         graph: &egui_node_graph2::Graph<Self, Self::DataType, Self::ValueType>,
         param: egui_node_graph2::AnyParameterId,
     ) -> bool {
-        if super::midi_device::is_midi_jack(node_id, graph, param) {
+        if super::midi_device::is_midi_jack(node_id, graph, param) || super::instrument_buttons::places(node_id, graph, param) {
             return true;
         }
         if self.display != NodeDisplay::MixerStrips {

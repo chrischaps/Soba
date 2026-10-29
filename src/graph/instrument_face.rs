@@ -16,6 +16,10 @@
 //!   device, a knob follows (#444); under a cable, a faint tick on its rim
 //!   shows where the device's was turned to.
 //!
+//! - **Buttons** (#474), under the knobs, for a device that has them: a
+//!   row each, its Gate jack beside it (see [`super::instrument_buttons`]).
+//!   One that's all buttons (the RC-505) shows them in place of the knobs.
+//!
 //! A Kit (#443) wears the same face, with its lanes' pads between the
 //! header and the knobs (see [`super::kit_face`]), and lists only kits. On
 //! a device that takes CCs a track a channel, a knob's menu can keep it on
@@ -101,6 +105,8 @@ pub fn jack_name(data: &SynthNodeData, param_name: &str) -> Option<String> {
         if let Some(name) = super::kit_face::jack_name(data, param_name) {
             return Some(name);
         }
+    } else if let Some(name) = super::instrument_buttons::jack_name(data, param_name) {
+        return Some(name);
     }
     let slot = slot_of(param_name)?;
     instrument::held(&data.labels, slot, &hardware::known()).map(|held| held.parameter.name)
@@ -196,6 +202,13 @@ pub fn instrument_face(
         responses.extend(super::kit_face::lanes(data, ui, node_id, graph, user_state, width, CELL, z));
     }
 
+    // A device that's all buttons shows them in place of its knobs
+    if super::instrument_buttons::knobless(graph, node_id) {
+        super::instrument_buttons::hide_knob_jacks(ui, node_id, graph);
+        responses.extend(super::instrument_buttons::buttons(data, ui, node_id, graph, user_state, width, z));
+        return responses;
+    }
+
     // The knobs, each centred in a cell wide enough for its name
     ui.add_space(6.0 * z);
     let own_tracks = own_tracks(data, node_id, graph);
@@ -212,6 +225,9 @@ pub fn instrument_face(
         if let Some(own) = &own_tracks[index] {
             track_tag(ui, node_id, index, own, Pos2::new(centre, grid.top() + (row as f32 * ROW + TAG_Y) * z), z);
         }
+    }
+    if data.module_id == crate::modules::instrument::ID {
+        responses.extend(super::instrument_buttons::buttons(data, ui, node_id, graph, user_state, width, z));
     }
     responses
 }
@@ -272,6 +288,7 @@ fn header(
     } else {
         (Instrument::READOUT_LIVE, Instrument::READOUT_NOTES_SENT, Instrument::READOUT_KNOBS_SENT)
     };
+    let presses = if is_kit { 0 } else { values[Instrument::READOUT_BUTTONS_SENT] as u32 };
     let live = values[live_at] > 0.5;
     let status = live.then(|| MIDI.status(port));
     let device = MIDI.chosen(port);
@@ -289,8 +306,8 @@ fn header(
     };
     let lamp_at = rect.left_top() + Vec2::new(7.0 * z, 7.0 * z);
     if status == Some(PortStatus::Sending) {
-        // A flash as a note or a knob goes out
-        let sent = values[notes_at] as u32 * 4096 + values[knobs_at] as u32;
+        // A flash as a note, a knob or a button goes out
+        let sent = (values[notes_at] as u32 * 4096 + values[knobs_at] as u32) * 4096 + presses;
         let flash = flash_of(ui, Id::unique(("instrument_flash", node_id)), sent, now, FLASH);
         painter.circle_filled(lamp_at, (4.0 + 2.0 * flash) * z, lamp.gamma_multiply(0.12 + 0.3 * flash));
         if flash > 0.0 {
@@ -414,6 +431,7 @@ fn profile_menu(
                 let mut labels = vec![(instrument::PROFILE.to_string(), String::new())];
                 labels.extend((0..SLOTS).map(|slot| (instrument::slot_key(slot), String::new())));
                 labels.extend((0..SLOTS).map(|slot| (instrument::slot_track_key(slot), String::new())));
+                labels.extend((0..crate::modules::instrument::BUTTONS).map(|button| (instrument::button_key(button), String::new())));
                 if is_kit {
                     labels.extend((0..LANES).map(|lane| (instrument::lane_key(lane), String::new())));
                 }

@@ -9,6 +9,7 @@
 //! shipped profile's name takes its place.
 
 pub mod breeding;
+pub mod button;
 pub mod dx7;
 pub mod garden;
 pub mod hearing;
@@ -25,6 +26,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 pub use profile::{Address, Button, ButtonMode, Clock, Curve, Kind, Naming, Parameter, Part, Profile, Programs, Step, Voices};
+pub use button::ButtonMap;
 pub use lane::LaneMap;
 pub use setlist::RowMap;
 pub use slot::SlotMap;

@@ -6,19 +6,20 @@ An Instrument is a piece of hardware as a node. Choose **MicroFreak** on its fac
 
 That last part matters most for gear that can't store a sound. A volca forgets its sound when you switch it off. With an Instrument, **the patch becomes its preset memory**: open the patch and Soba sends every knob back to the device.
 
-The Instrument also plays notes, as [MIDI Out](../output/midi-out.md) does, from a **Gate** and a **Pitch** cable. It makes no sound of its own: the hardware does.
+The Instrument also plays notes, as [MIDI Out](../output/midi-out.md) does, from a **Gate** and a **Pitch** cable, and presses the device's [buttons](#buttons): an RC-505's **Rec/Play**, a FANTOM's **Hold**. It makes no sound of its own: the hardware does.
 
 ## Choosing what it plays
 
 Click **Choose an instrument** on the face (or the name that's there) for the list of [profiles](../../hardware/instruments.md): the ones that ship with Soba, then your own. Choosing one:
 
 - gives each knob one of the profile's parameters, its first twelve in order;
+- gives each button one of its buttons, its first eight in order;
 - sets each knob to the parameter's default, if the maker's chart gives one, or else to the middle;
 - sets **Ch** to the device's factory channel;
 - sets **Port** to the port whose device looks like it (a port playing "MicroFreak MIDI" for the MicroFreak), if [the Rig](../../getting-started/interface-overview.md#the-rig) has one;
 - and sends every knob to the device.
 
-It's one step to undo. **None**, at the bottom of the list, empties the knobs.
+It's one step to undo. **None**, at the bottom of the list, empties the knobs and the buttons.
 
 Or skip the face: in [Quick add](../../getting-started/interface-overview.md#quick-add), type a device's name or its maker (`freak`, `korg`) and choose **Instrument · MicroFreak**. The node arrives already playing it, chosen just as above, and one undo takes it away again.
 
@@ -32,8 +33,9 @@ Or skip the face: in [Quick add](../../getting-started/interface-overview.md#qui
 | **Bend** | Control (Orange) | -1 to 1, sent as Pitch Bend wherever it moves. Unplugged, it springs back to the middle |
 | **Pressure** | Control (Orange), poly | 0 to 1, sent as aftertouch: Channel Pressure from a one-channel cable, each note's own from a poly cable |
 | **Cutoff**, **Resonance**… (one per knob) | Control (Orange) | 0 to 1 across the knob's travel. Patched, the cable turns the knob, and the knob follows it |
+| **Target Trk Rec/Play**, **Hold**… (one per button) | Gate (Green) | Presses its button while the gate is high, or flips a toggle each time it rises. Beside its button, under the knobs |
 
-Each knob's jack is named for the parameter the knob holds. An empty knob's jack is called **Slot 1** to **Slot 12**, as it is in the patch file. Every input is optional. The module has no outputs.
+Each knob's jack is named for the parameter the knob holds. An empty knob's jack is called **Slot 1** to **Slot 12**, as it is in the patch file. Each button's jack is named for its button, and is **Button 1** to **Button 8** in the patch file. A button that presses nothing has no jack. Every input is optional. The module has no outputs.
 
 ## Parameters
 
@@ -43,6 +45,8 @@ Each knob's jack is named for the parameter the knob holds. An empty knob's jack
 | **Ch** | 1 – 16 | 1 | The MIDI channel the notes go out on, and every knob without a channel of its own |
 | **Slot 1** … **Slot 12** | 0 – 1 | 0.5 | Each knob's travel. The knob shows what it sends, as the device names it |
 
+**Press 1** to **Press 8**, in the patch file, are the buttons held down on the face. They have no control of their own.
+
 ## The display
 
 - **The lamp and device**, top left. Green while messages are going out, and it flashes with each one. Amber while the port has no device, or its device is unplugged. Red when the device won't open. **Click the device's name** to choose another. The channel is at the right.
@@ -50,9 +54,27 @@ Each knob's jack is named for the parameter the knob holds. An empty knob's jack
 - **Send all**, at the right, sends every knob to the device again.
 - **Twelve knobs**, four to a row. Each is named for its parameter and coloured by its group: an oscillator's blue, a filter's teal, an envelope's orange, an effect's cyan. Each reads out what it sends, as the device names it: **Saw**, **+12**, **74**.
 
+- **Buttons**, under the knobs, one to a row, for a device that has them. See [Buttons](#buttons).
+
 **Right-click a knob** to change what it holds. **Holds** lists the profile's parameters by group. **Nothing** empties the knob. The menu's heading says where the knob sends: **Cutoff · CC 23**, or **Delay Time · CC 85 ch 9** for a parameter on a channel of its own.
 
 The menu's **Value** field is in the device's numbers too, so you can send an exact value: type **100** into Cutoff and CC 23 goes out at 100. For a parameter with named values, type the name (**Fall 2**, in any case, or just enough of its start to pick one out) or choose it from **Steps**. For one that nudges, type an offset: **+12** or **−5**. **Reset to** names the chart's default, and double-clicking the knob goes there too.
+
+## Buttons
+
+Some of a device's controls are buttons rather than knobs: a looper's **Rec/Play**, a synth's **Hold**. A profile lists them with the CC each sends, and whether it's **momentary** or a **toggle**. The Instrument gives each of the first eight a row under its knobs, with a Gate jack beside it named for the button.
+
+- **A momentary button** is pressed while its gate is high: its on value (usually 127) goes out as the gate rises, and its off value (usually 0) as it falls. Patch a lane of an [Arranger](../utilities/arranger.md) into the RC-505's **Target Trk Rec/Play**, and the lane's gate presses it.
+- **A toggle** flips each time its gate rises: on, then off at the next rise. The FANTOM-06's **Portamento** is one.
+- **Click a button** to press it by hand. It's held while you hold the mouse down, and a toggle flips once a click.
+- **It lights while it's on**, as a [Pad](./pad.md) does: a momentary button while it's held, a toggle while it's flipped on. The row's right end says what it sends: **CC 14**, or **CC 65 · toggle**.
+- **It lets go.** When the Clock stops, a button that's on is turned off, a toggle too, so a looper isn't left recording or a Hold left down. One still held stays off until its gate falls and rises again. Unplugging its jack lets it go too, as does moving the Instrument to another channel.
+
+**Right-click a button** to change what it presses. **Presses** lists the profile's buttons, all of them: the RC-505mkII has thirteen. **Nothing** empties it.
+
+A device that's all buttons and no knobs, like either RC-505, shows its buttons in place of the knobs, and its empty knobs' jacks go too.
+
+Each button presses its profile's button of that name, as each knob plays its profile's parameter, so a CC corrected in the profile reaches the patch. A button sends only as it changes: **Send all** doesn't press anything.
 
 ## Send all
 
@@ -91,16 +113,19 @@ A stepped knob goes to the step nearest the value it hears. Knobs that nudge (th
 
 **Knobs.** A knob sends when you turn it. A patched knob sends wherever its cable moves within a block, up to a thousand times a second, so an LFO sweeps a filter as smoothly as the device can follow. A stepped knob (an oscillator type, an arpeggio mode) shares its travel evenly among its steps, and sends each step's own value from the maker's chart, so it lands on the right step whatever numbers the device uses.
 
+**Buttons.** A button's press goes out on the sample its gate rises, as a note does, and only when it changes: a gate held high for a minute sends one on and one off.
+
 **Notes.** Notes, bend and pressure play as [MIDI Out](../output/midi-out.md#how-it-works) plays them: in time with the sound, chords from poly cables, and no stuck notes. When the Clock stops, a channel changes or the port changes, every note is let go.
 
 **A new port** hears every knob afresh: move the Instrument to port B, and port B's device gets the whole sound.
 
-**The profile is read, not copied.** Each knob plays its profile's parameter of that name. Correct a CC in your profile and every patch that uses it sends the corrected one. The patch also writes each knob's parameter down, so it still plays on a computer that doesn't have the profile. Its name shows with a **?**, and its knobs send what the patch wrote. Add the profile to that computer's **Documents/Soba/Instruments** folder and it reads the profile again.
+**The profile is read, not copied.** Each knob plays its profile's parameter of that name, and each button its button. Correct a CC in your profile and every patch that uses it sends the corrected one. The patch also writes each knob's parameter down, so it still plays on a computer that doesn't have the profile. Its name shows with a **?**, and its knobs send what the patch wrote. Add the profile to that computer's **Documents/Soba/Instruments** folder and it reads the profile again.
 
 ## Playing it
 
 - **A filter sweep on real hardware.** An [LFO](../modulation/lfo.md), slow, into **Cutoff**. Turn the LFO's **Rate** up for a wobble.
 - **A sequencer playing the device.** A [Clock](../modulation/clock.md) into a [Step Sequencer](../utilities/sequencer.md), its **Gate** and **Pitch** into the Instrument's. A second sequencer lane into **Osc Type** changes the oscillator step by step.
+- **A looper that records on the bar.** Choose **RC-505**, and patch an [Arranger](../utilities/arranger.md) lane's gate into **Target Trk Rec/Play**: a one-bar gate at the top of the verse starts recording, and the next one plays it back. [The Rig](../../recipes/the-rig.md) does this.
 - **Saved sounds for a volca.** Choose **volca fm**, set the knobs, and save the patch. Next time, open the patch and the volca plays that sound again.
 
 ## Related

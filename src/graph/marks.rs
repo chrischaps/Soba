@@ -31,6 +31,7 @@ pub const FACE: &[(&str, &[&str])] = &[
     ("seq.chord", &["follow", "step:<n>"]),
     ("util.looper", &["pedal:Rec", "pedal:Stop", "pedal:Undo", "pedal:Clear"]),
     ("seq.arranger", &["section:<n>", "cell:<lane>:<section>"]),
+    ("source.instrument", &["button:<n>"]),
 ];
 
 /// The names a module of this kind's face marks.

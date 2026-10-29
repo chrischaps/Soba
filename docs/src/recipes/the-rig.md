@@ -14,7 +14,7 @@ It uses each way Soba has of playing hardware. See [Playing Hardware](../hardwar
 - **[Setlist](../modules/midi/setlist.md): the song changes the room.** Each section names the Digitakt's pattern, sent half a second before its bar line so the Digitakt queues it and starts it on the downbeat. At the top it puts the RC-505 on phrase memory 1.
 - **[Instrument](../modules/midi/instrument.md): a synth as a node.** The MicroFreak's knobs are on the node by name. A step sequencer plays it, and an LFO is patched into its **Cutoff** jack.
 - **[FM Voice](../modules/midi/fm-voice.md): the patch is the volca's memory.** It holds the volca fm's whole DX7 voice and sends it when the patch opens. A second Instrument plays the volca's notes.
-- **[MIDI Out](../modules/output/midi-out.md) presses a button.** An [Arranger](../modules/utilities/arranger.md) lane hits **CC 14** on the RC-505's Rec/Play, once to record and once to play.
+- **[Instrument](../modules/midi/instrument.md#buttons) presses a button.** The RC-505 is an Instrument too, all buttons. An [Arranger](../modules/utilities/arranger.md) lane's gate presses its **Target Trk Rec/Play**, once to record and once to play.
 - **Clock on the ports.** Soba's [Clock](../modules/modulation/clock.md) sends the tempo, Start and Stop to the Digitakt and the RC-505, so their own patterns and loops keep time with the song. Its **Source** is **Auto**: when a device starts playing, Soba follows it.
 
 ## The room
@@ -24,7 +24,7 @@ It uses each way Soba has of playing hardware. See [Playing Hardware](../hardwar
 | **A** | Digitakt | Nothing plays it: it plays its own patterns. The Setlist chooses them | **Stand-in drums**: four Drums from a Trigger Sequencer, a pattern for each section |
 | **B** | MicroFreak | An Instrument plays a step sequencer's line and turns eleven of its knobs. A two-bar LFO rides **Cutoff** between a third and three quarters open | **Stand-in synth**: a saw through a ladder filter that the same LFO opens |
 | **C** | volca fm | The FM Voice sends its voice, SOFT KEYS. An Instrument plays three-note chords in the Chorus | **Stand-in keys**: the [Electric Piano](../concepts/groups.md#the-library) from the library, playing the same chords |
-| **D** | RC-505 | A MIDI Out presses Rec/Play on the Take's downbeat and again on the Verse's | A [Looper](../modules/utilities/looper.md), pressed at the same moments, taking the same four bars of the MicroFreak |
+| **D** | RC-505 | An Instrument presses its **Target Trk Rec/Play** on the Take's downbeat and again on the Verse's | A [Looper](../modules/utilities/looper.md), pressed at the same moments, taking the same four bars of the MicroFreak |
 
 The MicroFreak's Instrument leaves **Osc Type** off its knobs. Whichever engine you've chosen on the MicroFreak, the patch shapes it rather than replacing it. The volca's Instrument leaves off **Algorithm** and the LFO, because the FM Voice already sets them. Its envelope knobs sit in the middle, which leaves the voice as it is, and its arpeggiator is off.
 

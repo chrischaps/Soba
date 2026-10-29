@@ -1261,7 +1261,7 @@
     "source.instrument": {
       "category": "Output",
       "color": "#7e57c2",
-      "height": 678.0,
+      "height": 822.0,
       "inputs": [
         {
           "name": "Pitch",
@@ -1330,6 +1330,38 @@
         {
           "name": "Slot 12",
           "type": "Control"
+        },
+        {
+          "name": "Button 1",
+          "type": "Gate"
+        },
+        {
+          "name": "Button 2",
+          "type": "Gate"
+        },
+        {
+          "name": "Button 3",
+          "type": "Gate"
+        },
+        {
+          "name": "Button 4",
+          "type": "Gate"
+        },
+        {
+          "name": "Button 5",
+          "type": "Gate"
+        },
+        {
+          "name": "Button 6",
+          "type": "Gate"
+        },
+        {
+          "name": "Button 7",
+          "type": "Gate"
+        },
+        {
+          "name": "Button 8",
+          "type": "Gate"
         }
       ],
       "name": "Instrument",

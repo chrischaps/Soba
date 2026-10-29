@@ -752,6 +752,7 @@ mod tests {
                         PlanMessage::SetMarkers { .. } => "markers",
                         PlanMessage::MapSlot { .. } => "slot",
                         PlanMessage::SlotHeard { .. } => "heard",
+                        PlanMessage::MapButton { .. } => "button",
                         PlanMessage::MapLane { .. } => "lane",
                         PlanMessage::MapRow { .. } => "row",
                         PlanMessage::SetFmVoice { .. } => "fm voice",

@@ -47,7 +47,7 @@ Three things make a device feel like part of the patch:
 
 An [Arranger](../modules/utilities/arranger.md) knows when the verse ends. A [Setlist](../modules/midi/setlist.md) passes that on to the room. Each section can move the Digitakt to another pattern, the FANTOM to another scene, the RC-505 to another memory. A row can go a little ahead of the bar line, for gear that queues its next pattern, so every device changes on the downbeat.
 
-The Arranger's lanes can press buttons too. A lane's gate into a MIDI Out's CC jack presses whatever that CC is assigned to on the device, such as the RC-505's Rec/Play.
+The Arranger's lanes can press buttons too. A lane's gate into an Instrument's button presses it by name, such as the RC-505's **Target Trk Rec/Play** (see [Buttons](../modules/midi/instrument.md#buttons)). For a device without a profile, a lane's gate into a MIDI Out's CC jack presses whatever that CC is assigned to.
 
 ## 5. Wire the room
 

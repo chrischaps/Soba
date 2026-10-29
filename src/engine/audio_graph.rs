@@ -25,8 +25,8 @@ use crate::engine::graph_plan::{
 use crate::engine::spectrum_tap::SpectrumTap;
 use crate::hardware::dx7::Voice;
 use crate::hardware::setlist::{ROWS, SECTIONS};
-use crate::hardware::{LaneMap, RowMap, SlotMap};
-use crate::modules::instrument::SLOTS;
+use crate::hardware::{ButtonMap, LaneMap, RowMap, SlotMap};
+use crate::modules::instrument::{BUTTONS, SLOTS};
 use crate::modules::kit::LANES;
 use crate::modules::scenes::SceneKnob;
 
@@ -190,6 +190,8 @@ pub struct AudioGraph {
     scenes: HashMap<NodeId, Vec<SceneKnob>>,
     /// What each Instrument's knobs were last given to send (#442).
     slots: HashMap<NodeId, [SlotMap; SLOTS]>,
+    /// What each Instrument's buttons were last given to press (#474).
+    buttons: HashMap<NodeId, [ButtonMap; BUTTONS]>,
     /// What each Kit's lanes were last given to play (#443).
     lanes: HashMap<NodeId, [LaneMap; LANES]>,
     /// What each Setlist's rows were last given to send (#445).
@@ -216,6 +218,7 @@ impl AudioGraph {
             take_handoffs: Vec::new(),
             scenes: HashMap::new(),
             slots: HashMap::new(),
+            buttons: HashMap::new(),
             lanes: HashMap::new(),
             rows: HashMap::new(),
             fm_voices: HashMap::new(),
@@ -364,6 +367,7 @@ impl AudioGraph {
         self.take_handoffs.retain(|handoff| handoff.node_id() != node_id);
         self.scenes.remove(&node_id);
         self.slots.remove(&node_id);
+        self.buttons.remove(&node_id);
         self.lanes.remove(&node_id);
         self.rows.remove(&node_id);
         self.fm_voices.remove(&node_id);
@@ -545,6 +549,7 @@ impl AudioGraph {
         self.take_handoffs.clear();
         self.scenes.clear();
         self.slots.clear();
+        self.buttons.clear();
         self.lanes.clear();
         self.fm_voices.clear();
     }
@@ -678,6 +683,29 @@ impl AudioGraph {
             None => self.take_handoffs.push(PlanMessage::SlotHeard { node_id, slot, value }),
         }
         true
+    }
+
+    /// Gives an Instrument's button `button` the CC it presses (#474), as
+    /// [`map_slot`](Self::map_slot) gives a knob its parameter.
+    ///
+    /// Returns false if there is no such module.
+    pub fn map_button(&mut self, node_id: NodeId, button: usize, map: ButtonMap) -> bool {
+        let Some(spec) = self.nodes.get_mut(&node_id) else {
+            return false;
+        };
+        if let Some(place) = self.buttons.entry(node_id).or_insert([ButtonMap::EMPTY; BUTTONS]).get_mut(button) {
+            *place = map;
+        }
+        match spec.fresh.as_mut() {
+            Some(module) => module.map_button(button, map),
+            None => self.take_handoffs.push(PlanMessage::MapButton { node_id, button, map }),
+        }
+        true
+    }
+
+    /// What an Instrument's buttons were last given to press.
+    pub fn button_maps(&self, node_id: NodeId) -> Option<&[ButtonMap; BUTTONS]> {
+        self.buttons.get(&node_id)
     }
 
     /// Gives a Kit's lane `lane` the part it plays (#443), as
@@ -958,6 +986,7 @@ impl AudioGraph {
             EngineCommand::SetMarkers { node_id, markers } => self.set_markers(node_id, markers),
             EngineCommand::MapSlot { node_id, slot, map } => self.map_slot(node_id, slot, map),
             EngineCommand::SlotHeard { node_id, slot, value } => self.slot_heard(node_id, slot, value),
+            EngineCommand::MapButton { node_id, button, map } => self.map_button(node_id, button, map),
             EngineCommand::MapLane { node_id, lane, map } => self.map_lane(node_id, lane, map),
             EngineCommand::MapRow { node_id, section, row, map } => self.map_row(node_id, section, row, map),
             EngineCommand::SetFmVoice { node_id, voice } => self.set_fm_voice(node_id, voice),

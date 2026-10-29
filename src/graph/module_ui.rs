@@ -639,6 +639,8 @@ static MODULE_UI: &[ModuleUi] = &[
             knob("Slot 12"),
         ],
         labels: &[("Channel", "Ch")],
+        // Its buttons are pressed on its face (#474)
+        hidden: &["Press *"],
         display: NodeDisplay::InstrumentFace,
         knobs_per_row: 4,
         ..ModuleUi::DEFAULT

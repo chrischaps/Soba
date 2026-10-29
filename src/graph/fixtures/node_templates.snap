@@ -3244,6 +3244,22 @@ in   Slot 9             Control  ConnectionOrConstant inline=true  num 0.5 [0..1
 in   Slot 10            Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
 in   Slot 11            Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
 in   Slot 12            Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
+in   Button 1           Gate     ConnectionOnly       inline=true  port
+in   Button 2           Gate     ConnectionOnly       inline=true  port
+in   Button 3           Gate     ConnectionOnly       inline=true  port
+in   Button 4           Gate     ConnectionOnly       inline=true  port
+in   Button 5           Gate     ConnectionOnly       inline=true  port
+in   Button 6           Gate     ConnectionOnly       inline=true  port
+in   Button 7           Gate     ConnectionOnly       inline=true  port
+in   Button 8           Gate     ConnectionOnly       inline=true  port
+in   Press 1            Control  ConstantOnly         inline=false toggle false ""
+in   Press 2            Control  ConstantOnly         inline=false toggle false ""
+in   Press 3            Control  ConstantOnly         inline=false toggle false ""
+in   Press 4            Control  ConstantOnly         inline=false toggle false ""
+in   Press 5            Control  ConstantOnly         inline=false toggle false ""
+in   Press 6            Control  ConstantOnly         inline=false toggle false ""
+in   Press 7            Control  ConstantOnly         inline=false toggle false ""
+in   Press 8            Control  ConstantOnly         inline=false toggle false ""
 knob Slot 1             "Slot 1" Exposed
 knob Slot 2             "Slot 2" Exposed
 knob Slot 3             "Slot 3" Exposed
