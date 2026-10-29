@@ -31,7 +31,11 @@ Steps, in order (--only picks some):
     images     the recipe, manual and module pictures; stale ones are re-shot
                and pushed to master as a [Docs] commit of their own. Only the
                pictures something they show has changed since are filmed,
-               several at once (tools/showcase/picture_check.py)
+               several at once (tools/showcase/picture_check.py). They film
+               in a 3600x2100 px window: first one still says whether the
+               screen can hold it, and if it can't, the step is skipped,
+               saying so in the report, rather than failing every picture
+               (#495)
 
 A ticket checks only what it touched (CLAUDE.md, step 4) and pushes, and
 GitHub CI runs the full cargo test on every push. This is the rest: the
@@ -50,7 +54,8 @@ a stable too old for egui failed every step for two nights (#417).
 
 A failing step opens an issue labelled nightly-failure ("Nightly: <step>
 fails on master"), or comments on the one already open; a step that passes
-again closes it. The report and each step's log go to target/nightly/<stamp>/
+again closes it. A skipped step does neither, and doesn't keep a run from
+being green. The report and each step's log go to target/nightly/<stamp>/
 in the main checkout. Exits 1 if any step failed.
 
 The perf baseline is soba-nightly-perf.json in the git directory, beside the
@@ -68,6 +73,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -76,6 +82,7 @@ CAPTURE_STEPS = {"layout", "zoom", "images"}
 LABEL = "nightly-failure"
 STEP_TIMEOUT = 3 * 60 * 60
 LOG_TAIL = 40
+VERDICT = {True: "ok", False: "FAILED", None: "skipped"}
 WINDOWS = os.name == "nt"
 
 # The examples perf times, and how each is played: the heaviest songs, and a
@@ -102,6 +109,13 @@ BENCH_LINE = re.compile(r"^bench: ([0-9.]+) s ")
 # .llvm.<hash> symbols they name in each other (#498)
 STALE_BUILD = re.compile(r"(unresolved external symbol|undefined reference to).*\.llvm\.\d+")
 CI_TOOLCHAIN = re.compile(r"^\s*RUST_TOOLCHAIN:\s*['\"]?([\w.-]+)", re.MULTILINE)
+# The window the pictures film in, in pixels at 2 per point: SIZE in
+# recipe_images.py, module_images.py and manual_images.py. Layout (960x540)
+# and zoom (1920x1080) fit any screen worth filming on
+PICTURE_WINDOW = (3600, 2100)
+PICTURE_PPP = 2.0
+# What the capture says when Windows held its window smaller than asked
+CLAMPED = re.compile(r"frame is (\d+)x(\d+), expected \d+x\d+")
 
 
 def run(*args, check=True, cwd=None):
@@ -279,6 +293,41 @@ def push_pictures(worktree, short, log):
     return f"re-shot {', '.join(names)}, but the push was rejected three times; nothing pushed"
 
 
+def screen_size():
+    """The primary screen in physical pixels, whatever its scaling, or None where it can't tell."""
+    if not WINDOWS:
+        return None
+    import ctypes
+    user32, gdi32 = ctypes.windll.user32, ctypes.windll.gdi32
+    dc = user32.GetDC(None)
+    try:
+        return gdi32.GetDeviceCaps(dc, 118), gdi32.GetDeviceCaps(dc, 117)  # DESKTOPHORZRES, DESKTOPVERTRES
+    finally:
+        user32.ReleaseDC(None, dc)
+
+
+def window_too_big(worktree, log):
+    """Films one still in the pictures' window. Returns why the screen can't hold it, or None if it
+    can, or if the still failed some other way: then the step runs and fails saying how (#495)."""
+    w, h = PICTURE_WINDOW
+    soba = worktree / "target" / "capture" / "release" / ("soba.exe" if WINDOWS else "soba")
+    with tempfile.TemporaryDirectory() as out:
+        script = Path(out) / "probe.txt"
+        script.write_text("0.0 still probe\n0.1 end\n")
+        code = step_run([soba, "--capture", script, "--out", out, "--fps", "10",
+                         "--size", f"{w}x{h}", "--ppp", PICTURE_PPP], log, worktree, None)
+        if code == 0 and (Path(out) / "probe.ppm").exists():
+            return None
+    clamped = CLAMPED.findall(log.read_text(encoding="utf-8", errors="replace"))
+    if not clamped:
+        return None
+    screen = screen_size()
+    on = f"the screen is {screen[0]}x{screen[1]} px" if screen else "this screen"
+    got = "x".join(clamped[-1])
+    return (f"{on}, too small for the pictures' {w}x{h} px window and its title bar"
+            f" (the window came out {got}); film them with a bigger display attached")
+
+
 def only_pictures_since(green, sha, checkout):
     """Whether every file changed from the green commit to sha is a picture in docs/src/images.
 
@@ -397,7 +446,7 @@ def judge_perf(timings, baseline_path, log, busy=None):
 
 
 def run_steps(steps, worktree, logs, push, perf_baseline=None, rebaseline=False):
-    """Each step's result: (passed, minutes, note)."""
+    """Each step's result: (passed, minutes, note). Passed is None for a step skipped."""
     results = {}
     toolchain = pinned_toolchain(worktree)
     if toolchain:
@@ -455,6 +504,8 @@ def run_steps(steps, worktree, logs, push, perf_baseline=None, rebaseline=False)
             passed = step_run([python, showcase / "zoom_check.py"], log, worktree, env) == 0
             steps_in = [line for line in tail(log).splitlines() if line.startswith("Steps in: ")]
             note = steps_in[-1].lower() if steps_in else ""
+        elif step == "images" and (skip := window_too_big(worktree, log)):
+            passed, note = None, skip
         elif step == "images":
             # Every tool runs even when one fails, so one bad capture can't leave the rest stale
             tools = ["recipe_images.py", "module_images.py", "manual_images.py"]
@@ -469,7 +520,7 @@ def run_steps(steps, worktree, logs, push, perf_baseline=None, rebaseline=False)
             if failed:
                 note = "; ".join(filter(None, [f"{', '.join(failed)} failed", note]))
         results[step] = (passed, (time.monotonic() - start) / 60, note)
-        print(f"  {step:9} {'ok' if passed else 'FAILED'} in {results[step][1]:.1f} min  {note}".rstrip(), flush=True)
+        print(f"  {step:9} {VERDICT[passed]} in {results[step][1]:.1f} min  {note}".rstrip(), flush=True)
     return results
 
 
@@ -486,6 +537,8 @@ def file_issues(results, sha, logs, report):
                    (line.split("\t", 1) for line in listed.splitlines() if "\t" in line)}
     short = sha[:7]
     for step, (passed, _, note) in results.items():
+        if passed is None:
+            continue  # skipped: says nothing either way
         title = f"Nightly: {step} fails on master"
         number = open_issues.get(title)
         if passed and number:
@@ -505,9 +558,9 @@ def write_report(path, sha, results):
     lines = [f"# Nightly {path.parent.name}", "", f"Commit {sha}", "",
              "| Step | Result | Minutes | Note |", "|---|---|---|---|"]
     for step, (passed, minutes, note) in results.items():
-        lines.append(f"| {step} | {'ok' if passed else '**failed**'} | {minutes:.1f} | {note} |")
+        lines.append(f"| {step} | {'**failed**' if passed is False else VERDICT[passed]} | {minutes:.1f} | {note} |")
     for step, (passed, _, _) in results.items():
-        if not passed:
+        if passed is False:
             lines += ["", f"## {step}", "", "```", tail(path.parent / f"{step}.log"), "```"]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -567,10 +620,14 @@ def main():
         write_report(report, sha, results)
         if issues and ref is None:
             file_issues(results, sha, logs, report)
-        failed = [s for s, (passed, _, _) in results.items() if not passed]
+        failed = [s for s, (passed, _, _) in results.items() if passed is False]
         if whole and not failed:
             last_green.write_text(sha + "\n")
-        print(f"nightly: {'FAILED: ' + ', '.join(failed) if failed else 'all green'}. Report: {report}")
+        skipped = [s for s, (passed, _, _) in results.items() if passed is None]
+        verdict = f"FAILED: {', '.join(failed)}" if failed else "all green"
+        if skipped:
+            verdict += f" ({', '.join(skipped)} skipped)"
+        print(f"nightly: {verdict}. Report: {report}")
         return 1 if failed else 0
     finally:
         lock.unlink(missing_ok=True)
