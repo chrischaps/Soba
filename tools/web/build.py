@@ -3,7 +3,7 @@
     python tools/web/build.py [--dist dist]
     python tools/web/build.py --check     # just cargo check the threaded build (CI)
 
-The plain build is `trunk build --release`, as before: it renders sound on
+The plain build is `trunk build --release --cargo-profile dist`: it renders sound on
 the page's own thread, between frames (cpal's WebAudio host). The threaded
 build adds wasm threads and the `web-worklet` feature, so it can render in an
 AudioWorklet on the browser's audio thread instead, where drawing a big patch
@@ -28,6 +28,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 NIGHTLY = "nightly-2026-10-17"
+# Both builds take Cargo.toml's dist profile, fat LTO: a quarter smaller
+# (5-6% served gzipped) and a little faster in Chrome, for longer to build
+# (#494; WEB.md has the numbers)
+PROFILE = ["--release", "--cargo-profile", "dist"]
 # Its own target folder, so the two builds don't keep rebuilding each other
 THREADS_TARGET = ROOT / "target" / "web-threads"
 
@@ -88,8 +92,8 @@ def main():
 
     dist = ROOT / args.dist
     threads_dist = THREADS_TARGET / "dist"
-    run(["trunk", "build", "--release", "--dist", str(dist)])
-    run(["trunk", "build", "--release", "--features", "web-worklet", "--dist", str(threads_dist)], threads_env())
+    run(["trunk", "build", *PROFILE, "--dist", str(dist)])
+    run(["trunk", "build", *PROFILE, "--features", "web-worklet", "--dist", str(threads_dist)], threads_env())
 
     index = dist / "index.html"
     html = index.read_text(encoding="utf-8")

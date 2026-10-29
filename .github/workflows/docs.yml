@@ -87,9 +87,13 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
+      # A cache is saved only when its key misses, so the key names the profile
+      # build.py builds with: dependencies built for release are no use to dist
       - name: Cache cargo
         if: steps.check.outputs.deploy == 'true'
         uses: Swatinem/rust-cache@v2
+        with:
+          key: dist
 
       # trunk fetches wasm-bindgen and wasm-opt itself
       - name: Install trunk
@@ -99,7 +103,8 @@ jobs:
           sudo mv trunk /usr/local/bin/
 
       # Twice, into one dist/: threaded for a cross-origin isolated page, which
-      # renders sound in an AudioWorklet, and plain for the rest (#375)
+      # renders sound in an AudioWorklet, and plain for the rest (#375). Both
+      # with Cargo.toml's dist profile, fat LTO, for a smaller wasm (#494)
       - name: Build the app for the browser
         if: steps.check.outputs.deploy == 'true'
         run: python3 tools/web/build.py

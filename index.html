@@ -17,7 +17,9 @@
     <title>Soba</title>
     <meta name="description" content="A node-based modular synthesizer, playable in the browser." />
 
-    <link data-trunk rel="rust" data-bin="soba" data-wasm-opt="3" />
+    <!-- wasm-opt -O2: after the dist profile's fat LTO, -O3 took 9x as long
+         for 1% less served (#494) -->
+    <link data-trunk rel="rust" data-bin="soba" data-wasm-opt="2" />
     <!-- The examples' samples, fetched when a patch first plays one rather
          than carried in the wasm (src/persistence/example_fetch.rs) -->
     <link data-trunk rel="copy-dir" href="patches/samples" />

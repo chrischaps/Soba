@@ -9,7 +9,7 @@ at **soba.chaps.dev**, and every recipe page in the manual
 rustup target add wasm32-unknown-unknown
 cargo install --locked trunk
 trunk serve                 # http://127.0.0.1:8080, rebuilt on save
-trunk build --release       # into dist/
+trunk build --release       # into dist/, quicker to build than what's published
 python tools/web/build.py   # into dist/, with the threaded build too: what soba.chaps.dev serves
 ```
 
@@ -268,16 +268,16 @@ or two misses the next buffer. The full app now renders elsewhere (see
 thread instead ("Frames wait for the sound").
 
 The browser build is compiled with wasm's 128-bit SIMD (`+simd128`, in
-`.cargo/config.toml`) and `wasm-opt -O3`. Every browser that runs Soba has
-had SIMD since 2021–23 (Safari since 16.4), and LLVM vectorizes the DSP
-loops with it. These runs couldn't say how much it gains: the same build
+`.cargo/config.toml`), and since #494 with fat LTO (see "How big it is"
+below). Every browser that runs Soba has had SIMD since 2021–23 (Safari
+since 16.4), and LLVM vectorizes the DSP loops with it. These runs couldn't say how much it gains: the same build
 varied up to 2× from run to run on a machine busy with other work, more
 than the difference between builds. So the ranges above span all three
 builds, and a quiet machine should measure it again:
 
 ```bash
 (cd tools/web && npm install && npx playwright install firefox)
-trunk build --release
+trunk build --release --cargo-profile dist   # the plain build as published
 node tools/web/steadiness.mjs --dist dist --browsers chrome,firefox
 ```
 
@@ -418,6 +418,40 @@ each buffer fits one long frame. Holding at 2048 alone helped (Chrome's
 Canopy went from 214 late to 6) but couldn't fit Orrery's frames while
 dragging (67 late), hence the bigger buffer too. Not measured: Safari, and
 a phone, whose frames are slower still.
+
+## How big it is
+
+Every visitor downloads the wasm, and every page that embeds a patch, so
+both builds use Cargo.toml's `dist` profile (fat LTO, one codegen unit),
+as the desktop release does, with `wasm-opt -O2` (#494). GitHub Pages
+serves the wasm gzipped and never as brotli, so the gzipped column is what
+a visitor downloads:
+
+| Build | Profile | wasm-opt | Raw | Gzipped | Brotli |
+|---|---|---|---|---|---|
+| Plain | release | -O3 | 23.1 MB | 5.34 MB | 3.47 MB |
+| Plain | dist | -O3 | 16.9 MB | 4.94 MB | 3.44 MB |
+| Plain | **dist** | **-O2** | **17.3 MB** | **5.00 MB** | 3.47 MB |
+| Threaded | release | -O3 | 23.0 MB | 5.32 MB | 3.46 MB |
+| Threaded | **dist** | **-O2** | **17.7 MB** | **5.03 MB** | 3.49 MB |
+
+A quarter smaller raw, which the browser compiles and holds, and 6% less
+to download. Fat LTO also renders a little faster on the page's thread:
+as embeds in Chrome (`steadiness.mjs`, two runs of each), a 4096-frame
+buffer took 21.7 ms for Canopy against 23.1, 19.3 against 20.5 for Clair
+de Satellite, and 18.8 against 19.9 for Orrery. Firefox rendered the same
+within 0.3 ms, and in the worklet the two rendered alike. Neither build
+dropped a buffer.
+
+wasm-opt is -O2 because after fat LTO there's little left for -O3 to do,
+and it's slow at it: 178 s against 19 s, for 1% less served. On release's
+output -O3 took 63 s.
+
+The cost is build time. LTO makes the whole program one unit, so a change
+to Soba's code relinks everything serially: `tools/web/build.py` after
+an edit took 443 s here rather than 208 s, so the deploy takes a few
+minutes longer. `trunk serve` and `trunk build --release` are as quick as
+before. To build the plain one as published, add `--cargo-profile dist`.
 
 ## MIDI devices
 
