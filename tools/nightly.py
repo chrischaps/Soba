@@ -21,7 +21,9 @@ Steps, in order (--only picks some):
     perf       render --bench on a few heavy examples, best of three: fails
                if any renders more than 15% slower than the stored baseline,
                the timings of the last run it passed (#347). The renders
-               run at normal priority, one core at a time
+               run at normal priority, one core at a time, once the CPU is
+               quiet (or after half an hour, saying how busy it was); one
+               over the line is timed again and keeps the faster (#499)
     layout     check_layout.py: every example's modules inside their frames
     zoom       zoom_check.py: zoom_jitter.py --max 1.5 on each patch that
                something it holds has changed since it last passed, several at
@@ -90,6 +92,10 @@ PERF_RUNS = 3
 # How much slower than the baseline a render may be. Run to run, one render
 # of canopy varies by about a fifth; the best of three by much less
 PERF_TOLERANCE = 0.15
+# Timing waits up to PERF_WAIT for no more than PERF_QUIET of the CPU to be
+# busy, then times anyway (and the note says how busy it was)
+PERF_QUIET = 0.15
+PERF_WAIT = 30 * 60
 BENCH_LINE = re.compile(r"^bench: ([0-9.]+) s ")
 # A rustc stopped mid-build (the run of 27 October was, at the link) leaves
 # incremental objects that no longer agree: the next link can't find the
@@ -285,36 +291,84 @@ def only_pictures_since(green, sha, checkout):
     return diff.returncode == 0 and bool(paths) and all(p.startswith("docs/src/images/") for p in paths)
 
 
-def bench_examples(worktree, log, env):
-    """Times each of PERF_PATCHES with render --bench: {name: seconds}, or None if the build fails."""
+def cpu_busy(seconds=5):
+    """How much of the machine's CPU is busy over the next few seconds, 0 to 1, or None if it can't tell."""
+    if not WINDOWS:
+        try:
+            return min(1.0, os.getloadavg()[0] / (os.cpu_count() or 1))
+        except (AttributeError, OSError):
+            return None
+    import ctypes
+
+    def times():
+        idle, kernel, user = ctypes.c_ulonglong(), ctypes.c_ulonglong(), ctypes.c_ulonglong()
+        if not ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user)):
+            return None
+        return idle.value, kernel.value + user.value  # kernel time counts the idle time too
+
+    before = times()
+    time.sleep(seconds)
+    after = times()
+    if not before or not after or after[1] == before[1]:
+        return None
+    return 1 - (after[0] - before[0]) / (after[1] - before[1])
+
+
+def wait_for_quiet(log):
+    """Waits up to PERF_WAIT for the CPU to settle under PERF_QUIET. Returns how busy it was when it stopped waiting."""
+    deadline = time.monotonic() + PERF_WAIT
+    busy = cpu_busy()
+    while busy is not None and busy > PERF_QUIET and time.monotonic() < deadline:
+        time.sleep(55)
+        busy = cpu_busy()
+    with open(log, "a", encoding="utf-8") as out:
+        out.write(f"CPU {'?' if busy is None else f'{busy:.0%}'} busy as the renders start\n\n")
+    return busy
+
+
+def read_baseline(path):
+    """The stored perf baseline: ({name: seconds}, the short commit they were taken at)."""
+    try:
+        baseline = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        baseline = {}
+    return baseline.get("seconds", {}), baseline.get("commit", "?")[:7]
+
+
+def bench_examples(worktree, log, env, baseline_path):
+    """Times each of PERF_PATCHES with render --bench: ({name: seconds}, how busy the CPU was), or None if the build fails.
+
+    Another build running beside the renders slows every one of them by a fifth
+    (#499), so they wait for a quiet machine first, and one slower than the
+    baseline is timed once more, keeping the faster."""
     if step_run(["cargo", "build", "--release", "--bin", "render"], log, worktree, env) != 0:
         return None
     render = worktree / "target" / "release" / ("render.exe" if WINDOWS else "render")
     out = worktree / "target" / "perf"
     out.mkdir(parents=True, exist_ok=True)
+    base, _ = read_baseline(baseline_path)
+    busy = wait_for_quiet(log)
     timings = {}
     # At normal priority: below it, anything else running slows a render by
     # a quarter. A render is one thread, so the machine keeps its other cores
     for name, flags in PERF_PATCHES:
-        before = log.stat().st_size
-        step_run([render, Path("patches") / f"{name}.json", out / f"{name}.wav", "--seconds", PERF_SECONDS,
-                  "--bench", "--runs", PERF_RUNS, *flags], log, worktree, env, low=False)
-        with open(log, encoding="utf-8", errors="replace") as text:
-            text.seek(before)
-            found = [m.group(1) for m in map(BENCH_LINE.match, text.read().splitlines()) if m]
-        if found:
-            timings[name] = float(found[-1])
-    return timings
+        for _ in range(2):
+            before = log.stat().st_size
+            step_run([render, Path("patches") / f"{name}.json", out / f"{name}.wav", "--seconds", PERF_SECONDS,
+                      "--bench", "--runs", PERF_RUNS, *flags], log, worktree, env, low=False)
+            with open(log, encoding="utf-8", errors="replace") as text:
+                text.seek(before)
+                found = [m.group(1) for m in map(BENCH_LINE.match, text.read().splitlines()) if m]
+            if found:
+                timings[name] = min(float(found[-1]), timings.get(name, float("inf")))
+            if name not in base or timings.get(name, 0) <= base[name] * (1 + PERF_TOLERANCE):
+                break
+    return timings, busy
 
 
-def judge_perf(timings, baseline_path, log):
+def judge_perf(timings, baseline_path, log, busy=None):
     """Compares timings with the baseline. Returns (passed, note), and writes how each moved to log."""
-    try:
-        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        baseline = {}
-    base = baseline.get("seconds", {})
-    since = baseline.get("commit", "?")[:7]
+    base, since = read_baseline(baseline_path)
     slower, missing, lines = [], [], []
     for name, _ in PERF_PATCHES:
         now = timings.get(name)
@@ -333,6 +387,8 @@ def judge_perf(timings, baseline_path, log):
     notes = []
     if slower:
         notes.append(f"slower than at {since}: {', '.join(slower)}")
+        if busy is not None:
+            notes.append(f"the CPU was {busy:.0%} busy as they started")
     if missing:
         notes.append(f"didn't render: {', '.join(missing)}")
     if not base:
@@ -380,11 +436,12 @@ def run_steps(steps, worktree, logs, push, perf_baseline=None, rebaseline=False)
             passed = step_run(["cargo", "test", "--release", "--lib", "a_stopped_example_asks_for_no_frames", "--",
                                "--ignored", "--nocapture"], log, worktree, env) == 0
         elif step == "perf":
-            timings = bench_examples(worktree, log, env)
-            if timings is None:
+            benched = bench_examples(worktree, log, env, perf_baseline)
+            if benched is None:
                 passed, note = False, "render didn't build"
             else:
-                passed, note = judge_perf(timings, perf_baseline, log)
+                timings, busy = benched
+                passed, note = judge_perf(timings, perf_baseline, log, busy)
                 if rebaseline and len(timings) == len(PERF_PATCHES):
                     passed, note = True, "; ".join(filter(None, ["rebaselined", note]))
                 # Only a run of master keeps its timings, and only one with every example timed
