@@ -955,6 +955,8 @@ pub fn ungroup(editor: &mut SynthGraphEditorState, node_id: NodeId) -> Option<Ve
 pub struct Preview {
     /// Each module's box and colour.
     pub boxes: Vec<(Rect, Color32)>,
+    /// The module each box stands for, in the same order.
+    pub nodes: Vec<NodeId>,
     /// Each cable's ends and colour. Cables through the group's jacks run
     /// to the edge of the miniature.
     pub wires: Vec<([Pos2; 2], Color32)>,
@@ -964,7 +966,7 @@ pub struct Preview {
 
 impl Default for Preview {
     fn default() -> Self {
-        Self { boxes: Vec::new(), wires: Vec::new(), bounds: Rect::NOTHING }
+        Self { boxes: Vec::new(), nodes: Vec::new(), wires: Vec::new(), bounds: Rect::NOTHING }
     }
 }
 
@@ -974,6 +976,8 @@ pub struct Face {
     pub preview: Preview,
     /// The controls pinned to it.
     pub controls: Vec<FaceControl>,
+    /// How many modules inside a learn walking it would learn (#481).
+    pub learnable: usize,
 }
 
 /// A module's control pinned to a group's face.
@@ -1063,6 +1067,7 @@ pub fn preview(
         let data = &graph[member].user_data;
         let color = if data.kind.group().is_some() { theme::module::GROUP } else { data.header_color() };
         preview.boxes.push((rect(member), color));
+        preview.nodes.push(member);
     }
     for (input, output) in graph.iter_connections() {
         let (to, from) = (graph.get_input(input).node, graph.get_output(output).node);

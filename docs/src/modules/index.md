@@ -23,7 +23,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [MIDI In](./midi/midi-in.md) | `input.midi` | A MIDI device and channel as a purple cable: every module patched from it, through any group, hears that controller |
 | [Note In](./midi/note-in.md) | `input.poly_midi` | Play notes from the computer keyboard, its piano or a MIDI controller: one voice, or up to eight for chords |
 | [Controls](./midi/controls.md) | `input.controls` | A MIDI controller's faders, knobs, mod wheel, pitch bend and pressure as cables, learned from the hardware |
-| [Pads](./midi/pads.md) | `input.pads` | A pad controller's pads as eight gates, with velocity and pressure: finger drums, triggers and latches |
+| [Pad](./midi/pad.md) | `input.pad` | One pad of a pad controller as a gate, with velocity and pressure: finger drums, triggers and latches. Eight in a group are the Library's Pads ×8 |
 
 ### Filter
 
@@ -77,6 +77,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Logic](./utilities/logic.md) | `util.logic` | Combine gates with AND, OR, XOR and NOT, and turn a control voltage into a gate |
 | [Looper](./utilities/looper.md) | `util.looper` | Record, overdub and undo live layers, like a looper pedal, in time with the Clock |
 | [Oscilloscope](./visualization/oscilloscope.md) | `util.oscilloscope` | Draw up to two signals as waveforms |
+| [Spectrum](./visualization/spectrum.md) | `util.spectrum` | Show the harmonics in up to two sounds, as lines on a keyboard's axis |
 | [Dancer](./visualization/dancer.md) | `util.dancer` | A stick figure who dances to the patch, on the beat and as hard as the music is loud |
 | [Step Sequencer](./utilities/sequencer.md) | `seq.step` | 16 steps of pitch, gate and velocity, in four chained patterns |
 | [Chord Sequencer](./utilities/chord-sequencer.md) | `seq.chord` | 16 chords, each a root, a type and a slash bass, voice-led and played on polyphonic cables, in four patterns played in a chain |
@@ -144,7 +145,7 @@ Drive a voice from a sequence instead of a keyboard:
 | Let a live sound or drum loop move or trigger the patch | [Audio Input](./sources/audio-input.md)'s **Follow** and **Gate** |
 | Play notes | [Note In](./midi/note-in.md), from the computer keys or MIDI, one voice or chords |
 | Patch a fader, knob or wheel from a MIDI controller into anything | [Controls](./midi/controls.md); [MIDI Learn](../getting-started/interface-overview.md#midi-learn) to turn one knob |
-| Play drums from a pad controller | [Pads](./midi/pads.md), a Gate per pad into a [Drum](./sources/drum.md) each: see [Pad Kit](../recipes/pad-kit.md) |
+| Play drums from a pad controller | The Library's Pads ×8, a group of [Pads](./midi/pad.md), a Gate per pad into a [Drum](./sources/drum.md) each: see [Pad Kit](../recipes/pad-kit.md) |
 | Give several modules, or a whole group, one controller | [MIDI In](./midi/midi-in.md), patched into their purple **MIDI** inputs |
 | Slide from note to note | **Glide** on [Note In](./midi/note-in.md#glide); a [Slope](./modulation/slope.md) on any pitch, a sequencer's included |
 | Darken or brighten a sound | [SVF Filter](./filters/svf-filter.md) or [Ladder Filter](./filters/ladder-filter.md) |
@@ -170,6 +171,7 @@ Drive a voice from a sequence instead of a keyboard:
 | Make a synth talk or sing | [Vocoder](./effects/vocoder.md), with a voice from a [Sampler](./sources/sampler.md) or [Audio Input](./sources/audio-input.md) |
 | Balance tone and dynamics | [3-Band EQ](./effects/eq.md), [Compressor](./effects/compressor.md) |
 | See a signal | [Oscilloscope](./visualization/oscilloscope.md), [MIDI Monitor](./midi/midi-monitor.md) |
+| See what makes a sound bright: its harmonics | [Spectrum](./visualization/spectrum.md) |
 | Watch the music dance | [Dancer](./visualization/dancer.md) |
 | Hear the result | [Audio Output](./output/audio-output.md) |
 | Play visuals from the patch | [Link Out](./output/link-out.md), with Seoul |

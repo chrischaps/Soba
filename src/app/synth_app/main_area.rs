@@ -374,6 +374,7 @@ impl SynthApp {
             crate::graph::SynthResponse::MidiLearnCancel => {
                 self.cancel_midi_learn();
             }
+            crate::graph::SynthResponse::LearnWalk(action) => self.learn_walk(action),
             crate::graph::SynthResponse::MapToMacro {
                 engine_node_id,
                 param_index,

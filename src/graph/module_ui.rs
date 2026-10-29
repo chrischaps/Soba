@@ -233,11 +233,11 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
-        module_id: crate::modules::pads::ID,
-        // What each pad hears is learned, or set from its menu
-        hidden: &["Base", "Channel", "Note *", "Channel *", "Press *"],
-        monitor: &["Gate 1", "Gate 2", "Gate 3", "Gate 4", "Gate 5", "Gate 6", "Gate 7", "Gate 8"],
-        display: NodeDisplay::PadGrid,
+        module_id: crate::modules::pad::ID,
+        // What it hears is learned, or set from its menu
+        hidden: &["Note", "Channel", "Press"],
+        monitor: &["Gate"],
+        display: NodeDisplay::OnePad,
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
@@ -381,6 +381,14 @@ static MODULE_UI: &[ModuleUi] = &[
         module_id: "util.oscilloscope",
         knobs: &[knob_as("Trigger Level", "Trig")],
         display: NodeDisplay::Scope,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
+        module_id: "util.spectrum",
+        knobs: &[knob("Hold"), knob("Range")],
+        // The face's corner sets its Size
+        hidden: &["Size"],
+        display: NodeDisplay::Spectrum,
         ..ModuleUi::DEFAULT
     },
     ModuleUi {

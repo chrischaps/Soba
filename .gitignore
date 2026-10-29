@@ -28,3 +28,6 @@ node_modules/
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/next-issue/
+
+# Presentation takes, kept beside the script without --take
+/presentations/takes/

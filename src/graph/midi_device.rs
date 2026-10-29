@@ -1,4 +1,4 @@
-//! The Device a module listens to (#435). Note In, Pads, Controls, Clock
+//! The Device a module listens to (#435). Note In, Pad, Controls, Clock
 //! and the MIDI Monitor can hear one of the MIDI inputs open, or any.
 //!
 //! It's kept in the module's labels by the device's name, so a patch carries
@@ -29,8 +29,8 @@ pub const DEVICE_LABEL: &str = "Device";
 /// Device to choose? The MIDI In has one too, for the modules it's patched
 /// into to hear.
 pub fn listens_to_devices(module_id: &str) -> bool {
-    use crate::modules::{clock, controls, midi_monitor, note_in, pads};
-    [note_in::ID, pads::ID, controls::ID, clock::ID, midi_monitor::ID, midi_in::ID].contains(&module_id)
+    use crate::modules::{clock, controls, midi_monitor, note_in, pad};
+    [note_in::ID, pad::ID, controls::ID, clock::ID, midi_monitor::ID, midi_in::ID].contains(&module_id)
 }
 
 /// The device a module listens to, by name, or `None` for any.
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn the_midi_modules_have_a_device_and_the_rest_dont() {
-        for id in ["input.poly_midi", "input.pads", "input.controls", "util.clock", "util.midi_monitor", "input.midi"] {
+        for id in ["input.poly_midi", "input.pad", "input.controls", "util.clock", "util.midi_monitor", "input.midi"] {
             assert!(listens_to_devices(id), "{id}");
         }
         assert!(!listens_to_devices("output.midi"), "MIDI Out sends; its ports are its devices");
@@ -214,7 +214,7 @@ mod cable_tests {
 
     use crate::graph::groups::{group, GroupId};
     use crate::graph::{create_editor_state, SynthGraphEditorState, SynthGraphState, SynthNodeTemplate, SynthValueType};
-    use crate::modules::{note_in, pads};
+    use crate::modules::{note_in, pad};
 
     fn add(editor: &mut SynthGraphEditorState, module_id: &str, x: f32) -> NodeId {
         let template = SynthNodeTemplate::from_module_id(module_id).unwrap();
@@ -283,8 +283,8 @@ mod cable_tests {
     fn the_device_follows_the_cable_through_a_group_and_a_group_inside_it() {
         let mut editor = create_editor_state();
         let midi_in = add(&mut editor, midi_in::ID, 0.0);
-        let pads_a = add(&mut editor, pads::ID, 300.0);
-        let pads_b = add(&mut editor, pads::ID, 300.0);
+        let pads_a = add(&mut editor, pad::ID, 300.0);
+        let pads_b = add(&mut editor, pad::ID, 300.0);
         set_device(&mut editor, midi_in, "MPD218");
         set_channel(&mut editor, midi_in, 10);
         patch(&mut editor, midi_in, pads_a);
@@ -306,10 +306,26 @@ mod cable_tests {
     }
 
     #[test]
+    fn a_pad_in_a_group_whose_midi_jack_is_unplugged_hears_its_own_device() {
+        // The Library's Pads come with a MIDI jack (#480): until a MIDI In
+        // is plugged into it, each Pad hears its own Device
+        let mut editor = create_editor_state();
+        let midi_in = add(&mut editor, midi_in::ID, 0.0);
+        let kick = add(&mut editor, pad::ID, 300.0);
+        set_device(&mut editor, kick, "MPD218");
+        patch(&mut editor, midi_in, kick);
+        let group = wrap(&mut editor, &[kick], 1000);
+        let jack = editor.graph[group].get_input(midi_in::PORT_NAME).unwrap();
+        let from = editor.graph.connections.get(jack).and_then(|c| c.first().copied()).unwrap();
+        editor.graph.remove_connection(jack, from);
+        assert_eq!(heard(&editor.graph, kick), Heard { device: Some("MPD218"), channel: None, from: None });
+    }
+
+    #[test]
     fn a_routed_pads_claims_its_midi_in_s_device_on_its_channel() {
         let mut editor = create_editor_state();
         let midi_in = add(&mut editor, midi_in::ID, 0.0);
-        let pads = add(&mut editor, pads::ID, 300.0);
+        let pads = add(&mut editor, pad::ID, 300.0);
         set_device(&mut editor, pads, "Fantom-06");
         set_device(&mut editor, midi_in, "MPD218");
         let slot_of = |name: &str| match name {

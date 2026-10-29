@@ -382,46 +382,17 @@ out  D                  Control
 knob Slew               "Slew" KnobOnly
 display ControlFaders
 
-== input.pads "Pads" finder="Pads" Source
+== input.pad "Pad" finder="Pad" Source
 in   MIDI               MIDI     ConnectionOnly       inline=true  port
 in   Mode               Control  ConstantOnly         inline=true  select 0 ["Momentary", "Latch", "Trigger"] "Mode"
-in   Base               Control  ConstantOnly         inline=false num 36 [0..127]  stepped
+in   Note               Control  ConstantOnly         inline=false num 36 [0..127]  stepped
 in   Channel            Control  ConstantOnly         inline=false select 10 ["Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] ""
-in   Note 2             Control  ConstantOnly         inline=false num -1 [-1..127]  stepped
-in   Note 3             Control  ConstantOnly         inline=false num -1 [-1..127]  stepped
-in   Note 4             Control  ConstantOnly         inline=false num -1 [-1..127]  stepped
-in   Note 5             Control  ConstantOnly         inline=false num -1 [-1..127]  stepped
-in   Note 6             Control  ConstantOnly         inline=false num -1 [-1..127]  stepped
-in   Note 7             Control  ConstantOnly         inline=false num -1 [-1..127]  stepped
-in   Note 8             Control  ConstantOnly         inline=false num -1 [-1..127]  stepped
-in   Channel 2          Control  ConstantOnly         inline=false num -1 [-1..16]  stepped
-in   Channel 3          Control  ConstantOnly         inline=false num -1 [-1..16]  stepped
-in   Channel 4          Control  ConstantOnly         inline=false num -1 [-1..16]  stepped
-in   Channel 5          Control  ConstantOnly         inline=false num -1 [-1..16]  stepped
-in   Channel 6          Control  ConstantOnly         inline=false num -1 [-1..16]  stepped
-in   Channel 7          Control  ConstantOnly         inline=false num -1 [-1..16]  stepped
-in   Channel 8          Control  ConstantOnly         inline=false num -1 [-1..16]  stepped
-in   Press 1            Control  ConstantOnly         inline=false num 0 [0..1]
-in   Press 2            Control  ConstantOnly         inline=false num 0 [0..1]
-in   Press 3            Control  ConstantOnly         inline=false num 0 [0..1]
-in   Press 4            Control  ConstantOnly         inline=false num 0 [0..1]
-in   Press 5            Control  ConstantOnly         inline=false num 0 [0..1]
-in   Press 6            Control  ConstantOnly         inline=false num 0 [0..1]
-in   Press 7            Control  ConstantOnly         inline=false num 0 [0..1]
-in   Press 8            Control  ConstantOnly         inline=false num 0 [0..1]
-out  Gate 1             Gate
-out  Gate 2             Gate
-out  Gate 3             Gate
-out  Gate 4             Gate
-out  Gate 5             Gate
-out  Gate 6             Gate
-out  Gate 7             Gate
-out  Gate 8             Gate
+in   Press              Control  ConstantOnly         inline=false num 0 [0..1]
+out  Gate               Gate
 out  Velocity           Control
-out  Hit                Control
 out  Pressure           Control
-monitor [0, 1, 2, 3, 4, 5, 6, 7]
-display PadGrid
+monitor [0]
+display OnePad
 
 == filter.svf "SVF Filter" finder="SVF Filter" Filter
 in   In                 Audio    ConnectionOnly       inline=true  port
@@ -709,6 +680,17 @@ in   Mode               Control  ConstantOnly         inline=true  select 0 ["Au
 in   Trigger Level      Control  ConstantOnly         inline=false num 0 [-1..1]
 knob Trigger Level      "Trig" KnobOnly
 display Scope
+
+== util.spectrum "Spectrum" finder="Spectrum" Utility
+in   In 1               Audio    ConnectionOnly       inline=true  port
+in   In 2               Audio    ConnectionOnly       inline=true  port
+in   Hold               Control  ConstantOnly         inline=false num 1.5 [0..5] s
+in   Range              Control  ConstantOnly         inline=false num 72 [24..120] dB
+in   Harmonics          Control  ConstantOnly         inline=true  toggle true "Harmonics"
+in   Size               Control  ConstantOnly         inline=false num 1 [1..3] ×
+knob Hold               "Hold" KnobOnly
+knob Range              "Range" KnobOnly
+display Spectrum
 
 == util.dancer "Dancer" finder="Dancer" Utility
 in   Clock              Gate     ConnectionOnly       inline=true  port

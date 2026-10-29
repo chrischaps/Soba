@@ -11,6 +11,8 @@ use super::*;
 pub(super) enum Shown {
     /// Soba is being taught the controller: the control to move next (#429).
     Teach,
+    /// A group is learned in order: how far, and what it waits for (#481).
+    Walk,
     /// Map Mode is on: what it waits for, and how to leave (#426).
     MapMode,
     /// The prompt to move a control or hit a pad, for as long as MIDI Learn
@@ -42,6 +44,8 @@ impl SynthApp {
         let failed = self.status.as_ref().is_some_and(|line| line.severity >= Severity::Warning);
         if self.midi.hands.teaching().is_some() {
             Shown::Teach
+        } else if self.user_state.learn_walk.is_some() && self.is_midi_learning() {
+            Shown::Walk
         } else if self.map_mode_on() {
             Shown::MapMode
         } else if self.is_midi_learning() {
@@ -148,8 +152,19 @@ impl SynthApp {
                 if ui.add(button("Skip")).on_hover_text("This controller hasn't this one (Tab)").clicked() {
                     self.midi.hands.skip();
                 }
-                if ui.add(button("Done")).on_hover_text("It has no more (Enter)").clicked() {
-                    self.midi.hands.finish_teaching();
+                if ui.add(button("Done")).on_hover_text(self.teach_done_tip()).clicked() {
+                    self.midi.hands.done();
+                }
+            }
+            Shown::Walk => {
+                let text = self.walk_status().unwrap_or_default();
+                ui.label(RichText::new(text).color(theme::signal::MIDI.lerp_to_gamma(theme::text::PRIMARY, 0.35)).small());
+                let button = |text: &str| egui::Button::new(RichText::new(text).small()).small();
+                if ui.add(button("Skip")).on_hover_text("Leave this one as it is, and go on to the next (Tab)").clicked() {
+                    self.learn_walk(crate::graph::WalkAction::Skip);
+                }
+                if ui.add(button("Stop")).on_hover_text("Keep what's learned so far (Esc)").clicked() {
+                    self.learn_walk(crate::graph::WalkAction::Stop);
                 }
             }
             Shown::MapMode => {

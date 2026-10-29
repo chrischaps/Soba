@@ -342,6 +342,10 @@ pub struct SynthGraphState {
     /// display. Fed from the engine's spectrum taps once a frame.
     pub spectra: super::filter_spectrum::FilterSpectra,
 
+    /// What each Spectrum module on screen hears, column by column, its
+    /// peaks held. Fed from the same taps.
+    pub spectrum_views: super::spectrum_view::SpectrumViews,
+
     /// The input device Audio Input modules are listening to, if one is open.
     pub audio_input_name: Option<String>,
     /// How many channels it has, while it's open: the Channel choices
@@ -381,6 +385,10 @@ pub struct SynthGraphState {
     /// What each group on the shown level has on its face. Set by the app
     /// before drawing.
     pub group_faces: HashMap<GroupId, Face>,
+
+    /// A group's modules being learned in order (#481), which the group's
+    /// face and each module's show. Kept by the app.
+    pub learn_walk: Option<super::learn_walk::LearnWalk>,
 
     /// Where each group's miniature was drawn this frame, on screen, so
     /// stepping in can zoom through it. Filled as faces are drawn.
@@ -465,6 +473,7 @@ impl Default for SynthGraphState {
             readouts: HashMap::new(),
             faults: Default::default(),
             spectra: Default::default(),
+            spectrum_views: Default::default(),
             audio_input_name: None,
             audio_input_channels: None,
             samples: Default::default(),
@@ -476,6 +485,7 @@ impl Default for SynthGraphState {
             output_aliases: HashMap::new(),
             cables_from: Default::default(),
             group_faces: HashMap::new(),
+            learn_walk: None,
             miniatures: HashMap::new(),
             jack_actions: HashMap::new(),
             renaming: None,
@@ -614,6 +624,7 @@ impl SynthGraphState {
         self.module_meters.clear();
         self.readouts.clear();
         self.spectra.clear();
+        self.spectrum_views.clear();
         self.samples.clear();
         self.file_drop_target = None;
         self.hovered_file = None;

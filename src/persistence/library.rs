@@ -22,10 +22,12 @@ pub enum Section {
     Generators,
     /// Take audio in and give it back changed.
     Effects,
+    /// A controller's pads and knobs, as gates and CV (#480).
+    Controllers,
 }
 
 impl Section {
-    pub const ALL: [Section; 4] = [Section::Voices, Section::Drums, Section::Generators, Section::Effects];
+    pub const ALL: [Section; 5] = [Section::Voices, Section::Drums, Section::Generators, Section::Effects, Section::Controllers];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -33,6 +35,7 @@ impl Section {
             Section::Drums => "Drums",
             Section::Generators => "Generators",
             Section::Effects => "Effects",
+            Section::Controllers => "Controllers",
         }
     }
 }
@@ -171,6 +174,13 @@ pub const LIBRARY: &[LibraryGroup] = &[
         description: "The Slicer pedal rebuilt from stock modules, to open and see how it works: a synced LFO clocks a row of steps that open a VCA and a step filter",
         json: include_str!("../../library/slicer.json"),
     },
+    LibraryGroup {
+        name: "Pads ×8",
+        file_name: "pads-x8.json",
+        section: Section::Controllers,
+        description: "Eight Pads on the General MIDI drum notes, 36 to 43 on channel 10, as most pad controllers send them: Gate and Vel for each, in the order a Trigger Sequencer's lanes come",
+        json: include_str!("../../library/pads-x8.json"),
+    },
 ];
 
 #[cfg(test)]
@@ -180,7 +190,7 @@ mod tests {
     use crate::dsp::MidiMessage;
     use crate::engine::OfflineRenderer;
     use crate::graph::groups::{self, GroupIndex};
-    use crate::persistence::{capture_patch, compile_patch, stage_patch, ConnectionData, JackData, NodeData, ParameterValue};
+    use crate::persistence::{capture_patch, compile_patch, stage_patch, ConnectionData, GroupData, JackData, NodeData, ParameterValue};
 
     #[test]
     fn every_library_file_is_listed() {
@@ -225,8 +235,11 @@ mod tests {
                     jack.name
                 );
             }
-            // Every pin shows on the face, knob, dropdown or toggle
-            assert!(group.nodes.iter().any(|n| !n.pinned.is_empty()), "{}: nothing on its face", entry.name);
+            // Every pin shows on the face, knob, dropdown or toggle. A
+            // controller's pads wait to be pinned as pads (#482)
+            if entry.section != Section::Controllers {
+                assert!(group.nodes.iter().any(|n| !n.pinned.is_empty()), "{}: nothing on its face", entry.name);
+            }
             let staged = stage_patch(&patch).unwrap();
             let graph = &staged.graph;
             let id = graph.nodes.values().find_map(|n| n.user_data.kind.group()).unwrap();
@@ -341,6 +354,20 @@ mod tests {
                 wire(9013, "Out", g, jack),
             ]);
         }
+        if has(&group.outputs, "Gate 1") {
+            // Pads into the Library's Drum Kit, as GM drum notes play one
+            let kit = drum_kit(9100);
+            let k = kit.id;
+            patch.groups.push(kit);
+            wires.extend([
+                wire(g, "Gate 1", k, "Kick"),
+                wire(g, "Gate 3", k, "Snare"),
+                wire(g, "Gate 7", k, "Hat"),
+                wire(g, "Vel 1", k, "Accent"),
+                wire(k, "Out L", 9000, "Left"),
+                wire(k, "Out R", 9000, "Right"),
+            ]);
+        }
         if has(&group.inputs, "Trig") {
             nodes.push(node(9020, "util.clock", &[]));
             wires.push(wire(9020, "Gate", g, "Trig"));
@@ -366,6 +393,45 @@ mod tests {
         patch.nodes = nodes;
         patch.connections = wires;
         patch
+    }
+
+    /// The Library's Drum Kit, its IDs from `from` up so it sits beside
+    /// another Library group.
+    fn drum_kit(from: u64) -> GroupData {
+        let mut kit = LIBRARY.iter().find(|g| g.name == "Drum Kit").unwrap().patch().unwrap().groups.remove(0);
+        let ids: Vec<u64> = std::iter::once(kit.id).chain(kit.nodes.iter().map(|n| n.id)).collect();
+        let new = |id: u64| ids.iter().position(|&old| old == id).map_or(id, |at| from + at as u64);
+        kit.id = new(kit.id);
+        for node in &mut kit.nodes {
+            node.id = new(node.id);
+        }
+        for cable in &mut kit.connections {
+            (cable.from_node, cable.to_node) = (new(cable.from_node), new(cable.to_node));
+        }
+        kit
+    }
+
+    #[test]
+    fn pads_played_into_the_drum_kit_play_a_kit() {
+        // The acceptance (#480): the GM drum beat on Pads ×8, into the Drum
+        // Kit, strikes the kick, snare and hat, each as hard as its pad
+        let entry = LIBRARY.iter().find(|g| g.name == "Pads ×8").unwrap();
+        let patch = played(entry);
+        let sample_rate = 48_000.0;
+        let (mut renderer, compiled) = OfflineRenderer::from_patch(&patch, sample_rate, 256).unwrap();
+        assert!(compiled.warnings.is_empty(), "{:?}", compiled.warnings);
+        let audio = renderer.render_audition(&patch, 2.0);
+        let window = |at: f32| {
+            let start = (at * sample_rate) as usize;
+            peak(&audio.left[start..start + 2400])
+        };
+        let sixteenth = 60.0 / crate::engine::offline::PAD_BEAT_BPM / 4.0;
+        // The kick and hat on the downbeat, the snare on beat 2, and
+        // nothing between the hat on the 2nd sixteenth and the snare
+        assert!(window(0.0) > 0.1, "the downbeat: {}", window(0.0));
+        assert!(window(4.0 * sixteenth) > 0.1, "the snare: {}", window(4.0 * sixteenth));
+        let gap = window(3.0 * sixteenth);
+        assert!(gap < window(4.0 * sixteenth), "quieter between hits");
     }
 
     #[test]

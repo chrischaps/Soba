@@ -13,16 +13,24 @@
 //! - With nothing taught, the patch's CC mappings, in the order they were
 //!   learned, on eight encoders and four faders drawn as a guess.
 //!
+//! A taught controller is drawn with as many encoders and faders as it
+//! was taught (#485), and one being taught grows a control at a time.
+//!
 //! The pads are the patch's mappings to notes, footswitches and Scenes
 //! pads, whatever else the hands are doing: Soba isn't taught pads, so
 //! they're the mapped notes in order.
 
 use crate::engine::NodeId as EngineNodeId;
 use crate::persistence::{MidiControl, MidiEncoding, MidiMapping, MidiSource};
-use super::hands::{Controller, Step, Taught, ENCODERS, SLOTS};
+use super::hands::{Controller, Step, Taught};
 
 /// How many pads the sketch has room for.
 pub const PADS: usize = 8;
+
+/// The encoders and faders drawn while nothing is taught: a guess, the
+/// MiniLab's.
+pub const GUESSED_ENCODERS: usize = 8;
+pub const GUESSED_FADERS: usize = 4;
 
 /// What a control on the controller sends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,8 +96,8 @@ pub struct Control {
     pub does: Option<MidiMapping>,
     /// How many more of the patch's mappings it turns besides.
     pub also: usize,
-    /// A Pads module's pad (#428): its engine node, and which pad.
-    pub pad: Option<(EngineNodeId, usize)>,
+    /// The Pad module it is (#480), by its engine node.
+    pub pad: Option<EngineNodeId>,
 }
 
 impl Control {
@@ -99,13 +107,13 @@ impl Control {
     }
 }
 
-/// A Pads module in the patch (#428), whose pads the sketch's are.
-#[derive(Debug, Clone, Copy)]
-pub struct PadsModule<'a> {
+/// A Pad module in the patch (#480), whose pad one of the sketch's is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PadModule {
     pub node_id: EngineNodeId,
-    /// Each pad's note and channel (1-16, or 0 for any), or `None` for a
-    /// pad past the top of MIDI's notes.
-    pub notes: &'a [Option<(u8, u8)>],
+    pub note: u8,
+    /// 1-16, or 0 for any.
+    pub channel: u8,
 }
 
 /// Where the labels came from.
@@ -125,8 +133,10 @@ pub enum Source {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sketch {
     pub source: Source,
-    /// Each encoder, then each fader: [`SLOTS`] of them.
+    /// Each encoder, then each fader.
     pub slots: Vec<Control>,
+    /// How many of the slots are encoders: the rest are faders.
+    pub encoders: usize,
     /// The mapped pads, at most [`PADS`].
     pub pads: Vec<Control>,
     /// How many of the patch's mapped controls aren't on the sketch.
@@ -144,8 +154,8 @@ pub struct HandsNow<'a> {
     /// While Soba is taught, what it has been taught so far and the step
     /// it waits for.
     pub teaching: Option<(&'a Controller, Option<Step>)>,
-    /// The patch's Pads module, whose pads come first.
-    pub pads: Option<PadsModule<'a>>,
+    /// The patch's Pad modules, whose pads come first, lowest note first.
+    pub pads: &'a [PadModule],
 }
 
 /// Does `mapping` belong on a pad: a note, a footswitch or a Scenes pad?
@@ -153,11 +163,11 @@ fn on_a_pad(mapping: &MidiMapping) -> bool {
     mapping.source == MidiSource::Note || mapping.control == MidiControl::Button || mapping.scene.is_some()
 }
 
-/// The slot a teaching step teaches.
-fn slot_of(step: Step) -> usize {
+/// The slot a teaching step teaches, on a sketch of `encoders` encoders.
+fn slot_of(step: Step, encoders: usize) -> usize {
     match step {
         Step::Encoder(n) => n,
-        Step::Fader(n) => ENCODERS + n,
+        Step::Fader(n) => encoders + n,
     }
 }
 
@@ -181,14 +191,23 @@ pub fn sketch(hands: HandsNow, mappings: &[MidiMapping]) -> Sketch {
     // A DAW's macros aren't on the controller
     let patch: Vec<&MidiMapping> = mappings.iter().filter(|m| m.macro_slot.is_none()).collect();
     let taught = hands.teaching.map(|(taught, _)| taught).or(hands.controller);
+    // As many as were taught; while taught, those so far and the one waited for
+    let (encoders, faders) = match (hands.teaching, taught) {
+        (Some((so_far, step)), _) => (
+            so_far.encoders.len() + usize::from(matches!(step, Some(Step::Encoder(_)))),
+            so_far.faders.len() + usize::from(matches!(step, Some(Step::Fader(_)))),
+        ),
+        (None, Some(controller)) => (controller.encoders.len(), controller.faders.len()),
+        (None, None) => (GUESSED_ENCODERS, GUESSED_FADERS),
+    };
     let source = match (hands.teaching, hands.holding, taught) {
-        (Some((_, step)), ..) => Source::Teaching(step.map(slot_of)),
+        (Some((_, step)), ..) => Source::Teaching(step.map(|step| slot_of(step, encoders))),
         (None, Some(_), Some(_)) => Source::Following,
         (None, _, Some(_)) => Source::Patch,
         (None, _, None) => Source::Untaught,
     };
 
-    let mut slots = vec![Control::default(); SLOTS];
+    let mut slots = vec![Control::default(); encoders + faders];
     // The patch's mappings that are somewhere on the sketch, or paused
     let mut placed = vec![false; patch.len()];
     match taught {
@@ -214,9 +233,9 @@ pub fn sketch(hands: HandsNow, mappings: &[MidiMapping]) -> Sketch {
             // whatever's left over
             let knobs = gathered(patch.iter().copied().filter(|m| m.source == MidiSource::Cc && !on_a_pad(m)));
             let mixed = knobs.iter().any(|(h, _)| h.endless) && knobs.iter().any(|(h, _)| !h.endless);
-            let mut free = [true; SLOTS];
+            let mut free = vec![true; slots.len()];
             let mut take = |faders: Option<bool>| {
-                let slot = (0..SLOTS).find(|&slot| free[slot] && faders.is_none_or(|f| (slot >= ENCODERS) == f))?;
+                let slot = (0..free.len()).find(|&slot| free[slot] && faders.is_none_or(|f| (slot >= encoders) == f))?;
                 free[slot] = false;
                 Some(slot)
             };
@@ -243,16 +262,16 @@ pub fn sketch(hands: HandsNow, mappings: &[MidiMapping]) -> Sketch {
         }
     }
 
-    // The pads: a Pads module's first, each with any mapping on its note;
-    // then the mapped notes, footswitches and Scenes pads not on an encoder
-    // or fader, lowest first
+    // The pads: the Pad modules' first, lowest note first, each with any
+    // mapping on its note; then the mapped notes, footswitches and Scenes
+    // pads not on an encoder or fader, lowest first
+    let mut modules = hands.pads.to_vec();
+    modules.sort_by_key(|pad| (pad.note, pad.channel, pad.node_id));
     let mut pads: Vec<Control> = Vec::new();
-    if let Some(module) = hands.pads {
-        for (index, &(note, channel)) in module.notes.iter().take(PADS).enumerate().filter_map(|(i, n)| Some((i, n.as_ref()?))) {
-            let hardware = Hardware { source: MidiSource::Note, number: note, channel, endless: false };
-            let on_it: Vec<&MidiMapping> = patch.iter().copied().filter(|m| hardware.turns(m)).collect();
-            pads.push(Control { pad: Some((module.node_id, index)), ..Control::of(hardware, on_it) });
-        }
+    for module in modules.into_iter().take(PADS) {
+        let hardware = Hardware { source: MidiSource::Note, number: module.note, channel: module.channel, endless: false };
+        let on_it: Vec<&MidiMapping> = patch.iter().copied().filter(|m| hardware.turns(m)).collect();
+        pads.push(Control { pad: Some(module.node_id), ..Control::of(hardware, on_it) });
     }
     let mut mapped = gathered(patch.iter().enumerate().filter(|(i, m)| !placed[*i] && on_a_pad(m)).map(|(_, m)| *m));
     mapped.retain(|(h, _)| !pads.iter().any(|p| p.hardware.is_some_and(|pad| pad.turns_like(*h))));
@@ -268,7 +287,8 @@ pub fn sketch(hands: HandsNow, mappings: &[MidiMapping]) -> Sketch {
     }
 
     let unshown = gathered(patch.iter().enumerate().filter(|(i, _)| !placed[*i]).map(|(_, m)| *m)).len();
-    Sketch { source, slots, pads, unshown }
+    Sketch { source, slots, encoders, pads, unshown }
+
 }
 
 /// A control's name as the strip says it: a Looper's "Pedal Rec" is its
@@ -280,7 +300,11 @@ pub fn short_name(param_name: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::hands::FADERS;
+
+    /// The MiniLab's, which is also what's guessed with nothing taught.
+    const ENCODERS: usize = GUESSED_ENCODERS;
+    const FADERS: usize = GUESSED_FADERS;
+    const SLOTS: usize = ENCODERS + FADERS;
 
     fn endless(cc: u8) -> Option<Taught> {
         Some(Taught { cc, channel: 1, encoding: MidiEncoding::Relative64 })
@@ -415,22 +439,41 @@ mod tests {
         assert_eq!(sketch.slots[0].hardware.map(|h| h.number), Some(70));
         assert_eq!(sketch.slots[0].does, None, "no labels while it's taught");
         assert_eq!(sketch.slots[1].hardware, None, "skipped");
-        assert_eq!(slot_of(Step::Fader(1)), ENCODERS + 1);
+        // The controller grows as it's taught: the two so far and the one waited for
+        assert_eq!((sketch.slots.len(), sketch.encoders), (3, 3));
+
+        // On to the faders: all the encoders, and the fader waited for
+        let so_far = Controller { encoders: vec![endless(70), endless(71)], faders: vec![endless(20)] };
+        let hands = HandsNow { teaching: Some((&so_far, Some(Step::Fader(1)))), ..Default::default() };
+        let sketch = super::sketch(hands, &patch);
+        assert_eq!((sketch.slots.len(), sketch.encoders), (4, 2));
+        assert_eq!(sketch.source, Source::Teaching(Some(3)));
+        assert_eq!(slot_of(Step::Fader(1), 2), 3);
     }
 
     #[test]
-    fn a_pads_module_s_pads_come_first_with_any_mapping_on_their_notes() {
-        // Pads on 36-43, channel 10, but pad 8 past MIDI's notes
-        let mut notes: Vec<Option<(u8, u8)>> = (36..43).map(|n| Some((n, 10))).collect();
-        notes.push(None);
+    fn a_taught_controller_is_drawn_with_as_many_controls_as_it_has() {
+        // A BeatStep: sixteen encoders, no faders
+        let beatstep = Controller { encoders: (70..86).map(endless).collect(), faders: Vec::new() };
+        let patch = vec![knob(85, 1, 0, "Cutoff")];
+        let sketch = sketch(HandsNow { controller: Some(&beatstep), ..Default::default() }, &patch);
+        assert_eq!((sketch.slots.len(), sketch.encoders), (16, 16));
+        assert_eq!(named(&sketch.slots[15]), Some("Cutoff"));
+        assert_eq!(sketch.unshown, 0);
+    }
+
+    #[test]
+    fn the_pad_modules_come_first_lowest_note_first_with_any_mapping_on_their_notes() {
+        // Seven Pads on 36-42, channel 10, added in no order
+        let modules: Vec<PadModule> = [40u8, 36, 42, 37, 39, 38, 41].iter().map(|&note| PadModule { node_id: note as u64 + 100, note, channel: 10 }).collect();
         let patch = vec![pad(37, 4, "Pedal Rec", None), pad(50, 5, "Scene A", Some(0)), pad(51, 5, "Scene B", Some(1))];
-        let hands = HandsNow { pads: Some(PadsModule { node_id: 9, notes: &notes }), ..Default::default() };
+        let hands = HandsNow { pads: &modules, ..Default::default() };
         let sketch = sketch(hands, &patch);
         assert_eq!(sketch.pads.len(), PADS);
-        assert_eq!(sketch.pads[0].pad, Some((9, 0)));
+        assert_eq!(sketch.pads[0].pad, Some(136), "the kick's Pad first");
         assert_eq!(sketch.pads[0].does, None);
         assert_eq!(named(&sketch.pads[1]), Some("Pedal Rec"), "a mapping on the pad's note");
-        assert_eq!(sketch.pads[6].pad, Some((9, 6)));
+        assert_eq!(sketch.pads[6].pad, Some(142));
         // One place left: Scene A, and Scene B doesn't fit
         assert_eq!(sketch.pads[7].pad, None);
         assert_eq!(named(&sketch.pads[7]), Some("Scene A"));

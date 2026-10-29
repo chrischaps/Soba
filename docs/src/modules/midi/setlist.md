@@ -72,7 +72,7 @@ Hover over a row to see exactly what it sends: **Pattern A05: Program Change 4 o
 
 - **Three patterns on the bar.** An Arranger with Intro, Verse and Chorus, each with a row for the **Digitakt** on its own pattern with a 500 ms lead. The Digitakt moves through the three patterns, each exactly on its bar line.
 - **A scene for the chorus.** A row for the **FANTOM-06** in the Chorus, Bank **Scene A**, Scene 12. The FANTOM changes scene on the chorus's downbeat.
-- **Put the room back.** Patch a [Pads](./pads.md) gate into **Send**. After you've been turning things on the hardware, one hit brings every device back to the section playing.
+- **Put the room back.** Patch a [Pad](./pad.md)'s gate into **Send**. After you've been turning things on the hardware, one hit brings every device back to the section playing.
 
 ## Related
 

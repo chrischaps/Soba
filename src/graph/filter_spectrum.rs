@@ -267,7 +267,7 @@ fn band_levels(power: &[f32], bands: &[BandBins], scale: f32) -> [f32; BANDS] {
 /// smooth curve through the log power of the bins around. A windowed
 /// tone's peak is close to a parabola in log power, so this finds it
 /// between bins, where a straight line would put it on one.
-fn between_bins(power: &[f32], below: usize, t: f32) -> f32 {
+pub(super) fn between_bins(power: &[f32], below: usize, t: f32) -> f32 {
     let log = |bin: usize| power[bin.min(power.len() - 1)].max(1e-20).ln();
     let (p0, p1, p2, p3) = (log(below.saturating_sub(1)), log(below), log(below + 1), log(below + 2));
     let curve = 0.5
@@ -280,13 +280,13 @@ fn between_bins(power: &[f32], below: usize, t: f32) -> f32 {
 
 /// A radix-2 complex FFT of one size, its twiddles and bit-reversal worked
 /// out once.
-struct Fft {
+pub(super) struct Fft {
     twiddles: Vec<(f32, f32)>,
     reversed: Vec<usize>,
 }
 
 impl Fft {
-    fn new(n: usize) -> Self {
+    pub(super) fn new(n: usize) -> Self {
         assert!(n.is_power_of_two());
         let bits = n.trailing_zeros();
         Self {
@@ -301,7 +301,7 @@ impl Fft {
     }
 
     /// Transforms `re` + i`im` in place.
-    fn transform(&self, re: &mut [f32], im: &mut [f32]) {
+    pub(super) fn transform(&self, re: &mut [f32], im: &mut [f32]) {
         let n = self.reversed.len();
         for i in 0..n {
             let j = self.reversed[i];

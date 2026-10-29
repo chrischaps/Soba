@@ -1,7 +1,8 @@
 //! The Hands overlay (#431), the app's side: a quiet strip along the foot
 //! of the canvas that sketches the controller in Soba's own line style
-//! (eight encoders, four faders and, when the patch maps any, eight pads)
-//! and says beside each what it does right now: `Cutoff` over `Filter`,
+//! (the encoders and faders it was taught, in rows of up to eight, and,
+//! when the patch maps any, eight pads) and says beside each what it does
+//! right now: `Cutoff` over `Filter`,
 //! in the filter's colour. The encoders' pointers and the faders' caps sit
 //! where their knobs do and move as they move, a control brightens as its
 //! CC arrives, and a fader that hasn't picked its knob up yet shows a
@@ -16,7 +17,7 @@
 use egui::{pos2, vec2, Align2, Color32, FontId, Pos2, Rect, Sense, Shape, Stroke, StrokeKind};
 
 use super::*;
-use crate::app::hands::{slot_label, ENCODERS, FADERS};
+use crate::app::hands::Step;
 use crate::app::hands_overlay::{self as model, Control, HandsNow, Hardware, Sketch, Source};
 use crate::engine::MidiEvent;
 use crate::graph::steady_text;
@@ -151,24 +152,28 @@ impl SynthApp {
         let hands = &self.midi.hands;
         let teaching = hands.teaching().map(|t| (t.taught(), t.step()));
         let holding = hands.active().then(|| hands.mappings().as_slice());
-        // The first Pads module's pads (#428), on the notes they hear
+        // Every Pad in the patch (#480), on the note it hears
         let graph = &self.graph_state.graph;
-        let pads_node = graph.nodes.iter().find(|(_, n)| n.user_data.module_id == crate::modules::pads::ID).map(|(id, _)| id);
-        let notes: Vec<Option<(u8, u8)>> = pads_node
-            .map(|id| crate::modules::pads::listens(&crate::graph::pads_params(graph, id)).iter().map(|l| Some((l.note?, l.channel))).collect())
-            .unwrap_or_default();
-        let pads = pads_node.and_then(|id| self.user_state.get_engine_node_id(id)).map(|node_id| model::PadsModule { node_id, notes: &notes });
-        model::sketch(HandsNow { controller: hands.controller(), holding, teaching, pads }, self.midi.mappings.as_slice())
+        let pads: Vec<model::PadModule> = graph
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.user_data.module_id == crate::modules::pad::ID)
+            .filter_map(|(id, _)| {
+                let listen = crate::graph::pad_listen(graph, id);
+                Some(model::PadModule { node_id: self.user_state.get_engine_node_id(id)?, note: listen.note, channel: listen.channel })
+            })
+            .collect();
+        model::sketch(HandsNow { controller: hands.controller(), holding, teaching, pads: &pads }, self.midi.mappings.as_slice())
     }
 
-    /// Where a Pads module's pad is patched: what it plays ("Kick", or the
-    /// input's name), the module, and the module's colour.
-    fn pad_target(&self, engine_node_id: u64, pad: usize) -> Option<(String, String, Color32)> {
+    /// Where a Pad's gate is patched, through any groups' jacks: what it
+    /// plays ("Kick", or the input's name), the module, and the module's
+    /// colour.
+    fn pad_target(&self, engine_node_id: u64) -> Option<(String, String, Color32)> {
         let graph = &self.graph_state.graph;
         let node = graph.nodes.get(self.user_state.graph_node_id(engine_node_id)?)?;
-        let gate = format!("Gate {}", pad + 1);
-        let (_, output) = node.outputs.iter().find(|(name, _)| *name == gate)?;
-        let (input, _) = graph.iter_connections().find(|(_, from)| from == output)?;
+        let output = node.get_output("Gate").ok()?;
+        let (_, input) = crate::graph::groups::leaf_cables(graph).into_iter().find(|(from, _)| *from == output)?;
         let to = graph.nodes.get(graph.get_input(input).node)?;
         let (port, _) = to.inputs.iter().find(|(_, id)| *id == input)?;
         // A drum says which drum it is
@@ -179,13 +184,15 @@ impl SynthApp {
         Some((kind.unwrap_or_else(|| port.clone()), to.user_data.display_name.clone(), to.user_data.category.color()))
     }
 
-    /// A control as the strip draws it, at `now`.
+    /// A control as the strip draws it, at `now`: the `index`th of its
+    /// kind, from 0.
     fn hands_face(&self, kind: Kind, index: usize, control: &Control, teaching: bool, now: f64) -> Face {
         let mut face = Face {
             kind,
             number: match kind {
                 Kind::Pad => control.hardware.map_or_else(|| (index + 1).to_string(), |h| short_text(h).trim_start_matches("CC ").to_string()),
-                _ => slot_label(index),
+                Kind::Encoder => Step::Encoder(index).badge(),
+                Kind::Fader => Step::Fader(index).badge(),
             },
             name: None,
             module: None,
@@ -201,7 +208,7 @@ impl SynthApp {
         };
         let what = match kind {
             Kind::Encoder => format!("Encoder {}", index + 1),
-            Kind::Fader => format!("Fader {}", index - ENCODERS + 1),
+            Kind::Fader => format!("Fader {}", index + 1),
             Kind::Pad => format!("Pad {}", index + 1),
         };
         face.tip = match control.hardware {
@@ -222,15 +229,15 @@ impl SynthApp {
             }
         }
         let Some(mapping) = &control.does else {
-            // A Pads module's pad plays whatever its gate is patched into
-            if let Some((node, pad)) = control.pad {
-                let pads = self.module_name(node).unwrap_or("Pads").to_string();
-                match self.pad_target(node, pad) {
+            // A Pad plays whatever its gate is patched into
+            if let Some(node) = control.pad {
+                let pad = self.module_name(node).unwrap_or("Pad").to_string();
+                match self.pad_target(node) {
                     Some((name, module, ink)) => {
-                        face.tip.push_str(&format!("\nGate {} of {pads}, into {module}", pad + 1));
+                        face.tip.push_str(&format!("\nThe {pad}'s Gate, into {module}"));
                         (face.name, face.module, face.ink, face.sends) = (Some(name), Some(module), ink, None);
                     }
-                    None => face.tip.push_str(&format!("\nGate {} of {pads}, patched into nothing", pad + 1)),
+                    None => face.tip.push_str(&format!("\nThe {pad}'s Gate, patched into nothing")),
                 }
             } else if control.hardware.is_some() {
                 face.tip.push_str("\nNothing in the patch follows it");
@@ -277,20 +284,32 @@ impl SynthApp {
             .iter()
             .enumerate()
             .map(|(slot, control)| {
-                let kind = if slot < ENCODERS { Kind::Encoder } else { Kind::Fader };
-                self.hands_face(kind, slot, control, waiting_for == Some(slot), now)
+                let (kind, index) = match slot.checked_sub(sketch.encoders) {
+                    None => (Kind::Encoder, slot),
+                    Some(fader) => (Kind::Fader, fader),
+                };
+                self.hands_face(kind, index, control, waiting_for == Some(slot), now)
             })
             .collect();
+        let (encoders, faders) = faces.split_at(sketch.encoders);
         let pads: Vec<Face> = sketch.pads.iter().enumerate().map(|(i, pad)| self.hands_face(Kind::Pad, i, pad, false, now)).collect();
         let plate = self.hands_plate(&sketch);
 
+        // However many it has (#485)
+        let layout = Layout::of(encoders.len(), faders.len());
         // Full size where it fits, smaller in a narrow window
-        let columns = ENCODERS / 2;
-        let mut width = 2.0 * size::MARGIN + size::PLATE + size::GAP + columns as f32 * size::ENCODER + size::GAP + FADERS as f32 * size::FADER;
+        let mut width = 2.0 * size::MARGIN + size::PLATE;
+        if !encoders.is_empty() {
+            width += size::GAP + layout.encoder_columns as f32 * size::ENCODER;
+        }
+        if !faders.is_empty() {
+            width += size::GAP + layout.fader_columns as f32 * size::FADER;
+        }
         if !pads.is_empty() {
             width += size::GAP + (model::PADS / 2) as f32 * size::PAD;
         }
-        let height = 2.0 * size::MARGIN + 2.0 * size::ROW;
+        let span = layout.rows as f32 * size::ROW;
+        let height = 2.0 * size::MARGIN + span;
         let room = self.editor_rect.width() - 2.0 * size::LIFT;
         let scale = (room / width).min(1.0);
         let strip = Rect::from_center_size(
@@ -315,26 +334,33 @@ impl SynthApp {
                 let mut x = rect.left() + size::MARGIN * s;
                 asked = draw_plate(ui, &painter, Rect::from_min_size(pos2(x, top), vec2(size::PLATE, 2.0 * size::ROW) * s), &plate, s);
                 x += size::PLATE * s;
-                divider(&painter, x + size::GAP * s / 2.0, top, s);
-                x += size::GAP * s;
                 let breath = ((now * 3.0).sin().abs()) as f32;
-                for (i, face) in faces[..ENCODERS].iter().enumerate() {
-                    let (row, column) = (i / columns, i % columns);
-                    let cell = Rect::from_min_size(pos2(x + column as f32 * size::ENCODER * s, top + row as f32 * size::ROW * s), vec2(size::ENCODER, size::ROW) * s);
-                    draw_encoder(&painter, cell, face, s, breath);
-                    tip(ui, cell, face, ("hands_encoder", i));
+                if !encoders.is_empty() {
+                    divider(&painter, x + size::GAP * s / 2.0, top, span * s);
+                    x += size::GAP * s;
+                    let columns = layout.encoder_columns;
+                    for (i, face) in encoders.iter().enumerate() {
+                        let (row, column) = (i / columns, i % columns);
+                        let cell = Rect::from_min_size(pos2(x + column as f32 * size::ENCODER * s, top + row as f32 * size::ROW * s), vec2(size::ENCODER, size::ROW) * s);
+                        draw_encoder(&painter, cell, face, s, breath);
+                        tip(ui, cell, face, ("hands_encoder", i));
+                    }
+                    x += columns as f32 * size::ENCODER * s;
                 }
-                x += columns as f32 * size::ENCODER * s;
-                divider(&painter, x + size::GAP * s / 2.0, top, s);
-                x += size::GAP * s;
-                for (i, face) in faces[ENCODERS..].iter().enumerate() {
-                    let cell = Rect::from_min_size(pos2(x + i as f32 * size::FADER * s, top), vec2(size::FADER, 2.0 * size::ROW) * s);
-                    draw_fader(&painter, cell, face, s, breath);
-                    tip(ui, cell, face, ("hands_fader", i));
+                if !faders.is_empty() {
+                    divider(&painter, x + size::GAP * s / 2.0, top, span * s);
+                    x += size::GAP * s;
+                    let columns = layout.fader_columns;
+                    for (i, face) in faders.iter().enumerate() {
+                        let (row, column) = (i / columns, i % columns);
+                        let cell = Rect::from_min_size(pos2(x + column as f32 * size::FADER * s, top + 2.0 * row as f32 * size::ROW * s), vec2(size::FADER, 2.0 * size::ROW) * s);
+                        draw_fader(&painter, cell, face, s, breath);
+                        tip(ui, cell, face, ("hands_fader", i));
+                    }
+                    x += columns as f32 * size::FADER * s;
                 }
-                x += FADERS as f32 * size::FADER * s;
                 if !pads.is_empty() {
-                    divider(&painter, x + size::GAP * s / 2.0, top, s);
+                    divider(&painter, x + size::GAP * s / 2.0, top, span * s);
                     x += size::GAP * s;
                     let columns = model::PADS / 2;
                     for (i, face) in pads.iter().enumerate() {
@@ -347,7 +373,7 @@ impl SynthApp {
             });
 
         // Something moving, or about to: keep drawing while it settles
-        let settling = faces.iter().chain(&pads).any(|f| f.heard > 0.0 || f.teaching || f.hardware_at.is_some());
+        let settling = encoders.iter().chain(faders).chain(&pads).any(|f| f.heard > 0.0 || f.teaching || f.hardware_at.is_some());
         if settling {
             crate::app::pace::animate(ctx);
         }
@@ -364,8 +390,8 @@ impl SynthApp {
         let device = Some(self.midi.hands.device()).filter(|d| !d.is_empty()).unwrap_or("Controller").to_string();
         let quiet = theme::text::QUIET;
         let (doing, ink, ask) = match sketch.source {
-            Source::Teaching(Some(slot)) if slot < ENCODERS => (format!("Teaching: encoder {}", slot + 1), theme::signal::MIDI, None),
-            Source::Teaching(Some(slot)) => (format!("Teaching: fader {}", slot - ENCODERS + 1), theme::signal::MIDI, None),
+            Source::Teaching(Some(slot)) if slot < sketch.encoders => (format!("Teaching: encoder {}", slot + 1), theme::signal::MIDI, None),
+            Source::Teaching(Some(slot)) => (format!("Teaching: fader {}", slot - sketch.encoders + 1), theme::signal::MIDI, None),
             Source::Teaching(None) => ("Teaching".to_string(), theme::signal::MIDI, None),
             Source::Following => {
                 let selected = self.graph_state.selected_nodes.first().and_then(|&id| self.graph_state.graph.nodes.get(id));
@@ -394,6 +420,31 @@ struct Plate {
     doing: String,
     ink: Color32,
     ask: Option<(String, Ask)>,
+}
+
+/// How the strip lays out a controller's encoders and faders, in columns
+/// and rows: a MiniLab's eight encoders are two rows of four, as on the
+/// hardware, a BeatStep's sixteen two rows of eight, and a Launch
+/// Control's twenty-four three rows of eight. The faders go in rows of
+/// eight, each two rows tall.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Layout {
+    encoder_columns: usize,
+    fader_columns: usize,
+    /// The strip's height in rows: at least the plate's two.
+    rows: usize,
+}
+
+impl Layout {
+    /// The most in a row.
+    const ROW: usize = 8;
+
+    fn of(encoders: usize, faders: usize) -> Self {
+        let encoder_columns = if encoders <= 2 * Self::ROW { encoders.div_ceil(2) } else { Self::ROW }.max(1);
+        let fader_columns = faders.clamp(1, Self::ROW);
+        let rows = encoders.div_ceil(encoder_columns).max(2 * faders.div_ceil(fader_columns)).max(2);
+        Self { encoder_columns, fader_columns, rows }
+    }
 }
 
 /// A link on the plate, clicked.
@@ -453,9 +504,9 @@ fn draw_plate(ui: &mut egui::Ui, painter: &egui::Painter, rect: Rect, plate: &Pl
     response.clicked().then_some(*ask)
 }
 
-/// A hairline between one kind of control and the next.
-fn divider(painter: &egui::Painter, x: f32, top: f32, s: f32) {
-    let span = 2.0 * size::ROW * s;
+/// A hairline between one kind of control and the next, down a strip
+/// `span` tall.
+fn divider(painter: &egui::Painter, x: f32, top: f32, span: f32) {
     painter.vline(x, top + 0.18 * span..=top + 0.82 * span, Stroke::new(1.0, theme::background::GRID_MAJOR));
 }
 
@@ -496,7 +547,9 @@ fn arc(painter: &egui::Painter, center: Pos2, radius: f32, from: f32, to: f32, s
 /// badges have (#429): so the strip's encoder 3 is the knob badged 3.
 fn number_badge(painter: &egui::Painter, center: Pos2, number: &str, strength: f32, s: f32) {
     let height = 11.0 * s;
-    let width = if number.chars().count() > 1 { 16.0 * s } else { height };
+    // Wider for "16", and again for "F12"
+    let width = height + number.chars().count().saturating_sub(1) as f32 * 5.0 * s;
+
     let rect = Rect::from_center_size(center, vec2(width, height));
     painter.rect_filled(rect, height / 2.0, theme::signal::MIDI.gamma_multiply(0.8 * strength));
     painter.text(rect.center() + vec2(0.0, 0.25 * s), Align2::CENTER_CENTER, number, FontId::proportional(8.0 * s), Color32::WHITE.gamma_multiply(0.92 * strength.max(0.5)));

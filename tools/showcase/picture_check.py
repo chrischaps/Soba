@@ -108,6 +108,8 @@ FACES = {
     "sampler_tidy": ["source.sampler"],
     "slicer_display": ["fx.slicer"],
     "slope_display": ["mod.slope"],
+    "spectrum_display": ["util.spectrum"],
+    "spectrum_view": ["util.spectrum"],
     "step_ear": ["seq.step"],
     "step_grid": ["seq.step"],
     "tape_display": ["fx.tape"],

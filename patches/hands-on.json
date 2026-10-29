@@ -1,13 +1,13 @@
 {
   "name": "Hands On",
-  "version": 5,
+  "version": 6,
   "nodes": [
     {
       "id": 1,
       "module_id": "input.poly_midi",
       "position": [
-        40,
-        80
+        40.0,
+        80.0
       ],
       "parameters": [
         {
@@ -41,8 +41,8 @@
       "id": 2,
       "module_id": "input.controls",
       "position": [
-        40,
-        665
+        40.0,
+        665.0
       ],
       "parameters": [
         {
@@ -153,61 +153,11 @@
       ]
     },
     {
-      "id": 3,
-      "module_id": "input.pads",
-      "position": [
-        300,
-        80
-      ],
-      "parameters": [
-        {
-          "name": "Mode",
-          "type": "Select",
-          "value": 0
-        },
-        {
-          "name": "Base",
-          "type": "Number",
-          "value": 36.0
-        },
-        {
-          "name": "Channel",
-          "type": "Select",
-          "value": 10
-        }
-      ]
-    },
-    {
-      "id": 4,
-      "module_id": "input.pads",
-      "position": [
-        2600,
-        80
-      ],
-      "parameters": [
-        {
-          "name": "Mode",
-          "type": "Select",
-          "value": 0
-        },
-        {
-          "name": "Base",
-          "type": "Number",
-          "value": 44.0
-        },
-        {
-          "name": "Channel",
-          "type": "Select",
-          "value": 10
-        }
-      ]
-    },
-    {
       "id": 5,
       "module_id": "util.clock",
       "position": [
-        600,
-        1480
+        600.0,
+        1480.0
       ],
       "parameters": [
         {
@@ -241,8 +191,8 @@
       "id": 6,
       "module_id": "seq.step",
       "position": [
-        830,
-        1480
+        830.0,
+        1480.0
       ],
       "parameters": [
         {
@@ -509,6 +459,11 @@
           "name": "Step 16 Velocity",
           "type": "Number",
           "value": 68.0
+        },
+        {
+          "name": "Gate Mode",
+          "type": "Select",
+          "value": 1
         }
       ]
     },
@@ -516,8 +471,8 @@
       "id": 7,
       "module_id": "util.divider",
       "position": [
-        600,
-        1880
+        600.0,
+        1880.0
       ],
       "parameters": [
         {
@@ -541,8 +496,8 @@
       "id": 8,
       "module_id": "osc.sine",
       "position": [
-        1220,
-        1480
+        1220.0,
+        1480.0
       ],
       "parameters": [
         {
@@ -571,8 +526,8 @@
       "id": 9,
       "module_id": "filter.ladder",
       "position": [
-        1440,
-        1480
+        1440.0,
+        1480.0
       ],
       "parameters": [
         {
@@ -601,8 +556,8 @@
       "id": 10,
       "module_id": "mod.adsr",
       "position": [
-        1440,
-        1823
+        1440.0,
+        1823.0
       ],
       "parameters": [
         {
@@ -636,8 +591,8 @@
       "id": 11,
       "module_id": "util.vca",
       "position": [
-        1220,
-        2087
+        1220.0,
+        2087.0
       ],
       "parameters": [
         {
@@ -656,8 +611,8 @@
       "id": 12,
       "module_id": "osc.sine",
       "position": [
-        600,
-        80
+        600.0,
+        80.0
       ],
       "parameters": [
         {
@@ -691,8 +646,8 @@
       "id": 13,
       "module_id": "filter.ladder",
       "position": [
-        820,
-        80
+        820.0,
+        80.0
       ],
       "parameters": [
         {
@@ -721,8 +676,8 @@
       "id": 14,
       "module_id": "mod.adsr",
       "position": [
-        820,
-        423
+        820.0,
+        423.0
       ],
       "parameters": [
         {
@@ -756,8 +711,8 @@
       "id": 15,
       "module_id": "util.vca",
       "position": [
-        600,
-        687
+        600.0,
+        687.0
       ],
       "parameters": [
         {
@@ -776,8 +731,8 @@
       "id": 16,
       "module_id": "source.drum",
       "position": [
-        1120,
-        80
+        1120.0,
+        80.0
       ],
       "parameters": [
         {
@@ -816,8 +771,8 @@
       "id": 17,
       "module_id": "source.drum",
       "position": [
-        1442,
-        80
+        1442.0,
+        80.0
       ],
       "parameters": [
         {
@@ -856,8 +811,8 @@
       "id": 18,
       "module_id": "source.drum",
       "position": [
-        1120,
-        476
+        1120.0,
+        476.0
       ],
       "parameters": [
         {
@@ -896,8 +851,8 @@
       "id": 19,
       "module_id": "source.drum",
       "position": [
-        1120,
-        872
+        1120.0,
+        872.0
       ],
       "parameters": [
         {
@@ -936,8 +891,8 @@
       "id": 20,
       "module_id": "source.drum",
       "position": [
-        1442,
-        476
+        1442.0,
+        476.0
       ],
       "parameters": [
         {
@@ -976,8 +931,8 @@
       "id": 21,
       "module_id": "util.mix",
       "position": [
-        1442,
-        872
+        1442.0,
+        872.0
       ],
       "parameters": [
         {
@@ -1006,8 +961,8 @@
       "id": 22,
       "module_id": "util.mixer",
       "position": [
-        1800,
-        80
+        1800.0,
+        80.0
       ],
       "parameters": [
         {
@@ -1091,8 +1046,8 @@
       "id": 23,
       "module_id": "fx.delay",
       "position": [
-        2236,
-        80
+        2236.0,
+        80.0
       ],
       "parameters": [
         {
@@ -1136,8 +1091,8 @@
       "id": 24,
       "module_id": "fx.reverb",
       "position": [
-        2236,
-        525
+        2236.0,
+        525.0
       ],
       "parameters": [
         {
@@ -1181,8 +1136,8 @@
       "id": 25,
       "module_id": "util.looper",
       "position": [
-        2862,
-        80
+        2862.0,
+        80.0
       ],
       "parameters": [
         {
@@ -1226,8 +1181,8 @@
       "id": 26,
       "module_id": "util.scenes",
       "position": [
-        2600,
-        536
+        2600.0,
+        536.0
       ],
       "parameters": [
         {
@@ -1248,95 +1203,95 @@
       ],
       "scenes": {
         "A": {
+          "5": {
+            "Swing": 56.0
+          },
+          "9": {
+            "Resonance": 0.3
+          },
+          "12": {
+            "Detune": 0.3
+          },
           "13": {
             "Resonance": 0.3
           },
           "14": {
             "Release": 0.5
           },
-          "12": {
-            "Detune": 0.3
-          },
           "23": {
             "Feedback": 0.35
           },
           "24": {
             "Decay": 3.2
-          },
-          "9": {
-            "Resonance": 0.3
-          },
-          "5": {
-            "Swing": 56.0
           }
         },
         "B": {
+          "5": {
+            "Swing": 58.0
+          },
+          "9": {
+            "Resonance": 0.5
+          },
+          "12": {
+            "Detune": 0.2
+          },
           "13": {
             "Resonance": 0.45
           },
           "14": {
             "Release": 1.2
           },
-          "12": {
-            "Detune": 0.2
-          },
           "23": {
             "Feedback": 0.62
           },
           "24": {
             "Decay": 6.0
-          },
-          "9": {
-            "Resonance": 0.5
-          },
-          "5": {
-            "Swing": 58.0
           }
         },
         "C": {
+          "5": {
+            "Swing": 54.0
+          },
+          "9": {
+            "Resonance": 0.22
+          },
+          "12": {
+            "Detune": 0.5
+          },
           "13": {
             "Resonance": 0.2
           },
           "14": {
             "Release": 0.3
           },
-          "12": {
-            "Detune": 0.5
-          },
           "23": {
             "Feedback": 0.25
           },
           "24": {
             "Decay": 2.0
-          },
-          "9": {
-            "Resonance": 0.22
-          },
-          "5": {
-            "Swing": 54.0
           }
         },
         "D": {
+          "5": {
+            "Swing": 50.0
+          },
+          "9": {
+            "Resonance": 0.3
+          },
+          "12": {
+            "Detune": 0.65
+          },
           "13": {
             "Resonance": 0.35
           },
           "14": {
             "Release": 2.5
           },
-          "12": {
-            "Detune": 0.65
-          },
           "23": {
             "Feedback": 0.5
           },
           "24": {
             "Decay": 9.0
-          },
-          "9": {
-            "Resonance": 0.3
-          },
-          "5": {
-            "Swing": 50.0
           }
         }
       }
@@ -1345,8 +1300,8 @@
       "id": 27,
       "module_id": "output.audio",
       "position": [
-        3132,
-        80
+        3132.0,
+        80.0
       ],
       "parameters": [
         {
@@ -1490,7 +1445,7 @@
     },
     {
       "from_node": 3,
-      "from_port": "Hit",
+      "from_port": "Vel 1",
       "to_node": 16,
       "to_port": "Accent"
     },
@@ -1502,7 +1457,7 @@
     },
     {
       "from_node": 3,
-      "from_port": "Hit",
+      "from_port": "Vel 3",
       "to_node": 18,
       "to_port": "Accent"
     },
@@ -1514,7 +1469,7 @@
     },
     {
       "from_node": 3,
-      "from_port": "Hit",
+      "from_port": "Vel 4",
       "to_node": 19,
       "to_port": "Accent"
     },
@@ -1526,7 +1481,7 @@
     },
     {
       "from_node": 3,
-      "from_port": "Hit",
+      "from_port": "Vel 6",
       "to_node": 17,
       "to_port": "Accent"
     },
@@ -1538,13 +1493,13 @@
     },
     {
       "from_node": 3,
-      "from_port": "Hit",
+      "from_port": "Vel 7",
       "to_node": 20,
       "to_port": "Accent"
     },
     {
       "from_node": 3,
-      "from_port": "Pressure",
+      "from_port": "Pressure 7",
       "to_node": 20,
       "to_port": "Decay"
     },
@@ -1875,84 +1830,84 @@
     {
       "title": "Your MiniLab",
       "position": [
-        16,
-        56
+        16.0,
+        56.0
       ],
       "size": [
-        530,
-        992
+        530.0,
+        992.0
       ],
       "color": "green"
     },
     {
       "title": "The groove",
       "position": [
-        576,
-        1456
+        576.0,
+        1456.0
       ],
       "size": [
-        588,
-        787
+        588.0,
+        787.0
       ],
       "color": "amber"
     },
     {
       "title": "Bass",
       "position": [
-        1196,
-        1456
+        1196.0,
+        1456.0
       ],
       "size": [
-        498,
-        862
+        498.0,
+        862.0
       ],
       "color": "blue"
     },
     {
       "title": "Lead, on the keys",
       "position": [
-        576,
-        56
+        576.0,
+        56.0
       ],
       "size": [
-        498,
-        862
+        498.0,
+        862.0
       ],
       "color": "violet"
     },
     {
       "title": "Kit, on pad bank A",
       "position": [
-        1096,
-        56
+        1096.0,
+        56.0
       ],
       "size": [
-        652,
-        1212
+        652.0,
+        1212.0
       ],
       "color": "rose"
     },
     {
       "title": "Mix and echoes",
       "position": [
-        1776,
-        56
+        1776.0,
+        56.0
       ],
       "size": [
-        766,
-        865
+        766.0,
+        865.0
       ],
       "color": "cyan"
     },
     {
       "title": "Loops and scenes, on pad bank B",
       "position": [
-        2576,
-        56
+        2576.0,
+        56.0
       ],
       "size": [
-        787,
-        835
+        787.0,
+        835.0
       ],
       "color": "teal"
     }
@@ -1961,26 +1916,880 @@
     {
       "text": "**Hands On** is made for an Arturia MiniLab 3 as it comes from the box. Pick it in **MIDI In** and press **▶ Play**: a bassline plays itself in D Dorian, the keys play a lead over it, and the mod strip opens the lead. Teach Soba your MiniLab once (**MIDI In** ▸ Teach Your Controller) and **Ctrl+H** draws it, showing what each control does.",
       "position": [
-        16,
-        1078
+        16.0,
+        1078.0
       ],
-      "width": 530
+      "width": 530.0
     },
     {
       "text": "Encoders 1 – 8: the lead's Cutoff, Res, Release and Detune, the echoes' Feedback, the room's Decay, the bass's Res and the Swing, each picked up where it stands. Faders 1 and 2 are **Controls** cables, a wash into the echoes and the bass's filter; 3 and 4 set the kit's and the lead's levels. The pitch strip bends the bass with the lead. Another controller? **Ctrl+L** maps yours.",
       "position": [
-        576,
-        948
+        576.0,
+        948.0
       ],
-      "width": 498
+      "width": 498.0
     },
     {
       "text": "Pad bank A plays the kit, each drum as hard as it's hit: **1** kick, **3** snare, **4** clap, **6** tom, **7** closed hat; press into a held pad and the hat rings on. Bank B: **1** Rec, **2** Stop, **3** Undo, **4** Reverse, **5 – 8** scenes A – D. The main encoder turns through the lead's waves; click it to clear the loop.",
       "position": [
-        1096,
-        1298
+        1096.0,
+        1298.0
       ],
-      "width": 652
+      "width": 652.0
+    }
+  ],
+  "groups": [
+    {
+      "id": 3,
+      "name": "Pads A",
+      "position": [
+        300.0,
+        80.0
+      ],
+      "inputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Gate 1",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 1",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 2",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 3",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 3",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 4",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 4",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 5",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 6",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 6",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 7",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 7",
+          "type": "Control"
+        },
+        {
+          "name": "Pressure 7",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 8",
+          "type": "Gate"
+        }
+      ],
+      "inputs_position": [
+        -280.0,
+        145.0
+      ],
+      "outputs_position": [
+        1040.0,
+        145.0
+      ],
+      "nodes": [
+        {
+          "id": 28,
+          "module_id": "input.pad",
+          "position": [
+            0.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 29,
+          "module_id": "input.pad",
+          "position": [
+            250.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 37.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 30,
+          "module_id": "input.pad",
+          "position": [
+            500.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 38.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 31,
+          "module_id": "input.pad",
+          "position": [
+            750.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 39.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 32,
+          "module_id": "input.pad",
+          "position": [
+            0.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 40.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 33,
+          "module_id": "input.pad",
+          "position": [
+            250.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 41.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 34,
+          "module_id": "input.pad",
+          "position": [
+            500.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 42.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 35,
+          "module_id": "input.pad",
+          "position": [
+            750.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 43.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        }
+      ],
+      "connections": [
+        {
+          "from_node": 3,
+          "from_port": "MIDI",
+          "to_node": 28,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 28,
+          "from_port": "Gate",
+          "to_node": 3,
+          "to_port": "Gate 1"
+        },
+        {
+          "from_node": 28,
+          "from_port": "Velocity",
+          "to_node": 3,
+          "to_port": "Vel 1"
+        },
+        {
+          "from_node": 3,
+          "from_port": "MIDI",
+          "to_node": 29,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 29,
+          "from_port": "Gate",
+          "to_node": 3,
+          "to_port": "Gate 2"
+        },
+        {
+          "from_node": 3,
+          "from_port": "MIDI",
+          "to_node": 30,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 30,
+          "from_port": "Gate",
+          "to_node": 3,
+          "to_port": "Gate 3"
+        },
+        {
+          "from_node": 30,
+          "from_port": "Velocity",
+          "to_node": 3,
+          "to_port": "Vel 3"
+        },
+        {
+          "from_node": 3,
+          "from_port": "MIDI",
+          "to_node": 31,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 31,
+          "from_port": "Gate",
+          "to_node": 3,
+          "to_port": "Gate 4"
+        },
+        {
+          "from_node": 31,
+          "from_port": "Velocity",
+          "to_node": 3,
+          "to_port": "Vel 4"
+        },
+        {
+          "from_node": 3,
+          "from_port": "MIDI",
+          "to_node": 32,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 32,
+          "from_port": "Gate",
+          "to_node": 3,
+          "to_port": "Gate 5"
+        },
+        {
+          "from_node": 3,
+          "from_port": "MIDI",
+          "to_node": 33,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 33,
+          "from_port": "Gate",
+          "to_node": 3,
+          "to_port": "Gate 6"
+        },
+        {
+          "from_node": 33,
+          "from_port": "Velocity",
+          "to_node": 3,
+          "to_port": "Vel 6"
+        },
+        {
+          "from_node": 3,
+          "from_port": "MIDI",
+          "to_node": 34,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 34,
+          "from_port": "Gate",
+          "to_node": 3,
+          "to_port": "Gate 7"
+        },
+        {
+          "from_node": 34,
+          "from_port": "Velocity",
+          "to_node": 3,
+          "to_port": "Vel 7"
+        },
+        {
+          "from_node": 34,
+          "from_port": "Pressure",
+          "to_node": 3,
+          "to_port": "Pressure 7"
+        },
+        {
+          "from_node": 3,
+          "from_port": "MIDI",
+          "to_node": 35,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 35,
+          "from_port": "Gate",
+          "to_node": 3,
+          "to_port": "Gate 8"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Pads B",
+      "position": [
+        2600.0,
+        80.0
+      ],
+      "inputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Gate 1",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 2",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 3",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 4",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 5",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 6",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 7",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 8",
+          "type": "Gate"
+        }
+      ],
+      "inputs_position": [
+        -280.0,
+        145.0
+      ],
+      "outputs_position": [
+        1040.0,
+        145.0
+      ],
+      "nodes": [
+        {
+          "id": 36,
+          "module_id": "input.pad",
+          "position": [
+            0.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 44.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 37,
+          "module_id": "input.pad",
+          "position": [
+            250.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 45.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 38,
+          "module_id": "input.pad",
+          "position": [
+            500.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 46.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 39,
+          "module_id": "input.pad",
+          "position": [
+            750.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 47.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 40,
+          "module_id": "input.pad",
+          "position": [
+            0.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 48.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 41,
+          "module_id": "input.pad",
+          "position": [
+            250.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 49.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 42,
+          "module_id": "input.pad",
+          "position": [
+            500.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 50.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 43,
+          "module_id": "input.pad",
+          "position": [
+            750.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 51.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        }
+      ],
+      "connections": [
+        {
+          "from_node": 4,
+          "from_port": "MIDI",
+          "to_node": 36,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 36,
+          "from_port": "Gate",
+          "to_node": 4,
+          "to_port": "Gate 1"
+        },
+        {
+          "from_node": 4,
+          "from_port": "MIDI",
+          "to_node": 37,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 37,
+          "from_port": "Gate",
+          "to_node": 4,
+          "to_port": "Gate 2"
+        },
+        {
+          "from_node": 4,
+          "from_port": "MIDI",
+          "to_node": 38,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 38,
+          "from_port": "Gate",
+          "to_node": 4,
+          "to_port": "Gate 3"
+        },
+        {
+          "from_node": 4,
+          "from_port": "MIDI",
+          "to_node": 39,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 39,
+          "from_port": "Gate",
+          "to_node": 4,
+          "to_port": "Gate 4"
+        },
+        {
+          "from_node": 4,
+          "from_port": "MIDI",
+          "to_node": 40,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 40,
+          "from_port": "Gate",
+          "to_node": 4,
+          "to_port": "Gate 5"
+        },
+        {
+          "from_node": 4,
+          "from_port": "MIDI",
+          "to_node": 41,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 41,
+          "from_port": "Gate",
+          "to_node": 4,
+          "to_port": "Gate 6"
+        },
+        {
+          "from_node": 4,
+          "from_port": "MIDI",
+          "to_node": 42,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 42,
+          "from_port": "Gate",
+          "to_node": 4,
+          "to_port": "Gate 7"
+        },
+        {
+          "from_node": 4,
+          "from_port": "MIDI",
+          "to_node": 43,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 43,
+          "from_port": "Gate",
+          "to_node": 4,
+          "to_port": "Gate 8"
+        }
+      ]
     }
   ]
 }

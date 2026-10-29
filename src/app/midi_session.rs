@@ -182,6 +182,10 @@ pub struct MidiSession {
     /// them, so they say for themselves whether the patch has changed.
     saved_mappings: MidiMappings,
     learning: Option<MidiLearnTarget>,
+    /// What a learn walking a group (#481) has already learned, each as the
+    /// writes it made: an event that would write one of them again (a pad
+    /// hit twice, or bouncing) isn't learned, and passes by.
+    taken: Vec<Vec<(usize, f32)>>,
     /// The CC just learned, and the values it has sent since: enough of
     /// them tell an endless encoder from a fader.
     guessing: Option<Guess>,
@@ -624,6 +628,9 @@ impl MidiSession {
             return false;
         };
         let Some(writes) = into.hear(event) else { return false };
+        if self.taken.contains(&writes) {
+            return false;
+        }
         self.learning = None;
         heard.learned = true;
         heard.learned_into.extend(writes.into_iter().map(|(param, value)| (node_id, param, value)));
@@ -639,15 +646,24 @@ impl MidiSession {
     /// Waits for a CC or a note for `target`, in place of any control it
     /// waited for.
     pub fn start_learn(&mut self, target: MidiLearnTarget) {
+        self.start_learn_past(target, Vec::new());
+    }
+
+    /// Waits for a CC or a note for `target`, as [`start_learn`](Self::start_learn)
+    /// does, but passes by one that would write what a step of a walk has
+    /// already learned: one of `taken`.
+    pub fn start_learn_past(&mut self, target: MidiLearnTarget, taken: Vec<Vec<(usize, f32)>>) {
         // Learning a control wants the controller more than teaching it does
         self.hands.cancel_teaching();
         self.guessing = None;
         self.learning = Some(target);
+        self.taken = taken;
     }
 
     /// Stops waiting for a CC or a note.
     pub fn cancel_learn(&mut self) {
         self.learning = None;
+        self.taken.clear();
     }
 
     /// The control MIDI Learn waits for a CC or a note for.
@@ -956,6 +972,33 @@ mod tests {
         session.start_learn(into_controls());
         let heard = hear(&mut session, &[MidiEvent::PitchBend { channel: 0, value: 0 }]);
         assert_eq!(heard.learned_into, [(9, Controls::source_param(1), 1.0), (9, Controls::channel_param(1), 1.0)]);
+    }
+
+    #[test]
+    fn a_walks_next_learn_passes_by_a_pad_already_learned() {
+        // A Pad's learn: its note (1) and channel (2)
+        let pad = MidiLearnTarget {
+            into: Some(ModuleLearn {
+                kinds: super::super::module_learn::LearnKinds { note: Some(0.0), ..super::super::module_learn::LearnKinds::NONE },
+                kind: None,
+                number: Some(1),
+                channel: Some(2),
+                encoding: None,
+            }),
+            ..target(5)
+        };
+        let mut session = MidiSession::default();
+        session.start_learn_past(pad.clone(), vec![vec![(1, 36.0), (2, 10.0)]]);
+        // The first pad again, bouncing, then the second
+        let heard = hear(&mut session, &[on(9, 36), on(9, 37)]);
+        assert_eq!(heard.learned_into, [(5, 1, 37.0), (5, 2, 10.0)]);
+        // The same note on another channel is another pad
+        session.start_learn_past(pad.clone(), vec![vec![(1, 36.0), (2, 10.0)]]);
+        assert_eq!(hear(&mut session, &[on(0, 36)]).learned_into, [(5, 1, 36.0), (5, 2, 1.0)]);
+        // A plain learn forgets what the walk took
+        session.start_learn_past(pad.clone(), vec![vec![(1, 36.0), (2, 10.0)]]);
+        session.start_learn(pad);
+        assert_eq!(hear(&mut session, &[on(9, 36)]).learned_into, [(5, 1, 36.0), (5, 2, 10.0)]);
     }
 
     #[test]

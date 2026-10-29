@@ -1,22 +1,7 @@
 {
   "name": "Pad Kit",
-  "version": 5,
+  "version": 6,
   "nodes": [
-    {
-      "id": 1,
-      "module_id": "input.pads",
-      "position": [
-        40.0,
-        420.0
-      ],
-      "parameters": [
-        {
-          "name": "Mode",
-          "type": "Select",
-          "value": 0
-        }
-      ]
-    },
     {
       "id": 2,
       "module_id": "source.drum",
@@ -437,7 +422,7 @@
     },
     {
       "from_node": 1,
-      "from_port": "Hit",
+      "from_port": "Vel 1",
       "to_node": 2,
       "to_port": "Accent"
     },
@@ -449,7 +434,7 @@
     },
     {
       "from_node": 1,
-      "from_port": "Hit",
+      "from_port": "Vel 3",
       "to_node": 3,
       "to_port": "Accent"
     },
@@ -461,7 +446,7 @@
     },
     {
       "from_node": 1,
-      "from_port": "Hit",
+      "from_port": "Vel 4",
       "to_node": 4,
       "to_port": "Accent"
     },
@@ -473,7 +458,7 @@
     },
     {
       "from_node": 1,
-      "from_port": "Hit",
+      "from_port": "Vel 6",
       "to_node": 5,
       "to_port": "Accent"
     },
@@ -485,7 +470,7 @@
     },
     {
       "from_node": 1,
-      "from_port": "Hit",
+      "from_port": "Vel 7",
       "to_node": 6,
       "to_port": "Accent"
     },
@@ -585,7 +570,7 @@
   ],
   "notes": [
     {
-      "text": "Hit the pads on your controller, or click them here. Each **Gate** strikes its Drum, and **Hit**, how hard the last pad was struck, goes to every Drum's **Accent**: each hears its own hit.",
+      "text": "Hit the pads on your controller, or double-click **Pads** and click them there. Each pad is a **Pad**: its **Gate** strikes its Drum, and its **Vel**, how hard it was struck, goes to that Drum's **Accent**.",
       "position": [
         16.0,
         40.0
@@ -593,12 +578,460 @@
       "width": 380.0
     },
     {
-      "text": "Notes the pads hear are theirs: a Note In on Omni lets them be. Pads that send other notes? Click **learn** and hit pad 1.",
+      "text": "Notes the pads hear are theirs: a Note In on Omni lets them be. Pads that send other notes? Right-click **Pads**, choose **Learn in order** and hit them in turn.",
       "position": [
         16.0,
         200.0
       ],
       "width": 380.0
+    }
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "name": "Pads",
+      "position": [
+        40.0,
+        420.0
+      ],
+      "inputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Gate 1",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 1",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 2",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 3",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 3",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 4",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 4",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 5",
+          "type": "Gate"
+        },
+        {
+          "name": "Gate 6",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 6",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 7",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 7",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 8",
+          "type": "Gate"
+        }
+      ],
+      "inputs_position": [
+        -280.0,
+        145.0
+      ],
+      "outputs_position": [
+        1040.0,
+        145.0
+      ],
+      "nodes": [
+        {
+          "id": 10,
+          "module_id": "input.pad",
+          "position": [
+            0.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "module_id": "input.pad",
+          "position": [
+            250.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 37.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "module_id": "input.pad",
+          "position": [
+            500.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 38.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "module_id": "input.pad",
+          "position": [
+            750.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 39.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "module_id": "input.pad",
+          "position": [
+            0.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 40.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 15,
+          "module_id": "input.pad",
+          "position": [
+            250.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 41.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 16,
+          "module_id": "input.pad",
+          "position": [
+            500.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 42.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        },
+        {
+          "id": 17,
+          "module_id": "input.pad",
+          "position": [
+            750.0,
+            290.0
+          ],
+          "parameters": [
+            {
+              "name": "Mode",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 43.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 10
+            },
+            {
+              "name": "Press",
+              "type": "Number",
+              "value": 0.0
+            }
+          ]
+        }
+      ],
+      "connections": [
+        {
+          "from_node": 1,
+          "from_port": "MIDI",
+          "to_node": 10,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 10,
+          "from_port": "Gate",
+          "to_node": 1,
+          "to_port": "Gate 1"
+        },
+        {
+          "from_node": 10,
+          "from_port": "Velocity",
+          "to_node": 1,
+          "to_port": "Vel 1"
+        },
+        {
+          "from_node": 1,
+          "from_port": "MIDI",
+          "to_node": 11,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 11,
+          "from_port": "Gate",
+          "to_node": 1,
+          "to_port": "Gate 2"
+        },
+        {
+          "from_node": 1,
+          "from_port": "MIDI",
+          "to_node": 12,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 12,
+          "from_port": "Gate",
+          "to_node": 1,
+          "to_port": "Gate 3"
+        },
+        {
+          "from_node": 12,
+          "from_port": "Velocity",
+          "to_node": 1,
+          "to_port": "Vel 3"
+        },
+        {
+          "from_node": 1,
+          "from_port": "MIDI",
+          "to_node": 13,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 13,
+          "from_port": "Gate",
+          "to_node": 1,
+          "to_port": "Gate 4"
+        },
+        {
+          "from_node": 13,
+          "from_port": "Velocity",
+          "to_node": 1,
+          "to_port": "Vel 4"
+        },
+        {
+          "from_node": 1,
+          "from_port": "MIDI",
+          "to_node": 14,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 14,
+          "from_port": "Gate",
+          "to_node": 1,
+          "to_port": "Gate 5"
+        },
+        {
+          "from_node": 1,
+          "from_port": "MIDI",
+          "to_node": 15,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 15,
+          "from_port": "Gate",
+          "to_node": 1,
+          "to_port": "Gate 6"
+        },
+        {
+          "from_node": 15,
+          "from_port": "Velocity",
+          "to_node": 1,
+          "to_port": "Vel 6"
+        },
+        {
+          "from_node": 1,
+          "from_port": "MIDI",
+          "to_node": 16,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 16,
+          "from_port": "Gate",
+          "to_node": 1,
+          "to_port": "Gate 7"
+        },
+        {
+          "from_node": 16,
+          "from_port": "Velocity",
+          "to_node": 1,
+          "to_port": "Vel 7"
+        },
+        {
+          "from_node": 1,
+          "from_port": "MIDI",
+          "to_node": 17,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 17,
+          "from_port": "Gate",
+          "to_node": 1,
+          "to_port": "Gate 8"
+        }
+      ]
     }
   ]
 }

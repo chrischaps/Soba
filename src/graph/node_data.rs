@@ -228,6 +228,9 @@ pub enum NodeDisplay {
     SlopeShape,
     /// Dancer: a stick figure dancing on a stage, as big as its Size.
     Dancer,
+    /// Spectrum: each input's partials as lines on a keyboard's axis, the
+    /// note's harmonics numbered, as big as its Size.
+    Spectrum,
     /// Link Out: a lamp per lane, what it sends, and whether Seoul hears.
     LinkLanes,
     /// MIDI Out: its device, a keyboard of the notes it holds, its CCs and clock.
@@ -267,8 +270,8 @@ pub enum NodeDisplay {
     /// Controls: a slim fader per slot, moving with the hardware, and what
     /// each hears.
     ControlFaders,
-    /// Pads: eight pads in two rows, flashing as they're hit.
-    PadGrid,
+    /// Pad: one pad, flashing as it's hit (#480).
+    OnePad,
     /// Instrument: the hardware it plays and its profile, over its knobs
     /// in the hardware's own names (#442).
     InstrumentFace,
@@ -1551,6 +1554,11 @@ impl NodeDataTrait for SynthNodeData {
                     responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
                 }
             }
+            NodeDisplay::Spectrum => {
+                if let Some((param_name, value)) = super::spectrum_display::spectrum_display(ui, node_id, graph, user_state, zoom) {
+                    responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
+                }
+            }
             NodeDisplay::SlopeShape => super::slope_display::slope_display(ui, node_id, graph, user_state, zoom),
             NodeDisplay::LinkLanes => super::link_display::link_display(ui, node_id, graph, user_state, zoom),
             NodeDisplay::MidiOutKeys => {
@@ -1581,7 +1589,7 @@ impl NodeDataTrait for SynthNodeData {
                 let asked = super::controls_face::controls_face(ui, node_id, graph, user_state, zoom);
                 responses.extend(asked.into_iter().map(NodeResponse::User));
             }
-            NodeDisplay::PadGrid => {
+            NodeDisplay::OnePad => {
                 let asked = super::pads_face::pads_face(ui, node_id, graph, user_state, zoom);
                 responses.extend(asked.into_iter().map(NodeResponse::User));
             }

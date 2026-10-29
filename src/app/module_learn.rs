@@ -1,8 +1,8 @@
 //! Learning into a module (#427): MIDI Learn that teaches a module what to
 //! hear, rather than mapping a CC onto one of its knobs.
 //!
-//! A Controls slot hears one fader, knob or wheel, and a Pads pad (#428)
-//! one pad. Which one lives in the module's own hidden parameters (a kind,
+//! A Controls slot hears one fader, knob or wheel, and a Pad (#480) one
+//! pad. Which one lives in the module's own hidden parameters (a kind,
 //! a number, a channel), so the module can read MIDI on the audio thread,
 //! sample-accurately, and the patch keeps what it learned. Learning one is
 //! MIDI Learn as every control has it: right-click > Learn, a blinking
@@ -20,8 +20,8 @@
 //!     engine_node_id,
 //!     // The parameter the face lights while it waits: by convention the
 //!     // first one the learn writes. `is_midi_learn_target` checks it
-//!     param_index: Pads::note_param(pad),
-//!     param_name: "Pads 3".into(), // the status bar asks a move "for" it
+//!     param_index: Pad::PARAM_NOTE,
+//!     param_name: "Pad on C2".into(), // the status bar asks a move "for" it
 //!     min_value: 0.0,
 //!     max_value: 1.0,
 //!     control: MidiControl::Button,
@@ -29,8 +29,8 @@
 //!     into: Some(Box::new(ModuleLearn {
 //!         kinds: LearnKinds { note: Some(0.0), ..LearnKinds::NONE },
 //!         kind: None,
-//!         number: Some(Pads::note_param(pad)),
-//!         channel: Some(Pads::channel_param(pad)),
+//!         number: Some(Pad::PARAM_NOTE),
+//!         channel: Some(Pad::PARAM_CHANNEL),
 //!         encoding: None,
 //!     })),
 //! }

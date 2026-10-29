@@ -126,7 +126,7 @@ fn listen_to(example: &Example) -> Listen {
     let played = patch
         .all_nodes()
         .iter()
-        .any(|n| n.module_id == soba::modules::note_in::ID || n.module_id == soba::modules::pads::ID);
+        .any(|n| n.module_id == soba::modules::note_in::ID || n.module_id == soba::modules::pad::ID);
     match SONGS.iter().find(|(file, _, _)| *file == example.file_name) {
         Some(&(_, bars, bpm)) => Listen { seconds: bars * 4.0 * 60.0 / bpm, hearings: 1, played },
         None if played => Listen { seconds: PLAYED_SECONDS, hearings: 1, played },

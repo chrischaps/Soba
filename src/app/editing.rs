@@ -92,6 +92,8 @@ pub fn add_module(
     position: Pos2,
 ) -> (NodeId, Vec<EngineCommand>) {
     let node_id = place_node(editor, user_state, template, position);
+    // A Pad beside others takes the next note (#481)
+    crate::graph::pads_follow_on(&mut editor.graph, &[node_id]);
     let engine_node_id = user_state.allocate_engine_node_id(node_id);
     (node_id, engine_sync::add_module(&editor.graph, node_id, engine_node_id))
 }
@@ -248,6 +250,9 @@ pub fn paste(
         .reduce(|a, b| a.min(b))
         .unwrap_or_default();
     let offset = to_patch(editor, user_state, at).to_vec2() - corner;
+    // Pads beside others take the next notes (#481), before the engine hears of them
+    let landed: Vec<NodeId> = merged.nodes.iter().filter(|n| !n.nested).map(|n| n.graph_id).collect();
+    crate::graph::pads_follow_on(&mut editor.graph, &landed);
     let annotations = if at_top {
         user_state.annotations.add_from_patch(&patch.frames, &patch.notes, offset)
     } else {

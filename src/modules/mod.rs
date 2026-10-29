@@ -36,7 +36,7 @@ pub mod mix;
 pub mod mixer;
 pub mod noise;
 pub mod note_in;
-pub mod pads;
+pub mod pad;
 pub mod oscillator;
 pub mod oscilloscope;
 pub mod output;
@@ -50,6 +50,7 @@ pub mod sequencer;
 pub mod setlist;
 pub mod slicer;
 pub mod slope;
+pub mod spectrum;
 pub mod tape;
 pub mod trigger_sequencer;
 pub mod vca;
@@ -91,7 +92,7 @@ builtin_modules! {
     MidiIn,
     NoteIn,
     Controls,
-    Pads,
+    Pad,
     Poly<SvfFilter>,
     Poly<LadderFilter>,
     Poly<AdsrEnvelope>,
@@ -108,6 +109,7 @@ builtin_modules! {
     Logic,
     Looper,
     Oscilloscope,
+    Spectrum,
     Dancer,
     StepSequencer,
     ChordSequencer,
@@ -143,7 +145,7 @@ pub use chorus::Chorus;
 pub use clock::Clock;
 pub use cloud::Cloud;
 pub use controls::Controls;
-pub use pads::Pads;
+pub use pad::Pad;
 pub use compressor::Compressor;
 pub use dancer::Dancer;
 pub use delay::StereoDelay;
@@ -181,6 +183,7 @@ pub use setlist::Setlist;
 pub use fm_voice::FmVoice;
 pub use slicer::Slicer;
 pub use slope::Slope;
+pub use spectrum::Spectrum;
 pub use tape::Tape;
 pub use trigger_sequencer::TriggerSequencer;
 pub use vca::Vca;
