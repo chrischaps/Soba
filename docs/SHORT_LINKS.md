@@ -223,10 +223,15 @@ plants(id      TEXT PRIMARY KEY REFERENCES patches(id),
 shows it, from `packaging/shortlinks/` against the deployed database:
 
 ```
+npm run garden:review        # each waiting plant in turn: s shows it, h hides it, enter leaves it
 npm run garden:pending       # the waiting plants, each with its short link to listen to
 npm run garden:show <id> …   # into the garden
 npm run garden:hide <id> …   # out of it again; its short link still works
 ```
+
+`garden:review` is the one to clear the notice with (#486): it asks of each
+plant, oldest first, with its link and what it grew from, and sets the answers
+together at the end, or at `q`. Answers given before a Ctrl-C are lost.
 
 (`node garden.mjs ... --local` does the same against `wrangler dev`'s
 database.) A whole takedown is still `patches.removed`, which also takes the
