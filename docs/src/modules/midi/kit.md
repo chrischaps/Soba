@@ -55,9 +55,17 @@ Some devices take the same CCs on every track, each on its track's own channel. 
 
 Turning the knobs to another track sends nothing. The track keeps its sound until you move a knob, and then only that knob is sent. **Send all** sends every knob to the track the knobs turn.
 
+### A knob on a track of its own
+
+A drum machine's sound is spread across its tracks: the kick's decay, the snare's tune, the hats' filter. So a knob can keep a track of its own, whichever pad has the orange bar. **Right-click a knob** and open **Track**, beside **Holds**: it lists the lanes' tracks. Choose **Track 3**, and that knob turns track 3, on its channel, whatever the Track says. **The Track's**, at the top, puts it back.
+
+A knob on its own track wears a small orange tag under its name, **T3**, wherever its track isn't the one the Track says. Twelve knobs can hold a whole kit this way: four for the kick, four for the snare, four for the hats. **Send all** sends each knob to its own track, so opening the patch brings every track back, not only one. Moving a knob to another track sends it there at once, as giving it another parameter does.
+
+A parameter with a channel of its own still goes there: the Digitakt's Delay and Reverb are on its FX channel, whichever track the knob is on. Choosing the kit again puts every knob back on the Track's. The patch writes each knob's track down by name, as it does a lane's part, so undo, copy and paste keep it, and a patch whose profile this computer doesn't have still sends it to the right channel.
+
 The SP-404MKII is different: its pads are notes, and its knobs are its effects. Its knobs stay on their own channels whichever pad you click.
 
-The Kit [listens to its device](./instrument.md#the-hardware-turns-it-too) as an Instrument does. Turn the Digitakt's filter on the track the knobs turn, and the Kit's knob follows. Turning another track's filter doesn't move it, because that track's CCs come on another channel.
+The Kit [listens to its device](./instrument.md#the-hardware-turns-it-too) as an Instrument does. Turn the Digitakt's filter on the track the knobs turn, and the Kit's knob follows. Turning another track's filter doesn't move it, because that track's CCs come on another channel, unless a knob holds that track's filter as a track of its own: then that knob follows.
 
 ## How it works
 
@@ -72,6 +80,7 @@ The Kit [listens to its device](./instrument.md#the-hardware-turns-it-too) as an
 - **The Digitakt's eight tracks from Soba.** A [Clock](../modulation/clock.md) into a [Trigger Sequencer](../utilities/trigger-sequencer.md), its eight lanes and their velocities into a Kit playing the **Digitakt**. Program a beat on the sequencer's grid. A Soba hi-hat from the same sequencer plays in time with the hardware.
 - **Pads for the SP-404MKII.** The same sequencer into a Kit playing the **SP-404MKII**. Click a pad to move its lane to any of the sixteen, the bottom row's (13 to 16) say.
 - **A filter on one track.** Click a Digitakt pad, choose **Knobs turn this track**, and patch an [LFO](../modulation/lfo.md) into **Filter Freq**. Only that track sweeps.
+- **A whole kit in twelve knobs.** On a Digitakt Kit, give knobs 1-4 the kick's Decay, Tune, Filter Freq and Level, each on **Track ▸ Track 1**; 5-8 the snare's on Track 2; 9-12 the hats' on Track 3. Save the patch, and opening it again brings all three back.
 
 ## Related
 

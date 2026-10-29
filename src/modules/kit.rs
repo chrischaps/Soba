@@ -13,7 +13,9 @@
 //! Its twelve knobs are an Instrument's ([`Knobs`]). On a device that
 //! takes the same CCs on each track's channel (the Digitakt), they turn the
 //! lane the Track says. Choosing another track sends nothing until a knob
-//! moves, so the track keeps its sound.
+//! moves, so the track keeps its sound. A knob can keep a track of its own
+//! whatever the Track says (#468): the editor hands it over already on that
+//! track's channel, so twelve knobs hold a whole kit's sound.
 //!
 //! Which part each lane plays reaches the audio thread as a [`LaneMap`],
 //! by value, with `EngineCommand::MapLane`, as the knobs' maps do.
@@ -661,6 +663,54 @@ mod tests {
         let expected: Vec<Vec<u8>> = (0..6u8).map(|part| vec![0x90 + part, 60, 127]).collect();
         assert_eq!(notes, expected, "six parts: lanes 7 and 8 play nothing");
         assert_eq!(knobs, [vec![0xB0, 20, 64]], "an empty lane has no track: the Kit's channel");
+    }
+
+    #[test]
+    fn a_digitakt_kits_knobs_each_turn_their_own_track() {
+        // Knob 1 on Track 1's Decay, knob 2 on Track 3's, knob 3 the Track's
+        let profiles = crate::hardware::Profiles::load_from(std::path::Path::new("no such folder"));
+        let digitakt = &profiles.find("Digitakt").unwrap().profile;
+        let decay = crate::hardware::instrument::written(digitakt.parameter("Decay").unwrap());
+        let mut labels: std::collections::BTreeMap<String, String> =
+            crate::hardware::instrument::choose_kit(digitakt).into_iter().filter(|(_, text)| !text.is_empty()).collect();
+        for slot in 0..SLOTS {
+            labels.remove(&crate::hardware::instrument::slot_key(slot));
+        }
+        for (slot, track) in [(0, Some(0)), (1, Some(2)), (2, None)] {
+            labels.insert(crate::hardware::instrument::slot_key(slot), decay.clone());
+            if let Some(track) = track {
+                labels.insert(crate::hardware::instrument::slot_track_key(slot), crate::hardware::instrument::written_part(&digitakt.parts[track]));
+            }
+        }
+        let (mut module, mut ring) = module();
+        for (lane, map) in crate::hardware::instrument::lane_maps(&labels, &profiles).into_iter().enumerate() {
+            module.map_lane(lane, map);
+        }
+        let send_all = |module: &mut Kit| {
+            for (slot, map) in crate::hardware::instrument::maps(&labels, &profiles).into_iter().enumerate() {
+                module.map_slot(slot, map);
+            }
+        };
+        send_all(&mut module);
+        let mut params = defaults(&module);
+        params[Kit::PARAM_TRACK] = 7.0;
+        let inputs = inputs(&module);
+        run(&mut module, &inputs, &params);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 80, 64], vec![0xB2, 80, 64], vec![0xB7, 80, 64]], "each on its track's channel, the third on the Track's");
+        // Another Track keeps every track's sound, and the knob that
+        // follows it turns track 5
+        params[Kit::PARAM_TRACK] = 4.0;
+        run(&mut module, &inputs, &params);
+        assert!(messages(&mut ring).is_empty());
+        params[Kit::PARAM_SLOT] = 0.0;
+        params[Kit::PARAM_SLOT + 1] = 1.0;
+        params[Kit::PARAM_SLOT + 2] = 0.0;
+        run(&mut module, &inputs, &params);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 80, 0], vec![0xB2, 80, 127], vec![0xB4, 80, 0]]);
+        // Send all sends each to its own track again
+        send_all(&mut module);
+        run(&mut module, &inputs, &params);
+        assert_eq!(bytes(&mut ring), [vec![0xB0, 80, 0], vec![0xB2, 80, 127], vec![0xB4, 80, 0]]);
     }
 
     #[test]

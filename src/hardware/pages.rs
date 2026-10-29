@@ -92,7 +92,7 @@ pub fn page(profile: &Profile) -> String {
     if !profile.parts.is_empty() {
         let _ = writeln!(w, "## Parts\n");
         if profile.kind == Kind::Kit {
-            let tracks = if profile.cc_per_part { ", and its knobs turn whichever track you choose" } else { "" };
+            let tracks = if profile.cc_per_part { ", and its knobs turn whichever track you choose, or each a track of its own" } else { "" };
             let _ = writeln!(w, "A [Kit](../modules/midi/kit.md)'s eight lanes play the first eight when it's first made{tracks}. A part without a note is struck with middle C (60).\n");
         }
         let _ = writeln!(w, "| Part | Note | Channel |");

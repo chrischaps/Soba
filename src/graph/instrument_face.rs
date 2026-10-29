@@ -17,13 +17,16 @@
 //!   shows where the device's was turned to.
 //!
 //! A Kit (#443) wears the same face, with its lanes' pads between the
-//! header and the knobs (see [`super::kit_face`]), and lists only kits.
+//! header and the knobs (see [`super::kit_face`]), and lists only kits. On
+//! a device that takes CCs a track a channel, a knob's menu can keep it on
+//! a track of its own (#468), and a short tag under its name ("T3") says
+//! which, where it isn't the Track's.
 
 use eframe::egui::{self, Color32, Id, Pos2, Rect, Sense, UiBuilder, Vec2};
 use egui_node_graph2::{NodeId, NodeResponse};
 
 use crate::app::theme;
-use crate::hardware::{self, instrument, Known, Origin, Parameter, Profile, SlotMap};
+use crate::hardware::{self, instrument, Known, Origin, Parameter, Part, Profile, SlotMap};
 use crate::link::midi::{PortStatus, MIDI, PORTS, PORT_LABELS};
 use crate::modules::instrument::{Instrument, SLOTS, SLOT_NAMES};
 use crate::modules::kit::{self, Kit, LANES};
@@ -195,6 +198,7 @@ pub fn instrument_face(
 
     // The knobs, each centred in a cell wide enough for its name
     ui.add_space(6.0 * z);
+    let own_tracks = own_tracks(data, node_id, graph);
     let rows = SLOTS.div_ceil(PER_ROW);
     let (grid, _) = ui.allocate_exact_size(Vec2::new(width, rows as f32 * ROW * z), Sense::hover());
     let knob_width = 44.0 * z;
@@ -205,8 +209,42 @@ pub fn instrument_face(
         let cell = Rect::from_min_size(Pos2::new(centre - knob_width / 2.0 + 4.0 * z, grid.top() + row as f32 * ROW * z), Vec2::new(knob_width, ROW * z));
         let mut cell_ui = ui.new_child(UiBuilder::new().max_rect(cell).id_salt(("instrument_knob", index)));
         data.knob_cell(&mut cell_ui, knob, &mut KnobCellCtx::module(node_id, graph, user_state, z, &mut responses));
+        if let Some(own) = &own_tracks[index] {
+            track_tag(ui, node_id, index, own, Pos2::new(centre, grid.top() + (row as f32 * ROW + TAG_Y) * z), z);
+        }
     }
     responses
+}
+
+/// Where a knob's track tag sits in its row, under its name (patch units).
+const TAG_Y: f32 = 66.5;
+
+/// The track each Kit knob turns where it isn't the Track's: its own.
+fn own_tracks(data: &SynthNodeData, node_id: NodeId, graph: &SynthGraph) -> [Option<Part>; SLOTS] {
+    if data.module_id != kit::ID {
+        return Default::default();
+    }
+    let profiles = hardware::known();
+    let track = (display_frame::value_of(graph, node_id, "Track").unwrap_or(0.0).round().max(0.0) as usize).min(LANES - 1);
+    let lanes = instrument::lane_maps(&data.labels, &profiles);
+    let tracks = instrument::part(&data.labels, track, &profiles).filter(|_| lanes[track].track).map(|part| part.name);
+    // One whose parameter has a channel of its own goes there, not to a track
+    std::array::from_fn(|slot| {
+        instrument::held(&data.labels, slot, &profiles).filter(|held| held.parameter.channel.is_none())?;
+        instrument::own_track(&data.labels, slot, &profiles).filter(|own| tracks.as_ref() != Some(&own.name))
+    })
+}
+
+/// A knob's own track, under its name: "T3", in the orange of the pad bar
+/// that marks the Track's.
+fn track_tag(ui: &egui::Ui, node_id: NodeId, slot: usize, part: &Part, at: Pos2, z: f32) {
+    let font = egui::FontId::proportional(6.5 * z);
+    let rect = Rect::from_center_size(at, Vec2::new(24.0 * z, 7.0 * z));
+    let hovered = ui.interact(rect, Id::unique(("instrument_track_tag", node_id, slot)), Sense::hover());
+    let ink = if hovered.hovered() { theme::signal::CONTROL } else { theme::signal::CONTROL.gamma_multiply(0.85) };
+    ui.painter().text(at, egui::Align2::CENTER_CENTER, instrument::short_name(&part.name), font, ink);
+    let channel = part.channel.map(|c| format!(" on channel {c}")).unwrap_or_default();
+    hovered.on_hover_text(format!("This knob turns {}{channel}, whatever the Track says: right-click it to choose another", part.name));
 }
 
 /// The device line and the profile's, with their menus.
@@ -375,6 +413,7 @@ fn profile_menu(
             if ui.selectable_label(false, "None").clicked() {
                 let mut labels = vec![(instrument::PROFILE.to_string(), String::new())];
                 labels.extend((0..SLOTS).map(|slot| (instrument::slot_key(slot), String::new())));
+                labels.extend((0..SLOTS).map(|slot| (instrument::slot_track_key(slot), String::new())));
                 if is_kit {
                     labels.extend((0..LANES).map(|lane| (instrument::lane_key(lane), String::new())));
                 }
@@ -429,8 +468,15 @@ pub fn slot_items(ui: &mut egui::Ui, data: &SynthNodeData, node_id: NodeId, para
     let Some(slot) = slot_of(param_name) else { return asked };
     let profiles = hardware::known();
     let held = instrument::held(&data.labels, slot, &profiles);
+    let own_track = instrument::own_track(&data.labels, slot, &profiles);
     let heading = match &held {
-        Some(held) => format!("{} · {}{}", held.parameter.name, held.parameter.address.text(), held.parameter.channel.map(|c| format!(" ch {c}")).unwrap_or_default()),
+        Some(held) => format!(
+            "{} · {}{}{}",
+            held.parameter.name,
+            held.parameter.address.text(),
+            held.parameter.channel.map(|c| format!(" ch {c}")).unwrap_or_default(),
+            own_track.as_ref().filter(|_| held.parameter.channel.is_none()).map(|part| format!(" · {}", part.name)).unwrap_or_default(),
+        ),
         None => format!("{param_name} · empty"),
     };
     ui.label(egui::RichText::new(heading).small().weak());
@@ -478,6 +524,50 @@ pub fn slot_items(ui: &mut egui::Ui, data: &SynthNodeData, node_id: NodeId, para
             ui.close();
         }
     });
+    if data.module_id == kit::ID && known.profile.cc_per_part {
+        asked.extend(track_items(ui, data, node_id, slot, own_track.as_ref(), &profiles));
+    }
     ui.separator();
+    asked
+}
+
+/// A Kit knob's **Track** menu (#468): the Track's, or one of the lanes'
+/// tracks to keep whatever the Track says.
+fn track_items(ui: &mut egui::Ui, data: &SynthNodeData, node_id: NodeId, slot: usize, own: Option<&Part>, profiles: &hardware::Profiles) -> Vec<SynthResponse> {
+    let mut asked = Vec::new();
+    let lanes = instrument::lane_maps(&data.labels, profiles);
+    // Each lane's track, once, in the lanes' order
+    let mut tracks: Vec<Part> = Vec::new();
+    for lane in (0..LANES).filter(|&lane| lanes[lane].track) {
+        if let Some(part) = instrument::part(&data.labels, lane, profiles).filter(|part| !tracks.iter().any(|t| t.name == part.name)) {
+            tracks.push(part);
+        }
+    }
+    let mut keep = |part: Option<&Part>| {
+        let (label, text) = match part {
+            Some(part) => (format!("Knob to {}", part.name), instrument::written_part(part)),
+            None => ("Knob follows the Track".to_string(), String::new()),
+        };
+        asked.push(SynthResponse::SetLabels { node_id, label, labels: vec![(instrument::slot_track_key(slot), text)] });
+    };
+    crate::widgets::menu::menu_button(ui, "Track", |ui| {
+        ui.set_min_width(150.0);
+        if ui.selectable_label(own.is_none(), "The Track's").on_hover_text("Turns whichever track the Track says: click a pad to choose it").clicked() {
+            keep(None);
+            ui.close();
+        }
+        ui.separator();
+        for part in &tracks {
+            let current = own.is_some_and(|own| own.name == part.name);
+            let tip = format!("Always turns {}{}", part.name, part.channel.map(|c| format!(", on channel {c}")).unwrap_or_default());
+            if ui.selectable_label(current, &part.name).on_hover_text(tip).clicked() {
+                keep(Some(part));
+                ui.close();
+            }
+        }
+        if tracks.is_empty() {
+            ui.label(egui::RichText::new("Give the lanes their tracks first").small().weak());
+        }
+    });
     asked
 }
