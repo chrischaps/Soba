@@ -101,13 +101,15 @@ A footswitch counts as pressed when its value goes from below 64 to 64 or above.
 
 Every run is kept as a take. A take is a capture script: each cue the beats played, timed from your first press, with the lines you said written in as comments. It begins two seconds before the first press, setting the view, the transport and any knob you'd turned by hand, so it starts from where you did.
 
-To keep a take, either start with `--take`, which writes it when you stop presenting:
+Every take is saved, in a file of its own in a `takes` folder beside the script, named for the script and when you started presenting: `presentations/takes/ep4-filters-2026-10-28-090503.txt`. It's written as each beat begins, so a crash keeps everything up to the beat you were on, and again when you stop. The status bar then says where it is, and so does hovering **● Take** in the notes. A run you stop before the first press has no take.
+
+To choose the file yourself, start with `--take`:
 
 ```text
 soba patches/basic-subtractive.json --present presentations/ep4-filters.txt --take ep4-take.txt
 ```
 
-or click **Save take…** in the notes at any point.
+**Save take…** in the notes writes a copy anywhere, at any point. In the browser, where Soba can't write files, it's the only way to keep a take: it downloads one.
 
 A take keeps the script's cues, not your hands. A knob you turn or a view you move by hand during a beat isn't in it, so anything the film needs to show belongs in the script. A beat you played again replaces the first try: the take holds still where you went back, which is where the editor cuts your retake of the narration. The take says so in a comment under that beat (`# Played again: the film holds still from 1:10.2…`).
 
@@ -119,7 +121,7 @@ This is how a video gets made with it:
 
 1. **Write the script** against the patch, one beat per idea, each ending on something to listen to.
 2. **Rehearse live.** Give the script a `window` line the shape of the film (tall for a Short, wide for a video), because the camera frames modules to fit the window and the take keeps that view. Play the beats, rewrite them and go again until the pacing feels right. Fix the script between runs and present it again: there's no need to restart Soba.
-3. **Record the take.** Present with `--take`, and record two tracks as you go: your mic, and Soba's own sound (desktop or loopback audio). OBS in audio-only mode does it, as do Reaper and Audacity. Wear headphones, so the mic doesn't hear the patch. Play a beat again if you fluff a line.
+3. **Record the take.** Present (with `--take` to name its file), and record two tracks as you go: your mic, and Soba's own sound (desktop or loopback audio). OBS in audio-only mode does it, as do Reaper and Audacity. Wear headphones, so the mic doesn't hear the patch. Play a beat again if you fluff a line.
 4. **Film the take.** A capture films it with the patch's sound, frame by frame, so nothing stutters however busy the patch is:
 
    ```text

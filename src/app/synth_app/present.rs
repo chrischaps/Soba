@@ -9,9 +9,10 @@
 //! takes the mouse, for as long as it plays.
 //!
 //! The script's footswitches step it from MIDI, held back from everything
-//! else while it's on show; and the run is kept as a take, which `--take`
-//! or the notes' Save take writes as a capture script that films it again
-//! (#489).
+//! else while it's on show; and the run is kept as a take, a capture script
+//! that films it again (#489). It's written as each beat begins and as the
+//! presentation stops, to `--take`'s file or a new one in `takes/` beside
+//! the script (#497); the notes' Save take writes it anywhere.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -56,8 +57,11 @@ pub(super) struct Presenting {
     /// How things stood as the presentation began, to tell what changed
     /// by hand before the first press.
     opening: Scene,
-    /// Where the take is written as the presentation stops (`--take`).
+    /// Where the take is written: `--take`, or a file of its own beside
+    /// the script. `None` in the browser, which has only Save take.
     take_to: Option<PathBuf>,
+    /// A beat began or was played again, so the take on disk is behind.
+    take_grew: bool,
     /// Which of the script's footswitches are down.
     pedals_down: Vec<bool>,
     /// The script's window size, in points, until the window is asked for it.
@@ -88,7 +92,9 @@ impl SynthApp {
     pub fn start_presentation(&mut self, path: &std::path::Path) -> Result<(), String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("can't read {}: {e}", path.display()))?;
         let name = path.file_stem().map_or_else(|| path.display().to_string(), |s| s.to_string_lossy().into_owned());
-        self.present_text(&name, &text).map_err(|e| format!("{}: {e}", path.display()))
+        self.present_text(&name, &text).map_err(|e| format!("{}: {e}", path.display()))?;
+        self.take_to(take_beside(path, chrono::Local::now().naive_local()));
+        Ok(())
     }
 
     /// Presents a script's text, `name` its file's.
@@ -119,12 +125,13 @@ impl SynthApp {
             missed: false,
             opening: self.scene(),
             take_to: None,
+            take_grew: false,
         });
         self.status_message = Some(format!("Presenting {title}: {keys} plays the first of {beats} beats"));
         Ok(())
     }
 
-    /// Writes the take to `path` as the presentation stops:
+    /// Writes the take to `path` rather than a new file beside the script:
     /// `soba patch.json --present script.txt --take take.txt`.
     pub fn take_to(&mut self, path: PathBuf) {
         if let Some(presenting) = self.presenting.as_mut() {
@@ -148,7 +155,7 @@ impl SynthApp {
     }
 
     /// Escape: the presentation ends, and the patch stays as the beats
-    /// left it. With `--take`, the take is written.
+    /// left it. The take is written, and the status bar says where.
     pub(super) fn stop_presenting(&mut self) {
         let written = self.write_take();
         let Some(presenting) = self.presenting.take() else { return };
@@ -166,12 +173,13 @@ impl SynthApp {
         self.presenting.as_ref()?.run.take_script(patch.as_deref())
     }
 
-    /// Writes the take where `--take` asked, if it did and there's one to
-    /// write; says where, or what went wrong.
+    /// Writes the take where it's kept, if there's one to write; says
+    /// where, or what went wrong.
     fn write_take(&mut self) -> Option<Result<PathBuf, ()>> {
         let path = self.presenting.as_ref()?.take_to.clone()?;
         let text = self.take_text()?;
-        Some(match std::fs::write(&path, text) {
+        let written = path.parent().filter(|p| !p.as_os_str().is_empty()).map_or(Ok(()), std::fs::create_dir_all);
+        Some(match written.and_then(|()| std::fs::write(&path, text)) {
             Ok(()) => Ok(path),
             Err(e) => {
                 self.status_error(format!("Couldn't write the take to {}: {e}", path.display()));
@@ -254,10 +262,12 @@ impl SynthApp {
                 self.restore_scene(&scene);
             }
             presenting.missed = false;
+            presenting.take_grew = true;
         }
         if let Some(k) = presenting.run.take_began() {
             presenting.scenes[k] = Some(self.scene());
             presenting.missed = false;
+            presenting.take_grew = true;
         }
         // The take opens on things as they stood at the first press
         if presenting.run.take_wants_opening() {
@@ -446,8 +456,10 @@ impl SynthApp {
 
     /// After the patch is drawn: the script's pointer, and the notes.
     pub(super) fn tend_presentation(&mut self, ctx: &egui::Context) {
-        // Closing the window keeps the take
-        if ctx.input(|i| i.viewport().close_requested()) {
+        // The take is on disk as each beat begins, so a crash keeps it too,
+        // and closing the window keeps the rest
+        let grew = self.presenting.as_mut().is_some_and(|p| std::mem::take(&mut p.take_grew));
+        if grew || ctx.input(|i| i.viewport().close_requested()) {
             self.write_take();
         }
         let Some(presenting) = self.presenting.as_mut() else { return };
@@ -559,6 +571,16 @@ fn next_keys(script: &presentation::Script) -> String {
         Some(pedal) => format!("Page Down or {}", pedal.name()),
         None => "Page Down".into(),
     }
+}
+
+/// Where a run of the script at `script` is kept without `--take`: a file
+/// of its own in `takes/` beside it, named for the script and when it began,
+/// so no run overwrites another.
+#[cfg(not(target_arch = "wasm32"))]
+fn take_beside(script: &std::path::Path, began: chrono::NaiveDateTime) -> PathBuf {
+    let stem = script.file_stem().map_or_else(|| "presentation".into(), |s| s.to_string_lossy());
+    let name = format!("{stem}-{}.txt", began.format("%Y-%m-%d-%H%M%S"));
+    script.parent().unwrap_or(std::path::Path::new("")).join("takes").join(name)
 }
 
 /// Seconds as m:ss.
@@ -686,7 +708,10 @@ fn draw_notes(ui: &mut egui::Ui, presenting: &Presenting, now: f64) -> Vec<Notes
     ui.horizontal(|ui| {
         match run.take_length(now) {
             Some(length) => {
-                ui.label(RichText::new(format!("● Take {}", clock(length))).color(TALLY.gamma_multiply(0.85)).small());
+                let take = ui.label(RichText::new(format!("● Take {}", clock(length))).color(TALLY.gamma_multiply(0.85)).small());
+                if let Some(path) = &presenting.take_to {
+                    take.on_hover_text(format!("Kept in {} as each beat begins", path.display()));
+                }
                 ui.label(RichText::new("· hand moves aren't in it").color(theme::text::QUIET).small());
             }
             None => {
@@ -739,4 +764,19 @@ fn say_job(text: &str, wrap: f32, size: f32, ink: Color32) -> LayoutJob {
 
 fn title_font(size: f32) -> FontId {
     FontId::new(size, FontFamily::Name(theme::TITLE_FAMILY.into()))
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn a_take_without_take_goes_beside_its_script() {
+        let began = chrono::NaiveDate::from_ymd_opt(2026, 10, 28).unwrap().and_hms_opt(9, 5, 3).unwrap();
+        let path = take_beside(Path::new("presentations/ep1-how-a-synth-works.txt"), began);
+        assert_eq!(path, Path::new("presentations/takes/ep1-how-a-synth-works-2026-10-28-090503.txt"));
+        // A script named on its own is in the folder Soba started in
+        assert_eq!(take_beside(Path::new("ep4.txt"), began), Path::new("takes/ep4-2026-10-28-090503.txt"));
+    }
 }

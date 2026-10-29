@@ -24,3 +24,6 @@ __pycache__/
 
 # The browser tools (tools/web), installed by npm
 node_modules/
+
+# Presentation takes, kept beside the script without --take
+/presentations/takes/
