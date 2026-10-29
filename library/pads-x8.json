@@ -119,6 +119,11 @@
               "name": "Press",
               "type": "Number",
               "value": 0.0
+            },
+            {
+              "name": "Any Note",
+              "type": "Toggle",
+              "value": false
             }
           ],
           "pinned": {
@@ -152,6 +157,11 @@
               "name": "Press",
               "type": "Number",
               "value": 0.0
+            },
+            {
+              "name": "Any Note",
+              "type": "Toggle",
+              "value": false
             }
           ],
           "pinned": {
@@ -185,6 +195,11 @@
               "name": "Press",
               "type": "Number",
               "value": 0.0
+            },
+            {
+              "name": "Any Note",
+              "type": "Toggle",
+              "value": false
             }
           ],
           "pinned": {
@@ -218,6 +233,11 @@
               "name": "Press",
               "type": "Number",
               "value": 0.0
+            },
+            {
+              "name": "Any Note",
+              "type": "Toggle",
+              "value": false
             }
           ],
           "pinned": {
@@ -251,6 +271,11 @@
               "name": "Press",
               "type": "Number",
               "value": 0.0
+            },
+            {
+              "name": "Any Note",
+              "type": "Toggle",
+              "value": false
             }
           ],
           "pinned": {
@@ -284,6 +309,11 @@
               "name": "Press",
               "type": "Number",
               "value": 0.0
+            },
+            {
+              "name": "Any Note",
+              "type": "Toggle",
+              "value": false
             }
           ],
           "pinned": {
@@ -317,6 +347,11 @@
               "name": "Press",
               "type": "Number",
               "value": 0.0
+            },
+            {
+              "name": "Any Note",
+              "type": "Toggle",
+              "value": false
             }
           ],
           "pinned": {
@@ -350,6 +385,11 @@
               "name": "Press",
               "type": "Number",
               "value": 0.0
+            },
+            {
+              "name": "Any Note",
+              "type": "Toggle",
+              "value": false
             }
           ],
           "pinned": {

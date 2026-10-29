@@ -9,6 +9,7 @@ mod example_fetch;
 pub mod graph_io;
 pub mod library;
 mod opus;
+pub mod kit_pads;
 pub mod pads_group;
 pub mod controls_group;
 pub mod strikes_group;

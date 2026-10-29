@@ -71,6 +71,8 @@ fn place(menu: Rect, width: f32, screen: Rect) -> Place {
 struct Picks {
     template: Option<SynthNodeTemplate>,
     saved: Option<SavedModule>,
+    /// A kit profile to add a group of Pads for (#469), by name.
+    pads_for: Option<String>,
     open_library: bool,
     annotation: Option<NewAnnotation>,
     zoom_to: Option<framing::Target>,
@@ -159,7 +161,8 @@ impl SynthApp {
                 // Check if click was outside both main menu and submenu
                 let in_main_menu = menu_rect.contains(pos);
                 let in_submenu = submenu_rect.is_some_and(|r| r.contains(pos));
-                if !in_main_menu && !in_submenu && picks.template.is_none() && picks.annotation.is_none() && picks.saved.is_none() {
+                let picked = picks.template.is_some() || picks.annotation.is_some() || picks.saved.is_some() || picks.pads_for.is_some();
+                if !in_main_menu && !in_submenu && !picked {
                     picks.close = true;
                 }
             }
@@ -177,6 +180,9 @@ impl SynthApp {
         }
         if let Some(saved) = picks.saved {
             self.add_saved_module(&saved, menu_pos);
+        }
+        if let Some(name) = picks.pads_for {
+            self.add_pads_for(&name, menu_pos);
         }
         if picks.open_library {
             self.open_library_folder();
@@ -334,8 +340,8 @@ impl SynthApp {
         self.submenu_rows(ui, categories, index, picks);
     }
 
-    /// The open category's modules, My Modules or the Library. For a finger,
-    /// they scroll if the screen's too short for them, and a footer says
+    /// The open category's modules, My Modules or the Library. They scroll
+    /// if the screen's too short for them, and for a finger a footer says
     /// what the one held down does.
     fn submenu_rows(&mut self, ui: &mut egui::Ui, categories: &[(ModuleCategory, Vec<SynthNodeTemplate>)], index: usize, picks: &mut Picks) {
         let finger = self.add_menu.finger;
@@ -355,7 +361,12 @@ impl SynthApp {
                 });
             footer(ui, held.as_deref());
         } else {
-            self.submenu_items(ui, categories, index, picks, &mut held);
+            // The Library outgrows a short window too: it scrolls, by wheel
+            let max_height = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 16.0).max(200.0);
+            egui::ScrollArea::vertical()
+                .id_salt(("add_menu_rows", index))
+                .max_height(max_height)
+                .show(ui, |ui| self.submenu_items(ui, categories, index, picks, &mut held));
         }
     }
 
@@ -407,9 +418,35 @@ impl SynthApp {
                         picks.close = true;
                     }
                 }
+                if section == Section::Controllers {
+                    pads_for_menu(ui, picks);
+                }
             }
         }
     }
+}
+
+/// Pads for ▸: a group of Pads for each kit profile (#469), its pads
+/// named and set as the device's parts, for its own sequencer to play.
+fn pads_for_menu(ui: &mut egui::Ui, picks: &mut Picks) {
+    let profiles = crate::hardware::known();
+    let kits: Vec<&crate::hardware::Profile> = profiles.all().iter().map(|k| &k.profile).filter(|p| crate::hardware::instrument::is_kit(p)).collect();
+    if kits.is_empty() {
+        return;
+    }
+    let text = RichText::new("Pads for  \u{25B6}").color(theme::module::GROUP);
+    crate::widgets::menu::menu_button(ui, text, |ui| {
+        for kit in kits {
+            let tip = format!("A Pad for each of the {}'s {} parts, named for them, for its own sequencer to play Soba", kit.name, kit.parts.len());
+            if ui.button(&kit.name).on_hover_text(tip).clicked() {
+                picks.pads_for = Some(kit.name.clone());
+                picks.close = true;
+                ui.close();
+            }
+        }
+    })
+    .response
+    .on_hover_text("A drum machine's tracks as Pads: one a part, each on its note and channel");
 }
 
 /// A row that adds something. A mouse reads what it is in a tooltip; a

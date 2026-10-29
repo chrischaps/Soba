@@ -370,6 +370,7 @@ in   Mode               Control  ConstantOnly         inline=true  select 0 ["Mo
 in   Note               Control  ConstantOnly         inline=false num 36 [0..127]  stepped
 in   Channel            Control  ConstantOnly         inline=false select 10 ["Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] ""
 in   Press              Control  ConstantOnly         inline=false num 0 [0..1]
+in   Any Note           Control  ConstantOnly         inline=false toggle false ""
 out  Gate               Gate
 out  Velocity           Control
 out  Pressure           Control

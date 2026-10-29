@@ -13,6 +13,13 @@
 //! face (see [`crate::app::module_learn`]), so the module reads MIDI on the
 //! audio thread, sample-accurately, and the patch keeps what it learned.
 //!
+//! **Any Note** has it hear every note on its channel (#469): a drum
+//! machine's track sends its trig's own pitch, so a pitched trig is
+//! another note, and a pad listening for the track's note would miss it.
+//! A group of Pads built from a kit profile (**Pads for ▸**) sets it on
+//! every pad whose part has a channel to itself, as the Digitakt's tracks
+//! do.
+//!
 //! Its note is claimed: a Note In on Omni skips it (see
 //! [`crate::dsp::note_claims`]), so a hit never also plays the synth.
 //!
@@ -82,6 +89,8 @@ pub struct Listen {
     pub note: u8,
     /// 0 is Omni, 1-16 a MIDI channel.
     pub channel: u8,
+    /// It hears every note on its channel, not just `note` (#469).
+    pub any: bool,
 }
 
 impl Listen {
@@ -89,7 +98,7 @@ impl Listen {
     /// note `note` is this pad's.
     #[inline]
     fn hears(&self, channel: u8, note: u8) -> bool {
-        self.note == note && self.hears_channel(channel)
+        (self.any || self.note == note) && self.hears_channel(channel)
     }
 
     /// Whether channel pressure on wire channel `channel` reaches it.
@@ -105,17 +114,24 @@ pub fn listen(params: &[f32]) -> Listen {
     Listen {
         note: at(Pad::PARAM_NOTE, DEFAULT_NOTE).clamp(0.0, 127.0) as u8,
         channel: at(Pad::PARAM_CHANNEL, DEFAULT_CHANNEL).clamp(0.0, 16.0) as u8,
+        any: at(Pad::PARAM_ANY, 0) >= 0.5,
     }
 }
 
 /// Claims the note a Pad with `params`, set to hear `device`, listens to,
-/// so an Omni Note In skips it: from that device alone (#454). It's how the
-/// engine and the UI both work it out.
+/// so an Omni Note In skips it: from that device alone (#454), and every
+/// note of its channel on Any Note. It's how the engine and the UI both
+/// work it out.
 ///
 /// REAL-TIME SAFE.
 pub fn claim_notes(params: &[f32], device: ListenTo, claims: &mut NoteClaims) {
     let listen = listen(params);
-    claims.claim(device, listen.channel.checked_sub(1), listen.note);
+    let channel = listen.channel.checked_sub(1);
+    if listen.any {
+        claims.claim_all(device, channel);
+    } else {
+        claims.claim(device, channel, listen.note);
+    }
 }
 
 /// One pad from a pad controller, as a gate.
@@ -138,7 +154,8 @@ pub fn claim_notes(params: &[f32], device: ListenTo, claims: &mut NoteClaims) {
 /// - **Mode**: Momentary (high while held), Latch (each hit flips it) or
 ///   Trigger (a 5 ms gate per hit).
 /// - Hidden, set from the face: **Note** and **Channel**, which a learn
-///   writes, and **Press**, the pad pressed on the face.
+///   writes, **Press**, the pad pressed on the face, and **Any Note**, on
+///   which it hears every note of its channel.
 pub struct Pad {
     ports: Vec<PortDefinition>,
     parameters: Vec<ParameterDefinition>,
@@ -195,6 +212,8 @@ impl Pad {
                 .describe("The MIDI channel the pad is heard on; Omni hears all"),
             ParameterDefinition::new("press", "Press", 0.0, 1.0, 0.0, ParameterDisplay::linear(""))
                 .describe("The pad pressed on the face, as hard as this"),
+            ParameterDefinition::toggle("any_note", "Any Note", false)
+                .describe("Hear every note on the channel, not just Note: a drum machine's track, pitched trigs and all"),
         ];
         Self {
             ports,
@@ -224,6 +243,9 @@ impl Pad {
     pub const PARAM_CHANNEL: usize = 2;
     /// The Press parameter's index, which the face plays.
     pub const PARAM_PRESS: usize = 3;
+    /// The Any Note parameter's index: on, it hears every note of its
+    /// channel.
+    pub const PARAM_ANY: usize = 4;
 
     /// The output index of Gate, Velocity and Pressure.
     pub const PORT_GATE: usize = 0;
@@ -488,7 +510,7 @@ mod tests {
         let names: Vec<&str> = pad.ports().iter().map(|p| p.name).collect();
         assert_eq!(names, ["MIDI", "Gate", "Velocity", "Pressure"], "the MIDI input first (#479)");
         let params: Vec<&str> = pad.parameters().iter().map(|p| p.name).collect();
-        assert_eq!(params, ["Mode", "Note", "Channel", "Press"]);
+        assert_eq!(params, ["Mode", "Note", "Channel", "Press", "Any Note"]);
         for word in ["pad", "MIDI", "drums", "trigger"] {
             assert!(pad.info().description.contains(word), "Quick Add finds it under '{word}'");
         }
@@ -496,10 +518,33 @@ mod tests {
 
     #[test]
     fn a_new_pad_is_the_gm_kick_on_channel_ten() {
-        assert_eq!(listen(&defaults()), Listen { note: 36, channel: 10 });
+        assert_eq!(listen(&defaults()), Listen { note: 36, channel: 10, any: false });
         let mut module = module();
         let out = run(&mut module, &on_note(38), &[on(10, TEN, 38, 100), on(20, 0, 38, 100), on(30, TEN, 39, 100)]);
         assert_eq!(rises(&out[Pad::PORT_GATE].samples), [10], "the snare, on channel 10 only");
+    }
+
+    #[test]
+    fn on_any_note_it_hears_every_note_of_its_channel_and_claims_them() {
+        // The Digitakt's Track 3: its trigs on channel 3, a pitched one too
+        let mut params = on_note(2);
+        params[Pad::PARAM_CHANNEL] = 3.0;
+        params[Pad::PARAM_ANY] = 1.0;
+        assert_eq!(listen(&params), Listen { note: 2, channel: 3, any: true });
+        let mut module = module();
+        let out = run(&mut module, &params, &[on(10, 2, 2, 100), off(20, 2, 2), on(40, 2, 67, 90), off(50, 2, 67), on(70, 3, 2, 100), on(90, 2, 0, 0)]);
+        let gate = &out[Pad::PORT_GATE].samples;
+        assert_eq!(rises(gate), [10, 40], "its own note, then a pitched trig; channel 4's is another track's");
+        assert!(gate[50..].iter().all(|&s| s == 0.0), "let go by its note off");
+
+        let mut claims = NoteClaims::default();
+        claim_notes(&params, ListenTo::Any, &mut claims);
+        assert!((0..128).all(|note| claims.claims(0, 2, note)), "an Omni Note In skips the whole channel");
+        assert!(!claims.claims(0, 3, 2));
+        params[Pad::PARAM_ANY] = 0.0;
+        let mut claims = NoteClaims::default();
+        claim_notes(&params, ListenTo::Any, &mut claims);
+        assert!(claims.claims(0, 2, 2) && !claims.claims(0, 2, 67), "off, just its note");
     }
 
     #[test]

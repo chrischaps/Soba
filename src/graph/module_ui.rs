@@ -235,7 +235,7 @@ static MODULE_UI: &[ModuleUi] = &[
     ModuleUi {
         module_id: crate::modules::pad::ID,
         // What it hears is learned, or set from its menu
-        hidden: &["Note", "Channel", "Press"],
+        hidden: &["Note", "Channel", "Press", "Any Note"],
         monitor: &["Gate"],
         display: NodeDisplay::OnePad,
         ..ModuleUi::DEFAULT

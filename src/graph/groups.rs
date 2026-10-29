@@ -1033,9 +1033,9 @@ pub const CONTROL_FADER: &str = "Source";
 /// hears, else the parameter's name.
 pub fn control_label(graph: &SynthGraph, node_id: NodeId, param_name: &str) -> String {
     let node = &graph[node_id];
-    // A pad goes by the note it hears ("C2")
+    // A pad goes by the note it hears ("C2", or "any")
     if node.user_data.module_id == crate::modules::pad::ID && param_name == PAD_PRESS {
-        return super::pads_face::note_name(super::pads_face::listen_of(graph, node_id).note);
+        return super::pads_face::heard_note(super::pads_face::listen_of(graph, node_id));
     }
     // A fader by what it hears ("CC 82")
     if node.user_data.module_id == crate::modules::control::ID && param_name == CONTROL_FADER {

@@ -12,7 +12,7 @@ use egui_node_graph2::NodeId;
 
 use crate::graph::groups::{self, Face, GroupIndex, JackAction, JackEdit, Preview, Renaming, Side};
 use crate::graph::{annotation_ui, GroupId};
-use crate::persistence::{capture_level, Patch};
+use crate::persistence::{capture_level, kit_pads, Patch};
 use super::super::editing;
 use super::super::library::{self, SavedModule};
 use super::super::recording;
@@ -542,16 +542,45 @@ impl SynthApp {
                 return;
             }
         };
+        if self.add_patch(&patch, &saved.name, screen) {
+            self.status_message = Some(format!("Added {} from {}", saved.name, saved.from_where()));
+        }
+    }
+
+    /// Adds a group of Pads built from the kit profile `name` (#469), each
+    /// on its part's note and channel, with a MIDI In hearing the device
+    /// where it's open.
+    pub(super) fn add_pads_for(&mut self, name: &str, screen: egui::Pos2) {
+        let profiles = crate::hardware::known();
+        let Some(known) = profiles.find(name) else {
+            self.status_error(format!("Couldn't add Pads for {name}: its profile is gone"));
+            return;
+        };
+        let open = self.midi.open_names();
+        let device = kit_pads::device_for(&known.profile, &open);
+        let patch = kit_pads::pads_for(&known.profile, device);
+        if self.add_patch(&patch, &format!("Pads for {name}"), screen) {
+            let heard = device.map_or_else(|| format!(": tick the {name} under MIDI In, then choose it on the MIDI In"), |device| format!(", hearing {device}"));
+            self.status_message = Some(format!("Added {} Pads for the {name}{heard}", known.profile.parts.len()));
+        }
+    }
+
+    /// Pastes `patch` with its corner at a point on screen, as one undo
+    /// step called "Add `name`". Whether it went in.
+    fn add_patch(&mut self, patch: &Patch, name: &str, screen: egui::Pos2) -> bool {
         let at = self.screen_to_node(screen);
-        match editing::paste(&mut self.graph_state, &mut self.user_state, &patch, at) {
+        match editing::paste(&mut self.graph_state, &mut self.user_state, patch, at) {
             Ok(pasted) => {
                 if !pasted.warnings.is_empty() {
                     self.load_warnings = pasted.warnings.clone();
                 }
-                self.finish_paste(pasted, &format!("Add {}", saved.name));
-                self.status_message = Some(format!("Added {} from {}", saved.name, saved.from_where()));
+                self.finish_paste(pasted, &format!("Add {name}"));
+                true
             }
-            Err(e) => self.status_error(format!("Couldn't add {}: {e}", saved.name)),
+            Err(e) => {
+                self.status_error(format!("Couldn't add {name}: {e}"));
+                false
+            }
         }
     }
 

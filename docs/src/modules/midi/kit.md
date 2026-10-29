@@ -80,6 +80,7 @@ The Kit [listens to its device](./instrument.md#the-hardware-turns-it-too) as an
 - **The Digitakt's eight tracks from Soba.** A [Clock](../modulation/clock.md) into a [Trigger Sequencer](../utilities/trigger-sequencer.md), its eight lanes and their velocities into a Kit playing the **Digitakt**. Program a beat on the sequencer's grid. A Soba hi-hat from the same sequencer plays in time with the hardware.
 - **Pads for the SP-404MKII.** The same sequencer into a Kit playing the **SP-404MKII**. Click a pad to move its lane to any of the sixteen, the bottom row's (13 to 16) say.
 - **A filter on one track.** Click a Digitakt pad, choose **Knobs turn this track**, and patch an [LFO](../modulation/lfo.md) into **Filter Freq**. Only that track sweeps.
+- **The other way round.** To have the drum machine's own sequencer play Soba's drums, add **Library** ▸ **Controllers** ▸ **Pads for** ▸ **Digitakt**: a Pad for each track, named for it, on its channel (see [Pad: a drum machine's sequencer](./pad.md#a-drum-machines-sequencer)). A Kit and those Pads on one Digitakt play it both ways.
 - **A whole kit in twelve knobs.** On a Digitakt Kit, give knobs 1-4 the kick's Decay, Tune, Filter Freq and Level, each on **Track ▸ Track 1**; 5-8 the snare's on Track 2; 9-12 the hats' on Track 3. Save the patch, and opening it again brings all three back.
 
 ## Related
@@ -87,3 +88,4 @@ The Kit [listens to its device](./instrument.md#the-hardware-turns-it-too) as an
 - [Instrument](./instrument.md): a synth, played from Gate and Pitch
 - [Instrument Profiles](../../hardware/instruments.md): the kits that ship, and how to make your own (`"kind": "kit"` with its `"parts"`)
 - [Trigger Sequencer](../utilities/trigger-sequencer.md): eight lanes to play it with
+- [Pad](./pad.md#a-drum-machines-sequencer): **Pads for** ▸ a kit, for its sequencer to play Soba

@@ -62,16 +62,29 @@ impl NoteClaims {
     /// keys') is never claimed.
     #[inline]
     pub fn claim(&mut self, listen: ListenTo, channel: Option<u8>, note: u8) {
-        let bit = 1u128 << (note & 127);
+        self.claim_notes(listen, channel, 1u128 << (note & 127));
+    }
+
+    /// Claims every note on `channel` (0-15), or on every channel for
+    /// `None`, as [`claim`](Self::claim) claims one: a Pad on Any Note
+    /// (#469).
+    #[inline]
+    pub fn claim_all(&mut self, listen: ListenTo, channel: Option<u8>) {
+        self.claim_notes(listen, channel, u128::MAX);
+    }
+
+    /// Claims the notes whose bits are set in `bits`.
+    #[inline]
+    fn claim_notes(&mut self, listen: ListenTo, channel: Option<u8>, bits: u128) {
         let claim_on = |channels: &mut Channels| match channel {
             Some(channel) => {
                 if let Some(word) = channels.get_mut(channel as usize) {
-                    *word |= bit;
+                    *word |= bits;
                 }
             }
             None => {
                 for word in channels.iter_mut() {
-                    *word |= bit;
+                    *word |= bits;
                 }
             }
         };
@@ -148,6 +161,15 @@ mod tests {
         assert!(!claims.claims(SOBA_PORT, KEYS_CHANNEL, 60));
         claims.clear();
         assert_eq!(claims, NO_CLAIMS);
+    }
+
+    #[test]
+    fn a_pad_on_any_note_claims_its_whole_channel() {
+        let mut claims = NoteClaims::EMPTY;
+        claims.claim_all(ListenTo::Port(1), Some(2));
+        assert!((0..128).all(|note| claims.claims(1, 2, note) && claims.claims(SOBA_PORT, 2, note)));
+        assert!(!claims.claims(1, 3, 60) && !claims.claims(0, 2, 60), "another channel, another device");
+        assert!(!claims.claims(SOBA_PORT, KEYS_CHANNEL, 60), "the keys always play");
     }
 
     #[test]

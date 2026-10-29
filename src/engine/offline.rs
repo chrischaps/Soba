@@ -775,7 +775,7 @@ mod tests {
     /// A group of eight Pads with ID `id`, on `notes` and channel 10.
     fn pads(id: u64, notes: std::ops::Range<u8>, next: &mut u64) -> crate::persistence::GroupData {
         use crate::persistence::pads_group::{group_of_pads, PadJacks};
-        let jacks: Vec<PadJacks> = notes.map(|note| PadJacks { note, channel: 10, velocity: true, pressure: false }).collect();
+        let jacks: Vec<PadJacks> = notes.map(|note| PadJacks { note, channel: 10, velocity: true, pressure: false, any: false }).collect();
         group_of_pads(id, "Pads", (0.0, 0.0), &jacks, 0, &Default::default(), next)
     }
 

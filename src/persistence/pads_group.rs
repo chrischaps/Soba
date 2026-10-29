@@ -20,7 +20,9 @@
 //! No version marks this: only an old patch holds `input.pads`. An older
 //! app opens the group, but not the Pads in it, which it doesn't know.
 //!
-//! [`group_of_pads`] builds the group, for the Library's Pads ×8 too.
+//! [`group_of_pads`] builds the group, for the Library's Pads ×8 too, and
+//! [`group_of_named_pads`] a drum machine's, each pad named for its part
+//! (see [`super::kit_pads`]).
 
 use std::collections::BTreeMap;
 
@@ -50,6 +52,8 @@ pub struct PadJacks {
     pub velocity: bool,
     /// A **Pressure** jack.
     pub pressure: bool,
+    /// It hears every note on its channel (#469).
+    pub any: bool,
 }
 
 /// A group named `name` holding a Pad for each of `pads`, laid out four to
@@ -58,11 +62,19 @@ pub struct PadJacks {
 /// are a MIDI input into every Pad, and per pad its Gate, then any Vel and
 /// Pressure. The Pads take IDs from `next` up.
 pub fn group_of_pads(id: u64, name: &str, position: (f32, f32), pads: &[PadJacks], mode: usize, labels: &BTreeMap<String, String>, next: &mut u64) -> GroupData {
+    let unnamed: Vec<(PadJacks, Option<&str>)> = pads.iter().map(|&jacks| (jacks, None)).collect();
+    group_of_named_pads(id, name, position, &unnamed, mode, labels, next)
+}
+
+/// As [`group_of_pads`], each pad that has a name wearing it on the face
+/// and giving it to its jacks: **Track 1**, **Track 1 Vel**, **Track 1
+/// Pressure** for Gate 1, Vel 1 and Pressure 1.
+pub fn group_of_named_pads(id: u64, name: &str, position: (f32, f32), pads: &[(PadJacks, Option<&str>)], mode: usize, labels: &BTreeMap<String, String>, next: &mut u64) -> GroupData {
     let midi = crate::modules::midi_in::PORT_NAME;
     let mut outputs = Vec::new();
     let mut nodes = Vec::new();
     let mut connections = Vec::new();
-    for (index, jacks) in pads.iter().enumerate() {
+    for (index, &(jacks, pad_name)) in pads.iter().enumerate() {
         *next += 1;
         let pad_id = *next;
         let at = ((index % COLUMNS) as f32 * COLUMN, (index / COLUMNS) as f32 * ROW);
@@ -72,10 +84,15 @@ pub fn group_of_pads(id: u64, name: &str, position: (f32, f32), pads: &[PadJacks
             NamedParameter::new("Note", ParameterValue::Number(jacks.note as f32)),
             NamedParameter::new("Channel", ParameterValue::Select(jacks.channel as usize)),
             NamedParameter::new("Press", ParameterValue::Number(0.0)),
+            NamedParameter::new("Any Note", ParameterValue::Toggle(jacks.any)),
         ];
         node.labels = labels.clone();
         // Its pad on the group's face, to play from there (#482)
-        node.pinned.insert(crate::graph::groups::PAD_PRESS.to_string(), 1);
+        let press = crate::graph::groups::PAD_PRESS.to_string();
+        node.pinned.insert(press.clone(), 1);
+        if let Some(pad_name) = pad_name {
+            node.face_labels.insert(press, pad_name.to_string());
+        }
         nodes.push(node);
         connections.push(ConnectionData::new(id, midi, pad_id, midi));
         let n = index + 1;
@@ -83,12 +100,17 @@ pub fn group_of_pads(id: u64, name: &str, position: (f32, f32), pads: &[PadJacks
             connections.push(ConnectionData::new(pad_id, port, id, jack.clone()));
             outputs.push(JackData { name: jack, signal: signal.to_string() });
         };
-        jack("Gate", format!("Gate {n}"), "Gate");
+        let called = |what: &str| match pad_name {
+            Some(pad_name) if what == "Gate" => pad_name.to_string(),
+            Some(pad_name) => format!("{pad_name} {what}"),
+            None => format!("{what} {n}"),
+        };
+        jack("Gate", called("Gate"), "Gate");
         if jacks.velocity {
-            jack("Velocity", format!("Vel {n}"), "Control");
+            jack("Velocity", called("Vel"), "Control");
         }
         if jacks.pressure {
-            jack("Pressure", format!("Pressure {n}"), "Control");
+            jack("Pressure", called("Pressure"), "Control");
         }
     }
     let rows = pads.len().div_ceil(COLUMNS).max(1) as f32;
@@ -150,7 +172,7 @@ pub(super) fn pads_to_groups(patch: &mut Patch) {
                     .find_map(|c| c.from_port.strip_prefix("Gate ")?.parse::<usize>().ok().filter(|n| (1..=PADS).contains(n)))
                     .unwrap_or(1)
             };
-            let mut jacks = old_listens(&old).map(|(note, channel)| PadJacks { note, channel, velocity: false, pressure: false });
+            let mut jacks = old_listens(&old).map(|(note, channel)| PadJacks { note, channel, velocity: false, pressure: false, any: false });
             let renamed: Vec<(usize, String)> = connections
                 .iter()
                 .enumerate()
