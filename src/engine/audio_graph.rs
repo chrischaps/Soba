@@ -2518,16 +2518,16 @@ mod tests {
         assert!(!hears(5), "a Looper nothing live feeds");
     }
 
-    /// Pads claim their notes (#428): an Omni Note In skips them, from the
-    /// block a learn moves them in, with no recompile.
+    /// A Pad claims its note (#428, #480): an Omni Note In skips it, from
+    /// the block a learn moves it in, with no recompile.
     #[test]
     fn test_pads_claim_their_notes_from_an_omni_note_in() {
         use crate::dsp::{MidiEvent, MidiMessage};
-        use crate::modules::Pads;
+        use crate::modules::Pad;
         // Note In's Gate, after its Pitch
         const NOTE_IN_GATE: usize = 1;
         let mut graph = AudioGraph::with_registry(48000.0, 256, crate::engine::create_module_registry());
-        for (node_id, module_id) in [(1, crate::modules::note_in::ID), (2, crate::modules::pads::ID)] {
+        for (node_id, module_id) in [(1, crate::modules::note_in::ID), (2, crate::modules::pad::ID)] {
             assert!(graph.handle_command(EngineCommand::AddModule { node_id, module_id }));
         }
         let mut plan = graph.compile();
@@ -2536,12 +2536,12 @@ mod tests {
         let context = ProcessContext::new(48000.0, 256).with_midi(&hit);
         plan.process(&context);
         let gate = |plan: &GraphPlan, node, output| plan.output(node, output).unwrap().samples[255];
-        assert_eq!(gate(&plan, 2, 0), 1.0, "pad 1 is struck");
+        assert_eq!(gate(&plan, 2, 0), 1.0, "the pad is struck");
         assert_eq!(gate(&plan, 1, NOTE_IN_GATE), 0.0, "and the synth isn't");
 
-        // Pad 1 learns note 48: 36 is anyone's again
+        // The Pad learns note 48: 36 is anyone's again
         plan.process(&ProcessContext::new(48000.0, 256).with_midi(&[MidiEvent::new(0, 9, MidiMessage::NoteOff { note: 36, velocity: 0 })]));
-        assert!(plan.set_parameter(2, Pads::PARAM_BASE, 48.0));
+        assert!(plan.set_parameter(2, Pad::PARAM_NOTE, 48.0));
         plan.process(&context);
         assert_eq!(gate(&plan, 1, NOTE_IN_GATE), 1.0);
         assert_eq!(gate(&plan, 2, 0), 0.0);
@@ -2554,7 +2554,7 @@ mod tests {
         use crate::dsp::{ListenTo, MidiEvent, MidiMessage};
         const NOTE_IN_GATE: usize = 1;
         let mut graph = AudioGraph::with_registry(48000.0, 256, crate::engine::create_module_registry());
-        for (node_id, module_id) in [(1, crate::modules::note_in::ID), (2, crate::modules::pads::ID)] {
+        for (node_id, module_id) in [(1, crate::modules::note_in::ID), (2, crate::modules::pad::ID)] {
             assert!(graph.handle_command(EngineCommand::AddModule { node_id, module_id }));
         }
         let mut plan = graph.compile();
@@ -2565,7 +2565,7 @@ mod tests {
 
         // Device A's pad strikes the Pads, and the synth stays quiet
         plan.process(&ProcessContext::new(48000.0, 256).with_midi(&strike(0)));
-        assert_eq!(gate(&plan, 2, 0), 1.0, "pad 1 is struck");
+        assert_eq!(gate(&plan, 2, 0), 1.0, "the pad is struck");
         assert_eq!(gate(&plan, 1, NOTE_IN_GATE), 0.0, "and the synth isn't");
         plan.process(&ProcessContext::new(48000.0, 256).with_midi(&lift(0)));
 
@@ -2582,7 +2582,7 @@ mod tests {
         use crate::dsp::{ListenTo, MidiEvent, MidiMessage};
         const NOTE_IN_GATE: usize = 1;
         let mut graph = AudioGraph::with_registry(48000.0, 256, crate::engine::create_module_registry());
-        for (node_id, module_id) in [(1, crate::modules::note_in::ID), (2, crate::modules::pads::ID)] {
+        for (node_id, module_id) in [(1, crate::modules::note_in::ID), (2, crate::modules::pad::ID)] {
             assert!(graph.handle_command(EngineCommand::AddModule { node_id, module_id }));
         }
         let mut plan = graph.compile();

@@ -30,7 +30,7 @@ use soba::engine::{
 use soba::modules::looper::{LoopState, Looper};
 use soba::dsp::primitives::{Markers, ONSETS};
 use soba::hardware::{Address, Parameter, SlotMap, Step};
-use soba::modules::{Chopper, Cloud, Controls, MidiOut, Mixer, Pads, Resonator};
+use soba::modules::{Chopper, Cloud, Controls, MidiOut, Mixer, Pad, Resonator};
 
 struct CountingAllocator;
 
@@ -265,19 +265,17 @@ fn audio_callback_never_allocates() {
     ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::encoding_param(2), value: 1.0 });
     ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::range_param(3), value: 2.0 });
 
-    // Pads (#428) on channel 1 from note 48, so the notes played below hit
-    // them, and claim them from every Note In on Omni; pad 8 on its own
-    // note on channel 10. Its mode and Base move below, claims and all
-    let pads = node_of(&nodes, "input.pads");
-    ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::PARAM_BASE, value: 48.0 });
-    ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::PARAM_CHANNEL, value: 1.0 });
-    ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::note_param(7), value: 36.0 });
-    ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::channel_param(7), value: 10.0 });
+    // A Pad (#480) on note 48, channel 1, so the notes played below hit it,
+    // and it claims its note from every Note In on Omni. Its mode and note
+    // move below, claims and all
+    let pad = node_of(&nodes, "input.pad");
+    ui.send_command(EngineCommand::SetParameter { node_id: pad, param_index: Pad::PARAM_NOTE, value: 48.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: pad, param_index: Pad::PARAM_CHANNEL, value: 1.0 });
 
-    // Two devices play (#435): the Controls hears the first, the Pads the
+    // Two devices play (#435): the Controls hears the first, the Pad the
     // second, picked out of the block's MIDI each callback
     ui.send_command(EngineCommand::Listen { node_id: controls, listen: ListenTo::Port(0), channel: None });
-    ui.send_command(EngineCommand::Listen { node_id: pads, listen: ListenTo::Port(1), channel: None });
+    ui.send_command(EngineCommand::Listen { node_id: pad, listen: ListenTo::Port(1), channel: None });
 
     // A Chopper on the same Clock, cut at markers, given a new loop (and
     // new markers) every so often, mid-slice or not
@@ -471,11 +469,10 @@ fn audio_callback_never_allocates() {
             ui.send_command(EngineCommand::AddModule { node_id, module_id });
         }
         if round % 40 == 13 {
-            // A pad pressed on the face or let go, a new mode, a new Base
-            let pad = round / 40 % 8;
-            ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::press_param(pad), value: (round % 80 / 40) as f32 * 0.7 });
-            ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::PARAM_MODE, value: (round / 40 % 3) as f32 });
-            ui.send_command(EngineCommand::SetParameter { node_id: pads, param_index: Pads::PARAM_BASE, value: 44.0 + (round / 40 % 8) as f32 });
+            // The pad pressed on the face or let go, a new mode, a new note
+            ui.send_command(EngineCommand::SetParameter { node_id: pad, param_index: Pad::PARAM_PRESS, value: (round % 80 / 40) as f32 * 0.7 });
+            ui.send_command(EngineCommand::SetParameter { node_id: pad, param_index: Pad::PARAM_MODE, value: (round / 40 % 3) as f32 });
+            ui.send_command(EngineCommand::SetParameter { node_id: pad, param_index: Pad::PARAM_NOTE, value: 44.0 + (round / 40 % 8) as f32 });
         }
         if round % 30 == 7 {
             let probe = (round % 90 != 7).then(|| {
@@ -504,13 +501,13 @@ fn audio_callback_never_allocates() {
         for (n, event) in events.into_iter().enumerate() {
             midi.push(TimestampedMidiEvent::heard((n % 2) as u8, event)).unwrap();
         }
-        // The Pads' device unplugged and plugged back in, every so often,
+        // The Pad's device unplugged and plugged back in, every so often,
         // and patched from a MIDI In on channel 10, its claims narrowed to
         // that channel (#479)
         if round % 40 == 13 {
             let listen = if round % 80 == 13 { ListenTo::Unplugged } else { ListenTo::Port(1) };
             let channel = (round % 120 == 53).then_some(9);
-            ui.send_command(EngineCommand::Listen { node_id: pads, listen, channel });
+            ui.send_command(EngineCommand::Listen { node_id: pad, listen, channel });
         }
         ui.flush();
         // Snapshots coming back are dropped here, off the audio thread

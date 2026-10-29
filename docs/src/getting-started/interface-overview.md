@@ -272,7 +272,7 @@ What a control does depends on what it's mapped to:
 
 A controller turns a knob the way the mouse does: a fader sweeps a frequency by octaves, so the middle of its throw is in the middle of what you hear.
 
-To patch a fader or a wheel into a cable, rather than turn one knob with it, use a [Controls](../modules/midi/controls.md) module: its slots learn the same way. To play drums or fire triggers from a controller's pads, use a [Pads](../modules/midi/pads.md) module, whose notes a Note In on Omni then leaves alone.
+To patch a fader or a wheel into a cable, rather than turn one knob with it, use a [Controls](../modules/midi/controls.md) module: its slots learn the same way. To play drums or fire triggers from a controller's pads, use [Pad](../modules/midi/pad.md) modules, one a pad (the Library's **Pads ×8** is eight), whose notes a Note In on Omni then leaves alone.
 
 A mapping listens on the MIDI channel it was learned on, so the keys and the pads of one controller can send the same note numbers without mixing up. (Mappings made before Soba learned channels still listen on all of them.)
 
@@ -332,7 +332,7 @@ Map Mode and MIDI Learn come first. While either is on, the encoders don't follo
 On stage it's hard to remember which fader does what in this patch. Choose **Show the Controller** in the **MIDI In** menu, or press `Ctrl + H`, and a small sketch of your controller appears along the foot of the canvas. It has the encoders and faders you taught, with the same numbered purple badges as the knobs they turn, and a row of pads when the patch maps any. Up to sixteen encoders sit in two rows, as a MiniLab's eight do; more go in rows of eight, as do the faders. Beside each control is what it does right now: the knob's name, and under it the module's name in the module's colour. A control that does nothing stays faint and says what it sends (`CC 74`), so you can find the free ones.
 
 - **What it shows follows what the controller does.** While Hands Follow Selection is on, the encoders and faders show the selected module's knobs, and the sketch says which module they follow. Otherwise they show the patch's own mappings on the encoders and faders you taught.
-- **The pads** are a [Pads](../modules/midi/pads.md) module's, if the patch has one, each saying what its gate is patched into (**Kick** over **Drum**). After them come the patch's mappings to notes, the [Looper](../modules/utilities/looper.md)'s footswitches and the [Scenes](../modules/utilities/scenes.md) pads, lowest note first (**Rec** over **Looper**). A pad lights while you hold it.
+- **The pads** are the patch's [Pads](../modules/midi/pad.md), lowest note first, each saying what its gate is patched into (**Kick** over **Drum**). After them come the patch's mappings to notes, the [Looper](../modules/utilities/looper.md)'s footswitches and the [Scenes](../modules/utilities/scenes.md) pads, lowest note first (**Rec** over **Looper**). A pad lights while you hold it.
 - **It moves as the hardware does.** An encoder's pointer and a fader's cap sit where the knob they turn is, a control brightens as its message arrives, and a fader that hasn't picked its knob up yet shows a purple tick where the fader is. Endless encoders are drawn with a knurled rim.
 - **If you haven't taught Soba your controller**, the sketch lays the patch's mappings on eight encoders and four faders in the order you made them, and offers **Teach Your Controller…**. While you teach it, the sketch grows a control at a time, and the one Soba waits for breathes purple.
 

@@ -373,6 +373,46 @@ impl Patch {
         out
     }
 
+    /// Where cables from module `node`'s output `port` end, through any
+    /// groups' jacks between: each module's ID and input port.
+    pub fn leaf_inputs(&self, node: u64, port: &str) -> Vec<(u64, String)> {
+        /// One level of the patch: its group (none at the top), the level
+        /// outside it, and what's on it.
+        struct Level<'a> {
+            group: Option<u64>,
+            outside: Option<usize>,
+            nodes: &'a [NodeData],
+            connections: &'a [ConnectionData],
+        }
+        fn gather<'a>(levels: &mut Vec<Level<'a>>, group: Option<u64>, outside: Option<usize>, nodes: &'a [NodeData], connections: &'a [ConnectionData], groups: &'a [GroupData]) {
+            let here = levels.len();
+            levels.push(Level { group, outside, nodes, connections });
+            for inner in groups {
+                gather(levels, Some(inner.id), Some(here), &inner.nodes, &inner.connections, &inner.groups);
+            }
+        }
+        let mut levels = Vec::new();
+        gather(&mut levels, None, None, &self.nodes, &self.connections, &self.groups);
+        let Some(start) = levels.iter().position(|level| level.nodes.iter().any(|n| n.id == node)) else { return Vec::new() };
+        let mut ends = Vec::new();
+        let mut trail = vec![(start, node, port.to_string())];
+        while let Some((at, from, port)) = trail.pop() {
+            let level = &levels[at];
+            for cable in level.connections.iter().filter(|c| c.from_node == from && c.from_port == port) {
+                if Some(cable.to_node) == level.group {
+                    // Out through the group's jack, from the group outside it
+                    trail.extend(level.outside.map(|outside| (outside, cable.to_node, cable.to_port.clone())));
+                } else if let Some(inner) = levels.iter().position(|l| l.group == Some(cable.to_node) && l.outside == Some(at)) {
+                    // Into a group, from its jack inside
+                    trail.push((inner, cable.to_node, cable.to_port.clone()));
+                } else {
+                    ends.push((cable.to_node, cable.to_port.clone()));
+                }
+            }
+        }
+        ends
+    }
+
     /// Every module in the patch, in groups or not, to change.
     pub fn all_nodes_mut(&mut self) -> Vec<&mut NodeData> {
         fn collect<'a>(nodes: &'a mut [NodeData], groups: &'a mut [GroupData], out: &mut Vec<&'a mut NodeData>) {
@@ -1009,6 +1049,7 @@ pub fn patch_from_json(json: &str) -> Result<Patch, PatchError> {
     keep_fixed_sequencer_gates(&mut patch.nodes, &mut patch.groups);
     old_note_inputs_to_note_in(&mut patch);
     mixer_mono_out_through_a_mix(&mut patch);
+    super::pads_group::pads_to_groups(&mut patch);
     Ok(patch)
 }
 

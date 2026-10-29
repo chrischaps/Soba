@@ -96,8 +96,8 @@ pub struct Control {
     pub does: Option<MidiMapping>,
     /// How many more of the patch's mappings it turns besides.
     pub also: usize,
-    /// A Pads module's pad (#428): its engine node, and which pad.
-    pub pad: Option<(EngineNodeId, usize)>,
+    /// The Pad module it is (#480), by its engine node.
+    pub pad: Option<EngineNodeId>,
 }
 
 impl Control {
@@ -107,13 +107,13 @@ impl Control {
     }
 }
 
-/// A Pads module in the patch (#428), whose pads the sketch's are.
-#[derive(Debug, Clone, Copy)]
-pub struct PadsModule<'a> {
+/// A Pad module in the patch (#480), whose pad one of the sketch's is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PadModule {
     pub node_id: EngineNodeId,
-    /// Each pad's note and channel (1-16, or 0 for any), or `None` for a
-    /// pad past the top of MIDI's notes.
-    pub notes: &'a [Option<(u8, u8)>],
+    pub note: u8,
+    /// 1-16, or 0 for any.
+    pub channel: u8,
 }
 
 /// Where the labels came from.
@@ -154,8 +154,8 @@ pub struct HandsNow<'a> {
     /// While Soba is taught, what it has been taught so far and the step
     /// it waits for.
     pub teaching: Option<(&'a Controller, Option<Step>)>,
-    /// The patch's Pads module, whose pads come first.
-    pub pads: Option<PadsModule<'a>>,
+    /// The patch's Pad modules, whose pads come first, lowest note first.
+    pub pads: &'a [PadModule],
 }
 
 /// Does `mapping` belong on a pad: a note, a footswitch or a Scenes pad?
@@ -262,16 +262,16 @@ pub fn sketch(hands: HandsNow, mappings: &[MidiMapping]) -> Sketch {
         }
     }
 
-    // The pads: a Pads module's first, each with any mapping on its note;
-    // then the mapped notes, footswitches and Scenes pads not on an encoder
-    // or fader, lowest first
+    // The pads: the Pad modules' first, lowest note first, each with any
+    // mapping on its note; then the mapped notes, footswitches and Scenes
+    // pads not on an encoder or fader, lowest first
+    let mut modules = hands.pads.to_vec();
+    modules.sort_by_key(|pad| (pad.note, pad.channel, pad.node_id));
     let mut pads: Vec<Control> = Vec::new();
-    if let Some(module) = hands.pads {
-        for (index, &(note, channel)) in module.notes.iter().take(PADS).enumerate().filter_map(|(i, n)| Some((i, n.as_ref()?))) {
-            let hardware = Hardware { source: MidiSource::Note, number: note, channel, endless: false };
-            let on_it: Vec<&MidiMapping> = patch.iter().copied().filter(|m| hardware.turns(m)).collect();
-            pads.push(Control { pad: Some((module.node_id, index)), ..Control::of(hardware, on_it) });
-        }
+    for module in modules.into_iter().take(PADS) {
+        let hardware = Hardware { source: MidiSource::Note, number: module.note, channel: module.channel, endless: false };
+        let on_it: Vec<&MidiMapping> = patch.iter().copied().filter(|m| hardware.turns(m)).collect();
+        pads.push(Control { pad: Some(module.node_id), ..Control::of(hardware, on_it) });
     }
     let mut mapped = gathered(patch.iter().enumerate().filter(|(i, m)| !placed[*i] && on_a_pad(m)).map(|(_, m)| *m));
     mapped.retain(|(h, _)| !pads.iter().any(|p| p.hardware.is_some_and(|pad| pad.turns_like(*h))));
@@ -462,20 +462,18 @@ mod tests {
         assert_eq!(sketch.unshown, 0);
     }
 
-
     #[test]
-    fn a_pads_module_s_pads_come_first_with_any_mapping_on_their_notes() {
-        // Pads on 36-43, channel 10, but pad 8 past MIDI's notes
-        let mut notes: Vec<Option<(u8, u8)>> = (36..43).map(|n| Some((n, 10))).collect();
-        notes.push(None);
+    fn the_pad_modules_come_first_lowest_note_first_with_any_mapping_on_their_notes() {
+        // Seven Pads on 36-42, channel 10, added in no order
+        let modules: Vec<PadModule> = [40u8, 36, 42, 37, 39, 38, 41].iter().map(|&note| PadModule { node_id: note as u64 + 100, note, channel: 10 }).collect();
         let patch = vec![pad(37, 4, "Pedal Rec", None), pad(50, 5, "Scene A", Some(0)), pad(51, 5, "Scene B", Some(1))];
-        let hands = HandsNow { pads: Some(PadsModule { node_id: 9, notes: &notes }), ..Default::default() };
+        let hands = HandsNow { pads: &modules, ..Default::default() };
         let sketch = sketch(hands, &patch);
         assert_eq!(sketch.pads.len(), PADS);
-        assert_eq!(sketch.pads[0].pad, Some((9, 0)));
+        assert_eq!(sketch.pads[0].pad, Some(136), "the kick's Pad first");
         assert_eq!(sketch.pads[0].does, None);
         assert_eq!(named(&sketch.pads[1]), Some("Pedal Rec"), "a mapping on the pad's note");
-        assert_eq!(sketch.pads[6].pad, Some((9, 6)));
+        assert_eq!(sketch.pads[6].pad, Some(142));
         // One place left: Scene A, and Scene B doesn't fit
         assert_eq!(sketch.pads[7].pad, None);
         assert_eq!(named(&sketch.pads[7]), Some("Scene A"));

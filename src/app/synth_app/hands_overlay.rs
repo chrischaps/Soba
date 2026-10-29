@@ -152,24 +152,28 @@ impl SynthApp {
         let hands = &self.midi.hands;
         let teaching = hands.teaching().map(|t| (t.taught(), t.step()));
         let holding = hands.active().then(|| hands.mappings().as_slice());
-        // The first Pads module's pads (#428), on the notes they hear
+        // Every Pad in the patch (#480), on the note it hears
         let graph = &self.graph_state.graph;
-        let pads_node = graph.nodes.iter().find(|(_, n)| n.user_data.module_id == crate::modules::pads::ID).map(|(id, _)| id);
-        let notes: Vec<Option<(u8, u8)>> = pads_node
-            .map(|id| crate::modules::pads::listens(&crate::graph::pads_params(graph, id)).iter().map(|l| Some((l.note?, l.channel))).collect())
-            .unwrap_or_default();
-        let pads = pads_node.and_then(|id| self.user_state.get_engine_node_id(id)).map(|node_id| model::PadsModule { node_id, notes: &notes });
-        model::sketch(HandsNow { controller: hands.controller(), holding, teaching, pads }, self.midi.mappings.as_slice())
+        let pads: Vec<model::PadModule> = graph
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.user_data.module_id == crate::modules::pad::ID)
+            .filter_map(|(id, _)| {
+                let listen = crate::graph::pad_listen(graph, id);
+                Some(model::PadModule { node_id: self.user_state.get_engine_node_id(id)?, note: listen.note, channel: listen.channel })
+            })
+            .collect();
+        model::sketch(HandsNow { controller: hands.controller(), holding, teaching, pads: &pads }, self.midi.mappings.as_slice())
     }
 
-    /// Where a Pads module's pad is patched: what it plays ("Kick", or the
-    /// input's name), the module, and the module's colour.
-    fn pad_target(&self, engine_node_id: u64, pad: usize) -> Option<(String, String, Color32)> {
+    /// Where a Pad's gate is patched, through any groups' jacks: what it
+    /// plays ("Kick", or the input's name), the module, and the module's
+    /// colour.
+    fn pad_target(&self, engine_node_id: u64) -> Option<(String, String, Color32)> {
         let graph = &self.graph_state.graph;
         let node = graph.nodes.get(self.user_state.graph_node_id(engine_node_id)?)?;
-        let gate = format!("Gate {}", pad + 1);
-        let (_, output) = node.outputs.iter().find(|(name, _)| *name == gate)?;
-        let (input, _) = graph.iter_connections().find(|(_, from)| from == output)?;
+        let output = node.get_output("Gate").ok()?;
+        let (_, input) = crate::graph::groups::leaf_cables(graph).into_iter().find(|(from, _)| *from == output)?;
         let to = graph.nodes.get(graph.get_input(input).node)?;
         let (port, _) = to.inputs.iter().find(|(_, id)| *id == input)?;
         // A drum says which drum it is
@@ -225,15 +229,15 @@ impl SynthApp {
             }
         }
         let Some(mapping) = &control.does else {
-            // A Pads module's pad plays whatever its gate is patched into
-            if let Some((node, pad)) = control.pad {
-                let pads = self.module_name(node).unwrap_or("Pads").to_string();
-                match self.pad_target(node, pad) {
+            // A Pad plays whatever its gate is patched into
+            if let Some(node) = control.pad {
+                let pad = self.module_name(node).unwrap_or("Pad").to_string();
+                match self.pad_target(node) {
                     Some((name, module, ink)) => {
-                        face.tip.push_str(&format!("\nGate {} of {pads}, into {module}", pad + 1));
+                        face.tip.push_str(&format!("\nThe {pad}'s Gate, into {module}"));
                         (face.name, face.module, face.ink, face.sends) = (Some(name), Some(module), ink, None);
                     }
-                    None => face.tip.push_str(&format!("\nGate {} of {pads}, patched into nothing", pad + 1)),
+                    None => face.tip.push_str(&format!("\nThe {pad}'s Gate, patched into nothing")),
                 }
             } else if control.hardware.is_some() {
                 face.tip.push_str("\nNothing in the patch follows it");

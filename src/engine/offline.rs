@@ -16,7 +16,7 @@ use std::time::Duration;
 use web_time::Instant;
 
 use crate::persistence::sample_files::{self, SampleBase};
-use crate::persistence::{compile_patch, CompiledPatch, Patch, PatchError};
+use crate::persistence::{compile_patch, CompiledPatch, NodeData, Patch, PatchError};
 
 use super::commands::NodeId;
 use super::{create_module_registry, AudioGraph, EngineCommand, GraphPlan, PlanMessage};
@@ -503,8 +503,8 @@ impl OfflineRenderer {
     /// hears MIDI; a patch with Note Ins of each kind gets both. Each note
     /// lands on its sample.
     ///
-    /// Every Pads module (#428) is played [`PAD_BEAT`] on its own pads'
-    /// notes and channels.
+    /// Every set of Pads (#480) is played [`PAD_BEAT`] on its own notes and
+    /// channels.
     pub fn render_audition(&mut self, patch: &Patch, seconds: f32) -> StereoBuffer {
         let channels = audition_channels(patch);
         let (start, sample_rate) = (self.position, self.context.sample_rate);
@@ -562,50 +562,56 @@ pub const PAD_BEAT_BPM: f32 = 96.0;
 /// How long each pad of [`PAD_BEAT`] is held, in seconds.
 pub const PAD_BEAT_HOLD: f32 = 0.08;
 
-/// [`PAD_BEAT`] on the Pads modules of `patch`, as (wire channel, note,
+/// [`PAD_BEAT`] on the Pads of `patch` (#480), as (wire channel, note,
 /// seconds, velocity). A pad on Omni is played on channel 10.
 ///
-/// It's a drum beat, so where some Pads strike a Drum, only those play it:
-/// a second bank of pads cabled to a Looper's Rec and Undo (Hands On, #434)
-/// is left alone. Where none do, every Pads module plays it.
+/// The Pads side by side (in one group, or loose on one level) are one
+/// controller's pads, lowest note first: the beat's pad 1 is the lowest of
+/// them. It's a drum beat, so where some of those strike a Drum, only they
+/// play it: a second bank of pads cabled to a Looper's Rec and Undo (Hands
+/// On, #434) is left alone. Where none do, every one plays it.
 pub fn pad_beat(patch: &Patch) -> Vec<(u8, u8, f32, u8)> {
     use crate::dsp::DspModule;
-    use crate::modules::pads::{self, Pads};
-    let definition = Pads::new();
+    use crate::modules::pad::{self, Pad};
+    let definition = Pad::new();
     let sixteenth = 60.0 / PAD_BEAT_BPM / 4.0;
-    let nodes = patch.all_nodes();
-    let every: Vec<_> = nodes.iter().filter(|n| n.module_id == pads::ID).collect();
-    let drums: Vec<u64> = nodes.iter().filter(|n| n.module_id == crate::modules::drum::ID).map(|n| n.id).collect();
-    let mut cables = Vec::new();
-    collect_connections(&patch.connections, &patch.groups, &mut cables);
-    let striking: Vec<_> = every.iter().filter(|n| cables.iter().any(|c| c.from_node == n.id && drums.contains(&c.to_node))).copied().collect();
-    let players = if striking.is_empty() { every } else { striking };
+    let drums: Vec<u64> = patch.all_nodes().iter().filter(|n| n.module_id == crate::modules::drum::ID).map(|n| n.id).collect();
+    let mut sets = Vec::new();
+    pad_sets(&patch.nodes, &patch.groups, &mut sets);
+    let strikes = |set: &&Vec<&NodeData>| set.iter().any(|n| patch.leaf_inputs(n.id, "Gate").iter().any(|(to, _)| drums.contains(to)));
+    let striking: Vec<&Vec<&NodeData>> = sets.iter().filter(strikes).collect();
+    let players = if striking.is_empty() { sets.iter().collect() } else { striking };
     let mut beat = Vec::new();
-    for node in players {
-        let params: Vec<f32> = definition
-            .parameters()
+    for set in players {
+        let mut listens: Vec<pad::Listen> = set
             .iter()
-            .map(|p| node.parameters.iter().find(|named| named.name == p.name).map_or(p.default, |named| named.value.as_f32()))
+            .map(|node| {
+                let params: Vec<f32> = definition
+                    .parameters()
+                    .iter()
+                    .map(|p| node.parameters.iter().find(|named| named.name == p.name).map_or(p.default, |named| named.value.as_f32()))
+                    .collect();
+                pad::listen(&params)
+            })
             .collect();
-        let listens = pads::listens(&params);
+        listens.sort_by_key(|listen| (listen.note, listen.channel));
         for &(pad, step, velocity) in PAD_BEAT {
-            let Some(note) = listens[pad].note else { continue };
-            let channel = listens[pad].channel.checked_sub(1).unwrap_or(pads::DEFAULT_CHANNEL - 1);
-            beat.push((channel, note, step as f32 * sixteenth, velocity));
+            let Some(listen) = listens.get(pad) else { continue };
+            let channel = listen.channel.checked_sub(1).unwrap_or(pad::DEFAULT_CHANNEL - 1);
+            beat.push((channel, listen.note, step as f32 * sixteenth, velocity));
         }
     }
     beat
 }
 
-/// Every cable in the patch, in groups or not.
-fn collect_connections<'a>(
-    connections: &'a [crate::persistence::ConnectionData],
-    groups: &'a [crate::persistence::GroupData],
-    out: &mut Vec<&'a crate::persistence::ConnectionData>,
-) {
-    out.extend(connections);
+/// The Pads of each level of the patch, a set to each level that has any.
+fn pad_sets<'a>(nodes: &'a [NodeData], groups: &'a [crate::persistence::GroupData], sets: &mut Vec<Vec<&'a NodeData>>) {
+    let here: Vec<&NodeData> = nodes.iter().filter(|n| n.module_id == crate::modules::pad::ID).collect();
+    if !here.is_empty() {
+        sets.push(here);
+    }
     for group in groups {
-        collect_connections(&group.connections, &group.groups, out);
+        pad_sets(&group.nodes, &group.groups, sets);
     }
 }
 
@@ -677,7 +683,7 @@ mod tests {
     use super::*;
     use crate::dsp::analysis::{peak, rms, Spectrum};
     use crate::modules::Oscillator;
-    use crate::persistence::{ConnectionData, NamedParameter, NodeData, ParameterValue};
+    use crate::persistence::{ConnectionData, NamedParameter, ParameterValue};
 
     /// Oscillator (default C4, chosen waveform) into the output's Mono input.
     fn osc_patch(waveform: usize) -> Patch {
@@ -766,20 +772,30 @@ mod tests {
         }
     }
 
+    /// A group of eight Pads with ID `id`, on `notes` and channel 10.
+    fn pads(id: u64, notes: std::ops::Range<u8>, next: &mut u64) -> crate::persistence::GroupData {
+        use crate::persistence::pads_group::{group_of_pads, PadJacks};
+        let jacks: Vec<PadJacks> = notes.map(|note| PadJacks { note, channel: 10, velocity: true, pressure: false }).collect();
+        group_of_pads(id, "Pads", (0.0, 0.0), &jacks, 0, &Default::default(), next)
+    }
+
     #[test]
     fn test_audition_plays_a_beat_on_each_pads_own_notes() {
         let mut patch = Patch::new("pads");
-        patch.nodes.push(NodeData::new(1, crate::modules::pads::ID, (0.0, 0.0)));
+        patch.groups.push(pads(1, 36..44, &mut 10));
         let beat = pad_beat(&patch);
         assert_eq!(beat.len(), PAD_BEAT.len());
         assert!(beat.iter().all(|&(channel, note, _, _)| channel == 9 && (36..44).contains(&note)), "the GM pads on channel 10");
+        assert!(beat.iter().any(|&(_, note, at, _)| note == 36 && at == 0.0), "the kick on the downbeat: the lowest Pad is pad 1");
         assert!(audition_channels(&patch).is_empty(), "no Note In to play the phrase to");
 
-        // Learned onto C4 on channel 2, it's played there
-        patch.nodes[0].parameters =
-            vec![NamedParameter::new("Base", ParameterValue::Number(60.0)), NamedParameter::new("Channel", ParameterValue::Select(2))];
+        // Each learned onto C4 and up on channel 2, in no order, it's played there
+        for (index, node) in patch.groups[0].nodes.iter_mut().rev().enumerate() {
+            node.parameters = vec![NamedParameter::new("Note", ParameterValue::Number(60.0 + index as f32)), NamedParameter::new("Channel", ParameterValue::Select(2))];
+        }
         let beat = pad_beat(&patch);
         assert!(beat.iter().all(|&(channel, note, _, _)| channel == 1 && (60..68).contains(&note)));
+        assert!(beat.iter().any(|&(_, note, at, _)| note == 60 && at == 0.0));
         let last = beat.iter().map(|&(_, _, at, _)| at).fold(0.0, f32::max);
         assert!((last - 32.0 * 60.0 / PAD_BEAT_BPM / 4.0).abs() < 1e-4, "two bars, and the downbeat after");
     }
@@ -787,20 +803,15 @@ mod tests {
     #[test]
     fn test_audition_plays_its_beat_only_on_pads_that_strike_drums() {
         let mut patch = Patch::new("two banks");
-        let mut loops = NodeData::new(2, crate::modules::pads::ID, (0.0, 0.0));
-        loops.parameters = vec![NamedParameter::new("Base", ParameterValue::Number(44.0))];
-        patch.nodes.push(NodeData::new(1, crate::modules::pads::ID, (0.0, 0.0)));
-        patch.nodes.push(loops);
+        let mut next = 10;
+        patch.groups.push(pads(1, 36..44, &mut next));
+        patch.groups.push(pads(2, 44..52, &mut next));
         // With no Drum, both banks play it
         assert_eq!(pad_beat(&patch).len(), 2 * PAD_BEAT.len());
 
+        // The first bank's Gate 1 strikes a Drum, through the group's jack
         patch.nodes.push(NodeData::new(3, crate::modules::drum::ID, (0.0, 0.0)));
-        patch.connections.push(crate::persistence::ConnectionData {
-            from_node: 1,
-            from_port: "Gate 1".into(),
-            to_node: 3,
-            to_port: "Trig".into(),
-        });
+        patch.connections.push(ConnectionData::new(1, "Gate 1", 3, "Trig"));
         let beat = pad_beat(&patch);
         assert_eq!(beat.len(), PAD_BEAT.len());
         assert!(beat.iter().all(|&(_, note, _, _)| (36..44).contains(&note)), "the bank on the Looper is left alone");

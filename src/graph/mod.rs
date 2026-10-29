@@ -109,7 +109,7 @@ pub use group_face::{miniature_transform, paint_miniature, paint_open_pill};
 pub use clock_display::{follows_auto, follows_host, follows_link};
 pub use pads_face::note_claims as pads_claims;
 pub use instrument_face::{choose as choose_profile, knobs_of as instrument_knobs, InstrumentKnobs};
-pub use pads_face::params_of as pads_params;
+pub use pads_face::listen_of as pad_listen;
 pub use data_types::SynthDataType;
 pub use groups::{GroupId, NodeKind};
 pub use port_mapping::SynthGraph;
