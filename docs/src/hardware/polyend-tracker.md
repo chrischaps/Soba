@@ -8,7 +8,7 @@ Polyend's 8-track sample tracker; over MIDI it plays one instrument as a synth a
 
 ## Before you play
 
-Set Config > MIDI: Notes In and CC In to USB or MIDI In jack, and Notes Input Channel / CC In channel to match this profile (each is All or Ch 1-16; the manual gives no factory channel, so 1 is an assumption). Stop the sequencer to play it as a MIDI synthesizer: notes play the last selected instrument. Synth CCs 1-31 and 83-118 act on that instrument; CC 51-62 drive Perform mode effect slots, 71-82 the mixer. The Tracker receives no program change.
+Set Config > MIDI: Notes In and CC In to USB or MIDI In jack, and Notes Input Channel / CC In channel to match this profile (each is All or Ch 1-16; the manual gives no factory channel, so 1 is an assumption). Stop the sequencer to play it as a MIDI synthesizer: notes play the last selected instrument. Synth CCs 1-31 and 83-118 act on that instrument; CC 51-62 drive Perform mode effect slots, 71-82 the mixer. The Tracker receives no program change. Filter Type picks one of Disabled, Low-pass, High-pass and Band-pass, so Mutate moves it only with Ctrl+Alt+M; the manual doesn't say which CC 9 values pick which, so it reads as a number.
 
 ## Parameters
 
@@ -18,7 +18,7 @@ The first 12 are an Instrument's knobs when it's first made.
 |---|---|---|---|---|
 | ● | Cutoff | CC 1 | Filter |  |
 | ● | Resonance | CC 11 | Filter |  |
-| ● | Filter Type | CC 9 | Filter |  |
+| ● | Filter Type | CC 9 | Filter | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 | ● | Overdrive | CC 12 | FX | Mutate leaves it |
 | ● | Bit Depth | CC 13 | FX |  |
 | ● | Tune | CC 5 | Oscillator | Mutate leaves it |

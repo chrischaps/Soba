@@ -83,8 +83,9 @@ A stepped knob goes to the step nearest the value it hears. Knobs that nudge (th
 [Mutate](../../getting-started/interface-overview.md#mutate) works on hardware too. Select the Instrument and press `Ctrl + M`: its knobs move a small random step, and the device follows. Press it again to wander further, or hold it to go a long way. Each press is one undo step, so `Ctrl + Z` walks back to the sound you liked, sending the old values as it goes. Think of the MicroFreak as a partner suggesting the sound next door, not a menu to dig through.
 
 - **What stays put:** a knob a cable drives, an empty knob, any parameter the profile marks `"mutate": false` (a volume, a tuning, a MIDI setting) or whose name says it's loud (a level, drive or feedback), and knobs that nudge, since undo couldn't take a nudge back.
-- **Named values** (an arpeggio type, a clock division) move only with `Ctrl + Alt + M`, and then by whole steps, so the device always lands on one of its own values.
-- **Keeping one:** `Ctrl + Shift + M` keeps the knobs in a [Scenes](../utilities/scenes.md) module. Scenes morph an Instrument's knobs as they do any other knobs. A knob of named values holds until halfway, then switches once, rather than stepping through every value in between. Knobs that nudge aren't kept.
+- **Named values** (an arpeggio type, a clock division, the volca fm's Algorithm) move only with `Ctrl + Alt + M`, and then by whole steps, so the device always lands on one of its own values. Ten presses of `Ctrl + M` never trade an FM algorithm for another.
+- **Choices without names** move only with `Ctrl + Alt + M` too. These are parameters the profile marks `"selects": true` because the maker's chart doesn't say which values pick which: the MicroFreak's Osc Type, or the Digitakt's Filter Type. They read as numbers, and a nudge could otherwise carry the MicroFreak from one oscillator engine to the next.
+- **Keeping one:** `Ctrl + Shift + M` keeps the knobs in a [Scenes](../utilities/scenes.md) module. Scenes morph an Instrument's knobs as they do any other knobs. A knob of named values, or one that selects, holds until halfway, then switches once, rather than stepping through every value in between. Knobs that nudge aren't kept.
 
 ## How it works
 

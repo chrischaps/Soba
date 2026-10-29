@@ -10,7 +10,7 @@
   "parameters": [
     {"name": "Cutoff", "cc": 1, "group": "Filter"},
     {"name": "Resonance", "cc": 11, "group": "Filter"},
-    {"name": "Filter Type", "cc": 9, "group": "Filter"},
+    {"name": "Filter Type", "cc": 9, "group": "Filter", "selects": true},
     {"name": "Overdrive", "cc": 12, "group": "FX"},
     {"name": "Bit Depth", "cc": 13, "group": "FX"},
     {"name": "Tune", "cc": 5, "group": "Oscillator", "mutate": false},
@@ -74,5 +74,5 @@
     {"name": "Line In Level", "cc": 82, "group": "Mix", "mutate": false}
   ],
   "clock": {"sends": true, "receives": true, "transport": true},
-  "notes": "Set Config > MIDI: Notes In and CC In to USB or MIDI In jack, and Notes Input Channel / CC In channel to match this profile (each is All or Ch 1-16; the manual gives no factory channel, so 1 is an assumption). Stop the sequencer to play it as a MIDI synthesizer: notes play the last selected instrument. Synth CCs 1-31 and 83-118 act on that instrument; CC 51-62 drive Perform mode effect slots, 71-82 the mixer. The Tracker receives no program change."
+  "notes": "Set Config > MIDI: Notes In and CC In to USB or MIDI In jack, and Notes Input Channel / CC In channel to match this profile (each is All or Ch 1-16; the manual gives no factory channel, so 1 is an assumption). Stop the sequencer to play it as a MIDI synthesizer: notes play the last selected instrument. Synth CCs 1-31 and 83-118 act on that instrument; CC 51-62 drive Perform mode effect slots, 71-82 the mixer. The Tracker receives no program change. Filter Type picks one of Disabled, Low-pass, High-pass and Band-pass, so Mutate moves it only with Ctrl+Alt+M; the manual doesn't say which CC 9 values pick which, so it reads as a number."
 }

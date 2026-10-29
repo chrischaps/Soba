@@ -20,7 +20,9 @@
 //! parameter it holds allows: never one its profile marks `mutate: false`
 //! (a volume, a tuning, a MIDI setting), nor one that nudges the device
 //! rather than setting it, which undo couldn't walk back. One holding named
-//! values is a whole-number knob: Alt+Ctrl+M moves it by whole steps.
+//! values is a whole-number knob: Alt+Ctrl+M moves it by whole steps. One
+//! that selects (#471), an engine its chart doesn't place, moves only with
+//! Alt+Ctrl+M too, anywhere along its range.
 //!
 //! This holds what's mutated and how. The app's side (the key, the strip of
 //! variations, undo) is in `synth_app/mutating.rs`.
@@ -202,7 +204,11 @@ pub fn knobs(graph: &SynthGraph, user_state: &SynthGraphState, selection: &[Node
                     continue;
                 }
                 let steps = instrument::steps_of(parameter);
-                if steps.is_none_or(|count| switches && count > 1) {
+                let moved = match steps {
+                    Some(count) => switches && count > 1,
+                    None => switches || !parameter.selects,
+                };
+                if moved {
                     add(&knob.param_name, input, steps);
                 }
                 continue;
@@ -554,11 +560,13 @@ mod tests {
         assert!(parameters.len() < crate::modules::instrument::SLOTS);
         let knobs = held_names(&rig, fm, &parameters, false);
         assert!(knobs.contains(&"Mod Attack".to_string()) && knobs.contains(&"LFO Rate".to_string()), "{knobs:?}");
-        for kept in ["Transpose", "Velocity", "Arp Type", "Arp Div"] {
+        for kept in ["Transpose", "Velocity", "Algorithm", "Arp Type", "Arp Div"] {
             assert!(!knobs.contains(&kept.to_string()), "{kept} moved: {knobs:?}");
         }
         let all = held_names(&rig, fm, &parameters, true);
-        assert!(all.contains(&"Arp Type".to_string()) && all.contains(&"Arp Div".to_string()), "{all:?}");
+        for stepped in ["Algorithm", "Arp Type", "Arp Div"] {
+            assert!(all.contains(&stepped.to_string()), "{stepped} stayed: {all:?}");
+        }
         assert!(!all.contains(&"Transpose".to_string()) && !all.contains(&"Velocity".to_string()), "{all:?}");
         // Its Port and Channel say where it plays, not how it sounds
         assert!(!all.contains(&"Port".to_string()) && !all.contains(&"Channel".to_string()), "{all:?}");
@@ -590,6 +598,27 @@ mod tests {
         for seed in 0..40 {
             assert!(((knob.mutated(seed, NUDGE) * count).floor() - at).abs() <= 1.0);
         }
+    }
+
+    #[test]
+    fn ctrl_m_never_changes_the_microfreaks_oscillator_engine() {
+        // Osc Type selects an engine its chart doesn't place (#471): ten
+        // presses of Ctrl+M leave it, Ctrl+Alt+M may move it
+        let mut rig = Rig::new();
+        let (freak, parameters) = instrument(&mut rig, "MicroFreak");
+        let slot = parameters.iter().position(|p| p.name == "Osc Type").unwrap();
+        for _ in 0..10 {
+            let knobs = rig.knobs(&[freak], false);
+            assert!(!knobs.is_empty(), "the rest of its knobs move");
+            assert!(knobs.iter().all(|k| instrument::slot_named(&k.key.param) != Some(slot)), "Ctrl+M moved Osc Type");
+        }
+        let all = held_names(&rig, freak, &parameters, true);
+        assert!(all.contains(&"Osc Type".to_string()), "{all:?}");
+        // The volca fm's Algorithm moves a whole step at a time
+        let (fm, parameters) = instrument(&mut rig, "volca fm");
+        let algorithm = parameters.iter().position(|p| p.name == "Algorithm").unwrap();
+        assert_eq!(instrument::steps_of(&parameters[algorithm]), Some(32));
+        assert!(rig.knobs(&[fm], true).iter().any(|k| instrument::slot_named(&k.key.param) == Some(algorithm) && k.steps == Some(32)));
     }
 
     #[test]

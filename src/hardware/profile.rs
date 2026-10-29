@@ -15,7 +15,10 @@
 //! A parameter is a CC (`"cc": 74`), a 14-bit pair (`"cc": 1, "lsb": 33`)
 //! or an NRPN (`"nrpn": 1234`), across its whole range unless it names
 //! one. A stepped one lists its values: plain labels share the range
-//! evenly, and labels with a `value` say exactly what to send. One on its
+//! evenly, labels with a `value` say exactly what to send, and labels with
+//! a `from` give the bands a chart splits the range into, each sent from
+//! its middle (#471). One that picks one of several things where its chart
+//! doesn't say which values pick which is `"selects": true`. One on its
 //! own channel says so (`"channel": 9`, the Digitakt's delay), and a CC
 //! that nudges rather than sets is `"relative": true`, its middle meaning
 //! no change (the FANTOM's Cutoff).
@@ -155,18 +158,29 @@ pub enum Curve {
 }
 
 /// One value of a stepped parameter: a label sharing the range evenly
-/// with the others, or a label and exactly what to send.
+/// with the others, a label and exactly what to send, or a label and the
+/// lowest value the device takes for it, as a chart's table splits the
+/// range (#471): its band runs up to the next one's.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Step {
     Label(String),
     At { label: String, value: u16 },
+    From { label: String, from: u16 },
 }
 
 impl Step {
     pub fn label(&self) -> &str {
         match self {
-            Step::Label(label) | Step::At { label, .. } => label,
+            Step::Label(label) | Step::At { label, .. } | Step::From { label, .. } => label,
+        }
+    }
+
+    /// Where its band starts, for one a chart splits the range at.
+    pub fn from(&self) -> Option<u16> {
+        match self {
+            Step::From { from, .. } => Some(*from),
+            _ => None,
         }
     }
 }
@@ -188,6 +202,11 @@ pub struct Parameter {
     pub default: Option<u16>,
     /// Whether Mutate may move it: not a volume, a tuning or a MIDI setting.
     pub mutate: bool,
+    /// It picks one of several things, an oscillator engine or a waveform,
+    /// though its chart doesn't say which values pick which, so it has no
+    /// named values: it reads as a number, Mutate moves it only when asked
+    /// for switches, and a scene flips it at halfway (#471).
+    pub selects: bool,
     /// Its own channel, 1-16, whatever the device's or a part's: the
     /// Digitakt's delay is on its FX channel, not a track's.
     pub channel: Option<u8>,
@@ -208,6 +227,7 @@ impl Parameter {
             values: Vec::new(),
             default: None,
             mutate: true,
+            selects: false,
             channel: None,
             relative: false,
         }
@@ -218,9 +238,23 @@ impl Parameter {
         !self.values.is_empty()
     }
 
+    /// Whether it picks one thing of several rather than sweeping: named
+    /// values, or a choice its chart doesn't place. Mutate moves it only
+    /// when asked for switches (#471).
+    pub fn picks(&self) -> bool {
+        self.stepped() || self.selects
+    }
+
+    /// Whether its values are bands a chart splits the range into.
+    fn banded(&self) -> bool {
+        self.values.iter().any(|step| step.from().is_some())
+    }
+
     /// Each value's label and what to send for it. Labels without a value
     /// share the range evenly, each sent at the middle of its share, so a
     /// device that splits the range at its own points still lands on it.
+    /// A band is sent from its middle, inside it whichever way the device
+    /// rounds.
     pub fn steps(&self) -> Vec<(&str, u16)> {
         let (lo, hi) = self.range;
         let n = self.values.len() as f32;
@@ -231,12 +265,22 @@ impl Parameter {
             .map(|(i, step)| match step {
                 Step::At { label, value } => (label.as_str(), *value),
                 Step::Label(label) => (label.as_str(), (lo as f32 + share * (i as f32 + 0.5)).floor().min(hi as f32) as u16),
+                Step::From { label, from } => {
+                    let next = self.values.get(i + 1).and_then(Step::from).unwrap_or(hi.saturating_add(1));
+                    let top = next.saturating_sub(1).max(*from);
+                    (label.as_str(), from + (top - from) / 2)
+                }
             })
             .collect()
     }
 
-    /// The label of the step `value` falls in: the nearest one sent.
+    /// The label of the step `value` falls in: the band it's in, for a
+    /// banded one, or else the nearest one sent.
     pub fn label_of(&self, value: u16) -> Option<&str> {
+        if self.banded() {
+            let band = self.values.iter().rev().find(|step| step.from().is_some_and(|from| from <= value));
+            return band.or(self.values.first()).map(Step::label);
+        }
         self.steps().into_iter().min_by_key(|&(_, at)| at.abs_diff(value)).map(|(label, _)| label)
     }
 
@@ -320,8 +364,17 @@ impl Parameter {
         if let Some(channel) = self.channel.filter(|c| !(1..=16).contains(c)) {
             problems.push(format!("{name}: its channel {channel} isn't 1-16"));
         }
-        if self.relative && self.stepped() {
-            problems.push(format!("{name}: a relative parameter can't have named values"));
+        if self.relative && self.picks() {
+            problems.push(format!("{name}: a relative parameter can't have named values or select"));
+        }
+        if self.banded() {
+            if !self.values.iter().all(|step| step.from().is_some()) {
+                problems.push(format!("{name}: give every value a `from`, or none"));
+            } else if self.values.windows(2).any(|w| w[0].from() >= w[1].from()) {
+                problems.push(format!("{name}: its bands don't climb"));
+            } else if let Some(first) = self.values[0].from().filter(|&first| first != lo) {
+                problems.push(format!("{name}: its first band starts at {first}, not at the bottom of its range, {lo}"));
+            }
         }
         problems
     }
@@ -349,6 +402,8 @@ struct RawParameter {
     default: Option<u16>,
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     mutate: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    selects: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     channel: Option<u8>,
     #[serde(default, skip_serializing_if = "is_false")]
@@ -387,6 +442,7 @@ impl TryFrom<RawParameter> for Parameter {
             values: raw.values,
             default: raw.default,
             mutate: raw.mutate,
+            selects: raw.selects,
             channel: raw.channel,
             relative: raw.relative,
         })
@@ -412,6 +468,7 @@ impl From<Parameter> for RawParameter {
             values: p.values,
             default: p.default,
             mutate: p.mutate,
+            selects: p.selects,
             channel: p.channel,
             relative: p.relative,
         }
@@ -826,6 +883,46 @@ mod tests {
         assert_eq!(mode.label_of(127), Some("D"));
         let two = profile(r#"{ "name": "T", "parameters": [{ "name": "On", "cc": 1, "values": ["Off", "On"] }] }"#).unwrap();
         assert_eq!(two.parameters[0].steps(), [("Off", 32), ("On", 96)]);
+    }
+
+    #[test]
+    fn bands_are_sent_from_their_middle_and_read_by_where_they_start() {
+        // The volca fm's Algorithm, as its table *7 splits CC 48: some
+        // bands four values wide, some three
+        let p = profile(
+            r#"{ "name": "T", "parameters": [{ "name": "Algorithm", "cc": 48, "values": [
+                { "label": "Algo 1", "from": 0 }, { "label": "Algo 2", "from": 4 }, { "label": "Algo 9", "from": 32 },
+                { "label": "Algo 10", "from": 35 }, { "label": "Algo 32", "from": 121 }
+            ] }] }"#,
+        )
+        .unwrap();
+        let algorithm = &p.parameters[0];
+        assert_eq!(algorithm.steps(), [("Algo 1", 1), ("Algo 2", 17), ("Algo 9", 33), ("Algo 10", 77), ("Algo 32", 124)]);
+        assert_eq!([algorithm.text(0), algorithm.text(3), algorithm.text(4), algorithm.text(34), algorithm.text(35)], ["Algo 1", "Algo 1", "Algo 2", "Algo 9", "Algo 10"]);
+        assert_eq!(algorithm.text(127), "Algo 32", "the last band runs to the top");
+        assert_eq!(algorithm.parse("algo 9"), Some(33));
+        assert!(algorithm.picks() && !algorithm.selects);
+        assert_eq!(profile(&p.to_json()).unwrap(), p, "bands round-trip");
+        // Every value a band or none, starting at the bottom, climbing
+        let mixed = r#"{ "name": "T", "parameters": [{ "name": "M", "cc": 1, "values": [{ "label": "A", "from": 0 }, { "label": "B", "value": 90 }] }] }"#;
+        assert!(profile(mixed).unwrap_err().contains("`from`"));
+        let high = r#"{ "name": "T", "parameters": [{ "name": "M", "cc": 1, "values": [{ "label": "A", "from": 5 }, { "label": "B", "from": 60 }] }] }"#;
+        assert!(profile(high).unwrap_err().contains("first band starts at 5"));
+        let flat = r#"{ "name": "T", "parameters": [{ "name": "M", "cc": 1, "values": [{ "label": "A", "from": 0 }, { "label": "B", "from": 0 }] }] }"#;
+        assert!(profile(flat).unwrap_err().contains("climb"));
+    }
+
+    #[test]
+    fn a_parameter_that_selects_without_a_chart_picks_but_reads_as_a_number() {
+        let p = profile(r#"{ "name": "T", "parameters": [{ "name": "Osc Type", "cc": 9, "selects": true }, { "name": "Cutoff", "cc": 23 }] }"#).unwrap();
+        let [osc, cutoff] = &p.parameters[..] else { panic!("two parameters") };
+        assert!(osc.selects && osc.picks() && !osc.stepped());
+        assert_eq!(osc.text(40), "40");
+        assert!(!cutoff.picks());
+        assert!(profile(&p.to_json()).unwrap().parameters[0].selects, "it round-trips");
+        assert!(!p.to_json().contains("\"selects\": false"), "one that sweeps doesn't say so");
+        let relative = r#"{ "name": "T", "parameters": [{ "name": "M", "cc": 1, "relative": true, "selects": true }] }"#;
+        assert!(profile(relative).is_err());
     }
 
     #[test]

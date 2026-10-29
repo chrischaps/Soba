@@ -20,9 +20,9 @@
     {"name": "EG Attack 2", "cc": 21, "group": "Envelope"},
     {"name": "EG Release 1", "cc": 23, "group": "Envelope"},
     {"name": "EG Release 2", "cc": 24, "group": "Envelope"},
-    {"name": "Select 1", "cc": 14, "group": "Oscillator"},
-    {"name": "Select 2", "cc": 15, "group": "Oscillator"},
-    {"name": "Select 1+2", "cc": 16, "group": "Oscillator"},
+    {"name": "Select 1", "cc": 14, "group": "Oscillator", "selects": true},
+    {"name": "Select 2", "cc": 15, "group": "Oscillator", "selects": true},
+    {"name": "Select 1+2", "cc": 16, "group": "Oscillator", "selects": true},
     {"name": "Level 1+2", "cc": 19, "group": "Mix", "mutate": false},
     {"name": "Pitch 1+2", "cc": 28, "group": "Oscillator"},
     {"name": "Mod Amt 1+2", "cc": 31, "group": "Oscillator"},
@@ -35,7 +35,7 @@
     {"name": "Dry Gain", "cc": 52, "group": "Mix"},
     {"name": "Pan", "cc": 10, "group": "Mix", "mutate": false},
     {"name": "Send", "cc": 103, "group": "FX"},
-    {"name": "WG Model", "cc": 116, "group": "FX"},
+    {"name": "WG Model", "cc": 116, "group": "FX", "selects": true},
     {"name": "WG Decay", "cc": 117, "group": "FX"},
     {"name": "WG Body", "cc": 118, "group": "FX"},
     {"name": "WG Tune", "cc": 119, "group": "FX"}
@@ -51,5 +51,5 @@
   "cc_per_part": true,
   "programs": {"what": "Program", "style": "numbered", "first": 1, "count": 16},
   "clock": {"sends": false, "receives": true, "transport": true},
-  "notes": "Factory default is split-channel mode: Part 1-6 on MIDI channels 1-6, any note triggers the part (sounds do not map to note numbers) and the CCs are per part on its channel. Set the global parameter MIDI RX ShortMessage to On (the factory default) or the CCs are ignored. Clock, Start, Stop and Continue are received only when MIDI Clock Src is Auto (the factory default); nothing is transmitted. Single-channel mode (chosen by setting a MIDI channel with REC held while powering on; all six parts on that one channel) uses other CC numbers per part: Part 1 Select 14, Level 15, Mod Amt 16, Mod Rate 17, Pitch 18, EG Attack 19, EG Release 20, Send 103, Pan 109, each acting on both layers; the later parts continue in blocks (Part 2 from 23, Send 104, Pan 110, up to Part 6 at 89-100, Send 108, Pan 114), and the waveguide stays on 116-119. No Program Change is documented. The chart marks Program Change as received, and the Owner's Manual keeps 16 programs on the step buttons; which program change picks which isn't stated, so program change 0 is taken as program 1."
+  "notes": "Factory default is split-channel mode: Part 1-6 on MIDI channels 1-6, any note triggers the part (sounds do not map to note numbers) and the CCs are per part on its channel. Set the global parameter MIDI RX ShortMessage to On (the factory default) or the CCs are ignored. Clock, Start, Stop and Continue are received only when MIDI Clock Src is Auto (the factory default); nothing is transmitted. Single-channel mode (chosen by setting a MIDI channel with REC held while powering on; all six parts on that one channel) uses other CC numbers per part: Part 1 Select 14, Level 15, Mod Amt 16, Mod Rate 17, Pitch 18, EG Attack 19, EG Release 20, Send 103, Pan 109, each acting on both layers; the later parts continue in blocks (Part 2 from 23, Send 104, Pan 110, up to Part 6 at 89-100, Send 108, Pan 114), and the waveguide stays on 116-119. No Program Change is documented. The chart marks Program Change as received, and the Owner's Manual keeps 16 programs on the step buttons; which program change picks which isn't stated, so program change 0 is taken as program 1. Select and WG Model (the waveguide model) pick one of several, so Mutate moves them only with Ctrl+Alt+M; the chart doesn't say which values pick which, so they read as numbers."
 }

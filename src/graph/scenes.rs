@@ -165,6 +165,7 @@ fn glide_of(graph: &SynthGraph, node_id: NodeId, param: &str, value: &SynthValue
     match instrument::steps_of(&held.parameter) {
         _ if held.parameter.relative => None,
         Some(_) => Some(Glide::Flip),
+        None if held.parameter.selects => Some(Glide::Flip),
         None => Some(glide(value)),
     }
 }
@@ -614,6 +615,24 @@ mod tests {
         };
         assert_eq!(glide_of(arp), Some(Glide::Flip));
         assert!(matches!(glide_of(rate), Some(Glide::Turn { .. })));
+    }
+
+    #[test]
+    fn a_knob_that_selects_flips_though_its_chart_names_no_steps() {
+        // The MicroFreak's Osc Type picks an engine (#471): a morph doesn't
+        // pass through every engine between two scenes'
+        let mut rig = Rig::new();
+        let (freak, parameters) = instrument(&mut rig, "MicroFreak");
+        let scenes = rig.add(scenes::ID);
+        let osc = crate::modules::instrument::SLOT_NAMES[parameters.iter().position(|p| p.name == "Osc Type").unwrap()];
+        rig.set(freak, osc, 0.1);
+        let a = capture(&rig.editor.graph, &rig.user_state, scenes);
+        rig.set(freak, osc, 0.9);
+        let b = capture(&rig.editor.graph, &rig.user_state, scenes);
+        rig.morph(scenes, &a, &b, 0.4);
+        assert_eq!(rig.param(freak, osc), 0.1);
+        rig.morph(scenes, &a, &b, 0.5);
+        assert_eq!(rig.param(freak, osc), 0.9);
     }
 
     #[test]

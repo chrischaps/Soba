@@ -8,7 +8,7 @@ A six-part digital percussion synthesizer, each part two oscillators with pitch 
 
 ## Before you play
 
-Factory default is split-channel mode: Part 1-6 on MIDI channels 1-6, any note triggers the part (sounds do not map to note numbers) and the CCs are per part on its channel. Set the global parameter MIDI RX ShortMessage to On (the factory default) or the CCs are ignored. Clock, Start, Stop and Continue are received only when MIDI Clock Src is Auto (the factory default); nothing is transmitted. Single-channel mode (chosen by setting a MIDI channel with REC held while powering on; all six parts on that one channel) uses other CC numbers per part: Part 1 Select 14, Level 15, Mod Amt 16, Mod Rate 17, Pitch 18, EG Attack 19, EG Release 20, Send 103, Pan 109, each acting on both layers; the later parts continue in blocks (Part 2 from 23, Send 104, Pan 110, up to Part 6 at 89-100, Send 108, Pan 114), and the waveguide stays on 116-119. No Program Change is documented. The chart marks Program Change as received, and the Owner's Manual keeps 16 programs on the step buttons; which program change picks which isn't stated, so program change 0 is taken as program 1.
+Factory default is split-channel mode: Part 1-6 on MIDI channels 1-6, any note triggers the part (sounds do not map to note numbers) and the CCs are per part on its channel. Set the global parameter MIDI RX ShortMessage to On (the factory default) or the CCs are ignored. Clock, Start, Stop and Continue are received only when MIDI Clock Src is Auto (the factory default); nothing is transmitted. Single-channel mode (chosen by setting a MIDI channel with REC held while powering on; all six parts on that one channel) uses other CC numbers per part: Part 1 Select 14, Level 15, Mod Amt 16, Mod Rate 17, Pitch 18, EG Attack 19, EG Release 20, Send 103, Pan 109, each acting on both layers; the later parts continue in blocks (Part 2 from 23, Send 104, Pan 110, up to Part 6 at 89-100, Send 108, Pan 114), and the waveguide stays on 116-119. No Program Change is documented. The chart marks Program Change as received, and the Owner's Manual keeps 16 programs on the step buttons; which program change picks which isn't stated, so program change 0 is taken as program 1. Select and WG Model (the waveguide model) pick one of several, so Mutate moves them only with Ctrl+Alt+M; the chart doesn't say which values pick which, so they read as numbers.
 
 ## Parameters
 
@@ -28,9 +28,9 @@ The first 12 are an Instrument's knobs when it's first made. Each part takes the
 | ● | EG Attack 2 | CC 21 | Envelope |  |
 | ● | EG Release 1 | CC 23 | Envelope |  |
 | ● | EG Release 2 | CC 24 | Envelope |  |
-|  | Select 1 | CC 14 | Oscillator |  |
-|  | Select 2 | CC 15 | Oscillator |  |
-|  | Select 1+2 | CC 16 | Oscillator |  |
+|  | Select 1 | CC 14 | Oscillator | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
+|  | Select 2 | CC 15 | Oscillator | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
+|  | Select 1+2 | CC 16 | Oscillator | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | Level 1+2 | CC 19 | Mix | Mutate leaves it |
 |  | Pitch 1+2 | CC 28 | Oscillator |  |
 |  | Mod Amt 1+2 | CC 31 | Oscillator |  |
@@ -43,7 +43,7 @@ The first 12 are an Instrument's knobs when it's first made. Each part takes the
 |  | Dry Gain | CC 52 | Mix | Mutate leaves it |
 |  | Pan | CC 10 | Mix | Mutate leaves it |
 |  | Send | CC 103 | FX |  |
-|  | WG Model | CC 116 | FX |  |
+|  | WG Model | CC 116 | FX | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | WG Decay | CC 117 | FX |  |
 |  | WG Body | CC 118 | FX |  |
 |  | WG Tune | CC 119 | FX |  |

@@ -8,7 +8,7 @@ Eight-track sample-based drum machine and sequencer.
 
 ## Before you play
 
-In Settings > MIDI Config > Port Config turn Receive CC/NRPN and Receive Notes on. Tracks 1-8 are on their default channels 1-8 (notes 0-7 trigger tracks 1-8 only then). Program changes need Prg Ch Receive on in MIDI Sync; the channel is set by Prg Chg In Ch. The Delay and Reverb parameters go to the FX Control channel, not a track's: set FX Control Ch to 9 in Settings > MIDI Config > Channels (the manual gives no factory setting). The compressor and the external-in mixer (also in B.7) are left out, because the manual doesn't say which channel they listen on.
+In Settings > MIDI Config > Port Config turn Receive CC/NRPN and Receive Notes on. Tracks 1-8 are on their default channels 1-8 (notes 0-7 trigger tracks 1-8 only then). Program changes need Prg Ch Receive on in MIDI Sync; the channel is set by Prg Chg In Ch. The Delay and Reverb parameters go to the FX Control channel, not a track's: set FX Control Ch to 9 in Settings > MIDI Config > Channels (the manual gives no factory setting). The compressor and the external-in mixer (also in B.7) are left out, because the manual doesn't say which channel they listen on. Sample Select, Play Mode, Filter Type, SRR Routing, the LFOs' Mult, Dest, Wave and Trig mode, Filter Trig, LFO Trig and Delay Pingpong each pick one of several (Filter Type: Off, 2-pole Lowpass, 2-pole Highpass, EQ 1-5), so Mutate moves them only with Ctrl+Alt+M. Appendix B gives their CCs but not which values pick which, so they read as numbers.
 
 ## Parameters
 
@@ -19,7 +19,7 @@ The first 12 are an Instrument's knobs when it's first made. Each part takes the
 | ● | Filter Freq | CC 74 | Filter |  |
 | ● | Resonance | CC 75 | Filter |  |
 | ● | Tune | CC 16 | Sample | Mutate leaves it |
-| ● | Sample Select | CC 19 | Sample |  |
+| ● | Sample Select | CC 19 | Sample | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 | ● | Bit Reduction | CC 18 | Sample |  |
 | ● | Overdrive | CC 81 | Amp | Mutate leaves it |
 | ● | Delay Send | CC 82 | FX |  |
@@ -29,11 +29,11 @@ The first 12 are an Instrument's knobs when it's first made. Each part takes the
 | ● | Level | CC 7 | Amp | Mutate leaves it |
 | ● | Pan | CC 10 | Amp | Mutate leaves it |
 |  | Sample Level | CC 23 | Sample | Mutate leaves it |
-|  | Play Mode | CC 17 | Sample |  |
+|  | Play Mode | CC 17 | Sample | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | Param E | CC 20 | Sample |  |
 |  | Param F | CC 21 | Sample |  |
 |  | Param G | CC 22 | Sample |  |
-|  | Filter Type | CC 76 | Filter |  |
+|  | Filter Type | CC 76 | Filter | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | Filter Attack | CC 70 | Filter |  |
 |  | Filter Decay | CC 71 | Filter |  |
 |  | Filter Sus | CC 72 | Filter |  |
@@ -42,34 +42,34 @@ The first 12 are an Instrument's knobs when it's first made. Each part takes the
 |  | Filter Base | CC 84 | Filter |  |
 |  | Filter Width | CC 85 | Filter |  |
 |  | SRR | CC 87 | Filter |  |
-|  | SRR Routing | CC 88 | Filter |  |
+|  | SRR Routing | CC 88 | Filter | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | Amp Attack | CC 78 | Amp |  |
 |  | Amp Hold | CC 79 | Amp |  |
 |  | LFO1 Speed | CC 102 | LFO |  |
-|  | LFO1 Mult | CC 103 | LFO |  |
+|  | LFO1 Mult | CC 103 | LFO | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | LFO1 Fade | CC 104 | LFO |  |
-|  | LFO1 Dest | CC 105 | LFO |  |
-|  | LFO1 Wave | CC 106 | LFO |  |
+|  | LFO1 Dest | CC 105 | LFO | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
+|  | LFO1 Wave | CC 106 | LFO | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | LFO1 Phase | CC 107 | LFO |  |
-|  | LFO1 Trig | CC 108 | LFO |  |
+|  | LFO1 Trig | CC 108 | LFO | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | LFO1 Depth | CC 109/61 (14-bit) | LFO |  |
 |  | LFO2 Speed | CC 112 | LFO |  |
-|  | LFO2 Mult | CC 113 | LFO |  |
+|  | LFO2 Mult | CC 113 | LFO | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | LFO2 Fade | CC 114 | LFO |  |
-|  | LFO2 Dest | CC 115 | LFO |  |
-|  | LFO2 Wave | CC 116 | LFO |  |
+|  | LFO2 Dest | CC 115 | LFO | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
+|  | LFO2 Wave | CC 116 | LFO | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | LFO2 Phase | CC 117 | LFO |  |
-|  | LFO2 Trig | CC 118 | LFO |  |
+|  | LFO2 Trig | CC 118 | LFO | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | LFO2 Depth | CC 119/63 (14-bit) | LFO |  |
 |  | Track Level | CC 95 | Mix | Mutate leaves it |
 |  | Mute | CC 94 | Mix | Mutate leaves it |
 |  | Trig Note | CC 3 | Voice | Mutate leaves it |
 |  | Trig Velocity | CC 4 | Voice | Mutate leaves it |
 |  | Trig Length | CC 5 | Voice |  |
-|  | Filter Trig | CC 13 | Voice |  |
-|  | LFO Trig | CC 14 | Voice |  |
+|  | Filter Trig | CC 13 | Voice | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
+|  | LFO Trig | CC 14 | Voice | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | Delay Time | CC 85 (ch 9) | FX |  |
-|  | Delay Pingpong | CC 86 (ch 9) | FX |  |
+|  | Delay Pingpong | CC 86 (ch 9) | FX | one of several, as a number; Mutate moves it only with Ctrl+Alt+M |
 |  | Delay Width | CC 87 (ch 9) | FX |  |
 |  | Delay Feedback | CC 88 (ch 9) | FX | Mutate leaves it |
 |  | Delay Highpass | CC 89 (ch 9) | FX |  |

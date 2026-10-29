@@ -8,6 +8,8 @@ use super::{Address, ButtonMode, Kind, Naming, Profile, Step, Voices};
 
 /// How many parameters an Instrument shows by default.
 const FACE: usize = 12;
+/// The most named values a page lists in full.
+const LISTED: usize = 12;
 
 /// The page's file name: the profile's own file's, as Markdown.
 pub fn file_name(json_name: &str) -> String {
@@ -52,7 +54,13 @@ pub fn page(profile: &Profile) -> String {
         for (i, p) in profile.parameters.iter().enumerate() {
             let face = if i < FACE { "●" } else { "" };
             let mut values = if p.stepped() {
-                p.values.iter().map(Step::label).collect::<Vec<_>>().join(", ")
+                match &p.values[..] {
+                    // A long run reads as its ends: "Algo 1, Algo 2 … Algo 32"
+                    [first, second, .., last] if p.values.len() > LISTED => format!("{}, {} … {}", first.label(), second.label(), last.label()),
+                    steps => steps.iter().map(Step::label).collect::<Vec<_>>().join(", "),
+                }
+            } else if p.selects {
+                "one of several, as a number".to_string()
             } else if p.range != (0, p.address.max()) {
                 format!("{}–{}", p.range.0, p.range.1)
             } else {
@@ -66,6 +74,8 @@ pub fn page(profile: &Profile) -> String {
             }
             if !crate::app::mutate::moves(p) {
                 values = [values, "Mutate leaves it".to_string()].into_iter().filter(|v| !v.is_empty()).collect::<Vec<_>>().join("; ");
+            } else if p.picks() {
+                values = [values, "Mutate moves it only with Ctrl+Alt+M".to_string()].into_iter().filter(|v| !v.is_empty()).collect::<Vec<_>>().join("; ");
             }
             let mut message = match p.address {
                 Address::Cc14 { .. } => format!("{} (14-bit)", p.address.text()),

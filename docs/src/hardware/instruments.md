@@ -78,7 +78,8 @@ A profile is a small JSON file, like a patch:
 
   A parameter can also have:
   - **range**: the values it takes, when they aren't all of them.
-  - **values**: for a stepped parameter, its steps. Plain labels share the range evenly, and each is sent from the middle of its share, so the device lands on the right step however it divides the range. A step written as `{ "label": "Poly", "value": 64 }` sends exactly that value.
+  - **values**: for a stepped parameter, its steps. Plain labels share the range evenly, and each is sent from the middle of its share, so the device lands on the right step however it divides the range. A step written as `{ "label": "Poly", "value": 64 }` sends exactly that value. Where the chart splits the range into bands, as Korg's table for the volca fm's Algorithm does, write each step with where its band starts: `{ "label": "Algo 2", "from": 4 }`. A band runs up to the next one's start (the last to the top of the range), is sent from its middle, and every value in it reads as its name. The first band starts at the bottom of the range, and either every step has a `from` or none does.
+  - **selects**: `true` for a parameter that picks one of several things (an oscillator engine, a waveform, an LFO destination) where the chart doesn't say which values pick which. It reads as a number, but Mutate moves it only with `Ctrl + Alt + M` and a scene flips it once at halfway, as it does named values. When you find the bands (turn the knob slowly and watch the device's screen), write them as `values` with `from` and drop `selects`.
   - **curve**: `"log"`, for times and frequencies.
   - **default**: where it starts.
   - **mutate**: `false` keeps Mutate away from a volume or a tuning.
