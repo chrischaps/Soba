@@ -13,16 +13,24 @@
 //! - With nothing taught, the patch's CC mappings, in the order they were
 //!   learned, on eight encoders and four faders drawn as a guess.
 //!
+//! A taught controller is drawn with as many encoders and faders as it
+//! was taught (#485), and one being taught grows a control at a time.
+//!
 //! The pads are the patch's mappings to notes, footswitches and Scenes
 //! pads, whatever else the hands are doing: Soba isn't taught pads, so
 //! they're the mapped notes in order.
 
 use crate::engine::NodeId as EngineNodeId;
 use crate::persistence::{MidiControl, MidiEncoding, MidiMapping, MidiSource};
-use super::hands::{Controller, Step, Taught, ENCODERS, SLOTS};
+use super::hands::{Controller, Step, Taught};
 
 /// How many pads the sketch has room for.
 pub const PADS: usize = 8;
+
+/// The encoders and faders drawn while nothing is taught: a guess, the
+/// MiniLab's.
+pub const GUESSED_ENCODERS: usize = 8;
+pub const GUESSED_FADERS: usize = 4;
 
 /// What a control on the controller sends.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,8 +133,10 @@ pub enum Source {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sketch {
     pub source: Source,
-    /// Each encoder, then each fader: [`SLOTS`] of them.
+    /// Each encoder, then each fader.
     pub slots: Vec<Control>,
+    /// How many of the slots are encoders: the rest are faders.
+    pub encoders: usize,
     /// The mapped pads, at most [`PADS`].
     pub pads: Vec<Control>,
     /// How many of the patch's mapped controls aren't on the sketch.
@@ -153,11 +163,11 @@ fn on_a_pad(mapping: &MidiMapping) -> bool {
     mapping.source == MidiSource::Note || mapping.control == MidiControl::Button || mapping.scene.is_some()
 }
 
-/// The slot a teaching step teaches.
-fn slot_of(step: Step) -> usize {
+/// The slot a teaching step teaches, on a sketch of `encoders` encoders.
+fn slot_of(step: Step, encoders: usize) -> usize {
     match step {
         Step::Encoder(n) => n,
-        Step::Fader(n) => ENCODERS + n,
+        Step::Fader(n) => encoders + n,
     }
 }
 
@@ -181,14 +191,23 @@ pub fn sketch(hands: HandsNow, mappings: &[MidiMapping]) -> Sketch {
     // A DAW's macros aren't on the controller
     let patch: Vec<&MidiMapping> = mappings.iter().filter(|m| m.macro_slot.is_none()).collect();
     let taught = hands.teaching.map(|(taught, _)| taught).or(hands.controller);
+    // As many as were taught; while taught, those so far and the one waited for
+    let (encoders, faders) = match (hands.teaching, taught) {
+        (Some((so_far, step)), _) => (
+            so_far.encoders.len() + usize::from(matches!(step, Some(Step::Encoder(_)))),
+            so_far.faders.len() + usize::from(matches!(step, Some(Step::Fader(_)))),
+        ),
+        (None, Some(controller)) => (controller.encoders.len(), controller.faders.len()),
+        (None, None) => (GUESSED_ENCODERS, GUESSED_FADERS),
+    };
     let source = match (hands.teaching, hands.holding, taught) {
-        (Some((_, step)), ..) => Source::Teaching(step.map(slot_of)),
+        (Some((_, step)), ..) => Source::Teaching(step.map(|step| slot_of(step, encoders))),
         (None, Some(_), Some(_)) => Source::Following,
         (None, _, Some(_)) => Source::Patch,
         (None, _, None) => Source::Untaught,
     };
 
-    let mut slots = vec![Control::default(); SLOTS];
+    let mut slots = vec![Control::default(); encoders + faders];
     // The patch's mappings that are somewhere on the sketch, or paused
     let mut placed = vec![false; patch.len()];
     match taught {
@@ -214,9 +233,9 @@ pub fn sketch(hands: HandsNow, mappings: &[MidiMapping]) -> Sketch {
             // whatever's left over
             let knobs = gathered(patch.iter().copied().filter(|m| m.source == MidiSource::Cc && !on_a_pad(m)));
             let mixed = knobs.iter().any(|(h, _)| h.endless) && knobs.iter().any(|(h, _)| !h.endless);
-            let mut free = [true; SLOTS];
+            let mut free = vec![true; slots.len()];
             let mut take = |faders: Option<bool>| {
-                let slot = (0..SLOTS).find(|&slot| free[slot] && faders.is_none_or(|f| (slot >= ENCODERS) == f))?;
+                let slot = (0..free.len()).find(|&slot| free[slot] && faders.is_none_or(|f| (slot >= encoders) == f))?;
                 free[slot] = false;
                 Some(slot)
             };
@@ -268,7 +287,8 @@ pub fn sketch(hands: HandsNow, mappings: &[MidiMapping]) -> Sketch {
     }
 
     let unshown = gathered(patch.iter().enumerate().filter(|(i, _)| !placed[*i]).map(|(_, m)| *m)).len();
-    Sketch { source, slots, pads, unshown }
+    Sketch { source, slots, encoders, pads, unshown }
+
 }
 
 /// A control's name as the strip says it: a Looper's "Pedal Rec" is its
@@ -280,7 +300,11 @@ pub fn short_name(param_name: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::hands::FADERS;
+
+    /// The MiniLab's, which is also what's guessed with nothing taught.
+    const ENCODERS: usize = GUESSED_ENCODERS;
+    const FADERS: usize = GUESSED_FADERS;
+    const SLOTS: usize = ENCODERS + FADERS;
 
     fn endless(cc: u8) -> Option<Taught> {
         Some(Taught { cc, channel: 1, encoding: MidiEncoding::Relative64 })
@@ -415,8 +439,29 @@ mod tests {
         assert_eq!(sketch.slots[0].hardware.map(|h| h.number), Some(70));
         assert_eq!(sketch.slots[0].does, None, "no labels while it's taught");
         assert_eq!(sketch.slots[1].hardware, None, "skipped");
-        assert_eq!(slot_of(Step::Fader(1)), ENCODERS + 1);
+        // The controller grows as it's taught: the two so far and the one waited for
+        assert_eq!((sketch.slots.len(), sketch.encoders), (3, 3));
+
+        // On to the faders: all the encoders, and the fader waited for
+        let so_far = Controller { encoders: vec![endless(70), endless(71)], faders: vec![endless(20)] };
+        let hands = HandsNow { teaching: Some((&so_far, Some(Step::Fader(1)))), ..Default::default() };
+        let sketch = super::sketch(hands, &patch);
+        assert_eq!((sketch.slots.len(), sketch.encoders), (4, 2));
+        assert_eq!(sketch.source, Source::Teaching(Some(3)));
+        assert_eq!(slot_of(Step::Fader(1), 2), 3);
     }
+
+    #[test]
+    fn a_taught_controller_is_drawn_with_as_many_controls_as_it_has() {
+        // A BeatStep: sixteen encoders, no faders
+        let beatstep = Controller { encoders: (70..86).map(endless).collect(), faders: Vec::new() };
+        let patch = vec![knob(85, 1, 0, "Cutoff")];
+        let sketch = sketch(HandsNow { controller: Some(&beatstep), ..Default::default() }, &patch);
+        assert_eq!((sketch.slots.len(), sketch.encoders), (16, 16));
+        assert_eq!(named(&sketch.slots[15]), Some("Cutoff"));
+        assert_eq!(sketch.unshown, 0);
+    }
+
 
     #[test]
     fn a_pads_module_s_pads_come_first_with_any_mapping_on_their_notes() {

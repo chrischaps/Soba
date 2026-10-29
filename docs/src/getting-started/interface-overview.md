@@ -309,16 +309,18 @@ Mapping is for a patch you've finished. While you're building one, you want the 
 
 **Teach Soba your controller first.** You do this once per controller. Choose **Teach Your Controller…** in the **MIDI In** menu, and the status bar walks you through it. With several devices open, it teaches the one whose encoder you turn first, and keeps what it learns under that device's name. The hands then stay on the controller you taught last, for as long as it's open:
 
-1. "Turn encoder 1 a few clicks". Turn the first encoder a few clicks in one direction, at any speed. The status bar says what it heard (`Encoder 1 is CC 74 · ch 1, endless`) and asks for the next one, through encoder 8.
-2. "Move fader 1". Move each fader in turn, through fader 4.
+1. "Turn encoder 1 a few clicks". Turn the first encoder a few clicks in one direction, at any speed. The status bar says what it heard (`Encoder 1 is CC 74 · ch 1, endless`) and asks for the next one. Go on until you've turned them all, then press `Enter` (or **Done**).
+2. "Move fader 1". Move each fader in turn, then press `Enter` (or **Done**) again.
 
-If your controller has fewer encoders or faders, press `Tab` (or **Skip**) to pass one, and `Enter` (or **Done**) to finish early. `Escape` gives up and keeps what Soba knew before. Turning slowly lets Soba tell an endless encoder, which sends steps, from a knob with ends, which sends where it is. Soba keeps what it learned under the controller's name, not in the patch, so it's there for every patch, and each controller you teach is remembered separately.
+Soba learns as many encoders and faders as your controller has, and either can be none. A MiniLab 3 is eight encoders and four faders, a nanoKONTROL eight and eight, a Launch Control XL twenty-four and eight, and a BeatStep sixteen encoders and no faders: press **Done** straight away when it asks for fader 1. To pass over one in the middle, press `Tab` (or **Skip**): the knob it would turn is left free, so the rest stay where they are on the hardware. `Escape` gives up and keeps what Soba knew before. A controller taught before Soba learned any number keeps its eight encoders and four faders.
+
+Turning slowly lets Soba tell an endless encoder, which sends steps, from a knob with ends, which sends where it is. Soba keeps what it learned under the controller's name, not in the patch, so it's there for every patch, and each controller you teach is remembered separately.
 
 **Then turn on Hands Follow Selection** in the **MIDI In** menu, or press `Ctrl + Shift + L`. Teaching turns it on for you. While it's on:
 
-- The encoders turn the selected module's first eight knobs, in the order its face shows them, and the faders turn the next four.
+- The encoders turn the selected module's first knobs, in the order its face shows them, and the faders turn the knobs after: on a MiniLab, the first eight and the next four.
 - Select a [group](#groups) and they turn the knobs pinned to its face instead. With several modules selected, they turn the first one's.
-- The knobs they turn wear small numbered purple badges, `1` to `8` for the encoders and `F1` to `F4` for the faders. The badges fade in each time you select something else.
+- The knobs they turn wear small numbered purple badges, `1`, `2` and on for the encoders and `F1`, `F2` and on for the faders. The badges fade in each time you select something else.
 - Endless encoders step the knob from wherever it stands. Faders, and knobs with ends, pick the knob up as mapped ones do: a tick on the rim shows where the fader is until it reaches the knob.
 - The patch's own mappings on the taught encoders and faders pause, and their badges dim. Turn Hands Follow Selection off and they come back. Mappings on the controller's other controls, its pads and keys, carry on as before.
 - As with mappings, turning a knob this way isn't added to the undo history.
@@ -327,12 +329,13 @@ Map Mode and MIDI Learn come first. While either is on, the encoders don't follo
 
 #### Seeing what each control does
 
-On stage it's hard to remember which fader does what in this patch. Choose **Show the Controller** in the **MIDI In** menu, or press `Ctrl + H`, and a small sketch of your controller appears along the foot of the canvas. It has the eight encoders and four faders, with the same numbered purple badges as the knobs they turn, and a row of pads when the patch maps any. Beside each control is what it does right now: the knob's name, and under it the module's name in the module's colour. A control that does nothing stays faint and says what it sends (`CC 74`), so you can find the free ones.
+On stage it's hard to remember which fader does what in this patch. Choose **Show the Controller** in the **MIDI In** menu, or press `Ctrl + H`, and a small sketch of your controller appears along the foot of the canvas. It has the encoders and faders you taught, with the same numbered purple badges as the knobs they turn, and a row of pads when the patch maps any. Up to sixteen encoders sit in two rows, as a MiniLab's eight do; more go in rows of eight, as do the faders. Beside each control is what it does right now: the knob's name, and under it the module's name in the module's colour. A control that does nothing stays faint and says what it sends (`CC 74`), so you can find the free ones.
 
 - **What it shows follows what the controller does.** While Hands Follow Selection is on, the encoders and faders show the selected module's knobs, and the sketch says which module they follow. Otherwise they show the patch's own mappings on the encoders and faders you taught.
 - **The pads** are a [Pads](../modules/midi/pads.md) module's, if the patch has one, each saying what its gate is patched into (**Kick** over **Drum**). After them come the patch's mappings to notes, the [Looper](../modules/utilities/looper.md)'s footswitches and the [Scenes](../modules/utilities/scenes.md) pads, lowest note first (**Rec** over **Looper**). A pad lights while you hold it.
 - **It moves as the hardware does.** An encoder's pointer and a fader's cap sit where the knob they turn is, a control brightens as its message arrives, and a fader that hasn't picked its knob up yet shows a purple tick where the fader is. Endless encoders are drawn with a knurled rim.
-- **If you haven't taught Soba your controller**, the sketch lays the patch's mappings on eight encoders and four faders in the order you made them, and offers **Teach Your Controller…**. While you teach it, the control Soba waits for breathes purple.
+- **If you haven't taught Soba your controller**, the sketch lays the patch's mappings on eight encoders and four faders in the order you made them, and offers **Teach Your Controller…**. While you teach it, the sketch grows a control at a time, and the one Soba waits for breathes purple.
+
 - Mappings that don't fit, or are on controls Soba wasn't taught, are counted at the left, with a link to the [Controller Map](#the-controller-map).
 
 The sketch keeps its size as you zoom, stays clear of the status bar, and only takes the clicks that land on it. Hover a control to see what it sends. Soba remembers whether it's shown.

@@ -148,8 +148,8 @@ impl SynthApp {
                 if ui.add(button("Skip")).on_hover_text("This controller hasn't this one (Tab)").clicked() {
                     self.midi.hands.skip();
                 }
-                if ui.add(button("Done")).on_hover_text("It has no more (Enter)").clicked() {
-                    self.midi.hands.finish_teaching();
+                if ui.add(button("Done")).on_hover_text(self.teach_done_tip()).clicked() {
+                    self.midi.hands.done();
                 }
             }
             Shown::MapMode => {

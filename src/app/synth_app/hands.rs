@@ -1,6 +1,7 @@
 //! Hands follow the selection (#429), the app's side: which knobs the
 //! selection offers the hands, teaching Soba a controller from the MIDI In
-//! menu, its keys (Tab skips, Enter finishes, Escape gives up), and the
+//! menu, its keys (Tab skips, Enter says there are no more encoders, or
+//! faders, Escape gives up), and the
 //! toggle, Ctrl+Shift+L. What the hands are and how they turn is
 //! `crate::app::hands`; their badges are `crate::graph::hand_badges`.
 //!
@@ -8,7 +9,7 @@
 //! go and the patch's mappings have the controller back.
 
 use super::*;
-use crate::app::hands::{HandTarget, SLOTS};
+use crate::app::hands::{Controller, HandTarget, Step};
 use crate::graph::groups::Control;
 
 impl SynthApp {
@@ -32,7 +33,7 @@ impl SynthApp {
     }
 
     /// The knobs the selection offers the hands, in the order its face
-    /// shows them.
+    /// shows them: as many as the controller has encoders and faders.
     pub(super) fn hand_targets(&self) -> Vec<HandTarget> {
         let graph = &self.graph_state.graph;
         let Some(node) = self.graph_state.selected_nodes.first().and_then(|&id| graph.nodes.get(id)) else {
@@ -44,7 +45,8 @@ impl SynthApp {
             }),
             None => node.user_data.knob_params.iter().map(|k| (node.id, k.param_name.as_str())).collect(),
         };
-        knobs.into_iter().filter_map(|(node_id, param)| self.hand_target(node_id, param)).take(SLOTS).collect()
+        let room = self.midi.hands.controller().map_or(0, Controller::len);
+        knobs.into_iter().filter_map(|(node_id, param)| self.hand_target(node_id, param)).take(room).collect()
     }
 
     /// A module's knob, as the hands would hold it.
@@ -85,9 +87,10 @@ impl SynthApp {
         self.midi.hands.start_teaching();
     }
 
-    /// Tab skips the control being taught, Enter finishes and Escape gives
-    /// up, while Soba is being taught. Before the canvas's own Tab and
-    /// Escape, which would open the palette or leave the group.
+    /// Tab skips the control being taught, Enter says there are no more
+    /// encoders (and then no more faders) and Escape gives up, while Soba
+    /// is being taught. Before the canvas's own Tab and Escape, which would
+    /// open the palette or leave the group.
     pub(super) fn teach_keys(&mut self, ctx: &egui::Context) {
         if self.midi.hands.teaching().is_none() {
             return;
@@ -99,7 +102,7 @@ impl SynthApp {
         if cancel {
             self.midi.hands.cancel_teaching();
         } else if done {
-            self.midi.hands.finish_teaching();
+            self.midi.hands.done();
         } else if skip {
             self.midi.hands.skip();
         }
@@ -112,7 +115,19 @@ impl SynthApp {
         // With several open, the one turned first is taught (#454)
         let any = if teaching.device().is_none() && self.midi.open_names().len() > 1 { "the controller you turn first" } else { "your controller" };
         let device = Some(self.midi.hands.device()).filter(|d| !d.is_empty()).unwrap_or(any);
-        Some(format!("Teaching {device} · {} · Tab skips, Enter finishes, Esc cancels", teaching.prompt()))
+        let enter = match teaching.step() {
+            Some(Step::Encoder(_)) => "Enter when that's all the encoders",
+            _ => "Enter when that's all the faders",
+        };
+        Some(format!("Teaching {device} · {} · Tab skips, {enter}, Esc cancels", teaching.prompt()))
+    }
+
+    /// What Done does now, for its tip.
+    pub(super) fn teach_done_tip(&self) -> &'static str {
+        match self.midi.hands.teaching().and_then(|t| t.step()) {
+            Some(Step::Encoder(_)) => "That's all its encoders: on to the faders (Enter)",
+            _ => "That's all its faders: finish (Enter)",
+        }
     }
 }
 
@@ -147,7 +162,8 @@ mod tests {
 
         app.graph_state.selected_nodes = vec![osc];
         let names: Vec<String> = app.hand_targets().into_iter().map(|t| t.param_name).collect();
-        let face: Vec<String> = app.graph_state.graph[osc].user_data.knob_params.iter().map(|k| k.param_name.clone()).take(SLOTS).collect();
+        let face: Vec<String> = app.graph_state.graph[osc].user_data.knob_params.iter().map(|k| k.param_name.clone()).take(12).collect();
+
         assert_eq!(names, face);
 
         // Several selected: the first
@@ -182,6 +198,31 @@ mod tests {
         assert_eq!(targets[0].node_id, app.user_state.get_engine_node_id(filter).unwrap());
     }
 
+    /// A BeatStep's sixteen encoders and no faders turn every one of a
+    /// Sampler's knobs, past the twelve a MiniLab's would (#485).
+    #[test]
+    fn sixteen_encoders_turn_all_a_sampler_s_knobs() {
+        let mut app = SynthApp::new();
+        let endless = |cc| Some(Taught { cc, channel: 1, encoding: MidiEncoding::Relative64 });
+        app.midi.hands.know("", Controller { encoders: (70..86).map(endless).collect(), faders: Vec::new() });
+        app.midi.hands.on = true;
+        let sampler = add(&mut app, crate::modules::sampler::ID);
+        let knobs: Vec<String> = app.graph_state.graph[sampler].user_data.knob_params.iter().map(|k| k.param_name.clone()).collect();
+        let count = knobs.len();
+        assert!((13..=16).contains(&count), "more than eight and four, no more than sixteen: {count}");
+
+        app.graph_state.selected_nodes = vec![sampler];
+        let names: Vec<String> = app.hand_targets().into_iter().map(|t| t.param_name).collect();
+        assert_eq!(names, knobs);
+        app.follow_hands(1.0);
+        let badges = &app.user_state.hands.slots;
+        assert_eq!(badges.len(), count);
+        let mut labels: Vec<usize> = badges.values().map(|b| b.parse().expect("encoders only")).collect();
+        labels.sort();
+        assert_eq!(labels, (1..=count).collect::<Vec<_>>());
+
+    }
+
     #[test]
     fn teaching_keys_skip_finish_and_cancel() {
         let mut app = SynthApp::new();
@@ -191,7 +232,13 @@ mod tests {
         assert!(app.teach_status().unwrap().contains("Turn encoder 1"));
         app.midi.hands.skip();
         assert!(app.teach_status().unwrap().contains("Encoder 1 skipped · turn encoder 2"));
+        assert!(app.teach_status().unwrap().contains("Enter when that's all the encoders"));
+        // Done: no more encoders, so the faders
+        app.midi.hands.done();
+        let status = app.teach_status().unwrap();
+        assert!(status.contains("no encoders · move fader 1") && status.contains("Enter when that's all the faders"), "{status}");
         app.midi.hands.cancel_teaching();
+
         app.follow_hands(0.0);
         assert_eq!(app.status_message.as_deref(), Some("Teaching cancelled"));
         assert!(app.teach_status().is_none());

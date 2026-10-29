@@ -1,11 +1,13 @@
 //! Hands follow the selection (#429): the encoders and faders of a
 //! controller Soba has been taught turn whichever module is selected, the
-//! way a DAW's remote controls do. Click an oscillator and the eight
-//! encoders are its first eight knobs; click a filter and they're the
-//! filter's. The four faders take the next four.
+//! way a DAW's remote controls do. Click an oscillator and the encoders
+//! are its first knobs; click a filter and they're the filter's. The
+//! faders take the knobs after.
 //!
 //! Soba is taught a controller once, from the MIDI In menu: turn encoder
-//! 1, then 2, through 8, then move fader 1 through 4. What it heard is kept
+//! 1, then 2, and on until Done, then move each fader until Done again
+//! (#485). Either can be none, so a MiniLab is taught eight and four, a
+//! BeatStep sixteen encoders and no faders. What it heard is kept
 //! in the app's storage under the device's name, not in the patch, since
 //! it's the hardware's and goes with it from patch to patch. With several
 //! devices open, the one whose control is turned first is the one taught
@@ -26,13 +28,6 @@ use crate::engine::device_names::same;
 use crate::engine::NodeId as EngineNodeId;
 use crate::persistence::{MidiEncoding, MidiInput, MidiMapping, MidiSource};
 use super::midi_mappings::{MidiMappings, Standing};
-
-/// How many encoders are taught, and turn the first knobs.
-pub const ENCODERS: usize = 8;
-/// How many faders are taught, and turn the knobs after.
-pub const FADERS: usize = 4;
-/// Every control the hands have, encoders first.
-pub const SLOTS: usize = ENCODERS + FADERS;
 
 /// How many values a control sends while it's taught before it's taken:
 /// enough for an endless encoder to tell itself from a knob with ends.
@@ -72,7 +67,9 @@ impl Taught {
 }
 
 /// A controller as Soba was taught it: each encoder and fader, or `None`
-/// for one skipped (it has fewer).
+/// for one skipped, which leaves its knob free. It has as many as were
+/// taught. One taught before #485 kept a place for each of the MiniLab's
+/// eight encoders whenever it had faders, so it keeps its eight and four.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Controller {
     pub encoders: Vec<Option<Taught>>,
@@ -80,28 +77,30 @@ pub struct Controller {
 }
 
 impl Controller {
-    /// The control in `slot`: encoders 0-7, faders 8-11.
-    pub fn slot(&self, slot: usize) -> Option<Taught> {
-        match slot.checked_sub(ENCODERS) {
-            None => self.encoders.get(slot).copied().flatten(),
-            Some(fader) => self.faders.get(fader).copied().flatten(),
+    /// How many controls it has, encoders and faders: the knobs it holds.
+    pub fn len(&self) -> usize {
+        self.encoders.len() + self.faders.len()
+    }
+
+    /// Which control `slot` is: the encoders first, then the faders.
+    pub fn step(&self, slot: usize) -> Step {
+        match slot.checked_sub(self.encoders.len()) {
+            None => Step::Encoder(slot),
+            Some(fader) => Step::Fader(fader),
         }
     }
 
-    fn set(&mut self, slot: usize, taught: Option<Taught>) {
-        let (list, at) = match slot.checked_sub(ENCODERS) {
-            None => (&mut self.encoders, slot),
-            Some(fader) => (&mut self.faders, fader),
-        };
-        if list.len() <= at {
-            list.resize(at + 1, None);
+    /// The control in `slot`, if it was taught.
+    pub fn slot(&self, slot: usize) -> Option<Taught> {
+        match self.step(slot) {
+            Step::Encoder(n) => self.encoders.get(n).copied().flatten(),
+            Step::Fader(n) => self.faders.get(n).copied().flatten(),
         }
-        list[at] = taught;
     }
 
     /// Each control taught, with its slot.
     pub fn slots(&self) -> impl Iterator<Item = (usize, Taught)> + '_ {
-        (0..SLOTS).filter_map(|slot| Some((slot, self.slot(slot)?)))
+        (0..self.len()).filter_map(|slot| Some((slot, self.slot(slot)?)))
     }
 
     /// The slot of the control that sends `cc` on `channel` (0-15).
@@ -115,27 +114,27 @@ impl Controller {
 
     /// What it has: "8 encoders and 4 faders".
     pub fn summary(&self) -> String {
-        let count = |range: std::ops::Range<usize>| range.filter(|&slot| self.slot(slot).is_some()).count();
-        let (encoders, faders) = (count(0..ENCODERS), count(ENCODERS..SLOTS));
-        let plural = |n: usize, one: &str| if n == 1 { format!("1 {one}") } else { format!("{n} {one}s") };
-        match (encoders, faders) {
+        let taught = |list: &[Option<Taught>]| list.iter().flatten().count();
+        match (taught(&self.encoders), taught(&self.faders)) {
             (0, 0) => "nothing".to_string(),
-            (e, 0) => plural(e, "encoder"),
-            (0, f) => plural(f, "fader"),
-            (e, f) => format!("{} and {}", plural(e, "encoder"), plural(f, "fader")),
+            (e, 0) => count(e, "encoder"),
+            (0, f) => count(f, "fader"),
+            (e, f) => format!("{} and {}", count(e, "encoder"), count(f, "fader")),
         }
     }
 }
 
-/// What a slot's badge says: 1-8 for the encoders, F1-F4 for the faders.
-pub fn slot_label(slot: usize) -> String {
-    match slot.checked_sub(ENCODERS) {
-        None => (slot + 1).to_string(),
-        Some(fader) => format!("F{}", fader + 1),
+/// "1 encoder", "16 encoders", "no faders".
+fn count(n: usize, one: &str) -> String {
+    match n {
+        0 => format!("no {one}s"),
+        1 => format!("1 {one}"),
+        n => format!("{n} {one}s"),
     }
 }
 
-/// One step of teaching: the control to move next.
+/// One of a controller's controls, as it's taught a step at a time: the
+/// nth encoder or fader.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
     /// The nth encoder, from 0.
@@ -145,11 +144,12 @@ pub enum Step {
 }
 
 impl Step {
-    fn of(slot: usize) -> Option<Self> {
-        match slot.checked_sub(ENCODERS) {
-            None => Some(Step::Encoder(slot)),
-            Some(fader) if fader < FADERS => Some(Step::Fader(fader)),
-            Some(_) => None,
+    /// What its badge says: 1, 2, … for the encoders, F1, F2, … for the
+    /// faders.
+    pub fn badge(self) -> String {
+        match self {
+            Step::Encoder(n) => (n + 1).to_string(),
+            Step::Fader(n) => format!("F{}", n + 1),
         }
     }
 
@@ -186,12 +186,13 @@ pub struct Teaching {
     /// The device's name, to keep it under: `None` until a control is
     /// taken, when it's that control's device (#454).
     device: Option<String>,
-    /// The slot being taught.
-    slot: usize,
+    /// The control being taught, or `None` once the faders are done.
+    step: Option<Step>,
     taught: Controller,
     listening: Option<Listening>,
-    /// The step just taken, and what it heard, for the prompt to say.
-    last: Option<(Step, Option<Taught>)>,
+    /// What the step just taken heard, for the prompt to say:
+    /// "Encoder 1 is CC 70 · ch 1 · ".
+    last: Option<String>,
 }
 
 impl Teaching {
@@ -202,7 +203,7 @@ impl Teaching {
 
     /// Teaching whichever device's control is turned first (#454).
     pub fn any() -> Self {
-        Self { device: None, slot: 0, taught: Controller::default(), listening: None, last: None }
+        Self { device: None, step: Some(Step::Encoder(0)), taught: Controller::default(), listening: None, last: None }
     }
 
     /// The device taught, once a control of it has been taken.
@@ -212,7 +213,7 @@ impl Teaching {
 
     /// The control to move next, or `None` once they've all been taught.
     pub fn step(&self) -> Option<Step> {
-        Step::of(self.slot)
+        self.step
     }
 
     /// Hears a CC (channel 0-15) from the device being taught.
@@ -253,23 +254,52 @@ impl Teaching {
             Step::Fader(_) => MidiEncoding::Absolute,
         };
         let taught = Taught { cc, channel: channel + 1, encoding };
-        self.taught.set(self.slot, Some(taught));
         self.next(step, Some(taught));
         true
     }
 
-    /// Skips the control being taught: the controller hasn't one.
+    /// Skips the control being taught: the controller hasn't one there,
+    /// and the knob it would turn goes free.
     pub fn skip(&mut self) {
         if let Some(step) = self.step() {
-            self.taught.set(self.slot, None);
             self.next(step, None);
         }
     }
 
-    fn next(&mut self, step: Step, taught: Option<Taught>) {
-        self.slot += 1;
+    /// The controller has no more encoders, and the faders come next; or
+    /// no more faders, and it's done. Either can be none. Controls skipped
+    /// last aren't kept: they'd hold knobs for nothing.
+    pub fn done(&mut self) {
+        let Some(step) = self.step() else { return };
+        let list = match step {
+            Step::Encoder(_) => &mut self.taught.encoders,
+            Step::Fader(_) => &mut self.taught.faders,
+        };
+        while list.last() == Some(&None) {
+            list.pop();
+        }
+        let n = list.iter().flatten().count();
         self.listening = None;
-        self.last = Some((step, taught));
+        (self.step, self.last) = match step {
+            Step::Encoder(_) => (Some(Step::Fader(0)), Some(format!("{} · ", count(n, "encoder")))),
+            Step::Fader(_) => (None, Some(format!("{} · ", count(n, "fader")))),
+        };
+    }
+
+    /// Keeps what `step` heard, or that it was skipped, and moves on to the
+    /// next of its kind.
+    fn next(&mut self, step: Step, taught: Option<Taught>) {
+        let (list, next) = match step {
+            Step::Encoder(n) => (&mut self.taught.encoders, Step::Encoder(n + 1)),
+            Step::Fader(n) => (&mut self.taught.faders, Step::Fader(n + 1)),
+        };
+        list.push(taught);
+        self.step = Some(next);
+        self.listening = None;
+        self.last = Some(match taught {
+            Some(taught) => format!("{} is {} · ", step.name(), taught.text()),
+            None => format!("{} skipped · ", step.name()),
+        });
     }
 
     /// Is it a control being heard, not yet taken?
@@ -284,11 +314,7 @@ impl Teaching {
 
     /// What the status bar asks for: what was just heard, and what next.
     pub fn prompt(&self) -> String {
-        let last = match self.last {
-            Some((step, Some(taught))) => format!("{} is {} · ", step.name(), taught.text()),
-            Some((step, None)) => format!("{} skipped · ", step.name()),
-            None => String::new(),
-        };
+        let last = self.last.clone().unwrap_or_default();
         let Some(step) = self.step() else { return format!("{last}done") };
         // Before a device is chosen, which one is moving
         let on = match (&self.device, &self.listening) {
@@ -404,13 +430,13 @@ impl Hands {
     }
 
     /// Takes hold of `targets`, the selection's knobs in the order its face
-    /// shows them: the encoders the first eight, the faders the next four.
-    /// Returns whether what they hold changed, which is when the badges
+    /// shows them: the encoders the first, the faders the ones after,
+    /// however many of each the controller has. Returns whether what they hold changed, which is when the badges
     /// fade in again. A fader picks its new knob up afresh.
     pub fn follow(&mut self, targets: &[HandTarget]) -> bool {
         let controller = self.controller().filter(|_| self.active()).cloned().unwrap_or_default();
         let held: Vec<(usize, Taught, &HandTarget)> =
-            targets.iter().take(SLOTS).enumerate().filter_map(|(slot, target)| Some((slot, controller.slot(slot)?, target))).collect();
+            targets.iter().take(controller.len()).enumerate().filter_map(|(slot, target)| Some((slot, controller.slot(slot)?, target))).collect();
         let holding: Vec<_> = held.iter().map(|(slot, _, t)| (*slot, t.node_id, t.param_index)).collect();
         if holding == self.holding {
             return false;
@@ -460,12 +486,10 @@ impl Hands {
         turns: &mut Vec<(u64, usize, f32)>,
     ) -> bool {
         if let Some(teaching) = self.teaching.as_mut() {
-            let taken = teaching.hear_from(device.unwrap_or(&self.device), cc, channel, value);
+            // Teaching ends at Done, not at a count of controls (#485)
+            teaching.hear_from(device.unwrap_or(&self.device), cc, channel, value);
             if let Some(taught) = teaching.device().filter(|&taught| taught != self.device) {
                 self.device = taught.to_string();
-            }
-            if taken && teaching.step().is_none() {
-                self.finish_teaching();
             }
             return true;
         }
@@ -490,9 +514,11 @@ impl Hands {
         &self.turner
     }
 
-    /// Each knob held, and the slot that holds it, for its badge.
-    pub fn badges(&self) -> HashMap<(EngineNodeId, usize), u8> {
-        self.holding.iter().map(|&(slot, node, param)| ((node, param), slot as u8)).collect()
+    /// Each knob held, and what its badge says: the encoder or fader that
+    /// holds it, "3" or "F1".
+    pub fn badges(&self) -> HashMap<(EngineNodeId, usize), String> {
+        let Some(controller) = self.controller() else { return HashMap::new() };
+        self.holding.iter().map(|&(slot, node, param)| ((node, param), controller.step(slot).badge())).collect()
     }
 
     /// The patch's knobs whose mappings are paused while the hands follow:
@@ -520,19 +546,26 @@ impl Hands {
         self.teaching.as_ref()
     }
 
-    /// Skips the control being taught; past the last, it's done.
+    /// Skips the control being taught.
     pub fn skip(&mut self) {
         if let Some(teaching) = self.teaching.as_mut() {
             teaching.skip();
+        }
+    }
+
+    /// The controller has no more encoders, and the faders come next; after
+    /// the last fader, teaching is done.
+    pub fn done(&mut self) {
+        if let Some(teaching) = self.teaching.as_mut() {
+            teaching.done();
             if teaching.step().is_none() {
                 self.finish_teaching();
             }
         }
     }
 
-    /// Ends teaching, keeping what was taught: the controller has no more
-    /// controls. Nothing taught keeps the one taught before. The hands
-    /// follow from then on.
+    /// Ends teaching, keeping what was taught. Nothing taught keeps the
+    /// one taught before. The hands follow from then on.
     pub fn finish_teaching(&mut self) {
         let Some(teaching) = self.teaching.take() else { return };
         self.finished = Some(if teaching.taught.is_empty() {
@@ -643,51 +676,114 @@ mod tests {
         assert_eq!(teaching.taught().slot(0).map(|t| (t.cc, t.encoding)), Some((70, MidiEncoding::TwosComplement)));
     }
 
+    /// Turns encoder `n` (CC 70 + n) of the device the hands are on a few clicks.
+    fn turn_encoder(hands: &mut Hands, n: u8) {
+        for value in [64, 65, 66, 67] {
+            hands.hear(70 + n, 0, value, &|_, _| None, &mut Vec::new());
+        }
+    }
+
     #[test]
-    fn steps_can_be_skipped_and_teaching_finished_early() {
+    fn encoders_are_taught_until_done_then_faders_until_done_again() {
         let mut hands = Hands::default();
         hands.set_device(Some("Little Keys"));
         hands.start_teaching();
-        // Four encoders, then the rest skipped, then one fader
-        for n in 0..4 {
-            for value in [64, 65, 66, 67] {
-                hands.hear(70 + n, 0, value, &|_, _| None, &mut Vec::new());
-            }
-        }
-        for _ in 4..ENCODERS {
-            hands.skip();
-        }
+        // Encoders 1, 2 and 4, with 3 skipped; then 5 skipped, and Done
+        turn_encoder(&mut hands, 0);
+        turn_encoder(&mut hands, 1);
+        hands.skip();
+        turn_encoder(&mut hands, 3);
+        hands.skip();
+        assert_eq!(hands.teaching().and_then(Teaching::step), Some(Step::Encoder(5)), "on until Done");
+        hands.done();
         assert_eq!(hands.teaching().and_then(Teaching::step), Some(Step::Fader(0)));
-        assert!(hands.teaching().unwrap().prompt().starts_with("Encoder 8 skipped · move fader 1"));
+        assert!(hands.teaching().unwrap().prompt().starts_with("3 encoders · move fader 1"), "{}", hands.teaching().unwrap().prompt());
         for value in [0, 9, 20, 31] {
             hands.hear(20, 1, value, &|_, _| None, &mut Vec::new());
         }
-        assert!(hands.teaching().is_some());
-        hands.finish_teaching();
+        assert_eq!(hands.teaching().and_then(Teaching::step), Some(Step::Fader(1)));
+        hands.done();
+        assert!(hands.teaching().is_none(), "Done after the faders finishes");
 
         let controller = hands.controller().expect("taught");
-        assert_eq!(controller.summary(), "4 encoders and 1 fader");
-        assert_eq!(controller.slot(4), None);
-        assert_eq!(controller.slot(ENCODERS), Some(Taught { cc: 20, channel: 2, encoding: MidiEncoding::Absolute }));
+        assert_eq!(controller.summary(), "3 encoders and 1 fader");
+        // The skipped encoder 3 keeps its place, the one skipped last doesn't
+        assert_eq!(controller.len(), 5);
+        assert_eq!(controller.slot(2), None);
+        assert_eq!(controller.step(4), Step::Fader(0));
+        assert_eq!(controller.slot(4), Some(Taught { cc: 20, channel: 2, encoding: MidiEncoding::Absolute }));
         assert!(hands.on, "the hands follow once taught");
-        assert!(hands.take_finished().unwrap().starts_with("Taught 4 encoders and 1 fader"));
+        assert!(hands.take_finished().unwrap().starts_with("Taught 3 encoders and 1 fader"));
 
-        // Skipping past the last fader is done too; nothing taught keeps the old one
+        // Done and Done again with nothing taught keeps the old one
         hands.start_teaching();
-        for _ in 0..SLOTS {
-            hands.skip();
-        }
+        hands.done();
+        assert!(hands.teaching().unwrap().prompt().starts_with("no encoders · move fader 1"));
+        hands.done();
         assert!(hands.teaching().is_none());
-        assert_eq!(hands.controller().map(Controller::summary).as_deref(), Some("4 encoders and 1 fader"));
+        assert_eq!(hands.controller().map(Controller::summary).as_deref(), Some("3 encoders and 1 fader"));
         assert!(hands.take_finished().unwrap().starts_with("Nothing taught"));
     }
 
-    /// A controller of two endless encoders (CC 70, 71) and one fader (CC 20), on channel 1.
+    /// A BeatStep's sixteen encoders and no faders hold a module's first
+    /// sixteen knobs (#485).
+    #[test]
+    fn a_controller_has_as_many_encoders_and_faders_as_it_was_taught() {
+        let mut hands = Hands::default();
+        hands.set_device(Some("BeatStep"));
+        hands.start_teaching();
+        for n in 0..16 {
+            turn_encoder(&mut hands, n);
+        }
+        hands.done();
+        hands.done();
+        let controller = hands.controller().expect("taught");
+        assert_eq!(controller.summary(), "16 encoders");
+        assert!(controller.faders.is_empty());
+
+        assert!(hands.follow(&knobs(7, 20)));
+        let badges = hands.badges();
+        assert_eq!(badges.len(), 16);
+        assert_eq!(badges.get(&(7, 15)).map(String::as_str), Some("16"));
+        assert_eq!(badges.get(&(7, 16)), None, "knob 17 is past the encoders");
+    }
+
+    /// What a MiniLab taught before #485 was kept as: eight encoders and
+    /// four faders, encoder 8 skipped.
+    const MINILAB_BEFORE: &str = r#"{"encoders":[{"cc":74,"channel":1,"encoding":"relative64"},{"cc":71,"channel":1,"encoding":"relative64"},{"cc":76,"channel":1,"encoding":"relative64"},{"cc":77,"channel":1,"encoding":"relative64"},{"cc":93,"channel":1,"encoding":"relative64"},{"cc":18,"channel":1,"encoding":"relative64"},{"cc":19,"channel":1,"encoding":"relative64"},null],"faders":[{"cc":82,"channel":1,"encoding":"absolute"},{"cc":83,"channel":1,"encoding":"absolute"},{"cc":85,"channel":1,"encoding":"absolute"},{"cc":17,"channel":1}]}"#;
+
+    #[test]
+    fn a_minilab_taught_before_still_has_eight_encoders_and_four_faders() {
+        let mut storage = Memory::default();
+        storage.0.insert(TAUGHT_KEY.to_string(), "MiniLab3".to_string());
+        storage.0.insert(controller_key("MiniLab3"), MINILAB_BEFORE.to_string());
+        let mut hands = Hands::default();
+        hands.load(&storage);
+        hands.set_device(Some("MiniLab3"));
+        hands.on = true;
+        let controller = hands.controller().expect("loaded");
+        assert_eq!((controller.encoders.len(), controller.faders.len()), (8, 4));
+        assert_eq!(controller.summary(), "7 encoders and 4 faders");
+
+        // Encoder 8 was skipped, so knob 8 goes free; the faders are knobs 9-12
+        hands.follow(&knobs(7, 14));
+        let badges = hands.badges();
+        assert_eq!(badges.get(&(7, 6)).map(String::as_str), Some("7"));
+        assert_eq!(badges.get(&(7, 7)), None);
+        assert_eq!(badges.get(&(7, 8)).map(String::as_str), Some("F1"));
+        assert_eq!(badges.get(&(7, 11)).map(String::as_str), Some("F4"));
+        assert_eq!(badges.len(), 11);
+    }
+
+    /// A controller of two endless encoders (CC 70, 71), six skipped, and
+    /// one fader (CC 20), on channel 1.
     fn minilab() -> Hands {
         let mut hands = Hands::default();
         hands.set_device(Some("MiniLab3"));
         let endless = |cc| Some(Taught { cc, channel: 1, encoding: MidiEncoding::Relative64 });
-        let controller = Controller { encoders: vec![endless(70), endless(71)], faders: vec![Some(Taught { cc: 20, channel: 1, encoding: MidiEncoding::Absolute })] };
+        let mut encoders = vec![endless(70), endless(71)];
+        encoders.resize(8, None);
+        let controller = Controller { encoders, faders: vec![Some(Taught { cc: 20, channel: 1, encoding: MidiEncoding::Absolute })] };
         hands.know("MiniLab3", controller);
         hands.on = true;
         hands
@@ -702,12 +798,11 @@ mod tests {
         let mut hands = minilab();
         assert!(hands.follow(&knobs(7, 10)));
         let badges = hands.badges();
-        assert_eq!(badges.get(&(7, 0)), Some(&0));
-        assert_eq!(badges.get(&(7, 1)), Some(&1));
-        // Encoders 3-8 weren't taught, so knobs 3-8 go free; fader 1 is knob 9
-        assert_eq!(badges.get(&(7, 8)), Some(&(ENCODERS as u8)));
+        assert_eq!(badges.get(&(7, 0)).map(String::as_str), Some("1"));
+        assert_eq!(badges.get(&(7, 1)).map(String::as_str), Some("2"));
+        // Encoders 3-8 were skipped, so knobs 3-8 go free; fader 1 is knob 9
+        assert_eq!(badges.get(&(7, 8)).map(String::as_str), Some("F1"));
         assert_eq!(badges.len(), 3);
-        assert_eq!(slot_label(8), "F1");
         assert!(!hands.follow(&knobs(7, 10)), "the same selection holds on");
         assert!(hands.follow(&knobs(9, 2)), "another module takes the hands");
         assert!(hands.follow(&[]));
@@ -850,22 +945,23 @@ mod tests {
         assert!(hands.controllers.contains_key("Little Keys"));
     }
 
+    #[derive(Default)]
+    struct Memory(HashMap<String, String>);
+    impl eframe::Storage for Memory {
+        fn get_string(&self, key: &str) -> Option<String> {
+            self.0.get(key).cloned()
+        }
+        fn set_string(&mut self, key: &str, value: String) {
+            self.0.insert(key.to_string(), value);
+        }
+        fn remove_string(&mut self, key: &str) {
+            self.0.remove(key);
+        }
+        fn flush(&mut self) {}
+    }
+
     #[test]
     fn controllers_are_kept_by_device_name() {
-        #[derive(Default)]
-        struct Memory(HashMap<String, String>);
-        impl eframe::Storage for Memory {
-            fn get_string(&self, key: &str) -> Option<String> {
-                self.0.get(key).cloned()
-            }
-            fn set_string(&mut self, key: &str, value: String) {
-                self.0.insert(key.to_string(), value);
-            }
-            fn remove_string(&mut self, key: &str) {
-                self.0.remove(key);
-            }
-            fn flush(&mut self) {}
-        }
         let hands = minilab();
         let mut storage = Memory::default();
         hands.store(&mut storage);
