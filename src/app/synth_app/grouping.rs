@@ -662,5 +662,6 @@ pub(super) fn face_of(
     Face {
         preview: preview_of(graph, position, sizes, zoom, id),
         controls: groups::face_controls(graph, position, index, id),
+        learnable: crate::graph::learn_walk::count(graph, id),
     }
 }

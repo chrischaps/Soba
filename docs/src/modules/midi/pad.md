@@ -49,13 +49,29 @@ The Pad takes that note and the channel it came on. **Undo** takes a learn back.
 
 Right-click the pad to learn it from the menu, or to set its **Note** and **Channel** by hand. What it hears is saved with the patch.
 
+### A new Pad takes the next note
+
+Add, paste or duplicate a Pad beside others on the same level, and it hears the note after the highest one there, on that Pad's channel. Duplicate the Pad on 40 and the copy is on 41; duplicate a row on 36 to 39 and the copies are on 40 to 43. So a group of Pads built by hand mostly needs no learning at all. A Pad alone on its level keeps the note it came with.
+
+### Learning a group in order
+
+To learn every Pad in a group at once, right-click the group and choose **Learn in order**, then hit your controller's pads one after another. The Pads take them in the order they sit: the top row first, each row left to right.
+
+- The Pad waiting for its pad blinks purple, and says **skip** along its top. The ones still to come show their number, and each one learned shows a tick, its rim staying softly lit until the walk is over.
+- On the group's face, each Pad's card in the miniature lights as it's learned, and a row of dots along its foot counts the walk.
+- The status bar says how far it has come and what it waits for.
+
+Press `Tab`, or click **Skip**, to leave a Pad as it is and go on to the next. Press `Escape`, or click **Stop**, to stop early: what was learned so far is kept. Hitting a pad that has already been learned in this walk is passed by, so a pad that bounces or is hit twice doesn't take two Pads.
+
+The whole walk is one step: **Undo** takes all of it back.
+
 ## Pads ×8
 
 **Pads ×8**, under **Library** ▸ **Controllers** in the add menu, is a group of eight Pads on the General MIDI drum notes, 36 to 43 on channel 10, laid out in two rows of four as most controllers' pads are. Its jacks come in pairs, **Gate 1**, **Vel 1**, **Gate 2**, **Vel 2** and so on, in the order a [Trigger Sequencer](../utilities/trigger-sequencer.md)'s lanes come, so it drops in where a Trigger Sequencer was. Into the Library's **Drum Kit**, patch **Gate 1** into **Kick**, **Gate 3** into **Snare** and **Gate 7** into **Hat**, and **Vel 1** into **Accent**: General MIDI's kick, snare and closed hat.
 
 Its **MIDI** jack goes into every Pad inside. Plug a [MIDI In](./midi-in.md) into it and all eight hear that controller; leave it empty and each hears its own **Device**.
 
-Double-click the group to open it and play or learn its pads. To make a bigger pad controller, copy a row of Pads, learn the copies, and right-click each one's **Gate** and choose **Show on group**.
+If your controller sends other notes, right-click the group, choose **Learn in order** and hit its pads from the first (see [Learning a group in order](#learning-a-group-in-order)). Double-click the group to open it and play or learn its pads one at a time. To make a bigger pad controller, duplicate a row of Pads (the copies take the next notes), and right-click each one's **Gate** and choose **Show on group**.
 
 ## Claimed notes
 

@@ -83,6 +83,7 @@ mod loops;
 mod lossy_load;
 mod main_area;
 mod learn_into;
+mod learn_walk;
 mod map_mode;
 mod midi_listen;
 mod mutating;
@@ -767,9 +768,8 @@ impl SynthApp {
             self.show_midi_learn();
             self.status_message = Some(if heard.learned_into.is_empty() { "MIDI mapped" } else { "MIDI learned" }.to_string());
         }
-        for (node_id, param_index, value) in heard.learned_into {
-            self.learn_into_module(node_id, param_index, value);
-        }
+        // A group learning in order goes on to the next (#481)
+        self.learned_into_modules(&heard.learned_into);
 
         for (node_id, param_index, value, pressed) in heard.footswitches {
             if let Some(value) = self.midi_presses.set(now, node_id, param_index, value, pressed) {
@@ -1360,12 +1360,14 @@ impl SynthApp {
 
     /// Undoes the last edit to the patch.
     fn undo(&mut self) {
+        self.end_learn_walk();
         let applied = self.history.undo(&mut self.graph_state, &mut self.user_state);
         self.finish_history_move(applied, "Undo", "Nothing to undo");
     }
 
     /// Redoes the last undone edit.
     fn redo(&mut self) {
+        self.end_learn_walk();
         let applied = self.history.redo(&mut self.graph_state, &mut self.user_state);
         self.finish_history_move(applied, "Redo", "Nothing to redo");
     }
@@ -2713,6 +2715,8 @@ impl SynthApp {
         if on_canvas {
             // Teaching the controller has Tab, Enter and Escape first (#429)
             self.teach_keys(ctx);
+            // ...and learning a group in order, its Tab and Escape (#481)
+            self.walk_keys(ctx);
             self.handle_group_shortcuts(ctx);
             self.handle_editing_shortcuts(ctx);
             self.handle_framing_shortcut(ctx);
@@ -2900,7 +2904,9 @@ impl SynthApp {
         let gesture_held = ctx.input(|i| i.pointer.any_down())
             || self.user_state.annotations.is_editing()
             || self.user_state.renaming.is_some()
-            || self.mutating.holding();
+            || self.mutating.holding()
+            // A group learned in order is one step, once it's over (#481)
+            || self.user_state.learn_walk.is_some();
         self.history.record(&self.graph_state, &self.user_state, gesture_held, Instant::now());
 
         // How late live input is, for Loopers to take off their overdubs

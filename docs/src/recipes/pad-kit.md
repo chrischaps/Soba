@@ -11,7 +11,7 @@ A drum kit you play with your fingers, on a pad controller. A group of eight [Pa
 - **A controller as a group.** Eight Pads in a group are the controller's pads, with a **Gate** and a **Vel** jack for each one the kit uses. Open the group to see them, two rows of four as the pads sit.
 - **Velocity for each drum.** Each Pad's **Velocity**, out through its group's **Vel** jack, carries how hard it was struck, and changes on the very sample its gate rises. Patched into its Drum's **Accent**, it gives the drum its own hit: a ghost note is soft and dark, a backbeat full.
 - **Notes that belong to the pads.** The pads send notes. The Pads claim them, so a [Note In](../modules/midi/note-in.md) on Omni added to this patch for a bassline won't also play the drums' notes as pitches.
-- **Learning a controller.** The Pads hear the General MIDI drum notes, 36 to 43 on channel 10, which most pad controllers send out of the box. If yours sends something else, open the group, click **learn** on a Pad and hit the pad it should be.
+- **Learning a controller.** The Pads hear the General MIDI drum notes, 36 to 43 on channel 10, which most pad controllers send out of the box. If yours sends something else, right-click the group, choose **Learn in order** and hit your pads from the first: each Pad takes the next.
 
 ## The pads
 

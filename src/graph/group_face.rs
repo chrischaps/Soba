@@ -5,7 +5,9 @@
 //! A group wears rose, the one header colour no built-in module has, so a
 //! module of your own making reads as yours at a glance. Its face shows the
 //! modules inside as small cards in their own colours, wired as they are,
-//! and opens the group when clicked.
+//! and opens the group when clicked. While a learn walks the group (#481),
+//! the miniature follows it: each module learned lights in MIDI purple, the
+//! one waiting blinks, and a row of dots along its foot counts the walk.
 
 use egui::epaint::CubicBezierShape;
 use egui::text::{CCursor, CCursorRange};
@@ -15,10 +17,11 @@ use egui_node_graph2::{NodeId, NodeResponse};
 
 use crate::app::theme;
 use super::groups::{Control, FaceControl, JackAction, JackEdit, NodeKind, Preview, Side};
+use super::learn_walk::{LearnWalk, Mark};
 use super::hints;
 use super::steady_text;
 use super::node_data::{KnobCellCtx, KnobPlace};
-use super::{SynthGraph, SynthGraphState, SynthNodeData, SynthResponse, SynthValueType};
+use super::{SynthGraph, SynthGraphState, SynthNodeData, SynthResponse, SynthValueType, WalkAction};
 
 type Responses = Vec<NodeResponse<SynthResponse, SynthNodeData>>;
 
@@ -49,14 +52,16 @@ pub fn header_color(kind: NodeKind) -> Color32 {
 pub fn top_bar(data: &SynthNodeData, ui: &mut egui::Ui, node_id: NodeId, user_state: &mut SynthGraphState, zoom: f32) -> Responses {
     let mut responses = Vec::new();
     if let Some(window) = ui.ctx().read_response(egui::Id::unique((node_id, "window"))) {
-        if data.kind.group().is_some() {
+        if let Some(id) = data.kind.group() {
+            let learnable = user_state.group_faces.get(&id).map_or(0, |face| face.learnable);
+            let walking = user_state.learn_walk.as_ref().is_some_and(|walk| walk.group == id);
             if window.double_clicked() {
                 responses.push(NodeResponse::User(SynthResponse::EnterGroup(node_id)));
             }
             if window.secondary_clicked() {
                 responses.push(NodeResponse::User(SynthResponse::NodeSelected(node_id)));
             }
-            if crate::widgets::menu::context_menu(&window, |ui| group_menu(ui, node_id, &mut responses)).is_some() {
+            if crate::widgets::menu::context_menu(&window, |ui| group_menu(ui, node_id, learnable, walking, &mut responses)).is_some() {
                 user_state.widget_context_menu_open = true;
             }
         }
@@ -78,8 +83,9 @@ pub fn top_bar(data: &SynthNodeData, ui: &mut egui::Ui, node_id: NodeId, user_st
     responses
 }
 
-/// A group's right-click menu.
-fn group_menu(ui: &mut egui::Ui, node_id: NodeId, responses: &mut Responses) {
+/// A group's right-click menu. With `learnable` Pads inside, it can learn
+/// them in order, or stop while `walking` them.
+fn group_menu(ui: &mut egui::Ui, node_id: NodeId, learnable: usize, walking: bool, responses: &mut Responses) {
     ui.set_min_width(190.0);
     let mut item = |ui: &mut egui::Ui, label: &str, shortcut: &str, response: SynthResponse| {
         if ui.add(egui::Button::new(label).shortcut_text(crate::app::shortcuts::keys(ui.ctx(), shortcut))).clicked() {
@@ -91,11 +97,29 @@ fn group_menu(ui: &mut egui::Ui, node_id: NodeId, responses: &mut Responses) {
     item(ui, "Rename", "F2", SynthResponse::StartRename(node_id));
     item(ui, "Save to My Modules", "", SynthResponse::SaveGroup(node_id));
     ui.separator();
+    // Pushed once the items above and below are done with `responses`
+    let mut walk = None;
+    if walking {
+        let stop = egui::Button::new("Stop learning in order").shortcut_text(crate::app::shortcuts::keys(ui.ctx(), "Esc"));
+        if ui.add(stop).on_hover_text("Keep what's learned so far").clicked() {
+            walk = Some(WalkAction::Stop);
+            ui.close();
+        }
+        ui.separator();
+    } else if learnable > 0 {
+        let tip = format!("Hit your controller's pads in turn: each of the {learnable} Pads here, top row first, takes the next");
+        if ui.button("Learn in order").on_hover_text(tip).clicked() {
+            walk = Some(WalkAction::Start(node_id));
+            ui.close();
+        }
+        ui.separator();
+    }
     item(ui, "Duplicate", "Ctrl+D", SynthResponse::DuplicateNode(node_id));
     item(ui, "Copy", "Ctrl+C", SynthResponse::CopyNode(node_id));
     item(ui, "Ungroup", "Ctrl+Alt+G", SynthResponse::UngroupNode(node_id));
     ui.separator();
     item(ui, "Delete", "Del", SynthResponse::DeleteNode(node_id));
+    responses.extend(walk.map(|action| NodeResponse::User(SynthResponse::LearnWalk(action))));
 }
 
 /// A port's right-click menu, when it has anything to do with groups'
@@ -300,6 +324,11 @@ pub fn body(
     let hovered = response.hovered();
     let painter = ui.painter_at(rect.expand(1.0));
     paint_miniature(&painter, rect, preview, zoom, hovered);
+    if let Some(walk) = user_state.learn_walk.as_ref().filter(|walk| walk.group == id) {
+        let blink = 0.4 + 0.6 * (ui.input(|i| i.time) * 4.0).sin().abs() as f32;
+        paint_walk(&painter, rect, preview, zoom, walk, blink);
+        crate::app::pace::animate(ui.ctx());
+    }
     if hovered {
         paint_open_pill(&painter, rect, zoom);
     }
@@ -382,6 +411,45 @@ pub fn paint_miniature(painter: &egui::Painter, rect: Rect, preview: &Preview, z
         painter.rect_filled(card, corner, CARD_FILL);
         let band = Rect::from_min_max(card.min, Pos2::new(card.max.x, card.min.y + (card.height() * 0.3).max(2.0)));
         painter.rect_filled(band, corner, *color);
+    }
+}
+
+/// A learn walking the group, over its miniature: the cards of the modules
+/// it has learned lit, the one waiting outlined and blinking, and along the
+/// foot a dot for each module, filled as the walk passes it.
+fn paint_walk(painter: &egui::Painter, rect: Rect, preview: &Preview, zoom: f32, walk: &LearnWalk, blink: f32) {
+    let midi = theme::signal::MIDI;
+    if let Some(to_face) = miniature_transform(rect, preview, zoom) {
+        for ((card, _), &node) in preview.boxes.iter().zip(&preview.nodes) {
+            let card = Rect::from_min_max(to_face * card.min, to_face * card.max).shrink(1.0 * zoom);
+            let corner = (2.5 * zoom).min(card.height() * 0.3);
+            match walk.mark(node) {
+                Some(Mark::Learned) => {
+                    painter.rect_filled(card, corner, midi.gamma_multiply(0.6));
+                }
+                Some(Mark::Now) => {
+                    painter.rect_filled(card, corner, midi.gamma_multiply(0.25 * blink));
+                    painter.rect_stroke(card, corner, Stroke::new(1.5 * zoom, midi.gamma_multiply(blink)), egui::StrokeKind::Outside);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // The count, as dots in a dark band: patch units, so it holds still as the view zooms
+    let (_, of) = walk.progress();
+    let pitch = (7.0 * zoom).min((rect.width() - 24.0 * zoom) / of.max(1) as f32);
+    let radius = (pitch * 0.3).min(2.2 * zoom);
+    let band = Rect::from_center_size(rect.center_bottom() - vec2(0.0, 4.5 * zoom), vec2(pitch * of as f32 + 8.0 * zoom, 7.0 * zoom));
+    painter.rect_filled(band, band.height() / 2.0, Color32::from_black_alpha(170));
+    for (n, (node, _)) in walk.steps().enumerate() {
+        let at = Pos2::new(band.left() + 4.0 * zoom + pitch * (n as f32 + 0.5), band.center().y);
+        match walk.mark(node) {
+            Some(Mark::Learned) => painter.circle_filled(at, radius, midi),
+            Some(Mark::Now) => painter.circle_filled(at, radius * 1.25, midi.gamma_multiply(blink)),
+            Some(Mark::Skipped) => painter.circle_stroke(at, radius, Stroke::new(0.8 * zoom, theme::text::DISABLED)),
+            _ => painter.circle_stroke(at, radius, Stroke::new(0.8 * zoom, midi.gamma_multiply(0.5))),
+        };
     }
 }
 

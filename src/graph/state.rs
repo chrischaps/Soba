@@ -386,6 +386,10 @@ pub struct SynthGraphState {
     /// before drawing.
     pub group_faces: HashMap<GroupId, Face>,
 
+    /// A group's modules being learned in order (#481), which the group's
+    /// face and each module's show. Kept by the app.
+    pub learn_walk: Option<super::learn_walk::LearnWalk>,
+
     /// Where each group's miniature was drawn this frame, on screen, so
     /// stepping in can zoom through it. Filled as faces are drawn.
     pub miniatures: HashMap<GroupId, egui::Rect>,
@@ -481,6 +485,7 @@ impl Default for SynthGraphState {
             output_aliases: HashMap::new(),
             cables_from: Default::default(),
             group_faces: HashMap::new(),
+            learn_walk: None,
             miniatures: HashMap::new(),
             jack_actions: HashMap::new(),
             renaming: None,

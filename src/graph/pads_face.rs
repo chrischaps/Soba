@@ -11,6 +11,10 @@
 //! Right-click it to learn it, set its note or choose the channel. While it
 //! learns, it blinks in MIDI purple.
 //!
+//! While its group learns in order (#481), the top says where in the walk
+//! it comes: its number while it waits its turn, Skip on its turn, and a
+//! tick once it's learned, its rim staying softly purple.
+//!
 //! [`pad_control`] is the pad itself, drawn in any cell, so a group's face
 //! can show a Pad pinned to it (#482).
 
@@ -21,6 +25,7 @@ use egui_node_graph2::NodeId;
 
 use crate::app::module_learn::{LearnKinds, ModuleLearn};
 use crate::app::theme;
+use super::learn_walk::Mark;
 use crate::dsp::{DspModule, NoteClaims};
 use crate::modules::pad::{self, Listen};
 use crate::modules::Pad;
@@ -28,7 +33,7 @@ use crate::persistence::MidiControl;
 
 use super::display_frame;
 use super::sampler_take::MIN_PRESS_SECONDS;
-use super::{SynthGraph, SynthGraphState, SynthResponse};
+use super::{SynthGraph, SynthGraphState, SynthResponse, WalkAction};
 
 /// The pad's height, before zoom.
 const PAD_HEIGHT: f32 = 60.0;
@@ -42,7 +47,7 @@ const FLASH: f32 = 0.12;
 const SOFTEST_PRESS: f32 = 0.35;
 
 /// The Pad's parameter names and defaults, in its order.
-fn parameters() -> &'static [(&'static str, f32)] {
+pub(super) fn parameters() -> &'static [(&'static str, f32)] {
     static NAMES: OnceLock<Vec<(&'static str, f32)>> = OnceLock::new();
     NAMES.get_or_init(|| Pad::new().parameters().iter().map(|p| (p.name, p.default)).collect())
 }
@@ -128,20 +133,34 @@ pub fn pads_face(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_st
     painter.text(pos2(top.left() + 6.0 * z, top.center().y), Align2::LEFT_CENTER, channel_label(listen.channel), small.clone(), theme::text::QUIET);
     let learn_rect = Rect::from_min_max(pos2(top.right() - 40.0 * z, top.top()), top.right_bottom());
     let learn_button = ui.interact(learn_rect, ui.scope_id().with(("pad_learn", node_id)), Sense::click());
-    let (learn_text, learn_ink) = if learning {
-        ("cancel", theme::signal::MIDI.gamma_multiply(blink))
-    } else if learn_button.hovered() {
-        ("learn", theme::signal::MIDI)
-    } else {
-        ("learn", theme::text::QUIET)
+    // While its group learns in order, where in the walk it comes
+    let mark = user_state.learn_walk.as_ref().and_then(|walk| walk.mark(node_id));
+    let midi = theme::signal::MIDI;
+    let (learn_text, learn_ink, learn_tip) = match mark {
+        Some(Mark::Now) => ("skip".to_string(), midi.gamma_multiply(blink), "Its turn: hit a pad, or click to leave this one as it is (Tab)".to_string()),
+        Some(Mark::Next(n)) => (n.to_string(), midi.gamma_multiply(0.55), format!("Learning in order: this one comes {}", ordinal(n))),
+        // A tick, drawn below
+        Some(Mark::Learned) => (String::new(), midi, "Learned in this walk".to_string()),
+        Some(Mark::Skipped) => ("kept".to_string(), theme::text::QUIET, "Skipped: it keeps its note".to_string()),
+        None if learning => ("cancel".to_string(), midi.gamma_multiply(blink), "Click to stop learning".to_string()),
+        None => (
+            "learn".to_string(),
+            if learn_button.hovered() { midi } else { theme::text::QUIET },
+            "Learn the pad: hit a pad on your controller, and this one takes its note and channel".to_string(),
+        ),
     };
     painter.text(pos2(top.right() - 6.0 * z, top.center().y), Align2::RIGHT_CENTER, learn_text, small, learn_ink);
-    let learn_tip = if learning { "Click to stop learning" } else { "Learn the pad: hit a pad on your controller, and this one takes its note and channel" };
+    if mark == Some(Mark::Learned) {
+        let at = pos2(top.right() - 10.0 * z, top.center().y);
+        let tick = [at + vec2(-3.0, 0.0) * z, at + vec2(-1.0, 2.0) * z, at + vec2(3.0, -2.5) * z];
+        painter.add(egui::Shape::line(tick.to_vec(), Stroke::new(1.2 * z, learn_ink)));
+    }
     if learn_button.on_hover_text(learn_tip).clicked() {
-        if learning {
-            asked.push(SynthResponse::MidiLearnCancel);
-        } else if let Some(eid) = engine_id {
-            asked.push(learn_start(eid, &name, listen));
+        match mark {
+            Some(Mark::Now) => asked.push(SynthResponse::LearnWalk(WalkAction::Skip)),
+            Some(_) => {}
+            None if learning => asked.push(SynthResponse::MidiLearnCancel),
+            None => asked.extend(engine_id.map(|eid| learn_start(eid, &name, listen))),
         }
     }
 
@@ -184,7 +203,10 @@ pub(super) fn pad_control(
     if flash > 0.01 {
         crate::app::pace::animate(ui.ctx());
     }
-    let light = PadLight { flash, open, pressure: value(Pad::READOUT_PRESSURE), hovered: response.hovered(), learning: learning.then_some(blink) };
+    // Learned in a walk still going, its rim stays softly lit
+    let walked = user_state.learn_walk.as_ref().and_then(|walk| walk.mark(node_id)) == Some(Mark::Learned);
+    let rim = if learning { Some(blink) } else { walked.then_some(0.45) };
+    let light = PadLight { flash, open, pressure: value(Pad::READOUT_PRESSURE), hovered: response.hovered(), learning: rim };
     draw_pad(painter, cell, z, light);
 
     // Its note, quietly
@@ -238,8 +260,9 @@ pub(super) fn pad_control(
         channel_label(listen.channel),
     );
     let response = response.on_hover_text(tip);
+    let walking = user_state.learn_walk.as_ref().and_then(|walk| walk.mark(node_id)) == Some(Mark::Now);
     let menu = crate::widgets::menu::context_menu(&response, |ui| {
-        pad_menu(ui, node_id, engine_id, &name, listen, learning, asked);
+        pad_menu(ui, node_id, engine_id, &name, listen, learning, walking, asked);
     });
     if menu.is_some() {
         user_state.widget_context_menu_open = true;
@@ -255,7 +278,7 @@ pub(super) struct PadLight {
     /// How hard it's pressed, 0 to 1.
     pub pressure: f32,
     pub hovered: bool,
-    /// The blink while it learns.
+    /// The blink while it learns, or a steady glow once a walk has learned it.
     pub learning: Option<f32>,
 }
 
@@ -302,8 +325,20 @@ fn bloom(painter: &egui::Painter, center: egui::Pos2, reach: egui::Vec2, color: 
     painter.add(egui::Shape::mesh(mesh));
 }
 
+/// "1st", "2nd", "3rd", "4th"...
+fn ordinal(n: usize) -> String {
+    let suffix = match (n % 10, n % 100) {
+        (_, 11..=13) => "th",
+        (1, _) => "st",
+        (2, _) => "nd",
+        (3, _) => "rd",
+        _ => "th",
+    };
+    format!("{n}{suffix}")
+}
+
 /// The response that starts a Pad's learn.
-fn learn_start(engine_node_id: u64, name: &str, listen: Listen) -> SynthResponse {
+pub(super) fn learn_start(engine_node_id: u64, name: &str, listen: Listen) -> SynthResponse {
     SynthResponse::MidiLearnStart {
         engine_node_id,
         param_index: Pad::PARAM_NOTE,
@@ -317,13 +352,24 @@ fn learn_start(engine_node_id: u64, name: &str, listen: Listen) -> SynthResponse
 }
 
 /// The pad's right-click menu: learn it, its note and its channel.
-fn pad_menu(ui: &mut egui::Ui, node_id: NodeId, engine_id: Option<u64>, name: &str, listen: Listen, learning: bool, asked: &mut Vec<SynthResponse>) {
+#[allow(clippy::too_many_arguments)]
+fn pad_menu(ui: &mut egui::Ui, node_id: NodeId, engine_id: Option<u64>, name: &str, listen: Listen, learning: bool, walking: bool, asked: &mut Vec<SynthResponse>) {
     let set = |asked: &mut Vec<SynthResponse>, param: usize, value: f32| {
         let param_name = parameters()[param].0.to_string();
         asked.push(SynthResponse::ParameterChanged { node_id, param_name, value });
     };
     ui.label(egui::RichText::new(format!("{name} · {} ({}) · {}", note_name(listen.note), listen.note, channel_label(listen.channel))).small().weak());
-    if learning {
+    if walking {
+        // Its turn in its group's walk (#481)
+        if ui.button("Skip").on_hover_text("Leave this pad as it is, and go on to the next (Tab)").clicked() {
+            asked.push(SynthResponse::LearnWalk(WalkAction::Skip));
+            ui.close();
+        }
+        if ui.button("Stop learning in order").on_hover_text("Keep what's learned so far (Esc)").clicked() {
+            asked.push(SynthResponse::LearnWalk(WalkAction::Stop));
+            ui.close();
+        }
+    } else if learning {
         if ui.button("Cancel MIDI Learn").clicked() {
             asked.push(SynthResponse::MidiLearnCancel);
             ui.close();
@@ -386,5 +432,6 @@ mod tests {
         assert_eq!(note_name(60), "C4");
         assert_eq!(note_name(42), "F#2");
         assert_eq!(parameters()[Pad::PARAM_PRESS].0, "Press");
+        assert_eq!([1, 2, 3, 4, 11, 12, 13, 21, 22, 111].map(ordinal), ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "111th"]);
     }
 }
