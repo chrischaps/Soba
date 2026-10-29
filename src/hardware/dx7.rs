@@ -430,13 +430,13 @@ pub const ALGORITHMS: usize = 32;
 
 // Each operator's buses, from music-synthesizer-for-android's fm_core.cc
 // (FmCore::algorithms), operator 6 first, as it computes them
-const OUT_BUS_ONE: u8 = 1 << 0;
-const OUT_BUS_TWO: u8 = 1 << 1;
-const OUT_BUS_ADD: u8 = 1 << 2;
-const IN_BUS_ONE: u8 = 1 << 4;
-const IN_BUS_TWO: u8 = 1 << 5;
-const FB_IN: u8 = 1 << 6;
-const FB_OUT: u8 = 1 << 7;
+pub const OUT_BUS_ONE: u8 = 1 << 0;
+pub const OUT_BUS_TWO: u8 = 1 << 1;
+pub const OUT_BUS_ADD: u8 = 1 << 2;
+pub const IN_BUS_ONE: u8 = 1 << 4;
+pub const IN_BUS_TWO: u8 = 1 << 5;
+pub const FB_IN: u8 = 1 << 6;
+pub const FB_OUT: u8 = 1 << 7;
 
 #[rustfmt::skip]
 const BUSES: [[u8; OPERATORS]; ALGORITHMS] = [
@@ -474,6 +474,13 @@ const BUSES: [[u8; OPERATORS]; ALGORITHMS] = [
     [0xc4, 0x04, 0x04, 0x04, 0x04, 0x04], // 32
 ];
 
+/// The buses algorithm `algorithm` (from 0) has each operator read and
+/// write, operator 6 first, in the order a player computes them (#472):
+/// the flags above.
+pub fn buses(algorithm: usize) -> [u8; OPERATORS] {
+    BUSES[algorithm.min(ALGORITHMS - 1)]
+}
+
 /// How an algorithm wires the operators, numbered 1 to 6 as the DX7 does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Wiring {
@@ -489,7 +496,7 @@ pub struct Wiring {
 /// How algorithm `algorithm` (from 0) wires the operators, worked out from
 /// the buses each operator reads and writes, in the order they're computed.
 pub fn wiring(algorithm: usize) -> Wiring {
-    let buses = BUSES[algorithm.min(ALGORITHMS - 1)];
+    let buses = buses(algorithm);
     let mut carriers = [false; OPERATORS];
     let mut modulations = Vec::new();
     let mut on_bus: [Vec<usize>; 3] = Default::default();

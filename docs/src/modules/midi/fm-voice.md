@@ -6,7 +6,7 @@ The volca fm speaks DX7. A DX7 voice has six operators, 32 ways to wire them and
 
 The voices bred so far grow in the node's **garden**. Each one is a click away from playing again, and the patch keeps them all.
 
-The FM Voice makes no sound of its own. The volca plays the voice.
+Soba plays the voice too. Patch a **Pitch** and a **Gate** into the FM Voice and its **Out** plays it on six operators of Soba's own, so the garden sounds in the browser, on a train, or for anyone without a volca. Breed by ear with headphones on, then send the keepers to the volca (see [Played in Soba](#played-in-soba)).
 
 ## Setting it up
 
@@ -24,8 +24,16 @@ The volca takes a voice on any channel, so **Channel** matters only for a DX7. A
 | **Ch** | 1 – 16 | The channel the voice is addressed to. A volca fm takes it on any; a DX7 only on its own |
 | **Format** | volca fm, DX7 | What it's sent to: see [volca fm or DX7](#volca-fm-or-dx7) |
 | **Amount** | 0 – 1 | How far **Mutate** moves a child from its parent. A little is a neighbour; all the way is a wander |
+| **Level** | 0 – 1 | How loud **Out** plays the voice. At 1, a carrier at its loudest is full scale. The default, 0.25, leaves room for a chord |
 
-The module has no inputs or outputs.
+## Inputs and outputs
+
+| Port | Signal | Description |
+|------|--------|-------------|
+| **Pitch** | Control | V/Oct, a note per channel of a polyphonic cable, as a [Note In](./note-in.md) sends |
+| **Gate** | Gate | High while each note is held. Its rise strikes the note and its fall releases it |
+| **Velocity** | Control | How hard each note is struck, 0 to 1. Unpatched, it's about 100 of 127, where a DX7's velocity scaling barely moves |
+| **Out** | Audio | The voice, a note per channel. Patch it into a Mixer or an Audio Output, which hear every note |
 
 ## Breeding
 
@@ -78,6 +86,20 @@ The **⋯** menu at the right of the buttons:
 
 Opening a file says in the status bar how many voices it planted.
 
+## Played in Soba
+
+A Note In's **Pitch**, **Gate** and **Velocity** into the FM Voice, and its **Out** into the Audio Output, and the keyboard plays the voice. Each channel of the cable is a note, up to eight. The voice still goes to the volca as well, so with both patched the volca and Soba play the same voice.
+
+A voice bred, picked, undone or opened is heard at once, in the notes you're holding too: their levels and ratios change where they are, and each envelope glides to the new voice's.
+
+It follows the DX7 closely enough to breed by ear: the 32 algorithms, each operator's envelope with the DX7's quick-then-easing attack, the output levels on its 0.75 dB steps, ratios and fixed frequencies, keyboard level and rate scaling, velocity, feedback (from operator 4 back to 6 in algorithm 4, and 5 back to 6 in algorithm 6), the pitch envelope, the LFO with its delay, and oscillator key sync. It doesn't match a DX7 sample for sample, and a few things are close guesses rather than measurements:
+
+- **Detune**: about a cent a step in the middle of the keyboard, a little more low down and less up high.
+- **The pitch envelope**: its range (four octaves either way at the ends) and how fast each rate moves.
+- **The LFO**: its speeds follow the DX7 (about 6 Hz at 35), but how deep its pitch and amplitude depths go, and how its delay fades in, are guesses.
+
+So send a voice you love to the volca before you trust it. Most sound alike in character; a voice that leans hard on one of these may differ.
+
 ## volca fm or DX7
 
 A DX7 single voice ends with a checksum. The volca fm reads that byte as which operators are on, and a checksum switches some of them off. So with **Format** on **volca fm**, a voice ends with all six operators on. With **DX7**, it ends with the checksum, for a DX7, Dexed or a volca fm2. A saved `.syx` file is always a DX7 file. Banks carry a checksum for both.
@@ -102,3 +124,4 @@ In the browser, SysEx waits until the page is allowed to send it. Send a `.syx` 
 - **A walk**: start from a seed, Mutate at a low Amount, and keep going while you like what you hear. Ctrl+Z when you don't.
 - **Two families**: grow a bell and a bass apart, then cross across them.
 - **A set of sounds for a song**: keep the voices you love, let the garden weed the rest, and send the garden to the volca's memories at the end of the session.
+- **A loop that breeds**: play a Sequencer or a Chord Sequencer into the FM Voice and Mutate while it plays. Each child is heard on the next note, and the notes held take it up too.

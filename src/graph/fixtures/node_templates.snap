@@ -3314,9 +3314,15 @@ in   Send               Gate     ConnectionOnly       inline=true  port
 display SetlistFace
 
 == output.fm_voice "FM Voice" finder="FM Voice" Output
+in   Pitch              Control  ConnectionOnly       inline=true  port
+in   Gate               Gate     ConnectionOnly       inline=true  port
+in   Velocity           Control  ConnectionOnly       inline=true  port
 in   Port               Control  ConstantOnly         inline=true  select 0 ["A", "B", "C", "D", "E", "F", "G", "H"] "Port"
 in   Channel            Control  ConstantOnly         inline=true  select 0 ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] "Ch"
 in   Format             Control  ConstantOnly         inline=true  select 0 ["volca fm", "DX7"] "Format"
 in   Amount             Control  ConstantOnly         inline=false num 0.35 [0..1]
+in   Level              Control  ConstantOnly         inline=false num 0.25 [0..1]
+out  Out                Audio
 knob Amount             "Amount" KnobOnly
+knob Level              "Level" KnobOnly
 display FmVoiceFace

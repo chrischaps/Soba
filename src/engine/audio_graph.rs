@@ -23,6 +23,7 @@ use crate::engine::graph_plan::{
     MAX_INPUTS,
 };
 use crate::engine::spectrum_tap::SpectrumTap;
+use crate::hardware::dx7::Voice;
 use crate::hardware::setlist::{ROWS, SECTIONS};
 use crate::hardware::{LaneMap, RowMap, SlotMap};
 use crate::modules::instrument::SLOTS;
@@ -193,6 +194,8 @@ pub struct AudioGraph {
     lanes: HashMap<NodeId, [LaneMap; LANES]>,
     /// What each Setlist's rows were last given to send (#445).
     rows: HashMap<NodeId, Box<[[Option<RowMap>; ROWS]; SECTIONS]>>,
+    /// What each FM Voice was last given to play (#472).
+    fm_voices: HashMap<NodeId, Voice>,
 }
 
 impl AudioGraph {
@@ -215,6 +218,7 @@ impl AudioGraph {
             slots: HashMap::new(),
             lanes: HashMap::new(),
             rows: HashMap::new(),
+            fm_voices: HashMap::new(),
         }
     }
 
@@ -362,6 +366,7 @@ impl AudioGraph {
         self.slots.remove(&node_id);
         self.lanes.remove(&node_id);
         self.rows.remove(&node_id);
+        self.fm_voices.remove(&node_id);
 
         // Remove all connections involving this node
         self.connections.retain(|conn| {
@@ -541,6 +546,7 @@ impl AudioGraph {
         self.scenes.clear();
         self.slots.clear();
         self.lanes.clear();
+        self.fm_voices.clear();
     }
 
     /// Gives a Scenes module the knobs it turns as its Morph moves, from
@@ -719,6 +725,27 @@ impl AudioGraph {
     /// What a Setlist's rows were last given to send.
     pub fn row_maps(&self, node_id: NodeId) -> Option<&[[Option<RowMap>; ROWS]; SECTIONS]> {
         self.rows.get(&node_id).map(|rows| &**rows)
+    }
+
+    /// Gives an FM Voice the voice it plays (#472), as
+    /// [`map_slot`](Self::map_slot) gives a knob its parameter.
+    ///
+    /// Returns false if there is no such module.
+    pub fn set_fm_voice(&mut self, node_id: NodeId, voice: Voice) -> bool {
+        let Some(spec) = self.nodes.get_mut(&node_id) else {
+            return false;
+        };
+        self.fm_voices.insert(node_id, voice);
+        match spec.fresh.as_mut() {
+            Some(module) => module.set_fm_voice(voice),
+            None => self.take_handoffs.push(PlanMessage::SetFmVoice { node_id, voice }),
+        }
+        true
+    }
+
+    /// What an FM Voice was last given to play.
+    pub fn fm_voice(&self, node_id: NodeId) -> Option<&Voice> {
+        self.fm_voices.get(&node_id)
     }
 
     /// Gives a module room to record a take into. A module not yet handed
@@ -933,6 +960,7 @@ impl AudioGraph {
             EngineCommand::SlotHeard { node_id, slot, value } => self.slot_heard(node_id, slot, value),
             EngineCommand::MapLane { node_id, lane, map } => self.map_lane(node_id, lane, map),
             EngineCommand::MapRow { node_id, section, row, map } => self.map_row(node_id, section, row, map),
+            EngineCommand::SetFmVoice { node_id, voice } => self.set_fm_voice(node_id, voice),
             EngineCommand::SeedModule { node_id, seed } => self.seed_module(node_id, seed),
             EngineCommand::SetScenes { node_id, knobs } => self.set_scenes(node_id, knobs),
             // Played on the running module, not kept in the graph

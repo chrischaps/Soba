@@ -754,6 +754,7 @@ mod tests {
                         PlanMessage::SlotHeard { .. } => "heard",
                         PlanMessage::MapLane { .. } => "lane",
                         PlanMessage::MapRow { .. } => "row",
+                        PlanMessage::SetFmVoice { .. } => "fm voice",
                         PlanMessage::GiveRoom { .. } => "room",
                         PlanMessage::SettleTake { .. } => "settle",
                     });

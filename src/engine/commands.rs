@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use crate::dsp::primitives::Markers;
+use crate::hardware::dx7::Voice;
 use crate::hardware::{LaneMap, RowMap, SlotMap};
 use crate::dsp::{Audition, ListenTo, MeterLevels, OutputLevels, Readout, SampleData, SignalBuffer, Snapshot, MAX_CHANNELS};
 use crate::modules::oscilloscope::SCOPE_BUFFER_SIZE;
@@ -203,6 +204,14 @@ pub enum EngineCommand {
         map: Option<RowMap>,
     },
 
+    /// Give an FM Voice the DX7 voice it plays (#472): the garden's
+    /// playing voice, as it changes. Ignored by other modules.
+    SetFmVoice {
+        /// Target node.
+        node_id: NodeId,
+        voice: Voice,
+    },
+
     /// Give a module room to record a take into (a Sampler's Rec): an
     /// empty recording with room set aside, at the engine's sample rate,
     /// that nothing else holds. Ignored by modules that don't record.
@@ -308,6 +317,8 @@ pub enum PlanMessage {
     MapLane { node_id: NodeId, lane: usize, map: LaneMap },
     /// Give a running Setlist's row what it sends.
     MapRow { node_id: NodeId, section: usize, row: usize, map: Option<RowMap> },
+    /// Give a running FM Voice the voice it plays.
+    SetFmVoice { node_id: NodeId, voice: Voice },
     /// Give a running module room to record a take into. Room it's done
     /// with goes back to the UI to be dropped.
     GiveRoom { node_id: NodeId, room: Arc<SampleData> },
@@ -330,6 +341,7 @@ impl PlanMessage {
             | Self::SlotHeard { node_id, .. }
             | Self::MapLane { node_id, .. }
             | Self::MapRow { node_id, .. }
+            | Self::SetFmVoice { node_id, .. }
             | Self::GiveRoom { node_id, .. }
             | Self::SettleTake { node_id, .. } => node_id,
         }

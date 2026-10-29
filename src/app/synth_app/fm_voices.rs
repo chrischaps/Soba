@@ -8,6 +8,9 @@
 //! never while its port still has SysEx to send: only the newest voice
 //! goes, however many were bred in between.
 //!
+//! The same voice goes to the engine (#472), by value, wherever it isn't
+//! what the engine has, so Soba plays it too: no gap, as it's no cable.
+//!
 //! The file actions live here too: a `.syx` planted in the garden, the
 //! voice or the garden saved, and the garden sent as a bank into the
 //! device's memories.
@@ -17,6 +20,7 @@ use std::collections::HashMap;
 use eframe::egui;
 use egui_node_graph2::NodeId;
 
+use crate::engine::EngineCommand;
 use crate::graph::fm_voice_face::{self, VoiceFile};
 use crate::hardware::dx7::{self, Target};
 use crate::hardware::garden::Garden;
@@ -74,6 +78,9 @@ impl SynthApp {
         if let Some((node_id, name, bytes)) = PICKED.with_borrow_mut(Option::take) {
             self.plant_file(node_id, &name, &bytes);
         }
+        for command in self.fm_voice_plays() {
+            self.send_command(command);
+        }
         let graph = &self.graph_state.graph;
         self.fm_sends.sent.retain(|node_id, _| graph.nodes.contains_key(*node_id));
         // In the browser, SysEx waits until it's allowed (see the Rig)
@@ -111,6 +118,26 @@ impl SynthApp {
         if waiting {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(GAP));
         }
+    }
+
+    /// Every FM Voice's playing voice that isn't what the engine plays.
+    fn fm_voice_plays(&self) -> Vec<EngineCommand> {
+        let Some(handle) = self.ui_handle.as_ref() else { return Vec::new() };
+        let mut plays = Vec::new();
+        for (node_id, node) in self.graph_state.graph.nodes.iter() {
+            if node.user_data.module_id != fm_voice::ID {
+                continue;
+            }
+            let Some(engine_id) = self.user_state.get_engine_node_id(node_id) else { continue };
+            if !handle.graph().contains_module(engine_id) {
+                continue;
+            }
+            let voice = Garden::of(&node.user_data.labels).playing().voice;
+            if handle.graph().fm_voice(engine_id) != Some(&voice) {
+                plays.push(EngineCommand::SetFmVoice { node_id: engine_id, voice });
+            }
+        }
+        plays
     }
 
     /// What an FM Voice's menu asked for.

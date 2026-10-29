@@ -633,10 +633,28 @@
     "output.fm_voice": {
       "category": "Output",
       "color": "#7e57c2",
-      "height": 326.0,
-      "inputs": [],
+      "height": 380.0,
+      "inputs": [
+        {
+          "name": "Pitch",
+          "type": "Control"
+        },
+        {
+          "name": "Gate",
+          "type": "Gate"
+        },
+        {
+          "name": "Velocity",
+          "type": "Control"
+        }
+      ],
       "name": "FM Voice",
-      "outputs": []
+      "outputs": [
+        {
+          "name": "Out",
+          "type": "Audio"
+        }
+      ]
     },
     "output.link": {
       "category": "Output",

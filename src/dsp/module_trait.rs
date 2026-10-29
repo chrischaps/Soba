@@ -512,6 +512,12 @@ pub trait DspModule: Send + 'static {
     /// REAL-TIME SAFE: the map comes by value.
     fn map_row(&mut self, _section: usize, _row: usize, _map: Option<crate::hardware::RowMap>) {}
 
+    /// Gives an FM Voice the DX7 voice it plays (#472), in the notes it
+    /// holds too. Ignored by other modules.
+    ///
+    /// REAL-TIME SAFE: the voice comes by value.
+    fn set_fm_voice(&mut self, _voice: crate::hardware::dx7::Voice) {}
+
     /// Starts the module's random numbers from `seed`, so a patch plays the
     /// same noise wherever it runs: in the editor, in a capture or in the
     /// render tool. The graph seeds each module as it's added, before it

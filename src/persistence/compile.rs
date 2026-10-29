@@ -125,6 +125,12 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
             }
         }
 
+        // An FM Voice's playing voice (#472), for it to play
+        if node.template.module_id() == crate::modules::fm_voice::ID {
+            let voice = crate::hardware::garden::Garden::of(&graph[node.graph_id].user_data.labels).playing().voice;
+            compiled.commands.push(EngineCommand::SetFmVoice { node_id: engine_node_id, voice });
+        }
+
         if let Some(file) = &graph[node.graph_id].user_data.file {
             compiled.files.push((engine_node_id, file.clone()));
         }
@@ -266,6 +272,19 @@ mod tests {
         assert_eq!((lanes[1].0, lanes[1].1.note(), lanes[1].1.channel(0)), (1, 4, 4));
         assert!(lanes[1].1.track, "the Digitakt's knobs follow its tracks");
         assert!(compiled.commands.iter().any(|command| matches!(command, EngineCommand::MapSlot { slot: 0, .. })));
+    }
+
+    #[test]
+    fn test_an_fm_voice_hands_over_its_playing_voice() {
+        // A new node's garden is the seeds, Soft Keys playing (#472)
+        let mut patch = Patch::new("fm");
+        patch.nodes.push(NodeData::new(1, crate::modules::fm_voice::ID, (0.0, 0.0)));
+        let compiled = compile_patch(&patch).unwrap();
+        let voices: Vec<_> = compiled.commands.iter().filter_map(|command| match command {
+            EngineCommand::SetFmVoice { voice, .. } => Some(voice.name()),
+            _ => None,
+        }).collect();
+        assert_eq!(voices, ["SOFT KEYS"]);
     }
 
     #[test]
