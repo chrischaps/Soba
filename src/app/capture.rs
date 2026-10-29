@@ -232,6 +232,11 @@ pub struct Capture {
     /// Whether this UI pass is a new frame (rather than a repaint while
     /// waiting for the last frame's screenshot).
     fresh: bool,
+    /// Whether a UI pass has drawn the current frame.
+    drawn: bool,
+    /// The input the current frame began with, to give it again should the
+    /// pass that began it draw nothing.
+    frame_input: egui::RawInput,
     /// Frames stepped without drawing since the last drawn one.
     skipped: i64,
     /// A screenshot has been asked for and hasn't arrived.
@@ -328,6 +333,8 @@ impl Capture {
             frame: -warmup - 1,
             warmup,
             fresh: false,
+            drawn: false,
+            frame_input: egui::RawInput::default(),
             skipped: 0,
             awaiting_shot: false,
             shot: Arc::default(),
@@ -387,6 +394,21 @@ impl Capture {
         raw: &mut egui::RawInput,
         mut locate: impl FnMut(&Part) -> Result<Pos2, String>,
     ) {
+        // When a redraw is overdue (250 ms on the wall clock, as on a busy
+        // machine), eframe runs a pass of the app's logic alone, and asks for
+        // its input too. A frame begun in that pass was never drawn, so the
+        // next pass gets the same input rather than the frame after: else
+        // that frame goes unfilmed, and the cables' history, ticked once
+        // instead of twice, differs a pixel here and there for seconds (#492)
+        if self.fresh && !self.drawn {
+            raw.events.clone_from(&self.frame_input.events);
+            raw.hovered_files.clone_from(&self.frame_input.hovered_files);
+            raw.dropped_files.clone_from(&self.frame_input.dropped_files);
+            raw.focused = true;
+            raw.predicted_dt = self.dt() as f32;
+            raw.time = Some(self.ui_time());
+            return;
+        }
         let shot = self.shot.lock().unwrap_or_else(|e| e.into_inner()).take();
         raw.events.clear();
         raw.hovered_files.clear();
@@ -424,6 +446,7 @@ impl Capture {
 
         self.frame += 1;
         self.fresh = true;
+        self.drawn = false;
         self.skipped = 0;
         raw.time = Some(self.ui_time());
 
@@ -443,6 +466,9 @@ impl Capture {
         self.runner.follow_aim(&mut locate);
         raw.events.push(egui::Event::ModifiersChanged(self.runner.modifiers()));
         self.runner.animate(self.time(), self.time() + self.dt(), raw);
+        self.frame_input.events.clone_from(&raw.events);
+        self.frame_input.hovered_files.clone_from(&raw.hovered_files);
+        self.frame_input.dropped_files.clone_from(&raw.dropped_files);
     }
 
     /// egui's clock, which mustn't go below zero during warmup.
@@ -634,6 +660,7 @@ impl Capture {
                 ctx2.request_repaint();
             });
             self.awaiting_shot = true;
+            self.drawn = true;
         }
         ctx.request_repaint();
     }
@@ -826,6 +853,35 @@ mod tests {
         }
         assert_eq!(c.samples_done as i64, c.grid + 31 * 1600);
         assert_eq!(notes, [(14, 24_000), (22, 36_000)]);
+    }
+
+    #[test]
+    fn a_frame_no_pass_drew_is_given_again() {
+        // #492: eframe runs a pass of logic alone when a redraw is overdue,
+        // and it still asks for the input
+        let args = |s: &str| s.split(' ').map(String::from).collect::<Vec<_>>();
+        let config = CaptureConfig::from_args(&args("soba p.json --capture s.txt --fps 30")).unwrap().unwrap();
+        let mut c = Capture::from_script(config, "-1.5 cursor on\n-1.5 move 400 300 1.0\n1.0 end\n").unwrap();
+        let ctx = egui::Context::default();
+        let pass = |c: &mut Capture| {
+            let mut raw = egui::RawInput::default();
+            c.prepare_input(&ctx, &mut raw, |_| Err(String::new()));
+            (c.frame, raw.time, raw.events)
+        };
+        let drawn = |c: &mut Capture| {
+            c.end_frame(&ctx);
+            *c.shot.lock().unwrap() = Some(Arc::new(egui::ColorImage::filled([4, 4], egui::Color32::BLACK)));
+        };
+        let first = pass(&mut c);
+        drawn(&mut c);
+        // A logic-only pass begins the next frame...
+        let begun = pass(&mut c);
+        assert_eq!(begun.0, first.0 + 1);
+        // ...so the pass that draws it is still that frame, with its input
+        let again = pass(&mut c);
+        assert_eq!(again, begun);
+        drawn(&mut c);
+        assert_eq!(pass(&mut c).0, begun.0 + 1);
     }
 
     #[test]
