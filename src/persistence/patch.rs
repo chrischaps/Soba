@@ -1050,6 +1050,7 @@ pub fn patch_from_json(json: &str) -> Result<Patch, PatchError> {
     old_note_inputs_to_note_in(&mut patch);
     mixer_mono_out_through_a_mix(&mut patch);
     super::pads_group::pads_to_groups(&mut patch);
+    super::controls_group::controls_to_groups(&mut patch);
     Ok(patch)
 }
 

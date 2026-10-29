@@ -366,32 +366,20 @@
         }
       ]
     },
-    "input.controls": {
+    "input.control": {
       "category": "Source",
       "color": "#42a5f5",
-      "height": 344.0,
+      "height": 290.0,
       "inputs": [
         {
           "name": "MIDI",
           "type": "MIDI"
         }
       ],
-      "name": "Controls",
+      "name": "Control",
       "outputs": [
         {
-          "name": "A",
-          "type": "Control"
-        },
-        {
-          "name": "B",
-          "type": "Control"
-        },
-        {
-          "name": "C",
-          "type": "Control"
-        },
-        {
-          "name": "D",
+          "name": "Out",
           "type": "Control"
         }
       ]

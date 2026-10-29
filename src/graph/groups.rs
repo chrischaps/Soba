@@ -1000,11 +1000,13 @@ pub enum Control {
     Switch,
     /// A Pad's pad, played by its Press (#482).
     Pad,
+    /// A Control's fader, moving with the hardware (#483).
+    Fader,
 }
 
 /// The controls a module can show on a group's face, each kind in
 /// parameter order: its knobs, then its dropdowns and toggles, then a Pad's
-/// pad.
+/// pad or a Control's fader.
 pub fn controls(graph: &SynthGraph, node_id: NodeId) -> Vec<(&str, Control)> {
     let node = &graph[node_id];
     let knobs = node.user_data.knob_params.iter().map(|k| (k.param_name.as_str(), Control::Knob));
@@ -1014,21 +1016,30 @@ pub fn controls(graph: &SynthGraph, node_id: NodeId) -> Vec<(&str, Control)> {
         switch.then_some((name.as_str(), Control::Switch))
     });
     let pad = (node.user_data.module_id == crate::modules::pad::ID).then_some((PAD_PRESS, Control::Pad));
-    knobs.chain(switches).chain(pad).collect()
+    let fader = (node.user_data.module_id == crate::modules::control::ID).then_some((CONTROL_FADER, Control::Fader));
+    knobs.chain(switches).chain(pad).chain(fader).collect()
 }
 
 /// The parameter a Pad's pad plays, and is pinned by.
 pub const PAD_PRESS: &str = "Press";
 
+/// The parameter a Control's fader is pinned by: its Source, which says
+/// what the fader is.
+pub const CONTROL_FADER: &str = "Source";
+
 /// What a module calls one of its controls, and a group's face does too
 /// until it's given a name of its own: a knob's label, or the one a dropdown
-/// or toggle wears beside it ("FM", "Wave"), a pad's note, else the
-/// parameter's name.
+/// or toggle wears beside it ("FM", "Wave"), a pad's note, what a fader
+/// hears, else the parameter's name.
 pub fn control_label(graph: &SynthGraph, node_id: NodeId, param_name: &str) -> String {
     let node = &graph[node_id];
     // A pad goes by the note it hears ("C2")
     if node.user_data.module_id == crate::modules::pad::ID && param_name == PAD_PRESS {
         return super::pads_face::note_name(super::pads_face::listen_of(graph, node_id).note);
+    }
+    // A fader by what it hears ("CC 82")
+    if node.user_data.module_id == crate::modules::control::ID && param_name == CONTROL_FADER {
+        return super::controls_face::listen_of(graph, node_id).label();
     }
     if let Some(knob) = node.user_data.knob_params.iter().find(|k| k.param_name == param_name) {
         if !knob.label.is_empty() {
@@ -1380,6 +1391,24 @@ mod tests {
         // Named for its note until it's given a name of its own
         assert_eq!(control_label(graph, kick, PAD_PRESS), "C2");
         assert_eq!(name_face_control(&mut rig.editor.graph, kick, PAD_PRESS, "Kick"), Some(("C2".into(), "Kick".into())));
+    }
+
+    #[test]
+    fn a_pinned_fader_shows_on_its_group_by_what_it_hears() {
+        let mut rig = Rig::new();
+        let fader = rig.add(crate::modules::control::ID, pos2(0.0, 0.0));
+        let other = rig.add(crate::modules::control::ID, pos2(210.0, 0.0));
+        // A Control offers its fader beside its Slew knob, and nothing else
+        let offered = controls(&rig.editor.graph, fader);
+        assert_eq!(offered.last(), Some(&(CONTROL_FADER, Control::Fader)));
+        assert!(offered.iter().all(|(name, kind)| *kind != Control::Switch && (*kind == Control::Fader || *name == "Slew")));
+        rig.editor.graph[fader].user_data.pins.insert(CONTROL_FADER.into(), 1);
+        rig.group(&[fader, other], "Faders");
+        let graph = &rig.editor.graph;
+        let positions = &rig.editor.node_positions;
+        let shown = face_controls(graph, |n| positions.get(n).copied(), &GroupIndex::of(graph), GroupId(1000));
+        assert_eq!(shown, [FaceControl { node: fader, param: CONTROL_FADER.into(), depth: 1, kind: Control::Fader }]);
+        assert_eq!(control_label(graph, fader, CONTROL_FADER), "Mod", "a new Control hears the mod wheel");
     }
 
     #[test]

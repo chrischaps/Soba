@@ -37,6 +37,10 @@ const KNOBS_PER_ROW: usize = 4;
 const PADS_PER_ROW: usize = 4;
 const PAD_HEIGHT: f32 = 36.0;
 const PAD_GAP: f32 = 5.0;
+/// Pinned faders per row on a group's face, and how tall each is,
+/// unzoomed (#483).
+const FADERS_PER_ROW: usize = 6;
+const FADER_HEIGHT: f32 = 64.0;
 
 /// The miniature's backing, a little deeper than the node body.
 const PREVIEW_FILL: Color32 = Color32::from_rgb(28, 30, 40);
@@ -88,8 +92,8 @@ pub fn top_bar(data: &SynthNodeData, ui: &mut egui::Ui, node_id: NodeId, user_st
     responses
 }
 
-/// A group's right-click menu. With `learnable` Pads inside, it can learn
-/// them in order, or stop while `walking` them.
+/// A group's right-click menu. With `learnable` Pads or Controls inside,
+/// it can learn them in order, or stop while `walking` them.
 fn group_menu(ui: &mut egui::Ui, node_id: NodeId, learnable: usize, walking: bool, responses: &mut Responses) {
     ui.set_min_width(190.0);
     let mut item = |ui: &mut egui::Ui, label: &str, shortcut: &str, response: SynthResponse| {
@@ -112,7 +116,7 @@ fn group_menu(ui: &mut egui::Ui, node_id: NodeId, learnable: usize, walking: boo
         }
         ui.separator();
     } else if learnable > 0 {
-        let tip = format!("Hit your controller's pads in turn: each of the {learnable} Pads here, top row first, takes the next");
+        let tip = format!("Each of the {learnable} here in turn, top row first, takes the next pad you hit or control you move on your controller");
         if ui.button("Learn in order").on_hover_text(tip).clicked() {
             walk = Some(WalkAction::Start(node_id));
             ui.close();
@@ -296,7 +300,7 @@ fn draw_doorway(painter: &egui::Painter, center: Pos2, size: f32, ink: Color32, 
 }
 
 /// The body of a group's node: the name being typed, if it is, then the
-/// miniature, then the pinned dropdowns and toggles, pads and knobs.
+/// miniature, then the pinned dropdowns and toggles, pads, faders and knobs.
 pub fn body(
     data: &SynthNodeData,
     ui: &mut egui::Ui,
@@ -342,11 +346,11 @@ pub fn body(
         responses.push(NodeResponse::User(SynthResponse::EnterGroup(node_id)));
     }
 
-    // The dropdowns and toggles pinned to it, then the pads, then the
-    // knobs, in their modules' colours
+    // The dropdowns and toggles pinned to it, then the pads and faders,
+    // then the knobs, in their modules' colours
     let outer = data.parent.is_some();
     let of = |kind: Control| face.controls.iter().filter(move |c| c.kind == kind).collect::<Vec<_>>();
-    let (knobs, switches, pads) = (of(Control::Knob), of(Control::Switch), of(Control::Pad));
+    let (knobs, switches, pads, faders) = (of(Control::Knob), of(Control::Switch), of(Control::Pad), of(Control::Fader));
     if !switches.is_empty() {
         ui.add_space(6.0 * zoom);
         for (row, width) in switch_rows(ui, graph, &switches, PREVIEW_WIDTH * zoom) {
@@ -360,6 +364,10 @@ pub fn body(
     if !pads.is_empty() {
         ui.add_space(6.0 * zoom);
         pad_grid(ui, &pads, graph, user_state, zoom, outer, &mut responses);
+    }
+    if !faders.is_empty() {
+        ui.add_space(6.0 * zoom);
+        fader_rows(ui, &faders, graph, user_state, zoom, outer, &mut responses);
     }
     if !knobs.is_empty() {
         ui.add_space(6.0 * zoom);
@@ -664,6 +672,35 @@ fn pad_grid(
         let cell = Rect::from_min_size(grid.min + vec2(column * (cell_width + gap), row * (height + gap)), vec2(cell_width, height));
         let place = KnobPlace::Face { depth: pad.depth, outer };
         super::pads_face::pad_control(ui, &painter, cell, pad.node, graph, user_state, zoom, place, &mut asked);
+    }
+    responses.extend(asked.into_iter().map(NodeResponse::User));
+}
+
+/// The faders pinned to a group's face, six to a row across it, each the
+/// Control's own fader, moving with the hardware. Sized in patch units, so
+/// the face holds still as the view zooms (#255).
+fn fader_rows(
+    ui: &mut egui::Ui,
+    faders: &[&FaceControl],
+    graph: &SynthGraph,
+    user_state: &mut SynthGraphState,
+    zoom: f32,
+    outer: bool,
+    responses: &mut Responses,
+) {
+    let rows = faders.len().div_ceil(FADERS_PER_ROW);
+    let (gap, height, width) = (PAD_GAP * zoom, FADER_HEIGHT * zoom, PREVIEW_WIDTH * zoom);
+    let (area, _) = ui.allocate_exact_size(vec2(width, rows as f32 * height + (rows - 1) as f32 * gap), Sense::hover());
+    let painter = ui.painter_at(area.expand(1.0));
+    let mut asked = Vec::new();
+    for (r, row) in faders.chunks(FADERS_PER_ROW).enumerate() {
+        // A short row spreads across the face, as a controller's faders do
+        let cell_width = (width - (row.len() - 1) as f32 * gap) / row.len() as f32;
+        for (n, fader) in row.iter().enumerate() {
+            let at = area.min + vec2(n as f32 * (cell_width + gap), r as f32 * (height + gap));
+            let place = KnobPlace::Face { depth: fader.depth, outer };
+            super::controls_face::fader_control(ui, &painter, Rect::from_min_size(at, vec2(cell_width, height)), fader.node, graph, user_state, zoom, place, &mut asked);
+        }
     }
     responses.extend(asked.into_iter().map(NodeResponse::User));
 }

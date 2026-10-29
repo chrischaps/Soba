@@ -357,7 +357,7 @@ fn bloom(painter: &egui::Painter, center: egui::Pos2, reach: egui::Vec2, color: 
 }
 
 /// "1st", "2nd", "3rd", "4th"...
-fn ordinal(n: usize) -> String {
+pub(super) fn ordinal(n: usize) -> String {
     let suffix = match (n % 10, n % 100) {
         (_, 11..=13) => "th",
         (1, _) => "st",

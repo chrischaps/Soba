@@ -7,8 +7,9 @@
 //!
 //! Each step is an ordinary learn into a module (see
 //! [`crate::app::module_learn`]), so a walk takes whatever module learns
-//! from one hit or move. Only the Pad does so far: a Control (#483) joins
-//! it by answering [`walks`] and [`learn_start`].
+//! from one hit or move: a Pad, or a Control (#483), whose group learns
+//! as each fader is moved in turn. Another joins by answering [`walks`]
+//! and [`learn_start`].
 //!
 //! [`LearnWalk`] is the walk itself, kept on the
 //! [`SynthGraphState`] so the faces can show it: the group's miniature
@@ -19,10 +20,10 @@
 use egui::Pos2;
 use egui_node_graph2::NodeId;
 
-use crate::modules::pad;
+use crate::modules::{control, pad};
 
 use super::groups::{self, GroupId};
-use super::{pads_face, SynthGraph, SynthGraphState, SynthResponse};
+use super::{controls_face, pads_face, SynthGraph, SynthGraphState, SynthResponse};
 
 /// How far apart two modules' tops can be, unzoomed, and still be read as
 /// one row: well under a Pad's height, well over a hand's misplacement.
@@ -31,7 +32,7 @@ const ROW_SLACK: f32 = 80.0;
 /// Whether a walk learns this kind of module: one that learns what it
 /// hears from a single hit or move.
 pub fn walks(module_id: &str) -> bool {
-    module_id == pad::ID
+    [pad::ID, control::ID].contains(&module_id)
 }
 
 /// How many modules directly inside group `id` a walk would learn.
@@ -73,6 +74,7 @@ pub fn learn_start(graph: &SynthGraph, user_state: &SynthGraphState, node_id: No
     let engine_id = user_state.get_engine_node_id(node_id)?;
     match node.user_data.module_id {
         pad::ID => Some(pads_face::learn_start(engine_id, &node.user_data.display_name, pads_face::listen_of(graph, node_id))),
+        control::ID => Some(controls_face::learn_start(engine_id, &node.user_data.display_name)),
         _ => None,
     }
 }

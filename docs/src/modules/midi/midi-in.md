@@ -4,7 +4,7 @@
 
 MIDI In is a MIDI controller as a cable. It names a device and a channel, and every module patched from its purple **MIDI** output hears that device on that channel, whatever its own **Device** says. It makes no sound and has no signal to send: the cable is a choice of where the MIDI comes from, not a stream of it.
 
-Every module that hears MIDI ([Note In](./note-in.md), [Pad](./pad.md), [Controls](./controls.md), the [Clock](../modulation/clock.md) and the [MIDI Monitor](./midi-monitor.md)) can choose a device of its own, in its right-click menu (see [Listening to one device](./note-in.md#listening-to-one-device)). That suits one module. With several, each keeps its own setting, and moving to another controller means changing them all. Patch them from one MIDI In instead, and the device is chosen in one place.
+Every module that hears MIDI ([Note In](./note-in.md), [Pad](./pad.md), [Control](./control.md), the [Clock](../modulation/clock.md) and the [MIDI Monitor](./midi-monitor.md)) can choose a device of its own, in its right-click menu (see [Listening to one device](./note-in.md#listening-to-one-device)). That suits one module. With several, each keeps its own setting, and moving to another controller means changing them all. Patch them from one MIDI In instead, and the device is chosen in one place.
 
 ## Output
 
@@ -59,6 +59,6 @@ A group's MIDI jack with nothing plugged into it outside leaves the modules insi
 ## Related modules
 
 - [Note In](./note-in.md): notes as Pitch, Gate and Velocity, and choosing a device
-- [Pad](./pad.md), [Controls](./controls.md): a controller's pads and knobs as cables
+- [Pad](./pad.md), [Control](./control.md): a controller's pads and faders as cables
 - [MIDI Monitor](./midi-monitor.md): what a device sends
 - [Signal Types](../../concepts/signal-types.md#midi): the purple cable

@@ -94,7 +94,7 @@ pub struct MidiLearnTarget {
     /// The Scenes pad (0-7) to recall, in place of a parameter.
     pub scene: Option<u8>,
     /// Where in the module to write what's heard, in place of mapping it:
-    /// a Controls slot learning its fader (see [`super::module_learn`]).
+    /// a Control learning its fader (see [`super::module_learn`]).
     pub into: Option<ModuleLearn>,
 }
 
@@ -655,7 +655,12 @@ impl MidiSession {
     pub fn start_learn_past(&mut self, target: MidiLearnTarget, taken: Vec<Vec<(usize, f32)>>) {
         // Learning a control wants the controller more than teaching it does
         self.hands.cancel_teaching();
-        self.guessing = None;
+        // A module that has just learned a CC goes on hearing whether it's
+        // an encoder (it holds nothing still meanwhile), so a walk's next
+        // learn leaves it be (#483). A mapping's guess gives way
+        if !self.guessing.as_ref().is_some_and(|guess| guess.into) {
+            self.guessing = None;
+        }
         self.learning = Some(target);
         self.taken = taken;
     }
@@ -924,36 +929,40 @@ mod tests {
         assert!(heard.turns.is_empty());
     }
 
-    /// A learn into Controls slot B (#427): its source, CC, channel and
-    /// encoding parameters.
-    fn into_controls() -> MidiLearnTarget {
-        use crate::modules::Controls;
+    /// A learn into a Control (#483): its source, CC, channel and encoding
+    /// parameters.
+    fn into_control(node: u64) -> MidiLearnTarget {
+        use crate::modules::Control;
         MidiLearnTarget {
-            param_index: Controls::source_param(1),
-            param_name: "Controls B".into(),
+            param_index: Control::PARAM_SOURCE,
+            param_name: "Control".into(),
             into: Some(ModuleLearn {
                 kinds: super::super::module_learn::LearnKinds { cc: Some(0.0), bend: Some(1.0), pressure: Some(3.0), note: None },
-                kind: Some(Controls::source_param(1)),
-                number: Some(Controls::cc_param(1)),
-                channel: Some(Controls::channel_param(1)),
-                encoding: Some(Controls::encoding_param(1)),
+                kind: Some(Control::PARAM_SOURCE),
+                number: Some(Control::PARAM_CC),
+                channel: Some(Control::PARAM_CHANNEL),
+                encoding: Some(Control::PARAM_ENCODING),
             }),
-            ..target(9)
+            ..target(node)
         }
+    }
+
+    fn into_controls() -> MidiLearnTarget {
+        into_control(9)
     }
 
     #[test]
     fn a_learn_into_a_module_writes_its_params_and_maps_nothing() {
-        use crate::modules::Controls;
+        use crate::modules::Control;
         let mut session = MidiSession::default();
         session.start_learn(into_controls());
-        assert!(session.learning().unwrap().prompt().starts_with("Move a knob or fader, bend, or press a key down, for Controls B"));
+        assert!(session.learning().unwrap().prompt().starts_with("Move a knob or fader, bend, or press a key down, for Control"));
         // A note passes by, still played; the CC is learned
         let heard = hear(&mut session, &[on(0, 60), cc(4, 74, 10)]);
         assert!(heard.learned && heard.notes_changed);
         assert_eq!(
             heard.learned_into,
-            [(9, Controls::source_param(1), 0.0), (9, Controls::cc_param(1), 74.0), (9, Controls::channel_param(1), 5.0), (9, Controls::encoding_param(1), 0.0)],
+            [(9, Control::PARAM_SOURCE, 0.0), (9, Control::PARAM_CC, 74.0), (9, Control::PARAM_CHANNEL, 5.0), (9, Control::PARAM_ENCODING, 0.0)],
         );
         assert!(session.learning().is_none());
         assert!(session.mappings.is_empty(), "nothing is mapped");
@@ -966,12 +975,12 @@ mod tests {
         session.start_learn(into_controls());
         hear(&mut session, &[cc(0, 20, 65)]);
         let heard = hear(&mut session, &[cc(0, 20, 65), cc(0, 20, 63), cc(0, 20, 65)]);
-        assert_eq!(heard.learned_into, [(9, Controls::encoding_param(1), 1.0)]);
+        assert_eq!(heard.learned_into, [(9, Control::PARAM_ENCODING, 1.0)]);
 
         // The pitch bend has no number
         session.start_learn(into_controls());
         let heard = hear(&mut session, &[MidiEvent::PitchBend { channel: 0, value: 0 }]);
-        assert_eq!(heard.learned_into, [(9, Controls::source_param(1), 1.0), (9, Controls::channel_param(1), 1.0)]);
+        assert_eq!(heard.learned_into, [(9, Control::PARAM_SOURCE, 1.0), (9, Control::PARAM_CHANNEL, 1.0)]);
     }
 
     #[test]
@@ -999,6 +1008,24 @@ mod tests {
         session.start_learn_past(pad.clone(), vec![vec![(1, 36.0), (2, 10.0)]]);
         session.start_learn(pad);
         assert_eq!(hear(&mut session, &[on(9, 36)]).learned_into, [(5, 1, 36.0), (5, 2, 10.0)]);
+    }
+
+    #[test]
+    fn an_encoder_learned_in_a_walk_is_told_apart_while_the_next_control_waits() {
+        // Two Controls walked (#483): the first takes CC 20, an encoder, and
+        // the second waits while the encoder goes on turning
+        use crate::modules::Control;
+        let mut session = MidiSession::default();
+        session.start_learn(into_control(7));
+        let first = hear(&mut session, &[cc(0, 20, 65)]).learned_into;
+        let taken: Vec<(usize, f32)> = first.iter().map(|&(_, param, value)| (param, value)).collect();
+        session.start_learn_past(into_control(8), vec![taken]);
+        let heard = hear(&mut session, &[cc(0, 20, 65), cc(0, 20, 63), cc(0, 20, 65)]);
+        assert_eq!(heard.learned_into, [(7, Control::PARAM_ENCODING, 1.0)], "the first is told it's an encoder; the second passes it by");
+        assert!(session.learning().is_some_and(|target| target.node_id == 8), "still waiting");
+        // The next control moved is the second's
+        let heard = hear(&mut session, &[cc(0, 21, 30)]);
+        assert_eq!(heard.learned_into.iter().filter(|&&(node, ..)| node == 8).count(), 4);
     }
 
     #[test]

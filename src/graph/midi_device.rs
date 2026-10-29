@@ -1,4 +1,4 @@
-//! The Device a module listens to (#435). Note In, Pad, Controls, Clock
+//! The Device a module listens to (#435). Note In, Pad, Control, Clock
 //! and the MIDI Monitor can hear one of the MIDI inputs open, or any.
 //!
 //! It's kept in the module's labels by the device's name, so a patch carries
@@ -29,8 +29,8 @@ pub const DEVICE_LABEL: &str = "Device";
 /// Device to choose? The MIDI In has one too, for the modules it's patched
 /// into to hear.
 pub fn listens_to_devices(module_id: &str) -> bool {
-    use crate::modules::{clock, controls, midi_monitor, note_in, pad};
-    [note_in::ID, pad::ID, controls::ID, clock::ID, midi_monitor::ID, midi_in::ID].contains(&module_id)
+    use crate::modules::{clock, control, midi_monitor, note_in, pad};
+    [note_in::ID, pad::ID, control::ID, clock::ID, midi_monitor::ID, midi_in::ID].contains(&module_id)
 }
 
 /// The device a module listens to, by name, or `None` for any.
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn the_midi_modules_have_a_device_and_the_rest_dont() {
-        for id in ["input.poly_midi", "input.pad", "input.controls", "util.clock", "util.midi_monitor", "input.midi"] {
+        for id in ["input.poly_midi", "input.pad", "input.control", "util.clock", "util.midi_monitor", "input.midi"] {
             assert!(listens_to_devices(id), "{id}");
         }
         assert!(!listens_to_devices("output.midi"), "MIDI Out sends; its ports are its devices");

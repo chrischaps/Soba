@@ -1,0 +1,408 @@
+{
+  "name": "MiniLab 3 Faders",
+  "version": 6,
+  "nodes": [],
+  "connections": [],
+  "groups": [
+    {
+      "id": 800,
+      "name": "MiniLab 3 Faders",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "inputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Fader 1",
+          "type": "Control"
+        },
+        {
+          "name": "Fader 2",
+          "type": "Control"
+        },
+        {
+          "name": "Fader 3",
+          "type": "Control"
+        },
+        {
+          "name": "Fader 4",
+          "type": "Control"
+        },
+        {
+          "name": "Bend",
+          "type": "Control"
+        },
+        {
+          "name": "Mod",
+          "type": "Control"
+        }
+      ],
+      "inputs_position": [
+        -280.0,
+        0.0
+      ],
+      "outputs_position": [
+        1300.0,
+        0.0
+      ],
+      "nodes": [
+        {
+          "id": 1,
+          "module_id": "input.control",
+          "position": [
+            0.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Source",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "CC",
+              "type": "Number",
+              "value": 82.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Encoding",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slew",
+              "type": "Number",
+              "value": 0.02
+            }
+          ],
+          "pinned": {
+            "Source": 1
+          },
+          "face_labels": {
+            "Source": "Fader 1"
+          }
+        },
+        {
+          "id": 2,
+          "module_id": "input.control",
+          "position": [
+            210.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Source",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "CC",
+              "type": "Number",
+              "value": 83.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Encoding",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slew",
+              "type": "Number",
+              "value": 0.02
+            }
+          ],
+          "pinned": {
+            "Source": 1
+          },
+          "face_labels": {
+            "Source": "Fader 2"
+          }
+        },
+        {
+          "id": 3,
+          "module_id": "input.control",
+          "position": [
+            420.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Source",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "CC",
+              "type": "Number",
+              "value": 85.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Encoding",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slew",
+              "type": "Number",
+              "value": 0.02
+            }
+          ],
+          "pinned": {
+            "Source": 1
+          },
+          "face_labels": {
+            "Source": "Fader 3"
+          }
+        },
+        {
+          "id": 4,
+          "module_id": "input.control",
+          "position": [
+            630.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Source",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "CC",
+              "type": "Number",
+              "value": 17.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Encoding",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slew",
+              "type": "Number",
+              "value": 0.02
+            }
+          ],
+          "pinned": {
+            "Source": 1
+          },
+          "face_labels": {
+            "Source": "Fader 4"
+          }
+        },
+        {
+          "id": 5,
+          "module_id": "input.control",
+          "position": [
+            840.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Source",
+              "type": "Select",
+              "value": 1
+            },
+            {
+              "name": "CC",
+              "type": "Number",
+              "value": 0.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Encoding",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slew",
+              "type": "Number",
+              "value": 0.02
+            }
+          ],
+          "pinned": {
+            "Source": 1
+          },
+          "face_labels": {
+            "Source": "Bend"
+          }
+        },
+        {
+          "id": 6,
+          "module_id": "input.control",
+          "position": [
+            1050.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Source",
+              "type": "Select",
+              "value": 2
+            },
+            {
+              "name": "CC",
+              "type": "Number",
+              "value": 1.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Encoding",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slew",
+              "type": "Number",
+              "value": 0.02
+            }
+          ],
+          "pinned": {
+            "Source": 1
+          },
+          "face_labels": {
+            "Source": "Mod"
+          }
+        }
+      ],
+      "connections": [
+        {
+          "from_node": 800,
+          "from_port": "MIDI",
+          "to_node": 1,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1,
+          "from_port": "Out",
+          "to_node": 800,
+          "to_port": "Fader 1"
+        },
+        {
+          "from_node": 800,
+          "from_port": "MIDI",
+          "to_node": 2,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 2,
+          "from_port": "Out",
+          "to_node": 800,
+          "to_port": "Fader 2"
+        },
+        {
+          "from_node": 800,
+          "from_port": "MIDI",
+          "to_node": 3,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 3,
+          "from_port": "Out",
+          "to_node": 800,
+          "to_port": "Fader 3"
+        },
+        {
+          "from_node": 800,
+          "from_port": "MIDI",
+          "to_node": 4,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 4,
+          "from_port": "Out",
+          "to_node": 800,
+          "to_port": "Fader 4"
+        },
+        {
+          "from_node": 800,
+          "from_port": "MIDI",
+          "to_node": 5,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 5,
+          "from_port": "Out",
+          "to_node": 800,
+          "to_port": "Bend"
+        },
+        {
+          "from_node": 800,
+          "from_port": "MIDI",
+          "to_node": 6,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 6,
+          "from_port": "Out",
+          "to_node": 800,
+          "to_port": "Mod"
+        }
+      ]
+    }
+  ]
+}

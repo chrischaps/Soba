@@ -1,6 +1,6 @@
 //! Learn in order (#481), the app's side: a learn walked across a group's
-//! Pads, each step an ordinary learn into a module. Starting the walk
-//! starts the first Pad's learn; once the MIDI heard says it took a hit,
+//! Pads or Controls (#483), each step an ordinary learn into a module.
+//! Starting the walk starts the first one's learn; once the MIDI heard says it took a hit,
 //! the next one's starts, past the hits already taken. Tab (or Skip) leaves
 //! one as it is and Escape stops. A learn cancelled or started elsewhere
 //! stops it too.
@@ -29,7 +29,8 @@ impl SynthApp {
         }
     }
 
-    /// Starts learning the group `group_node`'s Pads in order, top row first.
+    /// Starts learning the group `group_node`'s Pads and Controls in order,
+    /// top row first.
     fn start_learn_walk(&mut self, group_node: egui_node_graph2::NodeId) {
         self.end_learn_walk();
         let graph = &self.graph_state.graph;
@@ -39,7 +40,7 @@ impl SynthApp {
         let positions = &self.graph_state.node_positions;
         let steps = learn_walk::steps(graph, |n| positions.get(n).copied(), id, self.graph_state.pan_zoom.zoom);
         let Some(walk) = LearnWalk::new(id, name.clone(), steps) else {
-            self.status_message = Some(format!("Nothing in {name} learns in order: it has no Pads"));
+            self.status_message = Some(format!("Nothing in {name} learns in order: it has no Pads or Controls"));
             return;
         };
         // Map Mode and teaching the controller give way, as for any learn
@@ -301,6 +302,42 @@ mod tests {
         let other = app.graph_state.selected_nodes[0];
         app.learn_walk(WalkAction::Start(other));
         assert!(app.user_state.learn_walk.is_none());
-        assert!(app.status_message.as_deref().unwrap().contains("has no Pads"));
+        assert!(app.status_message.as_deref().unwrap().contains("has no Pads or Controls"));
+    }
+
+    #[test]
+    fn a_group_of_controls_learns_each_fader_moved_in_turn() {
+        // Four Controls in a row (#483): move four faders, each one a while
+        let mut app = SynthApp::new();
+        let template = SynthNodeTemplate::from_module_id(crate::modules::control::ID).unwrap();
+        let controls: Vec<NodeId> =
+            (0..4).map(|n| editing::add_module(&mut app.graph_state, &mut app.user_state, template, egui::pos2(n as f32 * 210.0, 0.0)).0).collect();
+        app.group_selection(&egui::Context::default(), &controls);
+        app.user_state.renaming = None;
+        let group = app.graph_state.selected_nodes[0];
+        groups::rename(&mut app.graph_state.graph, group, "Faders");
+        app.prepare_level();
+        app.history.record(&app.graph_state, &app.user_state, false, Instant::now());
+
+        app.learn_walk(WalkAction::Start(group));
+        let status = app.walk_status().unwrap();
+        assert!(status.starts_with("Learning Faders in order, 1 of 4 · Move a knob or fader"), "{status}");
+        let frame = |app: &mut SynthApp, events: &[(u8, u8)]| {
+            let mut heard = crate::app::midi_session::Heard::default();
+            for &(controller, value) in events {
+                app.midi.hear(MidiEvent::ControlChange { channel: 0, controller, value }, &mut heard, &|_, _| None);
+            }
+            app.learned_into_modules(&heard.learned_into);
+        };
+        // Each fader is still moving as the next Control waits
+        for (n, cc) in [82u8, 83, 85, 17].into_iter().enumerate() {
+            frame(&mut app, &[(cc, 10), (cc, 12)]);
+            frame(&mut app, &[(cc, 14), (cc, 16)]);
+            assert_eq!(app.user_state.learn_walk.as_ref().map(|walk| walk.progress().0), (n < 3).then_some(n + 1));
+        }
+        let heard: Vec<u8> = controls.iter().map(|&n| crate::graph::control_listen(&app.graph_state.graph, n).cc).collect();
+        assert_eq!(heard, [82, 83, 85, 17]);
+        assert_eq!(app.status_message.as_deref(), Some("Learned all 4 in Faders, in order"));
+        assert_eq!(app.history.undo_label(), Some("Learn Faders in order"));
     }
 }

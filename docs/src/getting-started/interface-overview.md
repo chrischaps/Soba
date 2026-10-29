@@ -272,7 +272,7 @@ What a control does depends on what it's mapped to:
 
 A controller turns a knob the way the mouse does: a fader sweeps a frequency by octaves, so the middle of its throw is in the middle of what you hear.
 
-To patch a fader or a wheel into a cable, rather than turn one knob with it, use a [Controls](../modules/midi/controls.md) module: its slots learn the same way. To play drums or fire triggers from a controller's pads, use [Pad](../modules/midi/pad.md) modules, one a pad (the Library's **Pads ×8** is eight), whose notes a Note In on Omni then leaves alone.
+To patch a fader or a wheel into a cable, rather than turn one knob with it, use a [Control](../modules/midi/control.md) module, one a fader (the Library's **MiniLab 3 Faders** and **Controls ×4** are groups of them): it learns the same way. To play drums or fire triggers from a controller's pads, use [Pad](../modules/midi/pad.md) modules, one a pad (the Library's **Pads ×8** is eight), whose notes a Note In on Omni then leaves alone.
 
 A mapping listens on the MIDI channel it was learned on, so the keys and the pads of one controller can send the same note numbers without mixing up. (Mappings made before Soba learned channels still listen on all of them.)
 

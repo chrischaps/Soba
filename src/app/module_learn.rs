@@ -1,7 +1,7 @@
 //! Learning into a module (#427): MIDI Learn that teaches a module what to
 //! hear, rather than mapping a CC onto one of its knobs.
 //!
-//! A Controls slot hears one fader, knob or wheel, and a Pad (#480) one
+//! A Control (#483) hears one fader, knob or wheel, and a Pad (#480) one
 //! pad. Which one lives in the module's own hidden parameters (a kind,
 //! a number, a channel), so the module can read MIDI on the audio thread,
 //! sample-accurately, and the patch keeps what it learned. Learning one is
@@ -153,7 +153,7 @@ impl ModuleLearn {
 mod tests {
     use super::*;
 
-    /// A Controls slot's learn: CCs, bend and pressure, each a kind.
+    /// A Control's learn: CCs, bend and pressure, each a kind.
     fn controls() -> ModuleLearn {
         ModuleLearn {
             kinds: LearnKinds { cc: Some(0.0), bend: Some(1.0), pressure: Some(3.0), ..LearnKinds::NONE },
@@ -191,8 +191,8 @@ mod tests {
     }
 
     #[test]
-    fn encodings_are_written_as_controls_reads_them() {
-        use crate::modules::controls::encoding_from_param;
+    fn encodings_are_written_as_a_control_reads_them() {
+        use crate::modules::control::encoding_from_param;
         for encoding in [MidiEncoding::Absolute, MidiEncoding::Relative64, MidiEncoding::TwosComplement] {
             assert_eq!(encoding_from_param(encoding_value(encoding)), encoding);
         }

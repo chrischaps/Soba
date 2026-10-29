@@ -90,7 +90,7 @@ Every Note In hears every device open, until you give it a **Device**. Right-cli
 
 The Device is saved with the patch, by the device's name, so the patch finds it on another computer with the same gear. While no device of that name is open, the name dims and the module hears no MIDI. It still hears the computer keys and the piano, which aren't a device.
 
-[Pad](./pad.md), [Controls](./controls.md), the [Clock](../modulation/clock.md) and the [MIDI Monitor](./midi-monitor.md) have a Device too.
+[Pad](./pad.md), [Control](./control.md), the [Clock](../modulation/clock.md) and the [MIDI Monitor](./midi-monitor.md) have a Device too.
 
 A purple cable from a [MIDI In](./midi-in.md) into the module's **MIDI** input chooses for it: the module hears the MIDI In's device, and only its channel if it names one. While the cable is in, **Device** greys in the right-click menu, as a knob does under a cable, and the title shows the device the cable brings. Unplug it and the module hears its own Device again. A MIDI In is the way to give several modules one controller, or a whole group one jack to plug a controller into.
 

@@ -181,6 +181,20 @@ pub const LIBRARY: &[LibraryGroup] = &[
         description: "Eight Pads on the General MIDI drum notes, 36 to 43 on channel 10, as most pad controllers send them: Gate and Vel for each, in the order a Trigger Sequencer's lanes come",
         json: include_str!("../../library/pads-x8.json"),
     },
+    LibraryGroup {
+        name: "Controls ×4",
+        file_name: "controls-x4.json",
+        section: Section::Controllers,
+        description: "Four Controls hearing a keyboard's own wheels before anything is learned: A the mod wheel, B the pitch bend (-1 to 1), C the pressure and D CC 74. Learn in order teaches all four from your controller",
+        json: include_str!("../../library/controls-x4.json"),
+    },
+    LibraryGroup {
+        name: "MiniLab 3 Faders",
+        file_name: "minilab-3-faders.json",
+        section: Section::Controllers,
+        description: "An Arturia MiniLab 3's four faders (CC 82, 83, 85 and 17) and both touch strips, as it comes from the box: a Control for each, jacks Fader 1 to 4, Bend and Mod",
+        json: include_str!("../../library/minilab-3-faders.json"),
+    },
 ];
 
 #[cfg(test)]
@@ -365,6 +379,17 @@ mod tests {
                 wire(k, "Out R", 9000, "Right"),
             ]);
         }
+        if entry.section == Section::Controllers && group.outputs.iter().all(|j| j.signal == "Control") {
+            // A controller's Controls: the first one opens a VCA on a tone,
+            // from a quarter of the way
+            nodes.push(node(9040, "osc.sine", &[]));
+            nodes.push(node(9041, "util.vca", &[("Level", number(0.25)), ("CV Amount", number(0.75))]));
+            wires.extend([
+                wire(9040, "Out", 9041, "In"),
+                wire(g, &group.outputs[0].name, 9041, "CV"),
+                wire(9041, "Out", 9000, "Mono"),
+            ]);
+        }
         if has(&group.inputs, "Trig") {
             nodes.push(node(9020, "util.clock", &[]));
             wires.push(wire(9020, "Gate", g, "Trig"));
@@ -429,6 +454,24 @@ mod tests {
         assert!(window(4.0 * sixteenth) > 0.1, "the snare: {}", window(4.0 * sixteenth));
         let gap = window(3.0 * sixteenth);
         assert!(gap < window(4.0 * sixteenth), "quieter between hits");
+    }
+
+    #[test]
+    fn a_controllers_first_control_opens_what_it_is_patched_into() {
+        // Controls ×4's A hears the mod wheel, the MiniLab's Fader 1 CC 82:
+        // moved to the top, each opens the VCA from a quarter to all of it
+        for (name, controller) in [("Controls ×4", 1), ("MiniLab 3 Faders", 82)] {
+            let entry = LIBRARY.iter().find(|g| g.name == name).unwrap();
+            let patch = played(entry);
+            let sample_rate = 48_000.0;
+            let (mut renderer, compiled) = OfflineRenderer::from_patch(&patch, sample_rate, 256).unwrap();
+            assert!(compiled.warnings.is_empty(), "{name}: {:?}", compiled.warnings);
+            renderer.queue_midi(sample_rate as u64, 0, MidiMessage::ControlChange { controller, value: 127 });
+            let audio = renderer.render_seconds(2.0);
+            let window = |from: f32, to: f32| rms(&audio.left[(from * sample_rate) as usize..(to * sample_rate) as usize]);
+            let (before, after) = (window(0.2, 0.9), window(1.5, 2.0));
+            assert!((after / before - 4.0).abs() < 0.1, "{name}: {before} then {after}");
+        }
     }
 
     #[test]

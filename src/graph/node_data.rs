@@ -267,9 +267,9 @@ pub enum NodeDisplay {
     /// Scenes: a pad per scene, the From and To pads lit as Morph glides
     /// between them, and Morph riding a line from one to the other.
     ScenePads,
-    /// Controls: a slim fader per slot, moving with the hardware, and what
-    /// each hears.
-    ControlFaders,
+    /// Control: one slim fader, moving with the hardware, and what it
+    /// hears (#483).
+    OneFader,
     /// Pad: one pad, flashing as it's hit (#480).
     OnePad,
     /// Instrument: the hardware it plays and its profile, over its knobs
@@ -1585,7 +1585,7 @@ impl NodeDataTrait for SynthNodeData {
             NodeDisplay::FmVoiceFace => {
                 responses.extend(super::fm_voice_face::fm_voice_face(self, ui, node_id, graph, zoom));
             }
-            NodeDisplay::ControlFaders => {
+            NodeDisplay::OneFader => {
                 let asked = super::controls_face::controls_face(ui, node_id, graph, user_state, zoom);
                 responses.extend(asked.into_iter().map(NodeResponse::User));
             }

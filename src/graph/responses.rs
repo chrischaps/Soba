@@ -95,7 +95,7 @@ pub enum SynthResponse {
         /// The Scenes pad (0-7) to recall, in place of a parameter.
         scene: Option<u8>,
         /// Where in the module to write what's heard, in place of mapping
-        /// it: a Controls slot learning its fader (see
+        /// it: a Control learning its fader (see
         /// [`crate::app::module_learn`]). Boxed, as few learns have one.
         into: Option<Box<crate::app::module_learn::ModuleLearn>>,
     },

@@ -1,6 +1,6 @@
 # Hands On
 
-A patch to play with both hands on an Arturia MiniLab 3, set up for the controller as it comes from the box. A bassline plays itself in D Dorian at 96 BPM. The keys play a lead over it, pad bank A plays a drum kit, and pad bank B runs a Looper and four scenes. All eight encoders, all four faders and both touch strips have a job. The patch is 41 modules, sixteen of them the pads in two groups.
+A patch to play with both hands on an Arturia MiniLab 3, set up for the controller as it comes from the box. A bassline plays itself in D Dorian at 96 BPM. The keys play a lead over it, pad bank A plays a drum kit, and pad bank B runs a Looper and four scenes. All eight encoders, all four faders and both touch strips have a job. The patch is 44 modules: sixteen of them the pads in two groups, and four the strips and faders in another.
 
 > **Load it:** choose **📚 Examples → Hands On**, pick the MiniLab in **MIDI In**, press **▶ Play** and play. Then teach Soba the controller once (**MIDI In ▸ Teach Your Controller…**) and press **Ctrl+H**: a sketch of the MiniLab appears along the bottom, naming what each control does.
 > The patch file is [`patches/hands-on.json`](https://github.com/chrischaps/Soba/blob/master/patches/hands-on.json).
@@ -11,7 +11,7 @@ It uses each way Soba has of putting a controller to work:
 
 - **[Note In](../modules/midi/note-in.md) for the keys.** It's on Omni, yet it never plays the pads' notes: sixteen [Pads](../modules/midi/pad.md) claim both banks.
 - **[Pads](../modules/midi/pad.md) as gates.** Each bank is a group of eight Pads: **Pads A** and **Pads B**. Bank A strikes five Drums, each as hard as its pad was hit, through its **Vel** jacks. Bank B's first three pads are cables into the [Looper](../modules/utilities/looper.md)'s **Rec**, **Stop** and **Undo** jacks.
-- **[Controls](../modules/midi/controls.md) as cables.** The mod strip, two faders and the pitch strip become Control signals, patched like any other: one fader feeds three inputs at once.
+- **[Controls](../modules/midi/control.md) as cables.** A group of four Controls, **Controls**, turns the mod strip, two faders and the pitch strip into Control signals, patched like any other: one fader feeds three inputs at once.
 - **MIDI mappings saved with the patch.**
   - The encoders turn knobs, and pick each one up where it stands.
   - The main encoder steps a dropdown, and its click presses a footswitch.
@@ -77,6 +77,7 @@ The mappings are the MiniLab's factory map, but none of them is fixed:
 - **Map Mode** (**Ctrl+L**): click a knob, move a control on your controller, and that knob is yours. The [Controller Map](../getting-started/interface-overview.md#midi-learn) (**MIDI In ▸ Controller Map…**) lists every mapping, to change or clear.
 - **If an encoder steps oddly,** your controller's encoders send steps rather than positions. Choose **Hardware ▸ Encoder** on that knob's right-click menu, or in the Controller Map.
 - **The pads:** right-click **Pads A** or **Pads B**, choose **Learn in order** and hit your pads from the first. To learn just one, right-click its pad on the group's face and choose **Learn MIDI**.
+- **The strips and faders:** right-click **Controls**, choose **Learn in order**, and move the four controls that should be **A** to **D**: the mod strip, two faders and the pitch strip here.
 - **Let the encoders follow you.** Teach Soba your controller and press **Ctrl+Shift+L**: the encoders turn whatever module you select, not just the knobs mapped here.
 
 ## Related
@@ -84,4 +85,4 @@ The mappings are the MiniLab's factory map, but none of them is fixed:
 - [Pad Kit](./pad-kit.md): the drum half on its own
 - [Live Looper](./live-looper.md): looping a live input
 - [MIDI Learn](../getting-started/interface-overview.md#midi-learn): mappings, pickup and encoders
-- [Controls](../modules/midi/controls.md) and [Pad](../modules/midi/pad.md)
+- [Control](../modules/midi/control.md) and [Pad](../modules/midi/pad.md)

@@ -1,7 +1,7 @@
 //! MIDI In (#479): which device, and which channel, the modules patched
 //! from it hear.
 //!
-//! Note In, Pad, Controls, the Clock and the MIDI Monitor each pick their
+//! Note In, Pad, Control, the Clock and the MIDI Monitor each pick their
 //! own Device (#435). A purple cable from a MIDI In picks it for them: a
 //! group of eight Pads gets one jack to plug a controller into, and moving
 //! to another controller is one change, not eight.
@@ -131,7 +131,7 @@ mod tests {
     #[test]
     fn every_module_that_hears_midi_has_a_midi_input() {
         let registry = crate::engine::create_module_registry();
-        for id in [super::super::note_in::ID, super::super::pad::ID, super::super::controls::ID, super::super::clock::ID, super::super::midi_monitor::ID] {
+        for id in [super::super::note_in::ID, super::super::pad::ID, super::super::control::ID, super::super::clock::ID, super::super::midi_monitor::ID] {
             let module = registry.create(id).unwrap();
             let port = module.ports().iter().find(|p| p.name == PORT_NAME).unwrap_or_else(|| panic!("{id} has no MIDI input"));
             assert!(port.is_input() && port.signal_type == SignalType::Midi, "{id}");

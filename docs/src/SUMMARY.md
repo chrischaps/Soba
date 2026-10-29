@@ -31,7 +31,7 @@
   - [Audio Input](./modules/sources/audio-input.md)
   - [MIDI In](./modules/midi/midi-in.md)
   - [Note In](./modules/midi/note-in.md)
-  - [Controls](./modules/midi/controls.md)
+  - [Control](./modules/midi/control.md)
   - [Pad](./modules/midi/pad.md)
   - [Instrument](./modules/midi/instrument.md)
   - [Kit](./modules/midi/kit.md)

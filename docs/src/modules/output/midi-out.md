@@ -94,7 +94,7 @@ Like a port's device, its clock is a setting of this computer. A patch saved whe
 
 - **One synth per channel.** Two MIDI Outs on the same port, on channels 1 and 2, play two parts on a multitimbral synth or two tracks in a DAW.
 - **Line the room up.** Measure each device from the Rig (the ping beside its port's **Offset**), or play a Soba hi-hat beside its arpeggio and nudge the **Offset** until they land together. Every MIDI Out on the port moves with it.
-- **Wheels from your keyboard.** A [Controls](../midi/controls.md) slot hearing your controller's bend, patched into **Bend**, plays the hardware's bend from your keys. Another on its pressure, into **Pressure**, plays aftertouch.
+- **Wheels from your keyboard.** A [Control](../midi/control.md) hearing your controller's bend, patched into **Bend**, plays the hardware's bend from your keys. Another on its pressure, into **Pressure**, plays aftertouch.
 - **The right sound at the top.** Patch a gate that rises at the top of the song into **Send Program**, so a device that was left on another sound starts the song on the right one.
 - **Velocity from anywhere.** A Step Sequencer's second row, an LFO or a [Sample & Hold](../utilities/sample-hold.md) on Velocity gives a part its accents.
 - **CCs for movement.** An [LFO](../modulation/lfo.md) with **Bipolar** off on CC 2 sweeps the synth's own filter. An [ADSR](../modulation/adsr.md) on the same gate opens it with each note.

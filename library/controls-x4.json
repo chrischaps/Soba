@@ -1,0 +1,284 @@
+{
+  "name": "Controls ×4",
+  "version": 6,
+  "nodes": [],
+  "connections": [],
+  "groups": [
+    {
+      "id": 800,
+      "name": "Controls ×4",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "inputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "A",
+          "type": "Control"
+        },
+        {
+          "name": "B",
+          "type": "Control"
+        },
+        {
+          "name": "C",
+          "type": "Control"
+        },
+        {
+          "name": "D",
+          "type": "Control"
+        }
+      ],
+      "inputs_position": [
+        -280.0,
+        0.0
+      ],
+      "outputs_position": [
+        880.0,
+        0.0
+      ],
+      "nodes": [
+        {
+          "id": 1,
+          "module_id": "input.control",
+          "position": [
+            0.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Source",
+              "type": "Select",
+              "value": 2
+            },
+            {
+              "name": "CC",
+              "type": "Number",
+              "value": 1.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Encoding",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slew",
+              "type": "Number",
+              "value": 0.02
+            }
+          ],
+          "pinned": {
+            "Source": 1
+          },
+          "face_labels": {
+            "Source": "A"
+          }
+        },
+        {
+          "id": 2,
+          "module_id": "input.control",
+          "position": [
+            210.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Source",
+              "type": "Select",
+              "value": 1
+            },
+            {
+              "name": "CC",
+              "type": "Number",
+              "value": 0.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Encoding",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slew",
+              "type": "Number",
+              "value": 0.02
+            }
+          ],
+          "pinned": {
+            "Source": 1
+          },
+          "face_labels": {
+            "Source": "B"
+          }
+        },
+        {
+          "id": 3,
+          "module_id": "input.control",
+          "position": [
+            420.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Source",
+              "type": "Select",
+              "value": 3
+            },
+            {
+              "name": "CC",
+              "type": "Number",
+              "value": 0.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Encoding",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slew",
+              "type": "Number",
+              "value": 0.02
+            }
+          ],
+          "pinned": {
+            "Source": 1
+          },
+          "face_labels": {
+            "Source": "C"
+          }
+        },
+        {
+          "id": 4,
+          "module_id": "input.control",
+          "position": [
+            630.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Source",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "CC",
+              "type": "Number",
+              "value": 74.0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Encoding",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Range",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slew",
+              "type": "Number",
+              "value": 0.02
+            }
+          ],
+          "pinned": {
+            "Source": 1
+          },
+          "face_labels": {
+            "Source": "D"
+          }
+        }
+      ],
+      "connections": [
+        {
+          "from_node": 800,
+          "from_port": "MIDI",
+          "to_node": 1,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1,
+          "from_port": "Out",
+          "to_node": 800,
+          "to_port": "A"
+        },
+        {
+          "from_node": 800,
+          "from_port": "MIDI",
+          "to_node": 2,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 2,
+          "from_port": "Out",
+          "to_node": 800,
+          "to_port": "B"
+        },
+        {
+          "from_node": 800,
+          "from_port": "MIDI",
+          "to_node": 3,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 3,
+          "from_port": "Out",
+          "to_node": 800,
+          "to_port": "C"
+        },
+        {
+          "from_node": 800,
+          "from_port": "MIDI",
+          "to_node": 4,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 4,
+          "from_port": "Out",
+          "to_node": 800,
+          "to_port": "D"
+        }
+      ]
+    }
+  ]
+}

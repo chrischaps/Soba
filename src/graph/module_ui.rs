@@ -225,11 +225,11 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
-        module_id: crate::modules::controls::ID,
-        // What each slot hears is set from its fader's menu
+        module_id: crate::modules::control::ID,
+        // What it hears is learned, or set from its fader's menu
         knobs: &[knob("Slew")],
-        hidden: &["Source *", "CC *", "Channel *", "Encoding *", "Range *"],
-        display: NodeDisplay::ControlFaders,
+        hidden: &["Source", "CC", "Channel", "Encoding", "Range"],
+        display: NodeDisplay::OneFader,
         ..ModuleUi::DEFAULT
     },
     ModuleUi {

@@ -30,7 +30,7 @@ use soba::engine::{
 use soba::modules::looper::{LoopState, Looper};
 use soba::dsp::primitives::{Markers, ONSETS};
 use soba::hardware::{Address, Parameter, SlotMap, Step};
-use soba::modules::{Chopper, Cloud, Controls, MidiOut, Mixer, Pad, Resonator};
+use soba::modules::{Chopper, Cloud, Control, MidiOut, Mixer, Pad, Resonator};
 
 struct CountingAllocator;
 
@@ -255,15 +255,15 @@ fn audio_callback_never_allocates() {
         ui.send_command(EngineCommand::MapSlot { node_id: instrument, slot, map: *map });
     }
 
-    // A Controls (#427) hearing the mod wheel, the bend and the pressure
-    // played below, a fader on CC 74 swinging -1 to 1, and an endless
-    // encoder on CC 20 counting up and down. Its A cable runs on down the
-    // chain, as every module's first output does
-    let controls = node_of(&nodes, "input.controls");
-    ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::cc_param(2), value: 20.0 });
-    ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::source_param(2), value: 0.0 });
-    ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::encoding_param(2), value: 1.0 });
-    ui.send_command(EngineCommand::SetParameter { node_id: controls, param_index: Controls::range_param(3), value: 2.0 });
+    // A Control (#483) hearing an endless encoder on CC 20 counting up and
+    // down, swinging -1 to 1. Its cable runs on down the chain, as every
+    // module's first output does. Below, it's told now and then to hear the
+    // mod wheel, the bend or the pressure played, or CC 74's fader
+    let control = node_of(&nodes, "input.control");
+    ui.send_command(EngineCommand::SetParameter { node_id: control, param_index: Control::PARAM_CC, value: 20.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: control, param_index: Control::PARAM_SOURCE, value: 0.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: control, param_index: Control::PARAM_ENCODING, value: 1.0 });
+    ui.send_command(EngineCommand::SetParameter { node_id: control, param_index: Control::PARAM_RANGE, value: 2.0 });
 
     // A Pad (#480) on note 48, channel 1, so the notes played below hit it,
     // and it claims its note from every Note In on Omni. Its mode and note
@@ -272,9 +272,9 @@ fn audio_callback_never_allocates() {
     ui.send_command(EngineCommand::SetParameter { node_id: pad, param_index: Pad::PARAM_NOTE, value: 48.0 });
     ui.send_command(EngineCommand::SetParameter { node_id: pad, param_index: Pad::PARAM_CHANNEL, value: 1.0 });
 
-    // Two devices play (#435): the Controls hears the first, the Pad the
+    // Two devices play (#435): the Control hears the first, the Pad the
     // second, picked out of the block's MIDI each callback
-    ui.send_command(EngineCommand::Listen { node_id: controls, listen: ListenTo::Port(0), channel: None });
+    ui.send_command(EngineCommand::Listen { node_id: control, listen: ListenTo::Port(0), channel: None });
     ui.send_command(EngineCommand::Listen { node_id: pad, listen: ListenTo::Port(1), channel: None });
 
     // A Chopper on the same Clock, cut at markers, given a new loop (and
@@ -474,6 +474,13 @@ fn audio_callback_never_allocates() {
             ui.send_command(EngineCommand::SetParameter { node_id: pad, param_index: Pad::PARAM_MODE, value: (round / 40 % 3) as f32 });
             ui.send_command(EngineCommand::SetParameter { node_id: pad, param_index: Pad::PARAM_NOTE, value: 44.0 + (round / 40 % 8) as f32 });
         }
+        if round % 60 == 31 {
+            // The Control on another source (encoder, mod wheel, bend,
+            // pressure, then CC 74's fader), each from its rest
+            let (source, cc) = [(0.0, 20.0), (2.0, 1.0), (1.0, 0.0), (3.0, 0.0), (0.0, 74.0)][round / 60 % 5];
+            ui.send_command(EngineCommand::SetParameter { node_id: control, param_index: Control::PARAM_SOURCE, value: source });
+            ui.send_command(EngineCommand::SetParameter { node_id: control, param_index: Control::PARAM_CC, value: cc });
+        }
         if round % 30 == 7 {
             let probe = (round % 90 != 7).then(|| {
                 let (node_id, _) = nodes[round / 30 % nodes.len()];
@@ -489,7 +496,7 @@ fn audio_callback_never_allocates() {
             MidiEvent::PitchBend { channel: 0, value: (round as i16 % 64) * 128 - 4096 },
             MidiEvent::ChannelPressure { channel: 0, pressure: (round % 128) as u8 },
             MidiEvent::NoteOff { channel: 0, note: note.wrapping_sub(3), velocity: 0 },
-            // The faders, the mod wheel and an encoder, for Controls
+            // The faders, the mod wheel and an encoder, for the Control
             MidiEvent::ControlChange { channel: 0, controller: 74, value: (round * 3 % 128) as u8 },
             MidiEvent::ControlChange { channel: 0, controller: 1, value: (round % 128) as u8 },
             MidiEvent::ControlChange { channel: 0, controller: 20, value: if round % 3 == 0 { 63 } else { 65 } },
