@@ -19,7 +19,7 @@ use crate::dsp::{DspModule, ListenTo, ModuleRegistry, PortDefinition, SampleData
 use crate::dsp::primitives::Markers;
 use crate::engine::commands::{EngineCommand, NodeId, PlanMessage, PortIndex};
 use crate::engine::graph_plan::{
-    GraphPlan, InputSource, InputTap, LateLine, MonitorSource, OutputTap, PlanKnob, PlanNode, PlanScenes, SpectrumWatch,
+    GraphPlan, InputSource, InputTap, LateLine, MonitorSource, OutputTap, PlanKnob, PlanNode, PlanScenes, SpectrumWatch, Watched,
     MAX_INPUTS,
 };
 use crate::engine::spectrum_tap::SpectrumTap;
@@ -120,12 +120,17 @@ impl NodeSpec {
     fn spectrum_watch(&self, node_id: NodeId, connections: &[Connection]) -> Option<SpectrumWatch> {
         let (ports, tap) = self.spectrum.as_ref()?;
         let input = self.inputs().position(|(_, port)| port.id == ports.input)?;
+        // A display with no outputs hears a second input beside the first
+        let second = ports.outputs.iter().find_map(|id| self.inputs().position(|(_, port)| port.id == *id));
+        if let Some(second) = second {
+            return Some(SpectrumWatch { input, output: Watched::Input(second), tap: Arc::clone(tap) });
+        }
         let output_port = |id: &str| self.ports.iter().position(|port| port.is_output() && port.id == id);
         let candidates = || ports.outputs.iter().filter_map(|id| output_port(id));
         let port = candidates()
             .find(|&port| connections.iter().any(|conn| conn.from_node == node_id && conn.from_port == port))
             .or_else(|| candidates().next())?;
-        Some(SpectrumWatch { input, output: self.output_index(port)?, tap: Arc::clone(tap) })
+        Some(SpectrumWatch { input, output: Watched::Output(self.output_index(port)?), tap: Arc::clone(tap) })
     }
 
     /// Maps a port index to its index among the node's output ports, or
@@ -1123,8 +1128,8 @@ impl AudioGraph {
             heard[tap.buffer] = true;
         }
         for node in &mut plan.nodes {
-            if let Some(watch) = &node.spectrum {
-                heard[node.outputs.start + watch.output] = true;
+            if let Some(SpectrumWatch { output: Watched::Output(output), .. }) = &node.spectrum {
+                heard[node.outputs.start + output] = true;
             }
             node.heard = node
                 .outputs
@@ -2639,5 +2644,29 @@ mod tests {
         install(&mut graph, &mut plan);
         plan.process(&ProcessContext::new(48000.0, 256));
         check(&graph, &plan, svf_hp);
+    }
+
+    /// The Spectrum has no outputs: its tap hears In 1 and In 2.
+    #[test]
+    fn test_spectrum_taps_both_inputs() {
+        use crate::engine::spectrum_tap::WINDOW;
+        let registry = crate::engine::create_module_registry();
+        let port = |module: &str, id: &str| registry.create(module).unwrap().ports().iter().position(|p| p.id == id).unwrap();
+        let mut graph = AudioGraph::with_registry(48000.0, 256, crate::engine::create_module_registry());
+        for (node_id, module_id) in [(1, "osc.sine"), (2, crate::modules::spectrum::ID)] {
+            assert!(graph.handle_command(EngineCommand::AddModule { node_id, module_id }));
+        }
+        graph.connect(1, port("osc.sine", "out"), 2, port(crate::modules::spectrum::ID, "in2"));
+        let mut plan = graph.compile();
+        for _ in 0..4 {
+            plan.process(&ProcessContext::new(48000.0, 256));
+        }
+        let (_, tap) = graph.spectrum_taps().next().unwrap();
+        let (mut in1, mut in2) = ([0.0; WINDOW], [0.0; WINDOW]);
+        tap.read(&mut in1, &mut in2);
+        let fed = &plan.outputs[plan.nodes.iter().find(|node| node.node_id == 1).unwrap().outputs.start];
+        assert_eq!(&in2[WINDOW - 256..], &fed.voice(0).samples[..], "In 2 is heard");
+        assert!(in2[WINDOW - 256..].iter().any(|&s| s != 0.0));
+        assert!(in1.iter().all(|&s| s == 0.0), "In 1 has nothing patched");
     }
 }

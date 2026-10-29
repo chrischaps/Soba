@@ -384,6 +384,14 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
+        module_id: "util.spectrum",
+        knobs: &[knob("Hold"), knob("Range")],
+        // The face's corner sets its Size
+        hidden: &["Size"],
+        display: NodeDisplay::Spectrum,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
         module_id: "util.dancer",
         // The stage's corner sets its Size
         hidden: &["Size"],

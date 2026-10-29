@@ -142,9 +142,18 @@ impl PlanNode {
 pub(crate) struct SpectrumWatch {
     /// The input heard (index into the node's `inputs`).
     pub(crate) input: usize,
-    /// The output heard, counted among the node's outputs.
-    pub(crate) output: usize,
+    /// What it's heard beside: an output, or for a display, another input.
+    pub(crate) output: Watched,
     pub(crate) tap: Arc<SpectrumTap>,
+}
+
+/// The second sound a spectrum tap hears.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Watched {
+    /// An output, counted among the node's outputs: what a filter lets through.
+    Output(usize),
+    /// Another input (index into the node's `inputs`): a Spectrum's In 2.
+    Input(usize),
 }
 
 /// A cable that closes a loop, heard a constant one block behind.
@@ -921,7 +930,11 @@ fn outputs_finite(outputs: &[SignalBuffer]) -> bool {
 /// REAL-TIME SAFE: stores into the tap's ring.
 fn watch_spectrum(watch: &Option<SpectrumWatch>, inputs: &[&SignalBuffer], outputs: &[SignalBuffer], sample_rate: f32) {
     if let Some(watch) = watch {
-        if let (Some(input), Some(output)) = (inputs.get(watch.input), outputs.get(watch.output)) {
+        let output = match watch.output {
+            Watched::Output(index) => outputs.get(index),
+            Watched::Input(index) => inputs.get(index).copied(),
+        };
+        if let (Some(input), Some(output)) = (inputs.get(watch.input), output) {
             watch.tap.write(input, output, sample_rate);
         }
     }

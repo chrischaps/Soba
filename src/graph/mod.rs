@@ -33,6 +33,8 @@ pub(crate) mod midi_log_display;
 pub mod midi_device;
 mod output_meter_display;
 mod scope_display;
+mod spectrum_display;
+mod spectrum_view;
 mod noise_display;
 mod piano_display;
 pub mod midi_in_face;

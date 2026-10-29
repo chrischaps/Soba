@@ -228,6 +228,9 @@ pub enum NodeDisplay {
     SlopeShape,
     /// Dancer: a stick figure dancing on a stage, as big as its Size.
     Dancer,
+    /// Spectrum: each input's partials as lines on a keyboard's axis, the
+    /// note's harmonics numbered, as big as its Size.
+    Spectrum,
     /// Link Out: a lamp per lane, what it sends, and whether Seoul hears.
     LinkLanes,
     /// MIDI Out: its device, a keyboard of the notes it holds, its CCs and clock.
@@ -1548,6 +1551,11 @@ impl NodeDataTrait for SynthNodeData {
             NodeDisplay::DividerRing => super::divider_display::divider_display(ui, node_id, graph, user_state, zoom),
             NodeDisplay::Dancer => {
                 if let Some((param_name, value)) = super::dancer_display::dancer_display(ui, node_id, graph, user_state, zoom) {
+                    responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
+                }
+            }
+            NodeDisplay::Spectrum => {
+                if let Some((param_name, value)) = super::spectrum_display::spectrum_display(ui, node_id, graph, user_state, zoom) {
                     responses.push(NodeResponse::User(SynthResponse::ParameterChanged { node_id, param_name, value }));
                 }
             }

@@ -710,6 +710,17 @@ in   Trigger Level      Control  ConstantOnly         inline=false num 0 [-1..1]
 knob Trigger Level      "Trig" KnobOnly
 display Scope
 
+== util.spectrum "Spectrum" finder="Spectrum" Utility
+in   In 1               Audio    ConnectionOnly       inline=true  port
+in   In 2               Audio    ConnectionOnly       inline=true  port
+in   Hold               Control  ConstantOnly         inline=false num 1.5 [0..5] s
+in   Range              Control  ConstantOnly         inline=false num 72 [24..120] dB
+in   Harmonics          Control  ConstantOnly         inline=true  toggle true "Harmonics"
+in   Size               Control  ConstantOnly         inline=false num 1 [1..3] ×
+knob Hold               "Hold" KnobOnly
+knob Range              "Range" KnobOnly
+display Spectrum
+
 == util.dancer "Dancer" finder="Dancer" Utility
 in   Clock              Gate     ConnectionOnly       inline=true  port
 in   Audio              Audio    ConnectionOnly       inline=true  port

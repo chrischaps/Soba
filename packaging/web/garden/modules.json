@@ -2066,6 +2066,23 @@
       "name": "Scenes",
       "outputs": []
     },
+    "util.spectrum": {
+      "category": "Utility",
+      "color": "#9e9e9e",
+      "height": 326.0,
+      "inputs": [
+        {
+          "name": "In 1",
+          "type": "Audio"
+        },
+        {
+          "name": "In 2",
+          "type": "Audio"
+        }
+      ],
+      "name": "Spectrum",
+      "outputs": []
+    },
     "util.vca": {
       "category": "Utility",
       "color": "#9e9e9e",

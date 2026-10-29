@@ -159,6 +159,9 @@ MODULES = {
         -3.9 param util.looper Pedal Rec 0
     """, palette=False),
     "oscilloscope": Module("oscilloscope", "util.oscilloscope", 1.0, 395, "-1.0 play"),
+    # A saw an octave down on In 1, its harmonics numbered down the 1/n line,
+    # and the same saw through a lowpass on In 2, its upper harmonics sunk
+    "spectrum": Module("spectrum", "util.spectrum", 1.0, 460, "-2.0 play", palette=False),
     # Disco, just after a beat
     "dancer": Module("dancer", "util.dancer", 1.0, 400, "-2.1 play", palette=False),
 

@@ -579,6 +579,7 @@ impl SynthApp {
             self.user_state.tick_signal_history(now, &self.graph_state.graph);
             if let Some(handle) = self.ui_handle.as_ref() {
                 self.user_state.spectra.listen(handle.graph().spectrum_taps(), dt);
+                self.user_state.spectrum_views.listen(handle.graph().spectrum_taps(), dt);
             }
             self.user_state.output_meter.tick(dt);
             for meters in self.user_state.module_meters.values_mut() {
@@ -2659,6 +2660,7 @@ impl SynthApp {
         // What each filter on screen is fed and lets through
         if let Some(handle) = self.ui_handle.as_ref() {
             self.user_state.spectra.listen(handle.graph().spectrum_taps(), dt);
+            self.user_state.spectrum_views.listen(handle.graph().spectrum_taps(), dt);
         }
         self.user_state.output_meter.tick(dt);
         if !self.user_state.output_meter.is_idle() {

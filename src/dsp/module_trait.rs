@@ -70,7 +70,8 @@ pub struct FinishedTake {
 
 /// The ports whose sound a module's display shows as spectra: a filter's
 /// audio in, and its outputs. The first output with a cable from it is
-/// the one tapped, or the first output if none has one.
+/// the one tapped, or the first output if none has one. A display with no
+/// outputs of its own (the Spectrum) names a second input instead.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SpectrumPorts {
     pub input: &'static str,

@@ -77,6 +77,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Logic](./utilities/logic.md) | `util.logic` | Combine gates with AND, OR, XOR and NOT, and turn a control voltage into a gate |
 | [Looper](./utilities/looper.md) | `util.looper` | Record, overdub and undo live layers, like a looper pedal, in time with the Clock |
 | [Oscilloscope](./visualization/oscilloscope.md) | `util.oscilloscope` | Draw up to two signals as waveforms |
+| [Spectrum](./visualization/spectrum.md) | `util.spectrum` | Show the harmonics in up to two sounds, as lines on a keyboard's axis |
 | [Dancer](./visualization/dancer.md) | `util.dancer` | A stick figure who dances to the patch, on the beat and as hard as the music is loud |
 | [Step Sequencer](./utilities/sequencer.md) | `seq.step` | 16 steps of pitch, gate and velocity, in four chained patterns |
 | [Chord Sequencer](./utilities/chord-sequencer.md) | `seq.chord` | 16 chords, each a root, a type and a slash bass, voice-led and played on polyphonic cables, in four patterns played in a chain |
@@ -170,6 +171,7 @@ Drive a voice from a sequence instead of a keyboard:
 | Make a synth talk or sing | [Vocoder](./effects/vocoder.md), with a voice from a [Sampler](./sources/sampler.md) or [Audio Input](./sources/audio-input.md) |
 | Balance tone and dynamics | [3-Band EQ](./effects/eq.md), [Compressor](./effects/compressor.md) |
 | See a signal | [Oscilloscope](./visualization/oscilloscope.md), [MIDI Monitor](./midi/midi-monitor.md) |
+| See what makes a sound bright: its harmonics | [Spectrum](./visualization/spectrum.md) |
 | Watch the music dance | [Dancer](./visualization/dancer.md) |
 | Hear the result | [Audio Output](./output/audio-output.md) |
 | Play visuals from the patch | [Link Out](./output/link-out.md), with Seoul |

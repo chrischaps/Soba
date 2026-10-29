@@ -342,6 +342,10 @@ pub struct SynthGraphState {
     /// display. Fed from the engine's spectrum taps once a frame.
     pub spectra: super::filter_spectrum::FilterSpectra,
 
+    /// What each Spectrum module on screen hears, column by column, its
+    /// peaks held. Fed from the same taps.
+    pub spectrum_views: super::spectrum_view::SpectrumViews,
+
     /// The input device Audio Input modules are listening to, if one is open.
     pub audio_input_name: Option<String>,
     /// How many channels it has, while it's open: the Channel choices
@@ -465,6 +469,7 @@ impl Default for SynthGraphState {
             readouts: HashMap::new(),
             faults: Default::default(),
             spectra: Default::default(),
+            spectrum_views: Default::default(),
             audio_input_name: None,
             audio_input_channels: None,
             samples: Default::default(),
@@ -614,6 +619,7 @@ impl SynthGraphState {
         self.module_meters.clear();
         self.readouts.clear();
         self.spectra.clear();
+        self.spectrum_views.clear();
         self.samples.clear();
         self.file_drop_target = None;
         self.hovered_file = None;
