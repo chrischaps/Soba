@@ -588,6 +588,27 @@ mod tests {
     }
 
     #[test]
+    fn a_pad_pinned_to_its_group_stays_pinned_in_the_copy() {
+        let mut rig = Rig::new();
+        let pad = rig.add(crate::modules::pad::ID, pos2(100.0, 100.0));
+        let data = &mut rig.editor.graph[pad].user_data;
+        data.pins.insert(groups::PAD_PRESS.into(), 1);
+        data.face_labels.insert(groups::PAD_PRESS.into(), "Kick".into());
+        let id = rig.user_state.allocate_group_id();
+        let bounds = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 300.0));
+        let new = groups::group(&mut rig.editor, &[pad], id, "Pads", bounds).unwrap();
+
+        let pasted = duplicate(&mut rig.editor, &mut rig.user_state, &Selection::modules(&[new.node])).unwrap();
+        let copy_id = rig.editor.graph[pasted.nodes[0]].user_data.kind.group().unwrap();
+        let graph = &rig.editor.graph;
+        let shown = groups::face_controls(graph, |_| None, &GroupIndex::of(graph), copy_id);
+        let [control] = &shown[..] else { panic!("the copy's pad on its face: {shown:?}") };
+        assert_ne!(control.node, pad);
+        assert_eq!((control.param.as_str(), control.kind), (groups::PAD_PRESS, groups::Control::Pad));
+        assert_eq!(graph[control.node].user_data.face_label(groups::PAD_PRESS), Some("Kick"));
+    }
+
+    #[test]
     fn pasting_inside_a_group_lands_there() {
         let mut rig = Rig::new();
         let (osc, filter, out) = chain(&mut rig);

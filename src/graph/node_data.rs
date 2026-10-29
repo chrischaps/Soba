@@ -116,7 +116,7 @@ pub enum KnobPlace {
 }
 
 impl KnobPlace {
-    fn is_face(self) -> bool {
+    pub(super) fn is_face(self) -> bool {
         matches!(self, Self::Face { .. })
     }
 }
@@ -1072,7 +1072,7 @@ impl SynthNodeData {
     /// The top of a face control's menu: the name it goes by on the face,
     /// `named`, selected to type over. Enter renames it; a blank name gives
     /// it back its module's own.
-    fn face_name_item(&self, ui: &mut egui::Ui, node_id: egui_node_graph2::NodeId, param_name: &str, named: &str) -> Option<SynthResponse> {
+    pub(super) fn face_name_item(&self, ui: &mut egui::Ui, node_id: egui_node_graph2::NodeId, param_name: &str, named: &str) -> Option<SynthResponse> {
         let id = super::group_face::face_name_id(node_id, param_name);
         let hint = "What this control is called on the group's face. Enter names it; a blank name goes back to the module's own";
         let name = super::group_face::name_field(ui, id, named, hint);

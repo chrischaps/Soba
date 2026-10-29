@@ -235,11 +235,8 @@ mod tests {
                     jack.name
                 );
             }
-            // Every pin shows on the face, knob, dropdown or toggle. A
-            // controller's pads wait to be pinned as pads (#482)
-            if entry.section != Section::Controllers {
-                assert!(group.nodes.iter().any(|n| !n.pinned.is_empty()), "{}: nothing on its face", entry.name);
-            }
+            // Every pin shows on the face: knob, dropdown, toggle or pad
+            assert!(group.nodes.iter().any(|n| !n.pinned.is_empty()), "{}: nothing on its face", entry.name);
             let staged = stage_patch(&patch).unwrap();
             let graph = &staged.graph;
             let id = graph.nodes.values().find_map(|n| n.user_data.kind.group()).unwrap();

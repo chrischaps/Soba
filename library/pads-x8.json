@@ -120,7 +120,10 @@
               "type": "Number",
               "value": 0.0
             }
-          ]
+          ],
+          "pinned": {
+            "Press": 1
+          }
         },
         {
           "id": 2,
@@ -150,7 +153,10 @@
               "type": "Number",
               "value": 0.0
             }
-          ]
+          ],
+          "pinned": {
+            "Press": 1
+          }
         },
         {
           "id": 3,
@@ -180,7 +186,10 @@
               "type": "Number",
               "value": 0.0
             }
-          ]
+          ],
+          "pinned": {
+            "Press": 1
+          }
         },
         {
           "id": 4,
@@ -210,7 +219,10 @@
               "type": "Number",
               "value": 0.0
             }
-          ]
+          ],
+          "pinned": {
+            "Press": 1
+          }
         },
         {
           "id": 5,
@@ -240,7 +252,10 @@
               "type": "Number",
               "value": 0.0
             }
-          ]
+          ],
+          "pinned": {
+            "Press": 1
+          }
         },
         {
           "id": 6,
@@ -270,7 +285,10 @@
               "type": "Number",
               "value": 0.0
             }
-          ]
+          ],
+          "pinned": {
+            "Press": 1
+          }
         },
         {
           "id": 7,
@@ -300,7 +318,10 @@
               "type": "Number",
               "value": 0.0
             }
-          ]
+          ],
+          "pinned": {
+            "Press": 1
+          }
         },
         {
           "id": 8,
@@ -330,7 +351,10 @@
               "type": "Number",
               "value": 0.0
             }
-          ]
+          ],
+          "pinned": {
+            "Press": 1
+          }
         }
       ],
       "connections": [

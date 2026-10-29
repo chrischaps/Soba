@@ -32,6 +32,11 @@ const PREVIEW_MIN_HEIGHT: f32 = 46.0;
 const PREVIEW_MAX_HEIGHT: f32 = 100.0;
 /// Pinned knobs per row on a group's face.
 const KNOBS_PER_ROW: usize = 4;
+/// Pinned pads per row on a group's face, how tall each is and the gap
+/// between them, unzoomed (#482).
+const PADS_PER_ROW: usize = 4;
+const PAD_HEIGHT: f32 = 36.0;
+const PAD_GAP: f32 = 5.0;
 
 /// The miniature's backing, a little deeper than the node body.
 const PREVIEW_FILL: Color32 = Color32::from_rgb(28, 30, 40);
@@ -291,7 +296,7 @@ fn draw_doorway(painter: &egui::Painter, center: Pos2, size: f32, ink: Color32, 
 }
 
 /// The body of a group's node: the name being typed, if it is, then the
-/// miniature, then the pinned dropdowns and toggles, then the pinned knobs.
+/// miniature, then the pinned dropdowns and toggles, pads and knobs.
 pub fn body(
     data: &SynthNodeData,
     ui: &mut egui::Ui,
@@ -337,10 +342,11 @@ pub fn body(
         responses.push(NodeResponse::User(SynthResponse::EnterGroup(node_id)));
     }
 
-    // The dropdowns and toggles pinned to it, then the knobs, in their
-    // modules' colours
+    // The dropdowns and toggles pinned to it, then the pads, then the
+    // knobs, in their modules' colours
     let outer = data.parent.is_some();
-    let (knobs, switches): (Vec<_>, Vec<_>) = face.controls.iter().partition(|c| c.kind == Control::Knob);
+    let of = |kind: Control| face.controls.iter().filter(move |c| c.kind == kind).collect::<Vec<_>>();
+    let (knobs, switches, pads) = (of(Control::Knob), of(Control::Switch), of(Control::Pad));
     if !switches.is_empty() {
         ui.add_space(6.0 * zoom);
         for (row, width) in switch_rows(ui, graph, &switches, PREVIEW_WIDTH * zoom) {
@@ -350,6 +356,10 @@ pub fn body(
                 }
             });
         }
+    }
+    if !pads.is_empty() {
+        ui.add_space(6.0 * zoom);
+        pad_grid(ui, &pads, graph, user_state, zoom, outer, &mut responses);
     }
     if !knobs.is_empty() {
         ui.add_space(6.0 * zoom);
@@ -628,6 +638,34 @@ fn switch_chip(
             }
         }
     });
+}
+
+/// The pads pinned to a group's face, four to a row across it, each the
+/// Pad's own pad: pressed to play, lit as it's hit from the controller.
+/// Sized in patch units, so the face holds still as the view zooms (#255).
+fn pad_grid(
+    ui: &mut egui::Ui,
+    pads: &[&FaceControl],
+    graph: &SynthGraph,
+    user_state: &mut SynthGraphState,
+    zoom: f32,
+    outer: bool,
+    responses: &mut Responses,
+) {
+    let (columns, rows) = (pads.len().min(PADS_PER_ROW), pads.len().div_ceil(PADS_PER_ROW));
+    let (gap, height) = (PAD_GAP * zoom, PAD_HEIGHT * zoom);
+    let width = PREVIEW_WIDTH * zoom;
+    let (grid, _) = ui.allocate_exact_size(vec2(width, rows as f32 * height + (rows - 1) as f32 * gap), Sense::hover());
+    let cell_width = (width - (columns - 1) as f32 * gap) / columns as f32;
+    let painter = ui.painter_at(grid.expand(1.0));
+    let mut asked = Vec::new();
+    for (n, pad) in pads.iter().enumerate() {
+        let (column, row) = ((n % PADS_PER_ROW) as f32, (n / PADS_PER_ROW) as f32);
+        let cell = Rect::from_min_size(grid.min + vec2(column * (cell_width + gap), row * (height + gap)), vec2(cell_width, height));
+        let place = KnobPlace::Face { depth: pad.depth, outer };
+        super::pads_face::pad_control(ui, &painter, cell, pad.node, graph, user_state, zoom, place, &mut asked);
+    }
+    responses.extend(asked.into_iter().map(NodeResponse::User));
 }
 
 /// The field a group's name is typed into, while it's being named.

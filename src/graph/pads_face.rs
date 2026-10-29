@@ -16,7 +16,9 @@
 //! tick once it's learned, its rim staying softly purple.
 //!
 //! [`pad_control`] is the pad itself, drawn in any cell, so a group's face
-//! can show a Pad pinned to it (#482).
+//! can show a Pad pinned to it (#482): **Show on group**, in the pad's menu,
+//! puts it there, wearing the name it's given on the face in its corner. It
+//! plays the Pad's own Press, so it's the same pad in two places.
 
 use std::sync::OnceLock;
 
@@ -32,6 +34,8 @@ use crate::modules::Pad;
 use crate::persistence::MidiControl;
 
 use super::display_frame;
+use super::groups::PAD_PRESS;
+use super::node_data::KnobPlace;
 use super::sampler_take::MIN_PRESS_SECONDS;
 use super::{SynthGraph, SynthGraphState, SynthResponse, WalkAction};
 
@@ -165,13 +169,15 @@ pub fn pads_face(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, user_st
     }
 
     let cell = Rect::from_min_max(pos2(rect.left() + GAP * z, top.bottom()), pos2(rect.right() - GAP * z, rect.bottom() - GAP * z));
-    pad_control(ui, &painter, cell, node_id, graph, user_state, z, &mut asked);
+    pad_control(ui, &painter, cell, node_id, graph, user_state, z, KnobPlace::Module, &mut asked);
     asked
 }
 
-/// One Pad's pad in `cell`: lit from its readout, played by a press (as
-/// hard as how high), learned in Map Mode and from its right-click menu.
-/// What it asked for goes on `asked`.
+/// One Pad's pad in `cell`, at `place`: lit from its readout, played by a
+/// press (as hard as how high), learned in Map Mode and from its
+/// right-click menu, which pins it to its group's face or takes it off.
+/// On a face it wears the name it's been given there. What it asked for
+/// goes on `asked`.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn pad_control(
     ui: &mut egui::Ui,
@@ -181,10 +187,13 @@ pub(super) fn pad_control(
     graph: &SynthGraph,
     user_state: &mut SynthGraphState,
     z: f32,
+    place: KnobPlace,
     asked: &mut Vec<SynthResponse>,
 ) {
     let Some(node) = graph.nodes.get(node_id) else { return };
-    let name = node.user_data.display_name.clone();
+    let data = &node.user_data;
+    let name = data.display_name.clone();
+    let face_name = data.face_label(PAD_PRESS).filter(|_| place.is_face());
     let listen = listen_of(graph, node_id);
     let readout = display_frame::readout(user_state, node_id);
     let engine_id = user_state.get_engine_node_id(node_id);
@@ -212,6 +221,14 @@ pub(super) fn pad_control(
     // Its note, quietly
     let note_ink = if flash > 0.2 { Color32::from_rgb(20, 40, 28) } else { theme::text::DISABLED };
     painter.text(cell.left_bottom() + vec2(3.5 * z, -3.0 * z), Align2::LEFT_BOTTOM, note_name(listen.note), tiny.clone(), note_ink);
+    // Its name on a face, in its module's colour, darkening as it lights
+    if let Some(face_name) = face_name {
+        let ink = data.category.color().lerp_to_gamma(Color32::from_rgb(20, 40, 28), (flash * 1.5).min(1.0));
+        let at = cell.left_top() + vec2(3.5 * z, 3.0 * z);
+        let font = FontId::proportional(7.0 * z);
+        let galley = painter.layout(face_name.to_string(), font, ink, cell.width() - 6.0 * z);
+        painter.with_clip_rect(cell.shrink(1.0 * z)).galley(at, galley, ink);
+    }
     if learning {
         painter.text(cell.center(), Align2::CENTER_CENTER, "hit a pad", tiny, theme::signal::MIDI.gamma_multiply(blink));
         crate::app::pace::animate(ui.ctx());
@@ -253,16 +270,30 @@ pub(super) fn pad_control(
         _ => {}
     }
 
+    let called = face_name.map_or_else(|| name.clone(), |face_name| format!("{face_name} ({name})"));
     let tip = format!(
-        "{name} · {} ({}) on {}\nPress it to play it, harder toward the top\nRight-click to learn it from your controller",
+        "{called} · {} ({}) on {}\nPress it to play it, harder toward the top\nRight-click to learn it from your controller",
         note_name(listen.note),
         listen.note,
         channel_label(listen.channel),
     );
     let response = response.on_hover_text(tip);
+    if place.is_face() && response.secondary_clicked() {
+        super::group_face::reset_name_field(ui.ctx(), super::group_face::face_name_id(node_id, PAD_PRESS));
+    }
     let walking = user_state.learn_walk.as_ref().and_then(|walk| walk.mark(node_id)) == Some(Mark::Now);
     let menu = crate::widgets::menu::context_menu(&response, |ui| {
+        // On a face, the name it goes by there first, ready to type over
+        if place.is_face() {
+            let named = face_name.map_or_else(|| note_name(listen.note), str::to_string);
+            asked.extend(data.face_name_item(ui, node_id, PAD_PRESS, &named));
+        }
         pad_menu(ui, node_id, engine_id, &name, listen, learning, walking, asked);
+        // Onto its group's face, or off it
+        if data.parent.is_some() || place.is_face() {
+            ui.separator();
+            asked.extend(data.pin_items(ui, node_id, PAD_PRESS, place));
+        }
     });
     if menu.is_some() {
         user_state.widget_context_menu_open = true;

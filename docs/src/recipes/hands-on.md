@@ -76,7 +76,7 @@ The mappings are the MiniLab's factory map, but none of them is fixed:
 
 - **Map Mode** (**Ctrl+L**): click a knob, move a control on your controller, and that knob is yours. The [Controller Map](../getting-started/interface-overview.md#midi-learn) (**MIDI In ▸ Controller Map…**) lists every mapping, to change or clear.
 - **If an encoder steps oddly,** your controller's encoders send steps rather than positions. Choose **Hardware ▸ Encoder** on that knob's right-click menu, or in the Controller Map.
-- **The pads:** double-click **Pads A** or **Pads B**, click **learn** on a Pad and hit the pad it should be.
+- **The pads:** right-click **Pads A** or **Pads B**, choose **Learn in order** and hit your pads from the first. To learn just one, right-click its pad on the group's face and choose **Learn MIDI**.
 - **Let the encoders follow you.** Teach Soba your controller and press **Ctrl+Shift+L**: the encoders turn whatever module you select, not just the knobs mapped here.
 
 ## Related

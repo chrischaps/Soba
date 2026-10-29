@@ -54,7 +54,7 @@ pub struct PadJacks {
 
 /// A group named `name` holding a Pad for each of `pads`, laid out four to
 /// a row, each in `mode` (Momentary 0, Latch 1, Trigger 2), with `labels`
-/// (a Device). Its jacks
+/// (a Device), its pad pinned to the group's face. Its jacks
 /// are a MIDI input into every Pad, and per pad its Gate, then any Vel and
 /// Pressure. The Pads take IDs from `next` up.
 pub fn group_of_pads(id: u64, name: &str, position: (f32, f32), pads: &[PadJacks], mode: usize, labels: &BTreeMap<String, String>, next: &mut u64) -> GroupData {
@@ -74,6 +74,8 @@ pub fn group_of_pads(id: u64, name: &str, position: (f32, f32), pads: &[PadJacks
             NamedParameter::new("Press", ParameterValue::Number(0.0)),
         ];
         node.labels = labels.clone();
+        // Its pad on the group's face, to play from there (#482)
+        node.pinned.insert(crate::graph::groups::PAD_PRESS.to_string(), 1);
         nodes.push(node);
         connections.push(ConnectionData::new(id, midi, pad_id, midi));
         let n = index + 1;
@@ -251,6 +253,7 @@ mod tests {
         assert_eq!(group.nodes.len(), 8);
         assert!(group.nodes.iter().all(|n| n.module_id == pad::ID && n.labels.get("Device").map(String::as_str) == Some("MPD218")));
         assert!(group.nodes.iter().all(|n| param(n, "Mode") == 1.0), "each in the Mode Pads was in");
+        assert!(group.nodes.iter().all(|n| n.pinned.get("Press") == Some(&1)), "its pads on the face, to click as Pads' were (#482)");
         let heard: Vec<(f32, f32)> = group.nodes.iter().map(|n| (param(n, "Note"), param(n, "Channel"))).collect();
         assert_eq!(heard, [(48.0, 2.0), (49.0, 2.0), (50.0, 2.0), (70.0, 0.0), (52.0, 2.0), (53.0, 2.0), (54.0, 2.0), (55.0, 2.0)]);
         // Laid out 2×4

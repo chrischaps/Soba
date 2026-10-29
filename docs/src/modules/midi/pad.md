@@ -38,6 +38,17 @@ One pad. A hit flashes it in the gate's green, brighter and wider the harder it 
 
 **Click the pad** to play it. Toward the top is a hard hit, toward the bottom a soft one. In Momentary mode the gate stays high for as long as you hold the mouse button.
 
+## On a group's face
+
+A Pad in a group can put its pad on the group's face: right-click the pad and choose **Show on group**. The pads pinned there sit four to a row under the miniature, so a closed group of eight is a controller to play without opening it, with no controller plugged in.
+
+- **Click a pinned pad** as you'd click the Pad's own: the higher you click, the harder the hit. It writes the Pad's own **Press**, so it's one pad in two places, and a cable from its Gate hears both.
+- **It lights with the hardware.** Hit the pad on your controller and the pinned pad flashes, brighter the harder you hit it, as the Pad's own face does.
+- **Name it** for what it plays: right-click it on the face and type **Kick** or **Rec** over the name. The name sits in its top corner, in the Pad's blue, and only on the face; its note stays in the other corner.
+- Its right-click menu learns it, sets its **Note** and **Channel**, and takes it off the face with **Hide from group**.
+
+Pinned pads are kept by undo, copy and paste, a saved patch and **My Modules**, like any [pinned control](../../concepts/groups.md#the-face). The Library's **Pads ×8** comes with all eight pinned.
+
 ## Learning a pad
 
 A new Pad hears note 36 on channel 10: the General MIDI kick, which most pad controllers send from their first pad. If you want another pad:
@@ -71,7 +82,7 @@ The whole walk is one step: **Undo** takes all of it back.
 
 Its **MIDI** jack goes into every Pad inside. Plug a [MIDI In](./midi-in.md) into it and all eight hear that controller; leave it empty and each hears its own **Device**.
 
-If your controller sends other notes, right-click the group, choose **Learn in order** and hit its pads from the first (see [Learning a group in order](#learning-a-group-in-order)). Double-click the group to open it and play or learn its pads one at a time. To make a bigger pad controller, duplicate a row of Pads (the copies take the next notes), and right-click each one's **Gate** and choose **Show on group**.
+If your controller sends other notes, right-click the group, choose **Learn in order** and hit its pads from the first (see [Learning a group in order](#learning-a-group-in-order)). Its eight pads are on its face, to click (see [On a group's face](#on-a-groups-face)); right-click one there to learn it on its own. To make a bigger pad controller, open the group and duplicate a row of Pads: the copies take the next notes, and their pads come onto the face with them. Right-click each new one's **Gate** and choose **Show on group** to give it a jack.
 
 ## Claimed notes
 

@@ -53,9 +53,10 @@ New jacks go at the bottom of the group's jacks. Inside a group within a group, 
 
 The group's face shows a miniature of what's inside: each module as a small card in its header color, wired as it is. Hover it to see **Open ▸**, and click to go inside.
 
-Below the miniature are any controls you've **pinned** to the group. Inside the group, right-click a knob, a dropdown or a toggle and choose **Show on group**. It appears on the group's face, in its module's color: dropdowns and toggles in a row of their own, with the knobs under them. It's the module's own control, not a copy:
+Below the miniature are any controls you've **pinned** to the group. Inside the group, right-click a knob, a dropdown, a toggle or a [Pad](../modules/midi/pad.md)'s pad and choose **Show on group**. It appears on the group's face, in its module's color: dropdowns and toggles in a row of their own, then pads four to a row, with the knobs under them. It's the module's own control, not a copy:
 
 - Turning or changing either one changes both, and undo takes back either.
+- A pad on the face plays as the Pad's own does: click it, harder toward its top, and it strikes whatever its Gate is patched into. It lights as the pad on your controller is hit, so a closed group of Pads is a controller you can see and play (see [On a group's face](../modules/midi/pad.md#on-a-groups-face)).
 - A [MIDI Learn](../getting-started/interface-overview.md#midi-learn) mapping on a knob works from either place. Dropdowns and toggles can't learn a CC, inside or on the face.
 - If a cable inside the group moves a knob, the face shows it moving. A toggle with a jack, such as the Slope's **Cycle**, is greyed on the face while a cable sets it.
 
@@ -65,7 +66,7 @@ Right-click a control on the face and choose **Hide from group** to take it off.
 
 ## Naming a face control
 
-A pinned control wears its module's short name, such as **FM**, **CV Amt** or **2**. That says what the knob is, not what it does for this group. To name it, right-click it on the face. The menu opens on **Name** with the current name selected: type a new one and press `Enter`. An electric piano's **FM** might become **Tine**, and a mixer's **2** might become **4'**.
+A pinned control wears its module's short name, such as **FM**, **CV Amt** or **2**, and a pad its note in the corner. That says what the knob is, not what it does for this group. To name it, right-click it on the face. The menu opens on **Name** with the current name selected: type a new one and press `Enter`. An electric piano's **FM** might become **Tine**, a mixer's **2** might become **4'**, and the pad on C2 might become **Kick**.
 
 - The name shows only on the face. Inside the group, the module keeps its own names, so you can still see which knob is which when you open it.
 - Hover a named control to see what it drives, such as *Tine: Oscillator FM Depth*.
@@ -102,7 +103,7 @@ The **Library** is a shelf of ready-made groups that ships with Soba. Each one i
 | **Pump** | Each trigger ducks the sound and lets it swell back, like a compressor keyed from the kick | In, Trig → Out |
 | **Auto-Pan** | An LFO sweeps a mono sound from side to side. **Tempo** locks the sweep to the Clock | In → Out L, Out R |
 | **Slicer** | The [Slicer](../modules/effects/slicer.md) rebuilt from stock modules, to open and see how a slicer pedal works: a synced LFO clocks a Step Sequencer whose steps open a VCA and a step filter. Its face: **Rate**, **Steps**, **Duty**, **Atk**, **Rel**, **Filter**, **Depth** and **Close** | In, Reset → Out, Gate, Env |
-| **Pads ×8** | Eight [Pads](../modules/midi/pad.md) on the General MIDI drum notes, 36 to 43 on channel 10, two rows of four. Its **MIDI** jack goes to every Pad: plug a [MIDI In](../modules/midi/midi-in.md) into it to choose the controller. Right-click it and choose **Learn in order** to teach it a controller that sends other notes | MIDI → Gate 1, Vel 1, … Gate 8, Vel 8 |
+| **Pads ×8** | Eight [Pads](../modules/midi/pad.md) on the General MIDI drum notes, 36 to 43 on channel 10, two rows of four. Its **MIDI** jack goes to every Pad: plug a [MIDI In](../modules/midi/midi-in.md) into it to choose the controller. Its pads are on its face, to click. Right-click it and choose **Learn in order** to teach it a controller that sends other notes | MIDI → Gate 1, Vel 1, … Gate 8, Vel 8 |
 
 The voices share a shape: plug a [Note In](../modules/midi/note-in.md) into **Pitch**, **Gate** and **Velocity**, and **Out** into a mixer or the output. They're built from [polyphonic](./polyphony.md) modules, so Note In, or a [Chord Sequencer](../modules/utilities/chord-sequencer.md), plays chords through any of them. The String Machine's chorus is the one exception: like a real string machine's ensemble, it hears the whole chord at once. They're also levelled to match, so swapping one voice for another doesn't jump in volume.
 

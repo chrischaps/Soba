@@ -991,17 +991,20 @@ pub struct FaceControl {
     pub kind: Control,
 }
 
-/// The two kinds of control a module has, and a group's face shows.
+/// The kinds of control a module has, and a group's face shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Control {
     /// One of the knobs in its knob row.
     Knob,
     /// A dropdown or toggle, drawn among its inputs.
     Switch,
+    /// A Pad's pad, played by its Press (#482).
+    Pad,
 }
 
 /// The controls a module can show on a group's face, each kind in
-/// parameter order: its knobs, then its dropdowns and toggles.
+/// parameter order: its knobs, then its dropdowns and toggles, then a Pad's
+/// pad.
 pub fn controls(graph: &SynthGraph, node_id: NodeId) -> Vec<(&str, Control)> {
     let node = &graph[node_id];
     let knobs = node.user_data.knob_params.iter().map(|k| (k.param_name.as_str(), Control::Knob));
@@ -1010,14 +1013,23 @@ pub fn controls(graph: &SynthGraph, node_id: NodeId) -> Vec<(&str, Control)> {
         let switch = input.shown_inline && matches!(input.value, SynthValueType::Toggle { .. } | SynthValueType::Select { .. });
         switch.then_some((name.as_str(), Control::Switch))
     });
-    knobs.chain(switches).collect()
+    let pad = (node.user_data.module_id == crate::modules::pad::ID).then_some((PAD_PRESS, Control::Pad));
+    knobs.chain(switches).chain(pad).collect()
 }
+
+/// The parameter a Pad's pad plays, and is pinned by.
+pub const PAD_PRESS: &str = "Press";
 
 /// What a module calls one of its controls, and a group's face does too
 /// until it's given a name of its own: a knob's label, or the one a dropdown
-/// or toggle wears beside it ("FM", "Wave"), else the parameter's name.
+/// or toggle wears beside it ("FM", "Wave"), a pad's note, else the
+/// parameter's name.
 pub fn control_label(graph: &SynthGraph, node_id: NodeId, param_name: &str) -> String {
     let node = &graph[node_id];
+    // A pad goes by the note it hears ("C2")
+    if node.user_data.module_id == crate::modules::pad::ID && param_name == PAD_PRESS {
+        return super::pads_face::note_name(super::pads_face::listen_of(graph, node_id).note);
+    }
     if let Some(knob) = node.user_data.knob_params.iter().find(|k| k.param_name == param_name) {
         if !knob.label.is_empty() {
             return knob.label.clone();
@@ -1348,6 +1360,26 @@ mod tests {
         assert_eq!(knobs(GroupId(1000)), [knob(osc, "Octave"), switch(osc, "Waveform"), knob(filter, "Cutoff")]);
         assert!(knobs(GroupId(1001)).is_empty());
         let _ = outer;
+    }
+
+    #[test]
+    fn a_pinned_pad_shows_on_its_group_by_its_note() {
+        let mut rig = Rig::new();
+        let kick = rig.add(crate::modules::pad::ID, pos2(0.0, 0.0));
+        let snare = rig.add(crate::modules::pad::ID, pos2(250.0, 0.0));
+        let osc = rig.add("osc.sine", pos2(0.0, 300.0));
+        // A Pad offers its pad, and nothing else does
+        assert_eq!(controls(&rig.editor.graph, kick).last(), Some(&(PAD_PRESS, Control::Pad)));
+        assert!(!controls(&rig.editor.graph, osc).iter().any(|(_, kind)| *kind == Control::Pad));
+        rig.editor.graph[kick].user_data.pins.insert(PAD_PRESS.into(), 1);
+        rig.group(&[kick, snare, osc], "Kit");
+        let graph = &rig.editor.graph;
+        let positions = &rig.editor.node_positions;
+        let shown = face_controls(graph, |n| positions.get(n).copied(), &GroupIndex::of(graph), GroupId(1000));
+        assert_eq!(shown, [FaceControl { node: kick, param: PAD_PRESS.into(), depth: 1, kind: Control::Pad }]);
+        // Named for its note until it's given a name of its own
+        assert_eq!(control_label(graph, kick, PAD_PRESS), "C2");
+        assert_eq!(name_face_control(&mut rig.editor.graph, kick, PAD_PRESS, "Kick"), Some(("C2".into(), "Kick".into())));
     }
 
     #[test]

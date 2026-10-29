@@ -2,7 +2,7 @@
 
 A drum kit you play with your fingers, on a pad controller. A group of eight [Pads](../modules/midi/pad.md), one for each of the controller's pads, strikes five [Drums](../modules/sources/drum.md): kick, snare, clap, tom and closed hat. Each drum sounds as hard as its pad was hit. A Mixer and a little room finish it. The patch is 16 modules, eight of them the pads.
 
-> **Load it:** choose **📚 Examples → Pad Kit** in the toolbar, pick your controller in **MIDI In**, press **▶ Play** and hit the pads. No controller? Double-click the **Pads** group and click the pads inside: toward the top of a pad is a hard hit.
+> **Load it:** choose **📚 Examples → Pad Kit** in the toolbar, pick your controller in **MIDI In**, press **▶ Play** and hit the pads. No controller? Click the pads on the face of the **Pads** group: toward the top of a pad is a hard hit.
 > The patch file is [`patches/pad-kit.json`](https://github.com/chrischaps/Soba/blob/master/patches/pad-kit.json).
 
 ## What it teaches
