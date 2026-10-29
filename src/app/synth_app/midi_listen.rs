@@ -9,10 +9,15 @@
 //! An input open for its thru routes alone (#463) is left out of "any
 //! device" here: the engine's modules, the log, the ears and MIDI Learn are
 //! all told which slots those are.
+//!
+//! A module patched from a MIDI In hears that MIDI In's Device and Channel
+//! instead of its own (#479): the cable is followed here, each frame, so
+//! plugging, unplugging or grouping it, or turning the MIDI In's Channel,
+//! tells the engine at once.
 
 use super::*;
 use crate::engine::device_names::in_and_out;
-use crate::graph::midi_device::{device, listen_to, listens_to_devices};
+use crate::graph::midi_device::{heard, listen_to, listens_to_devices};
 use crate::link::midi::MIDI;
 use crate::link::midi_thru::THRU;
 
@@ -51,9 +56,11 @@ impl SynthApp {
                 continue;
             }
             let Some(engine_id) = self.user_state.get_engine_node_id(node_id) else { continue };
-            let listen = listen_to(device(&node.user_data), |name| self.midi.slot_of(name), thru_only);
-            if graph.listen(engine_id).is_some_and(|now| now != listen) {
-                commands.push(EngineCommand::Listen { node_id: engine_id, listen });
+            let heard = heard(&self.graph_state.graph, node_id);
+            let listen = listen_to(heard.device, |name| self.midi.slot_of(name), thru_only);
+            let channel = heard.channel;
+            if graph.listen(engine_id).zip(graph.channel(engine_id)).is_some_and(|now| now != (listen, channel)) {
+                commands.push(EngineCommand::Listen { node_id: engine_id, listen, channel });
             }
         }
         for command in commands {

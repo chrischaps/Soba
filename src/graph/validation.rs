@@ -50,8 +50,8 @@ impl ConnectionError {
             ConnectionError::IncompatibleTypes { from_type, to_type } => {
                 match (from_type, to_type) {
                     (SignalType::Bus, _) | (_, SignalType::Bus) => "A Mixer's Chain Out only goes into another Mixer's Chain In",
-                    (SignalType::Midi, _) => "MIDI requires a converter module",
-                    (_, SignalType::Midi) => "MIDI requires a converter module",
+                    (SignalType::Midi, _) => "A MIDI In's cable only goes into a MIDI input",
+                    (_, SignalType::Midi) => "A MIDI input only takes a cable from a MIDI In",
                     (SignalType::Gate, SignalType::Audio) => "Gate cannot connect directly to Audio",
                     (SignalType::Audio, SignalType::Gate) => "Audio cannot connect to Gate",
                     (SignalType::Control, SignalType::Gate) => "Control cannot connect to Gate",
@@ -77,8 +77,8 @@ impl ConnectionError {
 /// | Gate → Control | ✓       | On/off modulation             |
 /// | Gate → Gate    | ✓       | Same type                     |
 /// | MIDI → MIDI    | ✓       | Same type                     |
-/// | MIDI → Others  | ✗       | Needs converter module        |
-/// | Others → MIDI  | ✗       | Needs converter module        |
+/// | MIDI → Others  | ✗       | A MIDI In says which device   |
+/// | Others → MIDI  | ✗       | Only a MIDI In feeds MIDI     |
 /// | Gate → Audio   | ✗       | Gate needs envelope/converter |
 /// | Audio → Gate   | ✗       | Needs comparator module       |
 /// | Control → Gate | ✗       | Needs comparator module       |

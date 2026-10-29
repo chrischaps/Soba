@@ -109,6 +109,18 @@ impl NoteClaims {
         *self = Self::EMPTY;
     }
 
+    /// Adds `other`'s claims on one MIDI channel (0-15) to these: what a
+    /// Pads patched from a MIDI In on that channel can hear (#479).
+    #[inline]
+    pub fn merge_channel(&mut self, other: &NoteClaims, channel: u8) {
+        let channel = channel as usize;
+        for (mine, theirs) in self.ports.iter_mut().zip(&other.ports) {
+            if let (Some(mine), Some(theirs)) = (mine.get_mut(channel), theirs.get(channel)) {
+                *mine |= theirs;
+            }
+        }
+    }
+
     /// Whether nothing is claimed.
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -164,5 +176,19 @@ mod tests {
         claims.claim(ListenTo::AllBut(0b10), Some(9), 36);
         assert!(claims.claims(0, 9, 36) && claims.claims(7, 9, 36) && claims.claims(SOBA_PORT, 9, 36));
         assert!(!claims.claims(1, 9, 36), "it never hears them, so they play on");
+    }
+
+    #[test]
+    fn a_pads_on_one_channel_of_a_midi_in_claims_that_channel_alone() {
+        // On Omni, from a MIDI In on channel 10 of the device in slot 2 (#479)
+        let mut own = NoteClaims::EMPTY;
+        own.claim(ListenTo::Port(2), None, 36);
+        let mut claims = NoteClaims::EMPTY;
+        claims.merge_channel(&own, 9);
+        assert!(claims.claims(2, 9, 36) && claims.claims(SOBA_PORT, 9, 36));
+        assert!(!claims.claims(2, 0, 36), "channel 1's 36 plays on");
+        assert!(!claims.claims(0, 9, 36), "and another device's");
+        claims.merge_channel(&own, 99);
+        assert!(!claims.claims(2, 15, 36), "a channel past 16 adds nothing");
     }
 }

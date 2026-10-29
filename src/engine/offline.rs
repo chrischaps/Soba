@@ -289,8 +289,8 @@ impl OfflineRenderer {
             EngineCommand::SetBypass { node_id, bypassed } => {
                 self.plan.set_bypass(node_id, bypassed);
             }
-            EngineCommand::Listen { node_id, listen } => {
-                self.plan.set_listen(node_id, listen);
+            EngineCommand::Listen { node_id, listen, channel } => {
+                self.plan.set_listen(node_id, listen, channel);
             }
             EngineCommand::Audition { node_id, chord } => {
                 self.plan.audition(node_id, chord);
@@ -1163,7 +1163,7 @@ mod tests {
             EngineCommand::AddModule { node_id: CLOCK, module_id: "util.clock" },
             EngineCommand::AddModule { node_id: DELAY, module_id: "fx.delay" },
             EngineCommand::AddModule { node_id: OUT, module_id: "output.audio" },
-            EngineCommand::Connect { from_node: CLOCK, from_port: 2, to_node: DELAY, to_port: 0 },
+            EngineCommand::Connect { from_node: CLOCK, from_port: 3, to_node: DELAY, to_port: 0 },
             EngineCommand::Connect { from_node: DELAY, from_port: 4, to_node: OUT, to_port: 2 },
             EngineCommand::SetParameter { node_id: CLOCK, param_index: 0, value: 120.0 },
             EngineCommand::SetParameter { node_id: CLOCK, param_index: 1, value: 2.0 }, // gate %
@@ -1328,7 +1328,7 @@ mod tests {
         let patch = played_sine(Source::Midi);
         let (mut r, compiled) = OfflineRenderer::from_patch(&patch, sr, 256).unwrap();
         let note_in = compiled.node_ids[&1];
-        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::Port(0) });
+        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::Port(0), channel: None });
         let block = (0.25 * sr) as u64;
         let on = MidiMessage::NoteOn { note: 60, velocity: 100 };
 
@@ -1350,10 +1350,33 @@ mod tests {
         assert!(rms(&out.left[out.left.len() / 2..]) < 0.01, "device A's All Notes Off didn't stop it");
 
         // Set to Any, it hears both again
-        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::Any });
+        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::Any, channel: None });
         r.queue_midi_from(4 * block, 1, 0, on);
         let out = r.render(block as usize);
         assert!(rms(&out.left[out.left.len() / 2..]) > 0.05, "Any didn't hear device B");
+    }
+
+    #[test]
+    fn test_a_note_in_from_a_midi_in_hears_its_device_on_its_channel_alone() {
+        use crate::dsp::ListenTo;
+        let sr = 48000.0;
+        let patch = played_sine(Source::Midi);
+        let (mut r, compiled) = OfflineRenderer::from_patch(&patch, sr, 256).unwrap();
+        let note_in = compiled.node_ids[&1];
+        // Patched from a MIDI In on device B (slot 1), channel 2 (#479)
+        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::Port(1), channel: Some(1) });
+        let block = (0.25 * sr) as u64;
+        let on = MidiMessage::NoteOn { note: 60, velocity: 100 };
+
+        // Device B on channel 1, and device A on channel 2, pass it by
+        r.queue_midi_from(0, 1, 0, on);
+        r.queue_midi_from(100, 0, 1, on);
+        assert!(rms(&r.render(block as usize).left) < 1e-4, "another channel or device sounded");
+
+        // Device B on channel 2 plays it
+        r.queue_midi_from(block, 1, 1, on);
+        let out = r.render(block as usize);
+        assert!(rms(&out.left[out.left.len() / 2..]) > 0.05, "device B's channel 2 didn't play");
     }
 
     #[test]
@@ -1364,7 +1387,7 @@ mod tests {
         let (mut r, compiled) = OfflineRenderer::from_patch(&patch, sr, 256).unwrap();
         let note_in = compiled.node_ids[&1];
         // Device B, in slot 1, is Thru only (#463): it plays the room alone
-        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::AllBut(0b10) });
+        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::AllBut(0b10), channel: None });
         let block = (0.25 * sr) as u64;
         let on = |note| MidiMessage::NoteOn { note, velocity: 100 };
         let off = |note| MidiMessage::NoteOff { note, velocity: 0 };
@@ -1379,7 +1402,7 @@ mod tests {
         let out = r.render(block as usize);
         assert!(rms(&out.left[out.left.len() / 2..]) > 0.05, "Soba's own note didn't play");
         // Named as its Device, the module hears the Thru-only input after all
-        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::Port(1) });
+        r.apply(EngineCommand::Listen { node_id: note_in, listen: ListenTo::Port(1), channel: None });
         r.queue_midi_from(3 * block, SOBA_PORT, 0, off(64));
         r.queue_midi_from(3 * block + 100, 1, 0, on(67));
         let out = r.render(block as usize);
@@ -1395,7 +1418,7 @@ mod tests {
         let sr = 48000.0;
         let mut r = OfflineRenderer::new(sr, 256);
         synced_lfo_patch(&mut r, 3.0);
-        r.apply(EngineCommand::Listen { node_id: 1, listen: ListenTo::Port(0) });
+        r.apply(EngineCommand::Listen { node_id: 1, listen: ListenTo::Port(0), channel: None });
         let ticks = |from: f64, bpm: f64, count: usize| (0..count).map(move |n| ((from + n as f64 * 60.0 / (bpm * 24.0)) * sr as f64) as u64);
         r.queue_midi_from((0.5 * sr) as u64, 1, 0, MidiMessage::Start);
         for tick in ticks(0.5, 150.0, 24 * 20) {
@@ -1429,7 +1452,7 @@ mod tests {
         let sr = 48000.0;
         let mut r = OfflineRenderer::new(sr, 256);
         synced_lfo_patch(&mut r, 1.0);
-        r.apply(EngineCommand::Listen { node_id: 1, listen: ListenTo::Port(0) });
+        r.apply(EngineCommand::Listen { node_id: 1, listen: ListenTo::Port(0), channel: None });
         r.queue_midi_from(100, 0, 0, MidiMessage::Start);
         r.queue_midi_from(300, 1, 0, MidiMessage::Start);
         let ticks = |bpm: f64, count: usize| (0..count).map(move |n| (1000.0 + n as f64 * 60.0 * sr as f64 / (bpm * 24.0)) as u64);

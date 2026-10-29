@@ -7,7 +7,7 @@
 
 The MIDI Monitor shows the MIDI arriving from your device as it happens. Use it when you connect new gear, when a note won't play, or to find out which CC number a knob on your controller sends before you map it.
 
-It has no ports and makes no sound. It listens to every device ticked in **MIDI In** on the toolbar (see [Choosing a MIDI device](./note-in.md#choosing-a-midi-device)), so you can drop it anywhere in a patch without patching anything. To watch one device only, right-click it and choose it under **Device**.
+It makes no sound, and needs nothing patched. It listens to every device ticked in **MIDI In** on the toolbar (see [Choosing a MIDI device](./note-in.md#choosing-a-midi-device)), so you can drop it anywhere in a patch. To watch one device only, right-click it and choose it under **Device**. Its one jack, the purple **MIDI** input on its title bar, takes a cable from a [MIDI In](./midi-in.md): then it shows what that MIDI In's modules hear, its device on its channel.
 
 ## Controls
 

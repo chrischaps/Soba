@@ -49,6 +49,13 @@ fn short_device(name: &str) -> String {
     }
 }
 
+/// Whether a MIDI In on one channel (#479) keeps the event to it: the clock
+/// and transport have no channel, and the computer keys always play.
+fn has_channel(event: &MidiEvent) -> bool {
+    let system = matches!(event, MidiEvent::Clock | MidiEvent::Start | MidiEvent::Continue | MidiEvent::Stop | MidiEvent::SongPosition { .. });
+    !system && event.channel() != crate::dsp::KEYS_CHANNEL
+}
+
 /// Where a note came from: its MIDI channel, or the computer keys.
 fn note_channel(channel: u8) -> String {
     if channel == crate::dsp::KEYS_CHANNEL { "Keys".to_string() } else { format!("Ch{}", channel + 1) }
@@ -165,8 +172,10 @@ pub fn midi_log_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
 
     // Render MIDI event log
     let midi_events = user_state.midi_events();
-    // The device it listens to, or any; Soba's own keys it always hears
-    let device = graph.nodes.get(node_id).and_then(|node| super::midi_device::device(&node.user_data));
+    // The device it listens to, or any; Soba's own keys it always hears.
+    // A MIDI In patched into it says which, and on which channel (#479)
+    let heard = super::midi_device::heard(graph, node_id);
+    let device = heard.device;
     let name_devices = device.is_none() && user_state.midi_inputs.len() > 1;
 
     // Newest first, after the device, channel and type filters
@@ -183,13 +192,14 @@ pub fn midi_log_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, 
             // Channel filter: 0 = all, 1-16 = that channel
             let channel_ok = channel_filter == 0
                 || event.event.channel() as usize + 1 == channel_filter;
+            let routed_ok = heard.channel.is_none_or(|only| !has_channel(&event.event) || event.event.channel() == only);
             let type_ok = match &event.event {
                 MidiEvent::NoteOn { .. } | MidiEvent::NoteOff { .. } => show_notes,
                 MidiEvent::ControlChange { .. } => show_cc,
                 MidiEvent::PitchBend { .. } => show_pitch_bend,
                 _ => true, // Always show other events
             };
-            channel_ok && type_ok
+            channel_ok && routed_ok && type_ok
         })
         .take(MIDI_LOG_ROWS)
         .collect();

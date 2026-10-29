@@ -48,7 +48,8 @@ impl SignalType {
     /// - Same type to same type: Always allowed
     /// - Audio <-> Control: Allowed (audio-rate modulation)
     /// - Gate -> Control: Allowed (on/off modulation)
-    /// - Midi -> Any other type: Not allowed (needs converter module)
+    /// - Midi -> Any other type: Not allowed (a MIDI In's cable says which
+    ///   device a module hears, #479; it carries no signal)
     /// - Bus -> Bus only: a mix goes from one Mixer into the next, and
     ///   nowhere else would know which strand is which
     pub fn can_connect_to(&self, target: SignalType) -> bool {
@@ -343,6 +344,12 @@ pub enum MidiMessage {
 }
 
 impl MidiMessage {
+    /// Whether the message belongs to a channel: everything but the clock
+    /// and transport, which have none.
+    pub fn has_channel(&self) -> bool {
+        !matches!(self, Self::Clock | Self::Start | Self::Continue | Self::Stop | Self::SongPosition { .. })
+    }
+
     /// Converts a Note On message's note number to frequency in Hz.
     ///
     /// Uses standard A4 = 440 Hz tuning.
@@ -435,6 +442,13 @@ impl MidiEvent {
         Self { port, ..self }
     }
 
+    /// Does a module hearing one MIDI channel (0-15), from a MIDI In
+    /// (#479), or every one (`None`) hear this? The keys always play, and
+    /// the clock and transport, which have no channel, always reach it.
+    pub fn on_channel(&self, only: Option<u8>) -> bool {
+        only.is_none_or(|only| self.channel == only || self.channel == KEYS_CHANNEL || !self.message.has_channel())
+    }
+
     /// Creates a Note On event.
     pub fn note_on(sample_offset: u32, channel: u8, note: u8, velocity: u8) -> Self {
         Self::new(
@@ -473,6 +487,18 @@ mod tests {
         let event = MidiEvent::note_on(5, 0, 60, 100);
         assert_eq!(event.port, SOBA_PORT, "made here, it's Soba's");
         assert_eq!(event.from_port(4).port, 4);
+    }
+
+    #[test]
+    fn a_midi_in_on_one_channel_passes_that_channel_the_keys_and_the_clock() {
+        let on = |channel| MidiEvent::note_on(0, channel, 60, 100);
+        assert!(on(1).on_channel(None) && on(9).on_channel(None), "every channel");
+        assert!(on(1).on_channel(Some(1)));
+        assert!(!on(2).on_channel(Some(1)));
+        assert!(on(KEYS_CHANNEL).on_channel(Some(1)), "the computer keys always play");
+        assert!(MidiEvent::new(0, 0, MidiMessage::Clock).on_channel(Some(5)), "the clock has no channel");
+        assert!(MidiEvent::new(0, 0, MidiMessage::Start).on_channel(Some(5)));
+        assert!(!MidiEvent::new(0, 0, MidiMessage::PitchBend { value: 0 }).on_channel(Some(5)));
     }
 
     #[test]

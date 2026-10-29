@@ -68,6 +68,8 @@ struct NodeSpec {
     bypassed: bool,
     /// The MIDI input it hears (#435).
     listen: ListenTo,
+    /// The one MIDI channel it hears, from a MIDI In (#479), or every one.
+    channel: Option<u8>,
     /// Whether the module works per channel of a polyphonic cable.
     polyphonic: bool,
     /// Whether the module brings live input into the patch.
@@ -101,6 +103,7 @@ impl NodeSpec {
             bypass_routes,
             bypassed: false,
             listen: ListenTo::Any,
+            channel: None,
             polyphonic: module.polyphonic(),
             live_input: module.is_live_input(),
             note_claims: module.note_claims(),
@@ -499,11 +502,24 @@ impl AudioGraph {
         self.nodes.get(&node_id).map(|spec| spec.listen)
     }
 
-    /// Has a module hear one MIDI input, or every one (#435), in the next
-    /// compiled plan; a running plan is told with [`GraphPlan::set_listen`].
-    /// Returns false if the node doesn't exist.
-    pub fn set_listen(&mut self, node_id: NodeId, listen: ListenTo) -> bool {
-        self.nodes.get_mut(&node_id).map(|spec| spec.listen = listen).is_some()
+    /// The one MIDI channel a module hears (#479): `Some(None)` for every
+    /// channel, or `None` if it doesn't exist.
+    pub fn channel(&self, node_id: NodeId) -> Option<Option<u8>> {
+        self.nodes.get(&node_id).map(|spec| spec.channel)
+    }
+
+    /// Has a module hear one MIDI input, or every one (#435), and one
+    /// channel or every one (#479), in the next compiled plan; a running
+    /// plan is told with [`GraphPlan::set_listen`]. Returns false if the
+    /// node doesn't exist.
+    pub fn set_listen(&mut self, node_id: NodeId, listen: ListenTo, channel: Option<u8>) -> bool {
+        self.nodes
+            .get_mut(&node_id)
+            .map(|spec| {
+                spec.listen = listen;
+                spec.channel = channel;
+            })
+            .is_some()
     }
 
     /// Clears the entire graph.
@@ -879,7 +895,7 @@ impl AudioGraph {
                 value,
             } => self.set_parameter(node_id, param_index, value),
             EngineCommand::SetBypass { node_id, bypassed } => self.set_bypass(node_id, bypassed),
-            EngineCommand::Listen { node_id, listen } => self.set_listen(node_id, listen),
+            EngineCommand::Listen { node_id, listen, channel } => self.set_listen(node_id, listen, channel),
             EngineCommand::SetPlaying(_) => {
                 // Handled on the audio side
                 true
@@ -1057,6 +1073,7 @@ impl AudioGraph {
                 spectrum: spec.spectrum_watch(node_id, &self.connections),
                 faulted: false,
                 listen: spec.listen,
+                channel: spec.channel,
             });
         }
 
@@ -1985,14 +2002,16 @@ mod tests {
         graph.add_module_instance(1, Box::new(TestOscillator::new(0.5)));
         let mut plan = run_block(&mut graph, 256);
         assert_eq!(plan.listen(1), Some(ListenTo::Any), "any, until set");
-        assert!(graph.set_listen(1, ListenTo::Port(2)));
-        assert!(plan.set_listen(1, ListenTo::Port(2)));
-        assert!(!graph.set_listen(9, ListenTo::Port(2)), "no such module");
+        assert!(graph.set_listen(1, ListenTo::Port(2), Some(1)));
+        assert!(plan.set_listen(1, ListenTo::Port(2), Some(1)));
+        assert!(!graph.set_listen(9, ListenTo::Port(2), None), "no such module");
 
         graph.add_module_instance(2, Box::new(TestOscillator::default()));
         install(&mut graph, &mut plan);
         assert_eq!(plan.listen(1), Some(ListenTo::Port(2)));
         assert_eq!(graph.listen(1), Some(ListenTo::Port(2)));
+        assert_eq!(plan.channel(1), Some(Some(1)), "and the channel a MIDI In set (#479)");
+        assert_eq!(graph.channel(1), Some(Some(1)));
     }
 
     #[test]
@@ -2534,7 +2553,7 @@ mod tests {
             assert!(graph.handle_command(EngineCommand::AddModule { node_id, module_id }));
         }
         let mut plan = graph.compile();
-        assert!(plan.set_listen(2, ListenTo::Port(0)));
+        assert!(plan.set_listen(2, ListenTo::Port(0), None));
         let gate = |plan: &GraphPlan, node, output| plan.output(node, output).unwrap().samples[255];
         let strike = |port| [MidiEvent::new(0, 9, MidiMessage::NoteOn { note: 36, velocity: 100 }).from_port(port)];
         let lift = |port| [MidiEvent::new(0, 9, MidiMessage::NoteOff { note: 36, velocity: 0 }).from_port(port)];
@@ -2549,6 +2568,34 @@ mod tests {
         plan.process(&ProcessContext::new(48000.0, 256).with_midi(&strike(1)));
         assert_eq!(gate(&plan, 1, NOTE_IN_GATE), 1.0, "device B plays the synth");
         assert_eq!(gate(&plan, 2, 0), 0.0, "and not the Pads, which hear device A");
+    }
+
+    /// A Pads patched from a MIDI In on one channel (#479) claims what it
+    /// hears on that channel alone.
+    #[test]
+    fn test_pads_from_a_midi_in_on_one_channel_claim_that_channel_alone() {
+        use crate::dsp::{ListenTo, MidiEvent, MidiMessage};
+        const NOTE_IN_GATE: usize = 1;
+        let mut graph = AudioGraph::with_registry(48000.0, 256, crate::engine::create_module_registry());
+        for (node_id, module_id) in [(1, crate::modules::note_in::ID), (2, crate::modules::pads::ID)] {
+            assert!(graph.handle_command(EngineCommand::AddModule { node_id, module_id }));
+        }
+        let mut plan = graph.compile();
+        let gate = |plan: &GraphPlan, node, output| plan.output(node, output).unwrap().samples[255];
+        let strike = |channel| [MidiEvent::new(0, channel, MidiMessage::NoteOn { note: 36, velocity: 100 }).from_port(0)];
+
+        // On device A's channel 2, the Pads (on channel 10) hear nothing
+        // there, and claim nothing: channel 10's 36 is the synth's
+        assert!(plan.set_listen(2, ListenTo::Port(0), Some(1)));
+        plan.process(&ProcessContext::new(48000.0, 256).with_midi(&strike(9)));
+        assert_eq!(gate(&plan, 2, 0), 0.0, "the Pads hear channel 2 alone");
+        assert_eq!(gate(&plan, 1, NOTE_IN_GATE), 1.0, "so channel 10's note plays the synth");
+        assert!(!plan.claims.claims(0, 9, 36));
+
+        // From a MIDI In on channel 10, they claim it there and nowhere else
+        assert!(plan.set_listen(2, ListenTo::Port(0), Some(9)));
+        plan.process(&ProcessContext::new(48000.0, 256));
+        assert!(plan.claims.claims(0, 9, 36) && !plan.claims.claims(0, 1, 36));
     }
 
     /// A filter's spectrum tap hears what goes in and the output that's

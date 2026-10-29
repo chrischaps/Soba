@@ -245,16 +245,17 @@ pub struct Pads {
 impl Pads {
     /// Creates a new Pads module.
     pub fn new() -> Self {
-        let mut ports: Vec<PortDefinition> = (0..PADS)
-            .map(|pad| {
+        // The device and channel it hears, from a MIDI In (#479). Inputs
+        // come first: the editor counts ports so
+        let mut ports = vec![super::midi_in::input()];
+        ports.extend((0..PADS).map(|pad| {
                 let description = if pad == 0 {
                     "Pad 1: high while it's held, flipped by each hit, or a short trigger, as Mode says"
                 } else {
                     "This pad, as Mode says"
                 };
                 PortDefinition::output(GATE_IDS[pad], GATE_NAMES[pad], SignalType::Gate).describe(description)
-            })
-            .collect();
+            }));
         ports.extend([
             PortDefinition::output("velocity", "Velocity", SignalType::Control)
                 .describe("How hard each pad was last hit, 0 to 1: one channel per pad, on a polyphonic cable"),
@@ -640,9 +641,10 @@ mod tests {
         let pads = Pads::new();
         assert_eq!(pads.info().id, "input.pads");
         let names: Vec<&str> = pads.ports().iter().map(|p| p.name).collect();
-        assert_eq!(&names[..2], ["Gate 1", "Gate 2"]);
-        assert_eq!(&names[PADS..], ["Velocity", "Hit", "Pressure"]);
-        assert!(pads.ports()[..PADS].iter().all(|p| p.is_output() && p.signal_type == SignalType::Gate));
+        assert_eq!(names[0], "MIDI", "the device it hears, from a MIDI In (#479)");
+        assert_eq!(&names[1..3], ["Gate 1", "Gate 2"]);
+        assert_eq!(&names[PADS + 1..], ["Velocity", "Hit", "Pressure"]);
+        assert!(pads.ports()[1..=PADS].iter().all(|p| p.is_output() && p.signal_type == SignalType::Gate));
         let params: Vec<&str> = pads.parameters().iter().map(|p| p.name).collect();
         assert_eq!(params[Pads::note_param(0)], "Base");
         assert_eq!(params[Pads::channel_param(0)], "Channel");

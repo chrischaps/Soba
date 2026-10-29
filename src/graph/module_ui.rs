@@ -202,6 +202,12 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
+        module_id: crate::modules::midi_in::ID,
+        labels: &[("Channel", "Ch")],
+        display: NodeDisplay::MidiInDevice,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
         module_id: crate::modules::note_in::ID,
         // How the voices play, then their pitch offsets and how hard the
         // keys play

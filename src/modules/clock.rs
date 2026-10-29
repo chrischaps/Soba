@@ -442,6 +442,8 @@ impl Clock {
                 PortDefinition::input_with_default("tempo_cv", "Tempo", SignalType::Control, 0.0)
                     .late()
                     .describe("CV that bends the tempo around the BPM knob: +1 doubles it, -1 halves it. An Arranger lane here slows the song into its last chord"),
+                // The device it follows the clock of, from a MIDI In (#479)
+                super::midi_in::input(),
                 // Output ports
                 PortDefinition::output("gate", "Gate", SignalType::Gate).describe("Pulse on every beat division; patch into a sequencer or envelope"),
                 PortDefinition::output("run", "Run", SignalType::Gate).describe("High while the clock runs; patch into a sequencer's Run"),
@@ -959,7 +961,7 @@ mod tests {
         let clock = Clock::new();
         let ports = clock.ports();
 
-        assert_eq!(ports.len(), 5);
+        assert_eq!(ports.len(), 6);
 
         // Sync input
         assert!(ports[0].is_input());
@@ -973,10 +975,14 @@ mod tests {
         assert_eq!(ports[1].name, "Tempo");
         assert!(ports[1].late);
 
+        // The device it follows, from a MIDI In (#479)
+        assert!(ports[2].is_input());
+        assert_eq!(ports[2].signal_type, SignalType::Midi);
+
         // Gate output
-        assert!(ports[2].is_output());
-        assert_eq!(ports[2].id, "gate");
-        assert_eq!(ports[2].signal_type, SignalType::Gate);
+        assert!(ports[3].is_output());
+        assert_eq!(ports[3].id, "gate");
+        assert_eq!(ports[3].signal_type, SignalType::Gate);
     }
 
     #[test]
@@ -1237,7 +1243,7 @@ mod tests {
         let module = module.unwrap();
         assert_eq!(module.info().id, "util.clock");
         assert_eq!(module.info().name, "Clock");
-        assert_eq!(module.ports().len(), 5);
+        assert_eq!(module.ports().len(), 6);
         assert_eq!(module.parameters().len(), 6);
     }
 

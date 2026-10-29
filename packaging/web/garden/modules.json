@@ -370,7 +370,12 @@
       "category": "Source",
       "color": "#42a5f5",
       "height": 344.0,
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ],
       "name": "Controls",
       "outputs": [
         {
@@ -391,11 +396,29 @@
         }
       ]
     },
+    "input.midi": {
+      "category": "Source",
+      "color": "#42a5f5",
+      "height": 258.0,
+      "inputs": [],
+      "name": "MIDI In",
+      "outputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ]
+    },
     "input.pads": {
       "category": "Source",
       "color": "#42a5f5",
       "height": 438.0,
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ],
       "name": "Pads",
       "outputs": [
         {
@@ -447,8 +470,13 @@
     "input.poly_midi": {
       "category": "Source",
       "color": "#42a5f5",
-      "height": 412.0,
-      "inputs": [],
+      "height": 430.0,
+      "inputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ],
       "name": "Note In",
       "outputs": [
         {
@@ -1609,7 +1637,7 @@
     "util.clock": {
       "category": "Utility",
       "color": "#9e9e9e",
-      "height": 362.0,
+      "height": 380.0,
       "inputs": [
         {
           "name": "Sync",
@@ -1618,6 +1646,10 @@
         {
           "name": "Tempo",
           "type": "Control"
+        },
+        {
+          "name": "MIDI",
+          "type": "MIDI"
         }
       ],
       "name": "Clock",
@@ -1802,8 +1834,13 @@
     "util.midi_monitor": {
       "category": "Utility",
       "color": "#9e9e9e",
-      "height": 312.0,
-      "inputs": [],
+      "height": 330.0,
+      "inputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ],
       "name": "MIDI Monitor",
       "outputs": []
     },

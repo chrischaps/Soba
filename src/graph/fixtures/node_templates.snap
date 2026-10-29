@@ -322,7 +322,13 @@ knob Release            "Release" KnobOnly
 monitor [2, 3]
 display InputListen
 
+== input.midi "MIDI In" finder="MIDI In" Source
+in   Channel            Control  ConstantOnly         inline=true  select 0 ["Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] "Ch"
+out  MIDI               MIDI
+display MidiInDevice
+
 == input.poly_midi "Note In" finder="Note In" Source
+in   MIDI               MIDI     ConnectionOnly       inline=true  port
 in   Channel            Control  ConstantOnly         inline=true  select 0 ["Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] "Ch"
 in   Voices             Control  ConstantOnly         inline=false num 8 [1..8]  stepped
 in   Allocation         Control  ConstantOnly         inline=true  select 0 ["Rotate", "Reuse"] "Mode"
@@ -347,6 +353,7 @@ monitor [1]
 display NotePiano
 
 == input.controls "Controls" finder="Controls" Source
+in   MIDI               MIDI     ConnectionOnly       inline=true  port
 in   Slew               Control  ConstantOnly         inline=false num 0.02 [0..2] s log
 in   Source A           Control  ConstantOnly         inline=false select 2 ["CC", "Pitch Bend", "Mod Wheel", "Pressure"] ""
 in   CC A               Control  ConstantOnly         inline=false num 1 [0..127]  stepped
@@ -376,6 +383,7 @@ knob Slew               "Slew" KnobOnly
 display ControlFaders
 
 == input.pads "Pads" finder="Pads" Source
+in   MIDI               MIDI     ConnectionOnly       inline=true  port
 in   Mode               Control  ConstantOnly         inline=true  select 0 ["Momentary", "Latch", "Trigger"] "Mode"
 in   Base               Control  ConstantOnly         inline=false num 36 [0..127]  stepped
 in   Channel            Control  ConstantOnly         inline=false select 10 ["Omni", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] ""
@@ -501,6 +509,7 @@ display SlopeShape
 == util.clock "Clock" finder="Clock" Utility
 in   Sync               Gate     ConnectionOnly       inline=true  port
 in   Tempo              Control  ConnectionOrConstant inline=true  num 120 [20..300] BPM
+in   MIDI               MIDI     ConnectionOnly       inline=true  port
 in   Gate Length        Control  ConstantOnly         inline=false num 50 [1..99] %
 in   Division           Control  ConstantOnly         inline=true  select 2 ["1", "1/2", "1/4", "1/8", "1/16"] "Div"
 in   Run                Control  ConstantOnly         inline=true  toggle true "Run"
@@ -3179,6 +3188,7 @@ monitor [1]
 display CompressorCurve
 
 == util.midi_monitor "MIDI Monitor" finder="MIDI Monitor" Utility
+in   MIDI               MIDI     ConnectionOnly       inline=true  port
 in   Channel            Control  ConstantOnly         inline=true  select 0 ["All", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] "Ch"
 in   Notes              Control  ConstantOnly         inline=true  toggle true "Notes"
 in   CC                 Control  ConstantOnly         inline=true  toggle true "CC"

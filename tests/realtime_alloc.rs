@@ -276,8 +276,8 @@ fn audio_callback_never_allocates() {
 
     // Two devices play (#435): the Controls hears the first, the Pads the
     // second, picked out of the block's MIDI each callback
-    ui.send_command(EngineCommand::Listen { node_id: controls, listen: ListenTo::Port(0) });
-    ui.send_command(EngineCommand::Listen { node_id: pads, listen: ListenTo::Port(1) });
+    ui.send_command(EngineCommand::Listen { node_id: controls, listen: ListenTo::Port(0), channel: None });
+    ui.send_command(EngineCommand::Listen { node_id: pads, listen: ListenTo::Port(1), channel: None });
 
     // A Chopper on the same Clock, cut at markers, given a new loop (and
     // new markers) every so often, mid-slice or not
@@ -504,10 +504,13 @@ fn audio_callback_never_allocates() {
         for (n, event) in events.into_iter().enumerate() {
             midi.push(TimestampedMidiEvent::heard((n % 2) as u8, event)).unwrap();
         }
-        // The Pads' device unplugged and plugged back in, every so often
+        // The Pads' device unplugged and plugged back in, every so often,
+        // and patched from a MIDI In on channel 10, its claims narrowed to
+        // that channel (#479)
         if round % 40 == 13 {
             let listen = if round % 80 == 13 { ListenTo::Unplugged } else { ListenTo::Port(1) };
-            ui.send_command(EngineCommand::Listen { node_id: pads, listen });
+            let channel = (round % 120 == 53).then_some(9);
+            ui.send_command(EngineCommand::Listen { node_id: pads, listen, channel });
         }
         ui.flush();
         // Snapshots coming back are dropped here, off the audio thread

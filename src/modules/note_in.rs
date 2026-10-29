@@ -329,6 +329,9 @@ impl NoteIn {
     pub fn new() -> Self {
         let mut module = Self {
             ports: vec![
+                // The device and channel it hears, from a MIDI In (#479).
+                // Inputs come first: the editor counts ports so
+                super::midi_in::input(),
                 PortDefinition::output("pitch", "Pitch", SignalType::Control).describe("V/Oct, one pitch per voice, with pitch bend"),
                 PortDefinition::output("gate", "Gate", SignalType::Gate).describe("High for each voice while its key is held; patch into an envelope's Gate"),
                 PortDefinition::output("velocity", "Velocity", SignalType::Control).describe("How hard each voice's key was struck, 0 to 1"),
@@ -820,7 +823,7 @@ mod tests {
         assert_eq!(module.info().category, ModuleCategory::Source);
         assert!(module.polyphonic());
         let ports: Vec<&str> = module.ports().iter().map(|p| p.id).collect();
-        assert_eq!(ports, ["pitch", "gate", "velocity", "aftertouch"]);
+        assert_eq!(ports, ["midi", "pitch", "gate", "velocity", "aftertouch"]);
         let ids: Vec<&str> = module.parameters().iter().map(|p| p.id).collect();
         assert_eq!(
             ids,

@@ -179,6 +179,8 @@ pub enum NodeDisplay {
     ScalePiano,
     /// MIDI Monitor: scrolling event log.
     MidiLog,
+    /// MIDI In: the device the modules patched from it hear (#479).
+    MidiInDevice,
     /// Oscilloscope: live traces.
     Scope,
     /// Step Sequencer: step grid.
@@ -1197,7 +1199,8 @@ impl SynthNodeData {
         let mut device = None;
         if super::midi_device::listens_to_devices(self.module_id) {
             ui.separator();
-            device = super::midi_device::device_menu(ui, node_id, self, midi_inputs);
+            let routed = super::midi_device::midi_in_of(graph, node_id).is_some();
+            device = super::midi_device::device_menu(ui, node_id, self, midi_inputs, routed);
         }
         let mut recorded = None;
         if !super::resample::sources(graph, node_id).is_empty() {
@@ -1400,6 +1403,8 @@ impl NodeDataTrait for SynthNodeData {
             egui::vec2(icon_size + icon_padding, icon_size),
             egui::Sense::hover(),
         );
+        // A module that hears MIDI takes a MIDI In's cable at its head (#479)
+        super::midi_device::place_midi_jack(ui, node_id, graph, icon_rect.center().y);
         if !self.description.is_empty() {
             response.on_hover_text(self.description);
         }
@@ -1415,8 +1420,11 @@ impl NodeDataTrait for SynthNodeData {
         // title, and a module set to one MIDI device names it (#435)
         let note = if self.display == NodeDisplay::Timeline {
             super::arranger_display::title_note(graph, user_state, node_id)
+        } else if self.module_id == crate::modules::midi_in::ID {
+            // Its face names its device
+            None
         } else {
-            super::midi_device::title_note(self, &user_state.midi_inputs)
+            super::midi_device::title_note(super::midi_device::heard(graph, node_id), &user_state.midi_inputs)
         };
         if let Some(note) = note {
             // After the title, which the editor draws next
@@ -1472,6 +1480,10 @@ impl NodeDataTrait for SynthNodeData {
             NodeDisplay::MidiLog => {
                 category_rule(ui, color, zoom);
                 super::midi_log_display::midi_log_display(ui, node_id, graph, user_state, zoom);
+            }
+            NodeDisplay::MidiInDevice => {
+                let chosen = super::midi_in_face::midi_in_face(ui, node_id, graph, user_state, zoom);
+                responses.extend(chosen.map(NodeResponse::User));
             }
             // Audio Output: the output stage's level meter
             NodeDisplay::OutputMeter => {
@@ -1776,13 +1788,17 @@ impl NodeDataTrait for SynthNodeData {
         crate::app::theme::title_text_style()
     }
 
-    /// The Mixer lays its jacks out beside its channel rows.
+    /// The Mixer lays its jacks out beside its channel rows, and a module
+    /// that hears MIDI its MIDI jack on its title bar (#479).
     fn places_port(
         &self,
         node_id: egui_node_graph2::NodeId,
         graph: &egui_node_graph2::Graph<Self, Self::DataType, Self::ValueType>,
         param: egui_node_graph2::AnyParameterId,
     ) -> bool {
+        if super::midi_device::is_midi_jack(node_id, graph, param) {
+            return true;
+        }
         if self.display != NodeDisplay::MixerStrips {
             return false;
         }

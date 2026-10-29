@@ -239,11 +239,17 @@ impl Controls {
             "Slot C's control",
             "Slot D's control",
         ];
-        let ports = ["a", "b", "c", "d"]
-            .iter()
-            .zip(["A", "B", "C", "D"])
-            .zip(descriptions)
-            .map(|((&id, name), description)| PortDefinition::output(id, name, SignalType::Control).describe(description))
+        // The device and channel it hears, from a MIDI In (#479), first:
+        // the editor counts inputs before outputs
+        let ports = [super::midi_in::input()]
+            .into_iter()
+            .chain(
+                ["a", "b", "c", "d"]
+                    .iter()
+                    .zip(["A", "B", "C", "D"])
+                    .zip(descriptions)
+                    .map(|((&id, name), description)| PortDefinition::output(id, name, SignalType::Control).describe(description)),
+            )
             .collect();
         let mut parameters = vec![ParameterDefinition::new("slew", "Slew", 0.0, 2.0, DEFAULT_SLEW, ParameterDisplay::logarithmic("s"))
             .describe("How long each output takes to follow its control; a little smooths a CC's steps")];
@@ -444,8 +450,8 @@ mod tests {
         assert_eq!(controls.info().id, "input.controls");
         assert_eq!(controls.info().category, ModuleCategory::Source);
         let ports: Vec<&str> = controls.ports().iter().map(|p| p.name).collect();
-        assert_eq!(ports, ["A", "B", "C", "D"]);
-        assert!(controls.ports().iter().all(|p| p.is_output() && p.signal_type == SignalType::Control));
+        assert_eq!(ports, ["MIDI", "A", "B", "C", "D"], "the device it hears, from a MIDI In (#479), then its slots");
+        assert!(controls.ports()[1..].iter().all(|p| p.is_output() && p.signal_type == SignalType::Control));
         let names: Vec<&str> = controls.parameters().iter().map(|p| p.name).collect();
         assert_eq!(names.len(), 1 + SLOTS * FIELDS);
         assert_eq!(names[Controls::source_param(2)], "Source C");

@@ -20,6 +20,7 @@ The **ID** is the name a patch file uses to refer to the module.
 | [Chopper](./sources/chopper.md) | `source.chopper` | Plays a sliced break in time with the Clock, at any tempo, rearranged step by step |
 | [Cloud](./sources/cloud.md) | `source.cloud` | Granular: clouds of small grains from a file or live audio, with Freeze, and a cloud per voice of a chord |
 | [Audio Input](./sources/audio-input.md) | `source.audio_input` | A microphone, guitar or line input, with an envelope follower and a gate |
+| [MIDI In](./midi/midi-in.md) | `input.midi` | A MIDI device and channel as a purple cable: every module patched from it, through any group, hears that controller |
 | [Note In](./midi/note-in.md) | `input.poly_midi` | Play notes from the computer keyboard, its piano or a MIDI controller: one voice, or up to eight for chords |
 | [Controls](./midi/controls.md) | `input.controls` | A MIDI controller's faders, knobs, mod wheel, pitch bend and pressure as cables, learned from the hardware |
 | [Pads](./midi/pads.md) | `input.pads` | A pad controller's pads as eight gates, with velocity and pressure: finger drums, triggers and latches |
@@ -144,6 +145,7 @@ Drive a voice from a sequence instead of a keyboard:
 | Play notes | [Note In](./midi/note-in.md), from the computer keys or MIDI, one voice or chords |
 | Patch a fader, knob or wheel from a MIDI controller into anything | [Controls](./midi/controls.md); [MIDI Learn](../getting-started/interface-overview.md#midi-learn) to turn one knob |
 | Play drums from a pad controller | [Pads](./midi/pads.md), a Gate per pad into a [Drum](./sources/drum.md) each: see [Pad Kit](../recipes/pad-kit.md) |
+| Give several modules, or a whole group, one controller | [MIDI In](./midi/midi-in.md), patched into their purple **MIDI** inputs |
 | Slide from note to note | **Glide** on [Note In](./midi/note-in.md#glide); a [Slope](./modulation/slope.md) on any pitch, a sequencer's included |
 | Darken or brighten a sound | [SVF Filter](./filters/svf-filter.md) or [Ladder Filter](./filters/ladder-filter.md) |
 | Give each note a shape in time | [ADSR Envelope](./modulation/adsr.md) into a [VCA](./utilities/vca.md) |

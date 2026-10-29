@@ -7,7 +7,7 @@ Every jack in Soba has a signal type, and every type has a color. The color of a
 | **Audio** | <span class="swatch audio"></span>Blue | −1.0 to 1.0 | Sound |
 | **Control** | <span class="swatch control"></span>Orange | 0.0 to 1.0, or −1.0 to 1.0 | Modulation and pitch (CV) |
 | **Gate** | <span class="swatch gate"></span>Green | 0.0 or 1.0 | Notes, clock pulses, triggers |
-| **MIDI** | <span class="swatch midi"></span>Purple | Note and controller events | Reserved; see [MIDI](#midi) |
+| **MIDI** | <span class="swatch midi"></span>Purple | A device and a channel | Which controller a module hears, from a [MIDI In](../modules/midi/midi-in.md); see [MIDI](#midi) |
 | **Bus** | <span class="swatch bus"></span>Pale steel | A whole stereo mix and its sends | A Mixer's **Chain Out** into the next Mixer's **Chain In**; see [Bus](#bus) |
 
 Underneath, audio, control and gate signals are all the same thing: a stream of numbers at the audio sample rate. The type describes what the numbers mean, and it decides which jacks a cable may connect (see [Which types connect](#which-types-connect)).
@@ -53,7 +53,9 @@ Gates come from the **Gate** outputs of Note In, the [Clock](../modules/modulati
 
 ## MIDI
 
-MIDI is the purple signal type, and today no jack uses it. MIDI from your controller doesn't arrive over a cable. It goes straight into the modules that listen for it: Note In and the [MIDI Monitor](../modules/midi/midi-monitor.md). Note In turns notes into ordinary **Pitch**, **Gate** and **Velocity** signals that the rest of the patch understands, and does the same for your computer keyboard.
+MIDI is the purple signal type. A purple cable says which controller a module hears: it comes from a [MIDI In](../modules/midi/midi-in.md), which names a device and a channel, and goes into the **MIDI** input, the purple jack on the title bar, of a module that listens for MIDI: [Note In](../modules/midi/note-in.md), [Pads](../modules/midi/pads.md), [Controls](../modules/midi/controls.md), the [Clock](../modules/modulation/clock.md) or the [MIDI Monitor](../modules/midi/midi-monitor.md). Patched, the module hears the MIDI In's device and channel, whatever its own **Device** says. Unpatched, it hears its own Device, as it always has.
+
+The cable doesn't carry the notes themselves. MIDI from your controller still goes straight into the modules that listen for it; the cable only chooses where from. It also runs through a group's jacks, so a group of Pads can have one purple jack, and the controller plugged into it reaches every pad inside. Note In turns notes into ordinary **Pitch**, **Gate** and **Velocity** signals that the rest of the patch understands, and does the same for your computer keyboard.
 
 ## Bus
 
@@ -70,7 +72,7 @@ Same-type connections always work. A few cross-type connections work too, and th
 | Gate | Control | Yes | Use a gate as a 0-or-1 modulation signal |
 | Gate | Audio | No | A gate needs an envelope or VCA to become sound |
 | Audio or Control | Gate | No | Gate inputs only take gates |
-| MIDI | Anything else | No | MIDI needs a converter module |
+| MIDI | Anything else | No | A MIDI cable chooses a device; it carries no signal |
 
 Allowed cross-type connections pass the signal through unchanged. An audio cable into a control input is the raw waveform; a gate into a control input is exactly 0.0 or 1.0.
 

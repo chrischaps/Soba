@@ -97,11 +97,15 @@ pub enum EngineCommand {
         bypassed: bool,
     },
 
-    /// Have a module hear one MIDI input, or every one (#435): its Device.
+    /// Have a module hear one MIDI input, or every one (#435): its Device,
+    /// or the one a MIDI In's cable brings it (#479).
     Listen {
         /// Target node.
         node_id: NodeId,
         listen: ListenTo,
+        /// The one MIDI channel (0-15) it hears, set by the MIDI In it's
+        /// patched from, or `None` for every channel.
+        channel: Option<u8>,
     },
 
     /// Start or stop audio processing.
@@ -286,8 +290,9 @@ pub enum PlanMessage {
     },
     /// Bypass a running module, or bring it back.
     SetBypass { node_id: NodeId, bypassed: bool },
-    /// Have a running module hear one MIDI input, or every one.
-    Listen { node_id: NodeId, listen: ListenTo },
+    /// Have a running module hear one MIDI input, or every one, and one
+    /// channel or every one.
+    Listen { node_id: NodeId, listen: ListenTo, channel: Option<u8> },
     /// Play a chord on a running module's outputs, or stop.
     Audition { node_id: NodeId, chord: Option<Audition> },
     /// Give a running module a recording to play, or take its away. The

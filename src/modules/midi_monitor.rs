@@ -32,6 +32,8 @@ pub const ID: &str = "util.midi_monitor";
 /// - **Show CC** (toggle): Show control change events.
 /// - **Show Pitch Bend** (toggle): Show pitch bend events.
 pub struct MidiMonitor {
+    /// Its one port: the MIDI input a MIDI In patches (#479).
+    ports: [PortDefinition; 1],
     /// Parameter definitions.
     parameters: Vec<ParameterDefinition>,
 }
@@ -40,6 +42,7 @@ impl MidiMonitor {
     /// Creates a new MIDI Monitor module.
     pub fn new() -> Self {
         Self {
+            ports: [super::midi_in::input()],
             parameters: vec![
                 // Channel filter (0 = all, 1-16 = specific channel)
                 ParameterDefinition::choice(
@@ -75,8 +78,8 @@ impl DspModule for MidiMonitor {
     }
 
     fn ports(&self) -> &[PortDefinition] {
-        // No ports - this is a display-only module
-        &[]
+        // Just the MIDI input: the events are shown in the node graph UI
+        &self.ports
     }
 
     fn parameters(&self) -> &[ParameterDefinition] {
@@ -115,9 +118,10 @@ mod tests {
     }
 
     #[test]
-    fn test_midi_monitor_no_ports() {
+    fn test_midi_monitor_has_only_its_midi_input() {
         let monitor = MidiMonitor::new();
-        assert!(monitor.ports().is_empty());
+        assert_eq!(monitor.ports().len(), 1);
+        assert_eq!(monitor.ports()[0].signal_type, crate::dsp::SignalType::Midi);
     }
 
     #[test]

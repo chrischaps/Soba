@@ -110,6 +110,8 @@ pub(crate) struct PlanNode {
     pub(crate) faulted: bool,
     /// The MIDI input it hears (#435).
     pub(crate) listen: ListenTo,
+    /// The one MIDI channel it hears, from a MIDI In (#479), or every one.
+    pub(crate) channel: Option<u8>,
 }
 
 #[cfg(test)]
@@ -130,6 +132,7 @@ impl PlanNode {
             spectrum: None,
             faulted: false,
             listen: ListenTo::Any,
+            channel: None,
         }
     }
 }
@@ -445,12 +448,20 @@ impl GraphPlan {
             .is_some()
     }
 
-    /// Has a module hear one MIDI input, or every one (#435). Returns
-    /// false if the node isn't in this plan.
+    /// Has a module hear one MIDI input, or every one (#435), and one
+    /// channel or every one (#479). Returns false if the node isn't in this
+    /// plan.
     ///
     /// REAL-TIME SAFE.
-    pub fn set_listen(&mut self, node_id: NodeId, listen: ListenTo) -> bool {
-        self.nodes.iter_mut().find(|node| node.node_id == node_id).map(|node| node.listen = listen).is_some()
+    pub fn set_listen(&mut self, node_id: NodeId, listen: ListenTo, channel: Option<u8>) -> bool {
+        self.nodes
+            .iter_mut()
+            .find(|node| node.node_id == node_id)
+            .map(|node| {
+                node.listen = listen;
+                node.channel = channel;
+            })
+            .is_some()
     }
 
     /// Plays a chord on a module's outputs from its face, or stops (see
@@ -479,8 +490,8 @@ impl GraphPlan {
                 self.set_bypass(node_id, bypassed);
                 None
             }
-            PlanMessage::Listen { node_id, listen } => {
-                self.set_listen(node_id, listen);
+            PlanMessage::Listen { node_id, listen, channel } => {
+                self.set_listen(node_id, listen, channel);
                 None
             }
             PlanMessage::Audition { node_id, chord } => {
@@ -581,7 +592,16 @@ impl GraphPlan {
             self.claims.clear();
             for &(node, claim) in &self.claimers {
                 let node = &self.nodes[node];
-                claim(&node.params, node.listen, &mut self.claims);
+                match node.channel {
+                    None => claim(&node.params, node.listen, &mut self.claims),
+                    // From a MIDI In on one channel, it claims what it can
+                    // hear on that channel alone (#479)
+                    Some(channel) => {
+                        let mut own = NoteClaims::EMPTY;
+                        claim(&node.params, node.listen, &mut own);
+                        self.claims.merge_channel(&own, channel);
+                    }
+                }
             }
         }
 
@@ -645,14 +665,16 @@ impl GraphPlan {
             }
 
             let context = if node.hears_live { &live_context } else { context };
-            // Set to one device, it hears that device's MIDI and Soba's own
+            // Set to one device, it hears that device's MIDI and Soba's own;
+            // from a MIDI In on one channel, that channel's alone (#479)
             let picked;
-            let context = if node.listen == ListenTo::Any || context.midi.is_empty() {
+            let context = if (node.listen == ListenTo::Any && node.channel.is_none()) || context.midi.is_empty() {
                 context
             } else {
                 heard_midi.clear();
                 let room = heard_midi.capacity();
-                heard_midi.extend(context.midi.iter().filter(|event| node.listen.hears(event.port)).take(room).copied());
+                let heard = |event: &&MidiEvent| node.listen.hears(event.port) && event.on_channel(node.channel);
+                heard_midi.extend(context.midi.iter().filter(heard).take(room).copied());
                 picked = context.with_midi(heard_midi);
                 &picked
             };
@@ -755,6 +777,12 @@ impl GraphPlan {
     /// The MIDI input a node hears, or `None` if it isn't in this plan.
     pub fn listen(&self, node_id: NodeId) -> Option<ListenTo> {
         self.nodes.iter().find(|node| node.node_id == node_id).map(|node| node.listen)
+    }
+
+    /// The one MIDI channel a node hears (#479), `Some(None)` for every
+    /// one, or `None` if it isn't in this plan.
+    pub fn channel(&self, node_id: NodeId) -> Option<Option<u8>> {
+        self.nodes.iter().find(|node| node.node_id == node_id).map(|node| node.channel)
     }
 
     /// The patch transport: its tempo and beat, set by the first tempo source

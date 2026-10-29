@@ -29,6 +29,7 @@
   - [Chopper](./modules/sources/chopper.md)
   - [Cloud](./modules/sources/cloud.md)
   - [Audio Input](./modules/sources/audio-input.md)
+  - [MIDI In](./modules/midi/midi-in.md)
   - [Note In](./modules/midi/note-in.md)
   - [Controls](./modules/midi/controls.md)
   - [Pads](./modules/midi/pads.md)

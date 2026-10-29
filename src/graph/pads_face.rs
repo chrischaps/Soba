@@ -60,8 +60,17 @@ pub fn note_claims(graph: &SynthGraph, slot_of: impl Fn(&str) -> Option<u8>, thr
     let mut claims = NoteClaims::EMPTY;
     for (node_id, node) in graph.nodes.iter() {
         if node.user_data.module_id == pads::ID {
-            let device = super::midi_device::listen_to(super::midi_device::device(&node.user_data), &slot_of, thru_only);
-            pads::claim_notes(&params_of(graph, node_id), device, &mut claims);
+            // Its own Device, or a MIDI In's device and channel (#479)
+            let heard = super::midi_device::heard(graph, node_id);
+            let device = super::midi_device::listen_to(heard.device, &slot_of, thru_only);
+            match heard.channel {
+                None => pads::claim_notes(&params_of(graph, node_id), device, &mut claims),
+                Some(channel) => {
+                    let mut own = NoteClaims::EMPTY;
+                    pads::claim_notes(&params_of(graph, node_id), device, &mut own);
+                    claims.merge_channel(&own, channel);
+                }
+            }
         }
     }
     claims

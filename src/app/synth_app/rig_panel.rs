@@ -249,7 +249,9 @@ impl SynthApp {
             .map(|(name, index)| {
                 let slot = index.and_then(|_| self.midi.engine.as_ref()?.slot_of(&name));
                 let traffic = slot.and_then(|slot| self.midi.traffic.get(slot as usize).copied()).unwrap_or_default();
-                let heard_by = self.module_names(|data| crate::graph::midi_device::device(data).is_some_and(|device| device_names::same(device, &name)));
+                // Set to it, or patched from a MIDI In that is (#479)
+                let graph = &self.graph_state.graph;
+                let heard_by = self.module_names(|node_id| crate::graph::midi_device::heard(graph, node_id).device.is_some_and(|device| device_names::same(device, &name)));
                 let routed = routes.iter().any(|route| device_names::same(&route.from, &name));
                 let thru_only = crate::link::midi_thru::THRU.is_thru_only(&name);
                 InRow { name, index, slot, traffic, heard_by, routed, thru_only }
@@ -295,8 +297,8 @@ impl SynthApp {
     }
 
     /// The names of the modules whose data `matches`.
-    fn module_names(&self, matches: impl Fn(&SynthNodeData) -> bool) -> Vec<String> {
-        self.graph_state.graph.nodes.iter().filter(|(_, node)| matches(&node.user_data)).map(|(_, node)| node.user_data.display_name.clone()).collect()
+    fn module_names(&self, matches: impl Fn(egui_node_graph2::NodeId) -> bool) -> Vec<String> {
+        self.graph_state.graph.nodes.iter().filter(|(node_id, _)| matches(*node_id)).map(|(_, node)| node.user_data.display_name.clone()).collect()
     }
 }
 

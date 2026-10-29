@@ -29,6 +29,7 @@ pub mod lfo;
 pub mod link_out;
 pub mod logic;
 pub mod looper;
+pub mod midi_in;
 pub mod midi_monitor;
 pub mod midi_out;
 pub mod mix;
@@ -87,6 +88,7 @@ builtin_modules! {
     Chopper,
     Cloud,
     AudioInput,
+    MidiIn,
     NoteIn,
     Controls,
     Pads,
@@ -160,6 +162,7 @@ pub use link_out::LinkOut;
 pub use midi_out::MidiOut;
 pub use logic::Logic;
 pub use looper::Looper;
+pub use midi_in::MidiIn;
 pub use midi_monitor::MidiMonitor;
 pub use mix::Mix;
 pub use mixer::Mixer;

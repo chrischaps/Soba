@@ -20,6 +20,8 @@ Every note, from the keys or from MIDI, starts on its exact sample, however shor
 | **Velocity** | Control (Orange) | One per voice | Each note's velocity, 0 to 1 |
 | **Aftertouch** | Control (Orange) | 1 | Channel pressure, 0 to 1, shared by every voice |
 
+Its one input, **MIDI**, is the purple jack at the left end of its title bar. It takes a cable from a [MIDI In](./midi-in.md): patched, Note In hears that MIDI In's device and channel instead of its own **Device** (see [Listening to one device](#listening-to-one-device)).
+
 Once the patch is playing, each polyphonic output shows its channel count in a small pill beside its label: **×8** means it carries eight voices. The **Gate** output lights up while a note is held.
 
 ## Parameters
@@ -90,11 +92,13 @@ The Device is saved with the patch, by the device's name, so the patch finds it 
 
 [Pads](./pads.md), [Controls](./controls.md), the [Clock](../modulation/clock.md) and the [MIDI Monitor](./midi-monitor.md) have a Device too.
 
+A purple cable from a [MIDI In](./midi-in.md) into the module's **MIDI** input chooses for it: the module hears the MIDI In's device, and only its channel if it names one. While the cable is in, **Device** greys in the right-click menu, as a knob does under a cable, and the title shows the device the cable brings. Unplug it and the module hears its own Device again. A MIDI In is the way to give several modules one controller, or a whole group one jack to plug a controller into.
+
 ### Claimed notes
 
 A [Pads](./pads.md) module claims the notes its pads listen to, on their channel: by default notes 36 to 43 on channel 10, which most pad controllers send. A Note In on Omni skips those notes, so hitting a pad plays its drum and not the synth as well. The piano doesn't light for them either.
 
-A Pads set to one **Device** claims that device's notes alone. With the Pads on the pad controller, a keyboard's note 36 on channel 10 still plays the synth.
+A Pads set to one **Device** claims that device's notes alone. With the Pads on the pad controller, a keyboard's note 36 on channel 10 still plays the synth. A Pads patched from a [MIDI In](./midi-in.md) claims the notes of the MIDI In's device, and on its channel alone if it names one.
 
 A Note In set to a channel hears all of that channel's notes, claimed or not. Set **Ch** to the pads' channel to play notes from the pads too. The computer keys and the piano are never claimed.
 

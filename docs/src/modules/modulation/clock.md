@@ -25,6 +25,7 @@ On **MIDI** and **Auto**, a line under the lamps says who leads: **Soba leads**,
 |------|-------------|-------------|
 | **Sync** | Gate (Green) | A rising edge restarts the beat, so the next pulse starts right away |
 | **Tempo** | Control (Orange) | The **BPM** knob's jack. Bends the tempo around the knob by octaves: +1 doubles it, −1 halves it. See [Tempo CV](#tempo-cv) |
+| **MIDI** | MIDI (Purple) | The jack on the title bar. From a [MIDI In](../midi/midi-in.md): the device whose MIDI clock it follows, in place of its own **Device** |
 
 ## Outputs
 
@@ -120,7 +121,7 @@ If a patch has more than one Clock, synced modules follow the first one in the p
 
 Set **Source** to **MIDI** to slave the Clock to a MIDI clock master, such as a DAW, a drum machine or a hardware sequencer. Tick the master's port in the **MIDI In** menu, and set the master to send MIDI clock to it. In most DAWs this is a *Send MIDI Clock* or *Sync* setting on the MIDI output.
 
-With several devices open, choose the master under **Device** in the Clock's right-click menu, so a second device sending clock doesn't pull it off time (see [Listening to one device](../midi/note-in.md#listening-to-one-device)).
+With several devices open, choose the master under **Device** in the Clock's right-click menu, so a second device sending clock doesn't pull it off time (see [Listening to one device](../midi/note-in.md#listening-to-one-device)), or patch a [MIDI In](../midi/midi-in.md) set to it into the Clock's **MIDI** input. MIDI clock has no channel, so a MIDI In's Channel doesn't stop it.
 
 - **Tempo.** The Clock measures the master's tempo from the spacing of its clock ticks (24 per beat), fitted over the last two beats so that MIDI timing jitter averages out. The **BPM** knob dims and reads the received tempo, and every synced module follows it. When the master changes tempo, the Clock catches up within two beats. Until ticks arrive, the knob reads *No clock*.
 - **Position.** The Clock counts the ticks, so its beat is always exactly where the master's is, whatever the tempo. It can't drift.

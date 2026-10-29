@@ -293,9 +293,9 @@ impl UiHandle {
                     self.graph.mark_dirty();
                 }
             }
-            EngineCommand::Listen { node_id, listen } => {
-                self.graph.set_listen(node_id, listen);
-                if self.message_tx.push(AudioMessage::Plan(PlanMessage::Listen { node_id, listen })).is_err()
+            EngineCommand::Listen { node_id, listen, channel } => {
+                self.graph.set_listen(node_id, listen, channel);
+                if self.message_tx.push(AudioMessage::Plan(PlanMessage::Listen { node_id, listen, channel })).is_err()
                     || self.unsent_plan.is_some()
                 {
                     self.graph.mark_dirty();

@@ -6,7 +6,7 @@ Pads turns the pads of a MIDI pad controller into gates: finger drums, triggers 
 
 Pads send notes. Played into a [Note In](./note-in.md) they would be pitches: pad 1 a low C, pad 2 a C♯. Pads hears those notes as pads instead, and **claims** them, so a Note In listening on Omni lets them be. Hitting a pad plays its drum and never also plays the synth (see [Claimed notes](#claimed-notes)).
 
-It listens to the devices ticked in **MIDI In** on the toolbar, or to the one chosen under **Device** in its right-click menu (see [Listening to one device](./note-in.md#listening-to-one-device)), and reads each hit on its own sample, as Note In reads notes. The [Pad Kit](../../recipes/pad-kit.md) example plays five Drums from it.
+It listens to the devices ticked in **MIDI In** on the toolbar, or to the one chosen under **Device** in its right-click menu (see [Listening to one device](./note-in.md#listening-to-one-device)), or to the one a [MIDI In](./midi-in.md) patched into its purple **MIDI** input names. It reads each hit on its own sample, as Note In reads notes. The [Pad Kit](../../recipes/pad-kit.md) example plays five Drums from it.
 
 ## Outputs
 

@@ -6,7 +6,7 @@ Controls turns the faders, knobs, wheels and strips of a MIDI controller into ca
 
 [MIDI Learn](../../getting-started/interface-overview.md#midi-learn) can also turn a knob from your controller, but only a knob that's already on a module. Controls is for when the controller is the source: one move feeding several places, a fader scaled and flipped before it arrives, or a control mixed with an LFO.
 
-It listens to the devices ticked in **MIDI In** on the toolbar, or to the one chosen under **Device** in its right-click menu (see [Listening to one device](./note-in.md#listening-to-one-device)), and reads each move on its own sample, as [Note In](./note-in.md) reads notes.
+It listens to the devices ticked in **MIDI In** on the toolbar, or to the one chosen under **Device** in its right-click menu (see [Listening to one device](./note-in.md#listening-to-one-device)), or to the one a [MIDI In](./midi-in.md) patched into its purple **MIDI** input names. It reads each move on its own sample, as [Note In](./note-in.md) reads notes.
 
 ## Outputs
 
