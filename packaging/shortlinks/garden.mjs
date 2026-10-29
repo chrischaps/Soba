@@ -51,8 +51,8 @@ function setStatus(status, list) {
 }
 
 /// Walks the waiting plants oldest first, asking of each: show, hide, or
-/// leave it waiting. The answers go in together at the end (or at `q`), so
-/// the database sees two statements however many plants there were
+/// leave it waiting. The answers go in together at the end (or at `q`): one
+/// UPDATE for those shown and one for those hidden, however many there were
 async function review() {
   // The worker makes every ID, but they go into SQL, so they're checked as `show`'s are
   const plants = wrangler(PENDING, true).filter((p) => ID.test(p.id));
