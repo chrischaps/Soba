@@ -32,6 +32,8 @@ struct CanvasAsks {
     invalid_connections: Vec<(egui_node_graph2::OutputId, egui_node_graph2::InputId)>,
     /// The cables before one was dropped on a full input, to put back if it's refused
     before_drop: Option<crate::graph::refused_cable::Before>,
+    /// The jack the cable being dragged came out of, as this frame began
+    dragged_from: Option<egui_node_graph2::AnyParameterId>,
     /// Commands to send to the engine
     commands: Vec<EngineCommand>,
     /// Nodes whose bypass switch was clicked
@@ -158,6 +160,8 @@ impl SynthApp {
             &self.graph_state.graph,
             self.graph_state.connection_in_progress.is_some(),
         );
+        let dragging = self.graph_state.connection_in_progress;
+        asks.dragged_from = dragging.map(|(_, jack)| jack);
         let graph_response = self.graph_state.draw_graph_editor(
             ui,
             AllNodeTemplates,
@@ -168,6 +172,13 @@ impl SynthApp {
         crate::graph::map_mode::paint_edge(ui.painter(), editor_rect, &self.user_state);
         let dt = ctx.input(|i| i.stable_dt).min(0.1);
         self.user_state.cable_spotlight.end_frame(graph_response.hovered_cable, dt);
+        // A cable over a jack that won't take it, or let go there, says why (#496)
+        let (released, zoom) = (ctx.input(|i| i.pointer.any_released()), self.graph_state.pan_zoom.zoom);
+        let state = &mut self.user_state;
+        if let Some(reason) = state.refused_drop.follow(ctx, &self.graph_state.graph, dragging, &state.hidden, zoom, released) {
+            state.set_validation_error(reason);
+        }
+        state.refused_drop.paint(ctx, zoom, dt);
         self.tend_probe(ctx, graph_response.hovered_cable);
         self.note_miniatures();
         if let Some(dive) = &dive {
@@ -226,8 +237,16 @@ impl SynthApp {
             NodeResponse::ConnectEventEnded { output, input, .. } => {
                 // Validate the connection after it was made
                 if let Some(error_msg) = self.validate_and_check_connection(output, input) {
-                    // Mark for removal
+                    // Mark for removal, and show it refused at the jack it was dropped on
                     asks.invalid_connections.push((output, input));
+                    let jack = match asks.dragged_from {
+                        Some(egui_node_graph2::AnyParameterId::Input(_)) => egui_node_graph2::AnyParameterId::Output(output),
+                        _ => egui_node_graph2::AnyParameterId::Input(input),
+                    };
+                    let graph = &self.graph_state.graph;
+                    if let Some(refusal) = crate::graph::refused_drop::Refusal::of_cable(graph, output, input, jack, &error_msg) {
+                        self.user_state.refused_drop.refuse(refusal);
+                    }
                     // Show error message
                     self.user_state.set_validation_error(error_msg);
                 }

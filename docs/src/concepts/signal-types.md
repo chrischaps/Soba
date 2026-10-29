@@ -74,7 +74,7 @@ Same-type connections always work. A few cross-type connections work too, and th
 
 Allowed cross-type connections pass the signal through unchanged. An audio cable into a control input is the raw waveform; a gate into a control input is exactly 0.0 or 1.0.
 
-If you drop a cable on a jack that can't take it, Soba removes the cable and the status bar at the bottom of the window explains why, for example *Control cannot connect to Gate*.
+A jack that can't take the cable you're dragging shows it before you let go: the ring round it breaks into two halves, one in the cable's colour and one in the jack's, that don't meet. Drop the cable there anyway and a small tag beside the jack explains why, for example *Control cannot connect to Gate*, as does the status bar at the bottom of the window.
 
 ## Signal color and category color
 

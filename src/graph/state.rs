@@ -212,6 +212,9 @@ pub struct SynthGraphState {
     /// The cable picked out from the rest, and the knob it feeds (#220).
     pub cable_spotlight: super::cable_spotlight::CableSpotlight,
 
+    /// A jack that won't take the cable dragged to it, and why (#496).
+    pub refused_drop: super::refused_drop::RefusedDrop,
+
     /// Recent MIDI events for display in MIDI Monitor modules.
     pub midi_events: VecDeque<DisplayMidiEvent>,
 
@@ -427,6 +430,7 @@ impl Default for SynthGraphState {
             cable_through: CABLE_THROUGH,
             knob_style: crate::widgets::KnobStyle::default(),
             cable_spotlight: Default::default(),
+            refused_drop: Default::default(),
             midi_events: VecDeque::new(),
             midi_first_event_time: None,
             midi_notes: VecDeque::new(),

@@ -58,7 +58,7 @@ impl ConnectionError {
                     _ => "Incompatible signal types",
                 }
             }
-            ConnectionError::SelfConnection => "Cannot connect a node to itself",
+            ConnectionError::SelfConnection => "A module can't patch into itself",
             ConnectionError::DuplicateConnection => "Connection already exists",
         }
     }
@@ -187,7 +187,7 @@ mod tests {
     fn test_connection_error_messages() {
         assert_eq!(
             ConnectionError::SelfConnection.message(),
-            "Cannot connect a node to itself"
+            "A module can't patch into itself"
         );
         assert_eq!(
             ConnectionError::DuplicateConnection.message(),

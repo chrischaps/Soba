@@ -104,11 +104,11 @@ Until signal arrives, a small green dot above the knob shows that a cable is pat
 
 ## Cables
 
-Drag from an output to an input to patch a cable; a jack turns white when the cable is close enough to land on it. You can also drag from an input to an output. Cables only connect where the signals make sense: audio and control mix freely, and a gate can drive a control input, but a cable between jacks that can't work won't attach, and the status bar says why when it can. [Signal Types](../concepts/signal-types.md) has the full rules.
+Drag from an output to an input to patch a cable; a jack turns white when the cable is close enough to land on it. You can also drag from an input to an output. Cables only connect where the signals make sense: audio and control mix freely, and a gate can drive a control input, but a cable between jacks that can't work won't attach. Bring one near a jack that can't take it and the ring round the jack breaks in two, half in the cable's colour and half in the jack's. Let go there, and the halves spring apart as a small tag beside the jack says why, for example *Control cannot connect to Gate*; the status bar says it too. [Signal Types](../concepts/signal-types.md) has the full rules.
 
 - **One output can feed many inputs.** Each gets the full signal.
 - **Each input takes one cable.** Dropping a new cable onto an occupied input replaces the old one.
-- **No loops.** A cable that would feed a module's output back into its own input, directly or through other modules, is refused, and the status bar names the modules round the loop.
+- **No loops.** A cable that would feed a module's output back into its own input, directly or through other modules, is refused, and the tag at the jack and the status bar name the modules round the loop.
 - **To remove a cable,** drag its end off the input jack and let go over empty canvas.
 
 Cables run behind the modules, and behind frame titles and notes, showing faintly through them so a route can still be followed without covering the controls or the words. **〰 Cables ▸ Under modules and labels** sets how faintly.

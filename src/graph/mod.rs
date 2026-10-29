@@ -51,6 +51,7 @@ pub mod knob_cv;
 mod knob_menu;
 pub mod loops;
 pub mod refused_cable;
+pub mod refused_drop;
 pub mod fault_flash;
 mod cable_spotlight;
 mod lfo_display;
