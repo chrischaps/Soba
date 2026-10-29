@@ -12,7 +12,9 @@
 
 Steps, in order (--only picks some):
 
-    tests      cargo test
+    tests      cargo test. A link that fails on a stale incremental build,
+               one a stopped run left half-written, clears it and builds
+               once more (#498)
     loudness   the ignored example_loudness test: every example at length
     idle       the ignored idle test: every example, stopped, asks for no
                frames, so left open it costs next to nothing (#307)
@@ -61,6 +63,7 @@ import datetime
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -88,6 +91,10 @@ PERF_RUNS = 3
 # of canopy varies by about a fifth; the best of three by much less
 PERF_TOLERANCE = 0.15
 BENCH_LINE = re.compile(r"^bench: ([0-9.]+) s ")
+# A rustc stopped mid-build (the run of 27 October was, at the link) leaves
+# incremental objects that no longer agree: the next link can't find the
+# .llvm.<hash> symbols they name in each other (#498)
+STALE_BUILD = re.compile(r"(unresolved external symbol|undefined reference to).*\.llvm\.\d+")
 CI_TOOLCHAIN = re.compile(r"^\s*RUST_TOOLCHAIN:\s*['\"]?([\w.-]+)", re.MULTILINE)
 
 
@@ -199,6 +206,22 @@ def step_run(args, log, cwd, env, low=True):
             code = -1
         out.write(f"(exit {code})\n\n")
     return code
+
+
+def cargo_step(args, log, cwd, env):
+    """Step_run for a debug build. A link that fails on stale incremental objects clears them
+    and builds once more. Returns (exit code, note): the note says when it had to."""
+    before = log.stat().st_size if log.exists() else 0
+    code = step_run(args, log, cwd, env)
+    if code == 0 or not STALE_BUILD.search(log.read_bytes()[before:].decode("utf-8", "replace")):
+        return code, ""
+    target = Path(env.get("CARGO_TARGET_DIR") or Path(cwd) / "target")
+    for incremental in target.glob("*/incremental"):
+        shutil.rmtree(incremental, ignore_errors=True)
+    with open(log, "a", encoding="utf-8") as out:
+        out.write(f"(a stale incremental build: cleared {target / '*' / 'incremental'}, building again)\n\n")
+    code = step_run(args, log, cwd, env)
+    return code, "cleared a stale incremental build and built again"
 
 
 def tail(log, lines=LOG_TAIL):
@@ -348,7 +371,8 @@ def run_steps(steps, worktree, logs, push, perf_baseline=None, rebaseline=False)
                            encoding="utf-8")
             passed = False
         elif step == "tests":
-            passed = step_run(["cargo", "test"], log, worktree, env) == 0
+            code, note = cargo_step(["cargo", "test"], log, worktree, env)
+            passed = code == 0
         elif step == "loudness":
             passed = step_run(["cargo", "test", "--release", "--test", "example_loudness", "--",
                                "--ignored", "--nocapture"], log, worktree, env) == 0
