@@ -3214,6 +3214,7 @@ in   NRPN 1             Control  ConstantOnly         inline=false num 0 [0..163
 in   NRPN 2             Control  ConstantOnly         inline=false num 0 [0..16383]  stepped
 in   NRPN 3             Control  ConstantOnly         inline=false num 0 [0..16383]  stepped
 in   NRPN 4             Control  ConstantOnly         inline=false num 0 [0..16383]  stepped
+out  MIDI               MIDI
 knob CC 1 #             "CC 1" KnobOnly
 knob CC 2 #             "CC 2" KnobOnly
 knob CC 3 #             "CC 3" KnobOnly
@@ -3260,6 +3261,7 @@ in   Press 5            Control  ConstantOnly         inline=false toggle false 
 in   Press 6            Control  ConstantOnly         inline=false toggle false ""
 in   Press 7            Control  ConstantOnly         inline=false toggle false ""
 in   Press 8            Control  ConstantOnly         inline=false toggle false ""
+out  MIDI               MIDI
 knob Slot 1             "Slot 1" Exposed
 knob Slot 2             "Slot 2" Exposed
 knob Slot 3             "Slot 3" Exposed
@@ -3307,6 +3309,7 @@ in   Slot 11            Control  ConnectionOrConstant inline=true  num 0.5 [0..1
 in   Slot 12            Control  ConnectionOrConstant inline=true  num 0.5 [0..1]
 in   Track              Control  ConstantOnly         inline=false select 0 ["Lane 1", "Lane 2", "Lane 3", "Lane 4", "Lane 5", "Lane 6", "Lane 7", "Lane 8"] ""
 in   Velocity           Control  ConstantOnly         inline=false num 0.8 [0..1]
+out  MIDI               MIDI
 knob Velocity           "Velocity" KnobOnly
 knob Slot 1             "Slot 1" Exposed
 knob Slot 2             "Slot 2" Exposed
@@ -3321,6 +3324,27 @@ knob Slot 10            "Slot 10" Exposed
 knob Slot 11            "Slot 11" Exposed
 knob Slot 12            "Slot 12" Exposed
 display InstrumentFace
+
+== output.strike "Strike" finder="Strike" Output
+in   MIDI               MIDI     ConnectionOnly       inline=true  port
+in   Gate               Gate     ConnectionOnly       inline=true  port
+in   Vel                Control  ConnectionOnly       inline=true  port
+in   Port               Control  ConstantOnly         inline=false select 0 ["A", "B", "C", "D", "E", "F", "G", "H"] ""
+in   Channel            Control  ConstantOnly         inline=false select 0 ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] ""
+in   Note               Control  ConstantOnly         inline=false num 36 [0..127]  stepped
+in   Velocity           Control  ConstantOnly         inline=false num 0.8 [0..1]
+knob Velocity           "Velocity" KnobOnly
+display StrikeFace
+
+== output.cc_out "CC Out" finder="CC Out" Output
+in   MIDI               MIDI     ConnectionOnly       inline=true  port
+in   In                 Control  ConnectionOnly       inline=true  port
+in   Port               Control  ConstantOnly         inline=false select 0 ["A", "B", "C", "D", "E", "F", "G", "H"] ""
+in   Channel            Control  ConstantOnly         inline=false select 0 ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"] ""
+in   CC                 Control  ConstantOnly         inline=false num 74 [0..127]  stepped
+in   Value              Control  ConstantOnly         inline=false num 0.5 [0..1]
+knob Value              "Value" KnobOnly
+display CcOutFace
 
 == output.setlist "Setlist" finder="Setlist" Output
 in   Section            Control  ConnectionOnly       inline=true  port

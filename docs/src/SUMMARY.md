@@ -35,6 +35,8 @@
   - [Pad](./modules/midi/pad.md)
   - [Instrument](./modules/midi/instrument.md)
   - [Kit](./modules/midi/kit.md)
+  - [Strike](./modules/midi/strike.md)
+  - [CC Out](./modules/midi/cc-out.md)
   - [Setlist](./modules/midi/setlist.md)
   - [FM Voice](./modules/midi/fm-voice.md)
   - [SVF Filter](./modules/filters/svf-filter.md)

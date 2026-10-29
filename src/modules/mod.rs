@@ -22,6 +22,8 @@ pub mod envelope;
 pub mod eq;
 pub mod instrument;
 pub mod kit;
+pub mod strike;
+pub mod cc_out;
 pub mod filter;
 pub mod fm_voice;
 pub mod ladder;
@@ -131,6 +133,8 @@ builtin_modules! {
     MidiOut,
     Instrument,
     Kit,
+    Strike,
+    CcOut,
     Setlist,
     FmVoice,
 }
@@ -158,6 +162,8 @@ pub use eq::ParametricEq;
 pub use filter::SvfFilter;
 pub use instrument::Instrument;
 pub use kit::Kit;
+pub use strike::Strike;
+pub use cc_out::CcOut;
 pub use ladder::LadderFilter;
 pub use lfo::Lfo;
 pub use link_out::LinkOut;

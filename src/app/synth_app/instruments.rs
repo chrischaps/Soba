@@ -4,7 +4,7 @@
 //! parameter, an undo and a paste alike, and each sends the knob afresh.
 //! Send all from the face hands every knob over again. A Kit's knobs go
 //! the same way, and its lanes (#443) with them, and a Setlist's rows
-//! (#445).
+//! (#445), and what each Strike strikes and each CC Out sends (#484).
 
 use egui_node_graph2::NodeId;
 
@@ -20,6 +20,7 @@ impl SynthApp {
     pub(super) fn sync_instruments(&mut self) {
         let mut sends = self.instrument_sends(None);
         sends.extend(self.setlist_sends());
+        sends.extend(self.sender_sends());
         for command in sends {
             self.send_command(command);
         }
@@ -47,6 +48,38 @@ impl SynthApp {
                     if had.map_or(map.is_some(), |had| had[section][row] != map) {
                         sends.push(EngineCommand::MapRow { node_id: engine_id, section, row, map });
                     }
+                }
+            }
+        }
+        sends
+    }
+
+    /// Every Strike's part and CC Out's parameter that differs from what the
+    /// engine has (#484): from its device's profile, copied over its cable.
+    fn sender_sends(&self) -> Vec<EngineCommand> {
+        let Some(handle) = self.ui_handle.as_ref() else { return Vec::new() };
+        let mut sends = Vec::new();
+        let mut profiles = None;
+        for (node_id, node) in self.graph_state.graph.nodes.iter() {
+            let id = node.user_data.module_id;
+            if !crate::graph::device_follow::sends_to_device(id) {
+                continue;
+            }
+            let Some(engine_id) = self.user_state.get_engine_node_id(node_id) else { continue };
+            if !handle.graph().contains_module(engine_id) {
+                continue;
+            }
+            let profiles = profiles.get_or_insert_with(crate::hardware::known);
+            let labels = &node.user_data.labels;
+            if id == crate::modules::strike::ID {
+                let map = instrument::strike_map(labels, profiles);
+                if handle.graph().lane_maps(engine_id).map_or(!map.is_empty(), |had| had[0] != map) {
+                    sends.push(EngineCommand::MapLane { node_id: engine_id, lane: 0, map });
+                }
+            } else {
+                let map = instrument::cc_out_map(labels, profiles);
+                if handle.graph().slot_maps(engine_id).map_or(!map.is_empty(), |had| had[0] != map) {
+                    sends.push(EngineCommand::MapSlot { node_id: engine_id, slot: 0, map });
                 }
             }
         }

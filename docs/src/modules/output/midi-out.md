@@ -20,7 +20,7 @@ MIDI Out makes no sound of its own. It works in the desktop app, and in the brow
 | **CC 1** … **CC 4** | Control (Orange) | 0 to 1, sent on the lane's CC number (0 to 127), or finer in 14-bit or NRPN mode, wherever the value moves |
 | **Send Program** | Gate (Green) | Sends the Bank and Program again as it rises: at the top of a song, say, so the device is on the right sound however it was left |
 
-Every input is optional. The module has no outputs.
+Every input is optional. Its one output is **MIDI** (purple), on the right end of its title bar: patch it into [CC Outs](../midi/cc-out.md) for more controllers than its four lanes, or [Strikes](../midi/strike.md) for drum hits on chosen notes, each on this port and channel.
 
 ## Parameters
 

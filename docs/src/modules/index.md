@@ -97,6 +97,8 @@ The **ID** is the name a patch file uses to refer to the module.
 | [MIDI Out](./output/midi-out.md) | `output.midi` | Play hardware and other apps: gates and pitch as notes (poly cables as chords), bend and aftertouch, four CCs (7-bit, 14-bit or NRPN), programs and banks, and the Clock as MIDI clock |
 | [Instrument](./midi/instrument.md) | `source.instrument` | A piece of hardware as a node: a synth's or drum machine's own knobs, by name, to turn and patch, and its notes over MIDI |
 | [Kit](./midi/kit.md) | `source.kit` | A hardware drum machine, sampler or groovebox as a node: its tracks, pads or parts as eight lanes to strike from a Trigger Sequencer, and its knobs by name, over MIDI |
+| [Strike](./midi/strike.md) | `output.strike` | One drum hit out to hardware: patched from an Instrument or Kit, it strikes one of the drum machine's or sampler's pads, tracks or parts, by name, so a kit is as wide as the device |
+| [CC Out](./midi/cc-out.md) | `output.cc_out` | One controller out to hardware: a CC, or one of the device's own knobs by name when patched from an Instrument or Kit, swept from a cable |
 | [Setlist](./midi/setlist.md) | `output.setlist` | Each Arranger section changes the room: a device's pattern, scene, patch or memory, sent as Bank Select and Program Change ahead of the bar |
 | [FM Voice](./midi/fm-voice.md) | `output.fm_voice` | A DX7 voice for a volca fm, sent by SysEx as it changes and played on six FM operators of its own: mutate it, cross two, and keep a garden of the voices bred by ear |
 
@@ -178,5 +180,7 @@ Drive a voice from a sequence instead of a keyboard:
 | Play a hardware synth or a DAW, or lead its tempo | [MIDI Out](./output/midi-out.md) |
 | Turn and patch a hardware synth's own knobs, and keep its sound in the patch | [Instrument](./midi/instrument.md) |
 | Play a hardware drum machine's tracks or pads from a Trigger Sequencer | [Kit](./midi/kit.md) |
+| Play all sixteen of a sampler's pads, or a kit wider than eight lanes | [Strikes](./midi/strike.md), patched from an [Instrument](./midi/instrument.md): the Library's **Hardware** groups |
+| Send more CCs than MIDI Out's four, or one more of a device's knobs | [CC Out](./midi/cc-out.md) |
 | Change the hardware's patterns, scenes or memories with each section of a song | [Setlist](./midi/setlist.md), from an [Arranger](./utilities/arranger.md) |
 | Breed new sounds for a volca fm (or a DX7) by ear, or play DX7 voices in Soba itself | [FM Voice](./midi/fm-voice.md) |

@@ -11,6 +11,7 @@ pub mod library;
 mod opus;
 pub mod pads_group;
 pub mod controls_group;
+pub mod strikes_group;
 pub mod patch;
 pub mod patch_link;
 pub mod sample_files;

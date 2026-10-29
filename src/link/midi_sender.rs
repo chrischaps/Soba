@@ -9,6 +9,12 @@
 //! clock as it drifts from the computer's. A sample is heard that long
 //! after sample 0 left, plus the output device's delay.
 //!
+//! **In order.** What falls due goes out from every ring at once, in the
+//! order it's due, not one ring after another: sixteen Strikes (#484), each
+//! with a ring of its own, go out in the order they were struck, however
+//! late the thread wakes. Messages due together go ring by ring, in the
+//! order the rings were made, and a ring's own order always stands.
+//!
 //! **Stuck notes.** The sender watches every Note On and Note Off it
 //! sends, per module. When a module's ring is dropped (the module deleted,
 //! or another patch loaded) or it stops running (the audio stopped), the
@@ -512,50 +518,49 @@ impl MidiSender {
         let offsets = self.bus.offsets();
         // The clock first, so a Start goes before the notes on its beat
         let mut busy = self.send_clock(now, latency, &offsets);
-        let mut index = 0;
-        while index < self.streams.len() {
-            let gone = self.drain(index, now);
+        // Every ring's news, and which are gone or have stopped running
+        let flushing: Vec<(bool, bool)> = (0..self.streams.len())
+            .map(|index| {
+                let gone = self.drain(index, now);
+                let stale = self.streams[index].last_block.is_none_or(|at| now.duration_since(at) >= STALE);
+                (gone, stale)
+            })
+            .collect();
+        // What's due, from every ring at once, in the order it's due: a
+        // Strike's hit and its neighbour's go out as they were struck, not
+        // ring by ring (#484). Rings due together go in the order they came
+        while let Some(index) = self.next_due(&flushing, now, latency, &offsets) {
             let stream = &mut self.streams[index];
-            let stale = stream.last_block.is_none_or(|at| now.duration_since(at) >= STALE);
-            // Everything due goes out; a module that's gone or stopped
-            // sends what it left at once, then lets go of its notes
-            let flush = gone || stale;
-            while let Some(&(sample, item)) = stream.pending.front() {
-                let due = stream.due(sample, latency).map(|due| shifted(due, offsets[stream.port], latency));
-                if !flush && due.is_none_or(|due| due > now + self.ahead) {
-                    break;
-                }
-                stream.pending.pop_front();
-                let port = &mut self.ports[stream.port];
-                // What's left of a module that's gone goes after what's on its way
-                let at = if flush { port.after(now) } else { due.unwrap_or(now).max(now) };
-                match item {
-                    Item::Message(message) => Self::send(port, &mut self.outputs, &self.devices, &mut stream.held, message, now, at),
-                    Item::Control(control) => {
-                        stream.bends(&control);
-                        Self::offer(port, &mut self.outputs, &self.devices, control, now, at);
-                    }
-                    Item::Sysex(slot) => {
-                        if let Some(lease) = self.bus.pool().and_then(|pool| pool.adopt(slot)) {
-                            port.sysex.push_back((Sysex::Pooled(lease), at));
-                            // Now, if there's room: in its place among the block's messages
-                            Self::send_sysex(port, &mut self.outputs, &self.devices, now, self.ahead);
-                        }
-                    }
-                }
-            }
-            if flush && stream.has_loose_ends() {
-                let port = stream.port;
-                let (shared, others) = self.neighbours(index, port);
+            let Some((sample, item)) = stream.pending.pop_front() else { break };
+            let due = stream.due(sample, latency).map(|due| shifted(due, offsets[stream.port], latency));
+            let at = due.unwrap_or(now).max(now);
+            Self::send_item(&mut self.ports[stream.port], &mut self.outputs, &self.devices, self.bus, stream, item, now, at, self.ahead);
+        }
+        let mut index = flushing.len();
+        while index > 0 {
+            index -= 1;
+            let (gone, stale) = flushing[index];
+            if gone || stale {
+                // A module that's gone or stopped sends what it left at
+                // once, after what's on its way, then lets go of its notes
                 let stream = &mut self.streams[index];
-                Self::release_stream(&mut self.ports[port], &mut self.outputs, &self.devices, stream, shared, &others, now);
+                while let Some((_, item)) = stream.pending.pop_front() {
+                    let port = &mut self.ports[stream.port];
+                    let at = port.after(now);
+                    Self::send_item(port, &mut self.outputs, &self.devices, self.bus, stream, item, now, at, self.ahead);
+                }
+                if stream.has_loose_ends() {
+                    let port = stream.port;
+                    let (shared, others) = self.neighbours(index, port);
+                    let stream = &mut self.streams[index];
+                    Self::release_stream(&mut self.ports[port], &mut self.outputs, &self.devices, stream, shared, &others, now);
+                }
             }
             if gone {
-                self.streams.swap_remove(index);
+                self.streams.remove(index);
                 continue;
             }
             busy |= !stale;
-            index += 1;
         }
         // What waited for room goes as the budgets fill, SysEx first
         for port in &mut self.ports {
@@ -600,6 +605,42 @@ impl MidiSender {
             }
         }
         self.streams[index].events.is_abandoned() && self.streams[index].events.is_empty()
+    }
+
+    /// The ring whose next message is due soonest, of those due by now
+    /// (or by `ahead` of it) and still running: the first such ring on a tie.
+    fn next_due(&self, flushing: &[(bool, bool)], now: Instant, latency: Duration, offsets: &[f32; PORTS]) -> Option<usize> {
+        let mut next: Option<(Instant, usize)> = None;
+        for (index, stream) in self.streams.iter().enumerate() {
+            if flushing.get(index).is_none_or(|&(gone, stale)| gone || stale) {
+                continue;
+            }
+            let Some(&(sample, _)) = stream.pending.front() else { continue };
+            let Some(due) = stream.due(sample, latency).map(|due| shifted(due, offsets[stream.port], latency)) else { continue };
+            if due <= now + self.ahead && next.is_none_or(|(soonest, _)| due < soonest) {
+                next = Some((due, index));
+            }
+        }
+        next.map(|(_, index)| index)
+    }
+
+    /// Sends one of `stream`'s messages, controllers or SysEx on `port`, at `at`.
+    #[allow(clippy::too_many_arguments)]
+    fn send_item(port: &mut Port, outputs: &mut Box<dyn Outputs>, devices: &[String], bus: &'static MidiBus, stream: &mut Stream, item: Item, now: Instant, at: Instant, ahead: Duration) {
+        match item {
+            Item::Message(message) => Self::send(port, outputs, devices, &mut stream.held, message, now, at),
+            Item::Control(control) => {
+                stream.bends(&control);
+                Self::offer(port, outputs, devices, control, now, at);
+            }
+            Item::Sysex(slot) => {
+                if let Some(lease) = bus.pool().and_then(|pool| pool.adopt(slot)) {
+                    port.sysex.push_back((Sysex::Pooled(lease), at));
+                    // Now, if there's room: in its place among the block's messages
+                    Self::send_sysex(port, outputs, devices, now, ahead);
+                }
+            }
+        }
     }
 
     /// Takes up each port's device as the settings now say, letting go of
@@ -1073,6 +1114,45 @@ mod tests {
         sender.tick(start + Duration::from_millis(500));
         assert_eq!(sent(&log)[1], vec![0x90, 60, 100]);
         assert_eq!(bus.status(0), PortStatus::Sending);
+    }
+
+    #[test]
+    fn two_strikes_on_one_part_and_one_sample_send_two_notes_in_order() {
+        // The acceptance (#484): two Strikes patched from one device, each on
+        // its own ring, both strike its Pad 13 at sample 10 of a block, and
+        // the next block one alone at sample 3. Every note goes, on the
+        // device's channel, in the order each was struck
+        use crate::dsp::{context::ProcessContext, signal::SignalBuffer, DspModule, SignalType};
+        use crate::hardware::{LaneMap, Part};
+        use crate::modules::strike::Strike;
+        let (bus, mut sender, log) = setup(false);
+        let mut strikes = [Strike::on_bus(bus), Strike::on_bus(bus)];
+        let pad = LaneMap::of(&Part { name: "Pad 13".into(), note: Some(36), channel: None }, false);
+        let mut params: Vec<f32> = strikes[0].parameters().iter().map(|p| p.default).collect();
+        params[Strike::PARAM_CHANNEL] = 9.0;
+        let gate = |from: usize| {
+            let mut buffer = SignalBuffer::polyphonic(64, SignalType::Gate);
+            buffer.set_channels(1);
+            for (i, sample) in buffer.channel_mut(0).iter_mut().enumerate() {
+                *sample = if i >= from && i < from + 4 { 1.0 } else { 0.0 };
+            }
+            buffer
+        };
+        let (midi, vel) = (SignalBuffer::unconnected(64, SignalType::Midi), SignalBuffer::unconnected(64, SignalType::Control));
+        let context = ProcessContext::new(RATE, 64);
+        for strike in &mut strikes {
+            strike.map_lane(0, pad);
+        }
+        for (block, hits) in [[Some(10), Some(10)], [Some(3), None]].into_iter().enumerate() {
+            for (strike, hit) in strikes.iter_mut().zip(hits) {
+                let gate = hit.map_or_else(|| gate(64), gate);
+                strike.process(&[&midi, &gate, &vel], &mut [], &params, &context);
+            }
+            sender.tick(Instant::now() + Duration::from_secs(1 + block as u64));
+        }
+        let notes: Vec<Vec<u8>> = sent(&log).into_iter().filter(|bytes| bytes[0] & 0xE0 == 0x80).collect();
+        let (on, off) = (vec![0x99, 36, 102], vec![0x89, 36, 0]);
+        assert_eq!(notes, [on.clone(), on.clone(), off.clone(), off.clone(), on, off], "both, in time order across their rings, then the one");
     }
 
     #[test]

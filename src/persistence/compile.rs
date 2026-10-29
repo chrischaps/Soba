@@ -121,6 +121,21 @@ pub fn compile_patch(patch: &Patch) -> Result<CompiledPatch, PatchError> {
             }
         }
 
+        // What a Strike strikes and a CC Out sends (#484)
+        let labels = &graph[node.graph_id].user_data.labels;
+        if node.template.module_id() == crate::modules::strike::ID {
+            let map = crate::hardware::instrument::strike_map(labels, &crate::hardware::known());
+            if !map.is_empty() {
+                compiled.commands.push(EngineCommand::MapLane { node_id: engine_node_id, lane: 0, map });
+            }
+        }
+        if node.template.module_id() == crate::modules::cc_out::ID {
+            let map = crate::hardware::instrument::cc_out_map(labels, &crate::hardware::known());
+            if !map.is_empty() {
+                compiled.commands.push(EngineCommand::MapSlot { node_id: engine_node_id, slot: 0, map });
+            }
+        }
+
         // A Setlist's rows
         if node.template.module_id() == crate::modules::setlist::ID {
             let maps = crate::hardware::setlist::maps(&graph[node.graph_id].user_data.labels, &crate::hardware::known());

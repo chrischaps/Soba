@@ -1348,6 +1348,8 @@ impl SynthApp {
     fn follow_arrangers(&mut self) {
         self.user_state.arranger_leaders = crate::graph::arranger_follow::leaders(&self.graph_state.graph);
         crate::graph::arranger_follow::sync(&mut self.graph_state.graph, &self.user_state.arranger_leaders);
+        // ...and Strikes and CC Outs their devices' ports and channels (#484)
+        crate::graph::device_follow::sync(&mut self.graph_state.graph);
     }
 
     /// Sends the engine whatever cables have changed since it last heard,

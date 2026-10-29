@@ -27,7 +27,7 @@ It's one step to undo. **None**, at the bottom of the list, empties the lanes an
 | **Track 1 Vel**… (one per lane) | Control (Orange) | How hard the lane strikes, 0 to 1, read at the moment its gate rises. Unpatched, the **Velocity** knob says |
 | **Filter Freq**, **Decay**… (one per knob) | Control (Orange) | As an [Instrument's](./instrument.md#inputs): 0 to 1 across the knob's travel |
 
-Each lane's jacks are named for its part. An empty lane's are called **Gate 1** and **Vel 1** to **Gate 8** and **Vel 8**, as they are in the patch file. Every input is optional. The module has no outputs.
+Each lane's jacks are named for its part. An empty lane's are called **Gate 1** and **Vel 1** to **Gate 8** and **Vel 8**, as they are in the patch file. Every input is optional. Its one output is **MIDI** (purple), on the right end of its title bar: patch it into a [Strike](./strike.md) or [CC Out](./cc-out.md) and that plays this device, on its port and channel, with its profile's parts and knobs to choose from by name. A Strike on a part none of the lanes play is a ninth lane.
 
 ## Parameters
 

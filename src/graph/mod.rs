@@ -41,6 +41,8 @@ mod spectrum_view;
 mod noise_display;
 mod piano_display;
 pub mod midi_in_face;
+pub mod device_follow;
+pub mod sender_face;
 pub mod note_in_face;
 mod scale_display;
 mod display_frame;

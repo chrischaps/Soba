@@ -16,6 +16,10 @@
 //! - An Instrument's `"button 1"` … `"button 8"` (#474): the button its
 //!   jack presses, likewise (`{"name":"Target Trk Rec/Play","cc":14}`).
 //!
+//! - A Strike's `"part"` (#484): the part it strikes, as a lane's; a CC
+//!   Out's `"parameter"`: the parameter it sends, as a knob's. Each keeps
+//!   its device's `"profile"` too, copied over its MIDI cable.
+//!
 //! A knob plays its profile's parameter of that name, a lane its part and
 //! a button its button, so a CC or a note corrected in the profile reaches
 //! every patch. One
@@ -63,7 +67,12 @@ pub struct Held {
 /// The parameter knob `slot` holds, if it holds one: its profile's, where
 /// the profile is known and has it, or else as the patch wrote it.
 pub fn held(labels: &BTreeMap<String, String>, slot: usize, profiles: &Profiles) -> Option<Held> {
-    let written: Parameter = serde_json::from_str(labels.get(&slot_key(slot))?).ok()?;
+    held_under(labels, &slot_key(slot), profiles)
+}
+
+/// The parameter the label `key` holds, from the profile where it's known.
+fn held_under(labels: &BTreeMap<String, String>, key: &str, profiles: &Profiles) -> Option<Held> {
+    let written: Parameter = serde_json::from_str(labels.get(key)?).ok()?;
     let profile = profile_name(labels).and_then(|name| profiles.find(name));
     match profile.and_then(|known| known.profile.parameter(&written.name)) {
         Some(parameter) => Some(Held { parameter: parameter.clone(), known: true }),
@@ -148,7 +157,12 @@ pub fn lane_key(lane: usize) -> String {
 /// The part lane `lane` plays, if it plays one: its profile's, where the
 /// profile is known and has it, or else as the patch wrote it.
 pub fn part(labels: &BTreeMap<String, String>, lane: usize, profiles: &Profiles) -> Option<Part> {
-    let written: Part = serde_json::from_str(labels.get(&lane_key(lane))?).ok()?;
+    part_under(labels, &lane_key(lane), profiles)
+}
+
+/// The part the label `key` holds, from the profile where it's known.
+fn part_under(labels: &BTreeMap<String, String>, key: &str, profiles: &Profiles) -> Option<Part> {
+    let written: Part = serde_json::from_str(labels.get(key)?).ok()?;
     let profile = profile_name(labels).and_then(|name| profiles.find(name));
     Some(profile.and_then(|known| known.profile.parts.iter().find(|p| p.name == written.name)).cloned().unwrap_or(written))
 }
@@ -214,6 +228,33 @@ pub fn choose_kit(profile: &Profile) -> Vec<(String, String)> {
 /// Whether a Kit can play `profile`: a kit, with its parts.
 pub fn is_kit(profile: &Profile) -> bool {
     profile.kind == Kind::Kit && !profile.parts.is_empty()
+}
+
+/// The label that holds the part a Strike strikes (#484).
+pub const PART: &str = "part";
+
+/// The label that holds the parameter a CC Out sends (#484).
+pub const PARAMETER: &str = "parameter";
+
+/// The part a Strike strikes, if it has one: its profile's, where the
+/// profile is known and has it, or else as the patch wrote it.
+pub fn strike_part(labels: &BTreeMap<String, String>, profiles: &Profiles) -> Option<Part> {
+    part_under(labels, PART, profiles)
+}
+
+/// What a Strike strikes: its part, or nothing (its own Note).
+pub fn strike_map(labels: &BTreeMap<String, String>, profiles: &Profiles) -> LaneMap {
+    strike_part(labels, profiles).map_or(LaneMap::EMPTY, |part| LaneMap::of(&part, false))
+}
+
+/// The parameter a CC Out sends, if it holds one, and where that came from.
+pub fn cc_out_held(labels: &BTreeMap<String, String>, profiles: &Profiles) -> Option<Held> {
+    held_under(labels, PARAMETER, profiles)
+}
+
+/// What a CC Out sends: its parameter, or nothing (a plain CC).
+pub fn cc_out_map(labels: &BTreeMap<String, String>, profiles: &Profiles) -> SlotMap {
+    cc_out_held(labels, profiles).map_or(SlotMap::EMPTY, |held| SlotMap::of(&held.parameter))
 }
 
 /// Where a knob sits to start `parameter` from: its default, if the chart

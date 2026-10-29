@@ -671,6 +671,23 @@ static MODULE_UI: &[ModuleUi] = &[
         ..ModuleUi::DEFAULT
     },
     ModuleUi {
+        module_id: crate::modules::strike::ID,
+        // What it strikes, and where, are chosen on its face; patched from
+        // a device, its Port and Channel are the device's (#484)
+        knobs: &[knob("Velocity")],
+        hidden: &["Port", "Channel", "Note"],
+        display: NodeDisplay::StrikeFace,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
+        module_id: crate::modules::cc_out::ID,
+        // As a Strike's: what it sends is chosen on its face (#484)
+        knobs: &[knob("Value")],
+        hidden: &["Port", "Channel", "CC"],
+        display: NodeDisplay::CcOutFace,
+        ..ModuleUi::DEFAULT
+    },
+    ModuleUi {
         module_id: crate::modules::setlist::ID,
         // Each section's rows, under its name (#445)
         display: NodeDisplay::SetlistFace,

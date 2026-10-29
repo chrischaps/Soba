@@ -91,7 +91,7 @@ fn ports(module_id: &str) -> (Vec<usize>, Vec<usize>) {
 }
 
 /// The patch size the guard plays: every module, the first few twice.
-const PATCH_SIZE: usize = 49;
+const PATCH_SIZE: usize = soba::modules::BUILTIN_COUNT + 3;
 
 /// Adds `count` modules, cycling through every built-in module in
 /// registration order, chained output-to-input, with every port monitored.
@@ -254,6 +254,26 @@ fn audio_callback_never_allocates() {
     for (slot, map) in knobs.iter().enumerate() {
         ui.send_command(EngineCommand::MapSlot { node_id: instrument, slot, map: *map });
     }
+
+    // A Strike (#484) playing the Clock's gate as an SP-404MKII's Pad 13,
+    // and a CC Out the LFO sweeps as a 14-bit pair of the device's own
+    let strike = node_of(&nodes, "output.strike");
+    ui.send_command(EngineCommand::Connect {
+        from_node: clock,
+        from_port: port("util.clock", "Gate"),
+        to_node: strike,
+        to_port: port("output.strike", "Gate"),
+    });
+    let pad = soba::hardware::Part { name: "Pad 13".into(), note: Some(36), channel: Some(1) };
+    ui.send_command(EngineCommand::MapLane { node_id: strike, lane: 0, map: soba::hardware::LaneMap::of(&pad, false) });
+    let cc_out = node_of(&nodes, "output.cc_out");
+    ui.send_command(EngineCommand::Connect {
+        from_node: node_of(&nodes, "mod.lfo"),
+        from_port: 0,
+        to_node: cc_out,
+        to_port: port("output.cc_out", "In"),
+    });
+    ui.send_command(EngineCommand::MapSlot { node_id: cc_out, slot: 0, map: knobs[1] });
 
     // A Control (#483) hearing an endless encoder on CC 20 counting up and
     // down, swinging -1 to 1. Its cable runs on down the chain, as every

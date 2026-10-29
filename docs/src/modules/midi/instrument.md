@@ -35,7 +35,7 @@ Or skip the face: in [Quick add](../../getting-started/interface-overview.md#qui
 | **Cutoff**, **Resonance**… (one per knob) | Control (Orange) | 0 to 1 across the knob's travel. Patched, the cable turns the knob, and the knob follows it |
 | **Target Trk Rec/Play**, **Hold**… (one per button) | Gate (Green) | Presses its button while the gate is high, or flips a toggle each time it rises. Beside its button, under the knobs |
 
-Each knob's jack is named for the parameter the knob holds. An empty knob's jack is called **Slot 1** to **Slot 12**, as it is in the patch file. Each button's jack is named for its button, and is **Button 1** to **Button 8** in the patch file. A button that presses nothing has no jack. Every input is optional. The module has no outputs.
+Each knob's jack is named for the parameter the knob holds. An empty knob's jack is called **Slot 1** to **Slot 12**, as it is in the patch file. Each button's jack is named for its button, and is **Button 1** to **Button 8** in the patch file. A button that presses nothing has no jack. Every input is optional. Its one output is **MIDI** (purple), on the right end of its title bar: patch it into a [Strike](./strike.md) or [CC Out](./cc-out.md) and that plays this device, on its port and channel, with its profile's parts and knobs to choose from by name.
 
 ## Parameters
 

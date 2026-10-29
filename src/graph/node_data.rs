@@ -181,6 +181,10 @@ pub enum NodeDisplay {
     MidiLog,
     /// MIDI In: the device the modules patched from it hear (#479).
     MidiInDevice,
+    /// Strike: the part it strikes, and a lamp as it does (#484).
+    StrikeFace,
+    /// CC Out: the parameter it sends, and a bar of its value (#484).
+    CcOutFace,
     /// Oscilloscope: live traces.
     Scope,
     /// Step Sequencer: step grid.
@@ -1487,6 +1491,14 @@ impl NodeDataTrait for SynthNodeData {
             NodeDisplay::MidiInDevice => {
                 let chosen = super::midi_in_face::midi_in_face(ui, node_id, graph, user_state, zoom);
                 responses.extend(chosen.map(NodeResponse::User));
+            }
+            NodeDisplay::StrikeFace => {
+                let chosen = super::sender_face::strike_face(ui, node_id, graph, user_state, zoom);
+                responses.extend(chosen.into_iter().map(NodeResponse::User));
+            }
+            NodeDisplay::CcOutFace => {
+                let chosen = super::sender_face::cc_out_face(ui, node_id, graph, user_state, zoom);
+                responses.extend(chosen.into_iter().map(NodeResponse::User));
             }
             // Audio Output: the output stage's level meter
             NodeDisplay::OutputMeter => {

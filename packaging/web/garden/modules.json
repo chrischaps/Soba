@@ -630,6 +630,23 @@
       "name": "Audio Output",
       "outputs": []
     },
+    "output.cc_out": {
+      "category": "Output",
+      "color": "#7e57c2",
+      "height": 308.0,
+      "inputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        },
+        {
+          "name": "In",
+          "type": "Control"
+        }
+      ],
+      "name": "CC Out",
+      "outputs": []
+    },
     "output.fm_voice": {
       "category": "Output",
       "color": "#7e57c2",
@@ -760,7 +777,12 @@
         }
       ],
       "name": "MIDI Out",
-      "outputs": []
+      "outputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ]
     },
     "output.setlist": {
       "category": "Output",
@@ -785,6 +807,27 @@
         }
       ],
       "name": "Setlist",
+      "outputs": []
+    },
+    "output.strike": {
+      "category": "Output",
+      "color": "#7e57c2",
+      "height": 326.0,
+      "inputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        },
+        {
+          "name": "Gate",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel",
+          "type": "Control"
+        }
+      ],
+      "name": "Strike",
       "outputs": []
     },
     "seq.arranger": {
@@ -1365,7 +1408,12 @@
         }
       ],
       "name": "Instrument",
-      "outputs": []
+      "outputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ]
     },
     "source.kit": {
       "category": "Output",
@@ -1486,7 +1534,12 @@
         }
       ],
       "name": "Kit",
-      "outputs": []
+      "outputs": [
+        {
+          "name": "MIDI",
+          "type": "MIDI"
+        }
+      ]
     },
     "source.noise": {
       "category": "Source",

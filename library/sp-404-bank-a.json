@@ -1,0 +1,1132 @@
+{
+  "name": "SP-404 Bank A",
+  "version": 6,
+  "nodes": [],
+  "connections": [],
+  "midi_mappings": [],
+  "groups": [
+    {
+      "id": 1200,
+      "name": "SP-404 Bank A",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "inputs": [
+        {
+          "name": "Gate 1",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 1",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 2",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 2",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 3",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 3",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 4",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 4",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 5",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 5",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 6",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 6",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 7",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 7",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 8",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 8",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 9",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 9",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 10",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 10",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 11",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 11",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 12",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 12",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 13",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 13",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 14",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 14",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 15",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 15",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 16",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 16",
+          "type": "Control"
+        }
+      ],
+      "outputs": [],
+      "inputs_position": [
+        -300.0,
+        0.0
+      ],
+      "outputs_position": [
+        1300.0,
+        0.0
+      ],
+      "nodes": [
+        {
+          "id": 1201,
+          "module_id": "source.instrument",
+          "position": [
+            0.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slot 1",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 2",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 3",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 4",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 5",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 6",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 7",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 8",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 9",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 10",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 11",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 12",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Press 1",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 2",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 3",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 4",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 5",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 6",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 7",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 8",
+              "type": "Toggle",
+              "value": false
+            }
+          ],
+          "labels": {
+            "button 1": "{\"name\":\"Looper Delete\",\"cc\":87,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+            "button 2": "{\"name\":\"Looper Rec\",\"cc\":88,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+            "button 3": "{\"name\":\"Looper Resample\",\"cc\":89,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+            "button 4": "{\"name\":\"Looper Exit\",\"cc\":85,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+            "button 5": "{\"name\":\"Looper Pitch/Speed\",\"cc\":86,\"mode\":\"momentary\",\"on\":127,\"off\":0}",
+            "profile": "SP-404MKII",
+            "slot 1": "{\"name\":\"Bus 1 Ctrl 1\",\"cc\":16,\"group\":\"FX\",\"channel\":1}",
+            "slot 10": "{\"name\":\"Bus 2 Ctrl 4\",\"cc\":80,\"group\":\"FX\",\"channel\":2}",
+            "slot 11": "{\"name\":\"Bus 2 Ctrl 5\",\"cc\":81,\"group\":\"FX\",\"channel\":2}",
+            "slot 12": "{\"name\":\"Bus 2 Ctrl 6\",\"cc\":82,\"group\":\"FX\",\"channel\":2}",
+            "slot 2": "{\"name\":\"Bus 1 Ctrl 2\",\"cc\":17,\"group\":\"FX\",\"channel\":1}",
+            "slot 3": "{\"name\":\"Bus 1 Ctrl 3\",\"cc\":18,\"group\":\"FX\",\"channel\":1}",
+            "slot 4": "{\"name\":\"Bus 1 Ctrl 4\",\"cc\":80,\"group\":\"FX\",\"channel\":1}",
+            "slot 5": "{\"name\":\"Bus 1 Ctrl 5\",\"cc\":81,\"group\":\"FX\",\"channel\":1}",
+            "slot 6": "{\"name\":\"Bus 1 Ctrl 6\",\"cc\":82,\"group\":\"FX\",\"channel\":1}",
+            "slot 7": "{\"name\":\"Bus 2 Ctrl 1\",\"cc\":16,\"group\":\"FX\",\"channel\":2}",
+            "slot 8": "{\"name\":\"Bus 2 Ctrl 2\",\"cc\":17,\"group\":\"FX\",\"channel\":2}",
+            "slot 9": "{\"name\":\"Bus 2 Ctrl 3\",\"cc\":18,\"group\":\"FX\",\"channel\":2}"
+          }
+        },
+        {
+          "id": 1202,
+          "module_id": "output.strike",
+          "position": [
+            340.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 1\",\"note\":48,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1203,
+          "module_id": "output.strike",
+          "position": [
+            570.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 2\",\"note\":49,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1204,
+          "module_id": "output.strike",
+          "position": [
+            800.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 3\",\"note\":50,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1205,
+          "module_id": "output.strike",
+          "position": [
+            1030.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 4\",\"note\":51,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1206,
+          "module_id": "output.strike",
+          "position": [
+            340.0,
+            230.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 5\",\"note\":44,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1207,
+          "module_id": "output.strike",
+          "position": [
+            570.0,
+            230.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 6\",\"note\":45,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1208,
+          "module_id": "output.strike",
+          "position": [
+            800.0,
+            230.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 7\",\"note\":46,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1209,
+          "module_id": "output.strike",
+          "position": [
+            1030.0,
+            230.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 8\",\"note\":47,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1210,
+          "module_id": "output.strike",
+          "position": [
+            340.0,
+            460.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 9\",\"note\":40,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1211,
+          "module_id": "output.strike",
+          "position": [
+            570.0,
+            460.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 10\",\"note\":41,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1212,
+          "module_id": "output.strike",
+          "position": [
+            800.0,
+            460.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 11\",\"note\":42,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1213,
+          "module_id": "output.strike",
+          "position": [
+            1030.0,
+            460.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 12\",\"note\":43,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1214,
+          "module_id": "output.strike",
+          "position": [
+            340.0,
+            690.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 13\",\"note\":36,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1215,
+          "module_id": "output.strike",
+          "position": [
+            570.0,
+            690.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 14\",\"note\":37,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1216,
+          "module_id": "output.strike",
+          "position": [
+            800.0,
+            690.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 15\",\"note\":38,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        },
+        {
+          "id": 1217,
+          "module_id": "output.strike",
+          "position": [
+            1030.0,
+            690.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Pad 16\",\"note\":39,\"channel\":1}",
+            "profile": "SP-404MKII"
+          }
+        }
+      ],
+      "connections": [
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1202,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 1",
+          "to_node": 1202,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 1",
+          "to_node": 1202,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1203,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 2",
+          "to_node": 1203,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 2",
+          "to_node": 1203,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1204,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 3",
+          "to_node": 1204,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 3",
+          "to_node": 1204,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1205,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 4",
+          "to_node": 1205,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 4",
+          "to_node": 1205,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1206,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 5",
+          "to_node": 1206,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 5",
+          "to_node": 1206,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1207,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 6",
+          "to_node": 1207,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 6",
+          "to_node": 1207,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1208,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 7",
+          "to_node": 1208,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 7",
+          "to_node": 1208,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1209,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 8",
+          "to_node": 1209,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 8",
+          "to_node": 1209,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1210,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 9",
+          "to_node": 1210,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 9",
+          "to_node": 1210,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1211,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 10",
+          "to_node": 1211,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 10",
+          "to_node": 1211,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1212,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 11",
+          "to_node": 1212,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 11",
+          "to_node": 1212,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1213,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 12",
+          "to_node": 1213,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 12",
+          "to_node": 1213,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1214,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 13",
+          "to_node": 1214,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 13",
+          "to_node": 1214,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1215,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 14",
+          "to_node": 1215,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 14",
+          "to_node": 1215,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1216,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 15",
+          "to_node": 1216,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 15",
+          "to_node": 1216,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1201,
+          "from_port": "MIDI",
+          "to_node": 1217,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Gate 16",
+          "to_node": 1217,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1200,
+          "from_port": "Vel 16",
+          "to_node": 1217,
+          "to_port": "Vel"
+        }
+      ]
+    }
+  ]
+}

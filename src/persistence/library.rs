@@ -24,10 +24,13 @@ pub enum Section {
     Effects,
     /// A controller's pads and knobs, as gates and CV (#480).
     Controllers,
+    /// A piece of hardware played from the patch, a Strike for each of its
+    /// parts (#484). They make no sound of their own.
+    Hardware,
 }
 
 impl Section {
-    pub const ALL: [Section; 5] = [Section::Voices, Section::Drums, Section::Generators, Section::Effects, Section::Controllers];
+    pub const ALL: [Section; 6] = [Section::Voices, Section::Drums, Section::Generators, Section::Effects, Section::Controllers, Section::Hardware];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -36,6 +39,7 @@ impl Section {
             Section::Generators => "Generators",
             Section::Effects => "Effects",
             Section::Controllers => "Controllers",
+            Section::Hardware => "Hardware",
         }
     }
 }
@@ -195,6 +199,27 @@ pub const LIBRARY: &[LibraryGroup] = &[
         description: "An Arturia MiniLab 3's four faders (CC 82, 83, 85 and 17) and both touch strips, as it comes from the box: a Control for each, jacks Fader 1 to 4, Bend and Mod",
         json: include_str!("../../library/minilab-3-faders.json"),
     },
+    LibraryGroup {
+        name: "Digitakt Kit",
+        file_name: "digitakt-kit.json",
+        section: Section::Hardware,
+        description: "An Elektron Digitakt's eight tracks: an Instrument playing it, and a Strike for each track, on its own channel (1 to 8) and note (0 to 7). Jacks Gate 1 to 8 and Vel 1 to 8, as a Trigger Sequencer's lanes come",
+        json: include_str!("../../library/digitakt-kit.json"),
+    },
+    LibraryGroup {
+        name: "SP-404 Bank A",
+        file_name: "sp-404-bank-a.json",
+        section: Section::Hardware,
+        description: "A Roland SP-404MKII's sixteen pads of bank A, in MIDI mode A on channel 1: an Instrument playing it, and a Strike for each pad, notes 48 to 51 along the top row down to 36 to 39 along the bottom. Jacks Gate 1 to 16 and Vel 1 to 16",
+        json: include_str!("../../library/sp-404-bank-a.json"),
+    },
+    LibraryGroup {
+        name: "volca drum Kit",
+        file_name: "volca-drum-kit.json",
+        section: Section::Hardware,
+        description: "A KORG volca drum's six parts in its factory split-channel mode: an Instrument playing it, and a Strike for each part on channels 1 to 6 (any note plays a part). Jacks Gate 1 to 6 and Vel 1 to 6",
+        json: include_str!("../../library/volca-drum-kit.json"),
+    },
 ];
 
 #[cfg(test)]
@@ -250,7 +275,9 @@ mod tests {
                 );
             }
             // Every pin shows on the face: knob, dropdown, toggle or pad
-            assert!(group.nodes.iter().any(|n| !n.pinned.is_empty()), "{}: nothing on its face", entry.name);
+            // (Hardware's Strikes are struck from the patch: the device's
+            // knobs are on its Instrument inside)
+            assert!(entry.section == Section::Hardware || group.nodes.iter().any(|n| !n.pinned.is_empty()), "{}: nothing on its face", entry.name);
             let staged = stage_patch(&patch).unwrap();
             let graph = &staged.graph;
             let id = graph.nodes.values().find_map(|n| n.user_data.kind.group()).unwrap();
@@ -456,6 +483,72 @@ mod tests {
         assert!(gap < window(4.0 * sixteenth), "quieter between hits");
     }
 
+    /// What each Strike of the Hardware group `name` sends as its gate
+    /// rises, in the order of its jacks: each followed to its device in the
+    /// editor's graph, and given what the patch compiles it to play.
+    fn struck(name: &str) -> Vec<Vec<u8>> {
+        use crate::dsp::{context::ProcessContext, signal::SignalBuffer, DspModule, SignalType};
+        use crate::link::midi::{MidiBus, Outgoing};
+        use crate::modules::strike::{self, Strike};
+        let entry = LIBRARY.iter().find(|g| g.name == name).unwrap();
+        let patch = entry.patch().unwrap();
+        let group = &patch.groups[0];
+        let device = group.nodes.iter().find(|n| n.module_id == crate::modules::instrument::ID).unwrap().id;
+        let staged = stage_patch(&patch).unwrap();
+        let graph_id = |patch_id: u64| staged.nodes.iter().find(|n| n.patch_id == patch_id).unwrap().graph_id;
+        let compiled = compile_patch(&patch).unwrap();
+        let mut sent = Vec::new();
+        for jack in group.inputs.iter().filter(|j| j.name.starts_with("Gate")) {
+            let to = group.connections.iter().find(|c| c.from_node == group.id && c.from_port == jack.name).unwrap().to_node;
+            // Patched from the group's Instrument, through the editor's graph
+            assert_eq!(crate::graph::device_follow::device_of(&staged.graph, graph_id(to)), Some(graph_id(device)), "{name}: {}", jack.name);
+            let engine = compiled.node_ids[&to];
+            let map = compiled
+                .commands
+                .iter()
+                .find_map(|c| match c {
+                    crate::engine::EngineCommand::MapLane { node_id, lane: 0, map } if *node_id == engine => Some(*map),
+                    _ => None,
+                })
+                .unwrap();
+            let bus: &'static MidiBus = Box::leak(Box::new(MidiBus::new()));
+            bus.start_draining();
+            let mut module = Strike::on_bus(bus);
+            let mut ring = bus.take_new_streams().pop().unwrap();
+            module.map_lane(0, map);
+            let node = group.nodes.iter().find(|n| n.id == to).unwrap();
+            assert_eq!(node.module_id, strike::ID);
+            let params: Vec<f32> = module.parameters().iter().map(|p| node.parameters.iter().find(|n| n.name == p.name).unwrap().value.as_f32()).collect();
+            let mut gate = SignalBuffer::polyphonic(64, SignalType::Gate);
+            gate.set_channels(1);
+            gate.channel_mut(0).fill(1.0);
+            let quiet = [SignalBuffer::unconnected(64, SignalType::Midi), SignalBuffer::unconnected(64, SignalType::Control)];
+            module.process(&[&quiet[0], &gate, &quiet[1]], &mut [], &params, &ProcessContext::new(48_000.0, 64));
+            while let Ok(event) = ring.pop() {
+                if let Outgoing::Message { message, .. } = event {
+                    sent.push(message.bytes().to_vec());
+                }
+            }
+        }
+        sent
+    }
+
+    #[test]
+    fn sixteen_strikes_play_an_sp_404s_bank_and_each_kit_its_parts() {
+        // The acceptance (#484), from Roland's MIDI note map (SP-404MK2
+        // Reference Manual v4.04, p. 271): mode A, bank A on channel 1, pads
+        // 1-4 notes 48-51 and 13-16 notes 36-39
+        let notes = [48, 49, 50, 51, 44, 45, 46, 47, 40, 41, 42, 43, 36, 37, 38, 39];
+        let expected: Vec<Vec<u8>> = notes.iter().map(|&note| vec![0x90, note, 102]).collect();
+        assert_eq!(struck("SP-404 Bank A"), expected);
+        // Elektron's manual, 8.4: notes 0-7 strike tracks 1-8 on channels 1-8
+        let expected: Vec<Vec<u8>> = (0..8u8).map(|track| vec![0x90 + track, track, 102]).collect();
+        assert_eq!(struck("Digitakt Kit"), expected);
+        // Korg's split-channel chart: parts 1-6 on channels 1-6, any note
+        let expected: Vec<Vec<u8>> = (0..6u8).map(|part| vec![0x90 + part, 60, 102]).collect();
+        assert_eq!(struck("volca drum Kit"), expected);
+    }
+
     #[test]
     fn a_controllers_first_control_opens_what_it_is_patched_into() {
         // Controls ×4's A hears the mod wheel, the MiniLab's Fader 1 CC 82:
@@ -477,7 +570,8 @@ mod tests {
     #[test]
     fn each_makes_sound_at_a_matching_level() {
         let sample_rate = 48_000.0;
-        for entry in LIBRARY {
+        // Hardware plays a device: its sound is the device's
+        for entry in LIBRARY.iter().filter(|entry| entry.section != Section::Hardware) {
             let patch = played(entry);
             let (mut renderer, compiled) = OfflineRenderer::from_patch(&patch, sample_rate, 256).unwrap();
             assert!(compiled.warnings.is_empty(), "{}: {:?}", entry.name, compiled.warnings);

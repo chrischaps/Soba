@@ -125,6 +125,8 @@ impl MidiOut {
             PortDefinition::input_with_default("send_program", "Send Program", SignalType::Gate, 0.0)
                 .describe("Sends the Bank and Program again as it rises: at the top of a song, say"),
         );
+        // Strikes and CC Outs patched from it play its port and channel (#484)
+        ports.push(crate::modules::strike::output());
         let mut parameters = vec![
             ParameterDefinition::choice("port", "Port", PORT_LABELS, 0)
                 .describe("Which device plays: click the device on the face, or open the Rig (Ctrl+Shift+H) to give each port one"),
@@ -433,7 +435,11 @@ mod tests {
     fn ports_and_info() {
         let (module, _) = module();
         assert_eq!(module.info().id, "output.midi");
-        assert!(module.ports().iter().all(|p| p.is_input()));
+        // Every port an input but the last: the MIDI that Strikes and CC
+        // Outs are patched from (#484)
+        let (last, inputs) = module.ports().split_last().unwrap();
+        assert!(inputs.iter().all(|p| p.is_input()));
+        assert!(!last.is_input() && last.name == "MIDI" && last.signal_type == SignalType::Midi);
         assert_eq!(module.ports()[MidiOut::PORT_CC + 3].id, "cc4");
         assert_eq!(module.ports()[MidiOut::PORT_SEND_PROGRAM].id, "send_program");
         assert_eq!(module.parameters()[MidiOut::PARAM_NRPN + 3].name, "NRPN 4");

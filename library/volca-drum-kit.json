@@ -1,0 +1,527 @@
+{
+  "name": "volca drum Kit",
+  "version": 6,
+  "nodes": [],
+  "connections": [],
+  "midi_mappings": [],
+  "groups": [
+    {
+      "id": 1300,
+      "name": "volca drum Kit",
+      "position": [
+        0.0,
+        0.0
+      ],
+      "inputs": [
+        {
+          "name": "Gate 1",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 1",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 2",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 2",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 3",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 3",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 4",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 4",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 5",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 5",
+          "type": "Control"
+        },
+        {
+          "name": "Gate 6",
+          "type": "Gate"
+        },
+        {
+          "name": "Vel 6",
+          "type": "Control"
+        }
+      ],
+      "outputs": [],
+      "inputs_position": [
+        -300.0,
+        0.0
+      ],
+      "outputs_position": [
+        1300.0,
+        0.0
+      ],
+      "nodes": [
+        {
+          "id": 1301,
+          "module_id": "source.instrument",
+          "position": [
+            0.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Slot 1",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 2",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 3",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 4",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 5",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 6",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 7",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 8",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 9",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 10",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 11",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Slot 12",
+              "type": "Number",
+              "value": 0.503937
+            },
+            {
+              "name": "Press 1",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 2",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 3",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 4",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 5",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 6",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 7",
+              "type": "Toggle",
+              "value": false
+            },
+            {
+              "name": "Press 8",
+              "type": "Toggle",
+              "value": false
+            }
+          ],
+          "labels": {
+            "profile": "volca drum",
+            "slot 1": "{\"name\":\"Level 1\",\"cc\":17,\"group\":\"Mix\",\"mutate\":false}",
+            "slot 10": "{\"name\":\"EG Attack 2\",\"cc\":21,\"group\":\"Envelope\"}",
+            "slot 11": "{\"name\":\"EG Release 1\",\"cc\":23,\"group\":\"Envelope\"}",
+            "slot 12": "{\"name\":\"EG Release 2\",\"cc\":24,\"group\":\"Envelope\"}",
+            "slot 2": "{\"name\":\"Level 2\",\"cc\":18,\"group\":\"Mix\",\"mutate\":false}",
+            "slot 3": "{\"name\":\"Pitch 1\",\"cc\":26,\"group\":\"Oscillator\"}",
+            "slot 4": "{\"name\":\"Pitch 2\",\"cc\":27,\"group\":\"Oscillator\"}",
+            "slot 5": "{\"name\":\"Mod Amt 1\",\"cc\":29,\"group\":\"Oscillator\"}",
+            "slot 6": "{\"name\":\"Mod Amt 2\",\"cc\":30,\"group\":\"Oscillator\"}",
+            "slot 7": "{\"name\":\"Mod Rate 1\",\"cc\":46,\"group\":\"Oscillator\"}",
+            "slot 8": "{\"name\":\"Mod Rate 2\",\"cc\":47,\"group\":\"Oscillator\"}",
+            "slot 9": "{\"name\":\"EG Attack 1\",\"cc\":20,\"group\":\"Envelope\"}"
+          }
+        },
+        {
+          "id": 1302,
+          "module_id": "output.strike",
+          "position": [
+            340.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Part 1\",\"channel\":1}",
+            "profile": "volca drum"
+          }
+        },
+        {
+          "id": 1303,
+          "module_id": "output.strike",
+          "position": [
+            570.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Part 2\",\"channel\":2}",
+            "profile": "volca drum"
+          }
+        },
+        {
+          "id": 1304,
+          "module_id": "output.strike",
+          "position": [
+            800.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Part 3\",\"channel\":3}",
+            "profile": "volca drum"
+          }
+        },
+        {
+          "id": 1305,
+          "module_id": "output.strike",
+          "position": [
+            1030.0,
+            0.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Part 4\",\"channel\":4}",
+            "profile": "volca drum"
+          }
+        },
+        {
+          "id": 1306,
+          "module_id": "output.strike",
+          "position": [
+            340.0,
+            230.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Part 5\",\"channel\":5}",
+            "profile": "volca drum"
+          }
+        },
+        {
+          "id": 1307,
+          "module_id": "output.strike",
+          "position": [
+            570.0,
+            230.0
+          ],
+          "parameters": [
+            {
+              "name": "Port",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Channel",
+              "type": "Select",
+              "value": 0
+            },
+            {
+              "name": "Note",
+              "type": "Number",
+              "value": 36.0
+            },
+            {
+              "name": "Velocity",
+              "type": "Number",
+              "value": 0.8
+            }
+          ],
+          "labels": {
+            "part": "{\"name\":\"Part 6\",\"channel\":6}",
+            "profile": "volca drum"
+          }
+        }
+      ],
+      "connections": [
+        {
+          "from_node": 1301,
+          "from_port": "MIDI",
+          "to_node": 1302,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Gate 1",
+          "to_node": 1302,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Vel 1",
+          "to_node": 1302,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1301,
+          "from_port": "MIDI",
+          "to_node": 1303,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Gate 2",
+          "to_node": 1303,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Vel 2",
+          "to_node": 1303,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1301,
+          "from_port": "MIDI",
+          "to_node": 1304,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Gate 3",
+          "to_node": 1304,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Vel 3",
+          "to_node": 1304,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1301,
+          "from_port": "MIDI",
+          "to_node": 1305,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Gate 4",
+          "to_node": 1305,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Vel 4",
+          "to_node": 1305,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1301,
+          "from_port": "MIDI",
+          "to_node": 1306,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Gate 5",
+          "to_node": 1306,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Vel 5",
+          "to_node": 1306,
+          "to_port": "Vel"
+        },
+        {
+          "from_node": 1301,
+          "from_port": "MIDI",
+          "to_node": 1307,
+          "to_port": "MIDI"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Gate 6",
+          "to_node": 1307,
+          "to_port": "Gate"
+        },
+        {
+          "from_node": 1300,
+          "from_port": "Vel 6",
+          "to_node": 1307,
+          "to_port": "Vel"
+        }
+      ]
+    }
+  ]
+}

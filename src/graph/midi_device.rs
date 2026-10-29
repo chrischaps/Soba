@@ -145,23 +145,33 @@ pub fn device_choices(ui: &mut egui::Ui, node_id: NodeId, current: Option<&str>,
     chosen
 }
 
-/// Whether `param` is the MIDI input of a module that hears MIDI. It has
-/// no row: its jack sits on the left end of the title bar (see
-/// [`place_midi_jack`]), so a module grows no taller for it and a MIDI In's
-/// cable comes in at its head.
+/// Whether `param` is the MIDI input of a module that hears MIDI, or sends
+/// to a device (#484), or a device's MIDI output. It has no row: its jack
+/// sits on an end of the title bar (see [`place_midi_jack`]), so a module
+/// grows no taller for it and a MIDI cable comes in at its head, or leaves
+/// a device from there.
 pub fn is_midi_jack(node_id: NodeId, graph: &SynthGraph, param: egui_node_graph2::AnyParameterId) -> bool {
-    let egui_node_graph2::AnyParameterId::Input(input) = param else { return false };
-    graph
-        .nodes
-        .get(node_id)
-        .is_some_and(|node| node.user_data.is_module() && node.inputs.iter().any(|(name, id)| *id == input && name == midi_in::PORT_NAME))
+    let Some(node) = graph.nodes.get(node_id).filter(|node| node.user_data.is_module()) else { return false };
+    match param {
+        egui_node_graph2::AnyParameterId::Input(input) => node.inputs.iter().any(|(name, id)| *id == input && name == midi_in::PORT_NAME),
+        egui_node_graph2::AnyParameterId::Output(output) => {
+            super::device_follow::is_device(node.user_data.module_id) && node.outputs.iter().any(|(name, id)| *id == output && name == midi_in::PORT_NAME)
+        }
+    }
 }
 
-/// Puts the module's MIDI jack, if it has one, at height `y` on its left
-/// edge: the title bar's middle. Called each frame its title bar is drawn.
+/// Puts the module's MIDI jacks, if it has them, at height `y`: an input on
+/// its left edge, a device's output on its right, the title bar's middle.
+/// Called each frame its title bar is drawn.
 pub fn place_midi_jack(ui: &egui::Ui, node_id: NodeId, graph: &SynthGraph, y: f32) {
-    if let Some(input) = graph.nodes.get(node_id).and_then(|node| node.get_input(midi_in::PORT_NAME).ok()) {
+    let Some(node) = graph.nodes.get(node_id) else { return };
+    if let Ok(input) = node.get_input(midi_in::PORT_NAME) {
         egui_node_graph2::place_port(ui, node_id, egui_node_graph2::AnyParameterId::Input(input), y);
+    }
+    if super::device_follow::is_device(node.user_data.module_id) {
+        if let Ok(output) = node.get_output(midi_in::PORT_NAME) {
+            egui_node_graph2::place_port(ui, node_id, egui_node_graph2::AnyParameterId::Output(output), y);
+        }
     }
 }
 

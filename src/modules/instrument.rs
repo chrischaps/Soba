@@ -411,6 +411,8 @@ impl Instrument {
             PortDefinition::input_with_default(id, name, SignalType::Gate, 0.0)
                 .describe("Presses the hardware's button while the gate is high, or flips a toggle each time it rises")
         }));
+        // Strikes and CC Outs patched from it play its device (#484)
+        ports.push(crate::modules::strike::output());
         let mut parameters = vec![
             ParameterDefinition::choice("port", "Port", PORT_LABELS, 0)
                 .describe("Which device it plays: click the device on the face, or open the Rig (Ctrl+Shift+H) to give each port one"),
