@@ -89,6 +89,7 @@ jobs:
             "From \`packaging/shortlinks/\`:" \
             "" \
             '```' \
+            "npm run garden:review        # each in turn, with its link: show, hide or leave it" \
             "npm run garden:pending       # each waiting plant, with its short link to listen to" \
             "npm run garden:show <id> …   # into the garden" \
             "npm run garden:hide <id> …   # kept out" \

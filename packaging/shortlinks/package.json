@@ -8,6 +8,7 @@
     "dev": "wrangler dev --local --port 8787",
     "test": "node spike_test.mjs ../../patches",
     "garden:pending": "node garden.mjs pending",
+    "garden:review": "node garden.mjs review",
     "garden:show": "node garden.mjs show",
     "garden:hide": "node garden.mjs hide"
   },
