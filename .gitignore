@@ -12,7 +12,7 @@
 Thumbs.db
 
 # Local Claude settings (may contain user-specific paths)
-.claude/
+.claude/*
 nul
 
 # The web build (trunk build)
@@ -24,6 +24,10 @@ __pycache__/
 
 # The browser tools (tools/web), installed by npm
 node_modules/
+!.claude/settings.json
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/next-issue/
 
 # Presentation takes, kept beside the script without --take
 /presentations/takes/
