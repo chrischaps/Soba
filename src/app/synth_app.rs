@@ -89,6 +89,7 @@ mod midi_listen;
 mod mutating;
 mod out_of_sight;
 mod page_audio;
+mod pad_lights;
 mod plant;
 mod present;
 mod scenes;
@@ -332,6 +333,8 @@ pub struct SynthApp {
     rig_panel: rig_panel::RigPanel,
     /// What each FM Voice last sent (#448).
     fm_sends: fm_voices::FmSends,
+    /// What each controller's pads were last lit (#430).
+    pad_lights: crate::app::pad_lights::PadLights,
     /// The sketch of the controller along the canvas's foot (#431).
     hands_overlay: hands_overlay::HandsOverlay,
     /// Patch files the visitor picked, which the browser hands over later.
@@ -481,6 +484,7 @@ impl SynthApp {
             controller_map: Default::default(),
             rig_panel: Default::default(),
             fm_sends: Default::default(),
+            pad_lights: Default::default(),
             hands_overlay: Default::default(),
             #[cfg(target_arch = "wasm32")]
             uploads: std::sync::mpsc::channel(),
@@ -2788,6 +2792,8 @@ impl SynthApp {
         self.sync_instruments();
         // ...and FM Voices' voices, by SysEx
         self.sync_fm_voices(ctx);
+        // ...and the controllers' pad lights, by SysEx
+        self.sync_pad_lights(ctx);
 
         // What the toolbar and the shortcuts asked for, now the graph is drawn
         self.dispatch(ctx, actions);

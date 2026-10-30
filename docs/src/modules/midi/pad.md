@@ -126,6 +126,10 @@ A Note In set to a channel hears that channel's notes, claimed or not. To play a
 
 The computer keys and the on-screen pianos are never claimed: they always play Note In.
 
+## Lit on the controller
+
+A controller with RGB pads, like the MiniLab 3, can show what each Pad plays. Each pad lights in the colour of the module its Gate goes into, or in Gate green when nothing is patched. It flashes when you hit it and stays lit while it's latched. See [Pad Lights: MiniLab 3](../../hardware/minilab-3.md).
+
 ## Patches made with Pads
 
 Pads, the module this one replaced, was eight pads in one node, with one **Hit** cable for every drum's Accent. A patch made with it opens with a group named **Pads** in its place, holding eight Pads, each on the note and channel its pad heard, in the same Mode, hearing the same Device. The group's jacks are **Gate 1** to **Gate 8**. A cable from **Hit** now leaves from the **Vel** jack of the pad whose gate feeds the same drum, so each drum still hears its own hit, and **Pressure** from the pad it followed. It sounds as it did, except that two pads hit together now strike on the same sample, not a sample apart.

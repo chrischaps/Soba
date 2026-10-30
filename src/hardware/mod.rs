@@ -15,6 +15,7 @@ pub mod garden;
 pub mod hearing;
 pub mod instrument;
 pub mod lane;
+pub mod lights;
 pub mod listening;
 #[cfg(test)]
 mod pages;
