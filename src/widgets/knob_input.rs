@@ -128,7 +128,8 @@ fn wheel_id(knob: Id) -> Id {
 /// marks it as the one under the pointer for next frame's.
 pub fn wheel(ui: &Ui, response: &Response, config: &KnobConfig, value: &mut f32) {
     if response.hovered() && ui.is_enabled() {
-        let rect = response.rect.intersect(ui.clip_rect());
+        // On screen, where next frame's wheel is: the canvas is laid out at zoom 1
+        let rect = crate::graph::canvas_layer::on_screen(ui.ctx(), ui.layer_id(), response.rect.intersect(ui.clip_rect()));
         ui.data_mut(|d| d.insert_temp(hovered_id(), Hovered { id: response.id, layer: ui.layer_id(), rect }));
     }
     let Some((plain, fine)) = ui.data_mut(|d| d.remove_temp::<(f32, f32)>(wheel_id(response.id))) else { return };
@@ -168,7 +169,7 @@ pub fn claim_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
             true
         }
         Event::MouseWheel { unit, delta, modifiers, .. } if modifiers.alt => {
-            let over = pointer.is_some_and(|at| knob.rect.contains(at) && ctx.layer_id_at(at) == Some(knob.layer));
+            let over = pointer.is_some_and(|at| knob.rect.contains(at) && ctx.layer_id_at(at) == Some(crate::graph::canvas_layer::shown_on(ctx, knob.layer)));
             if !over {
                 return true;
             }

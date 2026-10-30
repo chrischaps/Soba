@@ -341,7 +341,7 @@ pub fn body(
     if hovered {
         paint_open_pill(&painter, rect, zoom);
     }
-    user_state.miniatures.insert(id, rect);
+    user_state.miniatures.insert(id, super::canvas_layer::on_screen(ui.ctx(), ui.layer_id(), rect));
     if response.on_hover_text("Open the group (double-click it, or Tab)").clicked() {
         responses.push(NodeResponse::User(SynthResponse::EnterGroup(node_id)));
     }

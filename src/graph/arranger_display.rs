@@ -450,10 +450,16 @@ pub fn claim_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
     }
     let line = ctx.options(|options| options.input_options.line_scroll_speed);
     let mut pointer = ctx.input(|input| input.pointer.latest_pos());
+    // Timelines are laid out on the canvas's layer, at zoom 1: where the
+    // pointer is, and how far a turn goes, in the timeline's own points
     let claim_at = |pointer: Option<Pos2>, zoom: bool| {
         let at = pointer?;
-        claims.iter().find(|c| c.rect.contains(at) && (zoom || c.zoomed) && ctx.layer_id_at(at) == Some(c.layer)).map(|c| (*c, at))
+        claims.iter().find_map(|c| {
+            let local = super::canvas_layer::in_layer(ctx, c.layer, at);
+            (c.rect.contains(local) && (zoom || c.zoomed) && ctx.layer_id_at(at) == Some(super::canvas_layer::shown_on(ctx, c.layer))).then_some((*c, local))
+        })
     };
+    let points = |claim: &Claim| ctx.layer_transform_from_global(claim.layer).map_or(1.0, |t| t.scaling);
     let add = |claim: Claim, at: Pos2, pan: f32, zoom: f32| {
         ctx.data_mut(|data| {
             let wheel = data.get_temp_mut_or_insert_with(wheel_id(claim.node_id), || Wheel { pan: 0.0, zoom: 1.0, at });
@@ -471,8 +477,8 @@ pub fn claim_wheel(ctx: &egui::Context, raw: &mut egui::RawInput) {
             let zoom = modifiers.ctrl || modifiers.command || modifiers.mac_cmd;
             let Some((claim, at)) = claim_at(pointer, zoom) else { return true };
             let delta = match unit {
-                egui::MouseWheelUnit::Point => *delta,
-                egui::MouseWheelUnit::Line => *delta * line,
+                egui::MouseWheelUnit::Point => *delta * points(&claim),
+                egui::MouseWheelUnit::Line => *delta * line * points(&claim),
                 egui::MouseWheelUnit::Page => *delta * claim.rect.width(),
             };
             if zoom {
@@ -1023,7 +1029,7 @@ fn sections(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, now: Now
             continue;
         }
 
-        super::marks::mark(ui.ctx(), node_id, format_args!("section:{}", section + 1), shown);
+        super::marks::mark(ui, node_id, format_args!("section:{}", section + 1), shown);
         let response = ui
             .interact(shown, Id::unique((node_id, "arranger-section", section)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand);
@@ -1308,7 +1314,7 @@ fn lane_rows(ui: &mut egui::Ui, cx: Ctx, layout: &Layout, frame: &Frame, lane: u
         }
         let cue = song.cue(section, lane);
         let what = format!("{} · {lane_label}", section_name(graph, node_id, section));
-        super::marks::mark(ui.ctx(), node_id, format_args!("cell:{}:{}", lane + 1, section + 1), cell);
+        super::marks::mark(ui, node_id, format_args!("cell:{}:{}", lane + 1, section + 1), cell);
         let response = ui
             .interact(cell, Id::unique((node_id, "arranger-cell", lane, section)), Sense::click_and_drag())
             .on_hover_cursor(CursorIcon::ResizeVertical);

@@ -901,7 +901,7 @@ impl SynthNodeData {
                 if let (Some(control), false) = (&knob_response.inner, place.is_face()) {
                     let r = control.rect;
                     let dial = egui::Rect::from_min_size(r.min, egui::vec2(r.width(), r.width().min(r.height())));
-                    super::marks::mark(ui.ctx(), node_id, format_args!("knob:{}", knob_param.param_name), dial);
+                    super::marks::mark(ui, node_id, format_args!("knob:{}", knob_param.param_name), dial);
                 }
 
                 // In Map Mode a click maps the knob instead of turning it (#426)
@@ -1392,7 +1392,7 @@ impl NodeDataTrait for SynthNodeData {
             );
             let center = egui::pos2(switch_rect.left() + switch_size * 0.5, switch_rect.center().y);
             self.draw_power_switch(ui.painter(), center, switch_size, switch.hovered());
-            super::marks::mark(ui.ctx(), node_id, "bypass", egui::Rect::from_center_size(center, egui::Vec2::splat(switch_size)));
+            super::marks::mark(ui, node_id, "bypass", egui::Rect::from_center_size(center, egui::Vec2::splat(switch_size)));
             let hint = if self.bypassed {
                 "Bypassed: audio passes straight through. Click to switch back in (Ctrl+B)"
             } else {

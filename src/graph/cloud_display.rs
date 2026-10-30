@@ -76,7 +76,7 @@ pub fn cloud_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     let blue = ModuleCategory::Source.color();
     ui.add_space(8.0 * z);
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
-    super::marks::mark(ui.ctx(), node_id, "cloud", rect);
+    super::marks::mark(ui, node_id, "cloud", rect);
     ui.painter().hline(rect.x_range(), rect.top() - 4.0 * z, Stroke::new(1.0 * z, with_alpha(blue, 64)));
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 3.0 * z, display_frame::PANEL);
@@ -201,7 +201,7 @@ pub fn cloud_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, use
     ui.painter().text(Pos2::new(row.left() + 2.0 * z, row.center().y), egui::Align2::LEFT_CENTER, label, small.clone(), color);
     let button = Rect::from_min_size(Pos2::new(row.right() - 34.0 * z, row.top() + 1.0 * z), Vec2::new(34.0 * z, row_height - 2.0 * z));
     let open = ui.interact(button, ui.scope_id().with(("cloud_open", node_id)), Sense::click());
-    super::marks::mark(ui.ctx(), node_id, "file", button);
+    super::marks::mark(ui, node_id, "file", button);
     let fill = if open.hovered() { theme::background::WIDGET_HOVERED } else { theme::background::WIDGET };
     ui.painter().rect(button, 3.0 * z, fill, Stroke::new(1.0 * z, theme::background::GRID_MAJOR), egui::StrokeKind::Middle);
     ui.painter().text(button.center(), egui::Align2::CENTER_CENTER, "Open…", small, theme::text::PRIMARY);

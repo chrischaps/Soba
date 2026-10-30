@@ -415,7 +415,7 @@ pub(super) fn step_grid(
                     let (rect, response) = ui
                         .allocate_exact_size(egui::vec2(step_size, step_size + 12.0 * zoom), Sense::click_and_drag());
                     let pad = egui::Rect::from_min_size(rect.min, egui::vec2(step_size, step_size));
-                    super::marks::mark(ui.ctx(), node_id, format_args!("step:{}", cells.len() + 1), pad);
+                    super::marks::mark(ui, node_id, format_args!("step:{}", cells.len() + 1), pad);
                     cells.push((pad, response.on_hover_text(HINT)));
                     ui.add_space(step_spacing);
                 }
@@ -528,6 +528,7 @@ pub(super) fn step_grid(
             if let Some(mut drag) = drag.filter(|_| response.dragged()) {
                 let (origin, now, octaves) =
                     ui.input(|i| (i.pointer.press_origin(), i.pointer.interact_pos(), i.modifiers.shift));
+                let (origin, now) = (super::canvas_layer::in_ui(ui, origin), super::canvas_layer::in_ui(ui, now));
                 if let (Some(origin), Some(now)) = (origin, now) {
                     let to = dragged_pitch(drag.from, now.y - origin.y, zoom, octaves);
                     if to != pitch {
@@ -677,6 +678,9 @@ fn slur(painter: &egui::Painter, from: egui::Rect, to: egui::Rect, wraps: bool, 
 /// edge can't clip it.
 pub(super) fn drag_badge(ui: &egui::Ui, node_id: NodeId, step: egui::Rect, name: &str, zoom: f32) {
     let painter = ui.ctx().layer_painter(LayerId::new(Order::Tooltip, Id::unique(("step_drag_badge", node_id))));
+    // It floats over the canvas, on screen, where the step is laid out at zoom 1
+    let step = super::canvas_layer::on_screen(ui.ctx(), ui.layer_id(), step);
+    let zoom = zoom * ui.ctx().layer_transform_to_global(ui.layer_id()).map_or(1.0, |t| t.scaling);
     let font = egui::FontId::proportional((12.0 * zoom).max(11.0));
     let galley = painter.layout_no_wrap(name.to_string(), font, Color32::from_rgb(30, 22, 12));
     let size = galley.size() + egui::vec2(10.0, 4.0);

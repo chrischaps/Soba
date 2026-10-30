@@ -490,7 +490,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
                 ui.spacing_mut().item_spacing.x = gap;
                 for _ in row_start..(row_start + 8).min(pattern.steps) {
                     let (rect, response) = ui.allocate_exact_size(cell, Sense::click_and_drag());
-                    super::marks::mark(ui.ctx(), node_id, format_args!("step:{}", cells.len() + 1), rect);
+                    super::marks::mark(ui, node_id, format_args!("step:{}", cells.len() + 1), rect);
                     cells.push((rect, response.on_hover_text(HINT)));
                 }
             });
@@ -562,6 +562,7 @@ pub(super) fn chord_grid(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph,
             let drag = ui.data(|d| d.get_temp::<RootDrag>(drag_id)).filter(|d| d.step == step);
             if let Some(drag) = drag.filter(|_| response.dragged()) {
                 let (origin, now, octaves) = ui.input(|i| (i.pointer.press_origin(), i.pointer.interact_pos(), i.modifiers.shift));
+                let (origin, now) = (super::canvas_layer::in_ui(ui, origin), super::canvas_layer::in_ui(ui, now));
                 if let (Some(origin), Some(now)) = (origin, now) {
                     let to = dragged_pitch(drag.from, now.y - origin.y, z, octaves);
                     if to != root {
