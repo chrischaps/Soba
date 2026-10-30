@@ -284,7 +284,7 @@ impl WidgetValueTrait for SynthValueType {
             }
         };
         // For a capture script to aim at, as a knob is
-        super::marks::mark(ui.ctx(), node_id, format_args!("knob:{param_name}"), control.rect);
+        super::marks::mark(ui, node_id, format_args!("knob:{param_name}"), control.rect);
         // Mapped to MIDI, or waiting to be: a purple badge on its corner, as
         // a knob has
         let midi = node_data.midi_learn(node_id, param_name, self, user_state);

@@ -1418,7 +1418,7 @@ impl SynthApp {
     fn is_over_module(&self, ctx: &egui::Context, screen: egui::Pos2) -> bool {
         // The editor senses clicks on each whole node under this id
         self.graph_state.node_order.iter().any(|&node_id| {
-            ctx.read_response(egui::Id::unique((node_id, "window"))).is_some_and(|r| r.rect.contains(screen))
+            annotation_ui::module_rect(ctx, node_id).is_some_and(|r| r.contains(screen))
         })
     }
 

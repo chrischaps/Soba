@@ -71,12 +71,14 @@ fn marks_id(node_id: NodeId) -> Id {
     Id::unique((node_id, "marks"))
 }
 
-/// Marks a part of a module as drawn at `rect`, on screen, this pass.
-/// Call it every pass the part is drawn.
-pub fn mark(ctx: &egui::Context, node_id: NodeId, name: impl std::fmt::Display, rect: Rect) {
+/// Marks a part of a module as drawn at `rect`, in `ui`, this pass: it's
+/// kept as it is on screen. Call it every pass the part is drawn.
+pub fn mark(ui: &egui::Ui, node_id: NodeId, name: impl std::fmt::Display, rect: Rect) {
     if !MARKING.load(Ordering::Relaxed) {
         return;
     }
+    let ctx = ui.ctx();
+    let rect = super::canvas_layer::on_screen(ctx, ui.layer_id(), rect);
     let name = name.to_string();
     let pass = ctx.cumulative_pass_nr();
     ctx.data_mut(|data| {
@@ -117,8 +119,12 @@ mod tests {
         let node = NodeId::default();
         let rect = Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(30.0, 12.0));
         start();
-        mark(&ctx, node, "file", rect);
-        mark(&ctx, node, "knob:Detune", rect.translate(egui::vec2(0.0, 40.0)));
+        ctx.run_ui(Default::default(), |ui| {
+            mark(ui, node, "file", rect);
+            mark(ui, node, "knob:Detune", rect.translate(egui::vec2(0.0, 40.0)));
+        })
+        .textures_delta
+        .clear();
         assert_eq!(marked(&ctx, node, "FILE"), Some(rect));
         assert_eq!(marked(&ctx, node, "knob:detune").map(|r| r.top()), Some(60.0));
         assert_eq!(marked(&ctx, node, "cue"), None);

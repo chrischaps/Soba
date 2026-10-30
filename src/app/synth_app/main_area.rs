@@ -2,6 +2,7 @@
 //! drawn, their right-click menus, and the add menu and palette over it.
 
 use super::*;
+use crate::graph::canvas_layer;
 
 /// What a module's right-click menu asked for, handled once the graph is drawn.
 enum NodeMenuAction {
@@ -162,12 +163,19 @@ impl SynthApp {
         );
         let dragging = self.graph_state.connection_in_progress;
         asks.dragged_from = dragging.map(|(_, jack)| jack);
-        let graph_response = self.graph_state.draw_graph_editor(
-            ui,
-            AllNodeTemplates,
-            &mut self.user_state,
-            Vec::default(),
-        );
+        // Laid out at zoom 1 and drawn at the view's, so nothing moves as it
+        // zooms (#409). The wheel zooms the view, not the layout
+        self.graph_state.app_zooms = true;
+        self.graph_state.zoom_with_wheel(ui);
+        let laid = canvas_layer::LaidOut::switch(&mut self.graph_state, ui.style().clone());
+        self.user_state.zoom = 1.0;
+        self.user_state.view_origin = self.history.view_origin() / laid.zoom();
+        let to_screen = laid.transform(editor_rect.min);
+        let graph_response = canvas_layer::show(ui, to_screen, |ui| {
+            self.graph_state.draw_graph_editor(ui, AllNodeTemplates, &mut self.user_state, Vec::default())
+        });
+        self.user_state.zoom = laid.zoom();
+        laid.restore(&mut self.graph_state);
         ui.set_clip_rect(view_clip);
         crate::graph::map_mode::paint_edge(ui.painter(), editor_rect, &self.user_state);
         let dt = ctx.input(|i| i.stable_dt).min(0.1);
@@ -194,7 +202,8 @@ impl SynthApp {
         // A selection box takes in the frames and notes wholly inside it
         if let Some(start) = self.graph_state.ongoing_box_selection {
             if let Some(pointer) = ctx.input(|i| i.pointer.hover_pos()) {
-                self.user_state.annotations.select_within(egui::Rect::from_two_pos(start, pointer));
+                // The box starts where the editor's layout had the pointer
+                self.user_state.annotations.select_within(egui::Rect::from_two_pos(to_screen * start, pointer));
             }
         }
 

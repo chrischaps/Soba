@@ -118,7 +118,7 @@ pub fn buttons(data: &SynthNodeData, ui: &mut egui::Ui, node_id: NodeId, graph: 
         let rect = Rect::from_min_max(row.min + vec2(4.0 * z, GAP * z / 2.0), row.max - vec2(4.0 * z, GAP * z / 2.0));
         let id = Id::unique(("instrument_button", node_id, index));
         let response = ui.interact(rect, id, Sense::click());
-        super::marks::mark(ui.ctx(), node_id, format_args!("button:{}", index + 1), rect);
+        super::marks::mark(ui, node_id, format_args!("button:{}", index + 1), rect);
 
         // On: lit, with a flash as it turns on that outlasts a trigger
         let on = lit & (1 << index) != 0;

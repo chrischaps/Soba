@@ -171,9 +171,15 @@ fn title_ink(tint: Tint) -> Color32 {
     tint.color().lerp_to_gamma(Color32::WHITE, 0.4)
 }
 
-/// Where a module was last drawn, on screen.
+/// Where a module was last drawn, on screen. It's laid out on the canvas's
+/// layer, at zoom 1 (see [`super::canvas_layer`]).
 pub fn module_rect(ctx: &egui::Context, node_id: NodeId) -> Option<Rect> {
-    ctx.read_response(Id::unique((node_id, "window"))).map(|r| r.rect)
+    ctx.read_response(Id::unique((node_id, "window"))).map(|r| super::canvas_layer::on_screen(ctx, r.layer_id, r.rect))
+}
+
+/// Where a rect laid out on `ui`'s layer is on screen.
+fn on_screen(ui: &Ui, rect: Rect) -> Rect {
+    super::canvas_layer::on_screen(ui.ctx(), ui.layer_id(), rect)
 }
 
 /// Modules whose middle lies inside a rectangle on screen.
@@ -237,7 +243,7 @@ pub fn show(ui: &mut Ui, annotations: &mut Annotations, mut backdrop: Backdrop<'
             MenuAction::SelectInside(id) => {
                 if let Some(Annotation::Frame(frame)) = annotations.get(id) {
                     let screen = view.rect_to_screen(frame.rect);
-                    *backdrop.selected_nodes = modules_inside(ui.ctx(), screen, backdrop.node_positions.keys());
+                    *backdrop.selected_nodes = modules_inside(ui.ctx(), on_screen(ui, screen), backdrop.node_positions.keys());
                     annotations.selected.clear();
                 }
             }
@@ -253,7 +259,7 @@ pub fn show(ui: &mut Ui, annotations: &mut Annotations, mut backdrop: Backdrop<'
         && !over_handle
         && ui
             .input(|i| i.pointer.interact_pos())
-            .is_some_and(|pos| ui.clip_rect().contains(pos) && ui.ctx().layer_id_at(pos) == Some(ui.layer_id()));
+            .is_some_and(|pos| on_screen(ui, ui.clip_rect()).contains(pos) && ui.ctx().layer_id_at(pos) == Some(super::canvas_layer::shown_on(ui.ctx(), ui.layer_id())));
     if clicked_elsewhere {
         annotations.selected.clear();
     }
@@ -290,6 +296,8 @@ fn frame_ui(
 ) -> bool {
     let Some(Annotation::Frame(frame)) = annotations.get(id).cloned() else { return false };
     let zoom = view.zoom;
+    // The canvas is laid out at zoom 1 and shown scaled, and a grab is a reach on screen
+    let grab = GRAB * ui.ctx().layer_transform_from_global(ui.layer_id()).map_or(1.0, |t| t.scaling);
     let screen = view.rect_to_screen(frame.rect);
     let band = Rect::from_min_size(screen.min, vec2(screen.width(), FRAME_TITLE_BAND * zoom));
     let selected = annotations.selected.contains(&id);
@@ -299,12 +307,12 @@ fn frame_ui(
     let body_slot = ui.painter().add(Shape::Noop);
 
     // The title band: a handle to move the frame by
-    let handle_rect = Rect::from_min_max(band.min + vec2(GRAB, GRAB), pos2(band.max.x - GRAB, band.max.y));
+    let handle_rect = Rect::from_min_max(band.min + vec2(grab, grab), pos2(band.max.x - grab, band.max.y));
     let title = ui.interact(handle_rect, Id::unique(("frame title", id)), Sense::click_and_drag());
     let mut over = title.hovered();
 
     if title.drag_started_by(PointerButton::Primary) && !pans_view(ui, &title) {
-        let members = modules_inside(ui.ctx(), screen, backdrop.node_positions.keys());
+        let members = modules_inside(ui.ctx(), on_screen(ui, screen), backdrop.node_positions.keys());
         let riders = riders(annotations, id, frame.rect);
         ui.ctx().data_mut(|d| d.insert_temp(drag_id(id), Drag::Move { members, riders }));
         if !selected {
@@ -376,9 +384,9 @@ fn frame_ui(
         let x = if edges.left { Some(screen.left()) } else if edges.right { Some(screen.right()) } else { None };
         let y = if edges.top { Some(screen.top()) } else if edges.bottom { Some(screen.bottom()) } else { None };
         let rect = match (x, y) {
-            (Some(x), Some(y)) => Rect::from_center_size(pos2(x, y), Vec2::splat(GRAB * 2.5)),
-            (Some(x), None) => Rect::from_x_y_ranges(x - GRAB..=x + GRAB, screen.top() + GRAB..=screen.bottom() - GRAB),
-            (None, Some(y)) => Rect::from_x_y_ranges(screen.left() + GRAB..=screen.right() - GRAB, y - GRAB..=y + GRAB),
+            (Some(x), Some(y)) => Rect::from_center_size(pos2(x, y), Vec2::splat(grab * 2.5)),
+            (Some(x), None) => Rect::from_x_y_ranges(x - grab..=x + grab, screen.top() + grab..=screen.bottom() - grab),
+            (None, Some(y)) => Rect::from_x_y_ranges(screen.left() + grab..=screen.right() - grab, y - grab..=y + grab),
             (None, None) => continue,
         };
         let handle = ui.interact(rect, Id::unique(("frame edge", id, x.is_some(), edges.left, edges.top, y.is_some())), Sense::drag());
@@ -418,7 +426,7 @@ fn frame_ui(
     if editing {
         title_editor(ui, annotations, id, band, zoom, title_ink(frame.tint));
     }
-    annotations.drawn.insert(id, screen);
+    annotations.drawn.insert(id, on_screen(ui, screen));
     over
 }
 
@@ -661,12 +669,15 @@ fn note_ui(
 ) -> bool {
     let Some(Annotation::Note(note)) = annotations.get(id).cloned() else { return false };
     let zoom = view.zoom;
+    // The canvas is laid out at zoom 1 and shown scaled, and a grab is a reach on screen
+    let grab = GRAB * ui.ctx().layer_transform_from_global(ui.layer_id()).map_or(1.0, |t| t.scaling);
     let selected = annotations.selected.contains(&id);
     let editing = annotations.editing.as_ref().is_some_and(|e| e.id == id);
     let padding = NOTE_PADDING * zoom;
     let text_height = if editing {
         // The field grows as lines are typed; it's measured as it was last drawn
-        annotations.drawn.get(&id).map_or(NOTE_TEXT_SIZE * zoom * 1.4, |r| r.height() - 2.0 * padding.y)
+        let laid = |r: &Rect| r.height() * ui.ctx().layer_transform_from_global(ui.layer_id()).map_or(1.0, |t| t.scaling);
+        annotations.drawn.get(&id).map_or(NOTE_TEXT_SIZE * zoom * 1.4, |r| laid(r) - 2.0 * padding.y)
     } else {
         note_text(ui, &note.text, note.width, zoom).size.y
     };
@@ -710,7 +721,7 @@ fn note_ui(
     });
 
     // The right edge sets where the text wraps
-    let edge = Rect::from_x_y_ranges(card.right() - GRAB..=card.right() + GRAB, card.top()..=card.bottom());
+    let edge = Rect::from_x_y_ranges(card.right() - grab..=card.right() + grab, card.top()..=card.bottom());
     let widen = ui.interact(edge, Id::unique(("note edge", id)), Sense::drag());
     over |= widen.hovered();
     if widen.hovered() || widen.dragged() {
@@ -786,7 +797,7 @@ fn note_ui(
         // The text field is drawn under the cables, so the card is too
         ui.painter().set(card_slot, Shape::Vec(shapes));
     }
-    annotations.drawn.insert(id, card);
+    annotations.drawn.insert(id, on_screen(ui, card));
     over
 }
 

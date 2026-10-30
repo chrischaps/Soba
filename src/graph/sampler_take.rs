@@ -326,7 +326,7 @@ pub fn rec_button(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, user_state: &S
     let red = theme::accent::ERROR;
     let id = ui.scope_id().with(("sampler_rec", node_id));
     let button = ui.interact(rect, id, Sense::click());
-    super::marks::mark(ui.ctx(), node_id, "rec", rect);
+    super::marks::mark(ui, node_id, "rec", rect);
     let engine_node_id = user_state.get_engine_node_id(node_id);
     // Busy, it can always be pressed again to let go
     let usable = blocked.is_none() || (view.is_busy() && blocked != Some(RecBlock::Jack));

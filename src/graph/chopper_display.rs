@@ -330,7 +330,7 @@ pub fn chopper_display(ui: &mut egui::Ui, node_id: NodeId, graph: &SynthGraph, u
         wave.clone().on_hover_text("Recording what's patched into In: press Rec to stop, and the take is the break from the top");
     } else if loaded.is_some() {
         if let (Some(markers), true) = (&slice_markers, wave.drag_started()) {
-            let pressed = ui.input(|i| i.pointer.press_origin()).or(wave.interact_pointer_pos());
+            let pressed = super::canvas_layer::in_ui(ui, ui.input(|i| i.pointer.press_origin())).or(wave.interact_pointer_pos());
             if let Some((m, _)) = pressed.and_then(|p| markers.nearest(p.x, x_at, GRAB * z)) {
                 markers.pick_up(ui, m);
             }

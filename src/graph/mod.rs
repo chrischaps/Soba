@@ -11,6 +11,7 @@ pub mod groups;
 mod garden_table;
 mod group_face;
 pub mod steady_text;
+pub mod canvas_layer;
 mod clock_display;
 mod controls_face;
 mod pads_face;

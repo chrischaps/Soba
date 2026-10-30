@@ -83,7 +83,7 @@ impl SliceMarkers<'_> {
             tab(painter, plot, x_at(place), Color32::WHITE.gamma_multiply(alpha), lit, z);
         }
         // The one in hand
-        let Some(pointer) = ui.ctx().pointer_latest_pos().filter(|_| self.dragging(ui)) else { return };
+        let Some(pointer) = super::canvas_layer::in_ui(ui, ui.ctx().pointer_latest_pos()).filter(|_| self.dragging(ui)) else { return };
         let x = pointer.x.clamp(plot.left(), plot.right());
         if pulled_off(rect, pointer, z) {
             let line = [Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())];

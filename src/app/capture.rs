@@ -134,7 +134,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 
 use eframe::egui;
-use egui::{Pos2, Rect, Vec2};
+use egui::{emath::TSTransform, LayerId, Pos2, Rect, Vec2};
 
 use super::capture_aim::{self, Part, Spot, Which};
 pub use super::cue_runner::CaptureAction;
@@ -672,13 +672,19 @@ impl Capture {
     fn check_aim(&mut self, ctx: &egui::Context) {
         for (at, cue, p) in self.runner.take_presses() {
             let Some(layer) = ctx.layer_id_at(p) else { continue };
+            // The editor is laid out on a layer of its own, drawn onto this one
+            let laid = crate::graph::canvas_layer::canvas_on(ctx, layer);
+            let to_screen = laid.and_then(|laid| ctx.layer_transform_to_global(laid)).unwrap_or(TSTransform::IDENTITY);
             let (hit, nearby): (Vec<Rect>, Vec<Rect>) = ctx.viewport(|v| {
                 let clickable = |w: &&egui::WidgetRect| w.enabled && (w.sense.senses_click() || w.sense.senses_drag());
                 let hovered = &v.interact_widgets.hovered;
-                let widgets = || v.prev_pass.widgets.get_layer(layer).filter(clickable);
+                let on = |layer: LayerId, to_screen: TSTransform| {
+                    v.prev_pass.widgets.get_layer(layer).filter(clickable).map(move |w| (w.id, to_screen * w.interact_rect))
+                };
+                let widgets = || on(layer, TSTransform::IDENTITY).chain(laid.into_iter().flat_map(|laid| on(laid, to_screen)));
                 (
-                    widgets().filter(|w| hovered.contains(&w.id)).map(|w| w.interact_rect).collect(),
-                    widgets().filter(|w| !hovered.contains(&w.id)).map(|w| w.interact_rect).collect(),
+                    widgets().filter(|(id, _)| hovered.contains(id)).map(|(_, r)| r).collect(),
+                    widgets().filter(|(id, _)| !hovered.contains(id)).map(|(_, r)| r).collect(),
                 )
             });
             if let Some(missed) = near_miss(p, &hit, &nearby) {

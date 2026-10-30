@@ -43,7 +43,7 @@ eframe = { version = "0.37", default-features = false, features = ["accesskit", 
 # feature of their own since 0.37
 egui = { version = "0.37", features = ["monochrome_emoji_fonts"] }
 # Pinned: bump the rev on purpose, after a push to the fork
-egui_node_graph2 = { git = "https://github.com/chrischaps/egui_node_graph2", rev = "35502b99eb7f2c2a25967f697c62b0c01b1cee3f" }
+egui_node_graph2 = { git = "https://github.com/chrischaps/egui_node_graph2", rev = "aaa7935234e9612db8a2a84194a652afec75ded6" }
 cpal = "0.18"
 midir = "0.11"
 rtrb = "0.3"

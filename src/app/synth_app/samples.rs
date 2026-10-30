@@ -519,7 +519,7 @@ impl SynthApp {
         self.graph_state.node_order.iter().rev().copied().find(|&node_id| {
             !self.user_state.hidden.contains(&node_id)
                 && self.graph_state.graph.nodes.get(node_id).is_some_and(|n| plays_a_sample(n.user_data.module_id))
-                && ctx.read_response(egui::Id::unique((node_id, "window"))).is_some_and(|r| r.rect.contains(screen))
+                && crate::graph::annotation_ui::module_rect(ctx, node_id).is_some_and(|r| r.contains(screen))
         })
     }
 }

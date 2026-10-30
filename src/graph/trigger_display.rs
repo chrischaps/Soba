@@ -330,7 +330,7 @@ fn accent_row(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, p
             painter.circle_filled(c, 1.1 * z, theme::background::GRID_MAJOR.gamma_multiply(fade));
         }
 
-        super::marks::mark(ui.ctx(), node_id, format_args!("accent:{}", step + 1), cell);
+        super::marks::mark(ui, node_id, format_args!("accent:{}", step + 1), cell);
         let response = ui
             .interact(cell, Id::unique((node_id, "trigger-accent", step)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand)
@@ -424,7 +424,7 @@ fn lane_rows(ui: &mut egui::Ui, rect: Rect, node_id: NodeId, params: &Params, at
             painter.vline(x, block.y_range().shrink(1.0 * z), Stroke::new(1.2 * z, orange.gamma_multiply(0.8)));
         }
 
-        super::marks::mark(ui.ctx(), node_id, format_args!("cell:{}:{}", lane + 1, step + 1), cell);
+        super::marks::mark(ui, node_id, format_args!("cell:{}:{}", lane + 1, step + 1), cell);
         let response = ui
             .interact(cell, Id::unique((node_id, "trigger-step", lane, step)), Sense::click_and_drag())
             .on_hover_cursor(CursorIcon::PointingHand);
@@ -691,7 +691,7 @@ pub(super) fn pattern_tabs(
             painter.circle_stroke(dot, 2.2 * z, Stroke::new(1.0 * z, green));
         }
 
-        super::marks::mark(ui.ctx(), node_id, format_args!("pattern:{letter}"), rect);
+        super::marks::mark(ui, node_id, format_args!("pattern:{letter}"), rect);
         let response = ui
             .interact(rect, Id::unique((node_id, "trigger-tab", pattern)), Sense::click())
             .on_hover_cursor(CursorIcon::PointingHand)
@@ -805,7 +805,7 @@ pub(super) fn pattern_tabs(
 fn follow_toggle(ui: &mut egui::Ui, node_id: NodeId, z: f32, rect: Rect, playing: Option<usize>) {
     let was_on = following(ui.ctx(), node_id);
     let green = theme::signal::GATE;
-    super::marks::mark(ui.ctx(), node_id, format_args!("follow"), rect);
+    super::marks::mark(ui, node_id, format_args!("follow"), rect);
     let response = ui
         .interact(rect, Id::unique((node_id, "trigger-follow")), Sense::click())
         .on_hover_cursor(CursorIcon::PointingHand)
