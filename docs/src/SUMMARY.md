@@ -90,6 +90,7 @@
   - [volca drum](./hardware/volca-drum.md)
   - [FANTOM-06](./hardware/fantom-06.md)
   - [ZOIA](./hardware/zoia.md)
+- [Pad Lights: MiniLab 3](./hardware/minilab-3.md)
 
 # Recipes
 

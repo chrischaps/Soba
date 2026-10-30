@@ -14,6 +14,7 @@ pub mod steady_text;
 mod clock_display;
 mod controls_face;
 mod pads_face;
+pub mod pad_players;
 pub mod learn_walk;
 mod next_pad;
 mod compressor_display;

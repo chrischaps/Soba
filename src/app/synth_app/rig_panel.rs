@@ -116,6 +116,7 @@ enum Edit {
     Measure(MeasureEdit),
     Budget(usize, u32),
     SendSysex(usize),
+    TestLights(usize),
     DismissSysex,
     Refresh,
 }
@@ -225,6 +226,7 @@ impl SynthApp {
                 Edit::Measure(edit) => self.measure_edit(edit),
                 Edit::Budget(port, per_second) => MIDI.set_budget(port, per_second),
                 Edit::SendSysex(port) => self.send_sysex_file(ctx, port),
+                Edit::TestLights(port) => self.test_pad_lights(ctx, port),
                 Edit::DismissSysex => self.rig_panel.sysex = None,
                 Edit::Refresh => {
                     self.refresh_midi_devices();
@@ -552,6 +554,14 @@ fn device_menu(ui: &mut egui::Ui, row: &OutRow, devices: &[String], edits: &mut 
                 let hint = "Send a .syx file's SysEx to this device, whole and within the port's budget: a voice, a bank, its settings";
                 if ui.selectable_label(false, "📤 Send a SysEx file…").on_hover_text(hint).clicked() {
                     edits.push(Edit::SendSysex(row.port));
+                }
+                // A controller whose pads Soba lights (#430)
+                if let Some(lights) = row.found.as_deref().and_then(crate::hardware::lights::of_device) {
+                    let unchecked = if lights.confirmed { "" } else { ". Its colour message hasn't been checked on the device yet" };
+                    let hint = format!("While this port plays it, its pads glow in the colour of what they play. This lights them in a rainbow for a few seconds{unchecked}");
+                    if ui.selectable_label(false, "💡 Test its pad lights").on_hover_text(hint).clicked() {
+                        edits.push(Edit::TestLights(row.port));
+                    }
                 }
             }
         })

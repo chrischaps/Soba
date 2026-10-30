@@ -27,6 +27,7 @@ pub(crate) mod mutate;
 mod notice;
 mod palette;
 pub mod pace;
+pub mod pad_lights;
 pub(crate) mod presentation;
 mod presentation_take;
 pub(crate) mod qwerty_keys;
